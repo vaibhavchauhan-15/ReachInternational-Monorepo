@@ -17,7 +17,7 @@ import {
   Search,
   Wrench,
 } from "lucide-react";
-import { formatAllowance, hasMaintenanceAllowance } from "@reachinternational/utils";
+import { formatAllowance, hasMaintenanceAllowance, formatDate, formatExactTimestamp } from "@reachinternational/utils";
 import {
   AnimatedBuilding2,
   AnimatedTruck,
@@ -35,9 +35,22 @@ import {
   AnimatedCalendar,
   AnimatedHistory,
 } from "@/components/ui/animated-icons";
-import { Button, TooltipWrapper, EmptyState } from "@/components/ui";
+import {
+  Button,
+  TooltipWrapper,
+  EmptyState,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  SearchBox,
+  useToast,
+} from "@/components/ui";
 import { ClientModal } from "@/components/clients/ClientModal";
 import { ClientShiftCodesTab } from "./ClientShiftCodesTab";
+import { SitesList } from "./SitesList";
 import type { CRMClient } from "@/lib/types/database";
 import type { ClientShiftCode } from "@reachinternational/types";
 import type {
@@ -48,7 +61,9 @@ import type {
   ClientAssignmentItem,
   ClientHistoryItem,
   ClientAuditItem,
+  ClientSite,
 } from "@/lib/data/clients";
+import type { AddressState } from "./AddressFields";
 
 export interface ClientDetailClientProps {
   client: CRMClient;
@@ -60,10 +75,12 @@ export interface ClientDetailClientProps {
   initialHistory: ClientHistoryItem[];
   initialAuditLogs: ClientAuditItem[];
   initialShiftCodes?: ClientShiftCode[];
+  initialSites?: ClientSite[];
+  states?: AddressState[];
   currentUserRole?: string;
 }
 
-export type ClientDetailTabKey = "machines" | "logs" | "assignments" | "shifts" | "history" | "audit";
+export type ClientDetailTabKey = "machines" | "sites" | "logs" | "assignments" | "shifts" | "history" | "audit";
 
 export function ClientDetailClient({
   client: initialClient,
@@ -75,9 +92,12 @@ export function ClientDetailClient({
   initialHistory = [],
   initialAuditLogs = [],
   initialShiftCodes = [],
+  initialSites = [],
+  states = [],
   currentUserRole = "super_admin",
 }: ClientDetailClientProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [client, setClient] = useState<CRMClient>(initialClient);
   const [activeTab, setActiveTab] = useState<ClientDetailTabKey>("machines");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -94,10 +114,11 @@ export function ClientDetailClient({
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
+    toast("info", `${key} copied to clipboard`);
     setTimeout(() => {
       setCopiedKey(null);
     }, 2000);
-  }, []);
+  }, [toast]);
 
   // Filtered Tab Items
   const filteredMachines = useMemo(() => {
@@ -217,69 +238,169 @@ export function ClientDetailClient({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full">
-      {/* ─── 1. TOP BREADCRUMB & BACK NAVIGATION ─── */}
-      <div className="flex items-center justify-between">
+      {/* ─── 1. TOP BREADCRUMB & BACK NAVIGATION (Hidden on mobile, single left breadcrumb on desktop) ─── */}
+      <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-mute)]">
         <Link
           href="/clients"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors group py-1"
+          className="inline-flex items-center gap-1 font-medium hover:text-[var(--color-ink)] transition-colors group py-1 mr-1 text-[var(--color-mute)] hover:text-[var(--color-ink)]"
         >
-          <motion.div whileTap={{ scale: 0.9 }} className="flex items-center gap-1">
-            <AnimatedChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-            <span>Back to Clients</span>
-          </motion.div>
+          <AnimatedChevronLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+          <span>Back to Clients</span>
         </Link>
+        <span>/</span>
+        <Link href="/dashboard" className="hover:text-[var(--color-ink)] transition-colors">
+          Home
+        </Link>
+        <span>/</span>
+        <Link href="/clients" className="hover:text-[var(--color-ink)] transition-colors">
+          Clients
+        </Link>
+        <span>/</span>
+        <span className="text-[var(--color-ink)] font-semibold truncate max-w-[280px]">
+          {client.company_name || client.client_name}
+        </span>
+      </nav>
 
-        <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-mute)]">
-          <Link href="/dashboard" className="hover:text-[var(--color-ink)] transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link href="/clients" className="hover:text-[var(--color-ink)] transition-colors">
-            Clients
-          </Link>
-          <span>/</span>
-          <span className="text-[var(--color-ink)] font-semibold truncate max-w-[240px]">
-            {client.company_name || client.client_name}
-          </span>
-        </nav>
-      </div>
-
-      {/* ─── 2. MASTER HERO BANNER CARD ─── */}
-      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 md:p-6 shadow-2xs relative overflow-hidden">
+      {/* ─── 2. MASTER HERO BANNER CARD (Optimized for Mobile and Desktop) ─── */}
+      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-2xs relative overflow-hidden transition-all">
         {/* Subtle top hairline gradient accent */}
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/50 to-transparent pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Left: Branding Icon + Title & Identifiers */}
-          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-            <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
-              <Building2 className="h-6 w-6 sm:h-7 sm:w-7" />
+        {/* ── Mobile Layout (≤640px) ── */}
+        <div className="flex flex-col gap-3 sm:hidden">
+          {/* Row 1: Brand Icon + Title & ID copy */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
+              <Building2 className="h-5 w-5" />
             </div>
 
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                {/* Client ID Pill with Copy */}
+            <div className="flex flex-col min-w-0 flex-1">
+              <h1 className="text-base font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">
+                {client.company_name || client.client_name}
+              </h1>
+              <div className="flex items-center gap-1.5 mt-1">
                 <button
                   type="button"
-                  onClick={() => handleCopy(clientIdentifier, "code")}
+                  onClick={() => handleCopy(clientIdentifier, "Client ID")}
+                  className="inline-flex items-center gap-1 h-5 px-2 rounded bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] text-[11px] font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer active:scale-95"
+                  title="Click to copy Client ID"
+                >
+                  <span>{clientIdentifier}</span>
+                  {copiedKey === "Client ID" ? (
+                    <AnimatedCheck size={11} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  ) : (
+                    <AnimatedCopy size={11} className="text-[var(--color-mute)] shrink-0" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Status & Feature Badges */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {client.deleted_at ? (
+              <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
+                SOFT DELETED
+              </span>
+            ) : client.status === "active" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                ACTIVE
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-neutral-100 dark:bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
+                INACTIVE
+              </span>
+            )}
+
+            {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                <Wrench size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Maint: {formatAllowance(client.maintenance_allowance_minutes ?? 0)}/mo</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
+                <AlertCircle size={10} className="text-red-600 dark:text-red-400 shrink-0" />
+                <span>Maint: None</span>
+              </span>
+            )}
+
+            {client.is_billing_address_different && (
+              <span className="inline-flex items-center rounded-full bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                Separate Billing
+              </span>
+            )}
+          </div>
+
+          {/* Row 3: Touch Action Buttons */}
+          <div className="flex items-center gap-2 pt-0.5">
+            {canManage && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsEditModalOpen(true)}
+                className="flex-1 min-h-[40px] text-xs font-semibold rounded-md inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <AnimatedEdit size={14} />
+                <span>Edit Profile</span>
+              </Button>
+            )}
+
+            {cleanPhone && (
+              <a
+                href={`tel:${cleanPhone}`}
+                className="flex-1 min-h-[40px] px-3 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] inline-flex items-center justify-center gap-1.5 active:bg-[var(--color-hairline-soft-surface)]"
+                title="Call Client"
+              >
+                <Phone size={14} className="text-[var(--color-mute)]" />
+                <span>Call</span>
+              </a>
+            )}
+
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-h-[40px] px-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center justify-center gap-1.5 active:bg-emerald-500/20"
+                title="WhatsApp Client"
+              >
+                <span>WhatsApp</span>
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* ── Desktop / Tablet Layout (>640px) ── */}
+        <div className="hidden sm:flex sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
+              <Building2 className="h-7 w-7" />
+            </div>
+
+            <div className="flex flex-col min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleCopy(clientIdentifier, "Client ID")}
                   className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer transition-colors active:scale-95"
                   title="Click to copy Client ID"
                 >
                   <span>{clientIdentifier}</span>
-                  {copiedKey === "code" ? (
+                  {copiedKey === "Client ID" ? (
                     <AnimatedCheck size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                   ) : (
                     <AnimatedCopy size={12} className="text-[var(--color-mute)] shrink-0" />
                   )}
                 </button>
 
-                {/* Status Badge */}
                 {client.deleted_at ? (
                   <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
                     SOFT DELETED
                   </span>
                 ) : client.status === "active" ? (
-                  <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     ACTIVE
                   </span>
                 ) : (
@@ -288,7 +409,6 @@ export function ClientDetailClient({
                   </span>
                 )}
 
-                {/* Maintenance Allowed Badge */}
                 {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                     <Wrench size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
@@ -302,7 +422,7 @@ export function ClientDetailClient({
                 )}
 
                 {client.is_billing_address_different && (
-                  <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <span className="inline-flex items-center rounded-full bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     Separate Billing
                   </span>
                 )}
@@ -314,14 +434,13 @@ export function ClientDetailClient({
             </div>
           </div>
 
-          {/* Right: Quick Action Buttons */}
-          <div className="flex items-center gap-2 sm:self-center shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
             {canManage && (
               <Button
                 variant="primary"
                 size="sm"
                 onClick={() => setIsEditModalOpen(true)}
-                className="h-9 px-3.5 text-xs font-semibold rounded-sm inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="h-9 px-3.5 text-xs font-semibold rounded-md inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <AnimatedEdit size={14} />
                 <span>Edit Profile</span>
@@ -331,11 +450,11 @@ export function ClientDetailClient({
             {cleanPhone && (
               <a
                 href={`tel:${cleanPhone}`}
-                className="h-9 px-3 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-3 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Call Client"
               >
                 <Phone size={14} className="text-[var(--color-mute)]" />
-                <span className="hidden sm:inline">Call</span>
+                <span>Call</span>
               </a>
             )}
 
@@ -344,7 +463,7 @@ export function ClientDetailClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="h-9 px-3 rounded-sm border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="WhatsApp Client"
               >
                 <span>WhatsApp</span>
@@ -354,479 +473,437 @@ export function ClientDetailClient({
         </div>
       </div>
 
-      {/* ─── 3. 4-CARD METADATA GRID (Geist System Design Tokens) ─── */}
+      {/* ─── 3. 4-CARD HIGH-DENSITY METADATA GRID (Constituent to User & Machine Pages) ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Contact Person */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-2xs hover:border-[var(--color-ink)]/30 hover:shadow-xs transition-all flex flex-col justify-between"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
-          <div>
-            <div className="flex items-center gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60 text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
-              <AnimatedUserCheck size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />
-              <span>Contact Person</span>
-            </div>
-            <div className="mt-2.5">
-              <div className="text-sm font-bold text-[var(--color-ink)] truncate">
+          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
+              <AnimatedUserCheck size={16} className="text-sky-500 shrink-0" />
+              Contact Person
+            </span>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-[var(--color-mute)]">Representative</span>
+              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[150px]" title={client.contact_person || undefined}>
                 {client.contact_person || "—"}
-              </div>
-              <div className="mt-1 flex items-center justify-between text-xs">
-                {client.phone ? (
-                  <div className="flex items-center gap-1.5">
-                    <a
-                      href={`tel:${client.phone}`}
-                      className="font-mono text-xs font-medium text-[var(--color-body)] hover:text-sky-600 transition-colors"
-                    >
-                      {client.phone}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(client.phone || "", "phone")}
-                      className="text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
-                      title="Copy phone"
-                    >
-                      {copiedKey === "phone" ? (
-                        <AnimatedCheck size={12} className="text-emerald-600" />
-                      ) : (
-                        <AnimatedCopy size={12} />
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[var(--color-mute)] text-xs">No direct phone</span>
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-[var(--color-mute)]">Phone</span>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold font-mono text-[var(--color-ink)]">
+                  {client.phone || "—"}
+                </span>
+                {client.phone && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(client.phone || "", "Phone")}
+                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    title="Copy phone"
+                  >
+                    {copiedKey === "Phone" ? (
+                      <AnimatedCheck size={12} className="text-emerald-500" />
+                    ) : (
+                      <AnimatedCopy size={12} />
+                    )}
+                  </button>
                 )}
               </div>
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-[var(--color-hairline)]/40 text-[11px] text-[var(--color-mute)]">
-            Primary Operational Representative
+
+            <div className="flex items-center justify-between gap-1.5 pt-0.5">
+              <span className="text-[var(--color-mute)]">WhatsApp</span>
+              {whatsappUrl ? (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  <span>Chat Direct</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <span className="text-[var(--color-mute)]">—</span>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Card 2: Tax & Statutory Compliance */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-2xs hover:border-[var(--color-ink)]/30 hover:shadow-xs transition-all flex flex-col justify-between"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
-          <div>
-            <div className="flex items-center gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60 text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
-              <AnimatedReceipt size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
-              <span>Tax & Statutory</span>
-            </div>
-            <div className="mt-2.5 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)]">GSTIN:</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-mono font-bold text-[var(--color-ink)]">
-                    {client.gstin || "Unregistered"}
-                  </span>
-                  {client.gstin && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(client.gstin || "", "gstin")}
-                      className="text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
-                      title="Copy GSTIN"
-                    >
-                      {copiedKey === "gstin" ? (
-                        <AnimatedCheck size={12} className="text-emerald-600" />
-                      ) : (
-                        <AnimatedCopy size={12} />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)]">PAN:</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-mono font-bold text-[var(--color-ink)]">
-                    {client.pan_number || "—"}
-                  </span>
-                  {client.pan_number && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(client.pan_number || "", "pan")}
-                      className="text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
-                      title="Copy PAN"
-                    >
-                      {copiedKey === "pan" ? (
-                        <AnimatedCheck size={12} className="text-emerald-600" />
-                      ) : (
-                        <AnimatedCopy size={12} />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
+              <AnimatedReceipt size={16} className="text-purple-500 shrink-0" />
+              Tax & Statutory
+            </span>
           </div>
-          <div className="mt-3 pt-2 border-t border-[var(--color-hairline)]/40 text-[11px] text-[var(--color-mute)]">
-            Verified Commercial Tax Entity
+
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-[var(--color-mute)]">GSTIN</span>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold font-mono text-[var(--color-ink)]">
+                  {client.gstin || "Unregistered"}
+                </span>
+                {client.gstin && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(client.gstin || "", "GSTIN")}
+                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    title="Copy GSTIN"
+                  >
+                    {copiedKey === "GSTIN" ? (
+                      <AnimatedCheck size={12} className="text-emerald-500" />
+                    ) : (
+                      <AnimatedCopy size={12} />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-[var(--color-mute)]">PAN</span>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold font-mono text-[var(--color-ink)]">
+                  {client.pan_number || "—"}
+                </span>
+                {client.pan_number && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(client.pan_number || "", "PAN")}
+                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    title="Copy PAN"
+                  >
+                    {copiedKey === "PAN" ? (
+                      <AnimatedCheck size={12} className="text-emerald-500" />
+                    ) : (
+                      <AnimatedCopy size={12} />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-1.5 pt-0.5">
+              <span className="text-[var(--color-mute)]">Tax Status</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {client.gstin ? "Verified Commercial" : "Standard"}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Card 3: Operational Site Address */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-2xs hover:border-[var(--color-ink)]/30 hover:shadow-xs transition-all flex flex-col justify-between"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
-          <div>
-            <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60 text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-              <div className="flex items-center gap-2">
-                <AnimatedMapPin size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>Operational Site</span>
-              </div>
-              {siteAddress !== "—" && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] lowercase font-normal text-sky-600 hover:underline flex items-center gap-0.5"
-                  title="Open in Google Maps"
-                >
-                  <ExternalLink size={10} />
-                  <span>maps</span>
-                </a>
-              )}
+          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
+              <AnimatedMapPin size={16} className="text-emerald-500 shrink-0" />
+              Operational Site
+            </span>
+            {siteAddress !== "—" && (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] lowercase font-normal text-sky-600 hover:underline flex items-center gap-0.5"
+                title="Open in Google Maps"
+              >
+                <ExternalLink size={10} />
+                <span>maps</span>
+              </a>
+            )}
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--color-mute)]">City / State</span>
+              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[150px]">
+                {[client.city, client.state].filter(Boolean).join(", ") || "—"}
+              </span>
             </div>
-            <div className="mt-2.5">
-              <p className="text-xs text-[var(--color-body)] leading-relaxed line-clamp-2" title={siteAddress}>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--color-mute)]">Pincode</span>
+              <span className="font-semibold font-mono text-[var(--color-ink)]">
+                {client.pincode || "—"}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-0.5 pt-0.5">
+              <span className="text-[var(--color-mute)] text-[11px]">Site Address:</span>
+              <p className="text-xs text-[var(--color-ink)] leading-relaxed line-clamp-2" title={siteAddress}>
                 {siteAddress}
               </p>
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-[var(--color-hairline)]/40 text-[11px] text-[var(--color-mute)]">
-            {[client.city, client.state].filter(Boolean).join(", ") || "Site Location Coordinates"}
           </div>
         </div>
 
         {/* Card 4: Registered Billing Address */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-2xs hover:border-[var(--color-ink)]/30 hover:shadow-xs transition-all flex flex-col justify-between"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
-          <div>
-            <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60 text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-              <div className="flex items-center gap-2">
-                <AnimatedFileText size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>Billing Address</span>
-              </div>
-              <span className="text-[10px] font-bold text-[var(--color-mute)]">
-                {client.is_billing_address_different ? "Separate" : "Same"}
+          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
+              <AnimatedFileText size={16} className="text-amber-500 shrink-0" />
+              Billing Address
+            </span>
+            <span className="text-[10px] font-bold text-[var(--color-mute)]">
+              {client.is_billing_address_different ? "Separate" : "Same"}
+            </span>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--color-mute)]">Billing City</span>
+              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[150px]">
+                {client.is_billing_address_different ? client.billing_city || "—" : client.city || "—"}
               </span>
             </div>
-            <div className="mt-2.5">
-              <p className="text-xs text-[var(--color-body)] leading-relaxed line-clamp-2" title={billingAddress}>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--color-mute)]">Billing PIN</span>
+              <span className="font-semibold font-mono text-[var(--color-ink)]">
+                {client.is_billing_address_different ? client.billing_pincode || "—" : client.pincode || "—"}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-0.5 pt-0.5">
+              <span className="text-[var(--color-mute)] text-[11px]">Billing Address:</span>
+              <p className="text-xs text-[var(--color-ink)] leading-relaxed line-clamp-2" title={billingAddress}>
                 {billingAddress}
               </p>
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-[var(--color-hairline)]/40 text-[11px] text-[var(--color-mute)]">
-            Tax Invoicing & Statutory Delivery
-          </div>
         </div>
       </div>
 
-      {/* ─── 4. 5-CARD KPI METRICS STRIP ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      {/* ─── 4. 4-CARD KPI METRICS STRIP (Balanced 4-col layout, zero empty space) ─── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Metric 1: Machinery */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs hover:border-sky-500/40 transition-colors"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
         >
-          <div className="flex items-center justify-between gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
-              Assigned Machinery
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
+              Assigned Fleet
             </span>
-            <AnimatedTruck size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />
+            <AnimatedTruck size={16} className="text-sky-500 shrink-0" />
           </div>
-          <div className="mt-2">
-            <div className="text-2xl sm:text-3xl font-extrabold text-[var(--color-ink)] font-mono">
-              {initialMachines.length}
-            </div>
-            <div className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              {activeMachinesCount} active equipment units
-            </div>
+          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
+            {initialMachines.length}
+          </div>
+          <div className="text-[11px] text-[var(--color-mute)]">
+            {activeMachinesCount === 1 ? "1 active unit" : `${activeMachinesCount} active equipment units`}
           </div>
         </div>
 
         {/* Metric 2: Running Hours */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs hover:border-emerald-500/40 transition-colors"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
         >
-          <div className="flex items-center justify-between gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
               Running Hours
             </span>
-            <AnimatedClock size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <AnimatedClock size={16} className="text-emerald-500 shrink-0" />
           </div>
-          <div className="mt-2">
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-              {totalRunningHours} <span className="text-xs font-normal">hrs</span>
-            </div>
-            <div className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              {initialLogs.length} logged machine shifts
-            </div>
+          <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            {totalRunningHours} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">hrs</span>
+          </div>
+          <div className="text-[11px] text-[var(--color-mute)]">
+            {initialLogs.length} logged machine shifts
           </div>
         </div>
 
         {/* Metric 3: Active Operators */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs hover:border-purple-500/40 transition-colors"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
         >
-          <div className="flex items-center justify-between gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
               Operator Roster
             </span>
-            <AnimatedUsers size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
+            <AnimatedUsers size={16} className="text-purple-500 shrink-0" />
           </div>
-          <div className="mt-2">
-            <div className="text-2xl sm:text-3xl font-extrabold text-purple-600 dark:text-purple-400 font-mono">
-              {activeAssignmentsCount}
-            </div>
-            <div className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              {initialAssignments.length} total shift allocations
-            </div>
+          <div className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400">
+            {activeAssignmentsCount}
+          </div>
+          <div className="text-[11px] text-[var(--color-mute)]">
+            {initialAssignments.length} total shift allocations
           </div>
         </div>
 
         {/* Metric 4: Account Status */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs hover:border-indigo-500/40 transition-colors"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
         >
-          <div className="flex items-center justify-between gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
               Account Standing
             </span>
-            <AnimatedShieldCheck size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <AnimatedShieldCheck size={16} className="text-indigo-500 shrink-0" />
           </div>
-          <div className="mt-2">
-            <div className="text-2xl sm:text-3xl font-extrabold text-[var(--color-ink)]">
-              {client.status.toUpperCase()}
-            </div>
-            <div className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              Member since {new Date(client.created_at).toLocaleDateString()}
-            </div>
+          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
+            {client.status.toUpperCase()}
           </div>
-        </div>
-
-        {/* Metric 5: Maintenance Allowance */}
-        <div
-          data-hover-parent
-          className="col-span-2 sm:col-span-1 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs hover:border-amber-500/40 transition-colors"
-        >
-          <div className="flex items-center justify-between gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
-              Maint. Allowed
-            </span>
-            <Wrench
-              size={16}
-              className={
-                hasMaintenanceAllowance(client.maintenance_allowance_minutes)
-                  ? "text-amber-600 dark:text-amber-400 shrink-0"
-                  : "text-red-600 dark:text-red-400 shrink-0"
-              }
-            />
-          </div>
-          <div className="mt-2">
-            {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
-              <>
-                <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-                  {formatAllowance(client.maintenance_allowance_minutes ?? 0)}
-                </div>
-                <div className="text-[11px] text-[var(--color-mute)] mt-0.5">
-                  Per machine / month pool
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-xs sm:text-sm font-bold text-red-700 dark:text-red-300">
-                  <AlertCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />
-                  <span>Not Allowed</span>
-                </div>
-                <div className="text-[11px] text-[var(--color-mute)] mt-1.5">
-                  0m pool • All logs marked B/D
-                </div>
-              </>
-            )}
+          <div className="text-[11px] text-[var(--color-mute)]" suppressHydrationWarning>
+            Member since {formatDate(client.created_at)}
           </div>
         </div>
       </div>
 
-      {/* ─── 5. OPERATIONAL TABS STRIP & INLINE SEARCH ─── */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-2">
-          {/* Tab Buttons Strip */}
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("machines");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "machines"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <AnimatedTruck size={14} />
-              <span>Machines</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "machines"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialMachines.length}
-              </span>
-            </button>
+      {/* ─── 5. TAB STRIP & SEARCH TOOLBAR (Consistent with Users/Machines Page) ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">
+        {/* Scrollable Tab Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-nowrap pb-1 sm:pb-0">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("machines");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "machines"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Machines ({initialMachines.length})
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("logs");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "logs"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <AnimatedClock size={14} />
-              <span>Running Logs</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "logs"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialLogs.length}
-              </span>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("sites");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "sites"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Sites ({initialSites.length})
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("assignments");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "assignments"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <AnimatedUsers size={14} />
-              <span>Assignments</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "assignments"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialAssignments.length}
-              </span>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("logs");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "logs"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Running Logs ({initialLogs.length})
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("shifts");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "shifts"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <Clock size={14} />
-              <span>Shift Codes</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "shifts"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialShiftCodes.length}
-              </span>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("assignments");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "assignments"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Assignments ({initialAssignments.length})
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("history");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "history"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <AnimatedCalendar size={14} />
-              <span>History</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "history"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialHistory.length}
-              </span>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("shifts");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "shifts"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Shift Codes ({initialShiftCodes.length})
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("audit");
-                setTabSearch("");
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "audit"
-                  ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <AnimatedShieldCheck size={14} />
-              <span>Audit Trail</span>
-              <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  activeTab === "audit"
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-hairline)] text-[var(--color-body)]"
-                }`}
-              >
-                {initialAuditLogs.length}
-              </span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("history");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "history"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            History ({initialHistory.length})
+          </button>
 
-          {/* Quick tab filter search */}
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[var(--color-mute)]">
-              <Search className="h-3.5 w-3.5" />
-            </div>
-            <input
-              type="text"
-              value={tabSearch}
-              onChange={(e) => setTabSearch(e.target.value)}
-              placeholder={`Filter ${activeTab}...`}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-hidden focus:border-sky-500 transition-colors"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("audit");
+              setTabSearch("");
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "audit"
+                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
+                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+            }`}
+          >
+            Audit Trail ({initialAuditLogs.length})
+          </button>
         </div>
+
+        {/* Search Bar - Reusing SearchBox primitive */}
+        <div className="w-full sm:w-72">
+          <SearchBox
+            value={tabSearch}
+            onChange={(val) => setTabSearch(val)}
+            placeholder={`Filter ${
+              activeTab === "machines"
+                ? "machines"
+                : activeTab === "logs"
+                ? "logs"
+                : activeTab === "assignments"
+                ? "assignments"
+                : activeTab === "shifts"
+                ? "shifts"
+                : activeTab === "history"
+                ? "history"
+                : "audit trail"
+            }...`}
+            size="sm"
+          />
+        </div>
+      </div>
 
         {/* ─── 6. TAB CONTENT PANELS ─── */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs min-h-[300px]">
@@ -859,46 +936,46 @@ export function ClientDetailClient({
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--color-hairline)] font-mono uppercase text-[11px] text-[var(--color-mute)] bg-[var(--color-canvas)]">
-                          <th className="py-2.5 px-3">Machine Code</th>
-                          <th className="py-2.5 px-3">Model & Manufacturer</th>
-                          <th className="py-2.5 px-3">Serial Number</th>
-                          <th className="py-2.5 px-3">Hour Meter</th>
-                          <th className="py-2.5 px-3">Status</th>
-                          <th className="py-2.5 px-3 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-hairline)]/60">
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine Code</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Model & Manufacturer</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Serial Number</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Hour Meter</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Status</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredMachines.map((m) => (
-                          <tr
+                          <TableRow
                             key={m.id}
-                            className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors group"
+                            className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors group"
                           >
-                            <td className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
+                            <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
                               <Link
                                 href={`/machines/${m.id}`}
-                                className="hover:underline flex items-center gap-1"
+                                className="hover:underline inline-flex items-center gap-1"
                               >
                                 <span>{m.machine_id}</span>
                                 <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                               </Link>
-                            </td>
-                            <td className="py-3 px-3 font-medium text-[var(--color-ink)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-medium text-[var(--color-ink)]">
                               <div>{m.model}</div>
                               {m.manufacturer && (
                                 <div className="text-[10px] text-[var(--color-mute)]">{m.manufacturer}</div>
                               )}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-[var(--color-body)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
                               {m.serial_number || "—"}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-[var(--color-ink)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono font-bold text-[var(--color-ink)]">
                               {m.hour_meter !== null ? `${m.hour_meter} hrs` : "—"}
-                            </td>
-                            <td className="py-3 px-3">
+                            </TableCell>
+                            <TableCell className="py-3 px-3">
                               <span
                                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                                   m.status === "active" || m.status === "rented"
@@ -908,8 +985,8 @@ export function ClientDetailClient({
                               >
                                 {m.status.toUpperCase()}
                               </span>
-                            </td>
-                            <td className="py-3 px-3 text-right">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 text-right">
                               <Link
                                 href={`/machines/${m.id}`}
                                 className="text-xs font-semibold text-sky-600 hover:text-sky-700 hover:underline inline-flex items-center gap-1"
@@ -917,11 +994,11 @@ export function ClientDetailClient({
                                 <span>Inspect</span>
                                 <ArrowRight size={12} />
                               </Link>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
 
                   {/* Mobile Touch Cards View */}
@@ -959,6 +1036,16 @@ export function ClientDetailClient({
             </div>
           )}
 
+          {/* TAB: SITES */}
+          {activeTab === "sites" && (
+            <SitesList
+              sites={initialSites}
+              clientId={client.id}
+              states={states}
+              currentUserRole={currentUserRole}
+            />
+          )}
+
           {/* TAB 2: RUNNING LOGS */}
           {activeTab === "logs" && (
             <div className="space-y-4">
@@ -988,44 +1075,44 @@ export function ClientDetailClient({
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--color-hairline)] font-mono uppercase text-[11px] text-[var(--color-mute)] bg-[var(--color-canvas)]">
-                          <th className="py-2.5 px-3">Date</th>
-                          <th className="py-2.5 px-3">Machine</th>
-                          <th className="py-2.5 px-3">Operator</th>
-                          <th className="py-2.5 px-3">Shift</th>
-                          <th className="py-2.5 px-3">Meter Readings</th>
-                          <th className="py-2.5 px-3">Running Hours</th>
-                          <th className="py-2.5 px-3 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-hairline)]/60">
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Date</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operator</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Shift</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Meter Readings</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Running Hours</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredLogs.map((log) => (
-                          <tr
+                          <TableRow
                             key={log.id}
-                            className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors"
+                            className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
                           >
-                            <td className="py-3 px-3 font-mono font-medium text-[var(--color-ink)]">
+                            <TableCell className="py-3 px-3 font-mono font-medium text-[var(--color-ink)]">
                               {log.log_date}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
                               {log.machine_code || "—"}
-                            </td>
-                            <td className="py-3 px-3 font-medium text-[var(--color-body)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-medium text-[var(--color-body)]">
                               {log.operator_name || "—"}
-                            </td>
-                            <td className="py-3 px-3 capitalize text-[var(--color-mute)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 capitalize text-[var(--color-mute)]">
                               {log.shift || "Regular"}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-[var(--color-body)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
                               {log.start_meter ?? "—"} → {log.end_meter ?? "—"}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                               {log.running_hours} hrs
-                            </td>
-                            <td className="py-3 px-3 text-right">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 text-right">
                               {log.is_breakdown ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[9px] font-bold text-red-700 dark:text-red-300 border border-red-200">
                                   <AlertCircle size={10} /> Breakdown
@@ -1035,11 +1122,11 @@ export function ClientDetailClient({
                                   Normal
                                 </span>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
 
                   {/* Mobile Touch Cards View */}
@@ -1104,40 +1191,40 @@ export function ClientDetailClient({
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--color-hairline)] font-mono uppercase text-[11px] text-[var(--color-mute)] bg-[var(--color-canvas)]">
-                          <th className="py-2.5 px-3">Operator Name</th>
-                          <th className="py-2.5 px-3">Contact</th>
-                          <th className="py-2.5 px-3">Machine Code</th>
-                          <th className="py-2.5 px-3">Shift Schedule</th>
-                          <th className="py-2.5 px-3">Assigned Date</th>
-                          <th className="py-2.5 px-3 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-hairline)]/60">
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operator Name</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Contact</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine Code</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Shift Schedule</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Assigned Date</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredAssignments.map((a) => (
-                          <tr
+                          <TableRow
                             key={a.id}
-                            className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors"
+                            className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
                           >
-                            <td className="py-3 px-3 font-semibold text-[var(--color-ink)]">
+                            <TableCell className="py-3 px-3 font-semibold text-[var(--color-ink)]">
                               {a.operator_name}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-[var(--color-body)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
                               {a.operator_phone || "—"}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
                               {a.machine_code}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-[var(--color-mute)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono text-[var(--color-mute)]">
                               {a.shift_start_time?.slice(0, 5)} – {a.shift_end_time?.slice(0, 5)}
-                            </td>
-                            <td className="py-3 px-3 text-[var(--color-mute)]">
-                              {a.assigned_at ? new Date(a.assigned_at).toLocaleDateString() : "—"}
-                            </td>
-                            <td className="py-3 px-3 text-right">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 text-[var(--color-mute)]">
+                              <span suppressHydrationWarning>{a.assigned_at ? formatDate(a.assigned_at) : "—"}</span>
+                            </TableCell>
+                            <TableCell className="py-3 px-3 text-right">
                               <span
                                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold border ${
                                   a.is_active
@@ -1147,11 +1234,11 @@ export function ClientDetailClient({
                               >
                                 {a.is_active ? "ACTIVE" : "ENDED"}
                               </span>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
 
                   {/* Mobile Touch Cards View */}
@@ -1236,12 +1323,8 @@ export function ClientDetailClient({
                           <span className="font-bold text-xs text-[var(--color-ink)]">
                             {h.title}
                           </span>
-                          <span className="text-[10px] font-mono text-[var(--color-mute)]">
-                            {new Date(h.timestamp).toLocaleDateString(undefined, {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })}
+                          <span className="text-[10px] font-mono text-[var(--color-mute)]" suppressHydrationWarning>
+                            {formatDate(h.timestamp)}
                           </span>
                         </div>
                         <p className="text-xs text-[var(--color-body)] leading-relaxed">
@@ -1261,7 +1344,7 @@ export function ClientDetailClient({
             </div>
           )}
 
-          {/* TAB 5: SECURITY AUDIT TRAIL */}
+          {/* TAB 6: SECURITY AUDIT TRAIL */}
           {activeTab === "audit" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1286,36 +1369,36 @@ export function ClientDetailClient({
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--color-hairline)] font-mono uppercase text-[11px] text-[var(--color-mute)] bg-[var(--color-canvas)]">
-                          <th className="py-2.5 px-3">Timestamp</th>
-                          <th className="py-2.5 px-3">Action</th>
-                          <th className="py-2.5 px-3">Actor & Role</th>
-                          <th className="py-2.5 px-3">Severity</th>
-                          <th className="py-2.5 px-3 text-right">Category</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-hairline)]/60">
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Timestamp</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Action</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Actor & Role</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Severity</TableHead>
+                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Category</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredAuditLogs.map((a) => (
-                          <tr
+                          <TableRow
                             key={a.id}
-                            className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors"
+                            className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
                           >
-                            <td className="py-3 px-3 font-mono text-[var(--color-mute)] whitespace-nowrap">
-                              {new Date(a.created_at).toLocaleString()}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
+                            <TableCell className="py-3 px-3 font-mono text-xs text-[var(--color-mute)] whitespace-nowrap">
+                              <span suppressHydrationWarning>{formatExactTimestamp(a.created_at, false)}</span>
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
                               {a.action}
-                            </td>
-                            <td className="py-3 px-3 font-medium text-[var(--color-ink)]">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 font-medium text-[var(--color-ink)]">
                               <div>{a.actor_name || "System"}</div>
                               <div className="text-[10px] text-[var(--color-mute)] capitalize">
                                 {a.actor_role || "automated"}
                               </div>
-                            </td>
-                            <td className="py-3 px-3">
+                            </TableCell>
+                            <TableCell className="py-3 px-3">
                               <span
                                 className={`inline-flex items-center rounded px-2 py-0.5 text-[9px] font-bold uppercase ${
                                   a.severity === "critical"
@@ -1327,14 +1410,14 @@ export function ClientDetailClient({
                               >
                                 {a.severity}
                               </span>
-                            </td>
-                            <td className="py-3 px-3 text-right text-[var(--color-mute)] capitalize">
+                            </TableCell>
+                            <TableCell className="py-3 px-3 text-right text-[var(--color-mute)] capitalize">
                               {a.category || "General"}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
 
                   {/* Mobile Touch Cards View */}
@@ -1362,7 +1445,7 @@ export function ClientDetailClient({
                           <span>
                             {a.actor_name || "Unknown"} ({a.actor_role || "—"})
                           </span>
-                          <span className="font-mono">{new Date(a.created_at).toLocaleDateString()}</span>
+                          <span className="font-mono" suppressHydrationWarning>{formatDate(a.created_at)}</span>
                         </div>
                       </div>
                     ))}
@@ -1372,7 +1455,6 @@ export function ClientDetailClient({
             </div>
           )}
         </div>
-      </div>
 
       {/* ─── 7. EDIT CLIENT MODAL INTEGRATION ─── */}
       {isEditModalOpen && (
@@ -1383,6 +1465,7 @@ export function ClientDetailClient({
           onSuccess={(updatedClient) => {
             if (updatedClient) {
               setClient(updatedClient);
+              toast("success", "Client Profile Updated", `${updatedClient.company_name || updatedClient.client_name || "Client"} details updated successfully.`);
             }
             setIsEditModalOpen(false);
             router.refresh();

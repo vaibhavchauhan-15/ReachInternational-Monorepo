@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, FileSpreadsheet, Loader2, X, CheckCircle2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
 import type { ClientDirectoryFilter } from "@reachinternational/utils";
 import { getClientExportDataAction } from "@/app/actions/client-export";
+import {
+  exportClientsToExcel,
+  exportClientsToCSV,
+  exportClientsToPDF,
+} from "@/lib/utils/clients-export";
 
 interface ClientExportModalProps {
   isOpen: boolean;
@@ -14,10 +19,11 @@ interface ClientExportModalProps {
 export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExportModalProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<"current" | "all" | "active">("current");
+  const [format, setFormat] = useState<"xlsx" | "csv" | "pdf">("xlsx");
 
   if (!isOpen) return null;
 
-  async function handleDownloadCsv() {
+  async function handleExport() {
     setIsExporting(true);
     try {
       const filterToApply: ClientDirectoryFilter =
@@ -35,60 +41,20 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
         return;
       }
 
-      // Convert records to CSV format with Excel UTF-8 BOM
-      const headers = [
-        "Client ID",
-        "Company Name",
-        "Contact Person",
-        "Phone",
-        "GSTIN",
-        "PAN",
-        "Site Address",
-        "City",
-        "District",
-        "State",
-        "Pincode",
-        "Separate Billing",
-        "Billing Address",
-        "Status",
-        "Registered On",
-      ];
+      const scopeName =
+        exportType === "all"
+          ? "All Master Clients"
+          : exportType === "active"
+          ? "Active Clients"
+          : "Filtered Results";
 
-      const csvRows = [headers.join(",")];
-
-      records.forEach((row) => {
-        const escapeCsv = (val: any) => `"${String(val ?? "").replace(/"/g, '""')}"`;
-        const values = [
-          escapeCsv(row.code),
-          escapeCsv(row.company_name),
-          escapeCsv(row.contact_person),
-          escapeCsv(row.phone),
-          escapeCsv(row.gstin),
-          escapeCsv(row.pan_number),
-          escapeCsv(row.site_address),
-          escapeCsv(row.city),
-          escapeCsv(row.district),
-          escapeCsv(row.state),
-          escapeCsv(row.pincode),
-          escapeCsv(row.is_billing_different ? "Yes" : "No"),
-          escapeCsv(row.billing_address),
-          escapeCsv(row.status),
-          escapeCsv(row.created_at),
-        ];
-        csvRows.push(values.join(","));
-      });
-
-      const csvContent = "\uFEFF" + csvRows.join("\r\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const timestamp = new Date().toISOString().slice(0, 10);
-      link.href = url;
-      link.setAttribute("download", `ReachInternational_Clients_${timestamp}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (format === "xlsx") {
+        exportClientsToExcel(records, "Client-Directory");
+      } else if (format === "csv") {
+        exportClientsToCSV(records, "Client-Directory");
+      } else if (format === "pdf") {
+        exportClientsToPDF(records, "Client-Directory", scopeName);
+      }
 
       setIsExporting(false);
       onClose();
@@ -110,7 +76,7 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
             </div>
             <div>
               <h3 className="text-base font-bold text-[var(--color-ink)]">Export Client Directory</h3>
-              <p className="text-xs text-[var(--color-mute)]">Download structured CSV/Excel report</p>
+              <p className="text-xs text-[var(--color-mute)]">Download Excel, CSV or PDF report</p>
             </div>
           </div>
           <button
@@ -121,6 +87,49 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+
+        {/* Format Selector */}
+        <div className="space-y-1.5 text-xs">
+          <p className="font-semibold text-[var(--color-ink)]">Select Format:</p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setFormat("xlsx")}
+              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                format === "xlsx"
+                  ? "bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/20"
+                  : "border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+              }`}
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Excel (.xlsx)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormat("csv")}
+              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                format === "csv"
+                  ? "bg-sky-500/10 border-sky-500 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
+                  : "border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+              }`}
+            >
+              <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>CSV (.csv)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormat("pdf")}
+              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                format === "pdf"
+                  ? "bg-rose-500/10 border-rose-500 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/20"
+                  : "border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+              }`}
+            >
+              <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>PDF (.pdf)</span>
+            </button>
+          </div>
         </div>
 
         {/* Export Scope Radio Selection */}
@@ -194,9 +203,9 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
           </button>
           <button
             type="button"
-            onClick={handleDownloadCsv}
+            onClick={handleExport}
             disabled={isExporting}
-            className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs font-semibold text-[var(--color-canvas)] hover:opacity-90 disabled:opacity-50 transition-all cursor-pointer"
           >
             {isExporting ? (
               <>
@@ -206,7 +215,7 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
             ) : (
               <>
                 <Download className="h-4 w-4" />
-                Download CSV
+                Download {format.toUpperCase()}
               </>
             )}
           </button>

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
+import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
@@ -28,6 +29,7 @@ import {
   SearchableSelect,
   CustomTimePicker,
   ReachInternationalLogo,
+  useToast,
   type SelectOption,
 } from "@/components/ui";
 import {
@@ -71,6 +73,8 @@ const DRAFT_FIELDS = [
 const DRAFT_KEY = "signup_draft_v1";
 
 export default function SignupPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [state, setState] = useState<AuthFormState>({});
   const [pending, setPending] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -457,11 +461,19 @@ export default function SignupPage() {
       setFormValues((prev) => ({ ...prev, [field]: value }));
     }
 
-    if (fieldErrors[field] || (field === "state_id" && fieldErrors.state)) {
+    if (
+      fieldErrors[field] ||
+      (field === "state_id" && fieldErrors.state) ||
+      (field === "street" && (fieldErrors.street || fieldErrors.address))
+    ) {
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy[field];
         if (field === "state_id") delete copy.state;
+        if (field === "street") {
+          delete copy.street;
+          delete copy.address;
+        }
         return copy;
       });
     }
@@ -528,11 +540,19 @@ export default function SignupPage() {
       }
     }
 
-    if (fieldErrors[field] || (field === "state_id" && fieldErrors.state)) {
+    if (
+      fieldErrors[field] ||
+      (field === "state_id" && fieldErrors.state) ||
+      ((field === "street" || field === "address") && (fieldErrors.street || fieldErrors.address))
+    ) {
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy[field];
         if (field === "state_id") delete copy.state;
+        if (field === "street" || field === "address") {
+          delete copy.street;
+          delete copy.address;
+        }
         return copy;
       });
     }
@@ -578,8 +598,19 @@ export default function SignupPage() {
     e.preventDefault();
     if (isSubmittingRef.current || pending) return;
 
-    // Client-side pre-flight checks
+    // Client-side pre-flight checks aligned with all mandatory sections
     const errors: Record<string, string> = {};
+    if (!formValues.full_name.trim() || formValues.full_name.trim().length < 2) {
+      errors.full_name = "Full name is required (minimum 2 characters).";
+    }
+    const cleanEmail = formValues.email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      errors.email = "Please enter a valid email address.";
+    }
+    const phoneDigits = formValues.phone.replace(/\D/g, "");
+    if (phoneDigits.length < 10) {
+      errors.phone = "Please enter a valid 10-digit mobile number.";
+    }
     if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
       errors.supervisor_id = "Please select your supervisor.";
     }
@@ -589,12 +620,22 @@ export default function SignupPage() {
     if (!formValues.shift_end_time.trim()) {
       errors.shift_end_time = "Shift end time is required.";
     }
+
+    const resolvedStreet = (formValues.street || formValues.address || "").trim();
+    if (resolvedStreet.length < 2) {
+      errors.street = "Address (street / site base) is required.";
+      errors.address = "Address (street / site base) is required.";
+    }
+    if (!formValues.city.trim() || formValues.city.trim().length < 2) {
+      errors.city = "City is required.";
+    }
+    if (!formValues.district.trim() || formValues.district.trim().length < 2) {
+      errors.district = "District is required.";
+    }
     if (!formValues.state.trim() && !formValues.state_id) {
       errors.state = "State is required.";
     }
-    if (!formValues.address.trim()) {
-      errors.address = "Address (street / site base) is required.";
-    }
+
     if (!formValues.bank_account_number.trim()) {
       errors.bank_account_number = "Bank account number is required.";
     } else {
@@ -633,12 +674,28 @@ export default function SignupPage() {
         errors.license_number = licRes.error || "Invalid driving licence format.";
       }
     }
+    if (!formValues.password || formValues.password.length < 8) {
+      errors.password = "Password must be at least 8 characters long.";
+    } else {
+      const hasUppercase = /[A-Z]/.test(formValues.password);
+      const hasLowercase = /[a-z]/.test(formValues.password);
+      const hasDigit = /\d/.test(formValues.password);
+      if (!hasUppercase || !hasLowercase || !hasDigit) {
+        errors.password = "Password must include uppercase, lowercase, and a number.";
+      }
+    }
+    if (formValues.password !== formValues.confirm_password) {
+      errors.confirm_password = "Passwords do not match.";
+    }
     if (!agreedToTerms) {
       errors.terms = "You must agree to the Terms of Service and Privacy Policy to register.";
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      isSubmittingRef.current = false;
+      setPending(false);
+      toast("error", "Validation Incomplete", "Please complete all mandatory fields before requesting access.");
       return;
     }
 
@@ -648,6 +705,36 @@ export default function SignupPage() {
     setFieldErrors({});
 
     const formData = new FormData(e.currentTarget);
+    formData.set("full_name", formValues.full_name.trim());
+    formData.set("email", formValues.email.trim());
+    formData.set("phone", formValues.phone.trim());
+    formData.set("role", formValues.role);
+    formData.set("supervisor_id", formValues.supervisor_id.trim());
+    formData.set("shift_start_time", formValues.shift_start_time.trim());
+    formData.set("shift_end_time", formValues.shift_end_time.trim());
+    formData.set(
+      "shift_time",
+      formValues.shift_start_time.trim() && formValues.shift_end_time.trim()
+        ? `${formValues.shift_start_time.trim()} - ${formValues.shift_end_time.trim()}`
+        : formValues.shift_start_time.trim() || formValues.shift_end_time.trim() || ""
+    );
+    formData.set("street", resolvedStreet);
+    formData.set("address", resolvedStreet);
+    formData.set("city", formValues.city.trim());
+    formData.set("district", formValues.district.trim());
+    formData.set("state", formValues.state.trim());
+    if (formValues.state_id) {
+      formData.set("state_id", String(formValues.state_id));
+    }
+    formData.set("bank_account_number", formValues.bank_account_number.trim());
+    formData.set("bank_ifsc_code", formValues.bank_ifsc_code.trim().toUpperCase());
+    formData.set("aadhaar_number", formValues.aadhaar_number.trim());
+    if (formValues.license_number.trim()) {
+      formData.set("license_number", formValues.license_number.trim().toUpperCase());
+    }
+    formData.set("password", formValues.password);
+    formData.set("confirm_password", formValues.confirm_password);
+
     if (bankFile) {
       formData.set("bank_document_file", bankFile);
     }
@@ -657,22 +744,39 @@ export default function SignupPage() {
     if (licenseFile) {
       formData.set("license_file", licenseFile);
     }
-    formData.set("bank_account_number", formValues.bank_account_number);
-    formData.set("bank_ifsc_code", formValues.bank_ifsc_code);
+
     try {
       const result = await signup({}, formData);
       setState(result);
 
-      // Clear draft only on successful signup
+      // On successful signup: clear draft, trigger toast notification, and redirect to login page
       if (result.message && !result.error) {
         clearDraft();
         clearFileDrafts(DRAFT_KEY);
+        toast(
+          "success",
+          "Registration Request Submitted",
+          "Your account is pending administrator approval. After approval from the administrator, you can log in."
+        );
+        setTimeout(() => {
+          router.push(
+            "/login?message=" +
+              encodeURIComponent(
+                "Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in."
+              )
+          );
+        }, 500);
+        return;
       }
 
       if (result.fieldErrors) {
         setFieldErrors(result.fieldErrors);
       } else {
         setFieldErrors({});
+      }
+
+      if (result.error) {
+        toast("error", "Registration Failed", result.error);
       }
 
       if (result.fieldValues) {
@@ -689,7 +793,8 @@ export default function SignupPage() {
           district: result.fieldValues?.district ?? prev.district,
           state: result.fieldValues?.state ?? prev.state,
           state_id: result.fieldValues?.state_id ?? prev.state_id,
-          address: result.fieldValues?.address ?? prev.address,
+          street: result.fieldValues?.street ?? result.fieldValues?.address ?? prev.street,
+          address: result.fieldValues?.address ?? result.fieldValues?.street ?? prev.address,
           bank_account_number: result.fieldValues?.bank_account_number ?? prev.bank_account_number,
           bank_ifsc_code: result.fieldValues?.bank_ifsc_code ?? prev.bank_ifsc_code,
           aadhaar_number: result.fieldValues?.aadhaar_number ?? prev.aadhaar_number,
@@ -706,6 +811,7 @@ export default function SignupPage() {
       isSubmittingRef.current = false;
       setPending(false);
       setState({ error: "An unexpected error occurred. Please try again." });
+      toast("error", "Registration Failed", "An unexpected error occurred. Please try again.");
     }
   }
 
@@ -797,13 +903,6 @@ export default function SignupPage() {
             {state.error && Object.keys(fieldErrors).length === 0 && (
               <div className="mb-3">
                 <Alert variant="error">{state.error}</Alert>
-              </div>
-            )}
-
-            {/* Global Success Banner */}
-            {state.message && !state.error && (
-              <div className="mb-3">
-                <Alert variant="success">{state.message}</Alert>
               </div>
             )}
 

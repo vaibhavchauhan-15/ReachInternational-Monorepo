@@ -25,7 +25,9 @@ export function ClientsPageShellLoading() {
         canManageClients={true}
         totalClients={0}
         onOpenAddModal={() => {}}
-        onOpenExportModal={() => {}}
+        onExportExcel={() => {}}
+        onExportCSV={() => {}}
+        onExportPDF={() => {}}
       />
 
       {/* 2. KPI: Loading Skeleton */}

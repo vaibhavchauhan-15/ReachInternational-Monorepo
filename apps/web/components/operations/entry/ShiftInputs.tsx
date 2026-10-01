@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Zap, Clock, SlidersHorizontal } from "lucide-react";
+import { Clock, SlidersHorizontal, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CustomDatePicker, CustomTimePicker } from "@/components/ui";
 import type { ClientShiftCode } from "@reachinternational/types";
@@ -99,7 +99,6 @@ export function ShiftInputs({
 }: ShiftInputsProps) {
   // Manual time pickers toggled via mode switcher
   const [showManualTimes, setShowManualTimes] = useState(false);
-  const overtimePresets = ["0", "1", "2", "4"];
 
   const effectiveShiftCodes =
     shiftCodes && shiftCodes.length > 0 ? shiftCodes : DEFAULT_CLIENT_SHIFTS;
@@ -162,6 +161,16 @@ export function ShiftInputs({
     )
   );
 
+  const isCurrentShiftLogged = Boolean(
+    activeShift &&
+    todayLoggedShiftCodes.some(
+      (c) =>
+        c.toUpperCase() === activeShift.code.toUpperCase() ||
+        c.replace(/^shift\s*/i, "").trim().toUpperCase() ===
+          activeShift.code.replace(/^shift\s*/i, "").trim().toUpperCase()
+    )
+  );
+
   return (
     <div className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/50 space-y-3">
       {/* Top Section Header */}
@@ -203,10 +212,10 @@ export function ShiftInputs({
         </div>
       </div>
 
-      {/* Main Responsive Layout: DatePicker is permanently mounted in column 1, Shift cards or Manual pickers crossfade smoothly in columns 2-3 */}
+      {/* Main Responsive Layout: DatePicker is in column 1, Shift cards or Manual pickers in columns 2-3 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-start">
-        {/* Date Picker (Stable, zero layout shift or remounting on mode toggle) */}
-        <div className="sm:col-span-1">
+        {/* Date Picker (Column 1 on desktop) */}
+        <div className="sm:col-span-1 min-w-0">
           <CustomDatePicker
             label="Select Date"
             value={logDate}
@@ -218,22 +227,22 @@ export function ShiftInputs({
           />
         </div>
 
-        {/* Dynamic Shift Selector / Manual Time Pickers Slot with Smooth GPU-Accelerated Transition */}
+        {/* Dynamic Shift Selector / Manual Time Pickers Slot (Columns 2-3 on desktop) */}
         <div className="sm:col-span-2 min-w-0">
           <AnimatePresence mode="wait" initial={false}>
             {!showManualTimes ? (
               <motion.div
                 key="shift-selection-view"
-                initial={{ opacity: 0, y: 5 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.18, ease: "easeInOut" }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.16, ease: "easeInOut" }}
                 className="flex flex-col"
               >
-                <label className="text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 leading-none h-[18px]">
-                  <Clock size={13} className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span>Select Shift</span>
-                  <span className="text-rose-500 font-semibold leading-none">*</span>
+                <label className="block text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0">
+                  <Clock size={15} className="h-[15px] w-[15px] text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className="truncate">Select Shift</span>
+                  <span className="text-rose-500 font-semibold ml-0.5 shrink-0 select-none leading-none">*</span>
                 </label>
                 <ShiftCardSelector
                   shiftCodes={effectiveShiftCodes}
@@ -241,16 +250,13 @@ export function ShiftInputs({
                   onSelect={handlePickShift}
                   todayLoggedShiftCodes={todayLoggedShiftCodes}
                   todayLogs={todayLogs}
-                  getAssignedInfo={(code) => {
-                    if (!assignedShiftCodes || assignedShiftCodes.length === 0) return undefined;
-                    const isAssigned = assignedShiftCodes.some(
-                      (c) => c.replace(/^shift\s*/i, "").trim().toUpperCase() === code.replace(/^shift\s*/i, "").trim().toUpperCase()
-                    );
-                    return isAssigned
-                      ? { isAssigned: true, label: "Assigned" }
-                      : { isAssigned: false, label: "Unassigned" };
-                  }}
                 />
+                {isCurrentShiftLogged && (
+                  <div className="mt-2 text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>This shift has already been entered for today.</span>
+                  </div>
+                )}
                 {isCurrentShiftUnassigned && (
                   <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md">
                     ⚠️ You are assigned to Shift {assignedShiftCodes.join(", ")} on this equipment. Shift {activeShift?.code} is unassigned and cannot be logged.
@@ -260,13 +266,13 @@ export function ShiftInputs({
             ) : (
               <motion.div
                 key="manual-times-view"
-                initial={{ opacity: 0, y: 5 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.18, ease: "easeInOut" }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.16, ease: "easeInOut" }}
                 className="flex flex-col"
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <CustomTimePicker
                     label="Start Time"
                     value={startTime}
@@ -287,60 +293,6 @@ export function ShiftInputs({
           </AnimatePresence>
         </div>
       </div>
-
-      {/* Overtime Controls (Smoothly animates in below when in Manual Mode) */}
-      <AnimatePresence>
-        {showManualTimes && (
-          <motion.div
-            key="overtime-controls"
-            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-            animate={{ opacity: 1, height: "auto", marginTop: 8 }}
-            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-            transition={{ duration: 0.18, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <div className="pt-2.5 border-t border-[var(--color-hairline)] flex flex-wrap items-center justify-between gap-2">
-              <label className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5 shrink-0">
-                <Zap size={13} className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span>Overtime (OT):</span>
-              </label>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="flex items-center gap-1">
-                  {overtimePresets.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => onOvertimeChange(preset)}
-                      className={`px-2 py-1 rounded text-xs font-mono font-medium transition-colors cursor-pointer ${
-                        overtimeHours === preset
-                          ? "bg-[var(--color-link)] text-white shadow-2xs font-bold"
-                          : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-[var(--color-hairline)]"
-                      }`}
-                    >
-                      {preset}h
-                    </button>
-                  ))}
-                </div>
-
-                <div className="w-16 sm:w-20">
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="16"
-                    value={overtimeHours}
-                    onChange={(e) => onOvertimeChange(e.target.value)}
-                    className="w-full h-8 px-1.5 text-center rounded border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] font-mono text-xs font-bold text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--color-link)]"
-                    placeholder="0"
-                    aria-label="Custom overtime hours"
-                  />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

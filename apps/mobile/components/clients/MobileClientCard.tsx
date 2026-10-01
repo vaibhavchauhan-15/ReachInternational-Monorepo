@@ -15,6 +15,7 @@ import {
   Copy,
   Check,
   Wrench,
+  MapPin,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
@@ -50,6 +51,7 @@ export interface MobileClientCardProps {
   onViewDetails: (client: any) => void;
   onEdit: (client: any) => void;
   onDelete: (client: any) => void;
+  onAddSite?: (client: any) => void;
 }
 
 export const MobileClientCard: React.FC<MobileClientCardProps> = ({
@@ -59,7 +61,8 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
   onViewDetails,
   onEdit,
   onDelete,
-}) => {
+  onAddSite,
+}: MobileClientCardProps) => {
   const { theme, isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const displayId = client.client_id || client.code;
@@ -94,7 +97,9 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
     : null;
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => onViewDetails(client)}
       style={[
         styles.card,
         {
@@ -288,6 +293,22 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
               <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Edit</Text>
             </TouchableOpacity>
 
+            {onAddSite && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  styles.iconActionBtn,
+                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+                ]}
+                onPress={() => onAddSite(client)}
+                activeOpacity={0.7}
+                accessibilityLabel={`Add Site to ${client.company_name}`}
+              >
+                <MapPin size={14} color="#10b981" />
+                <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Add Site</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[
                 styles.actionBtn,
@@ -304,7 +325,7 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
           </>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

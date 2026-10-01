@@ -13,7 +13,7 @@ import {
   ArrowRight,
   ShieldAlert,
 } from "lucide-react";
-import { Button, TooltipWrapper, EmptyState } from "@/components/ui";
+import { Button, TooltipWrapper, EmptyState, useToast } from "@/components/ui";
 import {
   upsertClientShiftCodeAction,
   deleteClientShiftCodeAction,
@@ -36,12 +36,12 @@ export function ClientShiftCodesTab({
   initialShiftCodes = [],
   canManage = true,
 }: ClientShiftCodesTabProps) {
+  const { toast } = useToast();
   const [shiftCodes, setShiftCodes] = useState<ClientShiftCode[]>(initialShiftCodes);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<ClientShiftCode | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Form state
   const [code, setCode] = useState("");
@@ -167,10 +167,10 @@ export function ClientShiftCodesTab({
       });
       setIsModalOpen(false);
       invalidateClientShiftsCache(clientId);
-      setFeedback({ type: "success", text: `Shift ${saved.code} saved successfully.` });
-      setTimeout(() => setFeedback(null), 4000);
+      toast("success", `Shift ${saved.code} saved successfully.`);
     } else {
       setFormError(res.error || "Failed to save shift code.");
+      toast("error", res.error || "Failed to save shift code.");
     }
   };
 
@@ -183,11 +183,9 @@ export function ClientShiftCodesTab({
     if (res.success) {
       setShiftCodes((prev) => prev.filter((s) => s.id !== shiftId));
       invalidateClientShiftsCache(clientId);
-      setFeedback({ type: "success", text: `Shift ${shiftCodeName} removed successfully.` });
-      setTimeout(() => setFeedback(null), 4000);
+      toast("success", `Shift ${shiftCodeName} removed successfully.`);
     } else {
-      setFeedback({ type: "error", text: res.error || "Failed to delete shift code." });
-      setTimeout(() => setFeedback(null), 5000);
+      toast("error", res.error || "Failed to delete shift code.");
     }
   };
 
@@ -202,14 +200,9 @@ export function ClientShiftCodesTab({
       setShiftCodes(res.data as ClientShiftCode[]);
       invalidateClientShiftsCache(clientId);
       const preset = CLIENT_SHIFT_PRESETS.find((p) => p.id === presetId);
-      setFeedback({
-        type: "success",
-        text: `Shift preset "${preset?.name || presetId}" applied successfully.`,
-      });
-      setTimeout(() => setFeedback(null), 4000);
+      toast("success", `Shift preset "${preset?.name || presetId}" applied successfully.`);
     } else {
-      setFeedback({ type: "error", text: res.error || "Failed to apply preset." });
-      setTimeout(() => setFeedback(null), 5000);
+      toast("error", res.error || "Failed to apply preset.");
     }
   };
 
@@ -250,20 +243,6 @@ export function ClientShiftCodesTab({
           </div>
         )}
       </div>
-
-      {/* ─── Feedback Alert ─── */}
-      {feedback && (
-        <div
-          className={`flex items-center gap-2 p-3 rounded-lg text-xs font-semibold border ${
-            feedback.type === "success"
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20"
-              : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20"
-          }`}
-        >
-          {feedback.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-          <span>{feedback.text}</span>
-        </div>
-      )}
 
       {/* ─── Shift Codes List / Empty State with 1-Click Presets ─── */}
       {shiftCodes.length === 0 ? (

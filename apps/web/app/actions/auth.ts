@@ -263,16 +263,56 @@ export async function forgotPassword(
   };
 }
 
+const ALLOWED_SIGNUP_DOCUMENT_MIMES: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "application/pdf": ".pdf",
+};
+const MAX_SIGNUP_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+
+function validateDocumentUpload(
+  file: File | null,
+  required: boolean,
+  label: string
+): { error?: string; safeExt?: string } {
+  if (!file || file.size === 0) {
+    if (required) return { error: `${label} is required.` };
+    return {};
+  }
+  if (file.size > MAX_SIGNUP_FILE_SIZE_BYTES) {
+    return {
+      error: `${label} must be smaller than 2 MB (received ${(file.size / (1024 * 1024)).toFixed(1)} MB).`,
+    };
+  }
+  const safeExt = ALLOWED_SIGNUP_DOCUMENT_MIMES[file.type.toLowerCase()];
+  if (!safeExt) {
+    return {
+      error: `${label} must be a valid document file (JPG, PNG, WebP, or PDF).`,
+    };
+  }
+  return { safeExt };
+}
+
+function sanitizeDocumentFileName(fileName: string): string {
+  return fileName
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .slice(0, 100);
+}
+
 export async function signup(
   state: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
-  const fullName = ((formData.get("full_name") as string) || "").trim();
-  const email = ((formData.get("email") as string) || "").trim();
-  const phone = ((formData.get("phone") as string) || "").trim();
-  const city = ((formData.get("city") as string) || "").trim();
-  const district = ((formData.get("district") as string) || "").trim();
-  const stateRaw = ((formData.get("state") as string) || "").trim();
+  const sanitize = (val: string) => val.replace(/[\x00-\x1F\x7F]/g, "").trim();
+
+  const fullName = sanitize((formData.get("full_name") as string) || "");
+  const email = sanitize((formData.get("email") as string) || "");
+  const phone = sanitize((formData.get("phone") as string) || "");
+  const city = sanitize((formData.get("city") as string) || "");
+  const district = sanitize((formData.get("district") as string) || "");
+  const stateRaw = sanitize((formData.get("state") as string) || "");
   const stateIdRaw = formData.get("state_id") as string | null;
 
   // Resolve state_id and normalized state name
@@ -295,15 +335,15 @@ export async function signup(
     }
   }
 
-  const address = ((formData.get("address") as string) || "").trim();
-  const bankAccountNumber = ((formData.get("bank_account_number") as string) || "").trim();
-  const bankIfscCode = ((formData.get("bank_ifsc_code") as string) || "").trim().toUpperCase();
-  const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
-  const licenseNumber = ((formData.get("license_number") as string) || "").trim();
-  const shiftStartTimeRaw = ((formData.get("shift_start_time") as string) || "").trim();
-  const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
-  const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
-  const supervisorIdRaw = ((formData.get("supervisor_id") as string) || "").trim();
+  const address = sanitize((formData.get("address") as string) || "");
+  const bankAccountNumber = sanitize((formData.get("bank_account_number") as string) || "");
+  const bankIfscCode = sanitize((formData.get("bank_ifsc_code") as string) || "").toUpperCase();
+  const aadhaarNumber = sanitize((formData.get("aadhaar_number") as string) || "");
+  const licenseNumber = sanitize((formData.get("license_number") as string) || "");
+  const shiftStartTimeRaw = sanitize((formData.get("shift_start_time") as string) || "");
+  const shiftEndTimeRaw = sanitize((formData.get("shift_end_time") as string) || "");
+  const shiftTimeRaw = sanitize((formData.get("shift_time") as string) || "");
+  const supervisorIdRaw = sanitize((formData.get("supervisor_id") as string) || "");
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -313,7 +353,7 @@ export async function signup(
 
   const password = (formData.get("password") as string) || "";
   const confirmPassword = (formData.get("confirm_password") as string) || "";
-  const requestedRole = (formData.get("role") as string) || "operator";
+  const requestedRole = sanitize((formData.get("role") as string) || "operator");
 
   // SECURITY (F07): Only allow non-admin roles during self-registration signup.
   // Admin and super_admin roles must be explicitly assigned by existing admins post-approval.
@@ -324,13 +364,11 @@ export async function signup(
     "operator",
   ];
 
-  const role = allowedSignupRoles.includes(requestedRole) ? requestedRole : "operator";
-
   const fieldValues = {
     full_name: fullName,
     email,
     phone,
-    role,
+    role: requestedRole,
     supervisor_id: supervisorIdRaw,
     shift_start_time: shiftStartTimeRaw,
     shift_end_time: shiftEndTimeRaw,
@@ -348,20 +386,95 @@ export async function signup(
     confirm_password: confirmPassword,
   };
 
+  if (!allowedSignupRoles.includes(requestedRole)) {
+    return {
+      error: "Invalid role selected for registration.",
+      fieldErrors: { role: "Invalid role selected." },
+      fieldValues,
+    };
+  }
+  const role = requestedRole;
+
   const fieldErrors: Record<string, string> = {};
 
-  if (!fullName) fieldErrors.full_name = "Full name is required.";
-  if (!email) fieldErrors.email = "Email address is required.";
-  if (!phone) fieldErrors.phone = "Mobile number is required.";
+  if (!fullName) {
+    fieldErrors.full_name = "Full name is required.";
+  } else if (fullName.length < 2 || fullName.length > 100) {
+    fieldErrors.full_name = "Full name must be between 2 and 100 characters.";
+  }
+
+  if (!email) {
+    fieldErrors.email = "Email address is required.";
+  } else if (email.length > 255) {
+    fieldErrors.email = "Email address cannot exceed 255 characters.";
+  }
+
+  if (!phone) {
+    fieldErrors.phone = "Mobile number is required.";
+  } else if (phone.length > 15) {
+    fieldErrors.phone = "Mobile number cannot exceed 15 digits.";
+  }
+
   if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Shift start time is required.";
   if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "Shift end time is required.";
-  if (isSupervisedRole(role) && !supervisorIdRaw) {
-    fieldErrors.supervisor_id = "Please select your supervisor.";
+
+  // Admin client for supervisor and duplicate checks
+  const adminSupabase = createSupabaseAdminClient();
+
+  let safeSupervisorId: string | null = null;
+  if (isSupervisedRole(role)) {
+    if (!supervisorIdRaw) {
+      fieldErrors.supervisor_id = "Please select your supervisor.";
+    } else {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(supervisorIdRaw)) {
+        fieldErrors.supervisor_id = "Selected supervisor is invalid.";
+      } else {
+        const { data: validSup } = await adminSupabase
+          .from("users")
+          .select("id, role, status")
+          .eq("id", supervisorIdRaw)
+          .maybeSingle();
+
+        if (
+          !validSup ||
+          (validSup.role !== "supervisor" &&
+            validSup.role !== "manager" &&
+            validSup.role !== "admin" &&
+            validSup.role !== "super_admin") ||
+          validSup.status !== "active"
+        ) {
+          fieldErrors.supervisor_id = "The selected supervisor is invalid or inactive.";
+        } else {
+          safeSupervisorId = supervisorIdRaw;
+        }
+      }
+    }
   }
-  if (!address) fieldErrors.address = "Street / site base address is required.";
-  if (!city) fieldErrors.city = "City/Town/Village is required.";
-  if (!district) fieldErrors.district = "District is required.";
-  if (!resolvedStateName) fieldErrors.state = "State is required.";
+
+  if (!address) {
+    fieldErrors.address = "Street / site base address is required.";
+  } else if (address.length < 2 || address.length > 255) {
+    fieldErrors.address = "Address must be between 2 and 255 characters.";
+  }
+
+  if (!city) {
+    fieldErrors.city = "City/Town/Village is required.";
+  } else if (city.length < 2 || city.length > 100) {
+    fieldErrors.city = "City must be between 2 and 100 characters.";
+  }
+
+  if (!district) {
+    fieldErrors.district = "District is required.";
+  } else if (district.length < 2 || district.length > 100) {
+    fieldErrors.district = "District must be between 2 and 100 characters.";
+  }
+
+  if (!resolvedStateName) {
+    fieldErrors.state = "State is required.";
+  } else if (resolvedStateName.length < 2 || resolvedStateName.length > 100) {
+    fieldErrors.state = "State must be between 2 and 100 characters.";
+  }
 
   // Banking Validation
   if (!bankAccountNumber) {
@@ -382,16 +495,28 @@ export async function signup(
     }
   }
 
+  // File Upload Security & MIME Whitelisting
   const bankFileRaw = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
-  if (!bankFileRaw || bankFileRaw.size === 0) {
-    fieldErrors.bank_document_file = "Bank document (Passbook front page, cancelled cheque, or statement) is required.";
+  const bankValidation = validateDocumentUpload(bankFileRaw, true, "Bank document (Passbook front page, cancelled cheque, or statement)");
+  if (bankValidation.error) {
+    fieldErrors.bank_document_file = bankValidation.error;
   }
 
-  if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
-  const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
-  if (!aadhaarFileRaw || aadhaarFileRaw.size === 0) {
-    fieldErrors.aadhaar_file = "Aadhaar document (Photo / PDF) is required.";
+  if (!aadhaarNumber) {
+    fieldErrors.aadhaar_number = "Aadhaar card number is required.";
   }
+  const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
+  const aadhaarValidation = validateDocumentUpload(aadhaarFileRaw, true, "Aadhaar document (Photo / PDF)");
+  if (aadhaarValidation.error) {
+    fieldErrors.aadhaar_file = aadhaarValidation.error;
+  }
+
+  const licenseFileRaw = formData.get("license_file") as File | null;
+  const licenseValidation = validateDocumentUpload(licenseFileRaw, false, "Licence document");
+  if (licenseValidation.error) {
+    fieldErrors.license_file = licenseValidation.error;
+  }
+
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
 
@@ -409,6 +534,17 @@ export async function signup(
       fieldErrors: {
         password: "Passwords do not match.",
         confirm_password: "Passwords do not match.",
+      },
+      fieldValues,
+    };
+  }
+
+  // SECURITY (DoS prevention): Max password length 128 characters
+  if (password.length > 128) {
+    return {
+      error: "Password cannot exceed 128 characters.",
+      fieldErrors: {
+        password: "Password cannot exceed 128 characters.",
       },
       fieldValues,
     };
@@ -466,9 +602,6 @@ export async function signup(
       fieldValues,
     };
   }
-
-  // Admin client check to enforce unique email and mobile number rule
-  const adminSupabase = createSupabaseAdminClient();
 
   // 1. Check duplicate email in public.users
   const { data: existingEmailUser } = await adminSupabase
@@ -692,10 +825,9 @@ export async function signup(
 
   // Upload Bank Document (Passbook Front Page / Cancelled Cheque / Statement)
   const bankFile = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
-  if (bankFile && bankFile.size > 0) {
+  if (bankFile && bankFile.size > 0 && bankValidation.safeExt) {
     try {
-      const ext = bankFile.name.split(".").pop()?.toLowerCase() || "bin";
-      const storagePath = `documents/${userId}/bank_document.${ext}`;
+      const storagePath = `documents/${userId}/bank_document${bankValidation.safeExt}`;
       const fileBytes = await bankFile.arrayBuffer();
 
       const { error: uploadErr } = await adminSupabase.storage
@@ -713,7 +845,7 @@ export async function signup(
             storage_path: storagePath,
             mime_type: bankFile.type,
             file_size_bytes: bankFile.size,
-            file_name: bankFile.name,
+            file_name: sanitizeDocumentFileName(bankFile.name),
             status: "pending",
           },
           { onConflict: "user_id,document_type_code" }
@@ -730,10 +862,9 @@ export async function signup(
   const aadhaarFile = formData.get("aadhaar_file") as File | null;
   const licenseFile = formData.get("license_file") as File | null;
 
-  if (aadhaarFile && aadhaarFile.size > 0) {
+  if (aadhaarFile && aadhaarFile.size > 0 && aadhaarValidation.safeExt) {
     try {
-      const ext = aadhaarFile.name.split(".").pop()?.toLowerCase() || "bin";
-      const storagePath = `documents/${userId}/aadhaar.${ext}`;
+      const storagePath = `documents/${userId}/aadhaar${aadhaarValidation.safeExt}`;
       const fileBytes = await aadhaarFile.arrayBuffer();
 
       const { error: uploadErr } = await adminSupabase.storage
@@ -751,7 +882,7 @@ export async function signup(
             storage_path: storagePath,
             mime_type: aadhaarFile.type,
             file_size_bytes: aadhaarFile.size,
-            file_name: aadhaarFile.name,
+            file_name: sanitizeDocumentFileName(aadhaarFile.name),
             status: "pending",
           },
           { onConflict: "user_id,document_type_code" }
@@ -764,10 +895,9 @@ export async function signup(
     }
   }
 
-  if (licenseFile && licenseFile.size > 0) {
+  if (licenseFile && licenseFile.size > 0 && licenseValidation.safeExt) {
     try {
-      const ext = licenseFile.name.split(".").pop()?.toLowerCase() || "bin";
-      const storagePath = `documents/${userId}/driving_license.${ext}`;
+      const storagePath = `documents/${userId}/driving_license${licenseValidation.safeExt}`;
       const fileBytes = await licenseFile.arrayBuffer();
 
       const { error: uploadErr } = await adminSupabase.storage
@@ -785,7 +915,7 @@ export async function signup(
             storage_path: storagePath,
             mime_type: licenseFile.type,
             file_size_bytes: licenseFile.size,
-            file_name: licenseFile.name,
+            file_name: sanitizeDocumentFileName(licenseFile.name),
             status: "pending",
           },
           { onConflict: "user_id,document_type_code" }
@@ -821,7 +951,7 @@ export async function signup(
     },
   });
 
-  return { message: "Signup successful! Your account is pending approval. You will be notified once an administrator approves your account." };
+  return { message: "Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in." };
 }
 
 /**

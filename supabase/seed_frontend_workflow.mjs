@@ -755,13 +755,14 @@ async function ensureAuthUser(userSpec, initialEmailConfirm = false) {
     console.log('\n⏱️ STEP 6: Submitting Machine Logs via Log Page Atomic Submission Pipeline...');
     console.log('  (Using submit_operator_hour_log_atomic RPC: meter sequence progression, shift timing, breakdown tracking, and maintenance allowance calculation)\n');
 
-    // Dates for recent days (within allowed 7-day operator window)
+    // Dates for recent days (within allowed 7-day operator window up to current date 2026-10-01)
     const logDates = [
-      '2026-09-25',
       '2026-09-26',
       '2026-09-27',
       '2026-09-28',
       '2026-09-29',
+      '2026-09-30',
+      '2026-10-01',
     ];
 
     let totalLogsCreated = 0;

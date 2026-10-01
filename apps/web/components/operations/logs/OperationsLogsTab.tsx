@@ -7,6 +7,8 @@ import {
   getOperationsMachineLogsAction,
   getOperationsOperatorLogsAction,
 } from "@/app/actions/operators";
+import { getClientSitesAction } from "@/app/actions/client-sites";
+import type { ClientSite } from "@/lib/data/clients";
 import dynamic from "next/dynamic";
 import {
   MachineSelect,
@@ -1308,6 +1310,24 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   );
   const activeDbClient = activeClient;
 
+  const [dbSites, setDbSites] = useState<ClientSite[]>([]);
+
+  useEffect(() => {
+    if (logsViewMode !== "client" || !activeClientId) {
+      setDbSites([]);
+      return;
+    }
+    let active = true;
+    getClientSitesAction(activeClientId)
+      .then((data) => {
+        if (active) setDbSites(data || []);
+      })
+      .catch((err) => console.error("Error loading sites for client", err));
+    return () => {
+      active = false;
+    };
+  }, [logsViewMode, activeClientId]);
+
   // Derived machine IDs associated with active selected client from logs
   const clientMachineIdsFromLogs = useMemo(() => {
     if (logsViewMode !== "client" || (!activeClientId && !activeClientName)) return [];
@@ -1848,7 +1868,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
                     <div>
                       <SearchableSelect
                         label="Select Location"
-                        count={clientSites.length}
+                        count={dbSites.length > 0 ? dbSites.length : clientSites.length}
                         value={effectiveSelectedSite}
                         onChange={(val) => {
                           const nextSite = val === "all" ? "" : val;
@@ -1857,7 +1877,12 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
                         }}
                         options={[
                           { value: "all", label: "All Sites & Locations" },
-                          ...clientSites.map((s) => ({ value: s, label: s })),
+                          ...(dbSites.length > 0
+                            ? dbSites.map((s) => ({
+                                value: s.id,
+                                label: `${s.site_name} (${s.site_code})`,
+                              }))
+                            : clientSites.map((s) => ({ value: s, label: s }))),
                         ]}
                       />
                     </div>

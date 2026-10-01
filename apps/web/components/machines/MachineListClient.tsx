@@ -30,7 +30,6 @@ import {
   FilterToolbar,
   TooltipWrapper,
   PageHeader,
-  ExportButton,
 } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { AnimatedCounter } from "@/components/ui/Motion";
@@ -359,14 +358,12 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
   onExportExcel,
   onExportCSV,
   onExportPDF,
-  onRefresh,
 }: {
   isAdmin: boolean;
   onOpenImport: () => void;
   onExportExcel: () => void;
   onExportCSV: () => void;
   onExportPDF: () => void;
-  onRefresh: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -387,7 +384,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const menuWidth = 208; // 13rem = 208px
-    const menuHeight = isAdmin ? 210 : 170;
+    const menuHeight = isAdmin ? 160 : 120;
     const spaceBelow = window.innerHeight - rect.bottom;
     const shouldOpenUpwards = spaceBelow < menuHeight + 16;
 
@@ -542,20 +539,6 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                 >
                   <Printer size={15} className="text-purple-600 dark:text-purple-400 shrink-0" />
                   <span>PDF Report / Print</span>
-                </button>
-
-                <div className="my-1 border-t border-[var(--color-hairline)]" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onRefresh();
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-                >
-                  <AnimatedRefresh size={15} className="text-amber-500 shrink-0" />
-                  <span>Refresh Data</span>
                 </button>
               </motion.div>
             </div>
@@ -1659,21 +1642,12 @@ export function MachineListClient({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <ExportButton
-                format="xlsx"
-                iconOnly
-                loading={isExporting}
-                onClick={() => handleExportExcel(selectedIds)}
-                tooltip="Export machine directory to Excel (.xlsx)"
-              />
-
               <HeaderMoreMenu
                 isAdmin={isAdmin}
                 onOpenImport={() => setImportModalOpen(true)}
                 onExportExcel={() => handleExportExcel(selectedIds)}
                 onExportCSV={() => handleExportCSV(selectedIds)}
                 onExportPDF={() => handleOpenPDFModal(selectedIds)}
-                onRefresh={() => router.refresh()}
               />
 
               {canCreateMachine && (

@@ -145,7 +145,7 @@ export function AttendanceDetailClient({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [selectedDay, setSelectedDay] = useState<AttendanceDay | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Safe defensive extraction with robust fallbacks
@@ -708,20 +708,8 @@ export function AttendanceDetailClient({
           </div>
 
           <div className="w-full sm:w-auto print:hidden">
-            {/* View Mode Toggle (Calendar Matrix vs. Table Ledger) */}
+            {/* View Mode Toggle (Adaptive Daily Cards / Table Ledger vs. Calendar) */}
             <div className="grid grid-cols-2 sm:inline-flex items-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-0.5 shadow-2xs w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setViewMode("calendar")}
-                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === "calendar"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                }`}
-              >
-                <AnimatedCalendar size={13} className="w-3.5 h-3.5 shrink-0" />
-                <span>Calendar Matrix</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
@@ -732,7 +720,21 @@ export function AttendanceDetailClient({
                 }`}
               >
                 <AnimatedLayers size={13} className="w-3.5 h-3.5 shrink-0" />
-                <span>Ledger View</span>
+                <span className="sm:hidden">Daily Cards</span>
+                <span className="hidden sm:inline">Ledger View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("calendar")}
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === "calendar"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                }`}
+              >
+                <AnimatedCalendar size={13} className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">Calendar Grid</span>
+                <span className="hidden sm:inline">Calendar Matrix</span>
               </button>
             </div>
           </div>
@@ -933,16 +935,16 @@ export function AttendanceDetailClient({
             </table>
           </div>
 
-          {/* Mobile View (≤640px) Touch Cards for Ledger View */}
-          <div className="block sm:hidden space-y-2.5 pt-2">
+          {/* Mobile View (≤640px) Touch Cards for Daily Attendance */}
+          <div className="block sm:hidden space-y-3 pt-2">
             {filteredDays.map((d) => {
               const chip = STATUS_CHIP[d.effectiveStatus] || STATUS_CHIP.DISABLED;
               const isClickable = !d.isDisabled && (d.worked_minutes > 0 || d.log_count > 0 || d.effectiveStatus === "ABSENT");
-              const dateStr = new Date(d.date).toLocaleDateString("en-IN", {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-              });
+              const dayDate = new Date(d.date);
+              const dayNumber = String(dayDate.getDate()).padStart(2, "0");
+              const monthShort = dayDate.toLocaleDateString("en-IN", { month: "short" });
+              const dayName = DOW_LABELS[d.dow];
+              const isSunday = d.dow === 0;
 
               return (
                 <div
@@ -952,72 +954,159 @@ export function AttendanceDetailClient({
                   onClick={() => {
                     if (isClickable) setSelectedDay(d);
                   }}
-                  className={`rounded-xl border p-3 shadow-xs transition-colors ${
-                    d.isToday ? "ring-1 ring-[var(--color-ink)]" : ""
+                  onKeyDown={(e) => {
+                    if (isClickable && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      setSelectedDay(d);
+                    }
+                  }}
+                  className={`rounded-xl border p-3.5 shadow-xs transition-all space-y-3 ${
+                    d.isToday ? "ring-2 ring-[var(--color-ink)] border-[var(--color-ink)]/40 bg-[var(--color-canvas-elevated)]" : ""
                   } ${
                     d.isDisabled
-                      ? "opacity-45 bg-[var(--color-canvas)]/50 border-dashed border-[var(--color-hairline)]"
+                      ? "opacity-60 bg-[var(--color-canvas)]/40 border-dashed border-[var(--color-hairline)]"
                       : isClickable
-                      ? "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] active:scale-[0.99] cursor-pointer"
+                      ? "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] active:scale-[0.99] cursor-pointer hover:border-[var(--color-ink)]/30"
                       : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)]"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)]">{dateStr}</span>
+                  {/* 1. Header: Date + Day Name + Status Pill */}
+                  <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--color-hairline)]/70">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <div className="flex items-baseline gap-1.5 font-mono">
+                        <span className={`text-base font-bold ${d.isToday ? "text-[#0070f3]" : "text-[var(--color-ink)]"}`}>
+                          {dayNumber} {monthShort}
+                        </span>
+                        <span
+                          className={`text-[11px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                            isSunday
+                              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                              : "bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)]"
+                          }`}
+                        >
+                          {dayName} {isSunday ? "• Rest" : ""}
+                        </span>
+                      </div>
                       {d.isToday && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--color-ink)] text-[var(--color-canvas)]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] shrink-0">
                           Today
                         </span>
                       )}
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${chip.color}`}>
-                      {chip.name}
+
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${chip.color}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        d.effectiveStatus === "PRESENT"
+                          ? "bg-emerald-500"
+                          : d.effectiveStatus === "HALF_DAY"
+                          ? "bg-amber-500"
+                          : d.effectiveStatus === "ABSENT"
+                          ? "bg-rose-500"
+                          : d.effectiveStatus === "WEEK_OFF"
+                          ? "bg-gray-400"
+                          : "bg-sky-500"
+                      }`} />
+                      <span>{chip.name}</span>
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2 text-xs font-mono">
-                    <div>
-                      <span className="text-xs text-[var(--color-mute)] uppercase font-semibold block">Shift Timings</span>
-                      <span className="text-[var(--color-ink)] font-semibold text-xs sm:text-sm">
-                        {d.punchIn ? formatTimeAMPM(d.punchIn) : "—"} → {d.punchOut ? formatTimeAMPM(d.punchOut) : "—"}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-[var(--color-mute)] uppercase font-semibold block">Hours</span>
-                      <span className="text-[var(--color-ink)] font-bold text-xs sm:text-sm">
-                        {d.worked_minutes > 0 ? formatMinutes(d.worked_minutes) : d.status === "WEEK_OFF" ? "Week Off" : "0h"}
-                      </span>
-                      {d.overtime_minutes > 0 && (
-                        <span className="text-xs text-amber-600 font-bold block">
-                          +{formatMinutes(d.overtime_minutes)} OT
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {(d.primaryMachine || d.primaryLocation) && (
-                    <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-[var(--color-hairline)]/40 text-xs text-[var(--color-mute)]">
-                      <div className="flex items-center gap-2 truncate">
-                        {d.primaryMachine && (
-                          <div className="flex items-center gap-1.5 truncate">
-                            <AnimatedTruck size={14} className="text-sky-600 shrink-0" />
-                            <span className="font-mono font-semibold text-[var(--color-ink)] truncate">{d.primaryMachine}</span>
+                  {/* 2. Middle Body: Worked Day vs. Non-Worked Day */}
+                  {d.worked_minutes > 0 || d.log_count > 0 ? (
+                    <div className="space-y-2.5">
+                      {/* Shift Punches & Worked Hours Well */}
+                      <div className="grid grid-cols-2 gap-2 bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)] text-xs font-mono">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider">
+                            Shift Timing
+                          </span>
+                          <span className="font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
+                            {d.punchIn ? formatTimeAMPM(d.punchIn) : "—"} → {d.punchOut ? formatTimeAMPM(d.punchOut) : "—"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5 text-right">
+                          <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider">
+                            Worked Hours
+                          </span>
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)]">
+                              {formatMinutes(d.worked_minutes)}
+                            </span>
+                            {d.overtime_minutes > 0 && (
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                +{formatMinutesShort(d.overtime_minutes)} OT
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {d.primaryLocation && (
-                          <div className="flex items-center gap-1.5 truncate">
-                            <AnimatedMapPin size={13} className="text-[var(--color-mute)] shrink-0" />
-                            <span className="truncate">{d.primaryLocation}</span>
-                          </div>
-                        )}
+                        </div>
                       </div>
-                      {isClickable && (
-                        <span className="inline-flex items-center text-[#0070f3] text-xs font-semibold shrink-0">
-                          <span>Details</span>
-                          <AnimatedChevronRight size={13} />
-                        </span>
+
+                      {/* Equipment & Location Details */}
+                      {(d.primaryMachine || d.primaryLocation) && (
+                        <div className="space-y-1.5 text-xs text-[var(--color-body)]">
+                          {d.primaryMachine && (
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <AnimatedTruck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                              <span className="font-mono font-semibold text-[var(--color-ink)] truncate">
+                                {d.primaryMachine}
+                              </span>
+                            </div>
+                          )}
+                          {d.primaryLocation && (
+                            <div className="flex items-center gap-1.5 min-w-0 text-[var(--color-mute)] text-[11.5px]">
+                              <AnimatedMapPin size={13} className="shrink-0 text-[var(--color-mute)]" />
+                              <span className="truncate">{d.primaryLocation}</span>
+                            </div>
+                          )}
+                        </div>
                       )}
+
+                      {/* Multi-Shift Entries Strip (if > 1 entry or breakdown) */}
+                      {d.entries && d.entries.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {d.entries.map((entry, idx) => (
+                            <span
+                              key={entry.id || idx}
+                              className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] px-2 py-0.5 rounded border border-[var(--color-hairline)]"
+                            >
+                              <span>{entry.shift_code ? `Shift ${entry.shift_code}` : `Shift #${idx + 1}`}:</span>
+                              <span className="text-[var(--color-mute)]">
+                                {entry.normal_working_hours ? `${entry.normal_working_hours}h` : "8h"}
+                              </span>
+                            </span>
+                          ))}
+                          {d.breakdown_minutes > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                              {d.breakdown_minutes}m Breakdown
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Non-Worked Day Content */
+                    <div className="py-1 text-xs text-[var(--color-mute)] flex items-center justify-between">
+                      <span className="text-[11.5px]">
+                        {d.status === "WEEK_OFF"
+                          ? "Scheduled Rest Day (Sunday)"
+                          : d.status === "ABSENT"
+                          ? "No operational shift logs submitted"
+                          : d.isToday
+                          ? "Shift in progress today"
+                          : "Upcoming scheduled workday"}
+                      </span>
+                      <span className="font-mono text-xs text-[var(--color-faint)]">
+                        {d.status === "WEEK_OFF" ? "Rest" : "0h"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 3. Footer Action: Details Link */}
+                  {isClickable && (
+                    <div className="flex items-center justify-end pt-2 border-t border-[var(--color-hairline)]/50">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#0070f3] hover:underline">
+                        <span>View Shift Log Details</span>
+                        <AnimatedChevronRight size={13} />
+                      </span>
                     </div>
                   )}
                 </div>

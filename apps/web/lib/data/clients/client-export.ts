@@ -26,7 +26,7 @@ export async function getClientsForExport(filter?: ClientDirectoryFilter): Promi
   let query = supabase
     .from("clients")
     .select(
-      "code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at"
+      "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at"
     );
 
   if (filter?.status === "active") {
@@ -67,7 +67,7 @@ export async function getClientsForExport(filter?: ClientDirectoryFilter): Promi
       : "Same as Site Address";
 
     return {
-      code: c.code || "",
+      code: c.client_id || c.code || "",
       company_name: c.company_name || "",
       contact_person: c.contact_person || "",
       phone: c.phone || "",

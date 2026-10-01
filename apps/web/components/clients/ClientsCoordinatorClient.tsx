@@ -13,12 +13,19 @@ import {
   Button,
   Pagination,
   FilterToolbar,
+  useToast,
 } from "@/components/ui";
 import { AnimatedCounter } from "@/components/ui/Motion";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import type { CRMClient, User } from "@/lib/types/database";
 import type { ClientKPIs } from "@/lib/data/clients";
 import { getClientListAction, restoreClientAction } from "@/app/actions/clients";
+import { getClientExportDataAction } from "@/app/actions/client-export";
+import {
+  exportClientsToExcel,
+  exportClientsToCSV,
+  exportClientsToPDF,
+} from "@/lib/utils/clients-export";
 import { serializeClientFilter, type ClientDirectoryFilter } from "@reachinternational/utils";
 import { ClientsHeader } from "./ClientsHeader";
 import { ClientsTable } from "./ClientsTable";
@@ -54,6 +61,11 @@ const DeleteDialog = dynamic(
 
 const ExportModule = dynamic(
   () => import("./ClientExportModal").then((mod) => mod.ClientExportModal),
+  { ssr: false }
+);
+
+const SiteModal = dynamic(
+  () => import("./SiteModal").then((mod) => mod.SiteModal),
   { ssr: false }
 );
 
@@ -237,6 +249,7 @@ interface ClientsCoordinatorClientProps {
   metrics: ClientKPIs;
   availableCities?: string[];
   currentSort?: string;
+  clientOptions?: Array<{ id: string; company_name: string; [key: string]: any }>;
 }
 
 export function ClientsCoordinatorClient({
@@ -248,6 +261,7 @@ export function ClientsCoordinatorClient({
   metrics,
   availableCities = [],
   currentSort: initialSortParam = "company_name_asc",
+  clientOptions = [],
 }: ClientsCoordinatorClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -391,15 +405,16 @@ export function ClientsCoordinatorClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<CRMClient | null>(null);
+  const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false);
+  const [selectedSiteClientId, setSelectedSiteClientId] = useState<string | null>(null);
 
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingClient, setDeletingClient] = useState<CRMClient | null>(null);
 
   const [isExportModuleOpen, setIsExportModuleOpen] = useState(false);
-
-  // Toast feedback state
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
 
   const canManageClients = ["super_admin", "admin", "manager"].includes(user.role);
 
@@ -450,6 +465,77 @@ export function ClientsCoordinatorClient({
     return options;
   }, [availableCities]);
 
+  // Direct Export Handlers
+  const handleExportExcel = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const records = await getClientExportDataAction({
+        search: localSearchTerm,
+        status: currentStatus,
+        city: currentCity,
+      });
+      const exportList = records && records.length > 0 ? records : clients;
+      if (!exportList || exportList.length === 0) {
+        toast("warning", "No client records found to export.");
+        return;
+      }
+      exportClientsToExcel(exportList);
+      toast("success", `Exported ${exportList.length} clients to Excel (.xlsx)`);
+    } catch (err: any) {
+      toast("error", "Failed to export Excel", err.message || "An error occurred");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [localSearchTerm, currentStatus, currentCity, clients, toast]);
+
+  const handleExportCSV = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const records = await getClientExportDataAction({
+        search: localSearchTerm,
+        status: currentStatus,
+        city: currentCity,
+      });
+      const exportList = records && records.length > 0 ? records : clients;
+      if (!exportList || exportList.length === 0) {
+        toast("warning", "No client records found to export.");
+        return;
+      }
+      exportClientsToCSV(exportList);
+      toast("success", `Exported ${exportList.length} clients to CSV (.csv)`);
+    } catch (err: any) {
+      toast("error", "Failed to export CSV", err.message || "An error occurred");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [localSearchTerm, currentStatus, currentCity, clients, toast]);
+
+  const handleExportPDF = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const records = await getClientExportDataAction({
+        search: localSearchTerm,
+        status: currentStatus,
+        city: currentCity,
+      });
+      const exportList = records && records.length > 0 ? records : clients;
+      if (!exportList || exportList.length === 0) {
+        toast("warning", "No client records found to export.");
+        return;
+      }
+      exportClientsToPDF(
+        exportList,
+        "Client-Directory",
+        currentStatus === "all" ? "Full Directory" : `Status: ${currentStatus.toUpperCase()}`
+      );
+      toast("success", `Opened PDF print report for ${exportList.length} clients`);
+    } catch (err: any) {
+      toast("error", "Failed to export PDF", err.message || "An error occurred");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [localSearchTerm, currentStatus, currentCity, clients, toast]);
+
   // Quick-add trigger from the reusable MobilePageHeader (+ / 3-dot)
   useEffect(() => {
     const handleQuickAdd = () => {
@@ -463,26 +549,19 @@ export function ClientsCoordinatorClient({
     };
   }, []);
 
-  // Quick-export & quick-print events from mobile header & desktop more menu
+  // Quick-export & quick-print events from mobile header & shortcuts
   useEffect(() => {
-    const handleExportExcel = () => {
-      setIsExportModuleOpen(true);
-    };
-    const handleExportCSV = () => {
-      setIsExportModuleOpen(true);
-    };
-    const handlePrintEvent = () => {
-      window.print();
-    };
     window.addEventListener("reach:quick-export-excel", handleExportExcel);
     window.addEventListener("reach:quick-export-csv", handleExportCSV);
-    window.addEventListener("reach:quick-print", handlePrintEvent);
+    window.addEventListener("reach:quick-export-pdf", handleExportPDF);
+    window.addEventListener("reach:quick-print", handleExportPDF);
     return () => {
       window.removeEventListener("reach:quick-export-excel", handleExportExcel);
       window.removeEventListener("reach:quick-export-csv", handleExportCSV);
-      window.removeEventListener("reach:quick-print", handlePrintEvent);
+      window.removeEventListener("reach:quick-export-pdf", handleExportPDF);
+      window.removeEventListener("reach:quick-print", handleExportPDF);
     };
-  }, []);
+  }, [handleExportExcel, handleExportCSV, handleExportPDF]);
 
   // ─── Silent URL Synchronization (Preserves bookmarkability without full RSC reload) ───
 
@@ -1011,6 +1090,11 @@ export function ClientsCoordinatorClient({
     setIsAddModalOpen(true);
   }, []);
 
+  const handleOpenAddSiteModal = useCallback((targetClientId?: unknown) => {
+    setSelectedSiteClientId(typeof targetClientId === "string" ? targetClientId : null);
+    setIsAddSiteModalOpen(true);
+  }, []);
+
   const handleOpenEditModal = useCallback((client: CRMClient) => {
     setEditingClient(client);
     setIsEditModalOpen(true);
@@ -1033,10 +1117,7 @@ export function ClientsCoordinatorClient({
       try {
         const res = await restoreClientAction(client.id);
         if (res.error) {
-          setToastMessage({
-            type: "error",
-            text: res.error,
-          });
+          toast("error", "Failed to restore client", res.error);
           return;
         }
 
@@ -1059,21 +1140,15 @@ export function ClientsCoordinatorClient({
         }
 
         queryCacheRef.current.clear();
-        setToastMessage({
-          type: "success",
-          text: `Client "${client.company_name || client.client_name}" restored successfully.`,
-        });
+        toast("success", `Client "${client.company_name || client.client_name}" restored successfully.`);
         startTransition(() => {
           router.refresh();
         });
       } catch (err: any) {
-        setToastMessage({
-          type: "error",
-          text: err.message || "Failed to restore client.",
-        });
+        toast("error", "Failed to restore client", err.message || "Failed to restore client.");
       }
     },
-    [currentStatus, router]
+    [currentStatus, router, toast]
   );
 
   const handleOpenExportModule = useCallback(() => {
@@ -1157,43 +1232,16 @@ export function ClientsCoordinatorClient({
 
   return (
     <div className="flex flex-col gap-5 pb-24 md:pb-6">
-      {/* Toast Notice Banner */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className={`flex items-center justify-between rounded-lg px-4 py-3 text-xs font-semibold shadow-md ${
-              toastMessage.type === "success"
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60"
-                : "bg-red-50 text-red-800 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/60"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {toastMessage.type === "success" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              ) : (
-                <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
-              )}
-              <span>{toastMessage.text}</span>
-            </div>
-            <button
-              onClick={() => setToastMessage(null)}
-              className="text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 1. ClientHeader with XLSX Export, MoreMenu, and Primary Add Client */}
+      {/* 1. ClientHeader with ExportDropdown and Primary Add Client */}
       <ClientsHeader
         canManageClients={canManageClients}
         totalClients={metrics.total}
+        isExporting={isExporting}
         onOpenAddModal={handleOpenAddModal}
-        onOpenExportModal={handleOpenExportModule}
+        onOpenAddSiteModal={handleOpenAddSiteModal}
+        onExportExcel={handleExportExcel}
+        onExportCSV={handleExportCSV}
+        onExportPDF={handleExportPDF}
       />
 
       {/* 2. Interactive KPI Cards Row (matching /machines pattern) */}
@@ -1458,6 +1506,7 @@ export function ClientsCoordinatorClient({
             onEditClient={handleOpenEditModal}
             onDeleteClient={handleOpenDeleteDialog}
             onRestoreClient={handleRestoreClient}
+            onAddSiteClient={(c) => handleOpenAddSiteModal(c.id)}
           />
         </div>
       ) : (
@@ -1500,6 +1549,7 @@ export function ClientsCoordinatorClient({
                       onEditClient={handleOpenEditModal}
                       onDeleteClient={handleOpenDeleteDialog}
                       onRestoreClient={handleRestoreClient}
+                      onAddSiteClient={(c) => handleOpenAddSiteModal(c.id)}
                     />
                   ))}
                 </AnimatePresence>
@@ -1569,10 +1619,25 @@ export function ClientsCoordinatorClient({
           onSuccess={() => {
             queryCacheRef.current.clear();
             setIsAddModalOpen(false);
-            setToastMessage({
-              type: "success",
-              text: "New client registered successfully.",
-            });
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Lazy SiteModal for Adding Sites */}
+      {isAddSiteModalOpen && (
+        <SiteModal
+          isOpen={isAddSiteModalOpen}
+          clientId={selectedSiteClientId || undefined}
+          clients={clientOptions}
+          onClose={() => {
+            setIsAddSiteModalOpen(false);
+            setSelectedSiteClientId(null);
+          }}
+          onSuccess={() => {
+            queryCacheRef.current.clear();
+            setIsAddSiteModalOpen(false);
+            setSelectedSiteClientId(null);
             router.refresh();
           }}
         />
@@ -1591,10 +1656,6 @@ export function ClientsCoordinatorClient({
             queryCacheRef.current.clear();
             setIsEditModalOpen(false);
             setEditingClient(null);
-            setToastMessage({
-              type: "success",
-              text: "Client details updated successfully.",
-            });
             router.refresh();
           }}
         />
@@ -1618,19 +1679,13 @@ export function ClientsCoordinatorClient({
             queryCacheRef.current.clear();
             setIsDeleteDialogOpen(false);
             setDeletingClient(null);
-            setToastMessage({
-              type: "success",
-              text: `Client "${deleted.company_name || deleted.client_name}" soft-deleted successfully.`,
-            });
+            toast("success", `Client "${deleted.company_name || deleted.client_name}" soft-deleted successfully.`);
             startTransition(() => {
               router.refresh();
             });
           }}
           onError={(err) => {
-            setToastMessage({
-              type: "error",
-              text: err,
-            });
+            toast("error", "Failed to delete client", err);
           }}
         />
       )}

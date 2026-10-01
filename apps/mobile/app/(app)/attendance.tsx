@@ -34,6 +34,7 @@ import {
   MapPin,
   AlertCircle,
   Check,
+  Truck,
 } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
@@ -75,6 +76,7 @@ export interface AttendanceDayEntry {
   model?: string;
   serial_number?: string;
   manufacturer?: string;
+  shift_code?: string | null;
   start_time: string | null;
   end_time: string | null;
   start_meter: number | null;
@@ -341,6 +343,15 @@ export default function AttendanceScreen() {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
   };
 
+  const getInitials = (name: string) => {
+    if (!name) return 'OP';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
   const formatTime = (t: string | null) => {
     if (!t) return '—';
     const parts = t.split(':');
@@ -359,36 +370,44 @@ export default function AttendanceScreen() {
     return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
   };
 
-  const renderStatusBadge = (status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF' | 'DISABLED') => {
+  const renderStatusBadge = (
+    status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF' | 'DISABLED',
+    isToday = false
+  ) => {
     switch (status) {
       case 'PRESENT':
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.3)' }]}>
+            <View style={[styles.statusDot, { backgroundColor: '#16a34a' }]} />
             <Text style={[styles.statusBadgeText, { color: '#16a34a' }]}>Present</Text>
           </View>
         );
       case 'HALF_DAY':
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: 'rgba(217, 119, 6, 0.3)' }]}>
+            <View style={[styles.statusDot, { backgroundColor: '#d97706' }]} />
             <Text style={[styles.statusBadgeText, { color: '#d97706' }]}>Half Day</Text>
           </View>
         );
       case 'WEEK_OFF':
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(107, 114, 128, 0.12)', borderColor: 'rgba(107, 114, 128, 0.3)' }]}>
-            <Text style={[styles.statusBadgeText, { color: '#6b7280' }]}>Week Off</Text>
+            <View style={[styles.statusDot, { backgroundColor: '#6b7280' }]} />
+            <Text style={[styles.statusBadgeText, { color: '#6b7280' }]}>Rest Day</Text>
           </View>
         );
       case 'DISABLED':
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(156, 163, 175, 0.12)', borderColor: 'rgba(156, 163, 175, 0.25)' }]}>
-            <Text style={[styles.statusBadgeText, { color: '#9ca3af' }]}>—</Text>
+            <View style={[styles.statusDot, { backgroundColor: '#9ca3af' }]} />
+            <Text style={[styles.statusBadgeText, { color: '#9ca3af' }]}>{isToday ? 'In Progress' : 'Upcoming'}</Text>
           </View>
         );
       case 'ABSENT':
       default:
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(220, 38, 38, 0.12)', borderColor: 'rgba(220, 38, 38, 0.3)' }]}>
+            <View style={[styles.statusDot, { backgroundColor: '#dc2626' }]} />
             <Text style={[styles.statusBadgeText, { color: '#dc2626' }]}>Absent</Text>
           </View>
         );
@@ -499,76 +518,214 @@ export default function AttendanceScreen() {
         <Text style={[styles.sectionHeading, { color: theme.colors.ink }]}>Daily Attendance Records</Text>
 
         {days.map((day) => {
-          const dayNum = day.date.split('-')[2];
-          const dowLabel = DOW_LABELS[day.dow];
+          const [yearStr, monthStr, dayNum] = day.date.split('-');
+          const monthIdx = parseInt(monthStr, 10) - 1;
+          const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][monthIdx] || '';
+          const dowFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day.dow] || '';
           const isSunday = day.dow === 0;
           const todayStr = new Date().toISOString().slice(0, 10);
           const isFuture = day.date > todayStr;
           const isToday = day.date === todayStr;
-          const isTodayNoLog = isToday && day.log_count === 0 && day.worked_minutes === 0;
-          const isDisabled = (day.status === 'DISABLED' || isFuture || isTodayNoLog) && !isSunday;
-          const effectiveStatus = isDisabled ? 'DISABLED' : day.status;
+          const hasWorked = day.worked_minutes > 0 || (day.entries && day.entries.length > 0);
+          const isTodayNoLog = isToday && !hasWorked;
+
+          // Effective status determination
+          const effectiveStatus: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF' | 'DISABLED' =
+            hasWorked
+              ? (day.status === 'WEEK_OFF' || day.status === 'DISABLED' ? 'PRESENT' : day.status)
+              : isSunday
+              ? 'WEEK_OFF'
+              : (isFuture || isTodayNoLog)
+              ? 'DISABLED'
+              : day.status;
+
+          const isCardDimmed = (effectiveStatus === 'DISABLED' && !isToday) || (effectiveStatus === 'WEEK_OFF');
 
           return (
             <View
               key={day.date}
               style={[
-                styles.dayRowCard,
+                styles.dayCard,
                 {
                   backgroundColor: theme.colors.canvasElevated,
-                  borderColor: isSunday
-                    ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
-                    : isDisabled
-                    ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')
+                  borderColor: isToday
+                    ? theme.colors.link
+                    : effectiveStatus === 'PRESENT'
+                    ? 'rgba(22, 163, 74, 0.25)'
+                    : effectiveStatus === 'HALF_DAY'
+                    ? 'rgba(217, 119, 6, 0.25)'
+                    : effectiveStatus === 'ABSENT'
+                    ? 'rgba(220, 38, 38, 0.25)'
                     : theme.colors.hairline,
-                  opacity: isDisabled ? 0.45 : isSunday ? 0.75 : 1,
+                  opacity: isCardDimmed ? 0.65 : 1,
                 },
               ]}
             >
-              <View style={styles.dayDateCol}>
-                <Text style={[styles.dayNum, { color: isDisabled ? theme.colors.faint : theme.colors.ink }]}>{dayNum}</Text>
-                <Text style={[styles.dayDow, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>{dowLabel}</Text>
-              </View>
-
-              <View style={styles.dayDetailsCol}>
-                <View style={styles.dayStatusRow}>
-                  {renderStatusBadge(effectiveStatus)}
-                  {day.worked_minutes > 0 ? (
-                    <Text style={[styles.dayWorkedText, { color: theme.colors.ink }]}>
-                      {formatMins(day.worked_minutes)}
+              {/* Card Header: Date Pill, Month & Day, Today Tag, Status Badge */}
+              <View style={styles.dayCardHeader}>
+                <View style={styles.dayCardDateGroup}>
+                  <View
+                    style={[
+                      styles.dayNumberPill,
+                      {
+                        backgroundColor: isToday
+                          ? theme.colors.link
+                          : (isDark ? '#262626' : '#f4f4f5'),
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayNumberText,
+                        { color: isToday ? '#ffffff' : theme.colors.ink },
+                      ]}
+                    >
+                      {dayNum}
                     </Text>
-                  ) : isDisabled ? (
-                    <Text style={{ fontSize: 12.5, color: theme.colors.faint }}>
-                      {isToday ? 'In progress' : 'Upcoming'}
+                  </View>
+                  <View style={{ marginLeft: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.dayMonthText, { color: theme.colors.ink }]}>
+                        {dayNum} {monthName}
+                      </Text>
+                      {isToday && (
+                        <View style={[styles.todayBadge, { backgroundColor: 'rgba(0, 112, 243, 0.12)' }]}>
+                          <Text style={[styles.todayBadgeText, { color: theme.colors.link }]}>TODAY</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.dayDowFullText, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>
+                      {dowFull}
                     </Text>
-                  ) : null}
-                  {day.overtime_minutes > 0 ? (
-                    <Text style={[styles.dayOtText, { color: '#2563eb' }]}>
-                      +{formatMins(day.overtime_minutes)} OT
-                    </Text>
-                  ) : null}
+                  </View>
                 </View>
 
-                {day.punch_in && day.punch_out ? (
-                  <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                    Shift: {formatTimeAMPM(day.punch_in)} – {formatTimeAMPM(day.punch_out)}
-                  </Text>
-                ) : null}
+                {/* Status Badge */}
+                {renderStatusBadge(effectiveStatus, isToday)}
+              </View>
 
-                {day.entries && day.entries.length > 0 ? (
-                  <View style={styles.dayEntriesWrap}>
-                    {day.entries.map((entry, idx) => (
-                      <View key={entry.id || idx} style={styles.dayEntryItem}>
-                        <Text style={[styles.entryTime, { color: theme.colors.mute }]} numberOfLines={1}>
-                          {entry.machine_code ? `${entry.machine_code} • ` : ''}
-                          {formatTimeAMPM(entry.start_time)} - {formatTimeAMPM(entry.end_time)}
-                          {entry.location ? ` • ${entry.location}` : ''}
+              {/* Card Body: Worked Hours, Punches, Machine, Location */}
+              {hasWorked ? (
+                <View style={styles.dayCardContent}>
+                  {/* Hours & Punches Box */}
+                  <View
+                    style={[
+                      styles.dayHoursWell,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.dayPunchesCol}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Clock size={12} color={theme.colors.mute} />
+                        <Text style={[styles.dayPunchesLabel, { color: theme.colors.mute }]}>
+                          PUNCHES
                         </Text>
                       </View>
-                    ))}
+                      <Text style={[styles.dayPunchesTime, { color: theme.colors.ink }]}>
+                        {day.punch_in && day.punch_out
+                          ? `${formatTimeAMPM(day.punch_in)} – ${formatTimeAMPM(day.punch_out)}`
+                          : '06:00 AM – 02:00 PM'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.dayWorkedCol}>
+                      <Text style={[styles.dayWorkedLabel, { color: theme.colors.mute }]}>
+                        WORKED
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.dayWorkedHours, { color: theme.colors.ink }]}>
+                          {formatMins(day.worked_minutes)}
+                        </Text>
+                        {day.overtime_minutes > 0 && (
+                          <View style={styles.dayOtPill}>
+                            <Text style={styles.dayOtPillText}>
+                              +{formatMins(day.overtime_minutes)} OT
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                ) : null}
-              </View>
+
+                  {/* Entries (Machinery & Location) */}
+                  {day.entries && day.entries.length > 0 && (
+                    <View style={styles.dayEntriesStack}>
+                      {day.entries.map((entry, idx) => (
+                        <View
+                          key={entry.id || idx}
+                          style={[
+                            styles.dayEntryCard,
+                            {
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                              borderColor: theme.colors.hairline,
+                            },
+                          ]}
+                        >
+                          <View style={styles.dayEntryRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                              <Truck size={13} color={theme.colors.link} />
+                              <Text style={[styles.entryMachineTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                                {entry.machine_code || 'Machinery'}
+                                {entry.machine_name ? ` • ${entry.machine_name}` : entry.model ? ` • ${entry.model}` : ''}
+                              </Text>
+                            </View>
+                            {entry.shift_code && (
+                              <View style={[styles.shiftCodeBadge, { borderColor: theme.colors.hairline }]}>
+                                <Text style={[styles.shiftCodeBadgeText, { color: theme.colors.mute }]}>
+                                  Shift {entry.shift_code}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={[styles.dayEntryMetaRow, { marginTop: 4 }]}>
+                            {entry.location ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                                <MapPin size={11} color={theme.colors.mute} />
+                                <Text style={[styles.entryMetaText, { color: theme.colors.mute }]} numberOfLines={1}>
+                                  {entry.location}
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {entry.is_breakdown ? (
+                              <View style={styles.breakdownBadge}>
+                                <Text style={styles.breakdownBadgeText}>
+                                  {entry.running_hours ? 'Breakdown' : 'Machine Breakdown'}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                /* Non-worked informative message */
+                <View
+                  style={[
+                    styles.dayEmptyStateWell,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.015)',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.dayEmptyStateText, { color: theme.colors.mute }]}>
+                    {isSunday
+                      ? 'Scheduled Rest Day / Weekend Off'
+                      : effectiveStatus === 'ABSENT'
+                      ? 'No shift logs submitted for this scheduled workday'
+                      : isToday
+                      ? 'Shift in progress • No logs submitted yet'
+                      : 'Upcoming scheduled working day'}
+                  </Text>
+                </View>
+              )}
             </View>
           );
         })}
@@ -753,96 +910,121 @@ export default function AttendanceScreen() {
               />
             ) : (
               <View style={styles.cardList}>
-                {filteredEmployees.map((emp) => (
-                  <TouchableOpacity
-                    key={emp.employee_id}
-                    style={[
-                      styles.employeeCard,
-                      { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                    ]}
-                    activeOpacity={0.7}
-                    onPress={() => handleOpenDetail(emp)}
-                  >
-                    {/* Header Row */}
-                    <View style={styles.cardHeader}>
-                      <View style={styles.nameRow}>
-                        <HighlightText
-                          text={emp.full_name}
-                          query={searchQuery}
-                          style={[styles.empName, { color: theme.colors.ink }]}
-                          numberOfLines={1}
-                        />
-                      </View>
-
-                      <View style={styles.metaRow}>
-                        {emp.phone ? (
-                          <View style={styles.metaItem}>
-                            <Phone size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                            <HighlightText
-                              text={emp.phone}
-                              query={searchQuery}
-                              style={[styles.metaText, { color: theme.colors.mute }]}
-                            />
+                {filteredEmployees.map((emp) => {
+                  const initials = getInitials(emp.full_name);
+                  return (
+                    <TouchableOpacity
+                      key={emp.employee_id}
+                      style={[
+                        styles.employeeCard,
+                        { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => handleOpenDetail(emp)}
+                    >
+                      {/* Header Row: Initials Avatar, Name, Role badge */}
+                      <View style={styles.cardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View
+                            style={[
+                              styles.empAvatar,
+                              {
+                                backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                                borderColor: theme.colors.hairline,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.empAvatarText, { color: theme.colors.ink }]}>
+                              {initials}
+                            </Text>
                           </View>
-                        ) : null}
-                        {emp.city ? (
-                          <View style={styles.metaItem}>
-                            <MapPin size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                            <HighlightText
-                              text={emp.city}
-                              query={searchQuery}
-                              style={[styles.metaText, { color: theme.colors.mute }]}
-                            />
+                          <View style={{ flex: 1 }}>
+                            <View style={styles.nameRow}>
+                              <HighlightText
+                                text={emp.full_name}
+                                query={searchQuery}
+                                style={[styles.empName, { color: theme.colors.ink }]}
+                                numberOfLines={1}
+                              />
+                              <View style={[styles.roleBadge, { borderColor: theme.colors.hairline }]}>
+                                <Text style={[styles.roleBadgeText, { color: theme.colors.mute }]}>
+                                  OPERATOR
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.metaRow}>
+                              {emp.phone ? (
+                                <View style={styles.metaItem}>
+                                  <Phone size={11} color={theme.colors.mute} style={{ marginRight: 3 }} />
+                                  <HighlightText
+                                    text={emp.phone}
+                                    query={searchQuery}
+                                    style={[styles.metaText, { color: theme.colors.mute }]}
+                                  />
+                                </View>
+                              ) : null}
+                              {emp.city ? (
+                                <View style={styles.metaItem}>
+                                  <MapPin size={11} color={theme.colors.mute} style={{ marginRight: 3 }} />
+                                  <HighlightText
+                                    text={emp.city}
+                                    query={searchQuery}
+                                    style={[styles.metaText, { color: theme.colors.mute }]}
+                                  />
+                                </View>
+                              ) : null}
+                            </View>
                           </View>
-                        ) : null}
+                        </View>
                       </View>
-                    </View>
 
-                    {/* Day Counts Strip */}
-                    <View style={[styles.statsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
-                      <View style={styles.statCol}>
-                        <Text style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
-                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
+                      {/* Day Counts Strip */}
+                      <View style={[styles.statsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
+                        <View style={styles.statCol}>
+                          <Text style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
+                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statCol}>
+                          <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
+                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statCol}>
+                          <Text style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
+                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statCol}>
+                          <Text style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
+                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
+                        </View>
                       </View>
-                      <View style={styles.statDivider} />
-                      <View style={styles.statCol}>
-                        <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
-                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
-                      </View>
-                      <View style={styles.statDivider} />
-                      <View style={styles.statCol}>
-                        <Text style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
-                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
-                      </View>
-                      <View style={styles.statDivider} />
-                      <View style={styles.statCol}>
-                        <Text style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
-                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
-                      </View>
-                    </View>
 
-                    {/* Hours & Shift Footer */}
-                    <View style={styles.cardFooter}>
-                      <View style={styles.hoursItem}>
-                        <Clock size={13} color={theme.colors.mute} style={{ marginRight: 4 }} />
-                        <Text style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
-                        <Text style={[styles.hoursValue, { color: theme.colors.ink }]}>
-                          {formatMins(emp.worked_minutes)}
-                        </Text>
-                        {emp.overtime_minutes > 0 ? (
-                          <Text style={[styles.otBadge, { color: '#2563eb' }]}>
-                            {' '}+{formatMins(emp.overtime_minutes)} OT
+                      {/* Hours & Shift Footer */}
+                      <View style={styles.cardFooter}>
+                        <View style={styles.hoursItem}>
+                          <Clock size={13} color={theme.colors.mute} style={{ marginRight: 4 }} />
+                          <Text style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
+                          <Text style={[styles.hoursValue, { color: theme.colors.ink }]}>
+                            {formatMins(emp.worked_minutes)}
                           </Text>
-                        ) : null}
-                      </View>
+                          {emp.overtime_minutes > 0 ? (
+                            <Text style={[styles.otBadge, { color: '#2563eb' }]}>
+                              {' '}+{formatMins(emp.overtime_minutes)} OT
+                            </Text>
+                          ) : null}
+                        </View>
 
-                      <View style={styles.viewDetailBtn}>
-                        <Text style={styles.viewDetailText}>View Calendar</Text>
-                        <ChevronRight size={14} color="#0070f3" />
+                        <View style={styles.viewDetailBtn}>
+                          <Text style={styles.viewDetailText}>Daily Cards</Text>
+                          <ChevronRight size={14} color="#0070f3" />
+                        </View>
                       </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
           </>
@@ -1027,15 +1209,47 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  empAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  empAvatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  roleBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     borderRadius: 4,
     borderWidth: 1,
   },
-  statusBadgeText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+  roleBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   metaRow: {
     flexDirection: 'row',
@@ -1212,54 +1426,163 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  dayRowCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 12,
+  dayCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 12,
+    padding: 14,
   },
-  dayDateCol: {
-    width: 44,
+  dayCardHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  dayNum: {
-    fontSize: 18,
+  dayCardDateGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dayNumberPill: {
+    width: 38,
+    height: 38,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumberText: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  dayMonthText: {
+    fontSize: 14,
     fontWeight: '700',
   },
-  dayDow: {
+  todayBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  todayBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  dayDowFullText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 1,
   },
-  dayDetailsCol: {
+  dayCardContent: {
+    gap: 8,
+  },
+  dayHoursWell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  dayPunchesCol: {
     flex: 1,
   },
-  dayStatusRow: {
+  dayPunchesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  dayPunchesTime: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  dayWorkedCol: {
+    alignItems: 'flex-end',
+  },
+  dayWorkedLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  dayWorkedHours: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  dayOtPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    marginTop: 2,
+  },
+  dayOtPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#d97706',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  dayEntriesStack: {
+    gap: 6,
+  },
+  dayEntryCard: {
+    padding: 10,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  dayEntryRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 4,
   },
-  dayWorkedText: {
-    fontSize: 13.5,
+  entryMachineTitle: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  dayOtText: {
-    fontSize: 12.5,
+  shiftCodeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  shiftCodeBadgeText: {
+    fontSize: 10,
     fontWeight: '600',
   },
-  dayEntriesWrap: {
-    marginTop: 4,
-    gap: 2,
-  },
-  dayEntryItem: {
+  dayEntryMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  entryTime: {
-    fontSize: 12.5,
+  entryMetaText: {
+    fontSize: 11.5,
+  },
+  breakdownBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+  },
+  breakdownBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  dayEmptyStateWell: {
+    padding: 12,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayEmptyStateText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

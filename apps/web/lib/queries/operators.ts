@@ -539,11 +539,16 @@ export const getOperationsLogsPage = cache(
           query = query.eq("machine_id", params.machineId);
         }
         if (params.site && params.site !== "all") {
-          const siteCandidates = resolveSiteMatchCandidates(params.site);
-          if (siteCandidates.length === 1) {
-            query = query.eq("location", siteCandidates[0]);
-          } else if (siteCandidates.length > 1) {
-            query = query.in("location", siteCandidates);
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(params.site.trim());
+          if (isUuid) {
+            query = query.eq("site_id", params.site.trim());
+          } else {
+            const siteCandidates = resolveSiteMatchCandidates(params.site);
+            if (siteCandidates.length === 1) {
+              query = query.eq("location", siteCandidates[0]);
+            } else if (siteCandidates.length > 1) {
+              query = query.in("location", siteCandidates);
+            }
           }
         }
       } else if (params.viewMode === "operator" && params.operatorId && params.operatorId !== "all") {

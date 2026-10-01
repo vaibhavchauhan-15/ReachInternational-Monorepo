@@ -316,5 +316,23 @@ Audit         not loaded (unmounted until tab click)
 - **Automated Verification**:
   - `supabase/tests/test_shift_presets_and_renaming_cascade.mjs` (6/6 tests passing on Dev DB `vlmxciuogczumumrwyot`).
 
+---
+
+## 18. Normalized Client Operating Sites & Direct Site Creation (2026-10-01)
+- **One Client, Multiple Operating Sites**:
+  - Eliminates client duplication by decoupling company registration from operational deployment sites.
+  - Client record holds tax identity (`gstin`, `pan_number`), company name, and official billing address.
+  - Dedicated table `public.client_sites` stores operational locations with auto-incrementing site codes (`CLI-XXXX-SNN`), generated `address_key`, immutable site code triggers, and fuzzy similarity search (`find_similar_sites`).
+  - Added `site_id` foreign keys to `machines` and `machine_hour_logs` with composite validation triggers.
+- **Direct Site Creation Workflows (Web & Mobile Parity)**:
+  - **Directory Header "Add Site" Button (`ClientsHeader.tsx`)**: Allows adding a site for any existing client directly from `/clients` without navigating into details.
+  - **Contextual Row Actions (`ClientRowActionsMenu.tsx`)**: "Add Site" quick action on table rows preselects the targeted client.
+  - **Mobile Touch Cards (`MobileClientCard.tsx`)**: Direct "Add Site" button next to Edit on cards.
+  - **Client Detail Tab (`/clients/[id]`)**: Full dedicated "Sites" tab with live count, Add Site, Edit Site, and Deactivate actions.
+  - **Mobile Sites Tab & Modal (`apps/mobile/app/(app)/clients.tsx`)**: Dedicated "Sites" tab chip, scrollable site cards, and native Add Site modal.
+- **Shared Validation & Utilities**:
+  - `@reachinternational/validation`: `SiteSchema` with ReDoS-safe bounds and 6-digit pincode validator.
+  - `@reachinternational/utils`: `normText`, `addressKey`, `formatAddress`, and 5/5 unit tests.
+
 
 

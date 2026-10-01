@@ -643,4 +643,13 @@ export async function applyClientShiftPresetAction(
   }
 }
 
+/**
+ * Server Action: Get cached active client options for dropdown selectors
+ */
+export async function getClientOptionsAction() {
+  const { getClientOptions } = await import("@/lib/queries/clients");
+  return getClientOptions();
+}
+
+
 

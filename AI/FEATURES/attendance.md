@@ -26,6 +26,7 @@ Supports both administrative roster summaries (for HR, Managers, Admins, Supervi
   - `supabase/migrations/116_fix_attendance_daily_detail_rpc.sql` — Daily detail computation with shift timings and breakdown deduction.
   - `supabase/migrations/136_allow_operator_self_and_manager_attendance_daily_detail.sql` — Operator self-access authorization and manager RBAC grant.
   - `supabase/migrations/137_restrict_operator_attendance_and_monthly_summary.sql` — Strict database-level operator lockdown on `get_attendance_monthly_summary` (raises 42501) and self-check on `get_attendance_daily_detail` (raises 42501 if caller is operator and `auth.uid() <> p_employee_id`).
+  - `supabase/migrations/150_fix_attendance_summary_and_daily_detail_rpcs.sql` — Unified CTE scoping for `get_attendance_monthly_summary`, weekend/Sunday shift log reflection as `PRESENT`, scheduled vs absent day calculations, `shift_code` projection in `get_attendance_daily_detail`, and mobile day cards optimization.
 
 ## Security & Data Isolation
 1. **Operator Isolation Rule**:

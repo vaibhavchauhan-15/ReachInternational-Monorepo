@@ -6,7 +6,7 @@ import {
   AnimatedCopy,
   AnimatedCheck,
 } from "@/components/ui/animated-icons";
-import { Phone, Edit2, Trash2, RotateCcw } from "lucide-react";
+import { Phone, Edit2, Trash2, RotateCcw, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge, useToast } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
@@ -20,6 +20,7 @@ interface MobileClientCardProps {
   onEditClient: (client: CRMClient) => void;
   onDeleteClient: (client: CRMClient) => void;
   onRestoreClient?: (client: CRMClient) => void;
+  onAddSiteClient?: (client: CRMClient) => void;
 }
 
 export const MobileClientCard = memo(function MobileClientCard({
@@ -30,6 +31,7 @@ export const MobileClientCard = memo(function MobileClientCard({
   onEditClient,
   onDeleteClient,
   onRestoreClient,
+  onAddSiteClient,
 }: MobileClientCardProps) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -211,6 +213,21 @@ export const MobileClientCard = memo(function MobileClientCard({
                 <Edit2 size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
                 <span>Edit</span>
               </button>
+
+              {!isSoftDeleted && onAddSiteClient && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddSiteClient(client);
+                  }}
+                  className="h-8 px-2.5 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Add Site Location"
+                >
+                  <MapPin size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Add Site</span>
+                </button>
+              )}
 
               <button
                 type="button"

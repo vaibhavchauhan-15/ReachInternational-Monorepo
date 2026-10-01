@@ -12,6 +12,7 @@ export interface ExportDropdownProps {
   onPrint?: () => void;
   loading?: boolean;
   label?: string;
+  responsive?: boolean;
   align?: "left" | "right";
   className?: string;
 }
@@ -23,6 +24,7 @@ export function ExportDropdown({
   onPrint,
   loading = false,
   label = "Export",
+  responsive = true,
   align = "right",
   className = "",
 }: ExportDropdownProps) {
@@ -62,9 +64,9 @@ export function ExportDropdown({
           />
         }
         onClick={() => setIsOpen((prev) => !prev)}
-        className="h-9 px-3 text-xs font-semibold whitespace-nowrap"
+        className="h-9 px-2.5 sm:px-3 text-xs font-semibold whitespace-nowrap"
       >
-        {label}
+        <span className={responsive ? "hidden sm:inline" : ""}>{label}</span>
       </Button>
 
       <AnimatePresence>

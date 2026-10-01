@@ -172,9 +172,18 @@
   - `user_documents` table with FK to types, UNIQUE(user_id, document_type_code), indexes, RLS.
   - Storage bucket: `user_files` (private, signed URL, 2MB limit, jpeg/png/pdf).
   - Storage path convention: `documents/{user_id}/{type_code}.{ext}`.
-  - Storage RLS: owner CRUD via folder check; admin/HR read.
-  - Pure creation migration avoiding direct deletion on `storage.buckets` (`storage.protect_delete()` compliance).
-  - `updated_at` trigger via existing `update_updated_at()`.
+- `151_client_sites_schema.sql`: Client Sites Normalization Phase A:
+  - Created `public.norm_text(text)` deterministic normalization function.
+  - Created `public.client_sites` table with auto-assigned `site_code` (`CLI-XXXX-SNN`), generated `address_key`, immutable site code trigger, unique constraints, and RLS policies.
+  - Created `public.find_similar_sites` fuzzy search RPC with `pg_trgm`.
+  - Added `site_id` column and composite FK `(site_id, client_id)` to `machines` and `machine_hour_logs`.
+- `152_client_sites_backfill.sql`: Client Sites Normalization Phase B:
+  - Idempotently created 5 initial sites from existing clients.
+  - Backfilled `machines.site_id` for rented machines.
+  - Temporarily bypassed `trg_enforce_machine_hour_logs_immutable` to backfill `machine_hour_logs.site_id` for all 36 logs.
+- `153_update_rpcs_for_site_id.sql`: Client Sites Normalization Phase C:
+  - Updated `submit_operator_hour_log_atomic` RPC to automatically resolve and insert `site_id` from machines.
+  - Updated `get_clients_directory_summary` RPC to return `sites_count` from `client_sites`.
 
 ## Schema Constraints & Triggers Summary
 

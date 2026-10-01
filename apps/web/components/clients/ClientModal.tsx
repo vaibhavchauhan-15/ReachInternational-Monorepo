@@ -10,7 +10,7 @@ import {
 import { AlertCircle, Save, Lock, Wrench, Clock, CheckCircle2, Moon, Sparkles } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
-import { Button, Input, Switch, CustomTimePicker } from "@/components/ui";
+import { Button, Input, Switch, CustomTimePicker, useToast } from "@/components/ui";
 import { invalidateClientShiftsCache } from "@/lib/cache/client-shifts-cache";
 import {
   CLIENT_SHIFT_PRESETS,
@@ -27,6 +27,7 @@ interface ClientModalProps {
 
 export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalProps) {
   const isEditing = Boolean(client);
+  const { toast } = useToast();
 
   const [formState, setFormState] = useState<ClientFormState>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -211,10 +212,12 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
     if (res.error) {
       setFormState(res);
+      toast("error", res.error);
     } else if (res.success) {
       if (client?.id) {
         invalidateClientShiftsCache(client.id);
       }
+      toast("success", isEditing ? "Client updated successfully" : "Client created successfully");
       onSuccess?.(res.client);
       onClose();
     }

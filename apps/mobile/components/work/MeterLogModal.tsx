@@ -13,7 +13,7 @@ import {
 import { Button, Input, TimeInput, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Check, ChevronDown, Clock, AlertTriangle, User } from 'lucide-react-native';
+import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2 } from 'lucide-react-native';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
 import {
@@ -1257,104 +1257,89 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                           style={{
                             minHeight: 44,
                             paddingHorizontal: 12,
-                            paddingVertical: 8,
+                            paddingVertical: 6,
                             borderRadius: 10,
                             borderWidth: 1.5,
-                            borderColor: isSelected
-                              ? theme.colors.ink
-                              : isLogged
-                              ? 'rgba(16, 185, 129, 0.7)'
-                              : hasAssignedShifts && isAssigned
-                              ? 'rgba(16, 185, 129, 0.6)'
+                            borderColor: isLogged
+                              ? isSelected
+                                ? '#059669'
+                                : '#10b981'
+                              : isSelected
+                              ? theme.colors.link
                               : theme.colors.hairline,
-                            backgroundColor: isSelected
-                              ? theme.colors.ink
-                              : isLogged
-                              ? 'rgba(16, 185, 129, 0.05)'
+                            backgroundColor: isLogged
+                              ? isSelected
+                                ? '#059669'
+                                : 'rgba(16, 185, 129, 0.12)'
+                              : isSelected
+                              ? theme.colors.link
                               : theme.colors.canvasElevated,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
+                            justifyContent: 'center',
+                            alignItems: isSelected ? 'flex-start' : 'center',
                           }}
                         >
-                          <Text
-                            style={{
-                              fontSize: 12.5,
-                              fontWeight: '800',
-                              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                              color: isSelected ? theme.colors.onPrimary : theme.colors.ink,
-                            }}
-                          >
-                            Shift {s.code}
-                          </Text>
-                          {(isLogged || hasAssignedShifts) && (
-                            <View
-                              style={{
-                                paddingHorizontal: 5,
-                                paddingVertical: 1.5,
-                                borderRadius: 4,
-                                backgroundColor: isLogged
-                                  ? isSelected
-                                    ? 'rgba(16, 185, 129, 0.35)'
-                                    : 'rgba(16, 185, 129, 0.15)'
-                                  : isAssigned
-                                  ? isSelected
-                                    ? 'rgba(16, 185, 129, 0.35)'
-                                    : 'rgba(16, 185, 129, 0.12)'
-                                  : isSelected
-                                  ? 'rgba(255, 255, 255, 0.15)'
-                                  : theme.colors.hairlineSoft,
-                              }}
-                            >
+                          {isSelected ? (
+                            /* EXPANDED (SELECTED) STATE: Exactly TWO lines (Name and Shift Time) */
+                            <View style={{ justifyContent: 'center' }}>
                               <Text
                                 style={{
-                                  fontSize: 10,
-                                  fontWeight: '700',
-                                  color: isLogged
-                                    ? isSelected
-                                      ? '#6ee7b7'
-                                      : '#059669'
-                                    : isAssigned
-                                    ? isSelected
-                                      ? '#6ee7b7'
-                                      : '#059669'
-                                    : isSelected
-                                    ? 'rgba(255,255,255,0.7)'
-                                    : theme.colors.mute,
+                                  fontSize: 12,
+                                  fontWeight: '800',
+                                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                                  color: theme.colors.onPrimary,
                                 }}
                               >
-                                {isLogged
-                                  ? `✓ Logged${loggedRow?.running_hours ? ` (${loggedRow.running_hours}h)` : ''}`
-                                  : isAssigned
-                                  ? '✓ Assigned'
-                                  : 'Unassigned'}
+                                {isLogged ? `✓ Shift ${s.code}` : `Shift ${s.code}`}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: '500',
+                                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                                  color: 'rgba(255,255,255,0.9)',
+                                  marginTop: 2,
+                                }}
+                              >
+                                {formatTo12Hour(s.start_time) || s.start_time} - {formatTo12Hour(s.end_time) || s.end_time}
                               </Text>
                             </View>
-                          )}
-                          {subtitle ? (
+                          ) : (
+                            /* CLOSED (UNSELECTED) STATE: Exactly ONE line (Only Name) */
                             <Text
                               style={{
                                 fontSize: 12,
-                                fontWeight: '600',
-                                color: isSelected ? 'rgba(255,255,255,0.9)' : theme.colors.ink,
+                                fontWeight: '700',
+                                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                                color: isLogged ? '#059669' : theme.colors.ink,
                               }}
                             >
-                              ({subtitle})
+                              {isLogged ? `✓ Shift ${s.code}` : `Shift ${s.code}`}
                             </Text>
-                          ) : null}
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: '500',
-                              color: isSelected ? 'rgba(255,255,255,0.7)' : theme.colors.mute,
-                            }}
-                          >
-                            {formatTo12Hour(s.start_time) || s.start_time} - {formatTo12Hour(s.end_time) || s.end_time}
-                          </Text>
+                          )}
                         </TouchableOpacity>
                       );
                     })}
                   </ScrollView>
+                  {selectedShiftCode && todayLoggedCodes.includes(selectedShiftCode) && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderColor: 'rgba(16, 185, 129, 0.3)',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        padding: 8,
+                        marginTop: 8,
+                        gap: 6,
+                      }}
+                    >
+                      <CheckCircle2 size={15} color="#059669" />
+                      <Text style={{ fontSize: 12, color: '#047857', flex: 1, fontWeight: '500' }}>
+                        This shift has already been entered for today.
+                      </Text>
+                    </View>
+                  )}
                   {assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode) && (
                     <View
                       style={{

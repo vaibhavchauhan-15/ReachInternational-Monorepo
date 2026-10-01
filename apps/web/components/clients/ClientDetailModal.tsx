@@ -18,7 +18,7 @@ import {
   Wrench,
   AlertCircle,
 } from "lucide-react";
-import { formatAllowance, hasMaintenanceAllowance } from "@reachinternational/utils";
+import { formatAllowance, hasMaintenanceAllowance, formatDate } from "@reachinternational/utils";
 import type { CRMClient } from "@/lib/types/database";
 import {
   getClientLocationAction,
@@ -540,7 +540,7 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
                   <div key={h.id} className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-[var(--color-ink)]">{h.title}</span>
-                      <span className="text-[10px] text-[var(--color-mute)]">{new Date(h.timestamp).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-[var(--color-mute)]" suppressHydrationWarning>{formatDate(h.timestamp)}</span>
                     </div>
                     <p className="text-[var(--color-body)] text-[11px] pt-1">{h.description}</p>
                   </div>
@@ -563,7 +563,7 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
                   <div key={a.id} className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 flex items-center justify-between">
                     <div>
                       <span className="font-mono font-bold text-sky-600">{a.action}</span>
-                      <span className="text-[10px] text-[var(--color-mute)] ml-2">{new Date(a.created_at).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-[var(--color-mute)] ml-2" suppressHydrationWarning>{formatDate(a.created_at)}</span>
                     </div>
                     <span className="text-[10px] text-[var(--color-mute)]">{a.actor_name}</span>
                   </div>

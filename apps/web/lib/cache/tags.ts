@@ -27,6 +27,7 @@ export const TAGS = {
   clientsLocations: "clients:locations",
   clientsBranch: (branchId: string) => `clients:branch:${branchId}`,
   clientDetail: (id: string) => `client:${id}`,
+  clientSites: (clientId: string) => `client-sites:${clientId}`,
 
   vendors: "vendors",
   vendorsBranch: (branchId: string) => `vendors:branch:${branchId}`,

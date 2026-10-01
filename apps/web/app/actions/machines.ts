@@ -106,6 +106,7 @@ export async function createMachine(state: MachineFormState, formData: FormData)
     const current_supervisor_id = supervisor_ids[0] || null;
     const current_operator_id = operator_ids[0] || null;
     const client_id = (formData.get("client_id") as string)?.trim() || null;
+    const site_id = (formData.get("site_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
     const health_status = (formData.get("health_status") as string) || "active";
     const status = (formData.get("status") as string) || "available";
@@ -187,6 +188,7 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       operator_ids,
       current_operator_id,
       client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
+      site_id: status === "rented" && isValidUuid(client_id) && isValidUuid(site_id) ? site_id : null,
       hour_meter,
       health_status,
       status,
@@ -251,6 +253,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     const operator_ids = parseUuidArray(formData, "operator_ids", "current_operator_id");
     const current_operator_id = operator_ids[0] || null;
     const client_id = (formData.get("client_id") as string)?.trim() || null;
+    const site_id = (formData.get("site_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
     const health_status = (formData.get("health_status") as string) || "active";
     const status = (formData.get("status") as string) || "available";
@@ -281,6 +284,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
         operator_ids,
         current_operator_id,
         client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
+        site_id: status === "rented" && isValidUuid(client_id) && isValidUuid(site_id) ? site_id : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -388,6 +392,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       operator_ids,
       current_operator_id,
       client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
+      site_id: status === "rented" && isValidUuid(client_id) && isValidUuid(site_id) ? site_id : null,
       hour_meter,
       health_status,
       status,
@@ -504,6 +509,7 @@ export async function updateMachineOperationalStatus(
       updateData.status = payload.status;
       if (payload.status === "available") {
         updateData.client_id = null;
+        updateData.site_id = null;
       }
     }
 
@@ -535,6 +541,9 @@ export async function updateMachineOperationalStatus(
         payload.client_id && isValidUuid(payload.client_id)
           ? payload.client_id
           : null;
+      if (!updateData.client_id) {
+        updateData.site_id = null;
+      }
     }
 
     // Fetch current machine state before update for tamper-evident audit diff tracking
@@ -2235,8 +2244,9 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
  */
 export async function updateMachineClientAssignmentAction(
   machineId: string,
-  clientId: string | null
-): Promise<{ success?: boolean; error?: string; client_id?: string | null; status?: "available" | "rented" }> {
+  clientId: string | null,
+  siteId?: string | null
+): Promise<{ success?: boolean; error?: string; client_id?: string | null; site_id?: string | null; status?: "available" | "rented" }> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
@@ -2245,11 +2255,12 @@ export async function updateMachineClientAssignmentAction(
     const supabase = await createSupabaseServerClient();
     
     const validClientId = clientId && isValidUuid(clientId) ? clientId : null;
+    const validSiteId = validClientId && siteId && isValidUuid(siteId) ? siteId : null;
     const status: "available" | "rented" = validClientId ? "rented" : "available";
 
     const { data: previousMachine } = await supabase
       .from("machines")
-      .select("client_id, status, client:clients(id, company_name)")
+      .select("client_id, site_id, status, client:clients(id, company_name)")
       .eq("id", machineId)
       .maybeSingle();
 
@@ -2257,6 +2268,7 @@ export async function updateMachineClientAssignmentAction(
       .from("machines")
       .update({
         client_id: validClientId,
+        site_id: validSiteId,
         status,
         updated_at: new Date().toISOString(),
       })

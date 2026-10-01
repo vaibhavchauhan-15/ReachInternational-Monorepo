@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { redirect } from "next/navigation";
-import { getClientList, getClientKPIs } from "@/lib/data/clients";
+import { getClientList, getClientKPIs, getClientOptions } from "@/lib/data/clients";
 import { ClientsCoordinatorClient } from "@/components/clients/ClientsCoordinatorClient";
 
 export const metadata: Metadata = {
@@ -84,8 +84,8 @@ export default async function ClientsPage(props: {
   const parsedPageSize = parseInt((searchParams?.pageSize as string) || "10", 10);
   const pageSize = [10, 25, 50, 100].includes(parsedPageSize) ? parsedPageSize : 10;
 
-  // 2 & 5. Concurrent high-performance queries: KPI data & First page of clients
-  const [metrics, paginatedData] = await Promise.all([
+  // 2 & 5. Concurrent high-performance queries: KPI data, First page of clients, and Client selector options
+  const [metrics, paginatedData, clientOptions] = await Promise.all([
     getClientKPIs(),
     getClientList({
       page,
@@ -96,6 +96,7 @@ export default async function ClientsPage(props: {
       sortField,
       sortOrder,
     }),
+    getClientOptions(),
   ]);
 
   // Cities are embedded in metrics.cities_list via Migration 071 (0 extra DB queries)
@@ -111,6 +112,8 @@ export default async function ClientsPage(props: {
       metrics={metrics}
       availableCities={availableCities}
       currentSort={rawSort}
+      clientOptions={clientOptions}
     />
   );
 }
+

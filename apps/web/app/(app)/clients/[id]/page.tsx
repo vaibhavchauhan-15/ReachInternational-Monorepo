@@ -13,9 +13,11 @@ import {
   getClientHistory,
   getClientAuditLogs,
   getClientShiftCodes,
+  getClientSites,
 } from "@/lib/data/clients";
+import { INDIAN_STATES } from "@reachinternational/utils";
 import { EmptyState } from "@/components/ui";
-import { ClientDetailClient } from "./ClientDetailClient";
+import { ClientDetailClient } from "@/components/clients/ClientDetailClient";
 
 export async function generateMetadata(props: {
   params: Promise<{ id: string }>;
@@ -77,6 +79,7 @@ export default async function ClientDetailPage(props: {
     history,
     auditLogs,
     shiftCodes,
+    sites,
   ] = await Promise.all([
     getClientDetail(clientId),
     getClientDetailLocation(clientId),
@@ -87,6 +90,7 @@ export default async function ClientDetailPage(props: {
     getClientHistory(clientId),
     getClientAuditLogs(clientId, 50),
     getClientShiftCodes(clientId),
+    getClientSites(clientId),
   ]);
 
   if (!detailRes.client) {
@@ -119,6 +123,8 @@ export default async function ClientDetailPage(props: {
       initialHistory={history}
       initialAuditLogs={auditLogs}
       initialShiftCodes={shiftCodes}
+      initialSites={sites}
+      states={[...INDIAN_STATES]}
       currentUserRole={user.role}
     />
   );

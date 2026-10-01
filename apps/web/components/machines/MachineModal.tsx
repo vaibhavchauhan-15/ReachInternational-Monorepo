@@ -3,7 +3,9 @@
 import { useState, useTransition, useEffect } from "react";
 import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect, MultiUserSelect, ClientSelect, type ClientSelectItem } from "@/components/ui";
 import { createMachine, updateMachine, checkMachineSerialNumberAvailable, getMachineModalOptionsAction } from "@/app/actions/machines";
+import { getClientSitesAction } from "@/app/actions/client-sites";
 import type { Machine, User } from "@/lib/types/database";
+import type { ClientSite } from "@/lib/data/clients";
 import { isManagerOrAbove } from "@reachinternational/permissions";
 import {
   AnimatedInfo,
@@ -68,6 +70,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   const [rentalStatus, setRentalStatus] = useState<string>(() => machine?.status || "available");
   const [healthStatus, setHealthStatus] = useState<string>(() => machine?.health_status || "active");
   const [clientId, setClientId] = useState<string>(() => machine?.client_id || "");
+  const [siteId, setSiteId] = useState<string>(() => machine?.site_id || "");
+  const [sites, setSites] = useState<ClientSite[]>([]);
+  const [isLoadingSites, setIsLoadingSites] = useState(false);
 
   // Lazy-loaded options state with session cache fallback (0ms subsequent loads)
   const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => {
@@ -161,9 +166,40 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     setRentalStatus(machine?.status || "available");
     setHealthStatus(machine?.health_status || "active");
     setClientId(machine?.client_id || "");
+    setSiteId(machine?.site_id || "");
     setFieldErrors({});
     setFormError("");
   }
+
+  // Load sites when clientId changes
+  useEffect(() => {
+    if (!clientId) {
+      setSites([]);
+      setSiteId("");
+      return;
+    }
+    let active = true;
+    setIsLoadingSites(true);
+    getClientSitesAction(clientId)
+      .then((data) => {
+        if (!active) return;
+        setSites(data);
+        if (data.length === 1 && !siteId) {
+          setSiteId(data[0].id);
+        } else if (siteId && !data.some((s) => s.id === siteId)) {
+          setSiteId(data[0]?.id || "");
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading sites for client", err);
+      })
+      .finally(() => {
+        if (active) setIsLoadingSites(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [clientId]);
 
   const handleSerialBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     if (isSupervisor) return;
@@ -462,6 +498,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                 setRentalStatus(nextVal);
                 if (nextVal === "available") {
                   setClientId("");
+                  setSiteId("");
                 }
               }}
               disabled={isSaving}
@@ -473,13 +510,39 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                   label="Assigned Client"
                   clients={allClients}
                   value={clientId}
-                  onChange={(selectedId) => setClientId(selectedId)}
+                  onChange={(selectedId) => {
+                    setClientId(selectedId);
+                    if (!selectedId) setSiteId("");
+                  }}
                   placeholder={isLoadingOptions && allClients.length === 0 ? "Loading clients..." : "Search and select client renting this machine..."}
                   clearable
                   disabled={isSaving}
                   error={fieldErrors.client_id}
                 />
                 <input type="hidden" name="client_id" value={clientId} />
+              </div>
+            )}
+
+            {rentalStatus === "rented" && clientId && (
+              <div className="sm:col-span-2 pt-0.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <Select
+                  label="Client Deployment Site"
+                  name="site_id_select"
+                  value={siteId}
+                  onChange={(val) => {
+                    const nextVal = typeof val === "string" ? val : val?.target?.value || "";
+                    setSiteId(nextVal);
+                  }}
+                  options={[
+                    { value: "", label: isLoadingSites ? "Loading sites..." : "Select deployment site..." },
+                    ...sites.map((s) => ({
+                      value: s.id,
+                      label: `${s.site_name} (${s.site_code}) — ${s.city}`,
+                    })),
+                  ]}
+                  disabled={isSaving || isLoadingSites}
+                />
+                <input type="hidden" name="site_id" value={siteId} />
               </div>
             )}
           </div>

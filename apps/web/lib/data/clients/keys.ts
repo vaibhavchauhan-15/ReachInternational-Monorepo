@@ -17,6 +17,7 @@ export const CLIENTS_CACHE_TAGS = {
 
   // Granular Entity Tags
   clientDetail: (id: string) => `client:${id}`,
+  sites: (id: string) => `client-sites:${id}`,
 } as const;
 
 export type ClientsCacheTag =

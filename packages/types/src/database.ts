@@ -462,6 +462,7 @@ export interface Machine {
   current_operator_id: string | null;
   operator_ids?: string[] | null;
   client_id?: string | null;
+  site_id?: string | null;
   health_status: MachineHealthStatus;
   status: MachineStatus;
   created_by: string | null;
@@ -574,6 +575,7 @@ export interface MachineHourLog {
   operator_id: string;
   supervisor_id?: string | null;
   client_id?: string | null;
+  site_id?: string | null;
   log_date: string;
   end_date?: string | null;
   start_datetime?: string | null;

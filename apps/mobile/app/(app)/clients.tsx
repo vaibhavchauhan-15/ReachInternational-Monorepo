@@ -9,7 +9,7 @@ import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
-import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById } from '@reachinternational/utils';
+import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate } from '@reachinternational/utils';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -215,10 +215,21 @@ export default function ClientsScreen() {
   const [allowanceMinutes, setAllowanceMinutes] = useState('0');
   const [selectedPresetId, setSelectedPresetId] = useState<string>(DEFAULT_CLIENT_SHIFT_PRESET_ID);
 
+  // Site Modal Form State
+  const [siteModalVisible, setSiteModalVisible] = useState(false);
+  const [siteTargetClientId, setSiteTargetClientId] = useState<string | null>(null);
+  const [siteFormName, setSiteFormName] = useState('');
+  const [siteFormStreet, setSiteFormStreet] = useState('');
+  const [siteFormCity, setSiteFormCity] = useState('');
+  const [siteFormDistrict, setSiteFormDistrict] = useState('');
+  const [siteFormStateId, setSiteFormStateId] = useState<number>(27);
+  const [siteFormPincode, setSiteFormPincode] = useState('');
+  const [isSavingSite, setIsSavingSite] = useState(false);
+
   // C11 Client Detail State & In-Memory Session Cache
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedDetailClient, setSelectedDetailClient] = useState<ClientItem | null>(null);
-  type MobileDetailTab = 'machines' | 'logs' | 'assignments' | 'history' | 'audit';
+  type MobileDetailTab = 'machines' | 'sites' | 'logs' | 'assignments' | 'history' | 'audit';
   const [mobileActiveTab, setMobileActiveTab] = useState<MobileDetailTab | null>(null);
   const [mobileLocationExpanded, setMobileLocationExpanded] = useState(false);
   const [mobileLocationLoading, setMobileLocationLoading] = useState(false);
@@ -226,6 +237,7 @@ export default function ClientsScreen() {
 
   const [mobileTabLoading, setMobileTabLoading] = useState<string | null>(null);
   const [mobileMachines, setMobileMachines] = useState<any[]>([]);
+  const [mobileSites, setMobileSites] = useState<any[]>([]);
   const [mobileLogs, setMobileLogs] = useState<any[]>([]);
   const [mobileAssignments, setMobileAssignments] = useState<any[]>([]);
   const [mobileHistory, setMobileHistory] = useState<any[]>([]);
@@ -600,6 +612,84 @@ export default function ClientsScreen() {
     setModalVisible(false);
   };
 
+  const handleOpenAddSite = (targetClientId?: string) => {
+    setSiteTargetClientId(targetClientId || selectedDetailClient?.id || null);
+    setSiteFormName('');
+    setSiteFormStreet('');
+    setSiteFormCity('');
+    setSiteFormDistrict('');
+    setSiteFormStateId(27);
+    setSiteFormPincode('');
+    setSiteModalVisible(true);
+  };
+
+  const handleSaveSite = async () => {
+    const cId = siteTargetClientId || selectedDetailClient?.id;
+    if (!cId) {
+      Alert.alert('Validation Error', 'Please select a client.');
+      return;
+    }
+    if (!siteFormName.trim()) {
+      Alert.alert('Validation Error', 'Site name is required.');
+      return;
+    }
+    if (!siteFormStreet.trim()) {
+      Alert.alert('Validation Error', 'Street / Area is required.');
+      return;
+    }
+    if (!siteFormCity.trim()) {
+      Alert.alert('Validation Error', 'City / Town is required.');
+      return;
+    }
+    if (!siteFormDistrict.trim()) {
+      Alert.alert('Validation Error', 'District is required.');
+      return;
+    }
+    if (!siteFormPincode.trim() || siteFormPincode.length !== 6) {
+      Alert.alert('Validation Error', 'A valid 6-digit pincode is required.');
+      return;
+    }
+
+    setIsSavingSite(true);
+    try {
+      const { data, error } = await supabase
+        .from('client_sites')
+        .insert({
+          client_id: cId,
+          site_name: siteFormName.trim(),
+          street: siteFormStreet.trim(),
+          city: siteFormCity.trim(),
+          district: siteFormDistrict.trim(),
+          state_id: siteFormStateId,
+          pincode: siteFormPincode.trim(),
+        })
+        .select('id, site_code, site_name, street, city, district, state_id, pincode, status')
+        .single();
+
+      if (error) {
+        if (error.code === '23505') {
+          Alert.alert('Duplicate Site', 'A site with this address or name already exists for this client.');
+        } else {
+          Alert.alert('Error', error.message || 'Failed to create site.');
+        }
+        return;
+      }
+
+      Alert.alert('Success', `Site "${siteFormName}" created successfully (${data.site_code}).`);
+      setSiteModalVisible(false);
+      if (cId) {
+        mobileDetailCacheRef.current.delete(`${cId}:sites`);
+        if (selectedDetailClient?.id === cId) {
+          handleMobileTabChange('sites');
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to create site.');
+    } finally {
+      setIsSavingSite(false);
+    }
+  };
+
   const handleSoftDelete = (client: ClientItem) => {
     Alert.alert(
       'Soft Delete Client?',
@@ -677,7 +767,7 @@ export default function ClientsScreen() {
   }, [selectedDetailClient?.id, mobileLocationExpanded, mobileLocationData]);
 
   const handleMobileTabChange = useCallback(
-    async (tab: 'machines' | 'logs' | 'assignments' | 'history' | 'audit') => {
+    async (tab: 'machines' | 'sites' | 'logs' | 'assignments' | 'history' | 'audit') => {
       setMobileActiveTab(tab);
       if (!selectedDetailClient?.id) return;
 
@@ -686,6 +776,7 @@ export default function ClientsScreen() {
       const cached = mobileDetailCacheRef.current.get(cacheKey);
       if (cached) {
         if (tab === 'machines') setMobileMachines(cached);
+        if (tab === 'sites') setMobileSites(cached);
         if (tab === 'logs') setMobileLogs(cached);
         if (tab === 'assignments') setMobileAssignments(cached);
         if (tab === 'history') setMobileHistory(cached);
@@ -703,6 +794,18 @@ export default function ClientsScreen() {
             .order('machine_id', { ascending: true });
           const res = data || [];
           setMobileMachines(res);
+          mobileDetailCacheRef.current.set(cacheKey, res);
+        } else if (tab === 'sites') {
+          const { data } = await supabase
+            .from('client_sites')
+            .select('id, site_code, site_name, street, city, district, state_id, pincode, status, states!inner(name)')
+            .eq('client_id', clientId)
+            .order('site_code', { ascending: true });
+          const res = (data || []).map((r: any) => ({
+            ...r,
+            state_name: r.states?.name || '',
+          }));
+          setMobileSites(res);
           mobileDetailCacheRef.current.set(cacheKey, res);
         } else if (tab === 'logs') {
           const { data } = await supabase
@@ -1037,6 +1140,7 @@ export default function ClientsScreen() {
                 onViewDetails={handleOpenDetail}
                 onEdit={handleOpenEdit}
                 onDelete={handleSoftDelete}
+                onAddSite={(c) => handleOpenAddSite(c.id)}
               />
             ))
           )}
@@ -1572,46 +1676,6 @@ export default function ClientsScreen() {
                   </View>
                 </View>
 
-                {/* 2.5 Monthly Maintenance Allowance Card */}
-                {(() => {
-                  const mMin = selectedDetailClient?.maintenance_allowance_minutes ?? 0;
-                  const isAllowed = mMin > 0;
-                  const mH = Math.floor(mMin / 60);
-                  const mM = mMin % 60;
-                  const label = `${mH > 0 ? `${mH}h` : ''}${mH > 0 && mM > 0 ? ' ' : ''}${mM > 0 ? `${mM}m` : ''}`;
-
-                  return (
-                    <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Wrench size={13} color={isAllowed ? (isDark ? '#fbbf24' : '#d97706') : '#dc2626'} />
-                          <Text style={[styles.detailCardTitle, { color: isAllowed ? (isDark ? '#fbbf24' : '#d97706') : '#dc2626' }]}>
-                            Monthly Maintenance Allowance
-                          </Text>
-                        </View>
-                        {isAllowed ? (
-                          <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
-                              {label} / machine / mo
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>
-                              NOT ALLOWED
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute, marginTop: 4 }]}>
-                        {isAllowed
-                          ? 'Breakdown time within this monthly allowance is classified as Maintenance instead of B/D.'
-                          : 'No monthly maintenance allowance. All machine breakdowns are classified directly as B/D.'}
-                      </Text>
-                    </View>
-                  );
-                })()}
-
                 {/* 3. Location & Billing Card (On Demand) */}
                 <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1666,6 +1730,7 @@ export default function ClientsScreen() {
                   {(
                     [
                       { id: 'machines', label: 'Machines', icon: Truck, count: mobileMachines.length },
+                      { id: 'sites', label: 'Sites', icon: MapPin, count: mobileSites.length },
                       { id: 'logs', label: 'Running Logs', icon: Clock, count: mobileLogs.length },
                       { id: 'assignments', label: 'Assignments', icon: UserCheck, count: mobileAssignments.length },
                       { id: 'history', label: 'History', icon: History, count: mobileHistory.length },
@@ -1758,6 +1823,52 @@ export default function ClientsScreen() {
                           <Text style={{ fontSize: 12, color: theme.colors.mute }}>{m.model}</Text>
                         </View>
                         <Badge status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'} customLabel={m.status.toUpperCase()} />
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* TAB: SITES */}
+              {mobileActiveTab === 'sites' && (
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: theme.colors.mute, textTransform: 'uppercase' }}>
+                      Registered Sites ({mobileSites.length})
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => handleOpenAddSite(selectedDetailClient?.id)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 32 }}
+                    >
+                      <Plus size={12} color="#ffffff" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#ffffff' }}>Add Site</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {mobileTabLoading === 'sites' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading operational sites...</Text>
+                    </View>
+                  ) : mobileSites.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                      No sites registered for this client.
+                    </Text>
+                  ) : (
+                    mobileSites.map((s: any) => (
+                      <View key={s.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 12 }}>
+                            {s.site_code}
+                          </Text>
+                          <Badge status={s.status === 'active' ? 'active' : 'inactive'} customLabel={s.status.toUpperCase()} />
+                        </View>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>{s.site_name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <MapPin size={12} color={theme.colors.mute} />
+                          <Text style={{ fontSize: 11.5, color: theme.colors.mute, flexShrink: 1 }}>
+                            {[s.street, s.city, s.district, s.state_name, s.pincode].filter(Boolean).join(', ')}
+                          </Text>
+                        </View>
                       </View>
                     ))
                   )}
@@ -1869,7 +1980,7 @@ export default function ClientsScreen() {
                           </Text>
                           <Text style={{ fontSize: 12, color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>{new Date(a.created_at).toLocaleDateString()}</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>{formatDate(a.created_at)}</Text>
                       </View>
                     ))
                   )}
@@ -1891,6 +2002,106 @@ export default function ClientsScreen() {
                   }}
                 />
               )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Client Site Modal */}
+      <Modal visible={siteModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Add Operating Site</Text>
+                <Text style={{ fontSize: 11.5, color: theme.colors.mute, marginTop: 2 }}>
+                  {siteTargetClientId
+                    ? (clients.find((c) => c.id === siteTargetClientId)?.company_name || 'Existing Client')
+                    : 'Register an operational facility'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSiteModalVisible(false)}>
+                <X size={20} color={theme.colors.mute} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.formSection}>
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Site Name *</Text>
+                  <TextInput
+                    value={siteFormName}
+                    onChangeText={setSiteFormName}
+                    placeholder="e.g. Pune Manufacturing Facility"
+                    placeholderTextColor={theme.colors.mute}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
+                  <TextInput
+                    value={siteFormStreet}
+                    onChangeText={setSiteFormStreet}
+                    placeholder="e.g. Plot 42, MIDC Phase 2"
+                    placeholderTextColor={theme.colors.mute}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                  />
+                </View>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town *</Text>
+                    <TextInput
+                      value={siteFormCity}
+                      onChangeText={setSiteFormCity}
+                      placeholder="e.g. Pune"
+                      placeholderTextColor={theme.colors.mute}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District *</Text>
+                    <TextInput
+                      value={siteFormDistrict}
+                      onChangeText={setSiteFormDistrict}
+                      placeholder="e.g. Pune"
+                      placeholderTextColor={theme.colors.mute}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State (Default: MH)</Text>
+                    <TextInput
+                      value="Maharashtra"
+                      editable={false}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, minHeight: 44 }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode (6 digits) *</Text>
+                    <TextInput
+                      value={siteFormPincode}
+                      onChangeText={setSiteFormPincode}
+                      placeholder="411001"
+                      placeholderTextColor={theme.colors.mute}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                    />
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Button label="Cancel" variant="outline" onPress={() => setSiteModalVisible(false)} disabled={isSavingSite} />
+              <Button label={isSavingSite ? 'Saving...' : 'Save Site'} variant="primary" onPress={handleSaveSite} disabled={isSavingSite} />
             </View>
           </View>
         </View>

@@ -8,6 +8,7 @@ import {
   AnimatedEdit,
   AnimatedTrash,
   AnimatedFileText,
+  AnimatedMapPin,
 } from "@/components/ui/animated-icons";
 import { TooltipWrapper } from "@/components/ui";
 import type { CRMClient } from "@/lib/types/database";
@@ -19,6 +20,7 @@ export interface ClientRowActionsMenuProps {
   onEdit: (c: CRMClient) => void;
   onDelete: (c: CRMClient) => void;
   onRestore?: (c: CRMClient) => void;
+  onAddSite?: (c: CRMClient) => void;
   triggerClassName?: string;
   align?: "left" | "right";
 }
@@ -42,6 +44,7 @@ export const ClientRowActionsMenu = memo(function ClientRowActionsMenu({
   onEdit,
   onDelete,
   onRestore,
+  onAddSite,
   triggerClassName,
   align = "right",
 }: ClientRowActionsMenuProps) {
@@ -196,6 +199,21 @@ export const ClientRowActionsMenu = memo(function ClientRowActionsMenu({
                   >
                     <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
                     <span>Edit Client</span>
+                  </button>
+                )}
+
+                {/* 2.5 Add Site: Quick Add Site Location */}
+                {canManageClients && onAddSite && !isSoftDeleted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onAddSite(client);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  >
+                    <AnimatedMapPin size={14} className="text-emerald-500 shrink-0" />
+                    <span>Add Site</span>
                   </button>
                 )}
 

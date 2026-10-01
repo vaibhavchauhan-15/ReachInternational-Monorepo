@@ -722,15 +722,8 @@ export default function MachinesScreen() {
       onPress: () => handleResetAllFilters(),
     });
 
-    list.push({
-      id: 'refresh-fleet',
-      label: 'Refresh Fleet Machinery',
-      icon: <RefreshCw size={16} color={theme.colors.ink} />,
-      onPress: () => fetchMachines(),
-    });
-
     return list;
-  }, [canCreate, theme.colors.ink, handleResetAllFilters, fetchMachines]);
+  }, [canCreate, theme.colors.ink, handleResetAllFilters]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>

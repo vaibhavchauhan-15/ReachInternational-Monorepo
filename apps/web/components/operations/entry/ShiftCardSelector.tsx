@@ -51,9 +51,7 @@ export function ShiftCardSelector({
   selectedCode,
   onSelect,
   className,
-  getAssignedInfo,
   todayLoggedShiftCodes = [],
-  todayLogs = [],
 }: ShiftCardSelectorProps) {
   if (!shiftCodes || shiftCodes.length === 0) {
     return null;
@@ -64,20 +62,22 @@ export function ShiftCardSelector({
       role="radiogroup"
       aria-label="Select Shift Schedule"
       className={cn(
-        "flex items-stretch gap-1.5 sm:gap-2 w-full overflow-x-auto pb-1 scrollbar-none",
+        "flex items-stretch gap-1.5 sm:gap-2 w-full",
         className
       )}
     >
       {shiftCodes.map((sc) => {
         const scNorm = sc.code.replace(/^shift\s+/i, "").trim().toUpperCase();
         const selNorm = (selectedCode || "").replace(/^shift\s+/i, "").trim().toUpperCase();
-        const isSelected = (selectedCode || "").toUpperCase() === sc.code.toUpperCase() || (selNorm !== "" && selNorm === scNorm);
-        const normalHours = (sc.normal_minutes / 60).toFixed(0);
-        const otHours = ((sc.scheduled_minutes - sc.normal_minutes) / 60).toFixed(0);
-        const assignedInfo = getAssignedInfo ? getAssignedInfo(sc.code) : undefined;
+        const isSelected =
+          (selectedCode || "").toUpperCase() === sc.code.toUpperCase() ||
+          (selNorm !== "" && selNorm === scNorm);
         const compactRange = formatCompactShiftRange(sc.start_time, sc.end_time);
-        const isLoggedToday = todayLoggedShiftCodes.some((c) => c.toUpperCase() === sc.code.toUpperCase());
-        const loggedRecord = todayLogs.find((l) => l.shift_code.toUpperCase() === sc.code.toUpperCase());
+        const isLoggedToday = todayLoggedShiftCodes.some(
+          (c) =>
+            c.toUpperCase() === sc.code.toUpperCase() ||
+            c.replace(/^shift\s+/i, "").trim().toUpperCase() === scNorm
+        );
 
         return (
           <button
@@ -87,78 +87,60 @@ export function ShiftCardSelector({
             aria-checked={isSelected}
             onClick={() => onSelect(sc)}
             className={cn(
-              "relative flex flex-col justify-between rounded-xl border text-left cursor-pointer select-none",
-              "transition-all duration-300 ease-out outline-none min-h-[52px]",
+              "relative flex flex-col justify-center rounded-xl border text-left cursor-pointer select-none",
+              "transition-all duration-200 ease-out outline-none min-h-[44px] h-[44px] px-2 sm:px-3 py-1.5 min-w-0",
+              // Grow & shrink behavior: selected card grows (flex-[1.5] on mobile, flex-[1.3] on desktop), unselected shrink (flex-1), fitting 360px seamlessly
               isSelected
-                ? "flex-[2.5] min-w-[135px] sm:min-w-[160px] bg-[var(--color-ink)] text-white border-[var(--color-ink)] shadow-xs py-2 px-3"
-                : "flex-1 min-w-[62px] sm:min-w-[76px] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)] py-2 px-2.5",
-              isLoggedToday && !isSelected
-                ? "border-emerald-500/40 bg-emerald-500/[0.04]"
-                : assignedInfo?.isAssigned && !isSelected && "border-amber-500/30 bg-amber-500/[0.03]"
+                ? "flex-[1.5] sm:flex-[1.3] shadow-xs"
+                : "flex-1 hover:bg-[var(--color-hairline-soft-surface)]",
+              // Color styling:
+              // - Submitted shift -> Green (emerald)
+              // - Other selected shift -> Blue (sky)
+              // - Other unselected shift -> Canvas elevated
+              isLoggedToday
+                ? isSelected
+                  ? "bg-emerald-600 dark:bg-emerald-600 text-white border-emerald-600 dark:border-emerald-500 ring-1 ring-emerald-500/40"
+                  : "bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 dark:border-emerald-500/50 hover:bg-emerald-500/20"
+                : isSelected
+                ? "bg-sky-600 dark:bg-sky-500 text-white border-sky-600 dark:border-sky-500 ring-1 ring-sky-500/30"
+                : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-sky-500/40"
             )}
-            title={`${getShiftDisplayTitle(sc)}: ${compactRange}${isLoggedToday ? " (Logged Today)" : ""}`}
+            title={`${getShiftDisplayTitle(sc)}${compactRange ? `: ${compactRange}` : ""}${isLoggedToday ? " (Logged Today)" : ""}`}
           >
-            {/* Header row: Shift Code + Night Moon Icon */}
-            <div className="flex items-center justify-between gap-1 w-full">
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-baseline gap-1 min-w-0">
-                  <span
-                    className={cn(
-                      "font-extrabold text-xs whitespace-nowrap leading-none",
-                      isSelected ? "text-white" : "text-[var(--color-ink)]"
-                    )}
-                  >
-                    {getShiftDisplayTitle(sc)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Moon icon only shown when expanded (selected) */}
-              {isSelected && sc.crosses_midnight && (
-                <Moon
-                  size={12}
-                  className="h-3 w-3 shrink-0 text-white/90"
-                  aria-label="Night Shift"
-                />
-              )}
-            </div>
-
-            {/* EXPANDED STATE ONLY: Visible when card is selected and grown */}
             {isSelected ? (
-              <div className="mt-1 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-200">
-                <div className="text-[9px] sm:text-[10px] font-mono font-medium text-white/90 whitespace-nowrap tracking-tight leading-tight">
-                  {compactRange}
-                </div>
-                <div className="text-[8px] font-medium text-white/70 whitespace-nowrap leading-tight">
-                  {normalHours}h norm{Number(otHours) > 0 ? ` + ${otHours}h OT` : ""}
-                </div>
-                {isLoggedToday ? (
-                  <span className="text-[9px] font-bold mt-0.5 truncate px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
-                    ✓ Logged Today ({loggedRecord?.running_hours ?? 8}h)
+              /* EXPANDED (SELECTED) STATE: Exactly TWO lines (Name and Shift Time) */
+              <div className="flex flex-col justify-center items-start leading-tight min-w-0 w-full select-none">
+                <div className="flex items-center gap-1 min-w-0 w-full">
+                  <span className="font-extrabold text-[11px] sm:text-xs text-white leading-tight truncate">
+                    {isLoggedToday ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
                   </span>
-                ) : assignedInfo?.isAssigned ? (
-                  <span className="text-[9px] font-medium mt-0.5 truncate px-1 py-0.5 rounded bg-white/20 text-white">
-                    {assignedInfo.label || "Covered"}
+                  {sc.crosses_midnight && (
+                    <Moon
+                      size={10}
+                      className="h-2.5 w-2.5 shrink-0 text-white/80"
+                      aria-label="Night Shift"
+                    />
+                  )}
+                </div>
+                {compactRange ? (
+                  <span className="text-[8.5px] sm:text-[10px] font-mono font-medium text-white/95 leading-tight mt-0.5 whitespace-nowrap truncate tracking-tighter sm:tracking-tight">
+                    {compactRange}
                   </span>
                 ) : null}
               </div>
-            ) : isLoggedToday ? (
-              /* REST STATE WITH LOGGED TODAY STATUS */
-              <div className="flex items-center gap-1 mt-1 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
-                  ✓ Logged{loggedRecord ? ` (${loggedRecord.running_hours}h)` : ""}
+            ) : (
+              /* CLOSED (UNSELECTED) STATE: Exactly ONE line (Only Name) */
+              <div className="flex flex-col justify-center items-center sm:items-start leading-tight min-w-0 w-full select-none">
+                <span
+                  className={cn(
+                    "font-bold text-[11px] sm:text-xs leading-tight truncate",
+                    isLoggedToday ? "text-emerald-800 dark:text-emerald-300" : "text-[var(--color-ink)]"
+                  )}
+                >
+                  {isLoggedToday ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
                 </span>
               </div>
-            ) : assignedInfo?.isAssigned ? (
-              /* REST STATE WITH ASSIGNMENT: Compact dot and short label */
-              <div className="flex items-center gap-1 mt-1 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                <span className="text-[9px] text-[var(--color-mute)] truncate">
-                  {assignedInfo.label || "Covered"}
-                </span>
-              </div>
-            ) : null}
+            )}
           </button>
         );
       })}

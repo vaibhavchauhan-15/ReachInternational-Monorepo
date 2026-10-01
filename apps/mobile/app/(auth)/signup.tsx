@@ -413,10 +413,15 @@ export default function SignupScreen() {
           }
         }
 
-        setSuccessMessage('Registration request submitted! Your account is pending administrator approval.');
+        setSuccessMessage('Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in.');
         setTimeout(() => {
-          router.replace('/(auth)/login');
-        }, 2200);
+          router.replace({
+            pathname: '/(auth)/login',
+            params: {
+              message: 'Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in.',
+            },
+          });
+        }, 1200);
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'An unexpected error occurred during signup.');

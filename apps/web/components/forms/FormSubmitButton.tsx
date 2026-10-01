@@ -49,7 +49,7 @@ export function FormSubmitButton({
     if (!loading) {
       isSubmittingRef.current = false;
     }
-  }, [loading]);
+  }, [loading, isReady, missingCount]);
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!isReady || loading || isSubmittingRef.current) {
@@ -58,6 +58,11 @@ export function FormSubmitButton({
       return;
     }
     isSubmittingRef.current = true;
+    // Auto-release lock after 500ms so that client validation failures
+    // or non-loading state transitions never permanently lock the submit button
+    setTimeout(() => {
+      isSubmittingRef.current = false;
+    }, 500);
     onClick?.(e);
   };
 

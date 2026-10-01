@@ -1,8 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import Link from "next/link";
-import { Edit2, Trash2, Eye, Building2, Phone, Receipt, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Building2, Phone, Receipt, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { Pagination } from "@/components/ui";
 import { ClientTableSkeletonRows } from "./ClientsSkeletons";
@@ -25,6 +24,7 @@ interface ClientsTableProps {
   onEditClient: (client: CRMClient) => void;
   onDeleteClient: (client: CRMClient) => void;
   onRestoreClient?: (client: CRMClient) => void;
+  onAddSiteClient?: (client: CRMClient) => void;
 }
 
 const ClientTableRow = memo(function ClientTableRow({
@@ -34,6 +34,7 @@ const ClientTableRow = memo(function ClientTableRow({
   onEditClient,
   onDeleteClient,
   onRestoreClient,
+  onAddSiteClient,
 }: {
   client: CRMClient;
   canManageClients: boolean;
@@ -41,30 +42,36 @@ const ClientTableRow = memo(function ClientTableRow({
   onEditClient: (client: CRMClient) => void;
   onDeleteClient: (client: CRMClient) => void;
   onRestoreClient?: (client: CRMClient) => void;
+  onAddSiteClient?: (client: CRMClient) => void;
 }) {
+  const handleRowClick = () => {
+    onViewClient(client);
+  };
+
   return (
-    <tr className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors group">
+    <tr
+      onClick={handleRowClick}
+      className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors group cursor-pointer border-b border-[var(--color-hairline)] last:border-0"
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleRowClick();
+        }
+      }}
+      aria-label={`View details for ${client.company_name || client.client_name}`}
+    >
       {/* Client ID */}
       <td className="py-2.5 px-4 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
-        <Link
-          href={`/clients/${client.id}`}
-          onClick={() => onViewClient(client)}
-          className="hover:underline cursor-pointer focus:outline-hidden"
-          title="View Client Details"
-        >
-          {client.client_id || client.code}
-        </Link>
+        <span>{client.client_id || client.code}</span>
       </td>
 
       {/* Company & Tax */}
       <td className="py-2.5 px-4 max-w-[260px]">
-        <Link
-          href={`/clients/${client.id}`}
-          onClick={() => onViewClient(client)}
-          className="font-bold text-[var(--color-ink)] hover:text-sky-600 text-left transition-colors cursor-pointer block truncate focus:outline-hidden"
-        >
+        <div className="font-bold text-[var(--color-ink)] group-hover:text-sky-600 text-left transition-colors truncate">
           {client.company_name || client.client_name}
-        </Link>
+        </div>
         {(client.gstin || client.pan_number) && (
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             {client.gstin && (
@@ -91,7 +98,11 @@ const ClientTableRow = memo(function ClientTableRow({
         {client.phone ? (
           <div className="font-mono text-[var(--color-ink)] flex items-center gap-1">
             <Phone className="h-3 w-3 text-[var(--color-mute)]" />
-            <a href={`tel:${client.phone}`} className="hover:text-sky-600">
+            <a
+              href={`tel:${client.phone}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-sky-600"
+            >
               {client.phone}
             </a>
           </div>
@@ -130,26 +141,11 @@ const ClientTableRow = memo(function ClientTableRow({
       </td>
 
       {/* Actions */}
-      <td className="py-2.5 px-4 text-right whitespace-nowrap">
-        <div className="flex items-center justify-end gap-1">
-          <Link
-            href={`/clients/${client.id}`}
-            onClick={() => onViewClient(client)}
-            className="rounded-md p-1.5 text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-sky-600 transition-colors cursor-pointer"
-            title="View Details"
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Link>
-          {canManageClients && (
-            <button
-              type="button"
-              onClick={() => onEditClient(client)}
-              className="rounded-md p-1.5 text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-sky-600 transition-colors cursor-pointer"
-              title="Edit Client"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </button>
-          )}
+      <td
+        className="py-2.5 px-4 text-right whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-end">
           <ClientRowActionsMenu
             client={client}
             canManageClients={canManageClients}
@@ -157,6 +153,7 @@ const ClientTableRow = memo(function ClientTableRow({
             onEdit={onEditClient}
             onDelete={onDeleteClient}
             onRestore={onRestoreClient}
+            onAddSite={onAddSiteClient}
           />
         </div>
       </td>
@@ -181,6 +178,7 @@ export const ClientsTable = memo(function ClientsTable({
   onEditClient,
   onDeleteClient,
   onRestoreClient,
+  onAddSiteClient,
 }: ClientsTableProps) {
   function renderSortIcon(column: string) {
     if (sortField !== column) {
@@ -269,6 +267,7 @@ export const ClientsTable = memo(function ClientsTable({
                   onEditClient={onEditClient}
                   onDeleteClient={onDeleteClient}
                   onRestoreClient={onRestoreClient}
+                  onAddSiteClient={onAddSiteClient}
                 />
               ))
             )}

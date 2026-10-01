@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Mail, Lock, Check, Moon, Sun } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Input, Alert, useTheme } from '../../components/ui';
@@ -30,6 +30,7 @@ import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const localParams = useLocalSearchParams<{ message?: string }>();
   const { theme, isDark, setMode } = useTheme();
   const { session, isLoading: authLoading, isProfileComplete, role } = useAuth();
 
@@ -38,6 +39,13 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const [successMessage, setSuccessMessage] = useState(localParams.message || '');
+
+  React.useEffect(() => {
+    if (localParams.message) {
+      setSuccessMessage(localParams.message);
+    }
+  }, [localParams.message]);
 
   // Redirect authenticated user away from login to role Home or onboarding
   React.useEffect(() => {
@@ -62,6 +70,9 @@ export default function LoginScreen() {
     if (errorMessage) {
       setErrorMessage('');
     }
+    if (successMessage) {
+      setSuccessMessage('');
+    }
   };
 
   const handlePasswordChange = (val: string) => {
@@ -71,6 +82,9 @@ export default function LoginScreen() {
     }
     if (errorMessage) {
       setErrorMessage('');
+    }
+    if (successMessage) {
+      setSuccessMessage('');
     }
   };
 
@@ -89,6 +103,7 @@ export default function LoginScreen() {
 
     triggerHapticFeedback();
     setErrorMessage('');
+    setSuccessMessage('');
 
     // Field-level validation matching Web client
     const newFieldErrors: { email?: string; password?: string } = {};
@@ -241,6 +256,13 @@ export default function LoginScreen() {
               {errorMessage && Object.keys(fieldErrors).length === 0 ? (
                 <View style={styles.bannerContainer}>
                   <Alert variant="error">{errorMessage}</Alert>
+                </View>
+              ) : null}
+
+              {/* Global Success Banner */}
+              {successMessage && !errorMessage ? (
+                <View style={styles.bannerContainer}>
+                  <Alert variant="success">{successMessage}</Alert>
                 </View>
               ) : null}
 

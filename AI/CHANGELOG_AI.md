@@ -1,23 +1,382 @@
-- **Mobile Bottom Navbar Equal Padding & Spacing (/dashboard & Mobile App) (2026-10-01)**:
+- **Direct Operating Site Creation for Existing Clients (Web & Mobile) (2026-10-01)**:
+  - **Delivered**:
+    1. **Unified Site Modal (`apps/web/components/clients/SiteModal.tsx`)**:
+       - Added client selection mode via `<ClientSelect>` when `clientId` is omitted, while preserving direct client targeting when `clientId` is provided.
+       - Built on-demand client loading via `getClientOptionsAction()` with loading state.
+    2. **Directory Header & Coordinator Integration (`apps/web/components/clients/ClientsHeader.tsx`, `ClientsCoordinatorClient.tsx`)**:
+       - Added primary/secondary "Add Site" button in `ClientsHeader.tsx` with `AnimatedMapPin` icon.
+       - Wired modal open/close states and router/cache invalidation in `ClientsCoordinatorClient.tsx`.
+    3. **Contextual 1-Click Site Creation (`ClientRowActionsMenu.tsx`, `MobileClientCard.tsx`)**:
+       - Added "Add Site" action to desktop table row menu.
+       - Added "Add Site" button to mobile touch card actions.
+    4. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/clients.tsx`, `MobileClientCard.tsx`)**:
+       - Added native `Add Client Site Modal` on mobile with site name, street, city, district, state, and 6-digit pincode inputs.
+       - Added "+ Add Site" button to the registered Sites tab in the mobile client detail modal.
+       - Added "Add Site" action to mobile client cards.
+    5. **Server Actions & DAL**:
+       - Exported `getClientOptionsAction` in `apps/web/app/actions/clients.ts` and re-exported `getClientOptions` in `lib/data/clients/index.ts`.
+       - Enhanced `apps/web/app/(app)/clients/page.tsx` with concurrent `getClientOptions()` query.
+  - **Files Changed**:
+    - `apps/web/components/clients/SiteModal.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsHeader.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsCoordinatorClient.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientRowActionsMenu.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsTable.tsx` (MODIFIED)
+    - `apps/web/components/clients/MobileClientCard.tsx` (MODIFIED)
+    - `apps/web/app/actions/clients.ts` (MODIFIED)
+    - `apps/web/app/(app)/clients/page.tsx` (MODIFIED)
+    - `apps/web/lib/data/clients/index.ts` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `apps/mobile/components/clients/MobileClientCard.tsx` (MODIFIED)
+    - `AI/FEATURES/clients.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Shared utils test: 5/5 unit tests passed.
+
+- **Migration 152 Backfill Hardening (Production Trigger Fix) (2026-10-01)**:
+  - **Delivered**:
+    1. **Trigger User Disabling (supabase/migrations/152_client_sites_backfill.sql)**:
+       - Replaced 'ALTER TABLE public.machine_hour_logs DISABLE TRIGGER trg_enforce_machine_hour_logs_immutable;' with 'ALTER TABLE public.machine_hour_logs DISABLE TRIGGER USER;' and restored with 'ENABLE TRIGGER USER;'.
+       - Fixed production error: ERROR 23514 triggered by trg_enforce_machine_hour_log_operator_date_window when backfilling historical records (>7 days old) where entry_source = 'operator'.
+       - Prevents triggers on immutability, 7-day operator date window, and shift recalculation from firing during foreign key backfill.
+  - **Files Changed**:
+    - supabase/migrations/152_client_sites_backfill.sql (MODIFIED)
+    - AI/CURRENT_TASK.md (MODIFIED)
+    - AI/STATE.md (MODIFIED)
+    - AI/CHANGELOG_AI.md (MODIFIED)
+  - **Verification**:
+    - Tested on Dev Supabase DB (vlmxciuogczumumrwyot): Ran backfill script idempotently with 0 errors.
+    - Verified all 8 user triggers restored to tgenabled = 'O'.
+
+- **Client Detail Page Hydration Mismatch Resolution (/clients/[id] & ClientDetailClient) (2026-10-01)**:
+  - **Delivered**:
+    1. **Deterministic Date Formatting (`apps/web/components/clients/ClientDetailClient.tsx`)**:
+       - Replaced `new Date(client.created_at).toLocaleDateString()` with canonical `formatDate(client.created_at)` from `@reachinternational/utils`.
+       - Resolved root cause of Next.js 16 SSR hydration mismatch (`+ 01/10/2026` vs `- 1/10/2026`) by using explicit `DD-MM-YYYY` deterministic formatting across server and client.
+       - Added `suppressHydrationWarning` on the Member since text container as defense in depth.
+       - Replaced raw `toLocaleDateString` and `toLocaleString` in operator assignments table, history timeline, audit trail table, and mobile audit touch cards.
+    2. **Web Client Modal Parity (`apps/web/components/clients/ClientDetailModal.tsx`)**:
+       - Replaced `new Date(h.timestamp).toLocaleDateString()` and `new Date(a.created_at).toLocaleDateString()` with `formatDate` and `suppressHydrationWarning`.
+    3. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/clients.tsx`)**:
+       - Replaced `new Date(a.created_at).toLocaleDateString()` with `formatDate(a.created_at)` from `@reachinternational/utils`.
+  - **Files Changed**:
+    - `apps/web/components/clients/ClientDetailClient.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientDetailModal.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Client Sites Normalization (One Client, Many Sites) (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Schema & Backfill (`supabase/migrations/151_client_sites_schema.sql`, `152_client_sites_backfill.sql`, `153_update_rpcs_for_site_id.sql`)**:
+       - Created `client_sites` table with auto-incrementing site codes (`CLI-XXXX-SNN`), generated `address_key`, immutable site code triggers, and duplicate address/name constraints.
+       - Hardened migration 151 with complete SQL idempotency (`IF NOT EXISTS`, `DROP TRIGGER/POLICY IF EXISTS`, `pg_constraint` catalog checks) to guarantee safe re-execution without relation/constraint conflict errors.
+       - Implemented deterministic `norm_text` SQL function and `find_similar_sites` fuzzy similarity matching.
+       - Added `site_id` foreign keys to `machines` and `machine_hour_logs` with composite `(site_id, client_id)` validation.
+       - Backfilled 5 initial sites from existing clients, linked 6 machines, and updated 36 shift hour logs with 0 unmatched rows.
+       - Updated `submit_operator_hour_log_atomic` RPC to automatically resolve and insert `site_id` from machines.
+       - Updated `get_clients_directory_summary` RPC to count sites from `client_sites`.
+    2. **Shared Packages (`packages/utils`, `packages/validation`, `packages/types`)**:
+       - Created `@reachinternational/utils/address`: `normText`, `addressKey`, `formatAddress`, and 5/5 unit tests (`packages/utils/src/address.test.ts`).
+       - Created `@reachinternational/validation/client-sites`: `SiteSchema` with ReDoS-safe bounds and 6-digit pincode validator.
+       - Added `site_id` to `Machine` and `MachineHourLog` interfaces in `@reachinternational/types`.
+    3. **Web Data Access & Server Actions (`apps/web/lib/data/clients/client-sites.ts`, `apps/web/app/actions/client-sites.ts`)**:
+       - Built cached DAL methods `getClientSites` and `getActiveClientSites` with tag invalidation (`clientSites(clientId)`).
+       - Created server actions `createClientSite`, `updateClientSite`, `deactivateClientSite` with audit logging and Next.js 16 `"max"` revalidation.
+       - Added `getClientSitesAction` for fast dynamic dropdown population.
+    4. **Web UI Components & Integration (`apps/web`)**:
+       - Created `AddressFields.tsx`, `SiteModal.tsx`, and `SitesList.tsx` adhering to Vercel Geist design system.
+       - Added "Sites" tab to client detail page (`/clients/[id]`) with live count and Add/Edit/Deactivate workflows.
+       - Added dynamic site selector to `MachineModal.tsx` when rental status is `rented`.
+       - Updated `OperationsLogsTab.tsx` to populate "Select Location" directly from `client_sites`, eliminating 3-variant duplicate strings.
+    5. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/clients.tsx`)**:
+       - Added `'sites'` to `MobileDetailTab`.
+       - Built on-demand `client_sites` query with in-memory caching in `handleMobileTabChange`.
+       - Added "Sites" tab chip in scrollable pill strip with dynamic count.
+       - Built responsive mobile touch card list displaying site code badge, status badge, site name, and formatted address.
+  - **Files Changed**:
+    - `packages/utils/src/address.ts` (CREATED)
+    - `packages/utils/src/address.test.ts` (CREATED)
+    - `packages/utils/src/index.ts` (MODIFIED)
+    - `packages/utils/src/client-keys.ts` (MODIFIED)
+    - `packages/validation/src/client-sites.ts` (CREATED)
+    - `packages/validation/src/index.ts` (MODIFIED)
+    - `packages/types/src/database.ts` (MODIFIED)
+    - `apps/web/lib/data/clients/client-sites.ts` (CREATED)
+    - `apps/web/lib/data/clients/index.ts` (MODIFIED)
+    - `apps/web/lib/data/clients/keys.ts` (MODIFIED)
+    - `apps/web/lib/cache/tags.ts` (MODIFIED)
+    - `apps/web/app/actions/client-sites.ts` (CREATED)
+    - `apps/web/app/actions/machines.ts` (MODIFIED)
+    - `apps/web/lib/queries/operators.ts` (MODIFIED)
+    - `apps/web/components/clients/AddressFields.tsx` (CREATED)
+    - `apps/web/components/clients/SiteModal.tsx` (CREATED)
+    - `apps/web/components/clients/SitesList.tsx` (CREATED)
+    - `apps/web/app/(app)/clients/[id]/page.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientDetailClient.tsx` (MODIFIED)
+    - `apps/web/components/machines/MachineModal.tsx` (MODIFIED)
+    - `apps/web/components/operations/logs/OperationsLogsTab.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `supabase/migrations/151_client_sites_schema.sql` (CREATED)
+    - `supabase/migrations/152_client_sites_backfill.sql` (CREATED)
+    - `supabase/migrations/153_update_rpcs_for_site_id.sql` (CREATED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - `packages/utils/src/address.test.ts`: 5/5 unit tests passed.
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Dev Database (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly protected.
+
+- **Operations (/operations) Shift Inputs & Shift Cards UI Polish & Mobile Sizing (2026-10-01)**:
+  - **Delivered**:
+    1. **Mobile Grow & Shrink Sizing (`apps/web/components/operations/entry/ShiftCardSelector.tsx`)**:
+       - Replaced fixed min-widths and `overflow-x-auto` with responsive `min-w-0` and proportional flex grow/shrink (`flex-[1.5] sm:flex-[1.3] min-w-0` for selected, `flex-1 min-w-0` for unselected).
+       - Adjusted padding to `px-2 sm:px-3` and gaps to `gap-1.5 sm:gap-2` so all 3 shift cards fit inside 360px mobile viewports without clipping or horizontal scrolling.
+       - Optimized time range typography to `text-[8.5px] sm:text-[10px] font-mono tracking-tighter sm:tracking-tight`.
+    2. **Color Schemes for Submitted vs Other Shifts**:
+       - Submitted shift cards show in **green color** (`bg-emerald-600 dark:bg-emerald-600 text-white` when selected; `bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/40` when unselected with `✓` indicator).
+       - Other (unsubmitted) selected shift cards show in **blue color** (`bg-sky-600 dark:bg-sky-500 text-white border-sky-600`) with high contrast in both dark and light themes.
+       - Other unselected shift cards retain clean elevated styling (`bg-[var(--color-canvas-elevated)] text-[var(--color-ink)]`).
+    3. **Already Entered Shift Notification Banner (`apps/web/components/operations/entry/ShiftInputs.tsx`)**:
+       - Displayed emerald alert banner below selector when active shift was already logged today: `✓ This shift has already been entered for today.` with `CheckCircle2` icon.
+       - Retained unassigned shift warning banner for unassigned shift selections.
+       - Removed redundant overtime controls since overtime is auto-calculated.
+    4. **Cross-Platform Mobile App Synchronization (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+       - Synchronized shift touch cards to show green (`#059669`) for submitted shifts and blue (`theme.colors.link`) for other selected shifts.
+       - Added `CheckCircle2` notice banner below shift selector on mobile when selected shift was already entered today.
+  - **Files Changed**:
+    - `apps/web/components/operations/entry/ShiftCardSelector.tsx` (MODIFIED)
+    - `apps/web/components/operations/entry/ShiftInputs.tsx` (MODIFIED)
+    - `apps/mobile/components/work/MeterLogModal.tsx` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Dev Database (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly protected.
+
+- **Machines Directory (/machines) UI Cleanup (2026-10-01)**:
+  - **Delivered**:
+    1. **Removed Duplicate Excel Export Button (`apps/web/components/machines/MachineListClient.tsx`)**:
+       - Removed standalone `<ExportButton ... tooltip="Export machine directory to Excel (.xlsx)" />` from header toolbar actions since Excel export is already directly accessible inside `HeaderMoreMenu`.
+       - Removed unused `ExportButton` import from `@/components/ui`.
+    2. **Removed Refresh Data Button from More Menu (`apps/web/components/machines/MachineListClient.tsx`)**:
+       - Removed `Refresh Data` button and its divider line from `HeaderMoreMenu`.
+       - Cleaned up `onRefresh` prop definition and call site.
+       - Updated popup height calculation (`menuHeight`) from 210/170 to 160/120.
+    3. **Mobile App Synchronization (`apps/mobile/app/(app)/machines.tsx`)**:
+       - Removed redundant `refresh-fleet` header action item from `MobileHeader` options.
+  - **Files Changed**:
+    - `apps/web/components/machines/MachineListClient.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`npx tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`npx tsc --noEmit`).
+
+- **Signup Flow & FormSubmitButton Resilience, Security Hardening, and Validation Parity (/signup & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **FormSubmitButton Dead-Lock Fix (`apps/web/components/forms/FormSubmitButton.tsx`)**:
+       - Fixed critical defect where `isSubmittingRef.current = true` was locked on click and never released if client-side validation failed synchronously.
+       - Implemented an automatic 500ms auto-release lock timer and reactive reset on `[loading, isReady, missingCount]` changes.
+    2. **Address Validation Alignment & Form Synchronization (`apps/web/app/signup/page.tsx`)**:
+       - Fixed address pre-flight check in `handleSubmit` to evaluate `(formValues.street || formValues.address)`.
+       - Synced error clearing in `handleAddressChange` and `handleChange` so modifying street or address clears both `fieldErrors.street` and `fieldErrors.address`.
+       - Fully synchronized all controlled form state fields into `FormData` before triggering server action.
+       - Expanded pre-flight validation to mirror all mandatory form sections and gracefully unlocked submission state on failure.
+    3. **Security Hardening & Hacking Prevention (`apps/web/app/actions/auth.ts`)**:
+       - Enforced document MIME whitelisting (`image/jpeg`, `image/png`, `image/webp`, `application/pdf`), rejecting executable/script uploads (.php, .exe, SVG XSS).
+       - Storage file extensions are derived exclusively from validated MIME types, preventing arbitrary extension attacks.
+       - Sanitized file names in DB metadata to eliminate path traversal vulnerabilities.
+       - Enforced 2MB file size caps on the server.
+       - Restricted registration roles to allowed set, rejecting unauthorized self-registration as admin or super_admin.
+       - Validated `supervisor_id` as UUID format and verified supervisor existence and active status in database.
+       - Enforced maximum 128 characters on passwords to prevent bcrypt CPU exhaustion DoS attacks.
+       - Stripped control characters and enforced upper length limits on all text fields.
+    4. **Automated Test Matrix Suite (`apps/web/lib/signup-security-matrix.test.ts`)**:
+       - Created and passed 16 automated tests covering accepted and rejected inputs across client pre-flight checks, server action security rules, and database constraints.
+  - **Files Changed**:
+    - `apps/web/components/forms/FormSubmitButton.tsx` (MODIFIED)
+    - `apps/web/app/signup/page.tsx` (MODIFIED)
+    - `apps/web/app/actions/auth.ts` (MODIFIED)
+    - `apps/web/lib/signup-security-matrix.test.ts` (CREATED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+    - `AI/FEATURES/auth.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Test Suite: 16/16 passed (`apps/web/lib/signup-security-matrix.test.ts`), 6/6 passed (`apps/web/lib/hooks/useFormDraft.test.ts`).
+    - Supabase Isolation: Production DB protected; development targeted.
+
+- **Signup Toast Notification & Login Redirect Flow (/signup & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **Web Signup Flow Enhancement (`apps/web/app/signup/page.tsx`)**:
+       - Replaced static success notification banner (`<Alert variant="success">{state.message}</Alert>`) with floating toast notification via `useToast()`.
+       - On successful access request submission, immediately triggers `toast("success", "Registration Request Submitted", "Your account is pending administrator approval. After approval from the administrator, you can log in.")`.
+       - Automatically redirects user to `/login?message=...` so the user is not stuck on the signup page and receives persistent feedback on the login screen.
+       - Clears form drafts from `localStorage` and `IndexedDB`.
+       - Added toast alerts on validation failure (`toast("error", "Validation Incomplete", ...)`) and unexpected submission errors.
+    2. **Auth Server Action Message Standardization (`apps/web/app/actions/auth.ts`)**:
+       - Standardized `signup()` return message: `"Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in."`.
+    3. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(auth)/signup.tsx`, `apps/mobile/app/(auth)/login.tsx`)**:
+       - Updated mobile signup success message and routed to `/(auth)/login` with route param `message`.
+       - Added `useLocalSearchParams<{ message?: string }>()` and success alert banner in `LoginScreen`.
+  - **Files Changed**:
+    - `apps/web/app/signup/page.tsx` (MODIFIED)
+    - `apps/web/app/actions/auth.ts` (MODIFIED)
+    - `apps/mobile/app/(auth)/signup.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/login.tsx` (MODIFIED)
+    - `AI/FEATURES/auth.md` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Unit Tests: 6/6 tests passed (`apps/web/lib/hooks/useFormDraft.test.ts`).
+    - Database Isolation: Production DB protected; development targeted.
+
+- **Client Detail Page Overhaul & Component Reuse (/clients/[id] & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **Toast Notification System Migration**:
+       - Replaced static notice banners across client modification flows (`ClientModal`, `ClientShiftCodesTab`, `ClientDetailClient`) with floating `useToast()` alerts.
+    2. **Table Primitive Standardization**:
+       - Replaced raw HTML `<table>` elements with design system primitives (`Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`) across all tab panels (`Machines`, `Running Logs`, `Operator Assignments`, `Audit Trail`).
+    3. **SearchBox Component Reuse**:
+       - Replaced raw search inputs with centralized `@/components/ui/SearchBox`.
+    4. **Mobile & Desktop Hero Banner Optimization**:
+       - Redesigned master hero card with responsive 2-tier layout: dedicated mobile view (`sm:hidden`) with compact 40x40 icon, clean badge stack, and full-width 44px action buttons; and desktop view (`hidden sm:flex`).
+    5. **Metadata & KPI Grid Harmonization**:
+       - Harmonized 4-card metadata grid (Contact Person, Tax & Statutory, Operational Site, Billing Address) with `/users/[id]` and `/machines/[id]`, removing artificial footers (`border-t mt-3`) and redundant sub-captions.
+       - Removed duplicate 5th KPI card ("Maint. Allowed: 12h/mo") from the metrics strip (already prominent in the hero badge), creating a balanced 4-column layout (`grid-cols-2 lg:grid-cols-4`) without empty spaces.
+    6. **Navigation & Tabs Polish**:
+       - Replaced dual top breadcrumb with a single left breadcrumb on desktop (`hidden sm:flex`), completely hidden on mobile (`sm:hidden`).
+       - Converted tabs into polished Geist pill buttons with item counters and smooth horizontal scrolling.
+    7. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/clients.tsx`)**:
+       - Removed redundant "Monthly Maintenance Allowance Card" from the mobile client detail modal, keeping the header badge for full web-mobile parity.
+  - **Files Changed**:
+    - `apps/web/components/clients/ClientDetailClient.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientModal.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientShiftCodesTab.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsPageShellLoading.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Production DB Isolation: Protected production project `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Client Directory Refactor & Usability Consistency (/clients & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **Table Row Usability & Action Streamlining (`apps/web/components/clients/ClientsTable.tsx`)**:
+       - Made entire table row clickable (`onClick`, `role="link"`, `cursor-pointer`, keyboard accessibility `Enter`/`Space`) navigating directly to `/clients/[id]`.
+       - Removed redundant Eye icon link and standalone Edit button from action column.
+       - Preserved clean 3-dots action menu (`ClientRowActionsMenu`) with `e.stopPropagation()` on actions and `tel:` links.
+    2. **Toast Feedback Migration (`apps/web/components/clients/ClientsCoordinatorClient.tsx`)**:
+       - Replaced static notice banner with sleek floating `useToast()` notifications on add, update, delete, and restore.
+    3. **Header Clean-up & Export Component Integration (`apps/web/components/clients/ClientsHeader.tsx`)**:
+       - Removed cluttered `HeaderMoreMenu` ("⋮More") button completely.
+       - Replaced icon-only export button with `@/components/ui/ExportDropdown` providing Excel (.xlsx), CSV (.csv), and PDF (.pdf) exports.
+    4. **Client Export Engine (`apps/web/lib/utils/clients-export.ts`)**:
+       - Implemented `exportClientsToExcel`, `exportClientsToCSV`, and `exportClientsToPDF` with Reach International branding, summary cards, and signature blocks.
+    5. **Database Export Projection (`apps/web/lib/data/clients/client-export.ts`)**:
+       - Added `id, client_id, code` to select query.
+    6. **Cross-Platform Mobile App Synchronization (`apps/mobile/components/clients/MobileClientCard.tsx`)**:
+       - Made client card touchable on mobile navigating to client details.
+  - **Files Changed**:
+    - `apps/web/lib/utils/clients-export.ts` (NEW)
+    - `apps/web/lib/data/clients/client-export.ts` (MODIFIED)
+    - `apps/web/components/ui/ExportDropdown.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsHeader.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsTable.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsCoordinatorClient.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientExportModal.tsx` (MODIFIED)
+    - `apps/mobile/components/clients/MobileClientCard.tsx` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Production DB Isolation: Protected production project `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Attendance Data Fetching & Shift Log Parity + Mobile Day Cards Optimization (/attendance & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Migration 150 (`supabase/migrations/150_fix_attendance_summary_and_daily_detail_rpcs.sql`)**:
+       - Re-architected `public.get_attendance_monthly_summary` into a single atomic `SELECT INTO` statement with CTE scoping (`calendar`, `daily_logs`, `operator_base`, `operator_records`, `filtered_records`, `paged_records`, `kpis_calc`). Resolved `42P01: relation "kpis_calc" does not exist` syntax error.
+       - Corrected `present_days` calculation to evaluate `dl.normal_hours >= 4.0` for all dates including Sunday shifts, ensuring Sunday shifts are counted as `PRESENT`.
+       - Fixed `absent_days` to strictly count past scheduled workdays (`d.date < CURRENT_DATE AND d.dow <> 0 AND dl.normal_hours = 0`), avoiding false-positive absent counts on future/today's dates.
+       - Defaulted `p_role = 'operator'` when `p_role IS NULL`.
+       - Upgraded `public.get_attendance_daily_detail` to check `dl.normal_hours >= 4.0 THEN 'PRESENT'` before `c.dow = 0 THEN 'WEEK_OFF'`, and projected `mhl.shift_code` into the `entries` array.
+       - Applied cleanly to Development Database (`vlmxciuogczumumrwyot`) via Supabase MCP `execute_sql`. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Frontend Workflow Seeding (`supabase/seed_frontend_workflow.mjs`)**:
+       - Extended `logDates` from `2026-09-25..29` to `2026-09-26..2026-10-01` (including current day `2026-10-01`).
+       - Successfully submitted 36 verified operator hour logs across 6 machines.
+       - Verified October 2026 returns: Total Staff: 6, Scheduled: 27, Present: 6, Worked: 48h.
+       - Verified September 2026 returns: Total Staff: 6, Scheduled: 26, Present: 6, Present Days: 5 (including Sunday Sep 27), Worked: 2400m, OT: 90m.
+    3. **Web Daily Detail Client (`apps/web/app/(app)/attendance/[userId]/AttendanceDetailClient.tsx`)**:
+       - Defaulted `viewMode` from `"calendar"` to `"table"` for immediate mobile day card visibility.
+       - Replaced mobile day cards with rich, well-formatted cards:
+         - Header: Date (`01 Oct`), month, day name (`Thursday`), `Today` pill if current date, and status pill with colored indicator.
+         - Hours Well: Punch In (`06:00 AM`), Punch Out (`02:00 PM`), bold worked hours (`8h 00m`), and overtime badge (`+1.5h OT`).
+         - Equipment & Location: Machine code & name with `Truck` icon, site location with `MapPin` icon.
+         - Multi-Shift Strip: shift pills (e.g. `Shift A: 8h`, `Shift B: 8h`) and breakdown badge (`90m Breakdown`).
+         - Non-worked state: "Scheduled Rest Day / Weekend Off", "No shift logs submitted for this scheduled workday", or "Upcoming scheduled working day".
+    4. **Web Roster Client (`apps/web/app/(app)/attendance/AttendanceClient.tsx`)**:
+       - Upgraded mobile operator cards (`block md:hidden`):
+         - Operator initials avatar circle (`OP`, `DP`, etc.).
+         - Operator name with search query highlight + `OPERATOR` role pill.
+         - Phone and City/State location with icons.
+         - 4-metric strip: Sched, Present, Absent, Half Day.
+         - Worked time and Overtime pill.
+         - "Ledger →" navigation link with min 44px touch target.
+    5. **Cross-Platform Native Mobile Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+       - Added `Truck` to `lucide-react-native` imports.
+       - Added `shift_code?: string | null;` to `AttendanceDayEntry`.
+       - Upgraded `renderStatusBadge` with status indicator dot and `isToday` awareness.
+       - Replaced `renderDetailBody` day cards with identical well-formatted cards matching the web app.
+       - Upgraded Manager employee cards with initials avatar, `OPERATOR` badge, 4-stat metrics, and "Daily Cards →" min 44px touch target.
+  - **Files Changed**:
+    - `supabase/migrations/150_fix_attendance_summary_and_daily_detail_rpcs.sql` (NEW)
+    - `supabase/seed_frontend_workflow.mjs` (MODIFIED)
+    - `apps/web/lib/data/attendance/attendance-detail.ts` (MODIFIED)
+    - `apps/web/app/(app)/attendance/[userId]/AttendanceDetailClient.tsx` (MODIFIED)
+    - `apps/web/app/(app)/attendance/AttendanceClient.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/attendance.tsx` (MODIFIED)
+  - **Verification**:
+    - Dev Database RPC Verification: `get_attendance_monthly_summary(2026, 10)` and `get_attendance_monthly_summary(2026, 9)` verified with live data.
+    - Web TypeScript (`@reachinternational/web`): 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Production DB Isolation: Protected production project `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Mobile Bottom Navbar Typography & Icon Proportion Harmonization (/dashboard & Mobile App) (2026-10-01)**:
   - **Delivered**:
     1. **Web App Bottom Navigation Bar (`apps/web/components/navigation/BottomNav.tsx`)**:
-       - Reconfigured `<ul>` container to `flex items-center justify-between h-14 max-w-md mx-auto px-2 py-1 gap-1 sm:px-4 sm:gap-2`.
-       - Provided equal 8px edge padding (`px-2`), equal vertical padding (`py-1`), and explicit 4px gap (`gap-1` / `sm:gap-2`) between all tab items.
-       - Configured `<li>` items with `flex-1 min-w-0 h-full flex items-center justify-center`.
-       - Configured `<Link>` items with `w-full h-full min-h-[44px] px-1 py-1 rounded-lg gap-0.5 text-[11px] sm:text-xs tracking-tight transition-all duration-150 active:scale-95`.
-       - Added subtle active background feedback (`bg-[var(--color-canvas)]/60`) and hover background (`hover:bg-[var(--color-canvas)]/40`).
-       - Scaled icon to `size={19}` and aligned active indicator dot to `bottom-1`.
+       - Standardized tab label typography to `text-[10px] sm:text-[11px] font-medium mt-1 tracking-tight`, making labels slightly smaller and harmonized with an 18px icon.
+       - Scaled icons to `size={18}` for balanced visual weight.
+       - Rendered active dot indicator in flex flow (`h-1 w-1 rounded-full mt-1`) instead of `absolute bottom-1`, reserving space via `opacity-0` when inactive to prevent layout jumping and completely eliminating text collision.
+       - Calibrated container padding to `px-1 sm:px-4` with `flex-1 min-w-0` on `li` and `px-0.5 py-1` on `<Link>`: provides 70.4px width per tab on 360px screen, fully accommodating "Machines" (~42px) and "Attendance" (~48px) with zero truncation and zero ellipsis.
+       - Removed bulky active box background for clean Geist alignment.
     2. **Cross-Platform Mobile App Synchronization (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
-       - Synchronized `pillBar` container with `justifyContent: 'space-between'`, `paddingHorizontal: 8`, `paddingVertical: 5`, and added `gap: 4`.
-       - Updated `navItemBtn` to `paddingHorizontal: 2`, `paddingVertical: 3`, with `borderRadius: 12`.
-       - Added active pill background feedback (`theme.colors.canvas + '80'`).
-       - Enforced `numberOfLines={1}` on item labels.
+       - Updated `itemLabel` to `fontSize: 10`, `fontWeight: '500'`, `letterSpacing: -0.2`, `marginTop: 2`.
+       - Scaled `navItemBtn` to `paddingVertical: 2`, `paddingHorizontal: 1`, with `minHeight: 44`.
+       - Rendered `activeDot` in normal flow with `marginTop: 2` and `backgroundColor: isActive ? theme.colors.ink : 'transparent'`.
+       - Removed box background for visual alignment with the web app.
   - **Files Changed**:
     - `apps/web/components/navigation/BottomNav.tsx` (MODIFIED)
     - `apps/mobile/components/navigation/MobileBottomNav.tsx` (MODIFIED)
   - **Verification**:
     - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
     - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+
 
 - **Signup Page Draft Persistence (/signup) (2026-10-01)**:
   - **Delivered**:

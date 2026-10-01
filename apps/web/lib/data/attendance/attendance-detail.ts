@@ -20,6 +20,7 @@ export interface AttendanceDayEntry {
   overtime_hours: number;
   is_breakdown: boolean;
   location: string | null;
+  shift_code?: string | null;
 }
 
 export interface AttendanceDay {
@@ -156,6 +157,7 @@ async function fetchAttendanceDetailFallback(
         breakdown_hours,
         breakdown_minutes,
         is_breakdown,
+        shift_code,
         location,
         remarks,
         machines (
@@ -246,6 +248,7 @@ async function fetchAttendanceDetailFallback(
         overtime_hours: otH,
         is_breakdown: !!l.is_breakdown,
         location: l.location || null,
+        shift_code: l.shift_code || null,
       };
     });
 
@@ -257,16 +260,14 @@ async function fetchAttendanceDetailFallback(
     }
 
     let status: AttendanceDay["status"] = "ABSENT";
-    if (dow === 0) {
-      status = "WEEK_OFF";
-    } else if (logCount === 0 && dateStr >= today) {
-      status = "DISABLED";
-    } else if (logCount === 0) {
-      status = "ABSENT";
-    } else if (normalMinutes >= 240) {
+    if (normalMinutes >= 240) {
       status = "PRESENT";
     } else if (normalMinutes > 0) {
       status = "HALF_DAY";
+    } else if (dow === 0) {
+      status = "WEEK_OFF";
+    } else if (logCount === 0 && dateStr >= today) {
+      status = "DISABLED";
     } else {
       status = "ABSENT";
     }

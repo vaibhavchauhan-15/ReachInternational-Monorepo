@@ -192,6 +192,7 @@ export const CLIENT_KEYS = {
   detailAssignments: (id: string) => `clients:detail:${id}:assignments`,
   detailHistory: (id: string) => `clients:detail:${id}:history`,
   detailAudit: (id: string) => `clients:detail:${id}:audit`,
+  detailSites: (id: string) => `clients:detail:${id}:sites`,
   kpi: (filter?: ClientKPIFilter) => `clients:kpi:${serializeClientKPIFilter(filter)}`,
   search: (query: string, options?: { limit?: number; status?: "all" | "active" | "inactive" }) =>
     `clients:search:${serializeClientSearch(query, options)}`,
@@ -228,6 +229,7 @@ export const CLIENT_QUERY_KEYS = {
   detailAssignments: (id: string) => [...CLIENT_QUERY_KEYS.details(), id, "assignments"] as const,
   detailHistory: (id: string) => [...CLIENT_QUERY_KEYS.details(), id, "history"] as const,
   detailAudit: (id: string) => [...CLIENT_QUERY_KEYS.details(), id, "audit"] as const,
+  detailSites: (id: string) => [...CLIENT_QUERY_KEYS.details(), id, "sites"] as const,
   searches: () => [...CLIENT_QUERY_KEYS.all, "search"] as const,
   search: (query: string, options?: { limit?: number; status?: "all" | "active" | "inactive" }) =>
     [...CLIENT_QUERY_KEYS.searches(), serializeClientSearch(query, options)] as const,

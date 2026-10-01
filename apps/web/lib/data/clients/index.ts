@@ -6,5 +6,7 @@ export * from "./client-detail";
 export * from "./client-kpis";
 export * from "./client-search";
 export * from "./client-locations";
+export * from "./client-sites";
 export * from "./client-mutations";
 export * from "./client-export";
+export { getClientOptions, type ClientOptionItem } from "@/lib/queries/clients";
