@@ -2133,6 +2133,7 @@ export default function OperationsScreen() {
           model={targetMachineForLog.model}
           serialNumber={targetMachineForLog.serial_number}
           initialShiftCode={(entryContext?.assigned_shift_code || entryContext?.operator?.shift_code) ?? undefined}
+          initialAssignedShiftCodes={entryContext?.assigned_shift_codes}
           onSubmit={() => {
             setMeterModalVisible(false);
             handleDataRefresh();
@@ -2168,6 +2169,7 @@ export default function OperationsScreen() {
           targetOperatorName={assistedRow.operator_name || undefined}
           initialClientId={assistedRow.client_id || undefined}
           initialShiftCode={assistedRow.shift_code || undefined}
+          initialAssignedShiftCodes={assistedRow.shift_code ? [assistedRow.shift_code] : undefined}
           initialStartMeter={assistedRow.current_meter != null ? assistedRow.current_meter : undefined}
           initialLogDate={assistedRow.log_date || undefined}
           onSubmit={() => {

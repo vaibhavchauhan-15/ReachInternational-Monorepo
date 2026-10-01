@@ -11,6 +11,13 @@ export interface ShiftCardSelectorProps {
   onSelect: (sc: ClientShiftCode) => void;
   className?: string;
   getAssignedInfo?: (code: string) => { isAssigned: boolean; label?: string } | undefined;
+  todayLoggedShiftCodes?: string[];
+  todayLogs?: Array<{
+    shift_code: string;
+    start_meter: number;
+    end_meter: number;
+    running_hours: number;
+  }>;
 }
 
 /**
@@ -45,6 +52,8 @@ export function ShiftCardSelector({
   onSelect,
   className,
   getAssignedInfo,
+  todayLoggedShiftCodes = [],
+  todayLogs = [],
 }: ShiftCardSelectorProps) {
   if (!shiftCodes || shiftCodes.length === 0) {
     return null;
@@ -67,6 +76,8 @@ export function ShiftCardSelector({
         const otHours = ((sc.scheduled_minutes - sc.normal_minutes) / 60).toFixed(0);
         const assignedInfo = getAssignedInfo ? getAssignedInfo(sc.code) : undefined;
         const compactRange = formatCompactShiftRange(sc.start_time, sc.end_time);
+        const isLoggedToday = todayLoggedShiftCodes.some((c) => c.toUpperCase() === sc.code.toUpperCase());
+        const loggedRecord = todayLogs.find((l) => l.shift_code.toUpperCase() === sc.code.toUpperCase());
 
         return (
           <button
@@ -81,9 +92,11 @@ export function ShiftCardSelector({
               isSelected
                 ? "flex-[2.5] min-w-[135px] sm:min-w-[160px] bg-[var(--color-ink)] text-white border-[var(--color-ink)] shadow-xs py-2 px-3"
                 : "flex-1 min-w-[62px] sm:min-w-[76px] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)] py-2 px-2.5",
-              assignedInfo?.isAssigned && !isSelected && "border-amber-500/30 bg-amber-500/[0.03]"
+              isLoggedToday && !isSelected
+                ? "border-emerald-500/40 bg-emerald-500/[0.04]"
+                : assignedInfo?.isAssigned && !isSelected && "border-amber-500/30 bg-amber-500/[0.03]"
             )}
-            title={`${getShiftDisplayTitle(sc)}: ${compactRange}`}
+            title={`${getShiftDisplayTitle(sc)}: ${compactRange}${isLoggedToday ? " (Logged Today)" : ""}`}
           >
             {/* Header row: Shift Code + Night Moon Icon */}
             <div className="flex items-center justify-between gap-1 w-full">
@@ -119,11 +132,23 @@ export function ShiftCardSelector({
                 <div className="text-[8px] font-medium text-white/70 whitespace-nowrap leading-tight">
                   {normalHours}h norm{Number(otHours) > 0 ? ` + ${otHours}h OT` : ""}
                 </div>
-                {assignedInfo?.isAssigned && (
+                {isLoggedToday ? (
+                  <span className="text-[9px] font-bold mt-0.5 truncate px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
+                    ✓ Logged Today ({loggedRecord?.running_hours ?? 8}h)
+                  </span>
+                ) : assignedInfo?.isAssigned ? (
                   <span className="text-[9px] font-medium mt-0.5 truncate px-1 py-0.5 rounded bg-white/20 text-white">
                     {assignedInfo.label || "Covered"}
                   </span>
-                )}
+                ) : null}
+              </div>
+            ) : isLoggedToday ? (
+              /* REST STATE WITH LOGGED TODAY STATUS */
+              <div className="flex items-center gap-1 mt-1 truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
+                  ✓ Logged{loggedRecord ? ` (${loggedRecord.running_hours}h)` : ""}
+                </span>
               </div>
             ) : assignedInfo?.isAssigned ? (
               /* REST STATE WITH ASSIGNMENT: Compact dot and short label */

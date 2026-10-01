@@ -312,6 +312,7 @@ export function useOperatorEntryContext(operatorId?: string) {
         last_log: res?.last_log || null,
         shift_codes: res?.shift_codes || [],
         assigned_shift_code: res?.assigned_shift_code || null,
+        assigned_shift_codes: Array.isArray(res?.assigned_shift_codes) ? res.assigned_shift_codes : [],
       };
     },
     enabled: Boolean(operatorId),

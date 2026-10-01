@@ -17,9 +17,10 @@ import { Button, TooltipWrapper, EmptyState } from "@/components/ui";
 import {
   upsertClientShiftCodeAction,
   deleteClientShiftCodeAction,
+  applyClientShiftPresetAction,
 } from "@/app/actions/clients";
 import type { ClientShiftCode } from "@reachinternational/types";
-import { formatTo12Hour } from "@reachinternational/utils";
+import { formatTo12Hour, CLIENT_SHIFT_PRESETS } from "@reachinternational/utils";
 import { invalidateClientShiftsCache } from "@/lib/cache/client-shifts-cache";
 
 export interface ClientShiftCodesTabProps {
@@ -190,6 +191,28 @@ export function ClientShiftCodesTab({
     }
   };
 
+  const [isApplyingPreset, setIsApplyingPreset] = useState<string | null>(null);
+
+  const handleApplyPreset = async (presetId: string, mode: "replace" | "append" = "replace") => {
+    setIsApplyingPreset(presetId);
+    const res = await applyClientShiftPresetAction(clientId, presetId, mode);
+    setIsApplyingPreset(null);
+
+    if (res.success && res.data) {
+      setShiftCodes(res.data as ClientShiftCode[]);
+      invalidateClientShiftsCache(clientId);
+      const preset = CLIENT_SHIFT_PRESETS.find((p) => p.id === presetId);
+      setFeedback({
+        type: "success",
+        text: `Shift preset "${preset?.name || presetId}" applied successfully.`,
+      });
+      setTimeout(() => setFeedback(null), 4000);
+    } else {
+      setFeedback({ type: "error", text: res.error || "Failed to apply preset." });
+      setTimeout(() => setFeedback(null), 5000);
+    }
+  };
+
   const formatHours = (minutes: number) => {
     const hrs = minutes / 60;
     return hrs % 1 === 0 ? `${hrs}h` : `${hrs.toFixed(1)}h`;
@@ -209,20 +232,22 @@ export function ClientShiftCodesTab({
             </span>
           </div>
           <p className="text-xs text-[var(--color-mute)] mt-0.5">
-            Configured shift windows (A/B/C) and built-in overtime policies for {clientName}. Operators select shift codes directly.
+            Configured shift windows (A/B/C) and built-in overtime policies for {clientName}. Active machine assignments dynamically reflect these shifts.
           </p>
         </div>
 
         {canManage && (
-          <Button
-            type="button"
-            onClick={openCreateModal}
-            size="sm"
-            className="self-start sm:self-auto gap-1.5 font-bold shadow-xs active:scale-95"
-          >
-            <Plus size={14} />
-            <span>Add Shift Code</span>
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              onClick={openCreateModal}
+              size="sm"
+              className="self-start sm:self-auto gap-1.5 font-bold shadow-xs active:scale-95"
+            >
+              <Plus size={14} />
+              <span>Add Shift Code</span>
+            </Button>
+          </div>
         )}
       </div>
 
@@ -240,20 +265,91 @@ export function ClientShiftCodesTab({
         </div>
       )}
 
-      {/* ─── Shift Codes List ─── */}
+      {/* ─── Shift Codes List / Empty State with 1-Click Presets ─── */}
       {shiftCodes.length === 0 ? (
-        <EmptyState
-          title="No Shift Codes Configured"
-          description={`No operational shifts have been assigned for ${clientName} yet. Add Shift A/B/C to enable standardized shift selection.`}
-          action={
-            canManage ? (
-              <Button onClick={openCreateModal} size="sm" className="gap-1.5">
-                <Plus size={14} />
-                <span>Configure First Shift</span>
+        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-5 space-y-4">
+          <div className="text-center max-w-lg mx-auto space-y-1.5">
+            <div className="inline-flex p-3 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 mb-1 border border-sky-500/20">
+              <Sparkles size={22} />
+            </div>
+            <h4 className="text-sm font-bold text-[var(--color-ink)]">
+              Configure Operational Shifts for {clientName}
+            </h4>
+            <p className="text-xs text-[var(--color-mute)] leading-relaxed">
+              Standardize shift selection for operators and supervisors. Click any 1-click industry template below to provision immediately, or configure custom timings.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+            {CLIENT_SHIFT_PRESETS.filter((p) => p.shifts.length > 0).map((preset) => {
+              const isThisApplying = isApplyingPreset === preset.id;
+              return (
+                <div
+                  key={preset.id}
+                  data-hover-parent
+                  className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 flex flex-col justify-between hover:border-sky-500/40 transition-all shadow-xs space-y-3"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                        {preset.badge}
+                      </span>
+                    </div>
+                    <h5 className="text-xs font-bold text-[var(--color-ink)] leading-snug">
+                      {preset.name}
+                    </h5>
+                    <p className="text-[11px] text-[var(--color-mute)] leading-relaxed">
+                      {preset.description}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1 pt-1.5 border-t border-[var(--color-hairline)]">
+                      {preset.shifts.map((s) => (
+                        <span
+                          key={s.code}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)]"
+                        >
+                          <strong className="text-sky-600 dark:text-sky-400">{s.code}:</strong>
+                          <span>{s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}</span>
+                          {s.crossesMidnight && <Moon size={9} className="text-purple-500 shrink-0" />}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {canManage && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="primary"
+                      loading={isThisApplying}
+                      disabled={Boolean(isApplyingPreset)}
+                      onClick={() => handleApplyPreset(preset.id, "replace")}
+                      className="w-full text-xs font-bold gap-1 mt-2"
+                    >
+                      <Sparkles size={12} />
+                      <span>1-Click Apply</span>
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {canManage && (
+            <div className="text-center pt-2 border-t border-[var(--color-hairline)]">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={openCreateModal}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Plus size={13} />
+                <span>Configure Custom Shift Manually</span>
               </Button>
-            ) : undefined
-          }
-        />
+            </div>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {shiftCodes.map((shift) => {

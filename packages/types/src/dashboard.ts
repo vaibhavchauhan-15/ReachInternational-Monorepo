@@ -131,13 +131,28 @@ export interface OperatorDashboardDTO {
     site: string;
   } | null;
   today: {
-    entryStatus: "pending" | "submitted";
+    entryStatus: "pending" | "submitted" | "partial";
     lastHmr: number | null;
+    submittedCount?: number;
+    totalAssignedCount?: number;
+    totalRunningHoursToday?: number;
   };
   shift: {
     start: string;
     end: string;
   };
+  assigned_shifts?: Array<{
+    code: string;
+    name: string;
+    start_time: string;
+    end_time: string;
+    raw_start_time?: string;
+    raw_end_time?: string;
+    crosses_midnight?: boolean;
+    is_logged_today: boolean;
+    running_hours_today?: number;
+    end_meter_today?: number | null;
+  }>;
   alerts: DashboardAlert[];
 }
 

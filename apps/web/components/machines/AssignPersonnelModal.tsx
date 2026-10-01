@@ -39,6 +39,11 @@ import {
   getMachinePersonnelFreshAction,
 } from "@/app/actions/machines";
 import {
+  getCachedClientShifts,
+  setCachedClientShifts,
+  CLIENT_SHIFTS_INVALIDATED_EVENT,
+} from "@/lib/cache/client-shifts-cache";
+import {
   getOperatorActiveAssignmentsAction,
   updateOperatorMachineAssignmentsAction,
   getAssignableMachinesAction,
@@ -66,8 +71,6 @@ function doRangesOverlap(ranges1: Array<[number, number]>, ranges2: Array<[numbe
   }
   return false;
 }
-
-const clientShiftsCache = new Map<string, ClientShiftCode[]>();
 
 export interface OperatorAssignmentItem {
   operatorId: string;
@@ -105,8 +108,8 @@ export interface AssignPersonnelModalProps {
   operator?: User | null;
   operatorId?: string;
   // Lists for dropdown / selection:
-  supervisors?: User[];
-  operators?: User[];
+  supervisors?: any[];
+  operators?: any[];
   machines?: any[];
   initialMachineId?: string;
   initialOperatorId?: string;
@@ -159,14 +162,32 @@ export function AssignPersonnelModal({
   // ═══════════════════════════════════════════════════════════════════
   // 1. DATA POOLS (Machines, Operators, Supervisors, Active Conflicts)
   // ═══════════════════════════════════════════════════════════════════
-  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
-  const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
+  const [lazySupervisors, setLazySupervisors] = useState<any[]>(() => {
+    const list: any[] = [...(supervisors || [])];
+    const initialSups = [
+      ...(Array.isArray(propMachine?.supervisors) ? propMachine.supervisors : []),
+      propMachine?.current_supervisor,
+    ].filter(Boolean);
+    initialSups.forEach((s: any) => {
+      if (s && s.id && !list.some((existing) => existing.id === s.id)) {
+        list.push(s);
+      }
+    });
+    return list;
+  });
+  const [lazyOperators, setLazyOperators] = useState<any[]>(() => operators || []);
   const [lazyMachines, setLazyMachines] = useState<any[]>(() => machines || []);
   const [otherAssignments, setOtherAssignments] = useState<ActiveOperatorOtherAssignment[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
   useEffect(() => {
-    if (supervisors && supervisors.length > 0) setLazySupervisors(supervisors);
+    if (supervisors && supervisors.length > 0) {
+      setLazySupervisors((prev) => {
+        const map = new Map(prev.map((s) => [s.id, s]));
+        supervisors.forEach((s) => s && s.id && map.set(s.id, s));
+        return Array.from(map.values());
+      });
+    }
   }, [supervisors]);
 
   useEffect(() => {
@@ -189,7 +210,13 @@ export function AssignPersonnelModal({
       promises.push(
         getMachineModalOptionsAction().then((data) => {
           if (!isMounted) return;
-          if (data.supervisors && data.supervisors.length > 0) setLazySupervisors(data.supervisors);
+          if (data.supervisors && data.supervisors.length > 0) {
+            setLazySupervisors((prev) => {
+              const map = new Map(prev.map((s) => [s.id, s]));
+              data.supervisors.forEach((s) => s && s.id && map.set(s.id, s));
+              return Array.from(map.values());
+            });
+          }
           if (data.operators && data.operators.length > 0) setLazyOperators(data.operators);
           if (data.activeAssignments && data.activeAssignments.length > 0) {
             setOtherAssignments(data.activeAssignments);
@@ -251,17 +278,50 @@ export function AssignPersonnelModal({
   }, [lazyMachines]);
 
   // Client shifts for active machine
-  const [machineClientShifts, setMachineClientShifts] = useState<ClientShiftCode[]>(DEFAULT_CLIENT_SHIFTS);
-  const clientId = activeMachine?.client_id;
+  const initialClientShifts = useMemo((): ClientShiftCode[] => {
+    const rawShifts = propMachine?.client_shifts;
+    if (Array.isArray(rawShifts) && rawShifts.length > 0) {
+      return rawShifts.map((s: any) => ({
+        ...s,
+        raw_start_time: formatTo12Hour(s.start_time) || s.start_time,
+        raw_end_time: formatTo12Hour(s.end_time) || s.end_time,
+        start_time: formatTo12Hour(s.start_time) || s.start_time,
+        end_time: formatTo12Hour(s.end_time) || s.end_time,
+      }));
+    }
+    const cId = propMachine?.client_id || propMachine?.client?.id;
+    if (cId) {
+      const cached = getCachedClientShifts(cId);
+      if (cached && cached.length > 0) return cached;
+    }
+    return DEFAULT_CLIENT_SHIFTS;
+  }, [propMachine]);
+
+  const [machineClientShifts, setMachineClientShifts] = useState<ClientShiftCode[]>(initialClientShifts);
+  const clientId = activeMachine?.client_id || activeMachine?.client?.id || propMachine?.client_id || propMachine?.client?.id;
 
   useEffect(() => {
+    if (Array.isArray(activeMachine?.client_shifts) && activeMachine.client_shifts.length > 0) {
+      const formatted: ClientShiftCode[] = activeMachine.client_shifts.map((s: any) => ({
+        ...s,
+        raw_start_time: formatTo12Hour(s.start_time) || s.start_time,
+        raw_end_time: formatTo12Hour(s.end_time) || s.end_time,
+        start_time: formatTo12Hour(s.start_time) || s.start_time,
+        end_time: formatTo12Hour(s.end_time) || s.end_time,
+      }));
+      if (clientId) setCachedClientShifts(clientId, formatted);
+      setMachineClientShifts(formatted);
+      return;
+    }
+
     if (!isOpen || !clientId) {
       setMachineClientShifts(DEFAULT_CLIENT_SHIFTS);
       return;
     }
 
-    if (clientShiftsCache.has(clientId)) {
-      setMachineClientShifts(clientShiftsCache.get(clientId)!);
+    const cached = getCachedClientShifts(clientId);
+    if (cached && cached.length > 0) {
+      setMachineClientShifts(cached);
       return;
     }
 
@@ -280,7 +340,7 @@ export function AssignPersonnelModal({
               end_time: formatTo12Hour(s.end_time) || s.end_time,
             }));
           const finalShifts = formatted.length > 0 ? formatted : DEFAULT_CLIENT_SHIFTS;
-          clientShiftsCache.set(clientId, finalShifts);
+          setCachedClientShifts(clientId, finalShifts);
           setMachineClientShifts(finalShifts);
         } else {
           setMachineClientShifts(DEFAULT_CLIENT_SHIFTS);
@@ -292,6 +352,36 @@ export function AssignPersonnelModal({
 
     return () => {
       active = false;
+    };
+  }, [isOpen, clientId, activeMachine?.client_shifts]);
+
+  // Synchronize shifts dynamically when client shift codes are created or renamed
+  useEffect(() => {
+    if (!isOpen || !clientId) return;
+    const handleShiftInvalidation = (e: Event) => {
+      const customEvent = e as CustomEvent<{ clientId?: string | null }>;
+      if (!customEvent.detail?.clientId || customEvent.detail.clientId === clientId) {
+        getClientShiftCodesAction(clientId).then((res) => {
+          if (res.success && res.data && res.data.length > 0) {
+            const formatted: ClientShiftCode[] = res.data
+              .filter((s: any) => s.is_active !== false)
+              .map((s: any) => ({
+                ...s,
+                raw_start_time: formatTo12Hour(s.start_time) || s.start_time,
+                raw_end_time: formatTo12Hour(s.end_time) || s.end_time,
+                start_time: formatTo12Hour(s.start_time) || s.start_time,
+                end_time: formatTo12Hour(s.end_time) || s.end_time,
+              }));
+            const finalShifts = formatted.length > 0 ? formatted : DEFAULT_CLIENT_SHIFTS;
+            setCachedClientShifts(clientId, finalShifts);
+            setMachineClientShifts(finalShifts);
+          }
+        });
+      }
+    };
+    window.addEventListener(CLIENT_SHIFTS_INVALIDATED_EVENT, handleShiftInvalidation);
+    return () => {
+      window.removeEventListener(CLIENT_SHIFTS_INVALIDATED_EVENT, handleShiftInvalidation);
     };
   }, [isOpen, clientId]);
 
@@ -313,6 +403,18 @@ export function AssignPersonnelModal({
     setMachineSupervisorIds(sIds);
     setInitialSupervisorIds(sIds);
 
+    const activeSups = [
+      ...(Array.isArray(activeMachine.supervisors) ? activeMachine.supervisors : []),
+      activeMachine.current_supervisor,
+    ].filter(Boolean);
+    if (activeSups.length > 0) {
+      setLazySupervisors((prev) => {
+        const map = new Map(prev.map((s) => [s.id, s]));
+        activeSups.forEach((s: any) => s && s.id && map.set(s.id, s));
+        return Array.from(map.values());
+      });
+    }
+
     // Operators
     const rawOps: any[] = Array.isArray(activeMachine.operators) && activeMachine.operators.length > 0
       ? activeMachine.operators
@@ -325,42 +427,143 @@ export function AssignPersonnelModal({
       : activeMachine.current_operator_id ? [activeMachine.current_operator_id] : [];
 
     const hydrated: OperatorAssignmentItem[] = [];
-    const seenIds = new Set<string>();
+    const seenKeys = new Set<string>();
 
     rawOps.forEach((o: any, idx: number) => {
-      if (!o || !o.id || seenIds.has(o.id)) return;
-      seenIds.add(o.id);
+      if (!o || !o.id) return;
+      const rawCode = o.shift_code || o.shiftCode;
+      const matchedShift = machineClientShifts.find(
+        (s) => s.code.trim().toUpperCase() === (rawCode || "").trim().toUpperCase()
+      ) || machineClientShifts[idx % machineClientShifts.length];
+
+      const shiftCode = rawCode || matchedShift?.code || `S${(idx % 3) + 1}`;
+      const shiftStartTime = matchedShift?.start_time || o.shift_start_time || o.shiftStartTime || null;
+      const shiftEndTime = matchedShift?.end_time || o.shift_end_time || o.shiftEndTime || null;
+
+      const key = `${o.id}-${shiftCode}`;
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
       hydrated.push({
         operatorId: o.id,
         operatorName: o.full_name || (o as any).name || "Operator",
         phone: o.phone || null,
         email: o.email || null,
-        shiftCode: o.shift_code || `S${(idx % 3) + 1}`,
-        shiftStartTime: o.shift_start_time || null,
-        shiftEndTime: o.shift_end_time || null,
+        shiftCode: shiftCode,
+        shiftStartTime: shiftStartTime,
+        shiftEndTime: shiftEndTime,
         notes: "Assigned via personnel modal",
       });
     });
 
+    const assignedOperatorIds = new Set(hydrated.map((h) => h.operatorId));
     opIds.forEach((id: string, idx: number) => {
-      if (seenIds.has(id)) return;
-      seenIds.add(id);
+      if (assignedOperatorIds.has(id)) return;
+      assignedOperatorIds.add(id);
       const matchedUser = lazyOperators.find((u) => u.id === id) || (activeMachine.current_operator?.id === id ? activeMachine.current_operator : null);
+      const matchedShift = machineClientShifts[hydrated.length % machineClientShifts.length];
+      const shiftCode = (matchedUser as any)?.shift_code || matchedShift?.code || `S${(hydrated.length % 3) + 1}`;
       hydrated.push({
         operatorId: id,
         operatorName: matchedUser?.full_name || (matchedUser as any)?.name || "Operator",
         phone: matchedUser?.phone || null,
         email: matchedUser?.email || null,
-        shiftCode: (matchedUser as any)?.shift_code || `S${(hydrated.length % 3) + 1}`,
-        shiftStartTime: (matchedUser as any)?.shift_start_time || null,
-        shiftEndTime: (matchedUser as any)?.shift_end_time || null,
+        shiftCode: shiftCode,
+        shiftStartTime: matchedShift?.start_time || (matchedUser as any)?.shift_start_time || null,
+        shiftEndTime: matchedShift?.end_time || (matchedUser as any)?.shift_end_time || null,
         notes: "Assigned via personnel modal",
       });
     });
 
     setMachineOperators(hydrated);
     setInitialMachineOperators(hydrated);
-  }, [isOpen, activeMachine, lazyOperators]);
+  }, [isOpen, activeMachine, lazyOperators, machineClientShifts]);
+
+  // Fetch fresh personnel directly from DB to capture exact shift assignments
+  useEffect(() => {
+    if (!isOpen || !activeMachine?.id) return;
+    let isMounted = true;
+    getMachinePersonnelFreshAction(activeMachine.id)
+      .then((res) => {
+        if (!isMounted || !res.success || !res.data) return;
+        const fresh = res.data;
+        if (fresh.supervisors && fresh.supervisors.length > 0) {
+          setLazySupervisors((prev) => {
+            const map = new Map(prev.map((s) => [s.id, s]));
+            fresh.supervisors.forEach((s: any) => {
+              if (s && s.id) map.set(s.id, s);
+            });
+            return Array.from(map.values());
+          });
+        }
+        if (fresh.supervisor_ids) {
+          setMachineSupervisorIds(fresh.supervisor_ids);
+          setInitialSupervisorIds(fresh.supervisor_ids);
+        }
+        if (fresh.operators && fresh.operators.length > 0) {
+          const freshHydrated: OperatorAssignmentItem[] = fresh.operators.map((o: any, idx: number) => {
+            const rawCode = o.shift_code || o.shiftCode;
+            const matchedShift = machineClientShifts.find(
+              (s) => s.code.trim().toUpperCase() === (rawCode || "").trim().toUpperCase()
+            ) || machineClientShifts[idx % machineClientShifts.length];
+
+            const shiftCode = rawCode || matchedShift?.code || `S${(idx % 3) + 1}`;
+            return {
+              operatorId: o.id,
+              operatorName: o.full_name || "Operator",
+              phone: o.phone || null,
+              email: o.email || null,
+              shiftCode: shiftCode,
+              shiftStartTime: o.shift_start_time || matchedShift?.start_time || null,
+              shiftEndTime: o.shift_end_time || matchedShift?.end_time || null,
+              notes: "Assigned via personnel modal",
+            };
+          });
+          setMachineOperators(freshHydrated);
+          setInitialMachineOperators(freshHydrated);
+        }
+      })
+      .catch((err) => console.error("Error refreshing machine personnel", err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, activeMachine?.id, machineClientShifts]);
+
+  // Reconcile operator shift codes whenever machineClientShifts loads/changes
+  useEffect(() => {
+    if (!machineClientShifts || machineClientShifts.length === 0 || machineOperators.length === 0) return;
+    const clientCodes = new Set(machineClientShifts.map((s) => s.code.trim().toUpperCase()));
+    let needsReconciliation = false;
+
+    const reconciled = machineOperators.map((item, idx) => {
+      const codeUpper = (item.shiftCode || "").trim().toUpperCase();
+      if (!clientCodes.has(codeUpper)) {
+        // Find matching client shift by timing or fallback to index
+        const matchedByTime = machineClientShifts.find((s) => {
+          if (!item.shiftStartTime) return false;
+          const t1 = parseTimeToMinutes(item.shiftStartTime);
+          const t2 = parseTimeToMinutes(s.start_time);
+          return t1 !== null && t2 !== null && Math.abs(t1 - t2) < 30;
+        });
+        const targetShift = matchedByTime || machineClientShifts[idx % machineClientShifts.length];
+        if (targetShift) {
+          needsReconciliation = true;
+          return {
+            ...item,
+            shiftCode: targetShift.code,
+            shiftStartTime: targetShift.start_time,
+            shiftEndTime: targetShift.end_time,
+          };
+        }
+      }
+      return item;
+    });
+
+    if (needsReconciliation) {
+      setMachineOperators(reconciled);
+      setInitialMachineOperators(reconciled);
+    }
+  }, [machineClientShifts]);
 
   // ═══════════════════════════════════════════════════════════════════
   // 3. STATE FOR OPERATOR-CENTRIC ASSIGNMENTS
@@ -433,49 +636,6 @@ export function AssignPersonnelModal({
   const [isAddMachineOpen, setIsAddMachineOpen] = useState(false);
   const [machineSearchQuery, setMachineSearchQuery] = useState("");
 
-  // Filter available unassigned operators for active machine
-  const assignedOpIdSet = useMemo(
-    () => new Set(machineOperators.map((a) => a.operatorId)),
-    [machineOperators]
-  );
-
-  const availableOperators = useMemo(
-    () =>
-      lazyOperators.filter(
-        (op) =>
-          !assignedOpIdSet.has(op.id) &&
-          (!op.role || op.role === "operator") &&
-          op.status !== "inactive" &&
-          (operatorSearchQuery === "" ||
-            op.full_name?.toLowerCase().includes(operatorSearchQuery.toLowerCase()) ||
-            op.phone?.includes(operatorSearchQuery) ||
-            op.email?.toLowerCase().includes(operatorSearchQuery.toLowerCase()))
-      ),
-    [lazyOperators, assignedOpIdSet, operatorSearchQuery]
-  );
-
-  // Filter available machines for active operator
-  const assignedMachineIdSet = useMemo(
-    () => new Set(operatorMachineAssignments.map((a) => a.machineId)),
-    [operatorMachineAssignments]
-  );
-
-  const availableMachines = useMemo(
-    () =>
-      lazyMachines.filter(
-        (m) =>
-          !assignedMachineIdSet.has(m.id) &&
-          (machineSearchQuery === "" ||
-            m.machine_id?.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
-            m.model?.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
-            m.serial_number?.toLowerCase().includes(machineSearchQuery.toLowerCase()))
-      ),
-    [lazyMachines, assignedMachineIdSet, machineSearchQuery]
-  );
-
-  // ═══════════════════════════════════════════════════════════════════
-  // 5. VALIDATIONS & CONFLICT DETECTION
-  // ═══════════════════════════════════════════════════════════════════
   // Cross-machine assignment lookup map
   const otherAssignmentsMap = useMemo(() => {
     const map = new Map<string, ActiveOperatorOtherAssignment[]>();
@@ -487,6 +647,54 @@ export function AssignPersonnelModal({
     }
     return map;
   }, [otherAssignments, currentMachineId]);
+
+  // Filter available operators for active machine (max 2 shifts allowed per operator platform-wide)
+  const availableOperators = useMemo(
+    () =>
+      lazyOperators.filter((op) => {
+        if (op.role && op.role !== "operator") return false;
+        if (op.status === "inactive") return false;
+
+        const thisCount = machineOperators.filter((a) => a.operatorId === op.id).length;
+        const otherCount = (otherAssignmentsMap.get(op.id) || []).length;
+        const totalShifts = thisCount + otherCount;
+
+        // Operator has already reached max 3 shifts
+        if (totalShifts >= 3) return false;
+        if (thisCount >= 3) return false;
+
+        const query = operatorSearchQuery.toLowerCase();
+        return (
+          query === "" ||
+          op.full_name?.toLowerCase().includes(query) ||
+          op.phone?.includes(query) ||
+          op.email?.toLowerCase().includes(query)
+        );
+      }),
+    [lazyOperators, machineOperators, otherAssignmentsMap, operatorSearchQuery]
+  );
+
+  // Filter available machines for active operator (max 3 shifts allowed per operator platform-wide)
+  const availableMachines = useMemo(() => {
+    if (operatorMachineAssignments.length >= 3) return [];
+
+    return lazyMachines.filter((m) => {
+      const opCountOnMachine = operatorMachineAssignments.filter((a) => a.machineId === m.id).length;
+      if (opCountOnMachine >= 3) return false;
+
+      const query = machineSearchQuery.toLowerCase();
+      return (
+        query === "" ||
+        m.machine_id?.toLowerCase().includes(query) ||
+        m.model?.toLowerCase().includes(query) ||
+        m.serial_number?.toLowerCase().includes(query)
+      );
+    });
+  }, [lazyMachines, operatorMachineAssignments, machineSearchQuery]);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 5. VALIDATIONS & CONFLICT DETECTION
+  // ═══════════════════════════════════════════════════════════════════
 
   // Machine Mode: Duplicate shift code validation on this machine
   const duplicateShiftCodes = useMemo(() => {
@@ -547,18 +755,36 @@ export function AssignPersonnelModal({
 
         if (doRangesOverlap(myRanges, otherRanges)) {
           const otherTiming = `${formatTo12Hour(other.shiftStartTime)} – ${formatTo12Hour(other.shiftEndTime)}`;
+          const myTiming = `${formatTo12Hour(a.shiftStartTime)} – ${formatTo12Hour(a.shiftEndTime)}`;
           conflicts.push({
             operatorId: a.operatorId,
             operatorName: a.operatorName,
             otherMachineCode: other.machineCode,
             otherShiftTiming: otherTiming,
-            shortMessage: `${a.operatorName} is already assigned to ${other.machineCode} (${otherTiming}).`,
+            shortMessage: `${a.operatorName}'s Shift ${a.shiftCode || ""} (${myTiming}) overlaps with active shift on ${other.machineCode} (${otherTiming}). An operator cannot be assigned to overlapping shifts.`,
           });
           break;
         }
       }
     }
     return conflicts;
+  }, [machineOperators, otherAssignmentsMap]);
+
+  // Machine Mode: Max 3 shifts per operator validation across fleet (24h)
+  const machineOperatorShiftExceeded = useMemo(() => {
+    const opCounts = new Map<string, number>();
+    for (const a of machineOperators) {
+      opCounts.set(a.operatorId, (opCounts.get(a.operatorId) || 0) + 1);
+    }
+    const exceeded: string[] = [];
+    for (const [opId, count] of opCounts.entries()) {
+      const others = (otherAssignmentsMap.get(opId) || []).length;
+      if (count + others > 3) {
+        const opName = machineOperators.find((m) => m.operatorId === opId)?.operatorName || "Operator";
+        exceeded.push(`${opName} is assigned to ${count + others} shifts (maximum allowed is 3 shifts or 24h).`);
+      }
+    }
+    return exceeded;
   }, [machineOperators, otherAssignmentsMap]);
 
   // Operator Mode: Overlapping shifts between machines assigned to this operator
@@ -572,8 +798,10 @@ export function AssignPersonnelModal({
           const r1 = shiftToMinuteRanges(m1.shiftStartTime, m1.shiftEndTime);
           const r2 = shiftToMinuteRanges(m2.shiftStartTime, m2.shiftEndTime);
           if (doRangesOverlap(r1, r2)) {
+            const t1 = `${formatTo12Hour(m1.shiftStartTime)} – ${formatTo12Hour(m1.shiftEndTime)}`;
+            const t2 = `${formatTo12Hour(m2.shiftStartTime)} – ${formatTo12Hour(m2.shiftEndTime)}`;
             conflicts.push(
-              `${m1.machineCode} (Shift ${m1.shiftCode}) collides with ${m2.machineCode} (Shift ${m2.shiftCode})`
+              `${m1.machineCode} (Shift ${m1.shiftCode}: ${t1}) collides with ${m2.machineCode} (Shift ${m2.shiftCode}: ${t2}). An operator cannot work overlapping shifts.`
             );
           }
         }
@@ -582,25 +810,56 @@ export function AssignPersonnelModal({
     return conflicts;
   }, [operatorMachineAssignments]);
 
+  // Operator Mode: Duplicate shift on same machine validation
+  const operatorDuplicateShifts = useMemo(() => {
+    const shiftKeys = new Set<string>();
+    for (const a of operatorMachineAssignments) {
+      const key = `${a.machineId}:${a.shiftCode.toUpperCase()}`;
+      if (shiftKeys.has(key)) return true;
+      shiftKeys.add(key);
+    }
+    return false;
+  }, [operatorMachineAssignments]);
+
+  const operatorShiftLimitExceeded = operatorMachineAssignments.length > 3;
+
   // Dirty State Calculation
   const isMachineDirty = useMemo(() => {
     const supChanged = JSON.stringify([...machineSupervisorIds].sort()) !== JSON.stringify([...initialSupervisorIds].sort());
-    const opsChanged = JSON.stringify(machineOperators.map((o) => ({ id: o.operatorId, shift: o.shiftCode })).sort((a, b) => a.id.localeCompare(b.id))) !==
-      JSON.stringify(initialMachineOperators.map((o) => ({ id: o.operatorId, shift: o.shiftCode })).sort((a, b) => a.id.localeCompare(b.id)));
+    const opsChanged =
+      JSON.stringify(
+        machineOperators
+          .map((o) => ({ id: o.operatorId, shift: o.shiftCode }))
+          .sort((a, b) => `${a.id}-${a.shift}`.localeCompare(`${b.id}-${b.shift}`))
+      ) !==
+      JSON.stringify(
+        initialMachineOperators
+          .map((o) => ({ id: o.operatorId, shift: o.shiftCode }))
+          .sort((a, b) => `${a.id}-${a.shift}`.localeCompare(`${b.id}-${b.shift}`))
+      );
     return canEditSupervisor ? (supChanged || opsChanged) : opsChanged;
   }, [machineSupervisorIds, initialSupervisorIds, machineOperators, initialMachineOperators, canEditSupervisor]);
 
   const isOperatorDirty = useMemo(() => {
-    const current = operatorMachineAssignments.map((a) => ({ mId: a.machineId, sCode: a.shiftCode })).sort((a, b) => a.mId.localeCompare(b.mId));
-    const initial = initialOperatorAssignments.map((a) => ({ mId: a.machineId, sCode: a.shiftCode })).sort((a, b) => a.mId.localeCompare(b.mId));
+    const current = operatorMachineAssignments
+      .map((a) => ({ mId: a.machineId, sCode: a.shiftCode }))
+      .sort((a, b) => `${a.mId}-${a.sCode}`.localeCompare(`${b.mId}-${b.sCode}`));
+    const initial = initialOperatorAssignments
+      .map((a) => ({ mId: a.machineId, sCode: a.shiftCode }))
+      .sort((a, b) => `${a.mId}-${a.sCode}`.localeCompare(`${b.mId}-${b.sCode}`));
     return JSON.stringify(current) !== JSON.stringify(initial);
   }, [operatorMachineAssignments, initialOperatorAssignments]);
 
   const isDirty = activeTabMode === "machine" ? isMachineDirty : isOperatorDirty;
   const hasValidationError =
     activeTabMode === "machine"
-      ? otherMachineConflicts.length > 0 || duplicateShiftCodes.length > 0 || overlappingShifts.length > 0
-      : operatorCollidingMachines.length > 0;
+      ? otherMachineConflicts.length > 0 ||
+        duplicateShiftCodes.length > 0 ||
+        overlappingShifts.length > 0 ||
+        machineOperatorShiftExceeded.length > 0
+      : operatorCollidingMachines.length > 0 ||
+        operatorDuplicateShifts ||
+        operatorShiftLimitExceeded;
 
   // ═══════════════════════════════════════════════════════════════════
   // 6. MUTATION HANDLERS
@@ -635,14 +894,14 @@ export function AssignPersonnelModal({
     setOperatorSearchQuery("");
   };
 
-  const handleRemoveOperatorFromMachine = (opId: string) => {
-    setMachineOperators((prev) => prev.filter((a) => a.operatorId !== opId));
+  const handleRemoveOperatorFromMachine = (index: number) => {
+    setMachineOperators((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleMachineShiftChange = (opId: string, shift: ClientShiftCode) => {
+  const handleMachineShiftChange = (index: number, shift: ClientShiftCode) => {
     setMachineOperators((prev) =>
-      prev.map((a) => {
-        if (a.operatorId !== opId) return a;
+      prev.map((a, idx) => {
+        if (idx !== index) return a;
         return {
           ...a,
           shiftCode: shift.code,
@@ -654,6 +913,11 @@ export function AssignPersonnelModal({
   };
 
   const handleAddMachineToOperator = async (m: any) => {
+    if (operatorMachineAssignments.length >= 3) {
+      toast("warning", "Shift limit reached", "An operator can be assigned to a maximum of 3 shifts (24h) only.");
+      return;
+    }
+
     let shifts = DEFAULT_CLIENT_SHIFTS;
     if (m.client_id) {
       try {
@@ -670,8 +934,12 @@ export function AssignPersonnelModal({
       }
     }
 
-    const assignedCodes = new Set(operatorMachineAssignments.map((a) => a.shiftCode.toUpperCase()));
-    const nextShift = shifts.find((s) => !assignedCodes.has(s.code.toUpperCase())) || shifts[0];
+    const assignedCodesOnMachine = new Set(
+      operatorMachineAssignments
+        .filter((a) => a.machineId === m.id)
+        .map((a) => a.shiftCode.toUpperCase())
+    );
+    const nextShift = shifts.find((s) => !assignedCodesOnMachine.has(s.code.toUpperCase())) || shifts[0];
 
     const newItem: MachineAssignmentItem = {
       machineId: m.id,
@@ -692,14 +960,14 @@ export function AssignPersonnelModal({
     setMachineSearchQuery("");
   };
 
-  const handleRemoveMachineFromOperator = (mId: string) => {
-    setOperatorMachineAssignments((prev) => prev.filter((a) => a.machineId !== mId));
+  const handleRemoveMachineFromOperator = (index: number) => {
+    setOperatorMachineAssignments((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleOperatorShiftChange = (mId: string, shift: ClientShiftCode) => {
+  const handleOperatorShiftChange = (index: number, shift: ClientShiftCode) => {
     setOperatorMachineAssignments((prev) =>
-      prev.map((a) => {
-        if (a.machineId !== mId) return a;
+      prev.map((a, idx) => {
+        if (idx !== index) return a;
         return {
           ...a,
           shiftCode: shift.code,
@@ -745,11 +1013,13 @@ export function AssignPersonnelModal({
             role: "operator",
           }));
 
+          const uniqueOpIds = Array.from(new Set(machineOperators.map((a) => a.operatorId)));
+
           onMachineUpdated({
             supervisor_ids: canEditSupervisor ? machineSupervisorIds : activeMachine.supervisor_ids,
             current_supervisor_id: machineSupervisorIds[0] || null,
-            operator_ids: machineOperators.map((a) => a.operatorId),
-            current_operator_id: machineOperators[0]?.operatorId || null,
+            operator_ids: uniqueOpIds,
+            current_operator_id: uniqueOpIds[0] || null,
             operators: optOps as any,
           });
         }
@@ -1029,6 +1299,15 @@ export function AssignPersonnelModal({
                 </div>
               )}
 
+              {machineOperatorShiftExceeded.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="text-[11px] font-medium leading-relaxed">
+                    {machineOperatorShiftExceeded.join(" ")}
+                  </div>
+                </div>
+              )}
+
               {/* Operator Cards List */}
               <div className="space-y-2.5">
                 {machineOperators.length === 0 ? (
@@ -1043,10 +1322,11 @@ export function AssignPersonnelModal({
                   machineOperators.map((item, idx) => {
                     const otherConflict = otherMachineConflicts.find((c) => c.operatorId === item.operatorId);
                     const hasConflict = duplicateShiftCodes.includes(item.shiftCode.toUpperCase()) || !!otherConflict;
+                    const isMultiShiftOnMachine = machineOperators.filter((o) => o.operatorId === item.operatorId).length > 1;
 
                     return (
                       <div
-                        key={item.operatorId}
+                        key={`${item.operatorId}-${item.shiftCode}-${idx}`}
                         className={`p-3 rounded-xl border transition-colors ${
                           hasConflict
                             ? "bg-rose-500/5 border-rose-500/40"
@@ -1064,15 +1344,31 @@ export function AssignPersonnelModal({
                                 <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)] truncate">
                                   {item.operatorName}
                                 </span>
-                                <span
-                                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
-                                    hasConflict
-                                      ? "bg-rose-500/10 text-rose-600 border-rose-500/25"
-                                      : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25"
-                                  }`}
-                                >
-                                  Shift {item.shiftCode}
-                                </span>
+                                {isMultiShiftOnMachine && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                    {machineOperators.filter((o) => o.operatorId === item.operatorId).length === 3 ? "3 Shifts (24h) on Machine" : "2 Shifts on Machine"}
+                                  </span>
+                                )}
+                                {(() => {
+                                  const matchingShift = machineClientShifts.find(
+                                    (s) => s.code.trim().toUpperCase() === item.shiftCode.trim().toUpperCase()
+                                  );
+                                  const shiftLabel = matchingShift?.name
+                                    ? (matchingShift.name.toLowerCase().startsWith("shift") ? matchingShift.name : `Shift ${item.shiftCode} (${matchingShift.name})`)
+                                    : `Shift ${item.shiftCode}`;
+                                  return (
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                                        hasConflict
+                                          ? "bg-rose-500/10 text-rose-600 border-rose-500/25"
+                                          : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25"
+                                      }`}
+                                      title={shiftLabel}
+                                    >
+                                      {shiftLabel}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               {(item.phone || item.email) && (
                                 <div className="text-[10px] text-[var(--color-mute)] truncate mt-0.5">
@@ -1090,7 +1386,7 @@ export function AssignPersonnelModal({
 
                           <button
                             type="button"
-                            onClick={() => handleRemoveOperatorFromMachine(item.operatorId)}
+                            onClick={() => handleRemoveOperatorFromMachine(idx)}
                             title={`Remove ${item.operatorName}`}
                             className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                           >
@@ -1107,7 +1403,7 @@ export function AssignPersonnelModal({
 
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                             {machineClientShifts.map((sc) => {
-                              const isSelected = item.shiftCode.toUpperCase() === sc.code.toUpperCase();
+                              const isSelected = item.shiftCode.trim().toUpperCase() === sc.code.trim().toUpperCase();
                               const others = otherAssignmentsMap.get(item.operatorId);
                               const isCollision = others?.some((other) => {
                                 const rOther = shiftToMinuteRanges(other.shiftStartTime, other.shiftEndTime);
@@ -1119,8 +1415,8 @@ export function AssignPersonnelModal({
                                 <button
                                   key={sc.code}
                                   type="button"
-                                  onClick={() => handleMachineShiftChange(item.operatorId, sc)}
-                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[44px] ${
+                                  onClick={() => handleMachineShiftChange(idx, sc)}
+                                  className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[52px] ${
                                     isSelected
                                       ? isCollision
                                         ? "bg-rose-600 text-white border-rose-700 shadow-2xs ring-1 ring-rose-600 font-semibold"
@@ -1130,17 +1426,47 @@ export function AssignPersonnelModal({
                                       : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-sky-500/40"
                                   }`}
                                 >
-                                  <div className="flex items-center justify-between gap-1 w-full">
-                                    <span className={`text-[11px] font-bold font-mono ${isSelected ? "text-white" : "text-[var(--color-ink)]"}`}>
-                                      Shift {sc.code}
-                                    </span>
+                                  <div className="flex items-center justify-between gap-1.5 w-full">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+                                          isSelected
+                                            ? "bg-white/25 text-white"
+                                            : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/25"
+                                        }`}
+                                      >
+                                        {sc.code}
+                                      </span>
+                                      <span
+                                        className={`text-xs font-bold truncate ${
+                                          isSelected ? "text-white" : "text-[var(--color-ink)]"
+                                        }`}
+                                        title={sc.name || `Shift ${sc.code}`}
+                                      >
+                                        {sc.name || `Shift ${sc.code}`}
+                                      </span>
+                                    </div>
                                     {sc.crosses_midnight && (
-                                      <Moon size={10} className={isSelected ? "text-white/80" : "text-indigo-500"} />
+                                      <Moon
+                                        size={11}
+                                        className={isSelected ? "text-white/90" : "text-indigo-500 shrink-0"}
+                                      />
                                     )}
                                   </div>
-                                  <span className={`text-[9px] font-mono mt-0.5 truncate ${isSelected ? "text-white/90" : "text-[var(--color-mute)]"}`}>
-                                    {sc.start_time} – {sc.end_time}
-                                  </span>
+                                  <div className="flex items-center justify-between gap-1 mt-1 text-[10px] font-mono">
+                                    <span className={`truncate ${isSelected ? "text-white/90" : "text-[var(--color-mute)]"}`}>
+                                      {sc.start_time} – {sc.end_time}
+                                    </span>
+                                    {sc.scheduled_minutes ? (
+                                      <span
+                                        className={`text-[9px] shrink-0 font-medium ${
+                                          isSelected ? "text-white/80" : "text-[var(--color-mute)]"
+                                        }`}
+                                      >
+                                        {Math.round(sc.scheduled_minutes / 60)}h
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </button>
                               );
                             })}
@@ -1191,8 +1517,11 @@ export function AssignPersonnelModal({
                           </div>
                         ) : (
                           availableOperators.map((op) => {
-                            const otherAssList = otherAssignmentsMap.get(op.id);
-                            const otherAss = otherAssList?.[0];
+                            const thisCount = machineOperators.filter((a) => a.operatorId === op.id).length;
+                            const otherAssList = otherAssignmentsMap.get(op.id) || [];
+                            const otherAss = otherAssList[0];
+                            const totalCount = thisCount + otherAssList.length;
+
                             const nextShift = getNextAvailableMachineShift();
                             const willOverlap = otherAss && doRangesOverlap(
                               shiftToMinuteRanges(nextShift.start_time, nextShift.end_time),
@@ -1209,6 +1538,15 @@ export function AssignPersonnelModal({
                                 <div className="min-w-0 pr-2">
                                   <div className="font-semibold truncate flex items-center gap-1.5 flex-wrap">
                                     <span>{op.full_name}</span>
+                                    {thisCount > 0 ? (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                                        Already on this machine ({thisCount}/3)
+                                      </span>
+                                    ) : totalCount > 0 ? (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                        {totalCount}/3 Shifts
+                                      </span>
+                                    ) : null}
                                     {otherAss && (
                                       <span
                                         className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${
@@ -1315,7 +1653,7 @@ export function AssignPersonnelModal({
                   Assigned Machinery Fleet (24h)
                 </span>
                 <span className="text-[10px] text-[var(--color-mute)] font-medium font-mono">
-                  {operatorMachineAssignments.length} Active Shift{operatorMachineAssignments.length !== 1 ? "s" : ""}
+                  {operatorMachineAssignments.length}/3 Shifts Assigned
                 </span>
               </div>
 
@@ -1325,6 +1663,24 @@ export function AssignPersonnelModal({
                   <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="text-[11px] font-medium leading-relaxed">
                     Shift conflict: {operatorCollidingMachines.join("; ")}. An operator cannot work simultaneous shifts across equipment.
+                  </div>
+                </div>
+              )}
+
+              {operatorDuplicateShifts && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="text-[11px] font-medium leading-relaxed">
+                    Duplicate shift assigned: This operator cannot be assigned to the same machine and shift code multiple times.
+                  </div>
+                </div>
+              )}
+
+              {operatorShiftLimitExceeded && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="text-[11px] font-medium leading-relaxed">
+                    Shift limit exceeded: An operator can be assigned to a maximum of 3 shifts (24h) only.
                   </div>
                 </div>
               )}
@@ -1349,7 +1705,7 @@ export function AssignPersonnelModal({
                     const shifts = item.clientShifts || DEFAULT_CLIENT_SHIFTS;
                     return (
                       <div
-                        key={item.machineId}
+                        key={`${item.machineId}-${item.shiftCode}-${idx}`}
                         className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2.5 transition-colors"
                       >
                         {/* Header: Badge + Machine ID + Model + Trash */}
@@ -1374,7 +1730,9 @@ export function AssignPersonnelModal({
                                   </span>
                                 )}
                                 <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase bg-sky-500/10 text-sky-600 border border-sky-500/25">
-                                  Shift {item.shiftCode}
+                                  {shifts.find((s) => s.code.toUpperCase() === item.shiftCode.toUpperCase())?.name
+                                    ? `${shifts.find((s) => s.code.toUpperCase() === item.shiftCode.toUpperCase())?.name} (${item.shiftCode})`
+                                    : `Shift ${item.shiftCode}`}
                                 </span>
                               </div>
                               {item.serialNumber && (
@@ -1387,7 +1745,7 @@ export function AssignPersonnelModal({
 
                           <button
                             type="button"
-                            onClick={() => handleRemoveMachineFromOperator(item.machineId)}
+                            onClick={() => handleRemoveMachineFromOperator(idx)}
                             title={`Relieve ${item.machineCode}`}
                             className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                           >
@@ -1409,24 +1767,54 @@ export function AssignPersonnelModal({
                                 <button
                                   key={sc.code}
                                   type="button"
-                                  onClick={() => handleOperatorShiftChange(item.machineId, sc)}
-                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[44px] ${
+                                  onClick={() => handleOperatorShiftChange(idx, sc)}
+                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[50px] ${
                                     isSelected
                                       ? "bg-sky-500 text-white border-sky-600 shadow-2xs ring-1 ring-sky-500 font-semibold"
                                       : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-sky-500/40"
                                   }`}
                                 >
-                                  <div className="flex items-center justify-between gap-1 w-full">
-                                    <span className={`text-[11px] font-bold font-mono ${isSelected ? "text-white" : "text-[var(--color-ink)]"}`}>
-                                      Shift {sc.code}
-                                    </span>
+                                  <div className="flex items-center justify-between gap-1.5 w-full">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+                                          isSelected
+                                            ? "bg-white/25 text-white"
+                                            : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/25"
+                                        }`}
+                                      >
+                                        {sc.code}
+                                      </span>
+                                      <span
+                                        className={`text-xs font-bold truncate ${
+                                          isSelected ? "text-white" : "text-[var(--color-ink)]"
+                                        }`}
+                                        title={sc.name || `Shift ${sc.code}`}
+                                      >
+                                        {sc.name || `Shift ${sc.code}`}
+                                      </span>
+                                    </div>
                                     {sc.crosses_midnight && (
-                                      <Moon size={10} className={isSelected ? "text-white/80" : "text-indigo-500"} />
+                                      <Moon
+                                        size={11}
+                                        className={isSelected ? "text-white/90" : "text-indigo-500 shrink-0"}
+                                      />
                                     )}
                                   </div>
-                                  <span className={`text-[9px] font-mono mt-0.5 truncate ${isSelected ? "text-white/90" : "text-[var(--color-mute)]"}`}>
-                                    {sc.start_time} – {sc.end_time}
-                                  </span>
+                                  <div className="flex items-center justify-between gap-1 mt-1 text-[10px] font-mono">
+                                    <span className={`truncate ${isSelected ? "text-white/90" : "text-[var(--color-mute)]"}`}>
+                                      {sc.start_time} – {sc.end_time}
+                                    </span>
+                                    {sc.scheduled_minutes ? (
+                                      <span
+                                        className={`text-[9px] shrink-0 font-medium ${
+                                          isSelected ? "text-white/80" : "text-[var(--color-mute)]"
+                                        }`}
+                                      >
+                                        {Math.round(sc.scheduled_minutes / 60)}h
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </button>
                               );
                             })}
@@ -1438,66 +1826,73 @@ export function AssignPersonnelModal({
                 )}
               </div>
 
-              {/* Add Machine Accordion */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsAddMachineOpen(!isAddMachineOpen)}
-                  className="w-full h-10 px-3.5 rounded-xl border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] flex items-center justify-between transition-colors cursor-pointer group"
-                >
-                  <span className="flex items-center gap-1.5 text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
-                    <Plus size={14} className="text-sky-500" />
-                    <span>Assign Equipment to this Operator</span>
-                  </span>
-                  <ChevronDown size={14} className={`text-[var(--color-mute)] transition-transform duration-150 ${isAddMachineOpen ? "rotate-180" : ""}`} />
-                </button>
+              {/* Add Machine Accordion or Capacity Banner */}
+              {operatorMachineAssignments.length >= 3 ? (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-2 font-medium">
+                  <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Maximum shift capacity reached (3/3 shifts assigned to this operator).</span>
+                </div>
+              ) : (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddMachineOpen(!isAddMachineOpen)}
+                    className="w-full h-10 px-3.5 rounded-xl border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] flex items-center justify-between transition-colors cursor-pointer group"
+                  >
+                    <span className="flex items-center gap-1.5 text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
+                      <Plus size={14} className="text-sky-500" />
+                      <span>Assign Equipment ({operatorMachineAssignments.length}/3 Shifts)</span>
+                    </span>
+                    <ChevronDown size={14} className={`text-[var(--color-mute)] transition-transform duration-150 ${isAddMachineOpen ? "rotate-180" : ""}`} />
+                  </button>
 
-                {isAddMachineOpen && (
-                  <div className="mt-2 p-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 animate-in fade-in duration-100">
-                    <div className="relative flex items-center">
-                      <Search size={13} className="absolute left-2.5 text-[var(--color-mute)] pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Search fleet machine by ID or model..."
-                        value={machineSearchQuery}
-                        onChange={(e) => setMachineSearchQuery(e.target.value)}
-                        autoFocus
-                        className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      />
-                    </div>
+                  {isAddMachineOpen && (
+                    <div className="mt-2 p-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 animate-in fade-in duration-100">
+                      <div className="relative flex items-center">
+                        <Search size={13} className="absolute left-2.5 text-[var(--color-mute)] pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Search fleet machine by ID or model..."
+                          value={machineSearchQuery}
+                          onChange={(e) => setMachineSearchQuery(e.target.value)}
+                          autoFocus
+                          className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        />
+                      </div>
 
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar divide-y divide-[var(--color-hairline)]">
-                      {availableMachines.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-[var(--color-mute)] italic">
-                          {machineSearchQuery ? "No matching machines found" : "All fleet machines assigned"}
-                        </div>
-                      ) : (
-                        availableMachines.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => handleAddMachineToOperator(m)}
-                            className="w-full p-2 text-left hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between cursor-pointer transition-colors"
-                          >
-                            <div className="min-w-0 pr-2">
-                              <div className="font-semibold truncate flex items-center gap-1.5">
-                                <span className="font-mono font-bold">{m.machine_id}</span>
-                                <span>• {m.model}</span>
+                      <div className="max-h-40 overflow-y-auto custom-scrollbar divide-y divide-[var(--color-hairline)]">
+                        {availableMachines.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-[var(--color-mute)] italic">
+                            {machineSearchQuery ? "No matching machines found" : "All fleet machines assigned"}
+                          </div>
+                        ) : (
+                          availableMachines.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => handleAddMachineToOperator(m)}
+                              className="w-full p-2 text-left hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between cursor-pointer transition-colors"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="font-semibold truncate flex items-center gap-1.5">
+                                  <span className="font-mono font-bold">{m.machine_id}</span>
+                                  <span>• {m.model}</span>
+                                </div>
+                                <div className="text-[10px] text-[var(--color-mute)]">
+                                  {m.client_name ? `Client: ${m.client_name}` : "Available in fleet"}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-[var(--color-mute)]">
-                                {m.client_name ? `Client: ${m.client_name}` : "Available in fleet"}
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-mono font-bold text-sky-600 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 shrink-0">
-                              + Assign
-                            </span>
-                          </button>
-                        ))
-                      )}
+                              <span className="text-[10px] font-mono font-bold text-sky-600 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 shrink-0">
+                                + Assign
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

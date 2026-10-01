@@ -16,11 +16,15 @@ const DEFAULT_OPERATOR_DASHBOARD: OperatorDashboardDTO = {
   today: {
     entryStatus: "pending",
     lastHmr: null,
+    submittedCount: 0,
+    totalAssignedCount: 0,
+    totalRunningHoursToday: 0,
   },
   shift: {
     start: "",
     end: "",
   },
+  assigned_shifts: [],
   alerts: [],
 };
 

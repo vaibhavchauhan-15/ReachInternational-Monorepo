@@ -220,8 +220,11 @@ async function fetchAttendanceDetailFallback(
       const bdH = Number(l.breakdown_hours) || 0;
       const bdM = Number(l.breakdown_minutes) || Math.round(bdH * 60);
 
-      workedMinutes += Math.round(runningH * 60);
-      normalMinutes += Math.round(normalH * 60);
+      // Operator shift working hours: lunch & normal work included = total shift work hours (NOT machine running hours HMR)
+      const effectiveNormalH = normalH > 0 ? normalH : 8.0;
+
+      workedMinutes += Math.round(effectiveNormalH * 60);
+      normalMinutes += Math.round(effectiveNormalH * 60);
       overtimeMinutes += Math.round(otH * 60);
       breakdownMinutes += bdM;
 
@@ -239,7 +242,7 @@ async function fetchAttendanceDetailFallback(
         start_meter: Number(l.start_meter) || 0,
         end_meter: Number(l.end_meter) || 0,
         running_hours: runningH,
-        normal_working_hours: normalH,
+        normal_working_hours: effectiveNormalH,
         overtime_hours: otH,
         is_breakdown: !!l.is_breakdown,
         location: l.location || null,

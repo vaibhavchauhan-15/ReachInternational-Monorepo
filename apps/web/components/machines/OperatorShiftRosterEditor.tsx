@@ -18,6 +18,11 @@ import { getClientShiftCodesAction } from "@/app/actions/clients";
 import { getActiveOperatorAssignmentsAction } from "@/app/actions/machines";
 import { DEFAULT_CLIENT_SHIFTS } from "../operations/entry/ShiftInputs";
 import { formatTo12Hour, parseTimeToMinutes } from "@reachinternational/utils";
+import {
+  getCachedClientShifts,
+  setCachedClientShifts,
+  CLIENT_SHIFTS_INVALIDATED_EVENT,
+} from "@/lib/cache/client-shifts-cache";
 
 export type { ActiveOperatorOtherAssignment };
 
@@ -41,8 +46,6 @@ function doRangesOverlap(ranges1: Array<[number, number]>, ranges2: Array<[numbe
   }
   return false;
 }
-
-const clientShiftsCache = new Map<string, ClientShiftCode[]>();
 
 export interface OperatorShiftAssignmentItem {
   operatorId: string;
@@ -134,8 +137,8 @@ export function OperatorShiftRosterEditor({
     if (propClientShifts && propClientShifts.length > 0) return;
     let active = true;
     if (clientId) {
-      if (clientShiftsCache.has(clientId)) {
-        const cached = clientShiftsCache.get(clientId)!;
+      const cached = getCachedClientShifts(clientId);
+      if (cached && cached.length > 0) {
         setInternalShifts(cached);
         onShiftsLoaded?.(cached);
       } else {
@@ -153,7 +156,7 @@ export function OperatorShiftRosterEditor({
                   end_time: formatTo12Hour(s.end_time) || s.end_time,
                 }));
               const result = formatted.length > 0 ? formatted : DEFAULT_CLIENT_SHIFTS;
-              clientShiftsCache.set(clientId, result);
+              setCachedClientShifts(clientId, result);
               setInternalShifts(result);
               onShiftsLoaded?.(result);
             } else {
@@ -178,8 +181,99 @@ export function OperatorShiftRosterEditor({
     };
   }, [clientId, propClientShifts, onShiftsLoaded]);
 
+  // Synchronize shifts dynamically when client shift codes are created, renamed or applied
+  useEffect(() => {
+    if (!clientId) return;
+    const handleShiftInvalidation = (e: Event) => {
+      const customEvent = e as CustomEvent<{ clientId?: string | null }>;
+      if (!customEvent.detail?.clientId || customEvent.detail.clientId === clientId) {
+        getClientShiftCodesAction(clientId).then((res) => {
+          if (res.success && res.data && res.data.length > 0) {
+            const formatted: ClientShiftCode[] = res.data
+              .filter((s: any) => s.is_active !== false)
+              .map((s: any) => ({
+                ...s,
+                raw_start_time: formatTo12Hour(s.start_time) || s.start_time,
+                raw_end_time: formatTo12Hour(s.end_time) || s.end_time,
+                start_time: formatTo12Hour(s.start_time) || s.start_time,
+                end_time: formatTo12Hour(s.end_time) || s.end_time,
+              }));
+            const result = formatted.length > 0 ? formatted : DEFAULT_CLIENT_SHIFTS;
+            setCachedClientShifts(clientId, result);
+            setInternalShifts(result);
+            onShiftsLoaded?.(result);
+          }
+        });
+      }
+    };
+    window.addEventListener(CLIENT_SHIFTS_INVALIDATED_EVENT, handleShiftInvalidation);
+    return () => {
+      window.removeEventListener(CLIENT_SHIFTS_INVALIDATED_EVENT, handleShiftInvalidation);
+    };
+  }, [clientId, onShiftsLoaded]);
+
   const clientShifts = propClientShifts && propClientShifts.length > 0 ? propClientShifts : internalShifts;
   const maxCapacity = clientShifts.length > 0 ? clientShifts.length : 3;
+
+  // Reconcile assigned operators' shift codes with loaded client shifts
+  useEffect(() => {
+    if (!clientShifts || clientShifts.length === 0 || !assignedOperators || assignedOperators.length === 0) return;
+    let changed = false;
+    const reconciled = assignedOperators.map((item) => {
+      const exactMatch = clientShifts.find((sc) => sc.code.toUpperCase() === item.shiftCode.toUpperCase());
+      if (exactMatch) {
+        if (!item.shiftStartTime || !item.shiftEndTime) {
+          changed = true;
+          return {
+            ...item,
+            shiftStartTime: exactMatch.start_time,
+            shiftEndTime: exactMatch.end_time,
+          };
+        }
+        return item;
+      }
+
+      // Try matching by timing
+      const timeMatch = clientShifts.find(
+        (sc) =>
+          item.shiftStartTime &&
+          item.shiftEndTime &&
+          (sc.start_time === item.shiftStartTime || sc.raw_start_time === item.shiftStartTime) &&
+          (sc.end_time === item.shiftEndTime || sc.raw_end_time === item.shiftEndTime)
+      );
+      if (timeMatch) {
+        changed = true;
+        return {
+          ...item,
+          shiftCode: timeMatch.code,
+          shiftStartTime: timeMatch.start_time,
+          shiftEndTime: timeMatch.end_time,
+        };
+      }
+
+      // Try matching legacy S1/S2/S3 index to client shifts
+      const legacyIdxMatch = item.shiftCode.match(/^S(\d+)$/i);
+      if (legacyIdxMatch) {
+        const sIndex = parseInt(legacyIdxMatch[1], 10) - 1;
+        if (sIndex >= 0 && sIndex < clientShifts.length) {
+          changed = true;
+          const target = clientShifts[sIndex];
+          return {
+            ...item,
+            shiftCode: target.code,
+            shiftStartTime: target.start_time,
+            shiftEndTime: target.end_time,
+          };
+        }
+      }
+
+      return item;
+    });
+
+    if (changed) {
+      onChange(reconciled);
+    }
+  }, [clientShifts, assignedOperators, onChange]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -191,27 +285,6 @@ export function OperatorShiftRosterEditor({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  // Compute available unassigned operators
-  const assignedOpIdSet = useMemo(
-    () => new Set(assignedOperators.map((a) => a.operatorId)),
-    [assignedOperators]
-  );
-
-  const availableOperators = useMemo(
-    () =>
-      allOperators.filter(
-        (op) =>
-          !assignedOpIdSet.has(op.id) &&
-          (!op.role || op.role === "operator") &&
-          op.status !== "inactive" &&
-          (searchQuery === "" ||
-            op.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            op.phone?.includes(searchQuery) ||
-            op.email?.toLowerCase().includes(searchQuery.toLowerCase()))
-      ),
-    [allOperators, assignedOpIdSet, searchQuery]
-  );
 
   const otherAssignments = propOtherAssignments && propOtherAssignments.length > 0 ? propOtherAssignments : internalOtherAssignments;
 
@@ -226,6 +299,31 @@ export function OperatorShiftRosterEditor({
     }
     return map;
   }, [otherAssignments, machineId]);
+
+  // Compute available operators (max 2 shifts allowed per operator platform-wide)
+  const availableOperators = useMemo(
+    () =>
+      allOperators.filter((op) => {
+        if (op.role && op.role !== "operator") return false;
+        if (op.status === "inactive") return false;
+
+        const thisCount = assignedOperators.filter((a) => a.operatorId === op.id).length;
+        const otherCount = (otherAssignmentsMap.get(op.id) || []).length;
+        const totalShifts = thisCount + otherCount;
+
+        if (totalShifts >= 3) return false;
+        if (thisCount >= 3) return false;
+
+        const query = searchQuery.toLowerCase();
+        return (
+          query === "" ||
+          op.full_name?.toLowerCase().includes(query) ||
+          op.phone?.includes(query) ||
+          op.email?.toLowerCase().includes(query)
+        );
+      }),
+    [allOperators, assignedOperators, otherAssignmentsMap, searchQuery]
+  );
 
   // Validation: Check for duplicate shifts among assigned operators
   const duplicateShiftCodes = useMemo(() => {
@@ -316,6 +414,23 @@ export function OperatorShiftRosterEditor({
     return conflicts;
   }, [assignedOperators, otherAssignmentsMap, clientShifts]);
 
+  // Validation: Check if any operator exceeds 2 shifts platform-wide
+  const operatorShiftExceeded = useMemo(() => {
+    const opCounts = new Map<string, number>();
+    for (const a of assignedOperators) {
+      opCounts.set(a.operatorId, (opCounts.get(a.operatorId) || 0) + 1);
+    }
+    const exceeded: string[] = [];
+    for (const [opId, count] of opCounts.entries()) {
+      const others = (otherAssignmentsMap.get(opId) || []).length;
+      if (count + others > 3) {
+        const opName = assignedOperators.find((m) => m.operatorId === opId)?.operatorName || "Operator";
+        exceeded.push(`${opName} is assigned to ${count + others} shifts (maximum allowed is 3 shifts or 24h).`);
+      }
+    }
+    return exceeded;
+  }, [assignedOperators, otherAssignmentsMap]);
+
   useEffect(() => {
     if (duplicateShiftCodes.length > 0) {
       onErrorChange?.(
@@ -327,6 +442,8 @@ export function OperatorShiftRosterEditor({
         true,
         `Shift window overlap: ${overlappingShifts.join("; ")}. Each operator must cover a distinct, non-overlapping shift window.`
       );
+    } else if (operatorShiftExceeded.length > 0) {
+      onErrorChange?.(true, operatorShiftExceeded[0]);
     } else if (otherMachineConflicts.length > 0) {
       onErrorChange?.(
         true,
@@ -335,7 +452,7 @@ export function OperatorShiftRosterEditor({
     } else {
       onErrorChange?.(false);
     }
-  }, [duplicateShiftCodes, overlappingShifts, otherMachineConflicts, onErrorChange]);
+  }, [duplicateShiftCodes, overlappingShifts, operatorShiftExceeded, otherMachineConflicts, onErrorChange]);
 
   // Helper to pick next available shift code
   const getNextAvailableShift = (): ClientShiftCode => {
@@ -362,14 +479,14 @@ export function OperatorShiftRosterEditor({
     setSearchQuery("");
   };
 
-  const handleRemoveOperator = (opId: string) => {
-    onChange(assignedOperators.filter((a) => a.operatorId !== opId));
+  const handleRemoveOperator = (index: number) => {
+    onChange(assignedOperators.filter((_, idx) => idx !== index));
   };
 
-  const handleShiftChange = (opId: string, shift: ClientShiftCode) => {
+  const handleShiftChange = (index: number, shift: ClientShiftCode) => {
     onChange(
-      assignedOperators.map((a) => {
-        if (a.operatorId !== opId) return a;
+      assignedOperators.map((a, idx) => {
+        if (idx !== index) return a;
         return {
           ...a,
           shiftCode: shift.code,
@@ -423,6 +540,19 @@ export function OperatorShiftRosterEditor({
         </div>
       )}
 
+      {/* Operator Shift Limit Exceeded Warning Banner */}
+      {operatorShiftExceeded.length > 0 && (
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <div className="font-bold">Operator Shift Limit Exceeded</div>
+            <p className="text-[11px] text-rose-800 dark:text-rose-200 leading-relaxed font-medium">
+              {operatorShiftExceeded.join(" ")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Assigned Operators List */}
       <div className="space-y-2.5">
         {assignedOperators.length === 0 ? (
@@ -437,13 +567,11 @@ export function OperatorShiftRosterEditor({
           assignedOperators.map((item, idx) => {
             const otherConflict = otherMachineConflicts.find((c) => c.operatorId === item.operatorId);
             const hasShiftConflict = duplicateShiftCodes.includes(item.shiftCode.toUpperCase()) || !!otherConflict;
-            const matchedShift = clientShifts.find(
-              (s) => s.code.toUpperCase() === item.shiftCode.toUpperCase()
-            );
+            const isMultiShiftOnMachine = assignedOperators.filter((o) => o.operatorId === item.operatorId).length > 1;
 
             return (
               <div
-                key={item.operatorId}
+                key={`${item.operatorId}-${item.shiftCode}-${idx}`}
                 className={`p-3 rounded-xl border transition-colors ${
                   hasShiftConflict
                     ? "bg-rose-500/5 border-rose-500/40"
@@ -461,6 +589,11 @@ export function OperatorShiftRosterEditor({
                         <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)] truncate">
                           {item.operatorName}
                         </span>
+                        {isMultiShiftOnMachine && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                            {assignedOperators.filter((o) => o.operatorId === item.operatorId).length === 3 ? "3 Shifts (24h) on Machine" : "2 Shifts on Machine"}
+                          </span>
+                        )}
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
                             hasShiftConflict
@@ -468,7 +601,9 @@ export function OperatorShiftRosterEditor({
                               : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25"
                           }`}
                         >
-                          Shift {item.shiftCode}
+                          {clientShifts.find((s) => s.code.toUpperCase() === item.shiftCode.toUpperCase())?.name
+                            ? `${clientShifts.find((s) => s.code.toUpperCase() === item.shiftCode.toUpperCase())?.name} (${item.shiftCode})`
+                            : `Shift ${item.shiftCode}`}
                         </span>
                       </div>
                       {(item.phone || item.email) && (
@@ -488,7 +623,7 @@ export function OperatorShiftRosterEditor({
                   {!disabled && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveOperator(item.operatorId)}
+                      onClick={() => handleRemoveOperator(idx)}
                       title={`Remove ${item.operatorName}`}
                       className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                     >
@@ -519,8 +654,8 @@ export function OperatorShiftRosterEditor({
                           key={sc.id || sc.code}
                           type="button"
                           disabled={disabled}
-                          onClick={() => handleShiftChange(item.operatorId, sc)}
-                          className={`p-1.5 sm:p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          onClick={() => handleShiftChange(idx, sc)}
+                          className={`p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[50px] ${
                             isSelected
                               ? isShiftOverlappingOther
                                 ? "bg-rose-600 text-white border-rose-700 shadow-2xs ring-1 ring-rose-600 font-semibold"
@@ -530,15 +665,29 @@ export function OperatorShiftRosterEditor({
                               : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-sky-500/40"
                           } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
                         >
-                          <div className="flex items-center justify-between gap-1 w-full">
-                            <span
-                              className={`text-[11px] font-bold font-mono ${
-                                isSelected ? "text-white" : "text-[var(--color-ink)]"
-                              }`}
-                            >
-                              Shift {sc.code}
-                            </span>
-                            <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between gap-1.5 w-full">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+                                  isSelected
+                                    ? "bg-white/25 text-white"
+                                    : isShiftOverlappingOther
+                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                    : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/25"
+                                }`}
+                              >
+                                {sc.code}
+                              </span>
+                              <span
+                                className={`text-xs font-bold truncate ${
+                                  isSelected ? "text-white" : "text-[var(--color-ink)]"
+                                }`}
+                                title={sc.name || `Shift ${sc.code}`}
+                              >
+                                {sc.name || `Shift ${sc.code}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
                               {isShiftOverlappingOther && !isSelected && (
                                 <span
                                   className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"
@@ -547,19 +696,34 @@ export function OperatorShiftRosterEditor({
                               )}
                               {sc.crosses_midnight && (
                                 <Moon
-                                  size={10}
+                                  size={11}
                                   className={isSelected ? "text-white/80" : "text-indigo-500"}
                                 />
                               )}
                             </div>
                           </div>
-                          <span
-                            className={`text-[9px] font-mono mt-0.5 truncate ${
-                              isSelected ? "text-white/90" : isShiftOverlappingOther ? "text-rose-600 dark:text-rose-400 font-medium" : "text-[var(--color-mute)]"
-                            }`}
-                          >
-                            {sc.start_time} – {sc.end_time}
-                          </span>
+                          <div className="flex items-center justify-between gap-1 mt-1 text-[10px] font-mono">
+                            <span
+                              className={`truncate ${
+                                isSelected
+                                  ? "text-white/90"
+                                  : isShiftOverlappingOther
+                                  ? "text-rose-600 dark:text-rose-400 font-medium"
+                                  : "text-[var(--color-mute)]"
+                              }`}
+                            >
+                              {sc.start_time} – {sc.end_time}
+                            </span>
+                            {sc.scheduled_minutes ? (
+                              <span
+                                className={`text-[9px] shrink-0 font-medium ${
+                                  isSelected ? "text-white/80" : "text-[var(--color-mute)]"
+                                }`}
+                              >
+                                {Math.round(sc.scheduled_minutes / 60)}h
+                              </span>
+                            ) : null}
+                          </div>
                         </button>
                       );
                     })}
@@ -632,8 +796,11 @@ export function OperatorShiftRosterEditor({
                       </div>
                     ) : (
                       availableOperators.map((op) => {
-                        const otherAssList = otherAssignmentsMap.get(op.id);
-                        const otherAss = otherAssList?.[0];
+                        const thisCount = assignedOperators.filter((a) => a.operatorId === op.id).length;
+                        const otherAssList = otherAssignmentsMap.get(op.id) || [];
+                        const otherAss = otherAssList[0];
+                        const totalCount = thisCount + otherAssList.length;
+
                         const nextShift = getNextAvailableShift();
                         const willOverlapNext = otherAss && doRangesOverlap(
                           shiftToMinuteRanges(nextShift.start_time, nextShift.end_time),
@@ -650,6 +817,15 @@ export function OperatorShiftRosterEditor({
                             <div className="min-w-0 pr-2">
                               <div className="font-semibold truncate flex items-center gap-1.5 flex-wrap">
                                 <span>{op.full_name}</span>
+                                {thisCount > 0 ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                                    Already on this machine ({thisCount}/3)
+                                  </span>
+                                ) : totalCount > 0 ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                    {totalCount}/3 Shifts
+                                  </span>
+                                ) : null}
                                 {otherAss && (
                                   <span
                                     className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${

@@ -238,7 +238,7 @@ export default function RunningLogsScreen() {
     filteredLogs.forEach((l) => {
       totalRunningHours += Number(l.running_hours) || 0;
       totalOvertimeHours += Number(l.overtime_hours) || 0;
-      totalWorkingHours += Number(l.normal_working_hours) || 8;
+      totalWorkingHours += (Number(l.normal_working_hours) || 8) + (Number(l.overtime_hours) || 0);
       if (l.is_breakdown) totalBreakdowns++;
     });
     return {

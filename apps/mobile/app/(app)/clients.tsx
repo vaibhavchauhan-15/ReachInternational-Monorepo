@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
+import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById } from '@reachinternational/utils';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -212,6 +213,7 @@ export default function ClientsScreen() {
   const [billingPincode, setBillingPincode] = useState('');
   const [allowanceHours, setAllowanceHours] = useState('0');
   const [allowanceMinutes, setAllowanceMinutes] = useState('0');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(DEFAULT_CLIENT_SHIFT_PRESET_ID);
 
   // C11 Client Detail State & In-Memory Session Cache
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -464,6 +466,7 @@ export default function ClientsScreen() {
     setBillingPincode('');
     setAllowanceHours('0');
     setAllowanceMinutes('0');
+    setSelectedPresetId(DEFAULT_CLIENT_SHIFT_PRESET_ID);
     setModalVisible(true);
   };
 
@@ -565,6 +568,33 @@ export default function ClientsScreen() {
         status: 'active',
       };
       setClients([newClient, ...clients]);
+
+      // If preset selected, provision shifts into client_shift_codes
+      if (selectedPresetId && selectedPresetId !== 'none') {
+        const preset = getClientShiftPresetById(selectedPresetId);
+        if (preset && preset.shifts.length > 0) {
+          const shiftRecords = preset.shifts.map((s) => ({
+            client_id: newClient.id,
+            code: s.code,
+            name: s.name,
+            start_time: s.startTime,
+            end_time: s.endTime,
+            scheduled_minutes: s.scheduledMinutes,
+            normal_minutes: s.normalMinutes,
+            crosses_midnight: s.crossesMidnight,
+            display_order: s.displayOrder,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          }));
+          (async () => {
+            try {
+              await supabase.from('client_shift_codes').insert(shiftRecords);
+            } catch {
+              // Non-blocking mobile fallback
+            }
+          })();
+        }
+      }
     }
     mobileQueryCacheRef.current.clear();
     setModalVisible(false);
@@ -694,19 +724,35 @@ export default function ClientsScreen() {
           setMobileLogs(res);
           mobileDetailCacheRef.current.set(cacheKey, res);
         } else if (tab === 'assignments') {
-          const { data } = await supabase
-            .from('operator_machine_assignments')
-            .select('id, shift_start_time, shift_end_time, is_active, machines!inner(machine_id, model, client_id), users!operator_id(full_name, phone)')
-            .eq('machines.client_id', clientId)
-            .order('is_active', { ascending: false });
-          const res = (data || []).map((a: any) => ({
-            id: a.id,
-            shift: `${(a.shift_start_time || '').slice(0, 5)} - ${(a.shift_end_time || '').slice(0, 5)}`,
-            is_active: !!a.is_active,
-            machine_code: Array.isArray(a.machines) ? a.machines[0]?.machine_id : a.machines?.machine_id || '—',
-            operator_name: Array.isArray(a.users) ? a.users[0]?.full_name : a.users?.full_name || '—',
-            operator_phone: Array.isArray(a.users) ? a.users[0]?.phone : a.users?.phone || '',
-          }));
+          const [assignmentsRes, shiftsRes] = await Promise.all([
+            supabase
+              .from('operator_machine_assignments')
+              .select('id, shift_code, shift_start_time, shift_end_time, is_active, machines!inner(machine_id, model, client_id), users!operator_id(full_name, phone)')
+              .eq('machines.client_id', clientId)
+              .order('is_active', { ascending: false }),
+            supabase
+              .from('client_shift_codes')
+              .select('code, name, start_time, end_time')
+              .eq('client_id', clientId),
+          ]);
+          const shiftsMap = new Map((shiftsRes.data || []).map((s: any) => [String(s.code).toUpperCase(), s]));
+          const res = (assignmentsRes.data || []).map((a: any) => {
+            const sc = a.shift_code ? shiftsMap.get(String(a.shift_code).toUpperCase()) : null;
+            const shiftName = sc?.name || (a.shift_code ? `Shift ${a.shift_code}` : '');
+            const timing = a.shift_start_time && a.shift_end_time
+              ? `${String(a.shift_start_time).slice(0, 5)} - ${String(a.shift_end_time).slice(0, 5)}`
+              : '';
+            return {
+              id: a.id,
+              shift: timing || '08:00 - 16:00',
+              shift_code: a.shift_code || null,
+              shift_name: shiftName,
+              is_active: !!a.is_active,
+              machine_code: Array.isArray(a.machines) ? a.machines[0]?.machine_id : a.machines?.machine_id || '—',
+              operator_name: Array.isArray(a.users) ? a.users[0]?.full_name : a.users?.full_name || '—',
+              operator_phone: Array.isArray(a.users) ? a.users[0]?.phone : a.users?.phone || '',
+            };
+          });
           setMobileAssignments(res);
           mobileDetailCacheRef.current.set(cacheKey, res);
         } else if (tab === 'history') {
@@ -1349,6 +1395,81 @@ export default function ClientsScreen() {
                   </View>
                 </View>
               </View>
+
+              {!editingClient && (
+                <View style={[styles.formSection, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                      Shift Templates (1-Click Presets)
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd' }}>
+                      <Sparkles size={10} color={isDark ? '#38bdf8' : '#0284c7'} />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#38bdf8' : '#0284c7' }}>
+                        Auto Provision
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontSize: 11, color: theme.colors.mute, marginBottom: 8, lineHeight: 16 }}>
+                    Select an operational shift preset for this client. Shifts will be pre-configured upon creation.
+                  </Text>
+
+                  <View style={{ gap: 8 }}>
+                    {CLIENT_SHIFT_PRESETS.map((preset) => {
+                      const isSelected = selectedPresetId === preset.id;
+                      return (
+                        <TouchableOpacity
+                          key={preset.id}
+                          onPress={() => setSelectedPresetId(preset.id)}
+                          style={{
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? theme.colors.primary : theme.colors.hairline,
+                            backgroundColor: isSelected ? (isDark ? 'rgba(0, 112, 243, 0.1)' : 'rgba(0, 112, 243, 0.05)') : theme.colors.canvasElevated,
+                            borderRadius: radiusNumeric.sm,
+                            padding: 10,
+                            minHeight: 44,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? theme.colors.primary : theme.colors.ink }}>
+                              {preset.name}
+                            </Text>
+                            {isSelected ? (
+                              <CheckCircle2 size={16} color={theme.colors.primary} />
+                            ) : (
+                              <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: theme.colors.mute }} />
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 10.5, fontWeight: '600', color: isSelected ? theme.colors.primary : theme.colors.mute, marginBottom: 4 }}>
+                            {preset.badge}
+                          </Text>
+                          {preset.shifts.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                              {preset.shifts.map((s) => (
+                                <View
+                                  key={s.code}
+                                  style={{
+                                    backgroundColor: theme.colors.canvas,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.hairline,
+                                    borderRadius: 4,
+                                    paddingHorizontal: 5,
+                                    paddingVertical: 2,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 9.5, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                                    {s.code}: {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1690,7 +1811,9 @@ export default function ClientsScreen() {
                       <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
                           <Text style={{ fontWeight: '700', fontSize: 13.5, color: theme.colors.ink }}>{a.operator_name}</Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{a.machine_code} ({a.shift})</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>
+                            {a.machine_code} • {a.shift_name || `Shift ${a.shift_code || '1'}`} ({a.shift})
+                          </Text>
                         </View>
                         <Badge status={a.is_active ? 'active' : 'inactive'} customLabel={a.is_active ? 'ACTIVE' : 'ENDED'} />
                       </View>

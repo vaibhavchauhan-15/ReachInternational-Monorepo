@@ -11,6 +11,71 @@ It provides complete cross-platform parity between the Next.js Web App (`apps/we
 
 > **⚠️ REMOVED (2026-09-16)**: The Operations Log Detail Modal (`OperationsLogDetailModal.tsx`) has been completely removed per user feedback. Log rows in `OperationsLogsTable.tsx` and `OperationsLogsMobileList.tsx` are fully non-clickable; the row eye (view) icon was replaced with a destructive delete (trash) icon wired through `deleteOperatorHourLogAction` with a `ConfirmationDialog` guard. The delete control is RBAC-gated per row via an optional `canDeleteLog?: (log: MachineHourLog) => boolean` prop (supplied by `OperationsLogsTab.tsx` from `userRole`/`user`; mirrors the server action: supervisor+ may delete any log, operators only their own within 24h). Historical references to the detail modal below are retained for archival context only.
 
+## 0.10. Cross-Machine Shift Overlap Prevention Across Fleet & Synchronization with Client Shift Codes (2026-10-01)
+Guaranteed platform-wide integrity of operator shift assignments across multiple machines and client-specific shift schedules:
+- **Core Business Logic**:
+  - An operator can be assigned to multiple machines across the fleet (up to 3 shifts or 24h total), provided that **no two shifts overlap in their operational time windows** (e.g. [06:00, 18:00) and [14:00, 22:00) share a 4-hour collision from 14:00 to 18:00 and are strictly forbidden).
+  - Shifts that do not overlap (e.g. Shift A 06:00–18:00 on Machine 1 and Shift C 22:00–06:00 on Machine 2) are accepted.
+  - When a client modifies shift code timings in `client_shift_codes` (e.g. extending Shift A from 8h to 12h: 06:00–18:00), active equipment assignments for that client are automatically synced to the new timings via database trigger, preventing stale schedule drift.
+- **Database Architecture (Migration 148)**:
+  - `public.do_shifts_overlap(TIME, TIME, TIME, TIME)`: PostgreSQL range overlap function unnesting `int4range` arrays to accurately verify whether two shifts intersect, handling shifts that cross midnight.
+  - `trg_sync_client_shift_codes_to_assignments`: Automatic database trigger on `client_shift_codes` cascading updated shift timings to all active `operator_machine_assignments` on client equipment.
+  - `public.assign_operator_machine_atomic()`: Resolves authoritative timings from `client_shift_codes` and enforces dual-layer cross-machine and same-machine overlap checks with explicit `SHIFT_OVERLAP_CONFLICT` exceptions.
+- **Web Backend & Frontend UI (`apps/web`)**:
+  - `apps/web/lib/data/machines/machine-filters.ts`: Joins `client_shift_codes` in `getActiveOperatorMachineAssignments` to guarantee memory conflict validation uses authoritative client timings.
+  - `apps/web/app/actions`: `machines.ts`, `assignments.ts`, and `clients.ts` validate cross-machine overlaps using 12-hour formatted collision messages.
+  - `apps/web/components/machines/AssignPersonnelModal.tsx`: Hydration prioritizes client shift timings and displays exact overlapping machine codes and times.
+- **Mobile Native Parity (`apps/mobile`)**:
+  - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Uses canonical `shiftToMinuteRanges` and `doRangesOverlap` handling midnight-crossing shifts. Maximum shift limit updated to 3, and conflict alerts display conflicting equipment IDs and formatted 12-hour time ranges.
+
+## 0.9. Operator Maximum Shift Limit Expansion (Max 3 Shifts / 24h Coverage) (2026-10-01)
+Expanded operator shift assignment capacity across the platform to allow a single operator to be assigned up to **3 shifts or 24h in a day** on a single machine or across machines:
+- **Core Business Logic**:
+  - Operators can now be assigned to up to 3 non-overlapping operational shifts platform-wide (e.g. S1 06:00–14:00, S2 14:00–22:00, and S3 22:00–06:00 for full 24h single-operator custody on one machine, or across multiple machines).
+  - Attempting to assign a 4th shift to an operator is strictly rejected with error `P0002` / `MAX_OPERATOR_SHIFTS_REACHED`.
+  - Machine capacity limit (maximum 3 active shifts per machine covering 24h) and GiST circular exclusion constraints (preventing overlapping shift hours) remain strictly enforced.
+  - When an operator is assigned to 3 shifts on the same equipment, `machines.operator_ids` cleanly contains a single deduplicated entry for that operator.
+- **Database Architecture (Migration 146)**:
+  - `public.enforce_max_shifts_per_operator()`: Concurrency trigger with transactional advisory locks checking `IF v_active_count >= 3 THEN RAISE EXCEPTION 'MAX_OPERATOR_SHIFTS_REACHED...' USING ERRCODE = 'P0002'`.
+  - `public.assign_operator_machine_atomic()`: Upgraded capacity check to `v_operator_active_count >= 3` and exception handler to return clean 3 shifts (24h) error message.
+- **Backend & Monorepo Utilities**:
+  - `packages/utils/src/conflict.ts`: Added `MAX_OPERATOR_SHIFTS_REACHED` conflict mapping rule.
+  - `apps/web/app/actions/assignments.ts` & `apps/web/app/actions/machines.ts`: Guard thresholds updated to 3 shifts.
+- **Frontend Web & Mobile Synchronization**:
+  - `apps/web/components/machines/AssignPersonnelModal.tsx` & `OperatorShiftRosterEditor.tsx`: Thresholds, capacity chips, tooltips, and warnings updated to 3 shifts (24h).
+  - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx` & `apps/mobile/components/machines/MachineModal.tsx`: Badges, capacity indicators (`3/3 Shifts`, `{opAss.length}/3 Shifts`), and error messages updated to 3 shifts (24h).
+
+## 0.8. Operator Assigned Shift Enforcement, Real-Time Mobile Dropdown & Chronological Offline Sync (2026-09-30)
+Enforced strict assigned shift validation across Database, Web Backend/Frontend, and Mobile Native App, with real-time dynamic shifts and hardened offline queue synchronization:
+- **Assigned Shift Enforcement Rule**:
+  - If Operator 1 is assigned to Machine 1 for Shift A:
+    - Attempting to log for Shift B on Machine 1 is **STRICTLY REJECTED** by the server with error: `"Operator is assigned to Shift A on this equipment, but attempted to log for Shift B. Please select your assigned shift."`
+    - Logging for Shift A (their assigned shift) is **ACCEPTED** and updates equipment telemetry cleanly.
+    - If operator holds 2 active shifts (e.g. Shifts A & B), logging for either Shift A or Shift B is accepted; logging for unassigned Shift C is rejected.
+    - If operator has no active assignments on that machine, they may log shifts without restriction.
+- **Database Architecture (Migration 143)**:
+  - Canonical atomic RPC `public.submit_operator_hour_log_atomic()`:
+    - Queries active `shift_code`(s) for `(p_operator_id, p_machine_id)` from `operator_machine_assignments`.
+    - If assigned shift codes exist, enforces that `p_shift_code` matches one of the assigned shift codes, raising exception SQLSTATE `23514` on mismatch.
+    - If operator has 1 assigned shift and `p_shift_code` is omitted, auto-binds to the assigned shift.
+    - Drops obsolete RPC overload signature preventing `42725` ("function ... is not unique") function collision.
+    - Fixed `audit_logs` column discrepancy (`user_id` instead of `performed_by`).
+  - Read RPC `public.get_operator_entry_context()`:
+    - Aggregates active assigned shift codes into `assigned_shift_codes: text[]` in JSONB context.
+- **Web Backend & Dashboard (`apps/web`)**:
+  - `apps/web/app/actions/operators.ts`: Added assigned shift pre-check in `submitOperatorHourLogAction` and specific error matching.
+  - `apps/web/components/operations/entry/ShiftInputs.tsx`: Added `assignedShiftCodes` prop, visual `✓ Assigned` badge vs `Unassigned` chip, and inline unassigned warning banner.
+  - `apps/web/components/operations/entry/OperatorEntryClient.tsx`: Client-side blocking with error toast for unassigned shifts.
+  - `apps/web/lib/queries/operator-entry.ts`: Mapped `assigned_shift_codes` from context.
+- **Mobile Native Real-Time & Offline Parity (`apps/mobile`)**:
+  - `apps/mobile/components/work/MeterLogModal.tsx`:
+    - Real-time subscriptions on `operator_machine_assignments` and `machines` (plus broadcast `operations-roster`) to dynamically re-fetch assigned shifts and client shift codes if deployment or assignments change while modal is open.
+    - Pre-submission client validation checking `assignedShiftCodes`.
+    - Horizontal shift strip with `✓ Assigned` badge and dynamic unassigned warning banner.
+    - RPC and fallback error catching preserving assigned shift rejection message.
+  - `apps/mobile/lib/offline/OfflineQueueManager.ts`:
+    - Added chronological pre-sorting (`ORDER BY start_datetime ASC` / `log_date + start_time ASC`) for `SUBMIT_HOUR_LOG` queue items before draining, completely eliminating false-positive shift overlap collisions when syncing shifts queued offline.
+
 ## 0.7. Operator Shift Log Entry Breakdown Calculation Fix & Complete Test Suite (2026-09-29)
 Resolved critical client-side validation error blocking operator shift entries containing machine breakdowns:
 - **Root Cause & Time Parsing Fix**:
@@ -176,9 +241,8 @@ When an authenticated operator visits Fleet Operations (`/operations`), the page
   - Last Recorded HMR: latest valid end meter
   - Last Recorded Log: id, log_date, start_meter, end_meter, running_hours, overtime_hours, start_time, end_time, operator_name, is_breakdown
 - **Zero-Waterfall Routing**: Operators bypass all manager waterfalls (1,000 machines catalog, client list, supervisor selectors).
-- **Sub-100ms Critical Shell**: `EntryHeader`, `OperatorMachineInfo`, `HMRInputs`, `LastMachineLogCard`, and `ShiftInputs` render immediately in the main server chunk.
-- **Dynamic Code-Splitting**: `BreakdownSection`, `SubmitConfirmModal`, `OperatorHistoryTab`, and export utilities load on demand via `next/dynamic`.
-- **On-Demand History**: History records load only when the operator opens the "History" tab.
+- **Dynamic Code-Splitting**: `BreakdownSection`, `OperatorHistoryTab`, and export utilities load on demand via `next/dynamic`.
+- **Frictionless Direct Submission**: Confirmation dialog (`SubmitConfirmModal`) completely removed; clicking "Submit Daily Log" immediately validates inputs and commits directly to the database without intermediate prompt modals (matching native mobile).
 - **Cross-Platform Parity**: Full synchronization in `apps/mobile/app/(app)/operations.tsx` and `MobileOperatorEntryCard.tsx` with offline mutation queuing (`offlineQueueManager`).
 - **Mobile Viewport (360×800) Optimizations**:
   - `EntryHeader`: Removed greetings (`Good morning/evening`), subtitles, date pills, and outer wrapper card. The component now renders strictly the clean segmented operational subnavigation toggle (`Log Entry` and `Log History`), eliminating redundant greeting headers since operators already have the dedicated `/dashboard` landing page.

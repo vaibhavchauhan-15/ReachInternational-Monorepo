@@ -104,7 +104,7 @@ async function runTestSuite() {
   });
 
   assert(manualOtResult.overtimeHours === 1.5, 'Manual overtime preserved as 1.5h');
-  assert(manualOtResult.normalWorkingHours === 6.5, 'Normal working hours is duration (8.0h) - manual OT (1.5h) = 6.5h', `actual: ${manualOtResult.normalWorkingHours}`);
+  assert(manualOtResult.normalWorkingHours === 8.0, 'Normal working hours remains 8.0h for full shift (manual OT does not deduct from normal work)', `actual: ${manualOtResult.normalWorkingHours}`);
 
   // --- SUITE 6: Supabase User Profile Shift Time Resolution ---
   console.log('\n--- SUITE 6: Supabase User Profile Shift Time Resolution ---');

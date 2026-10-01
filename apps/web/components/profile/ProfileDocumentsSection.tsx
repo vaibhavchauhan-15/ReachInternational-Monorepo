@@ -28,7 +28,9 @@ export function ProfileDocumentsSection({
     router.refresh();
   }, [router]);
 
-  const validDocumentTypes = documentTypes.filter((d) => d.code !== "profile_photo");
+  const validDocumentTypes = documentTypes.filter(
+    (d) => d.code !== "profile_photo" && d.code !== "bank_passbook"
+  );
 
   if (validDocumentTypes.length === 0) return null;
 

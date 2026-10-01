@@ -49,6 +49,15 @@ async function fetchOperatorEntryContextFromDb(
         (res?.assigned_shift_code as string | null) ||
         ((res?.operator as any)?.shift_code as string | null) ||
         null,
+      assigned_shift_codes: Array.isArray(res?.assigned_shift_codes)
+        ? (res.assigned_shift_codes as string[])
+        : (res?.assigned_shift_code ? [res.assigned_shift_code as string] : []),
+      today_logged_shift_codes: Array.isArray(res?.today_logged_shift_codes)
+        ? (res.today_logged_shift_codes as string[])
+        : [],
+      today_logs: Array.isArray(res?.today_logs)
+        ? (res.today_logs as OperatorEntryContext["today_logs"])
+        : [],
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);

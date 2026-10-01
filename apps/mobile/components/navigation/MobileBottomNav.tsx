@@ -90,11 +90,12 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
           variant="bounce"
         />
         <Text
+          numberOfLines={1}
           style={[
             styles.itemLabel,
             {
               color: itemColor,
-              fontWeight: isActive ? '700' : '500',
+              fontWeight: isActive ? '600' : '500',
             },
           ]}
         >
@@ -102,14 +103,12 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
         </Text>
 
         {/* Active Dot Indicator */}
-        {isActive && (
-          <View
-            style={[
-              styles.activeDot,
-              { backgroundColor: theme.colors.ink },
-            ]}
-          />
-        )}
+        <View
+          style={[
+            styles.activeDot,
+            { backgroundColor: isActive ? theme.colors.ink : 'transparent' },
+          ]}
+        />
       </View>
     </TouchableOpacity>
   );
@@ -230,9 +229,9 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingVertical: 5,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     borderRadius: 9999,
     borderWidth: 1,
     shadowColor: '#000000',
@@ -245,7 +244,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 3,
+    paddingVertical: 2,
     paddingHorizontal: 1,
     minHeight: 44,
   },
@@ -255,15 +254,15 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   itemLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '500',
     letterSpacing: -0.2,
-    marginTop: 1.5,
+    marginTop: 2,
   },
   activeDot: {
-    width: 4.5,
-    height: 4.5,
-    borderRadius: 2.25,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     marginTop: 2,
   },
 });

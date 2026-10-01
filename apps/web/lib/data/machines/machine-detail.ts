@@ -122,34 +122,101 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     });
   }
 
-  const assignmentMapByOpId = new Map<string, any>();
-  activeAssignmentsRaw.forEach((a: any) => {
-    if (a.operator_id && !assignmentMapByOpId.has(a.operator_id)) {
-      assignmentMapByOpId.set(a.operator_id, a);
+  // 3. Fetch Client Shift Codes if machine is assigned to a client
+  let clientShifts: any[] = [];
+  if (machine.client_id) {
+    const { data: cShifts } = await supabase
+      .from("client_shift_codes")
+      .select("id, client_id, code, name, start_time, end_time, scheduled_minutes, normal_minutes, crosses_midnight, display_order, is_active")
+      .eq("client_id", machine.client_id)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("code", { ascending: true });
+    if (cShifts && cShifts.length > 0) {
+      clientShifts = cShifts;
     }
-  });
+  }
+  const clientShiftMap = new Map(
+    clientShifts.map((cs: any) => [String(cs.code || "").trim().toUpperCase(), cs])
+  );
 
-  const operatorsList = Array.from(opIdSet)
-    .map((id: string) => {
+  // 4. Construct Operators List
+  let operatorsList: any[] = [];
+  if (activeAssignmentsRaw.length > 0) {
+    operatorsList = activeAssignmentsRaw
+      .filter((a: any) => opIdSet.has(a.operator_id))
+      .map((assign: any) => {
+        const user = usersMap.get(assign.operator_id) || (machine.current_operator?.id === assign.operator_id ? machine.current_operator : null);
+        const sc = assign.shift_code ? clientShiftMap.get(String(assign.shift_code).trim().toUpperCase()) : null;
+        const shift_name = sc?.name || (assign.shift_code ? `Shift ${assign.shift_code}` : null);
+        const start = assign.shift_start_time || sc?.start_time || user?.shift_start_time;
+        const end = assign.shift_end_time || sc?.end_time || user?.shift_end_time;
+        const shift_time =
+          start && end
+            ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
+            : user?.shift_time || "08:00 AM - 04:00 PM";
+        return {
+          ...(user || {}),
+          id: assign.operator_id,
+          full_name: user?.full_name || "Operator",
+          phone: user?.phone || null,
+          email: user?.email || null,
+          shift_time,
+          shift_code: assign.shift_code || null,
+          shift_name,
+          shift_start_time: start || null,
+          shift_end_time: end || null,
+          role: "operator",
+        };
+      });
+
+    // Also include any operators from opIdSet who don't have an active assignment row
+    const assignedOpIds = new Set(activeAssignmentsRaw.map((a: any) => a.operator_id));
+    opIdSet.forEach((id: string) => {
+      if (assignedOpIds.has(id)) return;
       const user = usersMap.get(id) || (machine.current_operator?.id === id ? machine.current_operator : null);
-      if (!user) return null;
-      const assignment = assignmentMapByOpId.get(id);
-      let shift_time =
-        user.shift_start_time && user.shift_end_time
-          ? `${String(user.shift_start_time).slice(0, 5)} - ${String(user.shift_end_time).slice(0, 5)}`
+      if (!user) return;
+      const sc = user.shift_code ? clientShiftMap.get(String(user.shift_code).trim().toUpperCase()) : null;
+      const shift_name = sc?.name || (user.shift_code ? `Shift ${user.shift_code}` : null);
+      const start = user.shift_start_time || sc?.start_time;
+      const end = user.shift_end_time || sc?.end_time;
+      const shift_time =
+        start && end
+          ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
           : user.shift_time || null;
-      if (!shift_time && assignment?.shift_start_time && assignment?.shift_end_time) {
-        shift_time = `${String(assignment.shift_start_time).slice(0, 5)} - ${String(assignment.shift_end_time).slice(0, 5)}`;
-      }
-      return {
+      operatorsList.push({
         ...user,
         shift_time,
-        shift_code: assignment?.shift_code || user.shift_code || null,
-        shift_start_time: assignment?.shift_start_time || user.shift_start_time || null,
-        shift_end_time: assignment?.shift_end_time || user.shift_end_time || null,
-      };
-    })
-    .filter(Boolean);
+        shift_code: user.shift_code || null,
+        shift_name,
+        shift_start_time: start || null,
+        shift_end_time: end || null,
+      });
+    });
+  } else {
+    operatorsList = Array.from(opIdSet)
+      .map((id: string) => {
+        const user = usersMap.get(id) || (machine.current_operator?.id === id ? machine.current_operator : null);
+        if (!user) return null;
+        const sc = user.shift_code ? clientShiftMap.get(String(user.shift_code).trim().toUpperCase()) : null;
+        const shift_name = sc?.name || (user.shift_code ? `Shift ${user.shift_code}` : null);
+        const start = user.shift_start_time || sc?.start_time;
+        const end = user.shift_end_time || sc?.end_time;
+        const shift_time =
+          start && end
+            ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
+            : user.shift_time || null;
+        return {
+          ...user,
+          shift_time,
+          shift_code: user.shift_code || null,
+          shift_name,
+          shift_start_time: start || null,
+          shift_end_time: end || null,
+        };
+      })
+      .filter(Boolean);
+  }
 
   const cleanSupIds = Array.from(new Set(supervisorsList.map((s: any) => s.id)));
   const cleanOpIds = Array.from(new Set(operatorsList.map((o: any) => o.id)));
@@ -165,7 +232,16 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     operator_ids: cleanOpIds,
     supervisors: supervisorsList,
     operators: operatorsList,
-    active_assignments: activeAssignmentsRaw.filter((a: any) => opIdSet.has(a.operator_id)),
+    client_shifts: clientShifts,
+    active_assignments: activeAssignmentsRaw
+      .filter((a: any) => opIdSet.has(a.operator_id))
+      .map((a: any) => {
+        const sc = a.shift_code ? clientShiftMap.get(String(a.shift_code).trim().toUpperCase()) : null;
+        return {
+          ...a,
+          shift_name: sc?.name || (a.shift_code ? `Shift ${a.shift_code}` : null),
+        };
+      }),
     current_supervisor: supervisorsList[0] || null,
     current_operator: operatorsList[0] || null,
     client: machine.client

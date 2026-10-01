@@ -510,16 +510,24 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             const { data: rpcData, error: rpcError } = await supabase.rpc('assign_operator_machine_atomic', {
               p_machine_id: machineToEdit.id,
               p_operator_id: opId,
-              p_shift_start: shiftObj.start_time,
-              p_shift_end: shiftObj.end_time,
               p_shift_start_time: shiftObj.start_time,
               p_shift_end_time: shiftObj.end_time,
               p_shift_code: shiftCode,
               p_notes: 'Assigned via mobile app',
             });
-            if (rpcError) throw new Error(rpcError.message);
+            if (rpcError) {
+              let msg = rpcError.message;
+              if (rpcError.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+                msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+              }
+              throw new Error(msg);
+            }
             if (rpcData && (rpcData as any).success === false) {
-              throw new Error((rpcData as any).error || 'Failed to assign operator.');
+              let msg = (rpcData as any).error || 'Failed to assign operator.';
+              if (msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+                msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+              }
+              throw new Error(msg);
             }
           }
         }

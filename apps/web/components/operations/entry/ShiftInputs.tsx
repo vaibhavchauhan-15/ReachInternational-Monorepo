@@ -70,6 +70,14 @@ interface ShiftInputsProps {
   shiftCodes?: ClientShiftCode[];
   selectedShiftCode?: string;
   onSelectShiftCode?: (code: string) => void;
+  assignedShiftCodes?: string[];
+  todayLoggedShiftCodes?: string[];
+  todayLogs?: Array<{
+    shift_code: string;
+    start_meter: number;
+    end_meter: number;
+    running_hours: number;
+  }>;
 }
 
 export function ShiftInputs({
@@ -85,6 +93,9 @@ export function ShiftInputs({
   shiftCodes = [],
   selectedShiftCode,
   onSelectShiftCode,
+  assignedShiftCodes = [],
+  todayLoggedShiftCodes = [],
+  todayLogs = [],
 }: ShiftInputsProps) {
   // Manual time pickers toggled via mode switcher
   const [showManualTimes, setShowManualTimes] = useState(false);
@@ -108,19 +119,23 @@ export function ShiftInputs({
     const e = formatTo12Hour(sc.end_time || sc.raw_end_time);
     if (e) onEndTimeChange(e);
 
-    // If shift has built-in OT, auto-fill default OT if OT is currently 0
-    if (sc.default_ot_minutes && sc.default_ot_minutes > 0) {
-      const defaultOtHours = (sc.default_ot_minutes / 60).toString();
-      onOvertimeChange(defaultOtHours);
-    }
+    // If shift has built-in OT, auto-fill default OT; otherwise reset to 0 to prevent manual OT leaking
+    const defaultOtHours = sc.default_ot_minutes && sc.default_ot_minutes > 0
+      ? (sc.default_ot_minutes / 60).toString()
+      : "0";
+    onOvertimeChange(defaultOtHours);
   };
 
-  // Ensure an operational shift is selected by default if available or if currently selected code is invalid
+  // Ensure an operational shift is selected by default if available or if currently selected code is invalid.
+  // Prioritize operator's assigned shift code if available.
   useEffect(() => {
     if (!effectiveShiftCodes || effectiveShiftCodes.length === 0 || !onSelectShiftCode) return;
 
     if (!selectedShiftCode) {
-      handlePickShift(effectiveShiftCodes[0]);
+      const preferred = assignedShiftCodes && assignedShiftCodes.length > 0
+        ? effectiveShiftCodes.find(s => assignedShiftCodes.some(c => c.toUpperCase() === s.code.toUpperCase()))
+        : null;
+      handlePickShift(preferred || effectiveShiftCodes[0]);
       return;
     }
 
@@ -131,9 +146,21 @@ export function ShiftInputs({
     });
 
     if (!hasMatch) {
-      handlePickShift(effectiveShiftCodes[0]);
+      const preferred = assignedShiftCodes && assignedShiftCodes.length > 0
+        ? effectiveShiftCodes.find(s => assignedShiftCodes.some(c => c.toUpperCase() === s.code.toUpperCase()))
+        : null;
+      handlePickShift(preferred || effectiveShiftCodes[0]);
     }
-  }, [selectedShiftCode, effectiveShiftCodes, onSelectShiftCode]);
+  }, [selectedShiftCode, effectiveShiftCodes, onSelectShiftCode, assignedShiftCodes]);
+
+  const isCurrentShiftUnassigned = Boolean(
+    activeShift &&
+    assignedShiftCodes &&
+    assignedShiftCodes.length > 0 &&
+    !assignedShiftCodes.some(
+      (c) => c.replace(/^shift\s*/i, "").trim().toUpperCase() === activeShift.code.replace(/^shift\s*/i, "").trim().toUpperCase()
+    )
+  );
 
   return (
     <div className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/50 space-y-3">
@@ -212,7 +239,23 @@ export function ShiftInputs({
                   shiftCodes={effectiveShiftCodes}
                   selectedCode={selectedShiftCode}
                   onSelect={handlePickShift}
+                  todayLoggedShiftCodes={todayLoggedShiftCodes}
+                  todayLogs={todayLogs}
+                  getAssignedInfo={(code) => {
+                    if (!assignedShiftCodes || assignedShiftCodes.length === 0) return undefined;
+                    const isAssigned = assignedShiftCodes.some(
+                      (c) => c.replace(/^shift\s*/i, "").trim().toUpperCase() === code.replace(/^shift\s*/i, "").trim().toUpperCase()
+                    );
+                    return isAssigned
+                      ? { isAssigned: true, label: "Assigned" }
+                      : { isAssigned: false, label: "Unassigned" };
+                  }}
                 />
+                {isCurrentShiftUnassigned && (
+                  <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md">
+                    ⚠️ You are assigned to Shift {assignedShiftCodes.join(", ")} on this equipment. Shift {activeShift?.code} is unassigned and cannot be logged.
+                  </p>
+                )}
               </motion.div>
             ) : (
               <motion.div

@@ -294,5 +294,27 @@ Audit         not loaded (unmounted until tab click)
 - **Component Reuse**:
   - Maximizes existing reusable components: `Button`, `EmptyState`, `TooltipWrapper`, `Badge`, `ClientModal`, `EnterpriseTable`, and bridged `AnimatedIcons`.
 
+---
+
+## 17. Client Shift Code Presets & Dynamic Renaming Cascade (2026-09-30)
+- **1-Click Industry Shift Templates**:
+  - Defined in shared utilities (`packages/utils/src/shift.ts`):
+    - `three_8h`: Three 8-Hour Shifts [A, B, C] (`06:00:00–14:00:00`, `14:00:00–22:00:00`, `22:00:00–06:00:00` +1d)
+    - `two_12h`: Two 12-Hour Shifts [Day, Night] (`08:00:00–20:00:00`, `20:00:00–08:00:00` +1d, 720m scheduled / 480m normal)
+    - `two_8h`: Two 8-Hour Shifts [A, B] (`06:00:00–14:00:00`, `14:00:00–22:00:00`)
+    - `single_general`: Single General Shift [General] (`09:00:00–18:00:00`)
+    - `none`: Custom (No Preset)
+- **Creation Workflow (`createClientAction`)**:
+  - Automatically provisions rows into `public.client_shift_codes` when `shift_preset` is selected in Add Client modal.
+- **Dynamic Renaming & Timing Cascade (`upsertClientShiftCodeAction`)**:
+  - If a client updates a shift name (e.g. from `Shift A` to `Morning Shift A`), active machine rosters dynamically reflect the updated name from `client_shift_codes` without requiring operators to be relieved and re-assigned.
+  - If a shift code is updated (e.g. `A` to `A1`), `upsertClientShiftCodeAction` automatically updates `operator_machine_assignments.shift_code` across all client machines.
+  - If shift timings change, cascades updated start/end times across active assignments.
+- **Frontend Integration (Web & Mobile Parity)**:
+  - Web: `ClientModal.tsx` Section 5 with preset cards and timing pills; `ClientShiftCodesTab.tsx` with 1-click presets in empty state.
+  - Mobile: `apps/mobile/app/(app)/clients.tsx` Add Client modal with 1-click preset selector cards and min 44px touch targets.
+- **Automated Verification**:
+  - `supabase/tests/test_shift_presets_and_renaming_cascade.mjs` (6/6 tests passing on Dev DB `vlmxciuogczumumrwyot`).
+
 
 

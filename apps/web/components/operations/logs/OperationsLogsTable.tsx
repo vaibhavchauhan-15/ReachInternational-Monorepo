@@ -163,7 +163,8 @@ export function calculateShiftWorkingHours(log: MachineHourLog): number {
   if (log.shift_scheduled_minutes != null && Number(log.shift_scheduled_minutes) > 0) {
     return Number(log.shift_scheduled_minutes) / 60;
   }
-  return Number(log.running_hours || 0);
+  // Standard shift working hours fallback (operator work time includes normal work + lunch = 8.0h)
+  return 8.0;
 }
 
 /**

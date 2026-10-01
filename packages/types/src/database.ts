@@ -686,6 +686,18 @@ export interface OperatorEntryContext {
   last_log?: OperatorLastLogSummary | null;
   shift_codes?: ClientShiftCode[];
   assigned_shift_code?: string | null;
+  assigned_shift_codes?: string[];
+  today_logged_shift_codes?: string[];
+  today_logs?: Array<{
+    id?: string;
+    shift_code: string;
+    start_meter: number;
+    end_meter: number;
+    running_hours: number;
+    start_time: string;
+    end_time: string;
+    is_breakdown?: boolean;
+  }>;
 }
 
 export interface TodayShiftMonitorRow {

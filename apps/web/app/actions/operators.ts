@@ -462,16 +462,16 @@ export async function submitOperatorHourLogAction(payload: {
   try {
     const { data: mData } = await supabase
       .from("machines")
-      .select("status, client_id")
+      .select("status, health_status, client_id")
       .eq("id", payload.machineId)
       .single();
 
     if (mData) {
-      if (["maintenance", "decommissioned", "inactive"].includes(mData.status)) {
+      if (mData.status === "inactive" || mData.health_status === "under_maintenance" || ["maintenance", "decommissioned"].includes(mData.status)) {
         await failIdempotencyKey(currentIdempotencyKey);
         return {
           success: false,
-          error: "Cannot record machine log for equipment currently in maintenance or decommissioned status.",
+          error: "Cannot record machine log for equipment currently in maintenance or inactive status.",
         };
       }
 
@@ -485,6 +485,36 @@ export async function submitOperatorHourLogAction(payload: {
 
       if (mData.client_id && !targetClientId) {
         targetClientId = mData.client_id;
+      }
+    }
+
+    // Verify operator assignment & shift code alignment
+    const { data: activeAssignments } = await supabase
+      .from("operator_machine_assignments")
+      .select("shift_code")
+      .eq("machine_id", payload.machineId)
+      .eq("operator_id", targetOperatorId)
+      .eq("is_active", true);
+
+    const activeAssignedShiftCodes = (activeAssignments || [])
+      .map((a: any) => a.shift_code?.trim())
+      .filter(Boolean);
+
+    if (activeAssignedShiftCodes.length > 0) {
+      const requestedCode = (payload.shiftCode || payload.shift || "").replace(/^shift\s*/i, "").trim();
+      if (requestedCode && !activeAssignedShiftCodes.some((c: string) => c.toUpperCase() === requestedCode.toUpperCase())) {
+        if (isAssisted && ["super_admin", "admin", "manager"].includes(user.role)) {
+          const overrideTag = `[Assisted Override: Shift ${requestedCode}]`;
+          if (!finalRemarks.includes("[Assisted Override")) {
+            finalRemarks = finalRemarks ? `${overrideTag} ${finalRemarks}` : overrideTag;
+          }
+        } else {
+          await failIdempotencyKey(currentIdempotencyKey);
+          return {
+            success: false,
+            error: `Operator is assigned to Shift ${activeAssignedShiftCodes.join(", ")} on this equipment, but attempted to log for Shift ${requestedCode}. Please select your assigned shift.`,
+          };
+        }
       }
     }
 
@@ -544,15 +574,20 @@ export async function submitOperatorHourLogAction(payload: {
       // Check if this is a genuine user validation error (e.g. meter regression, shift overlap trigger, future shift end, breakdown bounds, or unauthorized operator)
       if (
         rpcError.message?.includes("cannot be less than start meter reading") ||
+        rpcError.message?.includes("cannot exceed 24 hours") ||
         rpcError.message?.includes("Shift end timestamp") ||
         rpcError.message?.includes("overlap") ||
         rpcError.message?.includes("Cannot log before shift end") ||
         rpcError.message?.includes("Breakdown duration") ||
         rpcError.message?.includes("maintenance or decommissioned") ||
+        rpcError.message?.includes("maintenance or inactive") ||
         rpcError.message?.includes("Unauthorized operator") ||
         rpcError.message?.includes("Client ID does not match") ||
         rpcError.message?.includes("already submitted a log for Shift") ||
         rpcError.message?.includes("Not authorized to submit shift log") ||
+        rpcError.message?.includes("assigned to Shift") ||
+        rpcError.message?.includes("unassigned shift") ||
+        rpcError.message?.includes("previous 7 days") ||
         rpcError.code === "23514" ||
         rpcError.code === "42501" ||
         rpcError.code === "23503"

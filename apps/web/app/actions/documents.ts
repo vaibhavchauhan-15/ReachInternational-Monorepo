@@ -35,11 +35,13 @@ export async function getDocumentTypesAction(): Promise<DocumentType[]> {
   const { data, error } = await supabase
     .from("user_document_types")
     .select("code, label, visibility, allowed_mime_types, max_size_bytes")
-    .neq("code", "profile_photo")
+    .not("code", "in", '("profile_photo","bank_passbook")')
     .order("code");
 
   if (error || !data) return [];
-  return (data as DocumentType[]).filter((d) => d.code !== "profile_photo");
+  return (data as DocumentType[]).filter(
+    (d) => d.code !== "profile_photo" && d.code !== "bank_passbook"
+  );
 }
 
 // ─── Get user documents with signed URLs ────────────────────────────

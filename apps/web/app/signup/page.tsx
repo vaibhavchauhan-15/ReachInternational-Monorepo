@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useFormDraft, saveFileDraft, removeFileDraft, readFileDraft, clearFileDrafts } from "@/lib/hooks/useFormDraft";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Info, Upload, FileText, X } from "lucide-react";
+import { Info, FileText, X } from "lucide-react";
 import { validateDocumentFile, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES } from "@/lib/upload";
 import {
   AnimatedMail,
@@ -17,7 +18,6 @@ import {
   AnimatedClock,
   AnimatedUpload,
   AnimatedBuilding2,
-  AnimatedFileText,
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -59,6 +59,17 @@ const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
   label: s.name,
 }));
 
+// Allowlist for draft persistence — passwords are strictly excluded for security
+const DRAFT_FIELDS = [
+  "full_name", "email", "phone", "role", "supervisor_id",
+  "shift_start_time", "shift_end_time",
+  "street", "city", "district", "state", "state_id", "address",
+  "bank_account_number", "bank_ifsc_code",
+  "aadhaar_number", "license_number",
+] as const;
+
+const DRAFT_KEY = "signup_draft_v1";
+
 export default function SignupPage() {
   const [state, setState] = useState<AuthFormState>({});
   const [pending, setPending] = useState(false);
@@ -89,6 +100,14 @@ export default function SignupPage() {
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  // Draft persistence: saves non-sensitive fields to localStorage (survives tab close/reload)
+  const { restoredAt, clear: clearDraft } = useFormDraft(
+    DRAFT_KEY,
+    DRAFT_FIELDS,
+    formValues,
+    (d) => setFormValues((v) => ({ ...v, ...d })),
+  );
+
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [bankPreviewUrl, setBankPreviewUrl] = useState<string | null>(null);
   const [bankFileError, setBankFileError] = useState<string | null>(null);
@@ -107,6 +126,7 @@ export default function SignupPage() {
       setBankFile(null);
       setBankPreviewUrl(null);
       setBankFileError(null);
+      removeFileDraft(DRAFT_KEY, "bank_document");
       return;
     }
     const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
@@ -117,6 +137,7 @@ export default function SignupPage() {
     } else {
       setBankFile(file);
       setBankFileError(null);
+      saveFileDraft(DRAFT_KEY, "bank_document", file); // fire-and-forget
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy.bank_document_file;
@@ -136,6 +157,7 @@ export default function SignupPage() {
       setAadhaarFile(null);
       setAadhaarPreviewUrl(null);
       setAadhaarFileError(null);
+      removeFileDraft(DRAFT_KEY, "aadhaar");
       return;
     }
     const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
@@ -146,6 +168,7 @@ export default function SignupPage() {
     } else {
       setAadhaarFile(file);
       setAadhaarFileError(null);
+      saveFileDraft(DRAFT_KEY, "aadhaar", file); // fire-and-forget
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy.aadhaar_file;
@@ -165,6 +188,7 @@ export default function SignupPage() {
       setLicenseFile(null);
       setLicensePreviewUrl(null);
       setLicenseFileError(null);
+      removeFileDraft(DRAFT_KEY, "license");
       return;
     }
     const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
@@ -175,6 +199,7 @@ export default function SignupPage() {
     } else {
       setLicenseFile(file);
       setLicenseFileError(null);
+      saveFileDraft(DRAFT_KEY, "license", file); // fire-and-forget
       if (file.type.startsWith("image/")) {
         setLicensePreviewUrl(URL.createObjectURL(file));
       } else {
@@ -182,6 +207,56 @@ export default function SignupPage() {
       }
     }
   };
+
+  // Restore files from IndexedDB when a text draft was found
+  useEffect(() => {
+    if (restoredAt === null) return;
+    let cancelled = false;
+    (async () => {
+      const [bank, aadhaar, license] = await Promise.all([
+        readFileDraft(DRAFT_KEY, "bank_document"),
+        readFileDraft(DRAFT_KEY, "aadhaar"),
+        readFileDraft(DRAFT_KEY, "license"),
+      ]);
+      if (cancelled) return;
+      if (bank) {
+        setBankFile(bank);
+        setBankPreviewUrl(bank.type.startsWith("image/") ? URL.createObjectURL(bank) : null);
+      }
+      if (aadhaar) {
+        setAadhaarFile(aadhaar);
+        setAadhaarPreviewUrl(aadhaar.type.startsWith("image/") ? URL.createObjectURL(aadhaar) : null);
+      }
+      if (license) {
+        setLicenseFile(license);
+        setLicensePreviewUrl(license.type.startsWith("image/") ? URL.createObjectURL(license) : null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [restoredAt]); // only runs once when draft is detected
+
+  const handleStartFresh = useCallback(() => {
+    clearDraft();
+    clearFileDrafts(DRAFT_KEY);
+    setFormValues({
+      full_name: "", email: "", phone: "", role: "operator", supervisor_id: "",
+      shift_start_time: "08:00 AM", shift_end_time: "08:00 PM",
+      street: "", city: "", district: "", state: "", state_id: "", address: "",
+      bank_account_number: "", bank_ifsc_code: "",
+      aadhaar_number: "", license_number: "",
+      password: "", confirm_password: "",
+    });
+    // Clear file states
+    if (bankPreviewUrl) URL.revokeObjectURL(bankPreviewUrl);
+    setBankFile(null); setBankPreviewUrl(null); setBankFileError(null);
+    if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
+    setAadhaarFile(null); setAadhaarPreviewUrl(null); setAadhaarFileError(null);
+    if (licensePreviewUrl) URL.revokeObjectURL(licensePreviewUrl);
+    setLicenseFile(null); setLicensePreviewUrl(null); setLicenseFileError(null);
+    setFieldErrors({});
+    setState({});
+    setAgreedToTerms(false);
+  }, [clearDraft, bankPreviewUrl, aadhaarPreviewUrl, licensePreviewUrl]);
 
   useEffect(() => {
     let isMounted = true;
@@ -240,12 +315,7 @@ export default function SignupPage() {
     const hasCity = formValues.city.trim().length >= 2;
     const hasDistrict = formValues.district.trim().length >= 2;
     const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
-    const hasBankAccount = validateBankAccountNumber(formValues.bank_account_number).isValid;
-    const hasBankIfsc = validateIfscCode(formValues.bank_ifsc_code).isValid;
-    const hasBankDoc = Boolean(bankFile);
-    const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
-    const hasAadhaarDoc = Boolean(aadhaarFile);
-    return hasStreet && hasCity && hasDistrict && hasState && hasBankAccount && hasBankIfsc && hasBankDoc && hasAadhaar && hasAadhaarDoc;
+    return hasStreet && hasCity && hasDistrict && hasState;
   }, [
     formValues.street,
     formValues.address,
@@ -253,14 +323,22 @@ export default function SignupPage() {
     formValues.district,
     formValues.state,
     formValues.state_id,
-    formValues.bank_account_number,
-    formValues.bank_ifsc_code,
-    bankFile,
-    formValues.aadhaar_number,
-    aadhaarFile,
   ]);
 
   const section4Complete = useMemo(() => {
+    const hasBankAccount = validateBankAccountNumber(formValues.bank_account_number).isValid;
+    const hasBankIfsc = validateIfscCode(formValues.bank_ifsc_code).isValid;
+    const hasBankDoc = Boolean(bankFile);
+    return hasBankAccount && hasBankIfsc && hasBankDoc;
+  }, [formValues.bank_account_number, formValues.bank_ifsc_code, bankFile]);
+
+  const section5Complete = useMemo(() => {
+    const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
+    const hasAadhaarDoc = Boolean(aadhaarFile);
+    return hasAadhaar && hasAadhaarDoc;
+  }, [formValues.aadhaar_number, aadhaarFile]);
+
+  const section6Complete = useMemo(() => {
     return (
       formValues.password.length >= 8 &&
       formValues.confirm_password.length >= 8 &&
@@ -270,8 +348,22 @@ export default function SignupPage() {
   }, [formValues.password, formValues.confirm_password, agreedToTerms]);
 
   const isAllMandatoryFilled = useMemo(() => {
-    return section1Complete && section2Complete && section3Complete && section4Complete;
-  }, [section1Complete, section2Complete, section3Complete, section4Complete]);
+    return (
+      section1Complete &&
+      section2Complete &&
+      section3Complete &&
+      section4Complete &&
+      section5Complete &&
+      section6Complete
+    );
+  }, [
+    section1Complete,
+    section2Complete,
+    section3Complete,
+    section4Complete,
+    section5Complete,
+    section6Complete,
+  ]);
 
   const missingMandatoryList = useMemo(() => {
     const list: string[] = [];
@@ -571,6 +663,12 @@ export default function SignupPage() {
       const result = await signup({}, formData);
       setState(result);
 
+      // Clear draft only on successful signup
+      if (result.message && !result.error) {
+        clearDraft();
+        clearFileDrafts(DRAFT_KEY);
+      }
+
       if (result.fieldErrors) {
         setFieldErrors(result.fieldErrors);
       } else {
@@ -709,6 +807,27 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* Draft Restored Notice */}
+            {restoredAt && (
+              <div className="mb-3">
+                <Alert
+                  variant="info"
+                  onDismiss={() => {}}
+                  action={
+                    <button
+                      type="button"
+                      onClick={handleStartFresh}
+                      className="text-[11px] font-semibold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer"
+                    >
+                      Start fresh
+                    </button>
+                  }
+                >
+                  Draft restored from {new Date(restoredAt).toLocaleString()}. Re-enter your password to continue.
+                </Alert>
+              </div>
+            )}
+
             {/* Registration Form */}
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 sm:gap-3">
               {/* Hidden Inputs for Shift Timing */}
@@ -780,8 +899,9 @@ export default function SignupPage() {
 
                   {/* Account Role Dropdown */}
                   <div className="flex flex-col gap-1 w-full">
-                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                      Role Requested <span className="text-rose-500 font-semibold">*</span>
+                    <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
+                      <span>Role Requested</span>
+                      <span className="text-rose-500 font-semibold">*</span>
                     </label>
                     <input type="hidden" name="role" value={formValues.role} />
                     <SearchableSelect
@@ -805,13 +925,9 @@ export default function SignupPage() {
                 {/* Row 3: Conditional Supervisor Selector when Role is Operator, Service Engineer, or Mechanic */}
                 {isSupervisedRole(formValues.role) && (
                   <div className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
-                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
-                      <span>
-                        Supervisor <span className="text-rose-500 font-semibold">*</span>
-                      </span>
-                      <span className="text-[11px] text-[var(--color-mute)] font-normal">
-                        Select supervisor who oversees your work
-                      </span>
+                    <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
+                      <span>Select Supervisor</span>
+                      <span className="text-rose-500 font-semibold">*</span>
                     </label>
                     <input type="hidden" name="supervisor_id" value={formValues.supervisor_id} />
                     <SearchableSelect
@@ -842,14 +958,16 @@ export default function SignupPage() {
                 isCompleted={section2Complete}
                 headerAction={
                   shiftTimingSummary?.isValid ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
-                      {shiftTimingSummary.isOvernight ? "🌙 Overnight" : "☀️ Standard"} · {shiftTimingSummary.durationFormatted}
+                    <span className="inline-flex items-center text-[10px] font-semibold font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                      {shiftTimingSummary.durationMinutes % 60 === 0
+                        ? `${shiftTimingSummary.durationMinutes / 60}h`
+                        : `${Number(shiftTimingSummary.durationHours.toFixed(1))}h`}
                     </span>
                   ) : null
                 }
               >
                 {/* Shift Start Time | Shift End Time */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   <CustomTimePicker
                     label="Shift Start Time"
                     value={formValues.shift_start_time}
@@ -869,164 +987,153 @@ export default function SignupPage() {
                     error={fieldErrors.shift_end_time}
                   />
                 </div>
-                <p className="text-[11px] text-[var(--color-mute)] leading-normal mt-2">
-                  Assigned daily operational work hours. This schedule is recorded on your profile and daily duty logs.
-                </p>
               </FormSectionCard>
 
-              {/* Section 3: Address, Banking & Identity */}
+              {/* Section 3: Address Details */}
               <FormSectionCard
                 stepNumber={3}
-                title="Address, Banking & Identity"
+                title="Address Details"
                 isMandatory={true}
                 isCompleted={section3Complete}
               >
-                <div className="space-y-3">
-                  {/* Standardized Address Section: street + city/town/village + district + state */}
-                  <UserAddressSection
-                    street={formValues.street || formValues.address}
-                    city={formValues.city}
-                    district={formValues.district}
-                    state={formValues.state}
-                    stateId={formValues.state_id}
-                    onChange={handleAddressChange}
-                    errors={fieldErrors}
-                    required={true}
-                    idPrefix="signup"
-                  />
+                {/* Standardized Address Section: street + city/town/village + district + state */}
+                <UserAddressSection
+                  street={formValues.street || formValues.address}
+                  city={formValues.city}
+                  district={formValues.district}
+                  state={formValues.state}
+                  stateId={formValues.state_id}
+                  onChange={handleAddressChange}
+                  errors={fieldErrors}
+                  required={true}
+                  idPrefix="signup"
+                />
+              </FormSectionCard>
 
-                  {/* Bank Account Details */}
-                  <div className="pt-2 border-t border-[var(--color-hairline)]/60 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedCreditCard size={15} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                        <span>Bank Account Details</span>
-                        <span className="text-rose-500 font-semibold">*</span>
-                      </span>
-                      <span className="text-[10px] text-[var(--color-mute)]">For payroll & compensation disbursement</span>
-                    </div>
+              {/* Section 4: Banking Details */}
+              <FormSectionCard
+                stepNumber={4}
+                title="Banking Details"
+                isMandatory={true}
+                isCompleted={section4Complete}
+              >
+                <div className="space-y-2.5 sm:space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                    <Input
+                      id="signup-bank-account"
+                      name="bank_account_number"
+                      label="Bank Account Number"
+                      type="text"
+                      inputMode="numeric"
+                      value={formValues.bank_account_number}
+                      onChange={(e) => handleChange("bank_account_number", e.target.value)}
+                      onBlur={() => handleBlur("bank_account_number")}
+                      placeholder="9 to 18-digit Account Number"
+                      maxLength={20}
+                      required
+                      error={fieldErrors.bank_account_number}
+                      icon={<AnimatedCreditCard size={15} />}
+                    />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-                      <Input
-                        id="signup-bank-account"
-                        name="bank_account_number"
-                        label={
-                          <span>
-                            Bank Account Number <span className="text-rose-500 font-semibold">*</span>
-                          </span>
-                        }
-                        type="text"
-                        inputMode="numeric"
-                        value={formValues.bank_account_number}
-                        onChange={(e) => handleChange("bank_account_number", e.target.value)}
-                        onBlur={() => handleBlur("bank_account_number")}
-                        placeholder="9 to 18-digit Account Number"
-                        maxLength={20}
-                        required
-                        error={fieldErrors.bank_account_number}
-                        icon={<AnimatedCreditCard size={15} />}
-                      />
-
-                      <Input
-                        id="signup-bank-ifsc"
-                        name="bank_ifsc_code"
-                        label={
-                          <span>
-                            IFSC Code <span className="text-rose-500 font-semibold">*</span>
-                          </span>
-                        }
-                        type="text"
-                        value={formValues.bank_ifsc_code}
-                        onChange={(e) => handleChange("bank_ifsc_code", e.target.value)}
-                        onBlur={() => handleBlur("bank_ifsc_code")}
-                        placeholder="e.g. SBIN0001234"
-                        maxLength={11}
-                        required
-                        autoCapitalize="characters"
-                        error={fieldErrors.bank_ifsc_code}
-                        icon={<AnimatedBuilding2 size={15} />}
-                      />
-                    </div>
-
-                    {/* Bank Document Upload Card (Mandatory: Passbook / Cheque / Statement) */}
-                    <div
-                      className={`rounded-xl border ${
-                        bankFileError || fieldErrors.bank_document_file
-                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
-                          : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
-                      } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                          <AnimatedFileText size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                          <span>Bank Account Document</span>
-                          <span className="text-rose-500 font-semibold">*</span>
-                          <span className="text-[10px] font-normal text-[var(--color-mute)]">(Passbook / Cheque / Statement)</span>
-                        </span>
-                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
-                      </div>
-
-                      <p className="text-[10px] text-[var(--color-mute)] leading-tight">
-                        Upload passbook front page photo, cancelled cheque, or bank statement clearly showing account holder name, account number, and IFSC code.
-                      </p>
-
-                      {!bankFile ? (
-                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                            Upload Passbook / Cheque / Statement (JPG, PNG, PDF)
-                          </span>
-                          <input
-                            type="file"
-                            name="bank_document_file"
-                            className="hidden"
-                            accept="image/*,application/pdf,.doc,.docx,.txt"
-                            onChange={(e) => handleBankFileChange(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                      ) : (
-                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                          {bankPreviewUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={bankPreviewUrl}
-                              alt="Bank document preview"
-                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                              <FileText className="h-5 w-5 text-sky-600" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                              {bankFile.name}
-                            </p>
-                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                              {(bankFile.size / 1024).toFixed(0)} KB · Attached
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleBankFileChange(null)}
-                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
-                            title="Remove file"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {(bankFileError || fieldErrors.bank_document_file) && (
-                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                          {bankFileError || fieldErrors.bank_document_file}
-                        </p>
-                      )}
-                    </div>
+                    <Input
+                      id="signup-bank-ifsc"
+                      name="bank_ifsc_code"
+                      label="IFSC Code"
+                      type="text"
+                      value={formValues.bank_ifsc_code}
+                      onChange={(e) => handleChange("bank_ifsc_code", e.target.value)}
+                      onBlur={() => handleBlur("bank_ifsc_code")}
+                      placeholder="e.g. SBIN0001234"
+                      maxLength={11}
+                      required
+                      autoCapitalize="characters"
+                      error={fieldErrors.bank_ifsc_code}
+                      icon={<AnimatedBuilding2 size={15} />}
+                    />
                   </div>
 
+                  {/* Bank Document Upload Card (Mandatory: Passbook / Cheque / Statement) */}
+                  <div
+                    className={`rounded-xl border ${
+                      bankFileError || fieldErrors.bank_document_file
+                        ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
+                        : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
+                    } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
+                        <span>Bank Account Document</span>
+                        <span className="text-rose-500 font-semibold">*</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                    </div>
+
+                    {!bankFile ? (
+                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                        <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
+                        <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                          Upload Passbook / Cheque / Statement (JPG, PNG, PDF)
+                        </span>
+                        <input
+                          type="file"
+                          name="bank_document_file"
+                          className="hidden"
+                          accept="image/*,application/pdf,.doc,.docx,.txt"
+                          onChange={(e) => handleBankFileChange(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                        {bankPreviewUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={bankPreviewUrl}
+                            alt="Bank document preview"
+                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-sky-600" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                            {bankFile.name}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                            {(bankFile.size / 1024).toFixed(0)} KB · Attached
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleBankFileChange(null)}
+                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
+                          title="Remove file"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {(bankFileError || fieldErrors.bank_document_file) && (
+                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                        {bankFileError || fieldErrors.bank_document_file}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </FormSectionCard>
+
+              {/* Section 5: Identity Verification */}
+              <FormSectionCard
+                stepNumber={5}
+                title="Identity Verification"
+                isMandatory={true}
+                isCompleted={section5Complete}
+              >
+                <div className="space-y-2.5 sm:space-y-3">
                   {/* Aadhaar Card Number | Driving Licence Number */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1 border-t border-[var(--color-hairline)]/60">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                     <Input
                       id="signup-aadhaar"
                       name="aadhaar_number"
@@ -1062,7 +1169,7 @@ export default function SignupPage() {
                   </div>
 
                   {/* Document Uploads: Aadhaar Card & Driving Licence */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                     {/* Aadhaar Upload Card */}
                     <div
                       className={`rounded-xl border ${
@@ -1072,19 +1179,17 @@ export default function SignupPage() {
                       } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                          <AnimatedShieldCheck size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                        <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
                           <span>Aadhaar Document</span>
                           <span className="text-rose-500 font-semibold">*</span>
-                          <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
                         <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
                       </div>
 
                       {!aadhaarFile ? (
                         <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                          <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
+                          <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
                             Upload Aadhaar (JPG, PNG, PDF)
                           </span>
                           <input
@@ -1120,7 +1225,7 @@ export default function SignupPage() {
                           <button
                             type="button"
                             onClick={() => handleAadhaarFileChange(null)}
-                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
                             title="Remove file"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -1140,17 +1245,16 @@ export default function SignupPage() {
                       className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                          <AnimatedCreditCard size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                          Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
+                        <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
+                          <span>Licence Document</span>
                         </span>
                         <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
                       </div>
 
                       {!licenseFile ? (
                         <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                          <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
+                          <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
                             Upload Licence (JPG, PNG, PDF)
                           </span>
                           <input
@@ -1186,7 +1290,7 @@ export default function SignupPage() {
                           <button
                             type="button"
                             onClick={() => handleLicenseFileChange(null)}
-                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
                             title="Remove file"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -1204,12 +1308,12 @@ export default function SignupPage() {
                 </div>
               </FormSectionCard>
 
-              {/* Section 4: Security Credentials */}
+              {/* Section 6: Security Credentials */}
               <FormSectionCard
-                stepNumber={4}
+                stepNumber={6}
                 title="Security Credentials"
                 isMandatory={true}
-                isCompleted={section4Complete}
+                isCompleted={section6Complete}
               >
                 {/* Password | Confirm Password */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">

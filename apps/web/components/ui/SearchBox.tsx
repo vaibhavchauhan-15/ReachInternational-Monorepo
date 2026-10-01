@@ -71,7 +71,7 @@ export const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full rounded-lg border border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 font-medium transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 ${
+          className={`w-full rounded-lg border border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal font-medium transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 ${
             sizeClasses[size]
           } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           {...props}

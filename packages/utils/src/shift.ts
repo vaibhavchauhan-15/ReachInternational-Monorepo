@@ -227,3 +227,151 @@ export function calculateEffectiveShiftDurationHours(params: {
   return Math.max(0, Math.round((baseHours + safeOt) * 10) / 10);
 }
 
+export interface ClientShiftPresetItem {
+  code: string;
+  name: string;
+  startTime: string; // "06:00:00"
+  endTime: string;   // "14:00:00"
+  scheduledMinutes: number;
+  normalMinutes: number;
+  crossesMidnight: boolean;
+  displayOrder: number;
+}
+
+export interface ClientShiftPreset {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  shifts: ClientShiftPresetItem[];
+}
+
+export const CLIENT_SHIFT_PRESETS: ClientShiftPreset[] = [
+  {
+    id: "three_8h",
+    name: "Three 8-Hour Shifts [A, B, C]",
+    badge: "3 Shifts • 24h Coverage",
+    description: "Standard continuous 24-hour plant & site operations across three 8-hour shift windows.",
+    shifts: [
+      {
+        code: "A",
+        name: "Shift A (Morning)",
+        startTime: "06:00:00",
+        endTime: "14:00:00",
+        scheduledMinutes: 480,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 1,
+      },
+      {
+        code: "B",
+        name: "Shift B (Evening)",
+        startTime: "14:00:00",
+        endTime: "22:00:00",
+        scheduledMinutes: 480,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 2,
+      },
+      {
+        code: "C",
+        name: "Shift C (Night)",
+        startTime: "22:00:00",
+        endTime: "06:00:00",
+        scheduledMinutes: 480,
+        normalMinutes: 480,
+        crossesMidnight: true,
+        displayOrder: 3,
+      },
+    ],
+  },
+  {
+    id: "two_12h",
+    name: "Two 12-Hour Shifts [Day, Night]",
+    badge: "2 Shifts • 24h Heavy Site",
+    description: "Heavy civil & remote site roster with 8h base work + 4h scheduled built-in overtime.",
+    shifts: [
+      {
+        code: "DAY",
+        name: "Day Shift (12h)",
+        startTime: "08:00:00",
+        endTime: "20:00:00",
+        scheduledMinutes: 720,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 1,
+      },
+      {
+        code: "NIGHT",
+        name: "Night Shift (12h)",
+        startTime: "20:00:00",
+        endTime: "08:00:00",
+        scheduledMinutes: 720,
+        normalMinutes: 480,
+        crossesMidnight: true,
+        displayOrder: 2,
+      },
+    ],
+  },
+  {
+    id: "two_8h",
+    name: "Two 8-Hour Shifts [A, B]",
+    badge: "2 Shifts • 16h Operations",
+    description: "Dual-shift coverage for urban sites and daytime production without overnight sound emissions.",
+    shifts: [
+      {
+        code: "A",
+        name: "Shift A (Morning)",
+        startTime: "06:00:00",
+        endTime: "14:00:00",
+        scheduledMinutes: 480,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 1,
+      },
+      {
+        code: "B",
+        name: "Shift B (Evening)",
+        startTime: "14:00:00",
+        endTime: "22:00:00",
+        scheduledMinutes: 480,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 2,
+      },
+    ],
+  },
+  {
+    id: "single_general",
+    name: "Single General Shift [General]",
+    badge: "1 Shift • 8h–9h General",
+    description: "Standard daytime commercial & workshop schedule with 1-hour lunch break.",
+    shifts: [
+      {
+        code: "GEN",
+        name: "General Shift (Day)",
+        startTime: "09:00:00",
+        endTime: "18:00:00",
+        scheduledMinutes: 540,
+        normalMinutes: 480,
+        crossesMidnight: false,
+        displayOrder: 1,
+      },
+    ],
+  },
+  {
+    id: "none",
+    name: "Custom (No Preset)",
+    badge: "Manual Setup",
+    description: "Start without pre-configured shifts. Manually define custom shift codes and timings later.",
+    shifts: [],
+  },
+];
+
+export const DEFAULT_CLIENT_SHIFT_PRESET_ID = "three_8h";
+
+export function getClientShiftPresetById(id?: string | null): ClientShiftPreset | undefined {
+  if (!id) return undefined;
+  return CLIENT_SHIFT_PRESETS.find((p) => p.id === id);
+}
+

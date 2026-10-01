@@ -65,6 +65,7 @@ const AuditTab = lazy(() => import("./tabs/AuditTab"));
 // ─── Types ───
 type PersonnelPick = Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> & {
   shift_code?: string | null;
+  shift_name?: string | null;
   shift_start_time?: string | null;
   shift_end_time?: string | null;
 };
@@ -1092,8 +1093,8 @@ export function MachineClientView({
           isOpen={personnelModalOpen}
           onClose={() => setPersonnelModalOpen(false)}
           machine={machineData}
-          supervisors={supervisors}
-          operators={operators}
+          supervisors={supervisors && supervisors.length > 0 ? supervisors : ((machineData.supervisors || []) as any)}
+          operators={operators && operators.length > 0 ? operators : ((machineData.operators || []) as any)}
           userRole={userRole}
           onMachineUpdated={handleMachineUpdated}
         />
@@ -1193,7 +1194,11 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
             {person.full_name}
           </span>
           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClasses} shrink-0 font-mono`}>
-            {person.shift_code ? `Shift ${person.shift_code}` : `Shift ${shiftIndex}`}
+            {person.shift_name
+              ? person.shift_name
+              : person.shift_code
+              ? `Shift ${person.shift_code}`
+              : `Shift ${shiftIndex}`}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-mute)] mt-1">

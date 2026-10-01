@@ -46,6 +46,7 @@ export interface MeterLogModalProps {
   initialClientId?: string;
   initialStartMeter?: number | string;
   initialLogDate?: string;
+  initialAssignedShiftCodes?: string[];
 }
 
 export const MeterLogModal: React.FC<MeterLogModalProps> = ({
@@ -63,6 +64,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   initialClientId,
   initialStartMeter,
   initialLogDate,
+  initialAssignedShiftCodes,
 }) => {
   const { theme } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -133,12 +135,83 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
 
-  // Client Shift Codes
+  // Client Shift Codes & Operator Assigned Shifts
   const [shiftCodes, setShiftCodes] = useState<any[]>([]);
   const [selectedShiftCode, setSelectedShiftCode] = useState<string | null>(null);
+  const [assignedShiftCodes, setAssignedShiftCodes] = useState<string[]>(() => initialAssignedShiftCodes || []);
+  const [todayLoggedCodes, setTodayLoggedCodes] = useState<string[]>([]);
+  const [todayLogs, setTodayLogs] = useState<Array<{ shift_code: string; end_meter: number; running_hours: number }>>([]);
   const [showManualTimes, setShowManualTimes] = useState(false);
 
-  const fetchShiftCodes = async (cId: string) => {
+  const fetchTodayLogs = async (mId?: string, opId?: string) => {
+    const activeMachineId = mId || machineId;
+    let activeOpId = opId || targetOperatorId;
+    if (!activeOpId) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        activeOpId = authData?.user?.id;
+      } catch {
+        // Non-blocking
+      }
+    }
+    if (!activeMachineId || !activeOpId) return;
+
+    try {
+      const todayStr = getISTDateString();
+      const { data } = await supabase
+        .from('machine_hour_logs')
+        .select('shift_code, end_meter, running_hours')
+        .eq('machine_id', activeMachineId)
+        .eq('operator_id', activeOpId)
+        .eq('log_date', todayStr);
+
+      if (data && data.length > 0) {
+        const codes = data.map((d: any) => d.shift_code).filter(Boolean);
+        setTodayLoggedCodes(codes);
+        setTodayLogs(data as any);
+      } else {
+        setTodayLoggedCodes([]);
+        setTodayLogs([]);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  };
+
+  const fetchAssignedShifts = async (mId?: string, opId?: string): Promise<string[]> => {
+    const activeMachineId = mId || machineId;
+    let activeOpId = opId || targetOperatorId;
+    if (!activeOpId) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        activeOpId = authData?.user?.id;
+      } catch {
+        // Non-blocking
+      }
+    }
+    if (!activeMachineId || !activeOpId) {
+      setAssignedShiftCodes([]);
+      return [];
+    }
+    try {
+      const { data, error } = await supabase
+        .from('operator_machine_assignments')
+        .select('shift_code')
+        .eq('machine_id', activeMachineId)
+        .eq('operator_id', activeOpId)
+        .eq('is_active', true);
+      if (!error && data) {
+        const codes = data.map((r: any) => r.shift_code).filter(Boolean);
+        setAssignedShiftCodes(codes);
+        return codes;
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+    return [];
+  };
+
+  const fetchShiftCodes = async (cId: string, currentAssignedCodes?: string[]) => {
     try {
       const { data } = await supabase
         .from('client_shift_codes')
@@ -149,7 +222,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         .order('code', { ascending: true });
       if (data && data.length > 0) {
         setShiftCodes(data);
-        const match = resolveDefaultOperatorShift({ assigned_shift_code: initialShiftCode }, data);
+        const effectiveAssigned = currentAssignedCodes !== undefined ? currentAssignedCodes : assignedShiftCodes;
+        const assignedMatch = effectiveAssigned.length > 0
+          ? data.find((sc: any) => effectiveAssigned.includes(sc.code))
+          : null;
+        const match = assignedMatch || resolveDefaultOperatorShift({ assigned_shift_code: initialShiftCode }, data);
         const target = match || (!selectedShiftCode ? data[0] : null);
         if (target) {
           setSelectedShiftCode(target.code);
@@ -157,9 +234,28 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           const e = formatTo12Hour(target.end_time) || target.end_time;
           if (s) setStartTime(s);
           if (e) setEndTime(e);
+          const defaultOt = target.default_ot_minutes ? String(target.default_ot_minutes / 60) : '0';
+          setOvertimeHours(defaultOt);
         }
       } else {
         setShiftCodes([]);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  };
+
+  const fetchMachineDeployment = async () => {
+    if (!machineId) return;
+    try {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('client_id')
+        .eq('id', machineId)
+        .single();
+      if (!error && data?.client_id && data.client_id !== selectedClientId) {
+        setSelectedClientId(data.client_id);
+        fetchShiftCodes(data.client_id);
       }
     } catch {
       // Non-blocking fallback
@@ -172,12 +268,108 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     }
   }, [selectedClientId]);
 
+  // Real-time listener: operator_machine_assignments, machine_hour_logs, and machines deployment
+  useEffect(() => {
+    if (!visible || !machineId) return;
+
+    fetchAssignedShifts().then((codes) => {
+      if (selectedClientId) {
+        fetchShiftCodes(selectedClientId, codes);
+      }
+    });
+    fetchTodayLogs();
+    fetchMachineDeployment();
+
+    // Channel for real-time table mutations on operator_machine_assignments and machines
+    const realtimeChannel = supabase
+      .channel(`rt-meter-log-${machineId}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'operator_machine_assignments',
+          filter: `machine_id=eq.${machineId}`,
+        },
+        async () => {
+          const freshCodes = await fetchAssignedShifts();
+          if (selectedClientId) {
+            fetchShiftCodes(selectedClientId, freshCodes);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'machine_hour_logs',
+          filter: `machine_id=eq.${machineId}`,
+        },
+        async () => {
+          fetchTodayLogs();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'machines',
+          filter: `id=eq.${machineId}`,
+        },
+        (payload: any) => {
+          if (payload.new?.client_id && payload.new.client_id !== selectedClientId) {
+            setSelectedClientId(payload.new.client_id);
+            fetchShiftCodes(payload.new.client_id);
+          }
+        }
+      )
+      .subscribe();
+
+    // Channel for broadcast messages across supervisors and operators
+    const rosterBroadcastChannel = supabase
+      .channel('operations-roster')
+      .on('broadcast', { event: 'assignment_changed' }, async (eventPayload: any) => {
+        if (eventPayload?.payload?.machineId === machineId) {
+          const freshCodes = await fetchAssignedShifts();
+          if (selectedClientId) {
+            fetchShiftCodes(selectedClientId, freshCodes);
+          }
+        }
+      })
+      .on('broadcast', { event: 'deployment_changed' }, (eventPayload: any) => {
+        if (eventPayload?.payload?.machineId === machineId && eventPayload?.payload?.clientId) {
+          setSelectedClientId(eventPayload.payload.clientId);
+          fetchShiftCodes(eventPayload.payload.clientId);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(realtimeChannel);
+      supabase.removeChannel(rosterBroadcastChannel);
+    };
+  }, [visible, machineId, targetOperatorId, selectedClientId]);
+
   const handleSelectShift = (shift: any) => {
     setSelectedShiftCode(shift.code);
     const s = formatTo12Hour(shift.start_time) || shift.start_time;
     const e = formatTo12Hour(shift.end_time) || shift.end_time;
     if (s) setStartTime(s);
     if (e) setEndTime(e);
+    const defaultOt = shift.default_ot_minutes ? String(shift.default_ot_minutes / 60) : '0';
+    setOvertimeHours(defaultOt);
+
+    // Continuous 24h start-meter handoff:
+    // If earlier shifts were logged today on this machine, auto-hand off the highest end meter
+    if (todayLogs.length > 0) {
+      const highestEndMeter = Math.max(...todayLogs.map((l) => Number(l.end_meter) || 0));
+      if (highestEndMeter > 0) {
+        setStartMeter(String(highestEndMeter));
+        setEndMeter(String(highestEndMeter));
+      }
+    }
   };
 
   const [latestTimeline, setLatestTimeline] = useState<{
@@ -394,6 +586,17 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    const effectiveOperatorId = targetOperatorId || userId;
+    const isAssisted = Boolean(targetOperatorId && targetOperatorId !== userId);
+
+    const isUnassigned = assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode);
+    if (isUnassigned && !isAssisted) {
+      setError(`Operator is assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`);
+      return;
+    }
+
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
       setError(shiftStats.errorMessage || 'Cannot log before shift end.');
       return;
@@ -422,11 +625,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     let logPayload: Record<string, any> | null = null;
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      const effectiveOperatorId = targetOperatorId || userId;
-      const isAssisted = Boolean(targetOperatorId && targetOperatorId !== userId);
-
       if (isAssisted && userId) {
         const { data: userRow } = await supabase.from('users').select('role').eq('id', userId).single();
         if (userRow && !['super_admin', 'admin', 'manager'].includes(userRow.role)) {
@@ -451,6 +649,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (isBreakdown && bkdDurationFormatted) {
         remarksPayload = `[Breakdown Duration: ${bkdDurationFormatted}] ${remarksPayload}`.trim();
       }
+      if (isUnassigned && isAssisted) {
+        remarksPayload = `[Assisted Override: Shift ${selectedShiftCode}] ${remarksPayload}`.trim();
+      }
 
       logPayload = {
         machine_id: machineId || null,
@@ -458,6 +659,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         model: model || '',
         serial_number: serialNumber || '',
         client_id: selectedClientId || null,
+        shift_code: selectedShiftCode || null,
         location: location.trim() || null,
         start_meter: startVal,
         end_meter: endVal,
@@ -599,13 +801,19 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         } else if (rpcErr) {
           if (
             rpcErr.message?.includes('cannot be less than start meter') ||
+            rpcErr.message?.includes('cannot exceed 24 hours') ||
             rpcErr.message?.includes('Shift end timestamp') ||
             rpcErr.message?.includes('overlap') ||
             rpcErr.message?.includes('Cannot log before shift end') ||
             rpcErr.message?.includes('Breakdown duration') ||
-            rpcErr.message?.includes('maintenance or decommissioned') ||
+            rpcErr.message?.includes('maintenance or') ||
+            rpcErr.message?.includes('inactive') ||
             rpcErr.message?.includes('Unauthorized operator') ||
             rpcErr.message?.includes('Client ID does not match') ||
+            rpcErr.message?.includes('previous 7 days') ||
+            rpcErr.message?.includes('assigned to Shift') ||
+            rpcErr.message?.includes('unassigned shift') ||
+            rpcErr.message?.includes('Please select your assigned shift') ||
             rpcErr.code === '23514' ||
             rpcErr.code === '42501' ||
             rpcErr.code === '23503'
@@ -616,13 +824,19 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       } catch (rpcCatchErr: any) {
         if (
           rpcCatchErr.message?.includes('cannot be less than start meter') ||
+          rpcCatchErr.message?.includes('cannot exceed 24 hours') ||
           rpcCatchErr.message?.includes('Shift end timestamp') ||
           rpcCatchErr.message?.includes('overlap') ||
           rpcCatchErr.message?.includes('Cannot log before shift end') ||
           rpcCatchErr.message?.includes('Breakdown duration') ||
-          rpcCatchErr.message?.includes('maintenance or decommissioned') ||
+          rpcCatchErr.message?.includes('maintenance or') ||
+          rpcCatchErr.message?.includes('inactive') ||
           rpcCatchErr.message?.includes('Unauthorized operator') ||
           rpcCatchErr.message?.includes('Client ID does not match') ||
+          rpcCatchErr.message?.includes('previous 7 days') ||
+          rpcCatchErr.message?.includes('assigned to Shift') ||
+          rpcCatchErr.message?.includes('unassigned shift') ||
+          rpcCatchErr.message?.includes('Please select your assigned shift') ||
           rpcCatchErr.code === '23514' ||
           rpcCatchErr.code === '42501' ||
           rpcCatchErr.code === '23503'
@@ -633,6 +847,21 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
       // 2. Resilient Fallback Path (if RPC is not yet migrated on remote environment)
       if (!rpcSucceeded) {
+        if (machineId && effectiveOperatorId && selectedShiftCode) {
+          const { data: assignData } = await supabase
+            .from('operator_machine_assignments')
+            .select('shift_code')
+            .eq('machine_id', machineId)
+            .eq('operator_id', effectiveOperatorId)
+            .eq('is_active', true);
+          if (assignData && assignData.length > 0) {
+            const codes = assignData.map((r: any) => r.shift_code).filter(Boolean);
+            if (codes.length > 0 && !codes.includes(selectedShiftCode)) {
+              throw new Error(`Operator is assigned to Shift ${codes.join(', ')} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`);
+            }
+          }
+        }
+
         const payload: any = {
           machine_id: machineId || null,
           client_id: selectedClientId || null,
@@ -786,7 +1015,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       }
 
       if (errMsg.includes('violates check constraint') || errMsg.includes('23514')) {
-        if (errMsg.includes('machines_status_check')) {
+        if (errMsg.includes('assigned to Shift') || errMsg.includes('unassigned shift') || errMsg.includes('assigned shift')) {
+          errMsg = err.message;
+        } else if (errMsg.includes('machines_status_check')) {
           errMsg = "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";
         } else if (errMsg.includes('chk_machine_hour_logs_meter_range') || errMsg.includes('cannot be less than start meter')) {
           errMsg = "Ending hour meter reading cannot be less than starting hour meter reading.";
@@ -799,6 +1030,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         } else {
           errMsg = "Database validation failed. Please verify meter readings and timings.";
         }
+      } else if (errMsg.includes('assigned to Shift') || errMsg.includes('unassigned shift') || errMsg.includes('Please select your assigned shift')) {
+        errMsg = err.message;
       } else if (errMsg.includes('Shift end timestamp') || errMsg.includes('must be strictly after start timestamp')) {
         errMsg = "Shift end time must be strictly after the start time.";
       } else if (errMsg.includes('overlap') || errMsg.includes('overlapping')) {
@@ -1012,6 +1245,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                     {shiftCodes.map((s) => {
                       const isSelected = selectedShiftCode === s.code;
+                      const hasAssignedShifts = assignedShiftCodes.length > 0;
+                      const isAssigned = assignedShiftCodes.includes(s.code);
+                      const isLogged = todayLoggedCodes.includes(s.code);
+                      const loggedRow = todayLogs.find((l) => l.shift_code === s.code);
                       const subtitle = getShiftSubtitle(s);
                       return (
                         <TouchableOpacity
@@ -1023,8 +1260,18 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                             paddingVertical: 8,
                             borderRadius: 10,
                             borderWidth: 1.5,
-                            borderColor: isSelected ? theme.colors.ink : theme.colors.hairline,
-                            backgroundColor: isSelected ? theme.colors.ink : theme.colors.canvasElevated,
+                            borderColor: isSelected
+                              ? theme.colors.ink
+                              : isLogged
+                              ? 'rgba(16, 185, 129, 0.7)'
+                              : hasAssignedShifts && isAssigned
+                              ? 'rgba(16, 185, 129, 0.6)'
+                              : theme.colors.hairline,
+                            backgroundColor: isSelected
+                              ? theme.colors.ink
+                              : isLogged
+                              ? 'rgba(16, 185, 129, 0.05)'
+                              : theme.colors.canvasElevated,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 6,
@@ -1040,6 +1287,50 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                           >
                             Shift {s.code}
                           </Text>
+                          {(isLogged || hasAssignedShifts) && (
+                            <View
+                              style={{
+                                paddingHorizontal: 5,
+                                paddingVertical: 1.5,
+                                borderRadius: 4,
+                                backgroundColor: isLogged
+                                  ? isSelected
+                                    ? 'rgba(16, 185, 129, 0.35)'
+                                    : 'rgba(16, 185, 129, 0.15)'
+                                  : isAssigned
+                                  ? isSelected
+                                    ? 'rgba(16, 185, 129, 0.35)'
+                                    : 'rgba(16, 185, 129, 0.12)'
+                                  : isSelected
+                                  ? 'rgba(255, 255, 255, 0.15)'
+                                  : theme.colors.hairlineSoft,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: '700',
+                                  color: isLogged
+                                    ? isSelected
+                                      ? '#6ee7b7'
+                                      : '#059669'
+                                    : isAssigned
+                                    ? isSelected
+                                      ? '#6ee7b7'
+                                      : '#059669'
+                                    : isSelected
+                                    ? 'rgba(255,255,255,0.7)'
+                                    : theme.colors.mute,
+                                }}
+                              >
+                                {isLogged
+                                  ? `✓ Logged${loggedRow?.running_hours ? ` (${loggedRow.running_hours}h)` : ''}`
+                                  : isAssigned
+                                  ? '✓ Assigned'
+                                  : 'Unassigned'}
+                              </Text>
+                            </View>
+                          )}
                           {subtitle ? (
                             <Text
                               style={{
@@ -1064,6 +1355,35 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       );
                     })}
                   </ScrollView>
+                  {assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode) && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: targetOperatorId ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                        borderColor: targetOperatorId ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        padding: 8,
+                        marginTop: 8,
+                        gap: 6,
+                      }}
+                    >
+                      <AlertTriangle size={15} color={targetOperatorId ? '#d97706' : '#ef4444'} />
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: targetOperatorId ? '#b45309' : '#ef4444',
+                          flex: 1,
+                          fontWeight: '500',
+                        }}
+                      >
+                        {targetOperatorId
+                          ? `${targetOperatorName || 'Operator'} is rostered for Shift ${assignedShiftCodes.join(', ')}. Submitting will record an Assisted Override for Shift ${selectedShiftCode}.`
+                          : `You are assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment. Logging for Shift ${selectedShiftCode} will be rejected by the server.`}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 

@@ -454,10 +454,10 @@ export function CustomTimePicker({
         <label
           className={
             labelClassName ||
-            "block text-[13.5px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
+            "block text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
           }
         >
-          {!hideIcon && showIcon && <AnimatedClock size={14} className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />}
+          {!hideIcon && showIcon && <AnimatedClock size={15} className={`h-[15px] w-[15px] ${iconColor} shrink-0`} />}
           <span className="truncate">{label}</span>
           {required && <span className="text-rose-500 font-semibold ml-0.5 shrink-0">*</span>}
         </label>

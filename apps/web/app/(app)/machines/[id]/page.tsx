@@ -28,7 +28,7 @@ async function MachineDetailContent({ id }: { id: string }) {
   const [machine, activeRental, supervisors, operators, clients] = await Promise.all([
     getMachineById(id),
     getMachineActiveRental(id),
-    canManage ? getActiveSupervisors() : Promise.resolve([]),
+    canAssignOperator ? getActiveSupervisors() : Promise.resolve([]),
     canAssignOperator ? getActiveOperators() : Promise.resolve([]),
     canManage ? getClientOptions() : Promise.resolve([]),
   ]);

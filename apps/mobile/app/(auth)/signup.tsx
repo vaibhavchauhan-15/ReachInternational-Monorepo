@@ -446,18 +446,24 @@ export default function SignupScreen() {
   const section3Complete = Boolean(
     city.trim().length >= 2 &&
     district.trim().length >= 2 &&
-    (stateVal.trim().length > 0 || stateId !== null) &&
+    (stateVal.trim().length > 0 || stateId !== null)
+  );
+
+  const section4Complete = Boolean(
     cleanBankAcc.length >= 9 &&
     cleanBankAcc.length <= 18 &&
     validateBankAccountNumber(cleanBankAcc).isValid &&
     cleanIfsc.length === 11 &&
     validateIfscCode(cleanIfsc).isValid &&
-    Boolean(bankDoc) &&
+    Boolean(bankDoc)
+  );
+
+  const section5Complete = Boolean(
     aadhaarNumber.replace(/\D/g, '').length === 12 &&
     Boolean(aadhaarDoc)
   );
 
-  const section4Complete = Boolean(
+  const section6Complete = Boolean(
     password.length >= 8 &&
     confirmPassword.length >= 8 &&
     password === confirmPassword &&
@@ -465,7 +471,12 @@ export default function SignupScreen() {
   );
 
   const isAllMandatoryFilled = Boolean(
-    section1Complete && section2Complete && section3Complete && section4Complete
+    section1Complete &&
+    section2Complete &&
+    section3Complete &&
+    section4Complete &&
+    section5Complete &&
+    section6Complete
   );
 
   const missingFields: string[] = [];
@@ -628,7 +639,7 @@ export default function SignupScreen() {
                 {isSupervisedRole(selectedRole) && (
                   <View style={[styles.selectGroup, { paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                      Supervisor <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
+                      Select Supervisor <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
                     </Text>
                     <TouchableOpacity
                       onPress={() => setSupervisorModalVisible(true)}
@@ -665,41 +676,38 @@ export default function SignupScreen() {
               <MobileFormSectionCard
                 stepNumber={2}
                 title="Work Shift Schedule"
-                description="Assigned daily operational work hours recorded on your profile."
                 isMandatory={true}
                 isCompleted={section2Complete}
               >
-                <View style={styles.twoColumnRow}>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="Shift Start Time"
-                      value={shiftStartTime}
-                      onChange={setShiftStartTime}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="Shift End Time"
-                      value={shiftEndTime}
-                      onChange={setShiftEndTime}
-                    />
-                  </View>
+                <View style={{ gap: 10 }}>
+                  <TimeInput
+                    label="Shift Start Time"
+                    value={shiftStartTime}
+                    onChange={setShiftStartTime}
+                  />
+                  <TimeInput
+                    label="Shift End Time"
+                    value={shiftEndTime}
+                    onChange={setShiftEndTime}
+                  />
                 </View>
 
                 {shiftSummary?.isValid && (
                   <View style={styles.shiftPill}>
                     <Text style={styles.shiftPillText}>
-                      {shiftSummary.isOvernight ? '🌙 Overnight' : '☀️ Standard'} · {shiftSummary.durationFormatted}
+                      {shiftSummary.durationMinutes % 60 === 0
+                        ? `${shiftSummary.durationMinutes / 60}h`
+                        : `${Number(shiftSummary.durationHours.toFixed(1))}h`}
                     </Text>
                   </View>
                 )}
               </MobileFormSectionCard>
 
-              {/* Section 3: Address, Banking & Identity */}
+              {/* Section 3: Address Details */}
               <MobileFormSectionCard
                 stepNumber={3}
-                title="Address, Banking & Identity"
-                description="Field operations base location, bank account details, and statutory identity credentials."
+                title="Address Details"
+                description="Field operations base location."
                 isMandatory={true}
                 isCompleted={section3Complete}
               >
@@ -734,73 +742,66 @@ export default function SignupScreen() {
                   }}
                   required={true}
                 />
+              </MobileFormSectionCard>
 
-                {/* Bank Account Details */}
-                <View
-                  style={[
-                    styles.bankCard,
-                    {
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
-                      borderColor: (fieldErrors.bank_doc || bankDocError)
-                        ? '#ef4444'
-                        : cardBorder,
-                    },
-                  ]}
-                >
-                  <View style={styles.bankHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <CreditCard size={15} color="#0ea5e9" />
-                      <Text style={[styles.bankTitle, { color: theme.colors.ink }]}>
-                        Bank Account Details <Text style={{ color: '#ef4444' }}>*</Text>
-                      </Text>
-                    </View>
-                    <Text style={[styles.bankSubtitle, { color: theme.colors.mute }]}>
-                      For payroll & compensation
-                    </Text>
-                  </View>
+              {/* Section 4: Banking Details */}
+              <MobileFormSectionCard
+                stepNumber={4}
+                title="Banking Details"
+                description="Bank account credentials and passbook document."
+                isMandatory={true}
+                isCompleted={section4Complete}
+              >
+                <Input
+                  label="Bank Account Number"
+                  required
+                  placeholder="9 to 18-digit Account Number"
+                  value={bankAccountNumber}
+                  onChangeText={handleBankAccountChange}
+                  keyboardType="numeric"
+                  maxLength={18}
+                  error={fieldErrors.bank_account_number}
+                  leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
 
-                  <Input
-                    label="Bank Account Number"
-                    required
-                    placeholder="9 to 18-digit Account Number"
-                    value={bankAccountNumber}
-                    onChangeText={handleBankAccountChange}
-                    keyboardType="numeric"
-                    maxLength={18}
-                    error={fieldErrors.bank_account_number}
-                    leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
-                  />
+                <Input
+                  label="IFSC Code"
+                  required
+                  placeholder="e.g. SBIN0001234"
+                  value={bankIfscCode}
+                  onChangeText={handleBankIfscChange}
+                  autoCapitalize="characters"
+                  maxLength={11}
+                  error={fieldErrors.bank_ifsc_code}
+                  leftIcon={<Building2 size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
 
-                  <Input
-                    label="IFSC Code"
-                    required
-                    placeholder="e.g. SBIN0001234"
-                    value={bankIfscCode}
-                    onChangeText={handleBankIfscChange}
-                    autoCapitalize="characters"
-                    maxLength={11}
-                    error={fieldErrors.bank_ifsc_code}
-                    leftIcon={<Building2 size={16} color={isDark ? '#737373' : '#9ca3af'} />}
-                  />
+                <MobileDocumentUploadCard
+                  title="Bank Account Document *"
+                  subtitle="Passbook front page, cancelled cheque, or statement (max 2 MB)"
+                  docTypeCode="bank_document"
+                  selectedDoc={bankDoc}
+                  onDocSelected={(doc) => {
+                    setBankDoc(doc);
+                    setBankDocError(null);
+                    clearFieldError('bank_doc');
+                  }}
+                  onDocRemoved={() => {
+                    setBankDoc(null);
+                    setBankDocError(null);
+                  }}
+                  errorMessage={bankDocError || fieldErrors.bank_doc}
+                />
+              </MobileFormSectionCard>
 
-                  <MobileDocumentUploadCard
-                    title="Bank Account Document (Front / Cheque / PDF) *"
-                    subtitle="Passbook front page, cancelled cheque, or statement (max 2 MB)"
-                    docTypeCode="bank_document"
-                    selectedDoc={bankDoc}
-                    onDocSelected={(doc) => {
-                      setBankDoc(doc);
-                      setBankDocError(null);
-                      clearFieldError('bank_doc');
-                    }}
-                    onDocRemoved={() => {
-                      setBankDoc(null);
-                      setBankDocError(null);
-                    }}
-                    errorMessage={bankDocError || fieldErrors.bank_doc}
-                  />
-                </View>
-
+              {/* Section 5: Identity Verification */}
+              <MobileFormSectionCard
+                stepNumber={5}
+                title="Identity Verification"
+                description="Statutory identity credentials and verification documents."
+                isMandatory={true}
+                isCompleted={section5Complete}
+              >
                 <Input
                   label="Aadhaar Card Number"
                   required
@@ -814,7 +815,7 @@ export default function SignupScreen() {
                 />
 
                 <MobileDocumentUploadCard
-                  title="Aadhaar Card Document (Front / PDF) *"
+                  title="Aadhaar Document *"
                   subtitle="Front page or full e-Aadhaar PDF (max 2 MB)"
                   docTypeCode="aadhaar"
                   selectedDoc={aadhaarDoc}
@@ -841,7 +842,7 @@ export default function SignupScreen() {
                 />
 
                 <MobileDocumentUploadCard
-                  title="Driving Licence Document (Front / PDF)"
+                  title="Licence Document"
                   subtitle="Front page or smart card scan (max 2 MB)"
                   docTypeCode="driving_license"
                   selectedDoc={licenseDoc}
@@ -857,13 +858,13 @@ export default function SignupScreen() {
                 />
               </MobileFormSectionCard>
 
-              {/* Section 4: Security Credentials */}
+              {/* Section 6: Security Credentials */}
               <MobileFormSectionCard
-                stepNumber={4}
+                stepNumber={6}
                 title="Security Credentials"
                 description="Secure password credentials for logging into the platform."
                 isMandatory={true}
-                isCompleted={section4Complete}
+                isCompleted={section6Complete}
               >
                 <Input
                   label="Password"

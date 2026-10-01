@@ -633,7 +633,9 @@ export function computeShiftTiming(params: {
     ? Math.min(Math.max(0, Math.round(manualOvertime * 10) / 10), durationHours, 16.0)
     : undefined;
   const overtimeHours = clampedManualOt !== undefined ? clampedManualOt : autoOvertime;
-  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours) * 10) / 10);
+  const normalWorkingHours = durationHours >= 7.95
+    ? 8.0
+    : Math.max(0, Math.round((durationHours - overtimeHours) * 10) / 10);
 
   if (diffMinutes > 24 * 60) {
     return {

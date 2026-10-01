@@ -59,6 +59,39 @@ const DEFAULT_SHIFTS: ClientShiftItem[] = [
   { code: 'S3', name: 'Shift S3', start_time: '10:00 PM', end_time: '06:00 AM', crosses_midnight: true },
 ];
 
+function shiftToMinuteRanges(startStr?: string | null, endStr?: string | null): Array<[number, number]> {
+  if (!startStr || !endStr) return [];
+  const s = parseTimeToMinutes(startStr);
+  const e = parseTimeToMinutes(endStr);
+  if (s === null || e === null || s === e) return [];
+  if (e <= s) {
+    return [[s, 1440], [0, e]];
+  }
+  return [[s, e]];
+}
+
+function doRangesOverlap(rangesA: Array<[number, number]>, rangesB: Array<[number, number]>): boolean {
+  for (const [sA, eA] of rangesA) {
+    for (const [sB, eB] of rangesB) {
+      if (Math.max(sA, sB) < Math.min(eA, eB)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function checkTimeOverlap(
+  start1: string,
+  end1: string,
+  start2: string,
+  end2: string
+): boolean {
+  const r1 = shiftToMinuteRanges(start1, end1);
+  const r2 = shiftToMinuteRanges(start2, end2);
+  return doRangesOverlap(r1, r2);
+}
+
 export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProps> = ({
   visible,
   onClose,
@@ -71,6 +104,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   // Data pools
   const [machines, setMachines] = useState<any[]>([]);
   const [operators, setOperators] = useState<any[]>([]);
+  const [fleetAssignments, setFleetAssignments] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   // Form state
@@ -115,12 +149,17 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         .eq('role', 'operator')
         .neq('status', 'inactive')
         .order('full_name', { ascending: true }),
+      supabase
+        .from('operator_machine_assignments')
+        .select('operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active')
+        .eq('is_active', true),
     ])
-      .then(([mRes, uRes]) => {
+      .then(([mRes, uRes, assRes]) => {
         if (!active) return;
         const machList = mRes.data || [];
         setMachines(machList);
         setOperators(uRes.data || []);
+        setFleetAssignments(assRes.data || []);
 
         if (!selectedMachineId && machList.length > 0) {
           setSelectedMachineId(initialMachineId || machList[0].id);
@@ -257,10 +296,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     try {
       const opId = assignment.operator_id || assignment.operator?.id;
       const { data, error } = await supabase.rpc('end_operator_machine_assignment_atomic', {
-        p_machine_id: selectedMachineId,
-        p_operator_id: opId,
-        p_relieved_by: (await supabase.auth.getUser()).data.user?.id || null,
-        p_notes: 'Relieved via mobile roster management',
+        p_assignment_id: assignment.id,
+        p_ended_by: (await supabase.auth.getUser()).data.user?.id || null,
+        p_end_reason: 'Relieved via mobile roster management',
       });
 
       if (error) {
@@ -272,9 +310,18 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         action: 'unassigned',
         machineId: selectedMachineId,
         operatorId: opId,
+        shiftCode: assignment.shift_code,
       });
 
       await fetchActiveAssignments();
+      supabase
+        .from('operator_machine_assignments')
+        .select('operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active')
+        .eq('is_active', true)
+        .then((res) => {
+          if (res.data) setFleetAssignments(res.data);
+        });
+
       if (onSuccess) onSuccess();
     } catch (err: any) {
       setAssignmentError(err?.message || 'Failed to relieve operator.');
@@ -322,24 +369,86 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       return;
     }
 
+    // Check if shift code already taken on this machine
+    const isShiftCodeTaken = activeAssignments.some((a) => (a.shift_code || '').toUpperCase() === selectedShiftCode.toUpperCase());
+    if (isShiftCodeTaken) {
+      const shiftObj = clientShifts.find((s) => s.code.toUpperCase() === selectedShiftCode.toUpperCase());
+      const shiftDisplay = shiftObj?.name ? `${shiftObj.name} (${selectedShiftCode})` : `Shift ${selectedShiftCode}`;
+      setAssignmentError(`${shiftDisplay} is already assigned on this equipment. Please select another shift code.`);
+      return;
+    }
+
+    // Check operator shift capacity (max 3 shifts across fleet)
+    const opShifts = fleetAssignments.filter((a) => a.operator_id === selectedOperatorId);
+    if (opShifts.length >= 3) {
+      setAssignmentError('This operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.');
+      return;
+    }
+
+    // Check for shift time overlap with operator's other active shifts across the fleet
+    for (const otherShift of opShifts) {
+      if (otherShift.shift_start_time && otherShift.shift_end_time) {
+        if (checkTimeOverlap(shiftStartTime, shiftEndTime, otherShift.shift_start_time, otherShift.shift_end_time)) {
+          const otherMachine = machines.find((m) => m.id === otherShift.machine_id);
+          const machLabel = otherMachine?.machine_id ? `equipment ${otherMachine.machine_id}` : 'another equipment';
+          const otherStartFmt = formatTo12Hour(otherShift.shift_start_time) || otherShift.shift_start_time;
+          const otherEndFmt = formatTo12Hour(otherShift.shift_end_time) || otherShift.shift_end_time;
+          const thisStartFmt = formatTo12Hour(shiftStartTime) || shiftStartTime;
+          const thisEndFmt = formatTo12Hour(shiftEndTime) || shiftEndTime;
+          setAssignmentError(
+            `This shift (${thisStartFmt} – ${thisEndFmt}) overlaps with operator's active shift (${otherStartFmt} – ${otherEndFmt}) on ${machLabel}. Shifts for an operator cannot overlap.`
+          );
+          return;
+        }
+      }
+    }
+
+    // Check for shift time overlap with other active operators on the same equipment
+    for (const curAss of activeAssignments) {
+      if (curAss.shift_start_time && curAss.shift_end_time && curAss.operator_id !== selectedOperatorId) {
+        if (checkTimeOverlap(shiftStartTime, shiftEndTime, curAss.shift_start_time, curAss.shift_end_time)) {
+          const curStartFmt = formatTo12Hour(curAss.shift_start_time) || curAss.shift_start_time;
+          const curEndFmt = formatTo12Hour(curAss.shift_end_time) || curAss.shift_end_time;
+          const thisStartFmt = formatTo12Hour(shiftStartTime) || shiftStartTime;
+          const thisEndFmt = formatTo12Hour(shiftEndTime) || shiftEndTime;
+          setAssignmentError(
+            `This shift (${thisStartFmt} – ${thisEndFmt}) overlaps with active shift (${curStartFmt} – ${curEndFmt}) on this equipment. Shift timings on an equipment cannot overlap.`
+          );
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     try {
+      const { data: userAuth } = await supabase.auth.getUser();
+      const currentUserId = userAuth?.user?.id || null;
+
       const { data, error } = await supabase.rpc('assign_operator_machine_atomic', {
         p_machine_id: selectedMachineId,
         p_operator_id: selectedOperatorId,
         p_shift_start_time: shiftStartTime,
         p_shift_end_time: shiftEndTime,
         p_shift_code: selectedShiftCode,
+        p_assigned_by: currentUserId,
         p_notes: notes.trim() || 'Assigned via mobile Today Shift Logs',
       });
 
       if (error) {
-        setAssignmentError(error.message || 'Failed to assign operator.');
+        let msg = error.message || 'Failed to assign operator.';
+        if (error.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+          msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+        }
+        setAssignmentError(msg);
         return;
       }
 
       if (data && data.success === false) {
-        setAssignmentError(data.error || 'Failed to assign operator.');
+        let msg = data.error || 'Failed to assign operator.';
+        if (msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+          msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+        }
+        setAssignmentError(msg);
         return;
       }
 
@@ -350,6 +459,15 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         operatorId: selectedOperatorId,
         shiftCode: selectedShiftCode,
       });
+
+      await fetchActiveAssignments();
+      supabase
+        .from('operator_machine_assignments')
+        .select('operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active')
+        .eq('is_active', true)
+        .then((res) => {
+          if (res.data) setFleetAssignments(res.data);
+        });
 
       // Success
       if (onSuccess) onSuccess();
@@ -550,16 +668,33 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                         ]}
                       >
                         <View style={styles.assignmentItemLeft}>
-                          <Text style={[styles.assignmentName, { color: theme.colors.ink }]}>
-                            {ass.operator?.full_name || 'Operator'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={[styles.assignmentName, { color: theme.colors.ink }]}>
+                              {ass.operator?.full_name || 'Operator'}
+                            </Text>
+                            {(() => {
+                              const count = activeAssignments.filter((a) => (a.operator_id || a.operator?.id) === (ass.operator_id || ass.operator?.id)).length;
+                              if (count <= 1) return null;
+                              return (
+                                <View style={{ backgroundColor: count === 3 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: count === 3 ? '#059669' : '#0284c7' }}>
+                                    {count === 3 ? '3 Shifts (24h)' : '2 Shifts'}
+                                  </Text>
+                                </View>
+                              );
+                            })()}
+                          </View>
                           <Text style={[styles.assignmentTiming, { color: theme.colors.mute }]}>
                             {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <View style={styles.assignmentBadge}>
-                            <Text style={styles.assignmentBadgeText}>Shift {ass.shift_code || 'S1'}</Text>
+                            <Text style={styles.assignmentBadgeText}>
+                              {clientShifts.find((s) => s.code.toUpperCase() === (ass.shift_code || '').toUpperCase())?.name
+                                ? `${clientShifts.find((s) => s.code.toUpperCase() === (ass.shift_code || '').toUpperCase())?.name} (${ass.shift_code})`
+                                : `Shift ${ass.shift_code || 'S1'}`}
+                            </Text>
                           </View>
                           <TouchableOpacity
                             onPress={() => handleRemoveAssignment(ass)}
@@ -618,9 +753,44 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   <View style={styles.pickerTriggerLeft}>
                     <UserCheck size={16} color={theme.colors.link} />
                     <View style={styles.pickerTriggerTextWrap}>
-                      <Text style={[styles.pickerTriggerTitle, { color: theme.colors.ink }]}>
-                        {selectedOperator ? selectedOperator.full_name : 'Select active operator...'}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.pickerTriggerTitle, { color: theme.colors.ink }]}>
+                          {selectedOperator ? selectedOperator.full_name : 'Select active operator...'}
+                        </Text>
+                        {selectedOperator && (() => {
+                          const opAss = fleetAssignments.filter((a) => a.operator_id === selectedOperator.id);
+                          return (
+                            <View
+                              style={{
+                                backgroundColor:
+                                  opAss.length >= 2
+                                    ? 'rgba(239, 68, 68, 0.1)'
+                                    : opAss.length === 1
+                                    ? 'rgba(2, 132, 199, 0.1)'
+                                    : 'rgba(16, 185, 129, 0.1)',
+                                paddingHorizontal: 6,
+                                paddingVertical: 1,
+                                borderRadius: 4,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: '700',
+                                  color:
+                                    opAss.length >= 3
+                                      ? '#ef4444'
+                                      : opAss.length >= 1
+                                      ? '#0284c7'
+                                      : '#10b981',
+                                }}
+                              >
+                                {opAss.length}/3 Shifts
+                              </Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
                       {selectedOperator?.phone && (
                         <Text style={[styles.pickerTriggerSub, { color: theme.colors.mute }]}>
                           Phone: {selectedOperator.phone}
@@ -693,14 +863,36 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                         ]}
                       >
                         <View style={styles.shiftPillTop}>
-                          <Text
-                            style={[
-                              styles.shiftPillCode,
-                              { color: isSelected ? '#ffffff' : theme.colors.ink },
-                            ]}
-                          >
-                            Shift {sc.code}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+                            <View
+                              style={{
+                                backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(2, 132, 199, 0.1)',
+                                paddingHorizontal: 5,
+                                paddingVertical: 1,
+                                borderRadius: 4,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                                  fontWeight: '700',
+                                  color: isSelected ? '#ffffff' : theme.colors.link,
+                                }}
+                              >
+                                {sc.code}
+                              </Text>
+                            </View>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.shiftPillCode,
+                                { color: isSelected ? '#ffffff' : theme.colors.ink, maxWidth: 140 },
+                              ]}
+                            >
+                              {sc.name || `Shift ${sc.code}`}
+                            </Text>
+                          </View>
                           {sc.crosses_midnight && (
                             <Moon size={11} color={isSelected ? '#ffffff' : '#6366f1'} />
                           )}
@@ -969,37 +1161,63 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                       u.phone?.toLowerCase().includes(q)
                     );
                   })
-                  .map((u) => (
-                    <TouchableOpacity
-                      key={u.id}
-                      onPress={() => {
-                        setSelectedOperatorId(u.id);
-                        setIsOperatorPickerOpen(false);
-                      }}
-                      style={[
-                        styles.pickerItem,
-                        {
-                          borderBottomColor: theme.colors.hairline,
-                          backgroundColor:
-                            selectedOperatorId === u.id
+                  .map((u) => {
+                    const opAssignments = fleetAssignments.filter((a) => a.operator_id === u.id);
+                    const isMax = opAssignments.length >= 3;
+                    const isCurrentOnThisMachine = opAssignments.some((a) => a.machine_id === selectedMachineId);
+                    const isCurrentSelected = selectedOperatorId === u.id;
+
+                    return (
+                      <TouchableOpacity
+                        key={u.id}
+                        disabled={isMax}
+                        onPress={() => {
+                          setSelectedOperatorId(u.id);
+                          setIsOperatorPickerOpen(false);
+                        }}
+                        style={[
+                          styles.pickerItem,
+                          {
+                            borderBottomColor: theme.colors.hairline,
+                            backgroundColor: isCurrentSelected
                               ? isDark
                                 ? 'rgba(56, 189, 248, 0.1)'
                                 : '#f0f9ff'
                               : 'transparent',
-                        },
-                      ]}
-                    >
-                      <View>
-                        <Text style={[styles.pickerItemTitle, { color: theme.colors.ink }]}>
-                          {u.full_name}
-                        </Text>
-                        <Text style={[styles.pickerItemSub, { color: theme.colors.mute }]}>
-                          {u.phone || 'No phone'}
-                        </Text>
-                      </View>
-                      {selectedOperatorId === u.id && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  ))}
+                            opacity: isMax ? 0.5 : 1,
+                          },
+                        ]}
+                      >
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={[styles.pickerItemTitle, { color: theme.colors.ink }]}>
+                              {u.full_name}
+                            </Text>
+                            {isMax ? (
+                              <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444' }}>3/3 Shifts</Text>
+                              </View>
+                            ) : opAssignments.length > 0 ? (
+                              <View style={{ backgroundColor: 'rgba(2, 132, 199, 0.1)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#0284c7' }}>
+                                  {isCurrentOnThisMachine ? `${opAssignments.length}/3 (On this machine)` : `${opAssignments.length}/3 Shifts`}
+                                </Text>
+                              </View>
+                            ) : (
+                              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#10b981' }}>Available</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={[styles.pickerItemSub, { color: theme.colors.mute }]}>
+                            {u.phone || 'No phone'}
+                            {isMax && ' • Max 3 shifts (24h) reached across fleet'}
+                          </Text>
+                        </View>
+                        {isCurrentSelected && <Check size={16} color={theme.colors.link} />}
+                      </TouchableOpacity>
+                    );
+                  })}
               </ScrollView>
             </View>
           </View>
@@ -1256,7 +1474,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacingNumeric.sm,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-    minWidth: 100,
+    minWidth: 125,
     gap: 2,
   },
   shiftPillTop: {

@@ -1,6 +1,107 @@
 {
+  "totalScenariosTested": 75,
   "passed": 75,
   "failed": 0,
-  "bugLedger": [],
-  "timestamp": "2026-09-09T10:22:18.100Z"
+  "resolvedBugs": [
+    {
+      "id": "BUG-OP-01",
+      "severity": "Critical",
+      "module": "public.submit_operator_hour_log_atomic",
+      "title": "Postgres Unique Constraint 23505 Collision on Assignment Roster Sync",
+      "issue": "Updating assignment shift_code blindly when operator held 2 active shifts collided with unique index idx_oma_machine_active_shift_code.",
+      "resolution": "Preserve existing assigned shifts; only update if shift_code IS NULL and no active assignment already holds that shift code.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-02",
+      "severity": "High",
+      "module": "public.machine_hour_logs & submit_operator_hour_log_atomic",
+      "title": "Excessive Running Hours (> 24h) Accepted",
+      "issue": "Server accepted erroneous logs exceeding 24 running hours on a single shift.",
+      "resolution": "Added table check constraint chk_machine_hour_logs_max_running_hours and RPC guard throwing 23514.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-03",
+      "severity": "High",
+      "module": "public.submit_operator_hour_log_atomic",
+      "title": "Breakdown Duration Exceeding Shift Length Accepted",
+      "issue": "RPC accepted breakdown durations exceeding the total shift length (e.g. 10h breakdown on 8h shift).",
+      "resolution": "Added RPC duration bound check: raises exception 23514 if breakdown_hours > shift_duration_hours.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-04",
+      "severity": "High",
+      "module": "public.submit_operator_hour_log_atomic & apps/web/app/actions/operators.ts",
+      "title": "Logging on Inactive or Under-Maintenance Machine Accepted",
+      "issue": "Equipment decommissioned or under overhaul accepted operational shift hour logs.",
+      "resolution": "Added operational status guard: raises exception 23514 if status = 'inactive' OR health_status = 'under_maintenance'.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-05",
+      "severity": "High",
+      "module": "public.submit_operator_hour_log_atomic & apps/web/app/actions/operators.ts",
+      "title": "Client-Machine Deployment Mismatch Accepted",
+      "issue": "Passing mismatched client_id for deployed machine was inserted without validating machines.client_id.",
+      "resolution": "Added deployment validation: raises exception 23503 if machines.client_id IS NOT NULL AND client_id <> p_client_id.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-06",
+      "severity": "High",
+      "module": "trg_enforce_machine_hour_log_operator_date_window & submit_operator_hour_log_atomic",
+      "title": "Operator 7-Day Window Bypass via Service Role",
+      "issue": "Trigger relied strictly on auth.uid(), which is null when called from service-role Server Actions.",
+      "resolution": "Updated trigger to inspect NEW.entry_source = 'operator' and entered_by user role, plus added explicit RPC guard.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-07",
+      "severity": "Medium",
+      "module": "apps/web/components/dashboard/OperatorDashboard.tsx",
+      "title": "Client Shift Code Lost in Dashboard Entry",
+      "issue": "submitOperatorHourLogAction omitted shiftCode, causing backend trigger to default to 'S1' instead of assigned client shift code ('A').",
+      "resolution": "Passed shiftCode: assignedShiftCode and dynamic client shift code resolution.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-08",
+      "severity": "Low",
+      "module": "apps/web/components/operations/entry/ShiftInputs.tsx & apps/mobile/components/work/MeterLogModal.tsx",
+      "title": "Overtime Bleed on Shift Card Selection",
+      "issue": "Picking a shift card did not reset previous manual overtime input, carrying manual overtime into template shifts.",
+      "resolution": "Explicitly reset overtime to template defaults (0 or default_ot_minutes / 60) upon selecting a shift card.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-09",
+      "severity": "Critical",
+      "module": "public.submit_operator_hour_log_atomic",
+      "title": "Obsolete Overload Signature Collision",
+      "issue": "Migration created a new overload with differing parameter order without dropping the older signature, causing PostgreSQL error 42725 (not unique).",
+      "resolution": "Added DROP FUNCTION IF EXISTS for the obsolete signature, leaving a single canonical function.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-10",
+      "severity": "Critical",
+      "module": "public.submit_operator_hour_log_atomic",
+      "title": "Audit Log Column Discrepancy",
+      "issue": "RPC inserted into audit_logs using non-existent column 'performed_by', throwing PostgreSQL error 42703 on valid shift logs.",
+      "resolution": "Updated audit log insertion to use 'user_id' and 'entity_type: machine_hour_logs'.",
+      "status": "VERIFIED_FIXED"
+    },
+    {
+      "id": "BUG-OP-11",
+      "severity": "Critical",
+      "module": "public.submit_operator_hour_log_atomic, Web & Mobile",
+      "title": "Operator Assigned Shift Enforcement Across Database and Frontends",
+      "issue": "Operator assigned to Shift A on Machine 1 could log for Shift B without server rejection.",
+      "resolution": "Enforced in RPC submit_operator_hour_log_atomic (raises exception 23514), in Web submitOperatorHourLogAction pre-check, ShiftInputs badge/banner, and Mobile MeterLogModal pre-check and real-time subscription.",
+      "status": "VERIFIED_FIXED"
+    }
+  ],
+  "timestamp": "2026-09-30T17:44:00.000Z"
 }

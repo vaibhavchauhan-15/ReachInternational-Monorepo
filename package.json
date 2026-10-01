@@ -9,6 +9,7 @@
     "build:mobile:preview": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile preview",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "seed": "node supabase/seed.mjs",
     "verify:seed": "node supabase/verify_seed.mjs"
   },
   "devDependencies": {

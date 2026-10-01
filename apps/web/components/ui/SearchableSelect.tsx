@@ -138,7 +138,7 @@ export function SearchableSelect({
       onKeyDown={handleKeyDown}
     >
       {label && (
-        <label className="block text-[13.5px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+        <label className="block text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
           <span className="flex items-center gap-1.5">
             {label} {required && <span className="text-rose-500 font-semibold">*</span>}
           </span>
@@ -201,7 +201,7 @@ export function SearchableSelect({
           ) : (
             <>
               {icon}
-              <span className="text-[var(--color-mute)] font-normal">{placeholder}</span>
+              <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] font-normal truncate">{placeholder}</span>
             </>
           )}
         </span>
@@ -218,7 +218,7 @@ export function SearchableSelect({
             </span>
           )}
           <ChevronDown
-            size={16}
+            size={15}
             className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
               isOpen ? "rotate-180 text-sky-500" : ""
             }`}

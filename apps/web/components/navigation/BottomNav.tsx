@@ -98,7 +98,7 @@ export function BottomNav({ role }: { role: UserRole }) {
       }}
     >
       <ul
-        className="flex items-center justify-around h-14 max-w-lg mx-auto px-1"
+        className="flex items-center justify-between h-14 max-w-md mx-auto px-1 sm:px-4"
         role="tablist"
       >
         {tabs.map((t) => {
@@ -106,35 +106,38 @@ export function BottomNav({ role }: { role: UserRole }) {
           const Icon = ICONS[t.icon] || Menu;
 
           return (
-            <li key={t.key} role="presentation" className="flex-1 min-w-0">
+            <li key={t.key} role="presentation" className="flex-1 min-w-0 h-full flex items-center justify-center">
               <Link
                 href={t.href}
                 role="tab"
                 aria-selected={active}
                 aria-current={active ? "page" : undefined}
                 aria-label={t.label}
-                className={`group group/nav interactive-parent relative flex flex-col items-center justify-center h-14 min-h-[44px] gap-0.5 text-[11.5px] sm:text-xs tracking-tight transition-colors duration-150 ${
+                className={`group group/nav interactive-parent relative flex flex-col items-center justify-center w-full h-full min-h-[44px] px-0.5 py-1 rounded-md transition-all duration-150 active:scale-95 ${
                   active
                     ? "text-[var(--color-ink)] font-semibold"
-                    : "text-[var(--color-mute)] font-medium"
+                    : "text-[var(--color-mute)] font-medium hover:text-[var(--color-ink)]"
                 }`}
               >
                 <Icon
-                  size={20}
+                  size={18}
                   className={`shrink-0 transition-colors duration-150 ${
                     active
                       ? "text-[var(--color-ink)]"
-                      : "text-[var(--color-mute)]"
+                      : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
                   }`}
                   aria-hidden
                 />
-                <span className="truncate max-w-full leading-none">
+                <span className="truncate max-w-full text-center leading-none mt-1 text-[10px] sm:text-[11px] tracking-tight">
                   {t.label}
                 </span>
-                {/* Active dot indicator */}
-                {active && (
-                  <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-[var(--color-ink)]" />
-                )}
+                {/* Active dot indicator (in-flow below label, never overlaps text) */}
+                <span
+                  className={`h-1 w-1 rounded-full mt-1 transition-all duration-150 ${
+                    active ? "bg-[var(--color-ink)] opacity-100" : "opacity-0"
+                  }`}
+                  aria-hidden
+                />
               </Link>
             </li>
           );

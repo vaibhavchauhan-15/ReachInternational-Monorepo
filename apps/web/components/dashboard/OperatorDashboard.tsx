@@ -28,7 +28,6 @@ import {
   Info,
   RotateCcw,
   FileCheck,
-  FileCheck2,
   AlertOctagon,
   ArrowRight,
   Printer,
@@ -38,7 +37,6 @@ import {
   MapPin,
   Gauge,
   Zap,
-  ShieldCheck,
 } from "lucide-react";
 
 import type {
@@ -568,6 +566,27 @@ export function OperatorDashboard({
   const [startTime, setStartTime] = useState<string>(() => defaultShiftTimes.startTime);
   const [endTime, setEndTime] = useState<string>(() => defaultShiftTimes.endTime);
 
+  // Continuous 24h Shift Switching: Available operational shifts for equipment
+  const [activeShiftCode, setActiveShiftCode] = useState<string>(() => {
+    return (assignedMachine as any)?.shift_code || user?.shift_code || "A";
+  });
+
+  const availableShifts = useMemo(() => {
+    const customShifts = (assignedMachine as any)?.client_shifts as Array<{
+      code: string;
+      name: string;
+      start_time: string;
+      end_time: string;
+      crosses_midnight?: boolean;
+    }> | undefined;
+    if (customShifts && customShifts.length > 0) return customShifts;
+    return [
+      { code: "A", name: "Shift A (Morning)", start_time: "06:00 AM", end_time: "02:00 PM" },
+      { code: "B", name: "Shift B (Evening)", start_time: "02:00 PM", end_time: "10:00 PM" },
+      { code: "C", name: "Shift C (Night)", start_time: "10:00 PM", end_time: "06:00 AM", crosses_midnight: true },
+    ];
+  }, [assignedMachine]);
+
   // Keep shift timing in sync with user profile from Supabase
   useEffect(() => {
     if (defaultShiftTimes.hasCustomDefault) {
@@ -589,9 +608,6 @@ export function OperatorDashboard({
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Submit Confirmation Dialog Modal State
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   // Edit Modal State for Log Correction
@@ -1073,12 +1089,12 @@ export function OperatorDashboard({
       }
     }
 
-    setShowConfirmModal(true);
+    // Direct submission without confirmation modal
+    handleExecuteSubmit();
   };
 
   // Final Submit Action to Server / Database
   const handleExecuteSubmit = async () => {
-    setShowConfirmModal(false);
     setSubmitting(true);
     setMessage(null);
 
@@ -1125,6 +1141,7 @@ export function OperatorDashboard({
       }
 
       const idempotencyKey = typeof window !== "undefined" && window.crypto?.randomUUID ? window.crypto.randomUUID() : undefined;
+      const assignedShiftCode = activeShiftCode || (assignedMachine as any)?.shift_code || user?.shift_code || undefined;
 
       const res = await submitOperatorHourLogAction({
         machineId: selectedMachineId,
@@ -1138,6 +1155,8 @@ export function OperatorDashboard({
         startTime,
         endTime,
         overtimeHours: overtimeNum,
+        shiftCode: assignedShiftCode,
+        shift: assignedShiftCode ? `Shift ${assignedShiftCode.replace(/^shift\s*/i, "")}` : undefined,
         isBreakdown,
         breakdownStartTime: bkdStart,
         breakdownEndTime: bkdEnd,
@@ -1583,6 +1602,39 @@ export function OperatorDashboard({
                       <strong className="font-bold">Handover from</strong>{" "}
                       <span className="font-mono font-semibold">{machineTimeline.formattedEndDate}, {machineTimeline.formattedEndTime}</span>
                     </span>
+                  </div>
+                )}
+
+                {/* Continuous 24h Shift Coverage Tab Switcher */}
+                {availableShifts && availableShifts.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {availableShifts.map((sc) => {
+                      const isSelected = (activeShiftCode || "").toUpperCase() === sc.code.toUpperCase();
+                      return (
+                        <button
+                          key={sc.code}
+                          type="button"
+                          onClick={() => {
+                            setActiveShiftCode(sc.code);
+                            const s = formatTo12Hour(sc.start_time);
+                            if (s) setStartTime(s);
+                            const e = formatTo12Hour(sc.end_time);
+                            if (e) setEndTime(e);
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer select-none",
+                            isSelected
+                              ? "bg-[var(--color-ink)] text-white border-[var(--color-ink)] shadow-xs"
+                              : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
+                          )}
+                        >
+                          <span className="font-mono font-bold">Shift {sc.code}</span>
+                          <span className="text-[10px] opacity-75 font-normal">
+                            ({sc.start_time} – {sc.end_time})
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -2339,222 +2391,6 @@ export function OperatorDashboard({
           )}
         </div>
       )}
-
-      {/* ============================================ */}
-      {/* 4. SUBMISSION CONFIRMATION MODAL             */}
-      {/* ============================================ */}
-      <Modal
-        open={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        title={
-          <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-              <FileCheck2 size={16} />
-            </div>
-            <div>
-              <span className="font-bold text-sm sm:text-base text-[var(--color-ink)]">Submit Daily Machine Log?</span>
-              <span className="block text-[11px] text-[var(--color-mute)] font-normal -mt-0.5">
-                <span className="hidden sm:inline">Please review your shift parameters before direct database commit</span>
-                <span className="sm:hidden">Review shift parameters before commit</span>
-              </span>
-            </div>
-          </div>
-        }
-        className="sm:max-w-[620px]"
-        footer={
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5 w-full">
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-mute)]">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>
-                <span className="hidden sm:inline">Direct database commit</span>
-                <span className="sm:hidden">Direct commit</span>
-              </span>
-            </div>
-            <div className="flex items-center justify-end gap-2 shrink-0">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowConfirmModal(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                loading={submitting}
-                onClick={() => handleExecuteSubmit()}
-              >
-                <span className="hidden sm:inline">Confirm & Submit Log</span>
-                <span className="sm:hidden">Confirm & Submit</span>
-              </Button>
-            </div>
-          </div>
-        }
-      >
-        <div className="space-y-3 text-xs">
-          {/* 1. DEPLOYMENT & MACHINE CONTEXT */}
-          <div className="rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] p-3 sm:p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--color-hairline)]">
-            {/* Machine Details */}
-            <div className="space-y-1">
-              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="h-3 w-3 text-sky-500 shrink-0" /> Machine Identification
-              </span>
-              <div className="flex items-center gap-2 pt-0.5">
-                <span className="font-bold text-[var(--color-ink)] text-sm">
-                  {selectedMachine?.model || selectedMachine?.machine_name || "Machine"}
-                </span>
-                {(selectedMachine?.machine_code || machineNo) && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-mute)] font-semibold">
-                    {selectedMachine?.machine_code || machineNo}
-                  </span>
-                )}
-              </div>
-              <div className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
-                Serial: {selectedMachine?.serial_number || machineNo || "—"}
-              </div>
-            </div>
-
-            {/* Client & Deployment Site */}
-            <div className="space-y-1 sm:pl-3 pt-2 sm:pt-0">
-              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Building2 className="h-3 w-3 text-emerald-500 shrink-0" /> Deployment Site & Client
-              </span>
-              <div className="font-bold text-[var(--color-ink)] text-sm truncate pt-0.5">
-                {selectedClient?.client_name || selectedMachine?.customer_name || "Unassigned Client"}
-              </div>
-              <div className="text-xs text-[var(--color-mute)] flex items-start gap-1">
-                <MapPin className="h-3 w-3 text-neutral-400 shrink-0 mt-0.5" />
-                <span className="line-clamp-2 leading-relaxed">{clientLocation || "—"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. OPERATIONAL SHIFT & METERING CARD */}
-          <div className="rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] p-3 sm:p-3.5 space-y-2.5">
-            {/* Shift Timing Bar */}
-            <div className="bg-[var(--color-canvas-elevated)] p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-              <div className="flex items-center gap-2">
-                <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider">Shift Window:</span>
-                <span className="font-mono font-bold text-[var(--color-ink)] text-xs sm:text-[13px]">
-                  {startTime} → {endTime}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold">
-                <span className={cn(
-                  "px-2 py-0.5 rounded-md text-[10px] font-bold",
-                  operatingStats.isOvernight
-                    ? "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800"
-                    : "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                )}>
-                  {operatingStats.isOvernight ? "🌙 Overnight Shift" : "☀️ Day Shift"}
-                </span>
-                <span className="text-sky-600 dark:text-sky-400">
-                  {operatingStats.durationFormatted} ({operatingStats.normalWorkingHours.toFixed(1)}h work)
-                </span>
-              </div>
-            </div>
-
-            {/* 3 Balanced Stat Tiles (Single row across all viewports) */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
-              {/* Log Date */}
-              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
-                <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 mb-1 truncate">
-                  <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-neutral-400 shrink-0" /> <span className="hidden sm:inline">Shift </span>Date
-                </span>
-                <span className="font-mono font-bold text-[var(--color-ink)] text-[11px] sm:text-[13px] truncate">
-                  {formatDate(selectedLogDate)}
-                </span>
-              </div>
-
-              {/* Hour Meter */}
-              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-1 gap-1">
-                  <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 truncate">
-                    <Gauge className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-sky-500 shrink-0" /> <span className="hidden sm:inline">Hour </span>Meter
-                  </span>
-                  <span className="font-mono font-bold text-[9px] sm:text-[10px] text-sky-600 dark:text-sky-400 px-1 py-0.2 rounded bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 shrink-0">
-                    +{meterRunningHours}h<span className="hidden sm:inline"> run</span>
-                  </span>
-                </div>
-                <span className="font-mono font-bold text-[var(--color-ink)] text-[11px] sm:text-[13px] truncate">
-                  {startMeter} → {endMeter}
-                </span>
-              </div>
-
-              {/* Overtime */}
-              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
-                <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 mb-1 truncate">
-                  <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-500 shrink-0" /> Overtime
-                </span>
-                {parseFloat(overtimeHours) > 0 ? (
-                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-[11px] sm:text-[13px] truncate">
-                    {overtimeHours} hrs OT
-                  </span>
-                ) : (
-                  <span className="font-mono font-medium text-[var(--color-mute)] text-[11px] sm:text-[13px] truncate">
-                    0h (Std)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 3. MACHINE HEALTH & BREAKDOWN STATUS */}
-          {isBreakdown ? (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-400 space-y-1.5">
-              <div className="flex items-center justify-between font-bold text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                  <span className="font-mono uppercase tracking-wide">Machine Status: Breakdown Reported</span>
-                </div>
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-rose-500/20 font-bold border border-rose-500/30">
-                  {breakdownStats?.durationFormatted || `${breakdownHours}h ${breakdownMinutes}m`}
-                </span>
-              </div>
-              <div className="text-xs font-mono flex items-center gap-1.5 text-rose-800 dark:text-rose-300">
-                <Clock className="h-3 w-3 text-rose-500 shrink-0" />
-                <span>Breakdown Timing: {breakdownStats?.fullBreakdownString || `${breakdownStartTime} - ${breakdownEndTime}`}</span>
-              </div>
-              {breakdownReason && (
-                <div className="text-xs font-medium text-[var(--color-ink)] bg-white/60 dark:bg-black/20 p-1.5 rounded border border-rose-500/20">
-                  <span className="font-bold text-rose-600 dark:text-rose-400">Reason:</span> {breakdownReason}
-                </div>
-              )}
-              {actionTaken && (
-                <div className="text-xs font-medium text-[var(--color-ink)] bg-white/60 dark:bg-black/20 p-1.5 rounded border border-rose-500/20">
-                  <span className="font-bold text-rose-600 dark:text-rose-400">Action:</span> {actionTaken}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span>Machine Status: Normal Operation</span>
-              </div>
-              <span className="text-[11px] font-medium text-emerald-600/90 dark:text-emerald-400/90 font-mono">
-                No Machine Breakdown
-              </span>
-            </div>
-          )}
-
-          {/* 4. REMARKS (IF ANY) */}
-          {isBreakdown && remarks.trim() && (
-            <div className="bg-[var(--color-canvas)] p-2.5 rounded-xl border border-[var(--color-hairline)]">
-              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-1">
-                Remarks
-              </span>
-              <p className="text-[var(--color-ink)] font-medium italic bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)] leading-relaxed">
-                "{remarks}"
-              </p>
-            </div>
-          )}
-        </div>
-      </Modal>
 
       {/* ============================================ */}
       {/* 5. EDIT LOG MODAL FOR CORRECTIONS            */}

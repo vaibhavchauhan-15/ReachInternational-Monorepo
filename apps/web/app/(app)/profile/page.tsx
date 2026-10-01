@@ -19,8 +19,6 @@ import {
   AnimatedMapPin,
   AnimatedPhone,
   AnimatedUser,
-  AnimatedClock,
-  AnimatedCalendar,
 } from "@/components/ui/animated-icons";
 
 export const dynamic = "force-dynamic";
@@ -67,40 +65,36 @@ export default async function ProfilePage() {
               {view.name ? view.name.charAt(0).toUpperCase() : "U"}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-base sm:text-lg font-extrabold text-[var(--color-ink)] truncate leading-tight">
-                {view.name}
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-lg font-extrabold text-[var(--color-ink)] truncate leading-tight">
+                  {view.name}
+                </h1>
+                {user.employee_id && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-[var(--color-hairline)] text-[var(--color-mute)] border border-[var(--color-hairline)]">
+                    {user.employee_id}
+                  </span>
+                )}
+              </div>
               {/* Full email with break-all to prevent clipping */}
               <p className="text-xs text-[var(--color-mute)] break-all mt-0.5 select-text">
                 {view.email}
               </p>
-              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${roleMeta.badgeClass}`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${roleMeta.badgeClass}`}
                 >
                   <RoleIcon size={12} />
-                  {roleMeta.label}
+                  <span>{roleMeta.label}</span>
                 </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">
-                  {view.status}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span>{view.status}</span>
                 </span>
-                {/* Shift Timing Quick Badge */}
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                  <AnimatedClock size={12} />
-                  <span>{view.shiftTimingDisplay}</span>
-                </span>
-                {/* Joined Date Quick Badge */}
-                {view.joinedDateDisplay && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20">
-                    <AnimatedCalendar size={12} />
-                    <span>Joined {view.joinedDateDisplay}</span>
-                  </span>
-                )}
               </div>
             </div>
           </div>
 
-          <div className="shrink-0 flex items-center">
+          <div className="shrink-0 flex items-center self-stretch sm:self-center sm:w-auto">
             <ProfileEditButton user={user} />
           </div>
         </div>

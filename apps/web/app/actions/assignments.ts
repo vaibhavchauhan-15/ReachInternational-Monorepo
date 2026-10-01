@@ -15,6 +15,7 @@ import {
   parseProfileShiftTime,
   parseTimeToMinutes,
   minutesTo24HourTime,
+  formatTo12Hour,
 } from "@reachinternational/utils";
 import type { OperatorMachineAssignment } from "@/lib/types/database";
 
@@ -107,6 +108,13 @@ export async function createAssignmentAction(payload: {
           success: false,
           code: "MAX_OPERATORS_REACHED",
           error: "This machine already has the maximum capacity of 3 active operators assigned.",
+        };
+      }
+      if (rpcError.message?.includes("MAX_OPERATOR_SHIFTS_REACHED") || rpcError.code === "P0002") {
+        return {
+          success: false,
+          code: "MAX_OPERATOR_SHIFTS_REACHED",
+          error: "This operator is already assigned to the maximum allowed limit of 3 shifts (24h).",
         };
       }
       if (rpcError.message?.includes("23P01") || rpcError.code === "23P01") {
@@ -683,37 +691,87 @@ export async function updateOperatorMachineAssignmentsAction(
 
     const assignments = Array.isArray(payload.machineAssignments) ? payload.machineAssignments : [];
 
-    // 1. Validation: Ensure no duplicate machines in assignment payload
-    const seenMachines = new Set<string>();
-    for (const a of assignments) {
+    // 1. Validation: Maximum 3 shifts per operator platform-wide (24h)
+    if (assignments.length > 3) {
+      return { success: false, error: "An operator can be assigned to a maximum of 3 shifts (24h) only." };
+    }
+
+    // 2. Resolve client shift codes for each machine
+    const machineIds = Array.from(new Set(assignments.map((a) => a.machineId)));
+    const { data: mRows } = await supabase
+      .from("machines")
+      .select("id, machine_id, client_id")
+      .in("id", machineIds);
+
+    const clientIds = Array.from(new Set((mRows || []).map((m: any) => m.client_id).filter(Boolean)));
+    let clientShifts: any[] = [];
+    if (clientIds.length > 0) {
+      const { data: cs } = await supabase
+        .from("client_shift_codes")
+        .select("client_id, code, start_time, end_time")
+        .in("client_id", clientIds)
+        .eq("is_active", true);
+      clientShifts = cs || [];
+    }
+    const csMap = new Map<string, { start_time: string; end_time: string }>();
+    clientShifts.forEach((c) => {
+      csMap.set(`${c.client_id}:${c.code.trim().toUpperCase()}`, {
+        start_time: c.start_time,
+        end_time: c.end_time,
+      });
+    });
+    const machineMap = new Map((mRows || []).map((m: any) => [m.id, m]));
+
+    // Resolve authoritative start & end times for each assignment
+    const resolvedAssignments = assignments.map((a) => {
+      const machine = machineMap.get(a.machineId);
+      const shiftCode = a.shiftCode || "S1";
+      const cs = machine?.client_id ? csMap.get(`${machine.client_id}:${shiftCode.trim().toUpperCase()}`) : null;
+      const start = cs?.start_time || (a.shiftStartTime ? normalizeTimeTo24Hour(a.shiftStartTime) : "06:00:00");
+      const end = cs?.end_time || (a.shiftEndTime ? normalizeTimeTo24Hour(a.shiftEndTime) : "14:00:00");
+      return {
+        ...a,
+        shiftCode,
+        machineCode: machine?.machine_id || "Machine",
+        shiftStartTime: String(start).slice(0, 8),
+        shiftEndTime: String(end).slice(0, 8),
+      };
+    });
+
+    // 2b. Validation: Ensure no duplicate shifts on the same machine
+    const seenMachineShifts = new Set<string>();
+    for (const a of resolvedAssignments) {
       if (!isValidUuid(a.machineId)) {
         return { success: false, error: "One or more machine IDs are invalid." };
       }
-      if (seenMachines.has(a.machineId)) {
-        return { success: false, error: "Duplicate machine selected for this operator." };
+      const shiftKey = `${a.machineId}:${a.shiftCode}`;
+      if (seenMachineShifts.has(shiftKey)) {
+        return { success: false, error: `Duplicate assignment: Shift ${a.shiftCode} is already assigned for this machine.` };
       }
-      seenMachines.add(a.machineId);
+      seenMachineShifts.add(shiftKey);
     }
 
-    // 2. Validation: Ensure shift windows between machines assigned to THIS operator do NOT collide
-    for (let i = 0; i < assignments.length; i++) {
-      for (let j = i + 1; j < assignments.length; j++) {
-        const m1 = assignments[i];
-        const m2 = assignments[j];
+    // 3. Validation: Ensure shift windows between shifts assigned to THIS operator do NOT collide
+    for (let i = 0; i < resolvedAssignments.length; i++) {
+      for (let j = i + 1; j < resolvedAssignments.length; j++) {
+        const m1 = resolvedAssignments[i];
+        const m2 = resolvedAssignments[j];
         if (m1.shiftStartTime && m1.shiftEndTime && m2.shiftStartTime && m2.shiftEndTime) {
           const r1 = shiftToMinuteRangesLocal(m1.shiftStartTime, m1.shiftEndTime);
           const r2 = shiftToMinuteRangesLocal(m2.shiftStartTime, m2.shiftEndTime);
           if (doRangesOverlapLocal(r1, r2)) {
+            const t1 = `${formatTo12Hour(m1.shiftStartTime)} – ${formatTo12Hour(m1.shiftEndTime)}`;
+            const t2 = `${formatTo12Hour(m2.shiftStartTime)} – ${formatTo12Hour(m2.shiftEndTime)}`;
             return {
               success: false,
-              error: `Shift timing overlap detected: Shift for machine (${m1.shiftCode || "A"}) collides with (${m2.shiftCode || "B"}).`,
+              error: `Shift timing overlap detected: ${m1.machineCode} (Shift ${m1.shiftCode}: ${t1}) collides with ${m2.machineCode} (Shift ${m2.shiftCode}: ${t2}). An operator cannot work overlapping shifts.`,
             };
           }
         }
       }
     }
 
-    // 3. Query current active assignments for this operator
+    // 4. Query current active assignments for this operator
     const { data: currentActive, error: fetchErr } = await supabase
       .from("operator_machine_assignments")
       .select("id, machine_id, shift_code, shift_start_time, shift_end_time, is_active")
@@ -725,41 +783,55 @@ export async function updateOperatorMachineAssignmentsAction(
     }
 
     const currentActiveList = currentActive || [];
-    const targetMachineIds = new Set(assignments.map((a) => a.machineId));
+    const targetKeys = new Set(resolvedAssignments.map((a) => `${a.machineId}:${a.shiftCode || "S1"}`));
+    const targetMachineIds = new Set(resolvedAssignments.map((a) => a.machineId));
 
-    // 4. Relieve any machines that were removed
-    const machinesToRelieve = currentActiveList.filter((a) => !targetMachineIds.has(a.machine_id));
-    for (const relieved of machinesToRelieve) {
+    // 5. Relieve any assignments that were removed
+    const assignmentsToRelieve = currentActiveList.filter(
+      (a) => !targetKeys.has(`${a.machine_id}:${a.shift_code || "S1"}`)
+    );
+    for (const relieved of assignmentsToRelieve) {
+      targetMachineIds.add(relieved.machine_id);
       await supabase.rpc("end_operator_machine_assignment_atomic", {
         p_assignment_id: relieved.id,
         p_ended_by: caller.id,
         p_end_reason: "reassigned",
       });
 
-      // Remove operator from that machine's operator_ids array
-      const { data: targetM } = await supabase
-        .from("machines")
-        .select("id, operator_ids")
-        .eq("id", relieved.machine_id)
-        .maybeSingle();
+      // Check if operator still has any other active assignment on that machine
+      const { data: remainingOnMachine } = await supabase
+        .from("operator_machine_assignments")
+        .select("id")
+        .eq("operator_id", operatorId)
+        .eq("machine_id", relieved.machine_id)
+        .eq("is_active", true);
 
-      if (targetM && Array.isArray(targetM.operator_ids)) {
-        const nextOps = targetM.operator_ids.filter((id: string) => id !== operatorId);
-        await supabase
+      if (!remainingOnMachine || remainingOnMachine.length === 0) {
+        // Remove operator from that machine's operator_ids array
+        const { data: targetM } = await supabase
           .from("machines")
-          .update({
-            operator_ids: nextOps,
-            current_operator_id: nextOps[0] || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", relieved.machine_id);
+          .select("id, operator_ids")
+          .eq("id", relieved.machine_id)
+          .maybeSingle();
+
+        if (targetM && Array.isArray(targetM.operator_ids)) {
+          const nextOps = targetM.operator_ids.filter((id: string) => id !== operatorId);
+          await supabase
+            .from("machines")
+            .update({
+              operator_ids: nextOps,
+              current_operator_id: nextOps[0] || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", relieved.machine_id);
+        }
       }
     }
 
-    // 5. Apply / update active assignments
-    for (const item of assignments) {
-      const start24 = item.shiftStartTime ? normalizeTimeTo24Hour(item.shiftStartTime) : "08:00";
-      const end24 = item.shiftEndTime ? normalizeTimeTo24Hour(item.shiftEndTime) : "16:00";
+    // 6. Apply / update active assignments
+    for (const item of resolvedAssignments) {
+      const start24 = item.shiftStartTime ? normalizeTimeTo24Hour(item.shiftStartTime) : "06:00:00";
+      const end24 = item.shiftEndTime ? normalizeTimeTo24Hour(item.shiftEndTime) : "14:00:00";
 
       const { data: rpcRes, error: rpcErr } = await supabase.rpc("assign_operator_machine_atomic", {
         p_machine_id: item.machineId,

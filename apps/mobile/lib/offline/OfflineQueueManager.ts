@@ -291,10 +291,27 @@ export class OfflineQueueManager {
     this.notifyListeners();
 
     try {
-      // Process pending and retryable items in strict FIFO order
+      // Process pending and retryable items in strict chronological order for hour logs
       const itemsToProcess = this.queue.filter(
         (m) => m.status === 'pending' || (m.status === 'failed' && m.retry_count < 3)
       );
+
+      // Sort items so SUBMIT_HOUR_LOG mutations execute in strictly chronological order (start_datetime ASC)
+      // to ensure machine hour meters and shift timelines advance sequentially without false-positive overlap detections
+      itemsToProcess.sort((a, b) => {
+        if (a.mutation_type === 'SUBMIT_HOUR_LOG' && b.mutation_type === 'SUBMIT_HOUR_LOG') {
+          const pA = a.payload as Record<string, any> | undefined;
+          const pB = b.payload as Record<string, any> | undefined;
+          const dateStrA = pA?.start_datetime || (pA?.log_date ? `${pA.log_date}T${pA.start_time || '00:00'}` : '');
+          const dateStrB = pB?.start_datetime || (pB?.log_date ? `${pB.log_date}T${pB.start_time || '00:00'}` : '');
+          const timeA = dateStrA ? new Date(dateStrA).getTime() : 0;
+          const timeB = dateStrB ? new Date(dateStrB).getTime() : 0;
+          if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
+            return timeA - timeB;
+          }
+        }
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
 
       for (const item of itemsToProcess) {
         // Refresh item reference in current queue
@@ -400,6 +417,7 @@ export class OfflineQueueManager {
           p_machine_id: payload.machine_id,
           p_operator_id: payload.operator_id,
           p_client_id: payload.client_id || null,
+          p_shift_code: payload.shift_code || null,
           p_log_date: payload.log_date,
           p_end_date: payload.end_date,
           p_start_datetime: payload.start_datetime || null,
@@ -420,6 +438,7 @@ export class OfflineQueueManager {
           p_location: payload.location || null,
           p_remarks: payload.remarks || null,
           p_idempotency_key: idempotency_key,
+          p_entered_by: payload.entered_by || payload.operator_id || null,
         });
 
         if (!rpcErr && rpcRes && (rpcRes as any).success) {

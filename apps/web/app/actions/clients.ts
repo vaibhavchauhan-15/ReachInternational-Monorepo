@@ -14,7 +14,10 @@ import {
   getClientList,
   type PaginatedClientsResponse,
 } from "@/lib/data/clients";
-import type { ClientDirectoryFilter } from "@reachinternational/utils";
+import {
+  type ClientDirectoryFilter,
+  getClientShiftPresetById,
+} from "@reachinternational/utils";
 import type { CRMClient } from "@/lib/types/database";
 
 export interface ClientFormState {
@@ -80,6 +83,32 @@ export async function createClientAction(state: ClientFormState, formData: FormD
         error: result.error,
         fieldErrors: result.fieldErrors,
       };
+    }
+
+    // Provision industry shift template preset if selected
+    const presetId =
+      (formData.get("shift_preset") as string)?.trim() ||
+      (formData.get("shiftPreset") as string)?.trim() ||
+      "";
+    if (presetId && presetId !== "none" && result.client?.id) {
+      const preset = getClientShiftPresetById(presetId);
+      if (preset && preset.shifts.length > 0) {
+        const adminSupabase = createSupabaseAdminClient();
+        const shiftRecords = preset.shifts.map((s) => ({
+          client_id: result.client!.id,
+          code: s.code,
+          name: s.name,
+          start_time: s.startTime,
+          end_time: s.endTime,
+          scheduled_minutes: s.scheduledMinutes,
+          normal_minutes: s.normalMinutes,
+          crosses_midnight: s.crossesMidnight,
+          display_order: s.displayOrder,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }));
+        await adminSupabase.from("client_shift_codes").insert(shiftRecords);
+      }
     }
 
     revalidatePath("/clients");
@@ -352,6 +381,13 @@ export async function upsertClientShiftCodeAction(
 
     let result;
     if (input.id) {
+      // Fetch existing record to detect code rename or timing changes
+      const { data: existing } = await supabase
+        .from("client_shift_codes")
+        .select("code, name, start_time, end_time, crosses_midnight")
+        .eq("id", input.id)
+        .maybeSingle();
+
       const { data, error } = await supabase
         .from("client_shift_codes")
         .update(record)
@@ -361,6 +397,49 @@ export async function upsertClientShiftCodeAction(
 
       if (error) throw error;
       result = data;
+
+      // If code was renamed (e.g. 'A' -> 'A1'), cascade update all active operator machine assignments
+      if (existing && existing.code !== record.code) {
+        const { data: clientMachines } = await supabase
+          .from("machines")
+          .select("id")
+          .eq("client_id", input.clientId);
+
+        if (clientMachines && clientMachines.length > 0) {
+          const mIds = clientMachines.map((m: any) => m.id);
+          await supabase
+            .from("operator_machine_assignments")
+            .update({
+              shift_code: record.code,
+              shift_start_time: record.start_time,
+              shift_end_time: record.end_time,
+            })
+            .in("machine_id", mIds)
+            .eq("shift_code", existing.code);
+        }
+      } else if (
+        existing &&
+        (existing.start_time !== record.start_time ||
+          existing.end_time !== record.end_time)
+      ) {
+        // Timings updated without code rename: cascade new timings to active assignments
+        const { data: clientMachines } = await supabase
+          .from("machines")
+          .select("id")
+          .eq("client_id", input.clientId);
+
+        if (clientMachines && clientMachines.length > 0) {
+          const mIds = clientMachines.map((m: any) => m.id);
+          await supabase
+            .from("operator_machine_assignments")
+            .update({
+              shift_start_time: record.start_time,
+              shift_end_time: record.end_time,
+            })
+            .in("machine_id", mIds)
+            .eq("shift_code", record.code);
+        }
+      }
     } else {
       const { data, error } = await supabase
         .from("client_shift_codes")
@@ -374,10 +453,15 @@ export async function upsertClientShiftCodeAction(
 
     try {
       const { revalidateTag, revalidatePath } = await import("next/cache");
-      const { CACHE_TAGS } = await import("@/lib/cache");
+      const { CACHE_TAGS, TAGS } = await import("@/lib/cache");
       revalidateTag(CACHE_TAGS.clients, "max");
       revalidateTag(CACHE_TAGS.operations, "max");
+      revalidateTag(TAGS.machines, "max");
+      revalidateTag(TAGS.machinesList, "max");
+      revalidateTag(TAGS.assignments, "max");
       revalidatePath(`/clients/${input.clientId}`);
+      revalidatePath("/machines");
+      revalidatePath("/operations");
     } catch {
       // Non-blocking cache revalidation
     }
@@ -416,10 +500,15 @@ export async function deleteClientShiftCodeAction(
 
     try {
       const { revalidateTag, revalidatePath } = await import("next/cache");
-      const { CACHE_TAGS } = await import("@/lib/cache");
+      const { CACHE_TAGS, TAGS } = await import("@/lib/cache");
       revalidateTag(CACHE_TAGS.clients, "max");
       revalidateTag(CACHE_TAGS.operations, "max");
+      revalidateTag(TAGS.machines, "max");
+      revalidateTag(TAGS.machinesList, "max");
+      revalidateTag(TAGS.assignments, "max");
       revalidatePath(`/clients/${clientId}`);
+      revalidatePath("/machines");
+      revalidatePath("/operations");
     } catch {
       // Non-blocking
     }
@@ -427,6 +516,130 @@ export async function deleteClientShiftCodeAction(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to delete shift code." };
+  }
+}
+
+/**
+ * Server Action: Apply an industry standard shift preset template to a client
+ */
+export async function applyClientShiftPresetAction(
+  clientId: string,
+  presetId: string,
+  mode: "replace" | "append" = "replace"
+): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    if (!["super_admin", "admin", "manager"].includes(user.role)) {
+      return { success: false, error: "Unauthorized: Insufficient permissions to configure shift codes." };
+    }
+
+    const preset = getClientShiftPresetById(presetId);
+    if (!preset) {
+      return { success: false, error: "Invalid preset template selected." };
+    }
+
+    const supabase = createSupabaseAdminClient();
+
+    if (mode === "replace") {
+      // Clear existing shift codes for this client
+      await supabase.from("client_shift_codes").delete().eq("client_id", clientId);
+    }
+
+    if (preset.shifts.length > 0) {
+      let shiftsToInsert = preset.shifts;
+      if (mode === "append") {
+        const { data: existingCodes } = await supabase
+          .from("client_shift_codes")
+          .select("code")
+          .eq("client_id", clientId);
+        const existingSet = new Set((existingCodes || []).map((c: any) => c.code.toUpperCase()));
+        shiftsToInsert = preset.shifts.filter((s) => !existingSet.has(s.code.toUpperCase()));
+      }
+
+      if (shiftsToInsert.length > 0) {
+        const records = shiftsToInsert.map((s) => ({
+          client_id: clientId,
+          code: s.code,
+          name: s.name,
+          start_time: s.startTime,
+          end_time: s.endTime,
+          scheduled_minutes: s.scheduledMinutes,
+          normal_minutes: s.normalMinutes,
+          crosses_midnight: s.crossesMidnight,
+          display_order: s.displayOrder,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { error } = await supabase
+          .from("client_shift_codes")
+          .insert(records);
+
+        if (error) throw error;
+      }
+
+      // Cascade updated shift timings to all active assignments on client machines
+      const { data: clientMachines } = await supabase
+        .from("machines")
+        .select("id")
+        .eq("client_id", clientId);
+
+      if (clientMachines && clientMachines.length > 0) {
+        const mIds = clientMachines.map((m: any) => m.id);
+        const { data: currentShifts } = await supabase
+          .from("client_shift_codes")
+          .select("code, start_time, end_time")
+          .eq("client_id", clientId)
+          .eq("is_active", true);
+
+        if (currentShifts && currentShifts.length > 0) {
+          for (const cs of currentShifts) {
+            await supabase
+              .from("operator_machine_assignments")
+              .update({
+                shift_start_time: cs.start_time,
+                shift_end_time: cs.end_time,
+                updated_at: new Date().toISOString(),
+              })
+              .in("machine_id", mIds)
+              .eq("shift_code", cs.code)
+              .eq("is_active", true);
+          }
+        }
+      }
+    }
+
+    // Fetch full active list
+    const { data: fullList } = await supabase
+      .from("client_shift_codes")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("display_order", { ascending: true })
+      .order("code", { ascending: true });
+
+    try {
+      const { revalidateTag, revalidatePath } = await import("next/cache");
+      const { CACHE_TAGS, TAGS } = await import("@/lib/cache");
+      revalidateTag(CACHE_TAGS.clients, "max");
+      revalidateTag(CACHE_TAGS.operations, "max");
+      revalidateTag(TAGS.machines, "max");
+      revalidateTag(TAGS.machinesList, "max");
+      revalidateTag(TAGS.assignments, "max");
+      revalidatePath(`/clients/${clientId}`);
+      revalidatePath("/machines");
+      revalidatePath("/operations");
+    } catch {
+      // Non-blocking
+    }
+
+    return { success: true, data: fullList || [] };
+  } catch (err: any) {
+    console.error("applyClientShiftPresetAction exception:", err);
+    return { success: false, error: err.message || "Failed to apply shift preset." };
   }
 }
 

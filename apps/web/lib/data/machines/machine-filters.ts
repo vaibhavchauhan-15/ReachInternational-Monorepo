@@ -95,38 +95,63 @@ export const getActiveOperators = unstable_cache(
 export const getActiveOperatorMachineAssignments = unstable_cache(
   async (): Promise<ActiveOperatorOtherAssignment[]> => {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("operator_machine_assignments")
-      .select(`
-        operator_id,
-        machine_id,
-        shift_code,
-        shift_start_time,
-        shift_end_time,
-        machines!inner(id, machine_id),
-        users!inner(id, full_name)
-      `)
-      .eq("is_active", true);
+    const [{ data, error }, { data: shiftCodes }] = await Promise.all([
+      supabase
+        .from("operator_machine_assignments")
+        .select(`
+          operator_id,
+          machine_id,
+          shift_code,
+          shift_start_time,
+          shift_end_time,
+          machines!inner(id, machine_id, client_id),
+          users!inner(id, full_name)
+        `)
+        .eq("is_active", true),
+      supabase
+        .from("client_shift_codes")
+        .select("client_id, code, name, start_time, end_time")
+        .eq("is_active", true),
+    ]);
 
     if (error || !data) {
       console.error("[machine-filters] Error fetching active operator assignments:", error?.message || error);
       return [];
     }
 
+    const shiftMap = new Map<string, { start_time: string; end_time: string }>();
+    (shiftCodes || []).forEach((sc: any) => {
+      if (sc.client_id && sc.code) {
+        shiftMap.set(`${sc.client_id}:${sc.code.trim().toUpperCase()}`, {
+          start_time: sc.start_time,
+          end_time: sc.end_time,
+        });
+      }
+    });
+
     return data
-      .filter((row: any) => row.operator_id && row.machine_id && row.shift_start_time && row.shift_end_time)
-      .map((row: any) => ({
-        operatorId: row.operator_id,
-        operatorName: row.users?.full_name || "Operator",
-        machineId: row.machine_id,
-        machineCode: row.machines?.machine_id || "Machine",
-        shiftCode: row.shift_code || null,
-        shiftStartTime: String(row.shift_start_time).slice(0, 8),
-        shiftEndTime: String(row.shift_end_time).slice(0, 8),
-      }));
+      .filter((row: any) => row.operator_id && row.machine_id)
+      .map((row: any) => {
+        const clientShift = row.machines?.client_id && row.shift_code
+          ? shiftMap.get(`${row.machines.client_id}:${row.shift_code.trim().toUpperCase()}`)
+          : null;
+
+        const rawStart = clientShift?.start_time || row.shift_start_time || "06:00:00";
+        const rawEnd = clientShift?.end_time || row.shift_end_time || "14:00:00";
+
+        return {
+          operatorId: row.operator_id,
+          operatorName: row.users?.full_name || "Operator",
+          machineId: row.machine_id,
+          machineCode: row.machines?.machine_id || "Machine",
+          shiftCode: row.shift_code || null,
+          shiftStartTime: String(rawStart).slice(0, 8),
+          shiftEndTime: String(rawEnd).slice(0, 8),
+        };
+      });
   },
-  ["active-operator-machine-assignments-v1"],
-  { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines, TAGS.users] }
+  ["active-operator-machine-assignments-v2"],
+  { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines, TAGS.users, TAGS.clients] }
 );
 
 

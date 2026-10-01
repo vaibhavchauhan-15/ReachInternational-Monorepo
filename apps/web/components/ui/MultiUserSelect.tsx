@@ -111,8 +111,18 @@ export function MultiUserSelect({
   // Selected user objects
   const selectedUsers = useMemo(() => {
     const valSet = new Set(values || []);
-    return eligibleUsers.filter((u) => valSet.has(u.id));
-  }, [eligibleUsers, values]);
+    const matches = eligibleUsers.filter((u) => valSet.has(u.id));
+    if (matches.length < valSet.size) {
+      const matchIds = new Set(matches.map((m) => m.id));
+      for (const u of users) {
+        if (valSet.has(u.id) && !matchIds.has(u.id)) {
+          matches.push(u);
+          matchIds.add(u.id);
+        }
+      }
+    }
+    return matches;
+  }, [eligibleUsers, users, values]);
 
   // Search filtered candidates (with currently assigned/selected users placed at the top)
   const filteredCandidates = useMemo(() => {

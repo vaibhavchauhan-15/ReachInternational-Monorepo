@@ -15,7 +15,7 @@ import {
   calculateEffectiveShiftDurationHours,
 } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow, ClientShiftCode } from "@reachinternational/types";
-import { Clock, Send, Building, Truck } from "lucide-react";
+import { Clock, Send, Building, Truck, AlertTriangle } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import {
@@ -58,6 +58,7 @@ export function AssistedShiftEntryModal({
   const [isStartMeterLocked, setIsStartMeterLocked] = useState<boolean>(true);
 
   const [clientShifts, setClientShifts] = useState<ClientShiftCode[]>([]);
+  const [assignedShiftCodes, setAssignedShiftCodes] = useState<string[]>([]);
   const [selectedShiftCode, setSelectedShiftCode] = useState<string>("S1");
 
   const [startTime, setStartTime] = useState<string>("06:00 AM");
@@ -82,6 +83,43 @@ export function AssistedShiftEntryModal({
       }) || null
     );
   }, [clientShifts, selectedShiftCode]);
+
+  // Fetch operator's active assigned shifts on this equipment to verify assigned vs unassigned status
+  useEffect(() => {
+    if (!open || !row?.machine_id || !row?.operator_id) {
+      setAssignedShiftCodes([]);
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    supabase
+      .from("operator_machine_assignments")
+      .select("shift_code")
+      .eq("machine_id", row.machine_id)
+      .eq("operator_id", row.operator_id)
+      .eq("is_active", true)
+      .then(({ data }: { data: any }) => {
+        const codes = (data || []).map((d: any) => d.shift_code?.trim()).filter(Boolean);
+        if (codes.length > 0) {
+          setAssignedShiftCodes(codes);
+        } else if (row.shift_code) {
+          setAssignedShiftCodes([row.shift_code]);
+        } else {
+          setAssignedShiftCodes([]);
+        }
+      })
+      .catch(() => {
+        if (row.shift_code) setAssignedShiftCodes([row.shift_code]);
+      });
+  }, [open, row?.machine_id, row?.operator_id, row?.shift_code]);
+
+  // Determine if manager is logging for an unassigned shift (Assisted Override)
+  const isShiftUnassigned = useMemo(() => {
+    if (!selectedShiftCode || assignedShiftCodes.length === 0) return false;
+    const selNorm = selectedShiftCode.replace(/^shift\s*/i, "").trim().toUpperCase();
+    return !assignedShiftCodes.some(
+      (c) => c.replace(/^shift\s*/i, "").trim().toUpperCase() === selNorm
+    );
+  }, [selectedShiftCode, assignedShiftCodes]);
 
   const loadShifts = useCallback(async (clientId: string, bypassCache = false) => {
     if (!bypassCache) {
@@ -399,11 +437,11 @@ export function AssistedShiftEntryModal({
           {/* Operator & Machine Context Card */}
           <div className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-sm text-[var(--color-ink)]">
                   {row.operator_name}
                 </span>
-                <Badge variant="info" className="text-[10px] px-1.5 py-0.5 font-mono">
+                <Badge variant={isShiftUnassigned ? "warning" : "info"} className="text-[10px] px-1.5 py-0.5 font-mono">
                   Shift {activeShift?.code || selectedShiftCode || row.shift_code}
                   {activeShift?.name ? (() => {
                     const sub = activeShift.name
@@ -419,6 +457,12 @@ export function AssistedShiftEntryModal({
                     return sub && sub.toLowerCase() !== row.shift_code.toLowerCase() ? ` • ${sub}` : "";
                   })() : "")}
                 </Badge>
+                {isShiftUnassigned && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 animate-in fade-in duration-200">
+                    <AlertTriangle size={11} className="shrink-0 text-amber-500" />
+                    Assisted Override
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                 <Clock size={12} className="h-3 w-3 shrink-0" />
@@ -463,9 +507,28 @@ export function AssistedShiftEntryModal({
             onOvertimeChange={setOvertimeHours}
             shiftDurationHours={shiftDurationHours}
             shiftCodes={clientShifts.length > 0 ? clientShifts : undefined}
+            assignedShiftCodes={assignedShiftCodes}
             selectedShiftCode={selectedShiftCode}
             onSelectShiftCode={setSelectedShiftCode}
           />
+
+          {/* Assisted Override Confirmation Banner when Manager logs for unassigned shift */}
+          {isShiftUnassigned && (
+            <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 animate-in fade-in duration-200">
+              <AlertTriangle size={15} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div className="flex-1 space-y-0.5">
+                <div className="font-semibold flex items-center gap-1.5 text-amber-900 dark:text-amber-100">
+                  <span>Assisted Override Active</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200 font-mono">
+                    Emergency Substitute
+                  </span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-800/90 dark:text-amber-200/90">
+                  <strong>{row.operator_name}</strong> is rostered for Shift {assignedShiftCodes.join(", ")}, but you are recording for unassigned Shift {selectedShiftCode}. Submitting will record this emergency substitute shift with managerial supervisor override attribution.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Breakdown Section */}
           <BreakdownSection
@@ -513,7 +576,7 @@ export function AssistedShiftEntryModal({
               icon={<Send size={14} className="h-3.5 w-3.5" />}
               className="text-xs font-semibold flex-1 sm:flex-none h-10 sm:h-9"
             >
-              Submit Shift Log
+              {isShiftUnassigned ? "Submit Override Log" : "Submit Shift Log"}
             </Button>
           </div>
         </form>

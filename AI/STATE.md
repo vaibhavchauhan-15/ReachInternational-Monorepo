@@ -1,5 +1,424 @@
 # Project State — Reach International (reachinternational.co.in)
 
+- [x] **Mobile Bottom Navbar Equal Padding & Spacing (/dashboard & Mobile App) (2026-10-01)**:
+  - **Delivered**:
+    1. **Web App Bottom Navigation Bar (`apps/web/components/navigation/BottomNav.tsx`)**:
+       - Updated `<ul>` container to `flex items-center justify-between h-14 max-w-md mx-auto px-2 py-1 gap-1 sm:px-4 sm:gap-2`.
+       - Added equal 8px edge padding (`px-2`), equal vertical padding (`py-1`), and explicit 4px gap (`gap-1` / `sm:gap-2`) between all tab items.
+       - Updated `<li>` to `flex-1 min-w-0 h-full flex items-center justify-center`.
+       - Updated `<Link>` to `w-full h-full min-h-[44px] px-1 py-1 rounded-lg gap-0.5 text-[11px] sm:text-xs tracking-tight transition-all duration-150 active:scale-95`.
+       - Added subtle Geist-compliant active background feedback (`bg-[var(--color-canvas)]/60`) and hover background (`hover:bg-[var(--color-canvas)]/40`).
+       - Adjusted icon to `size={19}` and repositioned active indicator dot to `bottom-1`.
+    2. **Cross-Platform Mobile App Synchronization (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+       - Updated `pillBar` container to `justifyContent: 'space-between'`, `paddingHorizontal: 8`, `paddingVertical: 5`, and added `gap: 4`.
+       - Updated `navItemBtn` to `paddingHorizontal: 2`, `paddingVertical: 3`, and added `borderRadius: 12`.
+       - Added active pill background feedback (`theme.colors.canvas + '80'`).
+       - Ensured `numberOfLines={1}` on item labels.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- [x] **Signup Page Draft Persistence (/signup) (2026-10-01)**:
+  - **Delivered**:
+    1. **New Hook `useFormDraft` (`apps/web/lib/hooks/useFormDraft.ts`)**:
+       - Client-side form draft persistence using `localStorage` with key `signup_draft_v1`, 24h TTL, 500ms debounce, `visibilitychange`/`pagehide` flush.
+       - Allowlist-based field selection, `ready` gate to prevent empty overwrites, graceful `try/catch` degradation.
+       - **IndexedDB file draft helpers**: persist uploaded document files (JPEG, PNG, PDF) as native Blobs. Fire-and-forget saves, parallel async restore.
+    2. **Signup Page Integration (`apps/web/app/signup/page.tsx`)**:
+       - `DRAFT_FIELDS` allowlist persists all form inputs including address, banking (`bank_account_number`, `bank_ifsc_code`), and identity (`aadhaar_number`, `license_number`).
+       - Excluded: strictly `password` and `confirm_password` only.
+       - Document files (bank, aadhaar, licence) persisted via IndexedDB with fire-and-forget saves and async restore.
+       - Draft cleared only on successful signup. "Draft restored" info banner with "Start fresh" button ("Draft restored from [date]. Re-enter your password to continue.").
+    3. **Unit Tests (`apps/web/lib/hooks/useFormDraft.test.ts`)**: 6/6 tests passed.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors.
+    - Unit tests: 6/6 passed.
+
+- [x] **Signup Page FormSectionCard Separation & Typography Standardization (/signup) (2026-10-01)**:
+  - **Delivered**:
+    1. **Form Section Separation into 6 Distinct Cards (`apps/web/app/signup/page.tsx`, `apps/mobile/app/(auth)/signup.tsx`)**:
+       - Separated monolithic Section 3 into dedicated boxes: **Section 3: Address Details** (`stepNumber={3}`), **Section 4: Banking Details** (`stepNumber={4}`), **Section 5: Identity Verification** (`stepNumber={5}`), with **Section 6: Security Credentials** (`stepNumber={6}`).
+       - Modularized completion hooks: `section3Complete` (Address), `section4Complete` (Banking), `section5Complete` (Identity), `section6Complete` (Security), updating `isAllMandatoryFilled` gating.
+       - Replicated structure on native mobile with `MobileFormSectionCard` and removed inner redundant `bankCard` container.
+    2. **Page-Wide Font Size & Typography Scale Standardization**:
+       - **Super Headings**: All 6 section card titles strictly use `FormSectionCard` standard `text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]`.
+       - **Field Labels**: Standardized 100% of labels monorepo-wide to `text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1`.
+         - Updated `apps/web/components/ui/Input.tsx`.
+         - Updated `apps/web/components/ui/SearchableSelect.tsx`.
+         - Updated `apps/web/components/ui/CustomTimePicker.tsx` (eliminated desktop `sm:text-xs` shrinking).
+         - Updated `apps/web/components/forms/UserAddressSection.tsx` State label.
+         - Updated `Role Requested` and `Select Supervisor` in `apps/web/app/signup/page.tsx`.
+         - Standardized Bank Document, Aadhaar Document, and Licence Document headers.
+       - **Placeholders**: Standardized to `text-[12px] sm:text-[13px] font-normal text-[var(--color-mute)]` across text inputs, searchable selects, and document upload prompt texts.
+       - **Icons**: Standardized all form field icons, document upload dropzone icons, and dropdown chevrons to `size={15}` with `h-[15px] w-[15px]` wrappers, perfectly proportioned alongside label text.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+
+- [x] **Signup Page UI/UX Optimization & Mobile Viewport Decongestion (/signup) (2026-10-01)**:
+  - **Delivered**:
+    1. **Form Input Primitives Placeholder Consistency Monorepo-Wide (`apps/web/components/ui/Input.tsx`, `apps/web/components/ui/SearchableSelect.tsx`, `apps/web/components/ui/Textarea.tsx`, `apps/web/components/ui/SearchBox.tsx`, `apps/web/components/ui/NumberInput.tsx`, `apps/mobile/components/ui/Input.tsx`)**:
+       - Updated `Input.tsx` text size to `text-[13.5px] sm:text-[14px]` and added explicit `placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal`.
+       - Updated `SearchableSelect.tsx` placeholder span to `text-[12px] sm:text-[13px] text-[var(--color-mute)] font-normal truncate`.
+       - Updated `Textarea.tsx`, `SearchBox.tsx`, and `NumberInput.tsx` with identical `placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal` rules.
+       - Updated native mobile `Input.tsx` input style `fontSize: 13.5`.
+       - Solved oversized placeholder text across all inputs, textareas, search boxes, and select dropdowns application-wide.
+    2. **Web Signup Page Streamlining (`apps/web/app/signup/page.tsx`)**:
+       - Renamed supervisor label to `"Select Supervisor *"` and eliminated the descriptive sub-span.
+       - Replaced `grid-cols-2` with responsive `grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3` so start and end shift time pickers occupy separate rows on mobile devices without congestion.
+       - Simplified shift duration header pill from `"☀️ Standard · 12h 00m"` to show only hours (e.g. `8h`, `12h`).
+       - Removed redundant paragraph explaining operational work hours.
+       - Cleaned up Bank Account Details header: removed `AnimatedCreditCard` icon and deleted `"For payroll & compensation disbursement"`.
+       - Cleaned up Bank Account Document upload card: removed `AnimatedFileText` icon, deleted `"(Passbook / Cheque / Statement)"`, and deleted long upload instructions paragraph.
+       - Cleaned up Aadhaar Document card: removed `AnimatedShieldCheck` icon and deleted `"(Front Photo / PDF)"`.
+       - Cleaned up Licence Document card: removed `AnimatedCreditCard` icon and deleted `"(Front Photo / PDF)"`.
+       - Cleaned up unused imports (`Upload` from `lucide-react`, `AnimatedFileText` from `animated-icons`).
+    3. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+       - Renamed label to `"Select Supervisor *"`.
+       - Stacked `Shift Start Time` and `Shift End Time` vertically on mobile devices (`gap: 10`).
+       - Updated shift duration pill to display only hours (`8h`, `12h`).
+       - Removed `"For payroll & compensation"` subtitle and `CreditCard` icon from the bank details header.
+       - Streamlined document upload cards to `"Bank Account Document *"`, `"Aadhaar Document *"`, and `"Licence Document"`.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+
+- [x] **Profile Page Cleanup & Duplicate Passbook Box Removal (/profile) (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Migration & Schema Evolution (`supabase/migrations/149_remove_duplicate_bank_passbook_document_type.sql`)**:
+       - Migrated any existing user documents with `document_type_code = 'bank_passbook'` to canonical `'bank_document'`.
+       - Updated canonical `bank_document` label in `public.user_document_types` to `'Bank Passbook / Cheque'`.
+       - Deleted redundant duplicate `'bank_passbook'` row from `public.user_document_types`.
+       - Applied cleanly to Dev DB (`vlmxciuogczumumrwyot`) via Supabase MCP `execute_sql`. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Backend Action Safeguards (`apps/web/app/actions/documents.ts`)**:
+       - Excluded `bank_passbook` and `profile_photo` at the query and array-filter levels in `getDocumentTypesAction()`.
+    3. **Web Documents Upload Section (`apps/web/components/profile`, `apps/web/components/documents`)**:
+       - Filtered out `bank_passbook` defensively in `ProfileDocumentsSection.tsx` and `DocumentUploadSection.tsx`.
+       - Renamed section to "Identity & Banking Documents" with updated subtitle: "Upload Aadhaar, Driving Licence, and Bank Passbook / Cheque for verification."
+    4. **Web Profile Header Card UI/UX Optimization (`apps/web/app/(app)/profile/page.tsx`)**:
+       - Eliminated duplicate Shift Timing and Joined Date badges that caused the header card to look crowded with "too many tabs".
+       - Formatted the header card cleanly with avatar, name, optional employee ID badge, email, canonical Role Badge, and pulsing status dot badge.
+       - Optimized for 360×800 mobile viewport with responsive CTA alignment (`self-stretch sm:self-center sm:w-auto`).
+    5. **Cross-Platform Mobile Synchronization (`apps/mobile/app/(app)/profile.tsx`)**:
+       - Synchronized document section eyebrow to "IDENTITY & BANKING DOCUMENTS".
+       - Updated document type mapping to resolve `bank_document` to `'Bank Passbook / Cheque'`.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Database: Exactly 3 active document types (`aadhaar`, `bank_document`, `driving_license`).
+
+- [x] **Cross-Machine Shift Overlap Prevention Across Fleet & Synchronization with Client Shift Codes (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Migration & Architecture (`supabase/migrations/148_prevent_cross_machine_overlapping_shift_assignments.sql`)**:
+       - `public.do_shifts_overlap(TIME, TIME, TIME, TIME)`: PostgreSQL range overlap function unnesting `int4range` arrays to accurately verify whether two shifts intersect, handling shifts that cross midnight.
+       - `trg_sync_client_shift_codes_to_assignments`: Automatic database trigger on `client_shift_codes` cascading updated shift timings to all active `operator_machine_assignments` on client equipment.
+       - `public.assign_operator_machine_atomic()`: Resolves authoritative timings from `client_shift_codes` and enforces dual-layer cross-machine and same-machine overlap checks with explicit `SHIFT_OVERLAP_CONFLICT` exceptions.
+       - Deactivated invalid overlapping assignment on Dev DB (`vlmxciuogczumumrwyot`). Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Data Access Layer (`apps/web/lib/data/machines/machine-filters.ts`)**:
+       - Joined `client_shift_codes` in `getActiveOperatorMachineAssignments` to guarantee memory conflict validation uses authoritative client timings.
+    3. **Backend Server Actions (`apps/web/app/actions`)**:
+       - `machines.ts`, `assignments.ts`, `clients.ts`: Prefer matched client shift timings, perform cross-machine overlap validation, and propagate changes.
+    4. **Frontend Web & Mobile Synchronization (`apps/web`, `apps/mobile`)**:
+       - `AssignPersonnelModal.tsx`: Hydration prioritizes client shift timings, reports exact conflicting machine codes and 12-hour formatted times. Max shifts limit updated to 3.
+       - `MobileAssignPersonnelModal.tsx`: Upgraded `checkTimeOverlap` with canonical `shiftToMinuteRanges` and `doRangesOverlap` handling midnight-crossing shifts. Updated operator capacity limit to max 3 shifts across fleet. Added formatted 12-hour conflict alerts with equipment identifier.
+    5. **Automated Verification Suites**:
+       - `supabase/tests/test_prevent_cross_machine_shift_overlap.mjs`: 5/5 scenarios passed on Dev DB (including exact NCC 06:00-18:00 vs Tata Projects 14:00-22:00 4h overlap rejection).
+       - `supabase/tests/test_operator_three_shifts_24h.mjs`: 7/7 scenarios passed.
+  - **Verification**:
+    - Web TypeScript (`@reachinternational/web`): 0 errors.
+    - Mobile TypeScript (`@reachinternational/mobile`): 0 errors.
+
+- [x] **Attendance & Daily Overtime Reconciliation and Continuous 24h Shift Logging (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Migration & Architecture (`supabase/migrations/147_attendance_reconciliation_and_continuous_24h_shift_logging.sql`)**:
+       - **Canonical Daily Attendance Roll-Up View (`public.operator_worked_hours`)**:
+         - Groups by `(operator_id, log_date)` aggregating `total_normal_hours` (e.g. 24.0h for 3 full 8h shifts), `total_overtime_hours` (strictly 0.0 for standard shifts, eliminating false-positive overtime penalties), `total_worked_hours`, `shifts_logged_count`, `shift_codes_logged`, and `daily_attendance_status` ('PRESENT' >= 4.0h, 'HALF_DAY', 'ABSENT').
+       - **Upgraded Payroll Summary RPC (`public.get_hr_payroll_summary`)**:
+         - Reconciles multi-shift attendance days (e.g. 3 shifts / 24h continuous coverage on the same machine) using `GREATEST(work_days, ROUND(normal_hours / 8.0, 1))`. When an operator covers 3 shifts (24h), they are credited with 3.0 attended days (`attended_days = 3`) and compensated accordingly, with 0 overtime penalty for scheduled coverage.
+         - Dynamically recalculates draft payrolls from current machine hour logs (`r_cur`) while preserving approved and paid payrolls.
+       - **Upgraded Operator Dashboard RPC (`public.get_operator_dashboard`)**:
+         - Returns `assigned_shifts` array detailing all assigned shifts on the machine (Shift A, Shift B, Shift C) with `is_logged_today`, `running_hours_today`, and `end_meter_today`.
+         - Returns modern `today` summary object with `entryStatus` ('submitted' | 'partial' | 'pending'), `submittedCount`, `totalAssignedCount`, and `totalRunningHoursToday`.
+       - **Upgraded Operator Entry Context RPC (`public.get_operator_entry_context`)**:
+         - Returns `today_logged_shift_codes: text[]` and `today_logs: jsonb` for instant UI feedback and start-meter handoff.
+       - **Datetime Normalization & Immutability Trigger Hardening**:
+         - Dropped misleading column defaults on `machine_hour_logs` (`start_datetime`, `end_datetime`, `end_date`) that previously caused `now()` clock drift bugs.
+         - Upgraded `check_machine_hour_log_shift_overlap` to reliably normalize datetime fields and guard against future shift ends.
+         - Upgraded `enforce_machine_hour_logs_immutable` to allow `service_role` and `replica` during test cleanups while strictly blocking authenticated users from deleting or altering logs.
+       - Applied cleanly to Dev DB (`vlmxciuogczumumrwyot`) via Supabase MCP `execute_sql`. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Shared Types (`packages/types`)**:
+       - `packages/types/src/dashboard.ts`: Updated `OperatorDashboardDTO` with `today: { entryStatus, lastHmr, submittedCount, totalAssignedCount, totalRunningHoursToday }` and `assigned_shifts?: Array<{ ... }>`.
+       - `packages/types/src/database.ts`: Updated `OperatorEntryContext` with `today_logged_shift_codes?: string[]` and `today_logs?: Array<{ shift_code, start_meter, end_meter, running_hours, start_time, end_time, is_breakdown }>`.
+    3. **Web DAL & Queries (`apps/web/lib`)**:
+       - `operator-entry.ts`: Projected `today_logged_shift_codes` and `today_logs` from the context RPC.
+       - `operator-dashboard.ts`: Updated `DEFAULT_OPERATOR_DASHBOARD` with `submittedCount`, `totalAssignedCount`, `totalRunningHoursToday`, and `assigned_shifts: []`.
+    4. **Frontend Web Operator Views (`apps/web`)**:
+       - `OperatorDashboardView.tsx`: Rendered the **Continuous 24h Shift Coverage Tracker** with cards for Shift A, B, and C showing live status chips (`✓ Logged (8.0h)` vs `Ready to Log`) and direct CTAs to log each shift (`/operations?shift=B`), plus multi-shift submission status.
+       - `OperatorEntryClient.tsx`: Added `todayLoggedCodes` and `todayLogs` state. Wired `searchParams.get("shift")` to auto-select requested shift. Added `handleSelectShiftCode` with continuous 24h start-meter handoff from previous shift's end meter. Updated `handleSubmit` to update logged shift state and notify operator of remaining assigned shifts.
+       - `ShiftInputs.tsx` & `ShiftCardSelector.tsx`: Added `todayLoggedShiftCodes` and `todayLogs` props. Shift cards display green `✓ Logged Today (8h)` badges when logged, emerald border styling, and seamless tab switching.
+       - `OperatorDashboard.tsx`: Added `activeShiftCode`, `availableShifts` memo, and interactive Shift Tab Switcher pills above the Section B date picker to toggle between shifts on assigned equipment.
+    5. **Frontend Mobile Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+       - Added `todayLoggedCodes` and `todayLogs` state and `fetchTodayLogs` query.
+       - Attached Realtime subscription to `machine_hour_logs` to auto-fetch today's logs dynamically.
+       - Updated `handleSelectShift` to auto-handoff start meter from previous shift's end meter.
+       - Updated horizontal shift card selector to render emerald `✓ Logged (${running_hours}h)` badge for logged shifts and `✓ Assigned` for assigned shifts.
+    6. **Automated Verification Suite (`supabase/tests/test_attendance_and_24h_continuous_logging.mjs`)**:
+       - All 5 test steps passed (100% success): 3 continuous shifts logged, `public.operator_worked_hours` aggregation (24.0 normal hours, 0.0 OT), `get_hr_payroll_summary` attendance calculation (+3.0 attended days, +0.0 OT), `get_operator_dashboard` assigned_shifts, and `get_operator_entry_context` continuous handoff.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/types exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/utils exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Automated Node.js test suite: 5/5 tests passed on Dev DB (`vlmxciuogczumumrwyot`).
+
+- [x] **Operator Maximum Shift Limit Expansion to 3 Shifts / 24h Coverage (2026-10-01)**:
+  - **Delivered**:
+    1. **Database Migration & Concurrency Trigger (`supabase/migrations/146_allow_operator_three_shifts_or_24h.sql`)**:
+       - Upgraded PostgreSQL transactional advisory lock trigger `public.enforce_max_shifts_per_operator()`: Checks `IF v_active_count >= 3 THEN RAISE EXCEPTION 'MAX_OPERATOR_SHIFTS_REACHED: Operator cannot be assigned to more than 3 active shifts (maximum 3 shifts or 24h allowed).' USING ERRCODE = 'P0002';`.
+       - Upgraded canonical assignment RPC `public.assign_operator_machine_atomic()`: Step 6 operator capacity checks `IF v_operator_active_count >= 3 THEN ... 'Operator is already assigned to 3 shifts. An operator can be assigned to a maximum of 3 shifts (24h) only.'`. Catches `P0002` and returns clear 3 shifts (24h) error message.
+       - Verified equipment deduplication in `machines.operator_ids`: When 1 operator is assigned all 3 shifts (24h) on the same machine, `machines.operator_ids` cleanly contains 1 unique deduplicated ID.
+       - Preserved machine capacity check (at most 3 shifts per machine for 24h coverage) and PostgreSQL GiST non-overlapping time exclusion constraint.
+       - Applied cleanly to Dev DB (`vlmxciuogczumumrwyot`) via Supabase MCP `execute_sql`.
+    2. **Shared Conflict Parsing (`packages/utils/src/conflict.ts`)**:
+       - Added explicit conflict resolution rule for `MAX_OPERATOR_SHIFTS_REACHED` returning title `"Maximum Operator Shift Limit (3 Shifts / 24h)"` with friendly explanation.
+    3. **Backend Server Actions (`apps/web/app/actions`)**:
+       - `assignments.ts`: Updated `updateOperatorMachineAssignmentsAction` shift count limit from `> 2` to `> 3`.
+       - `machines.ts`: Updated `updateMachineOperatorsAction` and `updateMachinePersonnelAction` cross-fleet guards to allow up to 3 shifts per operator, updated error catching for 3 shifts (24h).
+    4. **Frontend Web Components (`apps/web/components/machines`)**:
+       - `AssignPersonnelModal.tsx`: Updated availability filters (`totalShifts >= 3`, `thisCount >= 3`), badges (`3 Shifts (24h) on Machine`, `2 Shifts on Machine`), search dropdown counters (`({thisCount}/3)`, `{totalCount}/3 Shifts`), and operator mode capacity banners (`3/3 shifts assigned`).
+       - `OperatorShiftRosterEditor.tsx`: Updated capacity checks (`>= 3`, `> 3`), badges (`3 Shifts (24h) on Machine`), and dropdown labels.
+    5. **Frontend Mobile Parity (`apps/mobile/components`)**:
+       - `MobileAssignPersonnelModal.tsx`: Updated badges (`3 Shifts (24h)` / `2 Shifts`), trigger button label (`{opAss.length}/3 Shifts`), picker sheet limit (`isMax = opAssignments.length >= 3`, `3/3 Shifts`, `Max 3 shifts (24h) reached across fleet`).
+       - `MachineModal.tsx`: Updated RPC error matching to 3 active shifts (24h).
+    6. **Automated Test Suite & Dev DB Verification (`supabase/tests/test_operator_three_shifts_24h.mjs`)**:
+       - 7/7 tests passed: 1st shift, 2nd shift (same machine), 3rd shift (same machine 24h coverage), 4th shift rejection (`P0002`), relief, cross-machine 3rd shift, and overlap rejection.
+       - Dev Database (`vlmxciuogczumumrwyot`) verified. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/utils exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Automated Node.js test suite: 7/7 tests passed.
+
+- [x] **Operator Assigned Shift Enforcement, Real-Time Context & Offline Queue Hardening (2026-09-30)**:
+  - **Delivered**:
+    1. **Assigned Shift Enforcement & Function Collision Resolution (`supabase/migrations/143_enforce_operator_assigned_shift_logs.sql`)**:
+       - Dropped obsolete overload of `public.submit_operator_hour_log_atomic` to resolve PostgreSQL signature ambiguity ("function ... is not unique").
+       - Upgraded `submit_operator_hour_log_atomic` to query active assignments for `(p_operator_id, p_machine_id)`. If operator has assigned shift codes, logging an unassigned shift raises exception `23514`: `"Operator is assigned to Shift % on this equipment, but attempted to log for Shift %. Please select your assigned shift."`
+       - Fixed `audit_logs` column name discrepancy (`user_id` instead of non-existent `performed_by` + `entity_type: 'machine_hour_logs'`).
+       - Upgraded `public.get_operator_entry_context()` RPC to collect and return `assigned_shift_codes: text[]`.
+    2. **Web Backend & Entry Client (`apps/web`)**:
+       - `apps/web/app/actions/operators.ts`: Added assigned shift pre-check in `submitOperatorHourLogAction` and specific error matching.
+       - `apps/web/components/operations/entry/ShiftInputs.tsx`: Added `assignedShiftCodes` prop, visual `✓ Assigned` badge vs `Unassigned` chip, and inline unassigned warning banner.
+       - `apps/web/components/operations/entry/OperatorEntryClient.tsx`: Client-side blocking with error toast for unassigned shifts.
+       - `apps/web/lib/queries/operator-entry.ts`: Mapped `assigned_shift_codes` from context.
+    3. **Mobile Native Real-Time & Parity (`apps/mobile`)**:
+       - `apps/mobile/components/work/MeterLogModal.tsx`:
+         - Real-time subscriptions on `operator_machine_assignments` and `machines` to keep shift codes and assigned shifts dynamically updated.
+         - Pre-submission client validation checking `assignedShiftCodes`.
+         - Horizontal shift strip with `✓ Assigned` badge and dynamic unassigned warning banner.
+         - RPC and fallback error catching preserving assigned shift rejection message.
+       - `apps/mobile/lib/offline/OfflineQueueManager.ts`:
+         - Added chronological pre-sorting (`start_datetime ASC` / `log_date + start_time ASC`) for `SUBMIT_HOUR_LOG` queue items to eliminate false-positive overlap detections.
+    4. **Automated Verification & Dev DB Isolation**:
+       - Verified Shift B rejection with error `"Operator is assigned to Shift A on this equipment, but attempted to log for Shift B"` on Dev DB (`vlmxciuogczumumrwyot`).
+       - Verified Shift A acceptance with `success: true` and log creation on Dev DB.
+       - Verified unassigned operator logging succeeds seamlessly.
+       - Zero TypeScript errors across `@reachinternational/web` and `@reachinternational/mobile`.
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - SQL Test Suite: All 4 tests passed.
+
+- [x] **Operator Shift Logging Testing, Debugging & Server-Side Validation Hardening (2026-09-30)**:
+  - **Delivered**:
+    1. **Database Hardening & Concurrency Protection (`supabase/migrations/142_fix_operator_shift_logs_validation_and_assignment_sync.sql`)**:
+       - Added table check constraint `chk_machine_hour_logs_max_running_hours` on `public.machine_hour_logs` ensuring running hours `(end_meter - start_meter) <= 24`.
+       - Upgraded trigger `trg_enforce_machine_hour_log_operator_date_window` to check `NEW.entry_source = 'operator'` and `entered_by` user role, preventing bypass when executed via Server Actions or background service-role runners.
+       - Upgraded canonical atomic RPC `public.submit_operator_hour_log_atomic()`:
+         - Fixed assignment roster sync bug that caused Postgres unique constraint collision (`idx_oma_machine_active_shift_code`, error 23505) when an operator holding multiple active shifts logged a shift.
+         - Added `(p_end_meter - p_start_meter) <= 24` validation.
+         - Added breakdown bound check (`p_breakdown_hours <= v_shift_duration_hours`).
+         - Added client deployment validation (`machines.client_id = p_client_id`).
+         - Added equipment status check (`status = 'inactive' OR health_status = 'under_maintenance'`).
+         - Added 7-day retrospective window enforcement for `v_entry_source = 'operator'`.
+    2. **Web Backend & Dashboard (`apps/web`)**:
+       - `apps/web/app/actions/operators.ts`: Updated `submitOperatorHourLogAction` to check `health_status === 'under_maintenance'` and added error string matchers for 24 hours, maintenance/inactive, and 7-day window.
+       - `apps/web/components/dashboard/OperatorDashboard.tsx`: Passed `shiftCode: assignedShiftCode` so dashboard entries retain client shift codes.
+       - `apps/web/components/operations/entry/ShiftInputs.tsx`: In `handlePickShift`, cleanly reset `overtimeHours` to template default OT (`0`), preventing accidental carryover.
+    3. **Mobile Cross-Platform Parity (`apps/mobile`)**:
+       - `apps/mobile/components/work/MeterLogModal.tsx`: Updated `handleSelectShift` and `fetchShiftCodes` to reset overtime to `'0'`, included `shift_code: selectedShiftCode` in `logPayload`, and added error matching for 24h limit, maintenance/inactive, and 7-day window in RPC catch blocks.
+       - `apps/mobile/lib/offline/OfflineQueueManager.ts`: Included `p_shift_code` and `p_entered_by` in `submit_operator_hour_log_atomic` RPC dispatch.
+    4. **Automated Test Matrix Suite (`scratch/test_comprehensive_matrix.mjs`)**:
+       - Executed 15 test scenarios against Dev DB (`vlmxciuogczumumrwyot`) covering Shift Card and Manual Entry:
+         - 6 Valid scenarios (Daytime Shift A, Afternoon Shift B multi-shift, Custom shift with OT, Overnight crossing midnight, Shift with breakdown, Idle shift 0 running hours) -> **100% ACCEPTED**.
+         - 9 Invalid scenarios (Meter regression, Running hours > 24h, Future shift end, Date older than 7 days, Future date, Breakdown > shift, Client mismatch, Inactive machine, Timeline overlap) -> **100% REJECTED**.
+       - Results: 15/15 Passed (100% Success). All test rows cleaned up cleanly.
+    5. **Typecheck & Strict Supabase Isolation**:
+       - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+       - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `node scratch/test_comprehensive_matrix.mjs`: 15/15 passed.
+
+- [x] **Client Shift Code Presets & Renaming Cascade Across Active Assignments (2026-09-30)**:
+  - **Delivered**:
+    1. **Industry Presets in Shared Utilities (`packages/utils/src/shift.ts`)**:
+       - Defined canonical presets: `three_8h` ("Three 8-Hour Shifts [A, B, C]"), `two_12h` ("Two 12-Hour Shifts [Day, Night]"), `two_8h` ("Two 8-Hour Shifts [A, B]"), `single_general` ("Single General Shift [General]"), and `none` ("Custom / No Preset").
+       - Exported `CLIENT_SHIFT_PRESETS`, `DEFAULT_CLIENT_SHIFT_PRESET_ID`, and `getClientShiftPresetById`.
+    2. **Backend Server Actions (`apps/web/app/actions/clients.ts`)**:
+       - `createClientAction`: Automatically provisions preset shift rows into `client_shift_codes` when `shift_preset` is selected during client creation.
+       - `upsertClientShiftCodeAction`: Detects `oldCode !== newCode` and cascades `UPDATE operator_machine_assignments SET shift_code = newCode, shift_start_time = record.start_time, shift_end_time = record.end_time` across all client machines without requiring operator relief. Cascades timing updates if start/end times change.
+       - `applyClientShiftPresetAction`: Added Server Action for 1-click preset application from Client Details with `replace` and `append` modes.
+       - Full Next.js cache revalidation across `CACHE_TAGS.clients`, `CACHE_TAGS.operations`, `TAGS.machines`, `TAGS.machinesList`, `TAGS.assignments`, and client/machine paths.
+    3. **Hydration & Fresh Action Layer**:
+       - `apps/web/lib/data/machines/machine-detail.ts`: `hydrateMachinePersonnelSingle` queries `client_shift_codes` before constructing `operatorsList`, builds `clientShiftMap`, and attaches `shift_name` dynamically to operators and `active_assignments`.
+       - `apps/web/app/actions/machines.ts`: `getMachinePersonnelFreshAction` queries `client_shift_codes`, attaches `shift_name` to operators and `active_assignments`, and returns `client_shifts`.
+       - `apps/web/app/(app)/machines/[id]/machine-client-view.tsx`: Updated `PersonnelPick` to include `shift_name?: string | null` and `PersonnelCard` to render `person.shift_name` dynamically.
+    4. **Web Frontend (`apps/web/components/clients`)**:
+       - `ClientModal.tsx`: Added Section 5 "Operational Shift Templates (1-Click Industry Presets)" with interactive preset cards, timing pills, and hidden input `name="shift_preset"`.
+       - `ClientShiftCodesTab.tsx`: Added 1-click industry template selector cards in empty state and `handleApplyPreset`.
+       - Shared shift cache and event listeners for `CLIENT_SHIFTS_INVALIDATED_EVENT` across `AssignPersonnelModal.tsx` and `OperatorShiftRosterEditor.tsx`.
+    5. **Mobile Cross-Platform Parity (`apps/mobile/app/(app)/clients.tsx`)**:
+       - Added 1-click preset selector cards in Add Client modal with min 44px touch targets.
+       - Automatically provisions preset shifts into `client_shift_codes` upon saving client.
+       - Assignments tab queries `client_shift_codes` to display dynamic `shift_name` on operator assignment cards.
+    6. **Automated Verification & Dev DB Isolation**:
+       - `supabase/tests/test_shift_presets_and_renaming_cascade.mjs`: 6/6 tests passed on Dev DB (`vlmxciuogczumumrwyot`).
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+       - 0 TypeScript errors across `@reachinternational/utils`, `@reachinternational/web`, and `@reachinternational/mobile`.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/utils exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `node supabase/tests/test_shift_presets_and_renaming_cascade.mjs`: 6/6 passed.
+
+- [x] **Machine Personnel Modal — Supervisor Resolution, Client Shift Names & Default Shift Selection (2026-09-30)**:
+  - **Delivered**:
+    1. **Data Access & Hydration Layer (`apps/web/lib/data/machines/machine-detail.ts`)**:
+       - Multi-shift operator mapping: maps all active assignments in `operator_machine_assignments` directly into `operatorsList`, preserving multi-shift assignments (e.g. Deepak Patel on Shift A & B) rather than collapsing by operator ID.
+       - Client shift code preloading: fetches `client_shift_codes` for `machine.client_id` with 12-hour formatted timings and attaches `client_shifts` directly onto the machine record.
+    2. **Supervisor Resolution Across All Authorized Roles**:
+       - `apps/web/app/(app)/machines/[id]/page.tsx`: Expanded supervisor query from `canManage` to `canAssignOperator` so supervisors and managers both receive the preloaded supervisor pool.
+       - `apps/web/components/ui/MultiUserSelect.tsx`: Added fallback chip resolution so assigned supervisor IDs are always resolved even if temporarily absent from eligible users list.
+       - `apps/web/components/machines/AssignPersonnelModal.tsx`: Initialized `lazySupervisors` with `supervisors` prop, `propMachine.supervisors`, and `propMachine.current_supervisor`, plus dynamic merge with `fresh.supervisors`.
+    3. **Client Shift Names & Timings Display (Frontend Web & Mobile)**:
+       - `apps/web/components/machines/AssignPersonnelModal.tsx`: Machine and Operator mode shift cards render shift code badge (`sc.code`), client shift name (`sc.name`), formatted timings (`sc.start_time – sc.end_time`), scheduled hours duration, and moon icon for night shifts.
+       - `apps/web/components/machines/OperatorShiftRosterEditor.tsx`: Rendered shift code badge, client shift name, formatted timings, scheduled hours duration, and night shift moon icon. Added reconciliation effect for assigned operators.
+       - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Shift pills display monospace code badge, client shift name, night shift moon icon, and timings with touch-optimized minWidth 125. Active assignment badge displays client shift name and code.
+    4. **Assigned Shift Selected by Default**:
+       - `AssignPersonnelModal.tsx`: `machineClientShifts` initialized directly from `propMachine.client_shifts`. Added reconciliation `useEffect` to map legacy/placeholder shift codes to actual client shift codes by timing or index so `item.shiftCode === sc.code` evaluates to true immediately upon opening.
+    5. **Strict Dev DB Isolation & Verification**:
+       - Verified on Target Dev DB (`vlmxciuogczumumrwyot`): Machine `M/C-0001` with client `Larsen & Toubro ECC`, supervisor `Vikram Singh`, and operators `Deepak Patel` (Shifts A & B) and `Amit Verma` (Shift C).
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+       - Monorepo typecheck: 0 TypeScript errors on `@reachinternational/web` and `@reachinternational/mobile`.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+
+- [x] **Operator Two-Shifts Assignment Limit Across Fleet (2026-09-30)**:
+  - **Delivered**:
+    1. **Database Migration & Concurrency Control (`supabase/migrations/140_allow_operator_two_shifts_assignment.sql`)**:
+       - Dropped legacy unique partial index `idx_oma_one_active_per_operator` that previously restricted operators to 1 active assignment.
+       - Created trigger `trg_enforce_max_shifts_per_operator` with transactional advisory locks `pg_advisory_xact_lock(hashtext('op_shifts_' || NEW.operator_id::text))` to enforce a strict platform-wide maximum of 2 active shifts per operator (raises `P0002` / `MAX_OPERATOR_SHIFTS_REACHED`).
+       - Upgraded `sync_machine_assigned_operators` trigger to use `ARRAY(SELECT DISTINCT operator_id ...)` so an operator with 2 shifts on the same machine is deduplicated in `machines.operator_ids`.
+       - Upgraded canonical RPC `assign_operator_machine_atomic()`: enforces caller is supervisor or above (`super_admin`, `admin`, `manager`, `supervisor`), enforces operator capacity $\le 2$, enforces non-overlapping shift times across all operator shifts, preserves other active shift when assigning a 2nd shift, and maintains machine capacity $\le 3$.
+       - Strictly applied to Dev DB (`vlmxciuogczumumrwyot`); Production DB (`dhbbgfzbyatzvqafnsqp`) untouched.
+    2. **Backend Server Actions (`apps/web/app/actions`)**:
+       - `updateMachineOperatorsAction` & `updateMachinePersonnelAction`: Support operators appearing up to twice on the same machine with different shift codes, enforce cross-fleet capacity ($\le 2$ shifts), validate non-overlapping shift times, and selectively relieve removed shifts by `(operator_id, shift_code)`.
+       - `getMachinePersonnelFreshAction`: Returns all active shifts in roster without collapsing multi-shift operators.
+       - `updateOperatorMachineAssignmentsAction`: Enforces max 2 shifts per operator, permits 2 shifts on the same machine with different shift codes.
+    3. **Web Frontend (`apps/web/components/machines`)**:
+       - `AssignPersonnelModal.tsx` & `OperatorShiftRosterEditor.tsx`: Allow selecting an operator for a 2nd shift (badge `1/2 Shifts` or `Already on this machine (1/2)`), allow selecting a machine up to 2 times, display `2 Shifts on Machine` badge, provide index-based removal and shift change, and show validation warning banners if limit exceeded.
+    4. **Mobile Frontend (`apps/mobile/components`)**:
+       - `MobileAssignPersonnelModal.tsx`: Fetches fleet active assignments, shows shift count badges (`0/2 Available`, `1/2 Shifts`, `2/2 Shifts Limit Reached`), disables operators at max shifts, checks for overlapping shift times, and handles `P0002` gracefully.
+       - `MachineModal.tsx`: Corrected RPC arguments to pass clean time parameters and handle 2-shift errors.
+    5. **Verification & Tests**:
+       - `supabase/tests/test_operator_two_shifts.mjs`: 6/6 tests passed on Dev DB (1st shift, 2nd shift on same machine, 3rd shift rejection, relief, cross-machine 2nd shift, shift overlap rejection).
+       - Zero TypeScript errors (`tsc --noEmit`) on both Web and Mobile.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `node supabase/tests/test_operator_two_shifts.mjs`: 6/6 passed.
+
+- [x] **Operator Worked Hours Consistency Across Attendance, Logs Summary & Triggers (2026-09-30)**:
+  - **Delivered**:
+    1. **Full Shift Work Hours Guarantee (Trigger `auto_calculate_machine_hour_log_overtime`)**:
+       - Updated trigger function to enforce that for full shifts (`v_duration_hours >= 7.95`, e.g. 06:00 AM to 02:00 PM), `normal_working_hours = 8.0`.
+       - Operator shift work hours includes lunch, pre-checks, idle, and normal work time without deduction.
+       - Overtime hours are additional and never deduct from base normal working hours.
+    2. **Backfill Existing Records on Dev DB (`vlmxciuogczumumrwyot`)**:
+       - Temporarily bypassed immutability trigger to update all historical logs where `normal_working_hours < 8.0` for 8-hour shifts to `8.00`, restoring immutability immediately.
+    3. **Attendance RPCs Upgraded (`get_attendance_daily_detail` & `get_attendance_monthly_summary`)**:
+       - Operator worked hours and worked minutes now strictly query `COALESCE(NULLIF(mhl.normal_working_hours, 0), 8.0) * 60` (480 minutes = 8h 00m) rather than machine HMR meter difference.
+       - Machine running hours (`running_hours`) is preserved cleanly as machine engine telemetry without reducing operator attendance.
+    4. **Operations Summary Upgraded (`get_operations_summary`)**:
+       - `total_working_hours` calculates sum of `normal_working_hours + overtime_hours`.
+    5. **Monorepo Shared Utilities (`packages/utils/src/date.ts`)**:
+       - `computeShiftTiming()` updated to maintain `normalWorkingHours = 8.0` for shifts $\ge 7.95\text{h}$ even when manual overtime is entered.
+    6. **Frontend Synchronization (Web & Mobile)**:
+       - `apps/web/lib/data/attendance/attendance-detail.ts`: Fallback computes `effectiveNormalH = 8.0` and updates `workedMinutes` accordingly.
+       - `apps/web/components/operations/logs/OperationsLogsTable.tsx`: Shift working hours fallback updated to 8.0h.
+       - `apps/mobile/app/(app)/running-logs.tsx`: `totalWorkingHours` calculation incorporates overtime hours.
+       - `apps/mobile/app/(app)/attendance.tsx`: Benefits directly from upgraded RPCs, displaying `8h 00m` via `formatMins(480)`.
+    7. **Dev Reseeding & Tests**:
+       - `supabase/seed_frontend_workflow.mjs`: Updated line 838 to pass `p_normal_working_hours: 8.0`.
+       - Re-seeded Dev DB with 30 logs across 6 machines. `verify_seed.mjs` passed 100%.
+       - `supabase/tests/test_shift_timing_and_lunch_inclusion.mjs`: 31/31 tests passed.
+       - `supabase/tests/test_operator_complete_matrix.mjs`: OP-21 passed.
+       - **Production Supabase DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched and protected.**
+  - **Verification**:
+    - `pnpm --filter @reachinternational/utils exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - RPC verification test verified: `worked_minutes = 480` (8h 00m) for all 06:00 to 14:00 shifts, `totalWorkedMinutes = 2400` across 5 days.
+
+- [x] **Dev Database Clean & Reseed with 100% Frontend Acceptance Criteria (2026-09-30)**:
+  - **Delivered**:
+    1. **Atomic Dev Database Purge (`clean_dev_seed_data`)**:
+       - Created idempotent PostgreSQL stored procedure `public.clean_dev_seed_data()` on Dev DB (`vlmxciuogczumumrwyot`).
+       - Temporarily disables immutability trigger `trg_enforce_machine_hour_logs_immutable`, cascades deletions across logs, assignments, payrolls, requests, user documents, notifications, audit logs, machinery, client shift codes, clients, and non-admin auth & public users, and re-enables trigger at conclusion.
+       - Safely seeded canonical Indian states (36 states & UTs) to guarantee foreign key integrity (`users_state_id_fkey`).
+    2. **Frontend Signup & Document Workflow Simulation (`seed_frontend_workflow.mjs`)**:
+       - Ensures canonical super_admin and admin accounts (`Password@123456`).
+       - Signs up Supervisor, Manager, HR, and 6 Operators with realistic Indian names, valid Aadhaar, Driving License, unmasked bank numbers, IFSC codes, shift times, and linked supervisor IDs.
+       - Uploads verified PDF documents (`bank_document`, `aadhaar`, `driving_license`) to Supabase Storage bucket `user_files` and populates `public.user_documents` with status `'verified'`.
+       - Admin approval workflow: transitions users to `status: 'active'`, confirms auth email, and writes `user.approved` audit logs.
+    3. **Add Client Page Acceptance Criteria**:
+       - Provisions 5 enterprise clients (L&T, Tata Projects, NCC, Afcons, Reliance) with valid GSTIN, PAN, structured addresses, maintenance allowances (720m, 0m, 480m, 720m, 300m), and client shift codes (A, B, C).
+    4. **Machinery Fleet & Operator Assignments**:
+       - Provisions 6 machines (`health_status: 'active'`) with client associations and active operator assignments in `public.operator_machine_assignments`.
+    5. **Log Page Atomic Submission Pipeline**:
+       - Submits 30 operational logs across 5 recent dates using `submit_operator_hour_log_atomic` RPC.
+       - Preserves flawless sequential meter progression across shifts and validates maintenance allowance coverage calculations (e.g., L&T 90m stoppage covered by allowance; Tata Projects 60m stoppage logged as pure breakdown).
+    6. **Tooling & Verification**:
+       - Added `pnpm seed` (`node supabase/seed.mjs` delegating to `seed_frontend_workflow.mjs`).
+       - Rewrote `pnpm verify:seed` (`node supabase/verify_seed.mjs`) validating row counts, unmasked bank fields, document verification, client GSTIN/allowances, and meter continuity.
+       - **Production Supabase DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched and protected.**
+  - **Verification**:
+    - `pnpm verify:seed`: All 5 verification criteria passed (11 users, 27 docs, 5 clients, 15 shift codes, 6 machines, 6 assignments, 30 logs, 44 audit logs).
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+- [x] **Remove Shift Log Submission Confirmation Dialog Completely (/operations) (2026-09-30)**:
+  - **Delivered**:
+    1. **Direct Validation & Submission (`OperatorEntryClient.tsx`)**:
+       - Completely removed `SubmitConfirmModal` and its `showConfirmModal` state.
+       - Merged form validation and submit handling into a single streamlined `handleSubmit` function.
+       - Submitting the form validates all operational constraints (assigned machine, shift code, meter progression, <=24h running hours, breakdown boundaries) and immediately executes `submitOperatorHourLogAction` without modal prompts.
+    2. **Frictionless Dashboard Log Entry (`OperatorDashboard.tsx`)**:
+       - Updated `handleOpenSubmitModal` to validate inputs and immediately commit via `handleExecuteSubmit()`.
+       - Removed `showConfirmModal` state and deleted the 220-line confirmation `<Modal>` markup.
+       - Cleaned up unused lucide icons (`FileCheck2`, `ShieldCheck`).
+    3. **Dead Code Elimination**:
+       - Deleted `apps/web/components/operations/entry/SubmitConfirmModal.tsx`.
+    4. **Web & Mobile 100% Behavioral Parity**:
+       - Native mobile app (`apps/mobile/components/work/MeterLogModal.tsx` and `MobileOperatorEntryCard.tsx`) already used frictionless direct submission; web is now completely aligned with zero-dialog ergonomics.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Monorepo typecheck clean; zero regressions.
+
 - [x] **Fix Production Attendance Page Crash & Resilient Fallback Architecture (/attendance) (2026-09-30)**:
   - **Delivered**:
     1. **Multi-Tier Resilient Fallback in DAL (`apps/web/lib/data/attendance/attendance-detail.ts`)**:

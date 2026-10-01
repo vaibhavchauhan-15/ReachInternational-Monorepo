@@ -116,7 +116,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
             disabled={disabled}
             value={internalValue}
             onChange={handleInputChange}
-            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-xs sm:text-[13px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-xs sm:text-[13px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
               prefix ? "pl-8" : "px-3.5"
             } ${
               showSteppers ? "pr-20 sm:pr-22" : suffix ? "pr-12" : "pr-3.5"

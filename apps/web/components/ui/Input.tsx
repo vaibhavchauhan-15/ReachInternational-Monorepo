@@ -24,7 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <div className="flex items-center justify-between">
             <label
               htmlFor={inputId}
-              className="text-[13.5px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1"
+              className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1"
             >
               <span>{typeof label === "string" && required ? label.replace(/\s*\*+$/, "") : label}</span>
               {required && <span className="text-rose-500 font-semibold">*</span>}
@@ -48,7 +48,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             type={currentType}
-            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-[15px] sm:text-[14px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 ${
+            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-[13.5px] sm:text-[14px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/70 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 ${
               icon ? "pl-9.5 sm:pl-10" : "px-3.5"
             } ${
               isPasswordType ? "pr-10 sm:pr-11" : "pr-3.5"

@@ -7,11 +7,16 @@ import {
   AnimatedMapPin,
   AnimatedReceipt,
 } from "@/components/ui/animated-icons";
-import { AlertCircle, Save, Lock, Wrench } from "lucide-react";
+import { AlertCircle, Save, Lock, Wrench, Clock, CheckCircle2, Moon, Sparkles } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
 import { Button, Input, Switch, CustomTimePicker } from "@/components/ui";
 import { invalidateClientShiftsCache } from "@/lib/cache/client-shifts-cache";
+import {
+  CLIENT_SHIFT_PRESETS,
+  DEFAULT_CLIENT_SHIFT_PRESET_ID,
+  formatTo12Hour,
+} from "@reachinternational/utils";
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -52,6 +57,9 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
   const [allowanceHours, setAllowanceHours] = useState(0);
   const [allowanceMinutes, setAllowanceMinutes] = useState(0);
   const [allowanceTime, setAllowanceTime] = useState("00:00");
+
+  // Operational Shift Template Preset (1-Click Industry Templates)
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(DEFAULT_CLIENT_SHIFT_PRESET_ID);
 
   const formContainerRef = useRef<HTMLFormElement>(null);
   const billingSectionRef = useRef<HTMLDivElement>(null);
@@ -104,6 +112,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setAllowanceHours(0);
       setAllowanceMinutes(0);
       setAllowanceTime("00:00");
+      setSelectedPresetId(DEFAULT_CLIENT_SHIFT_PRESET_ID);
     }
     setFormState({});
   }, [client, isOpen]);
@@ -163,6 +172,9 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     // Compute total allowance in minutes from hours + minutes inputs
     const totalAllowanceMinutes = Math.max(0, (allowanceHours * 60) + allowanceMinutes);
     formData.append("maintenanceAllowanceMinutes", String(totalAllowanceMinutes));
+    if (!isEditing) {
+      formData.append("shift_preset", selectedPresetId);
+    }
 
     // Validate all required fields
     const missingFields: string[] = [];
@@ -510,6 +522,88 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
               />
             </div>
           </div>
+
+          {/* Section 5: Operational Shift Templates (1-Click Industry Presets) */}
+          {!isEditing && (
+            <div
+              data-hover-parent
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+                  <Clock size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  Operational Shift Templates (1-Click Presets)
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/30 px-2 py-0.5 text-[10px] font-mono font-bold text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                  <Sparkles size={10} />
+                  Instant Provisioning
+                </span>
+              </div>
+
+              <p className="text-[11px] text-[var(--color-mute)] leading-relaxed">
+                Select an industry operational schedule. Shift codes and timings will be pre-configured immediately on client creation. You can fine-tune shift names and windows later.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                {CLIENT_SHIFT_PRESETS.map((preset) => {
+                  const isSelected = selectedPresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setSelectedPresetId(preset.id)}
+                      className={`text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden group ${
+                        isSelected
+                          ? "border-sky-500 bg-sky-500/5 dark:bg-sky-500/10 shadow-xs ring-1 ring-sky-500/30"
+                          : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:border-sky-500/40"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-1.5 mb-1">
+                          <span className="text-xs font-bold text-[var(--color-ink)] leading-snug">
+                            {preset.name}
+                          </span>
+                          {isSelected ? (
+                            <CheckCircle2 size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                          ) : (
+                            <span className="w-4 h-4 rounded-full border border-[var(--color-hairline)] shrink-0 mt-0.5 group-hover:border-sky-500/40" />
+                          )}
+                        </div>
+                        <span className="inline-block text-[10px] font-semibold text-sky-600 dark:text-sky-400 font-mono mb-1.5">
+                          {preset.badge}
+                        </span>
+                        <p className="text-[11px] text-[var(--color-mute)] leading-relaxed mb-2.5">
+                          {preset.description}
+                        </p>
+                      </div>
+
+                      {/* Shift Preview Pills */}
+                      {preset.shifts.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 pt-1 border-t border-[var(--color-hairline)]">
+                          {preset.shifts.map((s) => (
+                            <span
+                              key={s.code}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)]"
+                            >
+                              <strong className="text-sky-600 dark:text-sky-400">{s.code}:</strong>
+                              <span>{s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}</span>
+                              {s.crossesMidnight && <Moon size={9} className="text-purple-500 shrink-0" />}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="pt-1 border-t border-[var(--color-hairline)]">
+                          <span className="text-[10px] text-[var(--color-mute)] italic">
+                            No shift codes configured. Set up manually anytime.
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-[var(--color-hairline)] pt-4 shrink-0">

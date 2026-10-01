@@ -687,10 +687,15 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
               <View style={{ paddingTop: 2, paddingBottom: 2 }}>
                 <Text style={[styles.sectionEyebrow, { color: theme.colors.mute, marginBottom: 8 }]}>
-                  IDENTITY DOCUMENTS
+                  IDENTITY & BANKING DOCUMENTS
                 </Text>
                 {userDocuments.map((doc) => {
-                  const label = doc.document_type_code === 'aadhaar' ? 'Aadhaar Card' : 'Driving Licence';
+                  const label =
+                    doc.document_type_code === 'aadhaar'
+                      ? 'Aadhaar Card'
+                      : doc.document_type_code === 'driving_license'
+                      ? 'Driving Licence'
+                      : 'Bank Passbook / Cheque';
                   return (
                     <View key={doc.id} style={styles.documentItemRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>

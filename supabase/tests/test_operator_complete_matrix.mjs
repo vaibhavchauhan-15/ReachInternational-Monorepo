@@ -366,7 +366,7 @@ async function runOperatorTestSuite() {
     assert(otTwo.overtimeHours === 2.0 && otTwo.normalWorkingHours === 8.0, 'OP-21', '10h shift has 2.0 OT');
 
     const otManual = computeShiftTiming({ startDate: '2026-09-01', startTime: '06:00 AM', endTime: '02:00 PM', manualOvertime: 1.5 });
-    assert(otManual.overtimeHours === 1.5 && otManual.normalWorkingHours === 6.5, 'OP-21', 'Manual OT override (1.5h) adjusts normal hours to 6.5h');
+    assert(otManual.overtimeHours === 1.5 && otManual.normalWorkingHours === 8.0, 'OP-21', 'Manual OT override (1.5h) on full shift preserves 8.0h normal work');
 
     // OP-20: Break deduction policy verification (BUG-OP-02 Clarification)
     const breakResult = computeShiftTiming({ startDate: '2026-09-01', startTime: '06:00 AM', endTime: '02:00 PM' });

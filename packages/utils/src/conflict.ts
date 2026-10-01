@@ -110,7 +110,7 @@ export function parseConflictReason(
     };
   }
 
-  // 3. Check for maximum operators reached
+  // 3. Check for maximum operators reached on machine
   if (raw.includes('MAX_OPERATORS_REACHED') || raw.includes('maximum capacity of 3')) {
     return {
       title: 'Maximum Shift Capacity Reached (3/3)',
@@ -130,7 +130,27 @@ export function parseConflictReason(
     };
   }
 
-  // 4. General overtime overrun fallback
+  // 4. Check for maximum operator shifts reached platform-wide (3 shifts / 24h)
+  if (raw.includes('MAX_OPERATOR_SHIFTS_REACHED') || raw.includes('maximum of 3 shifts') || raw.includes('3 active shifts')) {
+    return {
+      title: 'Maximum Operator Shift Limit (3 Shifts / 24h)',
+      badgeText: 'OPERATOR CAPACITY LIMIT',
+      severity: 'medium',
+      conflictingEntity: meta?.operatorName || null,
+      overtimeHoursText: null,
+      description: `This operator is already assigned to the platform-wide maximum limit of 3 active shifts (24h in a day).`,
+      bulletWarnings: [
+        `Operator Limit: An operator can be assigned to a maximum of 3 shifts (up to 24h) across the fleet.`,
+        `Fleet Health & Safety: Additional shift assignments require relieving the operator from one of their existing active shifts.`,
+      ],
+      resolutionGuidance: {
+        acknowledgeAdvice: `Relieve the operator from an existing active shift before assigning another shift.`,
+        adjustAdvice: `Select another active operator who has available shift capacity.`,
+      },
+    };
+  }
+
+  // 5. General overtime overrun fallback
   return {
     title: 'Overtime Shift Window Conflict',
     badgeText: 'SHIFT OVERRUN CONFLICT',

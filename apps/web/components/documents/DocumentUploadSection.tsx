@@ -359,27 +359,31 @@ export function DocumentUploadSection({
     });
   };
 
-  if (documentTypes.length === 0) return null;
+  const displayedDocTypes = documentTypes.filter(
+    (d) => d.code !== "profile_photo" && d.code !== "bank_passbook"
+  );
+
+  if (displayedDocTypes.length === 0) return null;
 
   return (
     <>
       <section
-        aria-label="Identity Documents"
+        aria-label="Identity & Banking Documents"
         className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-4 sm:p-5 shadow-xs select-none"
       >
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Identity Documents
+              Identity & Banking Documents
             </h2>
             <p className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              Upload Aadhaar and Driving Licence for identity verification.
+              Upload Aadhaar, Driving Licence, and Bank Passbook / Cheque for verification.
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {documentTypes.map((docType) => {
+          {displayedDocTypes.map((docType) => {
             const existing = getExistingDoc(docType.code);
             const state = getDocState(docType.code);
             const hasFile = !!state.file;

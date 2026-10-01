@@ -114,11 +114,13 @@ export function MachineEditClient({
       : machine.current_operator_id ? [machine.current_operator_id] : [];
 
     const hydrated: OperatorShiftAssignmentItem[] = [];
-    const seenIds = new Set<string>();
+    const seenAssignments = new Set<string>();
 
     rawOps.forEach((o: any, idx: number) => {
-      if (!o || !o.id || seenIds.has(o.id)) return;
-      seenIds.add(o.id);
+      if (!o || !o.id) return;
+      const key = `${o.id}-${(o.shift_code || "").toUpperCase()}`;
+      if (seenAssignments.has(key)) return;
+      seenAssignments.add(key);
       hydrated.push({
         operatorId: o.id,
         operatorName: o.full_name || (o as any).name || "Operator",
@@ -131,6 +133,7 @@ export function MachineEditClient({
       });
     });
 
+    const seenIds = new Set(hydrated.map((h) => h.operatorId));
     opIds.forEach((id: string) => {
       if (seenIds.has(id)) return;
       seenIds.add(id);
@@ -151,7 +154,9 @@ export function MachineEditClient({
   });
   const [operatorRosterHasError, setOperatorRosterHasError] = useState(false);
   const [isSavingOperators, setIsSavingOperators] = useState(false);
-  const [clientShifts, setClientShifts] = useState<ClientShiftCode[]>([]);
+  const [clientShifts, setClientShifts] = useState<ClientShiftCode[]>(
+    () => (machine as any).client_shifts || []
+  );
   const totalShifts = clientShifts.length > 0 ? clientShifts.length : 3;
 
   // -------------------------------------------------------------
@@ -163,7 +168,23 @@ export function MachineEditClient({
   // -------------------------------------------------------------
   // Option Lists Hydration (Supervisors, Operators, Clients)
   // -------------------------------------------------------------
-  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
+  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => {
+    const list = [...(supervisors || [])];
+    const seen = new Set(list.map((s) => s.id));
+    if (Array.isArray(machine.supervisors)) {
+      machine.supervisors.forEach((s: any) => {
+        if (s && s.id && !seen.has(s.id)) {
+          list.push(s);
+          seen.add(s.id);
+        }
+      });
+    }
+    if (machine.current_supervisor && machine.current_supervisor.id && !seen.has(machine.current_supervisor.id)) {
+      list.push(machine.current_supervisor as any);
+      seen.add(machine.current_supervisor.id);
+    }
+    return list;
+  });
   const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
   const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => clients || []);
   const [lazyActiveAssignments, setLazyActiveAssignments] = useState<ActiveOperatorOtherAssignment[]>([]);
@@ -920,6 +941,7 @@ export function MachineEditClient({
                 onChange={setAssignedOperators}
                 onErrorChange={(hasErr) => setOperatorRosterHasError(hasErr)}
                 onShiftsLoaded={setClientShifts}
+                clientShifts={clientShifts.length > 0 ? clientShifts : undefined}
                 disabled={isSavingOperators}
                 isLoadingOptions={lazyOperators.length === 0}
               />

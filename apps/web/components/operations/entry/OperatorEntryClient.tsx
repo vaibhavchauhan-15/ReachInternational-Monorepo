@@ -28,11 +28,6 @@ const BreakdownSection = dynamic(
   { ssr: false }
 );
 
-const SubmitConfirmModal = dynamic(
-  () => import("./SubmitConfirmModal").then((mod) => mod.SubmitConfirmModal),
-  { ssr: false }
-);
-
 const OperatorHistoryTab = dynamic(
   () => import("./OperatorHistoryTab").then((mod) => mod.OperatorHistoryTab),
   { ssr: false }
@@ -177,6 +172,25 @@ export function OperatorEntryClient({
       : DEFAULT_CLIENT_SHIFTS;
   }, [initialContext.shift_codes]);
 
+  // Active assigned shift codes for operator on this machine
+  const assignedShiftCodes = useMemo<string[]>(() => {
+    if (initialContext.assigned_shift_codes && initialContext.assigned_shift_codes.length > 0) {
+      return initialContext.assigned_shift_codes;
+    }
+    if (initialContext.assigned_shift_code) {
+      return [initialContext.assigned_shift_code];
+    }
+    return [];
+  }, [initialContext.assigned_shift_codes, initialContext.assigned_shift_code]);
+
+  // Track today's logged shifts and logs for continuous 24h coverage
+  const [todayLoggedCodes, setTodayLoggedCodes] = useState<string[]>(
+    () => initialContext.today_logged_shift_codes || []
+  );
+  const [todayLogs, setTodayLogs] = useState<any[]>(
+    () => initialContext.today_logs || []
+  );
+
   // Resolve operator's own shift by code, timing, or distance
   const resolvedInitialShift = useMemo(() => {
     return resolveDefaultOperatorShift(initialContext, availableShifts);
@@ -200,8 +214,53 @@ export function OperatorEntryClient({
       : "0"
   );
 
+  // Seamless continuous 24h shift switching: update timing & handoff start meter from previous shift
+  const handleSelectShiftCode = useCallback((code: string) => {
+    setSelectedShiftCode(code);
+
+    const targetShift = availableShifts.find(
+      (s) =>
+        s.code.toUpperCase() === code.toUpperCase() ||
+        s.code.replace(/^shift\s*/i, "").toUpperCase() === code.replace(/^shift\s*/i, "").toUpperCase()
+    );
+
+    if (targetShift) {
+      const s = formatTo12Hour(targetShift.start_time || targetShift.raw_start_time);
+      if (s) setStartTime(s);
+      const e = formatTo12Hour(targetShift.end_time || targetShift.raw_end_time);
+      if (e) setEndTime(e);
+      const otHours = targetShift.default_ot_minutes && targetShift.default_ot_minutes > 0
+        ? (targetShift.default_ot_minutes / 60).toString()
+        : "0";
+      setOvertimeHours(otHours);
+    }
+
+    // Continuous 24h start-meter handoff:
+    // If earlier shifts were logged today on this machine, auto-hand off the highest end meter
+    if (todayLogs.length > 0) {
+      const highestEndMeter = Math.max(...todayLogs.map((l) => Number(l.end_meter) || 0));
+      if (highestEndMeter > 0) {
+        setStartMeter(String(highestEndMeter));
+        setEndMeter(String(highestEndMeter));
+      }
+    }
+  }, [availableShifts, todayLogs]);
+
   // Synchronize operator's default shift whenever initialContext or available shifts load/revalidate
   useEffect(() => {
+    const urlShift = searchParams?.get("shift");
+    if (urlShift && availableShifts.length > 0) {
+      const matched = availableShifts.find(
+        (s) =>
+          s.code.toUpperCase() === urlShift.toUpperCase() ||
+          s.code.replace(/^shift\s*/i, "").toUpperCase() === urlShift.replace(/^shift\s*/i, "").toUpperCase()
+      );
+      if (matched) {
+        handleSelectShiftCode(matched.code);
+        return;
+      }
+    }
+
     if (resolvedInitialShift) {
       setSelectedShiftCode(resolvedInitialShift.code);
       const s = formatTo12Hour(resolvedInitialShift.start_time || resolvedInitialShift.raw_start_time);
@@ -212,7 +271,7 @@ export function OperatorEntryClient({
         setOvertimeHours((resolvedInitialShift.default_ot_minutes / 60).toString());
       }
     }
-  }, [resolvedInitialShift]);
+  }, [resolvedInitialShift, searchParams, availableShifts, handleSelectShiftCode]);
 
   // Eager re-fetch guard: If initialContext had no assigned_shift_code, fetch fresh context in background
   useEffect(() => {
@@ -248,7 +307,6 @@ export function OperatorEntryClient({
 
   // Submission & Draft State
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
 
   // Restore draft from localStorage if available (deferred to avoid cascading render)
@@ -346,9 +404,11 @@ export function OperatorEntryClient({
     toast,
   ]);
 
-  // Validation before opening confirm modal
-  const handleOpenConfirm = (e: React.FormEvent) => {
+  // Direct Validation & Submit Handler (Confirmation modal completely removed)
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return;
 
     if (!initialContext.machine?.id) {
       toast("error", "No Machine Assigned", "You cannot submit a log without an assigned machine.");
@@ -386,12 +446,22 @@ export function OperatorEntryClient({
       }
     }
 
-    setShowConfirmModal(true);
-  };
+    // Strict Assigned Shift Validation: Operator can only log for their assigned shift(s) on this machine
+    if (assignedShiftCodes.length > 0 && selectedShiftCode) {
+      const selectedNorm = selectedShiftCode.replace(/^shift\s*/i, "").trim().toUpperCase();
+      const isAssigned = assignedShiftCodes.some(
+        (c) => c.replace(/^shift\s*/i, "").trim().toUpperCase() === selectedNorm
+      );
+      if (!isAssigned) {
+        toast(
+          "error",
+          "Unassigned Shift Selected",
+          `You are assigned to Shift ${assignedShiftCodes.join(", ")} on this equipment. Cannot log for unassigned Shift ${selectedShiftCode}.`
+        );
+        return;
+      }
+    }
 
-  // Submit Handler
-  const handleConfirmSubmit = async () => {
-    if (submitting || !initialContext.machine?.id) return;
     setSubmitting(true);
 
     let bkdDurationStr: string | undefined;
@@ -455,6 +525,32 @@ export function OperatorEntryClient({
           }
         }
 
+        const newlyLoggedCode = selectedShiftCode;
+        setTodayLoggedCodes((prev) => Array.from(new Set([...prev, newlyLoggedCode])));
+        setTodayLogs((prev) => [
+          ...prev.filter((l) => l.shift_code !== newlyLoggedCode),
+          {
+            shift_code: newlyLoggedCode,
+            start_meter: startNum,
+            end_meter: endNum,
+            running_hours: runningHours,
+            start_time: startTime,
+            end_time: endTime,
+          },
+        ]);
+
+        // Multi-shift 24h coverage guidance: alert operator if another assigned shift is pending
+        const remainingAssigned = assignedShiftCodes.filter(
+          (c) => c !== newlyLoggedCode && !todayLoggedCodes.includes(c)
+        );
+        if (remainingAssigned.length > 0) {
+          toast(
+            "info",
+            "Next Shift Ready",
+            `Shift ${newlyLoggedCode} recorded (${runningHours}h). You have Shift ${remainingAssigned.join(", ")} pending submission.`
+          );
+        }
+
         setStartMeter(String(endNum));
         setEndMeter(String(endNum));
         setIsStartMeterLocked(true);
@@ -476,7 +572,6 @@ export function OperatorEntryClient({
         try {
           localStorage.removeItem(DRAFT_KEY);
         } catch {}
-        setShowConfirmModal(false);
       } else {
         toast("error", "Submission Failed", res.error || "Could not save log entry.");
       }
@@ -508,7 +603,7 @@ export function OperatorEntryClient({
             </p>
           </div>
 
-          <form onSubmit={handleOpenConfirm} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Section A: Assigned Machine & Client Info */}
             <OperatorMachineInfo
               machine={initialContext.machine}
@@ -546,7 +641,10 @@ export function OperatorEntryClient({
               shiftDurationHours={shiftDurationHours}
               shiftCodes={availableShifts}
               selectedShiftCode={selectedShiftCode}
-              onSelectShiftCode={setSelectedShiftCode}
+              onSelectShiftCode={handleSelectShiftCode}
+              assignedShiftCodes={assignedShiftCodes}
+              todayLoggedShiftCodes={todayLoggedCodes}
+              todayLogs={todayLogs}
             />
 
             {/* Section D: Machine Breakdown (Code-Split / Lazy) */}
@@ -609,31 +707,6 @@ export function OperatorEntryClient({
                 } as unknown as Machine)
               : null
           }
-        />
-      )}
-
-      {/* 4. Submission Confirmation Modal (Code-Split / Lazy) */}
-      {showConfirmModal && (
-        <SubmitConfirmModal
-          isOpen={showConfirmModal}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={handleConfirmSubmit}
-          submitting={submitting}
-          summary={{
-            machineCode: initialContext.machine?.machine_id || "—",
-            machineModel: initialContext.machine?.model,
-            clientName: initialContext.client?.company_name || "Internal",
-            site: initialContext.client?.site || "Base Yard",
-            logDate,
-            startTime,
-            endTime,
-            startMeter: startNum,
-            endMeter: endNum,
-            runningHours,
-            overtimeHours: parseFloat(overtimeHours) || 0,
-            isBreakdown,
-            breakdownDuration: breakdownStats?.fullBreakdownString,
-          }}
         />
       )}
     </div>

@@ -114,7 +114,7 @@ export function UserAddressSection({
 
         {/* State Selector */}
         <div className="flex flex-col gap-1 w-full" id={`${idPrefix}-state-container`}>
-          <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center gap-1">
+          <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
             <span>State</span>
             {required && <span className="text-rose-500 font-semibold">*</span>}
           </label>
