@@ -22,140 +22,10 @@ import { Search, X, RotateCcw, SlidersHorizontal, ChevronDown } from 'lucide-rea
 import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { SearchInput, type SearchInputProps } from './SearchInput';
 
 // ============================================================================
-// 1. REUSABLE SEARCH INPUT
-// ============================================================================
-
-export interface SearchInputProps extends Omit<TextInputProps, 'value' | 'onChangeText'> {
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder?: string;
-  isLoading?: boolean;
-  onClear?: () => void;
-  onSubmitEditing?: () => void;
-  variant?: 'pill' | 'rounded';
-  containerStyle?: StyleProp<ViewStyle>;
-  inputStyle?: StyleProp<TextStyle>;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
-}
-
-export const SearchInput: React.FC<SearchInputProps> = ({
-  value,
-  onChangeText,
-  placeholder = 'Search...',
-  isLoading = false,
-  onClear,
-  onSubmitEditing,
-  variant = 'rounded',
-  containerStyle,
-  inputStyle,
-  leftIcon,
-  rightIcon,
-  autoCapitalize = 'none',
-  autoCorrect = false,
-  returnKeyType = 'search',
-  onFocus,
-  onBlur,
-  ...textInputProps
-}) => {
-  const { theme, isDark } = useTheme();
-  const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-
-  const handleFocus = (e: any) => {
-    setIsFocused(true);
-    if (onFocus) onFocus(e);
-  };
-
-  const handleBlur = (e: any) => {
-    setIsFocused(false);
-    if (onBlur) onBlur(e);
-  };
-
-  const handleClear = () => {
-    Haptics.selectionAsync().catch(() => {});
-    onChangeText('');
-    if (onClear) onClear();
-    inputRef.current?.focus();
-  };
-
-  const borderRadius = variant === 'pill' ? radiusNumeric.full : 10;
-
-  return (
-    <TouchableOpacity
-      activeOpacity={1}
-      onPress={() => inputRef.current?.focus()}
-      style={[
-        styles.searchBox,
-        {
-          borderRadius,
-          backgroundColor: theme.colors.canvas,
-          borderColor: isFocused ? theme.colors.ink : theme.colors.hairline,
-        },
-        isFocused && Platform.OS === 'web' && ({
-          boxShadow: isDark
-            ? '0 0 0 1px rgba(255, 255, 255, 0.35)'
-            : '0 0 0 1px rgba(0, 0, 0, 0.22)',
-        } as any),
-        containerStyle,
-      ]}
-    >
-      {/* Left Icon or Loading Spinner */}
-      {isLoading ? (
-        <ActivityIndicator size="small" color={theme.colors.mute} style={styles.searchIcon} />
-      ) : leftIcon ? (
-        <View style={styles.searchIcon}>{leftIcon}</View>
-      ) : (
-        <Search
-          size={15}
-          color={isFocused ? theme.colors.ink : theme.colors.mute}
-          style={styles.searchIcon}
-        />
-      )}
-
-      {/* Actual TextInput with Web Outline Suppression */}
-      <TextInput
-        ref={inputRef}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.colors.mute}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onSubmitEditing={onSubmitEditing}
-        returnKeyType={returnKeyType}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        style={[
-          styles.searchInput,
-          { color: theme.colors.ink },
-          Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
-          inputStyle,
-        ]}
-        {...textInputProps}
-      />
-
-      {/* Clear Button or Custom Right Icon */}
-      {value.length > 0 ? (
-        <TouchableOpacity
-          onPress={handleClear}
-          style={styles.clearBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Clear search text"
-        >
-          <X size={14} color={theme.colors.mute} />
-        </TouchableOpacity>
-      ) : rightIcon ? (
-        <View style={styles.clearBtn}>{rightIcon}</View>
-      ) : null}
-    </TouchableOpacity>
-  );
-};
-
-// ============================================================================
-// 2. CANONICAL FILTER TOOLBAR
+// CANONICAL FILTER TOOLBAR
 // ============================================================================
 
 export interface FilterToolbarProps {
@@ -389,27 +259,6 @@ const styles = StyleSheet.create({
   },
   searchFlexWrap: {
     flex: 1,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13.5,
-    fontWeight: '500',
-    paddingVertical: 0,
-    height: '100%',
-  },
-  clearBtn: {
-    padding: 4,
-    marginLeft: 4,
   },
   filterToggleBtn: {
     flexDirection: 'row',

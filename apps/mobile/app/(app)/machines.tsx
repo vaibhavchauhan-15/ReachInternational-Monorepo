@@ -1713,6 +1713,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingVertical: 0,
     height: '100%',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   searchClearBtn: {
     padding: 3,

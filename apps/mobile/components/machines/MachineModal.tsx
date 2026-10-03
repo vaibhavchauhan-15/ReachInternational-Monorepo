@@ -11,10 +11,10 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { Input, useTheme, SearchableSelect, ShiftCardSelector, type SelectOption } from '../ui';
+import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, type SelectOption } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import * as Haptics from 'expo-haptics';
 import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
 import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from 'lucide-react-native';
 import { type SelectableUser } from './MultiUserSelectModal';
@@ -975,31 +975,14 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             },
                           ]}
                         >
-                          {/* Search Input */}
-                          <View
-                            style={[
-                              styles.dropdownSearchBox,
-                              {
-                                backgroundColor: theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
-                              },
-                            ]}
-                          >
-                            <Search size={14} color={theme.colors.mute} />
-                            <TextInput
-                              style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
-                              placeholder="Search supervisors by name, phone..."
-                              placeholderTextColor={theme.colors.mute}
-                              value={supervisorSearchQuery}
-                              onChangeText={setSupervisorSearchQuery}
-                              autoFocus
-                            />
-                            {supervisorSearchQuery ? (
-                              <TouchableOpacity onPress={() => setSupervisorSearchQuery('')} hitSlop={8}>
-                                <X size={13} color={theme.colors.mute} />
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
+                          {/* Search Input using canonical SearchInput */}
+                          <SearchInput
+                            placeholder="Search supervisors by name, phone..."
+                            value={supervisorSearchQuery}
+                            onChangeText={setSupervisorSearchQuery}
+                            autoFocus
+                            containerStyle={{ marginBottom: 8 }}
+                          />
 
                           {/* Subheader: Selected Count + Deselect / Clear */}
                           <View
@@ -1226,31 +1209,14 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           },
                         ]}
                       >
-                        {/* Search Input */}
-                        <View
-                          style={[
-                            styles.dropdownSearchBox,
-                            {
-                              backgroundColor: theme.colors.canvas,
-                              borderColor: theme.colors.hairline,
-                            },
-                          ]}
-                        >
-                          <Search size={14} color={theme.colors.mute} />
-                          <TextInput
-                            style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
-                            placeholder="Search operators by name, phone..."
-                            placeholderTextColor={theme.colors.mute}
-                            value={operatorSearchQuery}
-                            onChangeText={setOperatorSearchQuery}
-                            autoFocus
-                          />
-                          {operatorSearchQuery ? (
-                            <TouchableOpacity onPress={() => setOperatorSearchQuery('')} hitSlop={8}>
-                              <X size={13} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
+                        {/* Search Input using canonical SearchInput */}
+                        <SearchInput
+                          placeholder="Search operators by name, phone..."
+                          value={operatorSearchQuery}
+                          onChangeText={setOperatorSearchQuery}
+                          autoFocus
+                          containerStyle={{ marginBottom: 8 }}
+                        />
 
                         {/* Operators List */}
                         <ScrollView

@@ -416,23 +416,23 @@ export function OperatorEntryClient({
     }
 
     if (!selectedShiftCode || !selectedShiftCode.trim()) {
-      toast("error", "Shift Required", "Please select an operational shift before submitting.");
+      toast("error", "Shift Required", "Please select an operational shift.");
       return;
     }
 
     if (!endMeter.trim() || endNum < startNum) {
-      toast("error", "Invalid Meter Reading", "Please enter an end meter reading that is at least equal to start meter.");
+      toast("error", "Invalid Meter", `End meter must be ≥ start meter (${startNum.toFixed(1)}).`);
       return;
     }
 
     if (runningHours > 24) {
-      toast("error", "Excessive Running Hours", "Running hours cannot exceed 24 hours per shift.");
+      toast("error", "Excessive Hours", "Running hours cannot exceed 24h per shift.");
       return;
     }
 
     if (isBreakdown) {
       if (!breakdownStartTime || !breakdownEndTime) {
-        toast("error", "Breakdown Window Required", "Please enter both breakdown start and end times.");
+        toast("error", "Window Required", "Enter breakdown start and end times.");
         return;
       }
       const maxAllowedDuration = shiftDurationHours > 0 ? shiftDurationHours : 24;
@@ -440,7 +440,7 @@ export function OperatorEntryClient({
         toast(
           "error",
           "Breakdown Exceeds Shift",
-          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`
+          `Breakdown (${breakdownStats.durationDecimalHours}h) cannot exceed shift (${maxAllowedDuration}h).`
         );
         return;
       }
@@ -455,8 +455,8 @@ export function OperatorEntryClient({
       if (!isAssigned) {
         toast(
           "error",
-          "Unassigned Shift Selected",
-          `You are assigned to Shift ${assignedShiftCodes.join(", ")} on this equipment. Cannot log for unassigned Shift ${selectedShiftCode}.`
+          "Unassigned Shift",
+          `Assigned to Shift ${assignedShiftCodes.join(", ")} only.`
         );
         return;
       }
@@ -568,6 +568,7 @@ export function OperatorEntryClient({
           is_breakdown: isBreakdown,
           breakdown_duration: bkdDurationStr,
           operator_name: user.full_name || initialContext.operator?.name || "Operator",
+          entered_by_name: user.full_name || "Operator",
         });
         try {
           localStorage.removeItem(DRAFT_KEY);

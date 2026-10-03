@@ -252,14 +252,15 @@ export function ShiftInputs({
                   todayLogs={todayLogs}
                 />
                 {isCurrentShiftLogged && (
-                  <div className="mt-2 text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                  <div className="mt-1.5 text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-md flex items-center gap-1.5">
                     <CheckCircle2 size={13} className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>This shift has already been entered for today.</span>
+                    <span>Already logged for today.</span>
                   </div>
                 )}
                 {isCurrentShiftUnassigned && (
-                  <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md">
-                    ⚠️ You are assigned to Shift {assignedShiftCodes.join(", ")} on this equipment. Shift {activeShift?.code} is unassigned and cannot be logged.
+                  <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                    <span>⚠️</span>
+                    <span>Assigned to Shift {assignedShiftCodes.join(", ")} only.</span>
                   </p>
                 )}
               </motion.div>

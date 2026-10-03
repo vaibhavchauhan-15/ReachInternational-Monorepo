@@ -3541,6 +3541,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     paddingVertical: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   filterToggleBtn: {
     width: 28,

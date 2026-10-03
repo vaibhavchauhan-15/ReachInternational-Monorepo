@@ -1,3 +1,47 @@
+- **Mobile Assign Personnel Header, Machine Dropdown Functionality & Universal Search Input Layout Polish (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile Assign Personnel Modal Header Polish (`MobileAssignPersonnelModal.tsx`)**:
+       - Removed static machine details (`M/C-0001` badge and `• JCB 3DX Super - JCB3DX-2024-001` subtitle) from the modal header.
+       - Header displays strictly `"Assign Machine Operator"` with 44px min touch target close button.
+    2. **Machine Dropdown Selection Fully Functional (`MobileAssignPersonnelModal.tsx`)**:
+       - Replaced absolute floating popover with a clean inline expandable panel (`styles.dropdownInlinePanel`) with responsive `<ScrollView>` and `<SearchInput>`.
+       - Fixed outside-click handler from `mousedown` to `click` with explicit `{...({ 'data-dropdown-container': 'true' } as any)}` attributes.
+       - Machine selection immediately updates `selectedMachineId`, triggers haptics (`Haptics.selectionAsync()`), reloads active machine assignments, and collapses the panel.
+       - Refactored Section 2 Supervisor dropdown and Section 3 Operator search to use canonical `<SearchInput>`.
+    3. **Canonical Reusable `SearchInput` Primitive (`apps/mobile/components/ui/SearchInput.tsx`)**:
+       - Built accessible, responsive search input conforming to Vercel Geist design tokens.
+       - Focus edge border highlighting: `#0284c7` (primary brand blue) / `#38bdf8` (dark mode) with subtle focus ring glow on web.
+       - Seamless borderless inner `<TextInput>` with `backgroundColor: 'transparent'`, `borderWidth: 0`, and web resets (`outline: 'none'`, `border: 'none'`, `boxShadow: 'none'`).
+       - Integrated Search icon (turns blue on focus), activity loading spinner, clear `X` button with hitSlop, and haptic feedback.
+       - Re-exported via `apps/mobile/components/ui/index.ts` and integrated into `FilterToolbar.tsx`.
+    4. **Universal Search Box Resets Monorepo-Wide (`apps/mobile`)**:
+       - Eliminated browser default `2px inset rgb(118, 118, 118)` borders and inner box outlines across all text inputs in:
+         - `SearchableSelect.tsx`, `FilterToolbar.tsx`, `DropdownFilterSelector.tsx`, `ClientSelectModal.tsx`, `MultiUserSelectModal.tsx`, `MachineDetailView.tsx`, `machines.tsx`, `attendance.tsx`, `payroll.tsx`, `users.tsx`, `Input.tsx`, `MobileHeader.tsx`, `MobileCommandPalette.tsx`, `OperationsFilterSelectorModal.tsx`, `CustomFilterSelectorModal.tsx`, and `_layout.tsx`.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/SearchInput.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/components/ui/FilterToolbar.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineModal.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/SearchableSelect.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/DropdownFilterSelector.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/ClientSelectModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MultiUserSelectModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineDetailView.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/attendance.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/payroll.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/users.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/Input.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/MobileHeader.tsx` (MODIFIED)
+    - `apps/mobile/components/navigation/MobileCommandPalette.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/OperationsFilterSelectorModal.tsx` (MODIFIED)
+    - `apps/mobile/components/users/CustomFilterSelectorModal.tsx` (MODIFIED)
+    - `apps/mobile/app/_layout.tsx` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
 - **Fix Migration 157 Type Mismatch (`supabase/migrations`) (2026-10-03)**:
   - **Delivered**:
     - Resolved `ERROR: 42883: operator does not exist: text = uuid` on line 16 when running Migration 157.

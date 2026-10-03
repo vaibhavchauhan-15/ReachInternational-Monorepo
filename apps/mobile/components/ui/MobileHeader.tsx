@@ -768,6 +768,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 0,
     margin: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   searchPlaceholderText: {
     fontSize: 13.5,

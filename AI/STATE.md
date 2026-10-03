@@ -1,5 +1,30 @@
 # Project State — Reach International (reachinternational.co.in)
 
+- [x] **Mobile Assign Personnel Header, Machine Dropdown Functionality & Universal Search Input Layout Polish (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile Assign Personnel Modal Header Polish (`MobileAssignPersonnelModal.tsx`)**:
+       - Removed static machine details (`M/C-0001` pill and `• JCB 3DX Super - JCB3DX-2024-001` subtitle) from the modal header.
+       - Header now cleanly displays `"Assign Machine Operator"` with 44px min touch target close button.
+    2. **Machine Dropdown Selection Fully Functional (`MobileAssignPersonnelModal.tsx`)**:
+       - Replaced absolute floating popover with a clean inline expandable panel (`styles.dropdownInlinePanel`) with responsive `<ScrollView>` and `<SearchInput>`.
+       - Fixed outside-click handler from `mousedown` to `click` with explicit `{...({ 'data-dropdown-container': 'true' } as any)}` DOM attributes.
+       - Tapping any equipment item immediately updates `selectedMachineId`, triggers haptics (`Haptics.selectionAsync()`), reloads active machine assignments, and smoothly collapses the panel.
+       - Supervisor dropdown in Section 2 refactored to inline expandable panel with canonical `<SearchInput>` and outside-click dismissal.
+       - Operator search in Section 3 upgraded to canonical `<SearchInput>`.
+    3. **Canonical Reusable `SearchInput` Component (`apps/mobile/components/ui/SearchInput.tsx`)**:
+       - Built accessible, responsive search input conforming to Vercel Geist design tokens.
+       - Focus edge border highlighting: `#0284c7` (primary brand blue) / `#38bdf8` (dark mode) with subtle focus ring glow on web.
+       - Borderless inner `<TextInput>` with `backgroundColor: 'transparent'`, `borderWidth: 0`, and web resets (`outline: 'none'`, `border: 'none'`, `boxShadow: 'none'`).
+       - Features: Left search icon (focus reactive), activity loading spinner, clear `X` button with hitSlop, and haptic feedback.
+       - Re-exported via `apps/mobile/components/ui/index.ts` and integrated into `FilterToolbar.tsx`.
+    4. **Universal Search Box Resets Monorepo-Wide (`apps/mobile`)**:
+       - Eliminated browser default `2px inset rgb(118, 118, 118)` borders and inner box outlines across all text inputs in:
+         - `SearchableSelect.tsx`, `FilterToolbar.tsx`, `DropdownFilterSelector.tsx`, `ClientSelectModal.tsx`, `MultiUserSelectModal.tsx`, `MachineDetailView.tsx`, `machines.tsx`, `attendance.tsx`, `payroll.tsx`, `users.tsx`, `Input.tsx`, `MobileHeader.tsx`, `MobileCommandPalette.tsx`, `OperationsFilterSelectorModal.tsx`, `CustomFilterSelectorModal.tsx`, and `_layout.tsx`.
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Full Monorepo Typecheck: Clean pass across 7/7 packages (`pnpm typecheck` -> 7 successful, 0 errors).
+
 - [x] **Fix Migration 157 Type Mismatch (`supabase/migrations`) (2026-10-03)**:
   - **Delivered**:
     - Identified root cause of `ERROR: 42883: operator does not exist: text = uuid`: `public.audit_logs.entity_id` is typed as `TEXT`, whereas `public.clients.id` is typed as `UUID`. PostgreSQL does not possess an implicit equality operator between `TEXT` and `UUID`.

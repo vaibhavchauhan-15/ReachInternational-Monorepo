@@ -358,7 +358,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     paddingVertical: 0,
     height: 26,
-    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   menuScroll: {
     maxHeight: 210,

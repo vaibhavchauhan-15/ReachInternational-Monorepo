@@ -331,6 +331,11 @@ const styles = StyleSheet.create({
     paddingLeft: 34,
     paddingRight: 32,
     fontSize: 13,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      } as any,
+    }),
   },
   clearSearchBtn: {
     position: 'absolute',

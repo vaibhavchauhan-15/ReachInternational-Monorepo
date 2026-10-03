@@ -111,7 +111,7 @@ export function BreakdownSection({
               value={breakdownReason}
               onChange={(e) => onBreakdownReasonChange(e.target.value)}
               placeholder="e.g. Hydraulic pipe leakage replaced by field engineer..."
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+              className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs text-[var(--color-ink)] placeholder:text-[11px] sm:placeholder:text-xs placeholder:text-[var(--color-mute)] focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
             />
           </div>
         </div>

@@ -1321,7 +1321,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       >
                         {targetOperatorId
                           ? `${targetOperatorName || 'Operator'} is rostered for Shift ${assignedShiftCodes.join(', ')}. Submitting will record an Assisted Override for Shift ${selectedShiftCode}.`
-                          : `You are assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment. Logging for Shift ${selectedShiftCode} will be rejected by the server.`}
+                          : `Assigned to Shift ${assignedShiftCodes.join(', ')} only.`}
                       </Text>
                     </View>
                   )}

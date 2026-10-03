@@ -29,7 +29,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useTheme, ShiftCardSelector } from '../ui';
+import { useTheme, ShiftCardSelector, SearchInput } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { broadcastMobileAssignmentChanged } from '../../lib/realtime-roster';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -177,10 +177,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     const handleWebClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (!target.closest('[data-dropdown-container]')) {
-        setIsMachineDropdownOpen(false);
-        setIsSupervisorDropdownOpen(false);
+      if (target.closest?.('[data-dropdown-container]')) {
+        return;
       }
+      setIsMachineDropdownOpen(false);
+      setIsSupervisorDropdownOpen(false);
     };
 
     const handleWebKeyDown = (e: KeyboardEvent) => {
@@ -191,11 +192,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       }
     };
 
-    document.addEventListener('mousedown', handleWebClick);
+    document.addEventListener('click', handleWebClick);
     document.addEventListener('keydown', handleWebKeyDown);
 
     return () => {
-      document.removeEventListener('mousedown', handleWebClick);
+      document.removeEventListener('click', handleWebClick);
       document.removeEventListener('keydown', handleWebKeyDown);
     };
   }, [isMachineDropdownOpen, isSupervisorDropdownOpen]);
@@ -613,33 +614,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           {/* ═══════════════════════════════════════════════════════ */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.headerTitleWrap}>
-              <View style={styles.headerTopRow}>
-                <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
-                  Assign Machine Operator
-                </Text>
-                {activeMachine && (
-                  <View
-                    style={[
-                      styles.headerMachineCodePill,
-                      {
-                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#f4f4f5',
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.headerMachineCodeText, { color: theme.colors.mute }]}>
-                      {activeMachine.machine_id}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {activeMachine && (
-                <Text style={[styles.headerSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
-                  • <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{activeMachine.model || 'Equipment'}</Text>
-                  {activeMachine.serial_number ? ` - ${activeMachine.serial_number}` : ''}
-                </Text>
-              )}
+              <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
+                Assign Machine Operator
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -695,11 +672,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   {
                     backgroundColor: theme.colors.canvas,
                     borderColor: theme.colors.hairline,
-                    zIndex: isMachineDropdownOpen ? 100 : 1,
                   },
                 ]}
-                // @ts-ignore
-                data-dropdown-container
+                {...({ 'data-dropdown-container': 'true' } as any)}
               >
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.sectionLabelWithIcon}>
@@ -762,51 +737,32 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   />
                 </TouchableOpacity>
 
-                {/* Machinery Dropdown Popover (Screenshot 4 Match) */}
+                {/* Machinery Dropdown Inline Panel */}
                 {isMachineDropdownOpen && (
                   <View
                     style={[
-                      styles.anchoredDropdownPopover,
+                      styles.dropdownInlinePanel,
                       {
                         backgroundColor: theme.colors.canvasElevated,
                         borderColor: theme.colors.hairline,
                       },
                     ]}
                   >
-                    {/* Search Input */}
-                    <View
-                      style={[
-                        styles.dropdownSearchBox,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <Search size={14} color={theme.colors.mute} />
-                      <TextInput
-                        style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
-                        placeholder="Search by Model, Code, S/N..."
-                        placeholderTextColor={theme.colors.mute}
-                        value={machineSearchQuery}
-                        onChangeText={setMachineSearchQuery}
-                        autoFocus
-                      />
-                      {machineSearchQuery.length > 0 && (
-                        <TouchableOpacity
-                          onPress={() => setMachineSearchQuery('')}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <X size={13} color={theme.colors.mute} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    {/* Search Input using canonical SearchInput */}
+                    <SearchInput
+                      placeholder="Search by Model, Code, S/N..."
+                      value={machineSearchQuery}
+                      onChangeText={setMachineSearchQuery}
+                      autoFocus
+                      containerStyle={styles.searchBoxOverride}
+                    />
 
                     {/* Machine List */}
                     <ScrollView
                       style={styles.dropdownListScroll}
                       keyboardShouldPersistTaps="handled"
                       nestedScrollEnabled
+                      showsVerticalScrollIndicator={true}
                     >
                       {filteredMachines.length === 0 ? (
                         <View style={styles.dropdownEmptyRow}>
@@ -829,13 +785,13 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                               activeOpacity={0.7}
                               style={[
                                 styles.machineDropdownItem,
-                                isSelected && {
-                                  backgroundColor: isDark
-                                    ? 'rgba(56, 189, 248, 0.12)'
-                                    : '#f0f9ff',
-                                  borderColor: isDark
-                                    ? 'rgba(56, 189, 248, 0.3)'
-                                    : '#bae6fd',
+                                {
+                                  backgroundColor: isSelected
+                                    ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff')
+                                    : theme.colors.canvas,
+                                  borderColor: isSelected
+                                    ? (isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd')
+                                    : theme.colors.hairline,
                                 },
                               ]}
                             >
@@ -872,7 +828,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                               </View>
 
                               {isSelected && (
-                                <Check size={16} color="#0284c7" style={{ marginLeft: 8 }} />
+                                <View style={styles.checkIconWrap}>
+                                  <Check size={13} color="#ffffff" />
+                                </View>
                               )}
                             </TouchableOpacity>
                           );
@@ -892,11 +850,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   {
                     backgroundColor: theme.colors.canvas,
                     borderColor: theme.colors.hairline,
-                    zIndex: isSupervisorDropdownOpen ? 90 : 1,
                   },
                 ]}
-                // @ts-ignore
-                data-dropdown-container
+                {...({ 'data-dropdown-container': 'true' } as any)}
               >
                 <View style={styles.sectionHeaderRow}>
                   <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
@@ -986,45 +942,25 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   </View>
                 </TouchableOpacity>
 
-                {/* Supervisor Popover Menu (Screenshot 5 Match) */}
+                {/* Supervisor Inline Dropdown Panel */}
                 {isSupervisorDropdownOpen && (
                   <View
                     style={[
-                      styles.anchoredDropdownPopover,
+                      styles.dropdownInlinePanel,
                       {
                         backgroundColor: theme.colors.canvasElevated,
                         borderColor: theme.colors.hairline,
                       },
                     ]}
                   >
-                    {/* Search Bar */}
-                    <View
-                      style={[
-                        styles.dropdownSearchBox,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <Search size={14} color={theme.colors.mute} />
-                      <TextInput
-                        style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
-                        placeholder="Search staff by name, shift, role..."
-                        placeholderTextColor={theme.colors.mute}
-                        value={supervisorSearchQuery}
-                        onChangeText={setSupervisorSearchQuery}
-                        autoFocus
-                      />
-                      {supervisorSearchQuery.length > 0 && (
-                        <TouchableOpacity
-                          onPress={() => setSupervisorSearchQuery('')}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <X size={13} color={theme.colors.mute} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    {/* Search Bar using canonical SearchInput */}
+                    <SearchInput
+                      placeholder="Search staff by name, shift, role..."
+                      value={supervisorSearchQuery}
+                      onChangeText={setSupervisorSearchQuery}
+                      autoFocus
+                      containerStyle={styles.searchBoxOverride}
+                    />
 
                     {/* Subheader: Selected Count + Deselect All */}
                     <View
@@ -1051,6 +987,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                       style={styles.dropdownListScroll}
                       keyboardShouldPersistTaps="handled"
                       nestedScrollEnabled
+                      showsVerticalScrollIndicator={true}
                     >
                       {filteredSupervisors.length === 0 ? (
                         <View style={styles.dropdownEmptyRow}>
@@ -1349,33 +1286,14 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                         ]}
                       >
                         {/* Search Bar */}
-                        <View
-                          style={[
-                            styles.dropdownSearchBox,
-                            {
-                              backgroundColor: theme.colors.canvas,
-                              borderColor: theme.colors.hairline,
-                            },
-                          ]}
-                        >
-                          <Search size={14} color={theme.colors.mute} />
-                          <TextInput
-                            style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
-                            placeholder="Search active operator by name..."
-                            placeholderTextColor={theme.colors.mute}
-                            value={operatorSearchQuery}
-                            onChangeText={setOperatorSearchQuery}
-                            autoFocus
-                          />
-                          {operatorSearchQuery.length > 0 && (
-                            <TouchableOpacity
-                              onPress={() => setOperatorSearchQuery('')}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <X size={13} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        {/* Search Bar using canonical SearchInput */}
+                        <SearchInput
+                          placeholder="Search active operator by name..."
+                          value={operatorSearchQuery}
+                          onChangeText={setOperatorSearchQuery}
+                          autoFocus
+                          containerStyle={styles.searchBoxOverride}
+                        />
 
                         {/* Operators List */}
                         <ScrollView
@@ -1767,27 +1685,30 @@ const styles = StyleSheet.create({
   },
 
   /* Anchored Popover Menus */
-  anchoredDropdownPopover: {
-    position: 'absolute',
-    top: 76,
-    left: 12,
-    right: 12,
-    zIndex: 9999,
+  dropdownInlinePanel: {
+    marginTop: 10,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: 10,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 12px 28px rgba(0, 0, 0, 0.22)',
-      },
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 12,
-      },
-    }),
+    gap: 8,
+  },
+  searchBoxOverride: {
+    marginBottom: 4,
+  },
+  checkIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#0284c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  anchoredDropdownPopover: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 10,
   },
   dropdownSearchBox: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -959,6 +960,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     padding: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   filterStripContainer: {
     marginVertical: 2,

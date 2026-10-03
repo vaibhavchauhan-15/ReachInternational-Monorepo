@@ -693,6 +693,16 @@ const styles: any = StyleSheet.create({
     fontSize: 13,
     height: '100%',
     padding: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   dropdownScroll: {
     maxHeight: 200,
@@ -751,6 +761,16 @@ const styles: any = StyleSheet.create({
     fontSize: 13.5,
     height: '100%',
     padding: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   list: {
     maxHeight: 380,

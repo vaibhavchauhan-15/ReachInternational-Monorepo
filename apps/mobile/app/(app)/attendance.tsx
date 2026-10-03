@@ -1136,6 +1136,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     height: 44,
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   filterStrip: {
     flexDirection: 'row',

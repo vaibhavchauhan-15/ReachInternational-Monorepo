@@ -14,9 +14,9 @@ import {
   Gauge,
   Clock,
   MapPin,
-  CheckCircle2,
   ArrowRight,
   Layers,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -132,18 +132,16 @@ export async function OperatorDashboardView({
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-[var(--color-mute)]" />
-              Continuous Shift Coverage ({submittedCount}/{totalAssignedCount} Logged)
+              Shift Coverage ({submittedCount}/{totalAssignedCount})
             </h2>
-            {totalRunningHoursToday > 0 && (
-              <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                {totalRunningHoursToday.toFixed(1)} hrs total recorded today
-              </span>
-            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {data.assigned_shifts.map((s) => {
               const isLogged = s.is_logged_today;
+              const shiftClean = s.code.replace(/^shift\s*/i, "").trim();
+              const shiftCodeName = shiftClean ? `Shift ${shiftClean}` : s.code;
+
               return (
                 <div
                   key={s.code}
@@ -157,17 +155,10 @@ export async function OperatorDashboardView({
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold text-xs font-mono px-2 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)]">
-                        Shift {s.code}
-                      </span>
-                      <span className="text-xs font-bold text-[var(--color-ink)] truncate max-w-[120px]">
-                        {s.name}
+                        {shiftCodeName}
                       </span>
                     </div>
-                    {isLogged ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono shrink-0">
-                        <CheckCircle2 className="w-3 h-3" /> Logged ({s.running_hours_today?.toFixed(1)}h)
-                      </span>
-                    ) : (
+                    {!isLogged && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono shrink-0">
                         Ready to Log
                       </span>
@@ -183,6 +174,18 @@ export async function OperatorDashboardView({
                         {s.start_time} – {s.end_time} {s.crosses_midnight ? "🌙" : ""}
                       </span>
                     </div>
+                    {isLogged && (
+                      <div className="flex items-center justify-between text-[var(--color-mute)]">
+                        <span className="flex items-center gap-1">
+                          <Timer className="w-3 h-3" /> Machine RT :
+                        </span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          {s.running_hours_today != null
+                            ? `${Number(s.running_hours_today.toFixed(1))}h`
+                            : "0h"}
+                        </span>
+                      </div>
+                    )}
                     {isLogged && s.end_meter_today != null && (
                       <div className="flex items-center justify-between text-[var(--color-mute)]">
                         <span className="flex items-center gap-1">
@@ -208,7 +211,7 @@ export async function OperatorDashboardView({
                         href={`/operations?shift=${s.code}`}
                         className="w-full text-center text-xs font-semibold px-3 py-2 rounded-lg bg-[var(--color-ink)] text-white hover:bg-[var(--color-ink)]/90 inline-flex items-center justify-center gap-1 min-h-[40px] transition-colors"
                       >
-                        Log Shift {s.code} <ArrowRight className="w-3 h-3" />
+                        Log {shiftCodeName} <ArrowRight className="w-3 h-3" />
                       </Link>
                     )}
                   </div>

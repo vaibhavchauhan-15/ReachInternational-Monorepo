@@ -95,6 +95,10 @@ function MobileWebScrollbarStyles() {
       ::-webkit-scrollbar-thumb:hover {
         background: ${thumbHover};
       }
+      /* Suppress user-agent default outlines and borders on text inputs */
+      input, textarea {
+        outline: none !important;
+      }
     `;
   }, [isDark]);
 

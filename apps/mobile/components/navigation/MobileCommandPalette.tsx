@@ -501,6 +501,17 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 14,
     fontWeight: '500',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   clearBtn: {
     padding: 4,

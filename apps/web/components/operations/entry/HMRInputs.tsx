@@ -141,12 +141,12 @@ export function HMRInputs({
           </div>
           {isMeterRegressed && (
             <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
-              Ending meter cannot be less than starting meter ({startNum.toFixed(1)}).
+              End meter must be ≥ {startNum.toFixed(1)}.
             </p>
           )}
           {isOver24Hours && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
-              Running hours cannot exceed 24.0 hours for a single shift.
+              Running hours cannot exceed 24h.
             </p>
           )}
         </div>

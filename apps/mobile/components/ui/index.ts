@@ -28,3 +28,4 @@ export * from './FilterToolbar';
 export * from './ConfirmDialog';
 export * from './SegmentedToggle';
 export * from './ShiftCardSelector';
+export * from './SearchInput';

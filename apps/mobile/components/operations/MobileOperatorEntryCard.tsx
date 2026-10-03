@@ -369,40 +369,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
       {/* 3. Last Recorded Log Banner */}
       {entryContext.last_log ? (
-        <View style={{ marginBottom: spacingNumeric.sm, gap: 8 }}>
-          {/* Contextual Notice if Today's Shift was Logged by Supervisor */}
-          {Boolean(
-            entryContext.last_log.entry_source &&
-            entryContext.last_log.entry_source !== 'operator' &&
-            entryContext.last_log.log_date === getISTDateString()
-          ) && (
-            <View
-              style={[
-                styles.hmrBanner,
-                {
-                  backgroundColor: isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff',
-                  borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  marginBottom: 0,
-                },
-              ]}
-            >
-              <UserCheck size={18} color={isDark ? '#38bdf8' : '#0284c7'} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#e0f2fe' : '#0369a1' }}>
-                  Today's Shift Logged by Supervisor
-                </Text>
-                <Text style={{ fontSize: 12.5, color: isDark ? '#bae6fd' : '#0c4a6e', marginTop: 2 }}>
-                  Supervisor {entryContext.last_log.entered_by_name || 'Your supervisor'} recorded your shift for today.
-                </Text>
-              </View>
-            </View>
-          )}
-
+        <View style={{ marginBottom: spacingNumeric.sm }}>
           <View
             style={[
               styles.hmrBanner,
@@ -445,13 +412,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#065f46' }}>Last Entry By</Text>
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', marginTop: 2 }} numberOfLines={1}>
-                  {entryContext.last_log.operator_name || 'Operator'}
+                  {entryContext.last_log.entered_by_name || entryContext.last_log.operator_name || 'Operator'}
                 </Text>
-                {entryContext.last_log.entry_source && entryContext.last_log.entry_source !== 'operator' && (
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#93c5fd' : '#1d4ed8', marginTop: 1 }}>
-                    (by {entryContext.last_log.entered_by_name || 'Supervisor'})
-                  </Text>
-                )}
               </View>
             </View>
           </View>

@@ -311,6 +311,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     paddingVertical: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   list: {
     flex: 1,

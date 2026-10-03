@@ -189,7 +189,16 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '500',
     paddingVertical: 0,
-    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   errorText: {
     fontSize: 11.5,
