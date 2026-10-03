@@ -1,8 +1,10 @@
 /**
  * Reach International Mobile — Signup / Registration Screen
- * Exact replication of the Web Mobile Viewport Signup UI/UX.
- * Production-ready with native keyboard management, safe areas, theme adaptation,
- * dynamic status bar contrast, haptic feedback, validation, and full Supabase authentication lifecycle parity.
+ * 95% identical replication of the Web Mobile Viewport Signup UI/UX,
+ * with 5% native smart phone optimizations:
+ * - Touch & haptic feedback on selectors, checkboxes, AM/PM, uploads, and submit
+ * - Uses canonical reusable UI components (Input, TimeInput, SearchableSelect, MobileFormSectionCard, MobileAddressFields, MobileDocumentUploadCard, MobileSubmitButton)
+ * - Safe areas and responsive theming (Light/Dark).
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -14,15 +16,13 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Modal,
-  ActivityIndicator,
-  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, TimeInput, useTheme } from '../../components/ui';
+import { Input, Alert, TimeInput, SearchableSelect, useTheme } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
@@ -31,8 +31,6 @@ import {
   validateBankAccountNumber,
   validateIfscCode,
   formatIfscCode,
-  INDIAN_STATES,
-  getStateById,
   computeShiftTiming,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
@@ -48,24 +46,20 @@ import {
   Mail,
   Phone,
   Lock,
-  MapPin,
   ShieldCheck,
   CreditCard,
   Building2,
-  ChevronDown,
-  X,
   Check,
   Info,
-  Search,
   Sun,
   Moon,
 } from 'lucide-react-native';
 
 const SIGNUP_ROLES = [
-  { value: 'operator', label: 'Operator', desc: 'Machine duty & daily running hour logs' },
-  { value: 'supervisor', label: 'Supervisor', desc: 'Equipment monitoring & shift supervision' },
-  { value: 'manager', label: 'Manager', desc: 'Fleet operations, client accounts & asset management' },
-  { value: 'hr', label: 'HR', desc: 'Staff onboarding & personnel management' },
+  { value: 'operator', label: 'Operator' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'hr', label: 'HR' },
 ];
 
 export default function SignupScreen() {
@@ -76,7 +70,6 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
 
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
@@ -103,9 +96,8 @@ export default function SignupScreen() {
 
   // Supervisor Selection State
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
-  const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
-  const [supervisorSearch, setSupervisorSearch] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -126,13 +118,27 @@ export default function SignupScreen() {
   useEffect(() => {
     let isMounted = true;
     async function loadSupervisors() {
+      setLoadingSupervisors(true);
       try {
         const { data, error } = await supabase.rpc('get_active_supervisors_public');
         if (!error && data && isMounted) {
           setSupervisors(data as Array<{ id: string; full_name: string }>);
+        } else if (error) {
+          console.warn('[Signup] RPC get_active_supervisors_public error:', error.message);
+          // Fallback query if RPC fails
+          const { data: directData } = await supabase
+            .from('users')
+            .select('id, full_name')
+            .eq('role', 'supervisor')
+            .in('status', ['active', 'approved']);
+          if (directData && isMounted && directData.length > 0) {
+            setSupervisors(directData as Array<{ id: string; full_name: string }>);
+          }
         }
       } catch (err) {
         console.warn('Failed to load active supervisors for mobile signup:', err);
+      } finally {
+        if (isMounted) setLoadingSupervisors(false);
       }
     }
 
@@ -142,9 +148,6 @@ export default function SignupScreen() {
     };
   }, []);
 
-  const selectedRoleObj = SIGNUP_ROLES.find((r) => r.value === selectedRole) || SIGNUP_ROLES[0];
-  const selectedSupervisor = supervisors.find((s) => s.id === selectedSupervisorId);
-
   const shiftSummary = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
     return computeShiftTiming({
@@ -152,16 +155,6 @@ export default function SignupScreen() {
       endTime: shiftEndTime,
     });
   }, [shiftStartTime, shiftEndTime]);
-
-  const triggerHaptic = () => {
-    if (Platform.OS === 'android') {
-      try {
-        Vibration.vibrate(12);
-      } catch {
-        // Safe fallback
-      }
-    }
-  };
 
   const handleBankAccountChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 18);
@@ -206,95 +199,157 @@ export default function SignupScreen() {
     if (clean.length === 12) {
       const res = validateAadhaarNumber(clean);
       if (!res.isValid) {
-        setFieldErrors((prev) => ({ ...prev, aadhaar_number: res.error || 'Invalid Aadhaar number' }));
+        setFieldErrors((prev) => ({
+          ...prev,
+          aadhaar_number: res.error || 'Invalid 12-digit Aadhaar number.',
+        }));
       }
     }
   };
 
   const handleLicenseChange = (val: string) => {
-    const upper = val.toUpperCase();
-    setLicenseNumber(upper);
+    const formatted = val.toUpperCase();
+    setLicenseNumber(formatted);
     clearFieldError('license_number');
+    if (formatted.trim()) {
+      const res = validateLicenseNumber(formatted);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          license_number: res.error || 'Invalid driving licence format.',
+        }));
+      }
+    }
   };
+
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    email.trim().length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase()) &&
+    cleanPhone.length >= 10 &&
+    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId)
+  );
+
+  const section2Complete = Boolean(
+    shiftStartTime.trim().length > 0 &&
+    shiftEndTime.trim().length > 0
+  );
+
+  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
+  const cleanIfsc = bankIfscCode.trim().toUpperCase();
+
+  const section3Complete = Boolean(
+    street.trim().length >= 2 &&
+    city.trim().length >= 2 &&
+    district.trim().length >= 2 &&
+    (stateVal.trim().length > 0 || stateId !== null)
+  );
+
+  const section4Complete = Boolean(
+    cleanBankAcc.length >= 9 &&
+    cleanBankAcc.length <= 18 &&
+    validateBankAccountNumber(cleanBankAcc).isValid &&
+    cleanIfsc.length === 11 &&
+    validateIfscCode(cleanIfsc).isValid &&
+    Boolean(bankDoc)
+  );
+
+  const section5Complete = Boolean(
+    aadhaarNumber.replace(/\D/g, '').length === 12 &&
+    Boolean(aadhaarDoc)
+  );
+
+  const section6Complete = Boolean(
+    password.length >= 8 &&
+    confirmPassword.length >= 8 &&
+    password === confirmPassword &&
+    agreedToTerms
+  );
+
+  const isAllMandatoryFilled = Boolean(
+    section1Complete &&
+    section2Complete &&
+    section3Complete &&
+    section4Complete &&
+    section5Complete &&
+    section6Complete
+  );
+
+  const missingFields: string[] = [];
+  if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
+  if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) missingFields.push('Email Address');
+  if (cleanPhone.length < 10) missingFields.push('Mobile Number');
+  if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
+  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Timing');
+  if (!street.trim()) missingFields.push('Street Address');
+  if (!city.trim() || city.trim().length < 2) missingFields.push('City');
+  if (!district.trim() || district.trim().length < 2) missingFields.push('District');
+  if (!stateVal.trim() && !stateId) missingFields.push('State');
+  if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) missingFields.push('Bank Account Number');
+  if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) missingFields.push('IFSC Code');
+  if (!bankDoc) missingFields.push('Bank Document');
+  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('Aadhaar Number');
+  if (!aadhaarDoc) missingFields.push('Aadhaar Document');
+  if (!password || password.length < 8) missingFields.push('Password');
+  if (password !== confirmPassword) missingFields.push('Confirm Password');
+  if (!agreedToTerms) missingFields.push('Terms of Service');
+
+  const missingMandatoryCount = missingFields.length;
 
   const handleSignup = async () => {
     if (isSubmittingRef.current || isLoading) return;
-    triggerHaptic();
-    setErrorMessage('');
-    setSuccessMessage('');
 
     const errors: Record<string, string> = {};
 
-    if (!fullName.trim() || fullName.trim().length < 2) {
-      errors.full_name = 'Full name is required (minimum 2 characters).';
+    if (!fullName || fullName.trim().length < 2) {
+      errors.full_name = 'Full name must be at least 2 characters.';
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email.trim() || !emailRegex.test(email.trim().toLowerCase())) {
-      errors.email = 'Please enter a valid email address.';
+    if (!email || !email.includes('@')) {
+      errors.email = 'Please provide a valid email address.';
     }
 
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
     if (cleanPhone.length < 10) {
-      errors.phone = 'Valid 10-digit mobile number is required.';
+      errors.phone = 'Mobile number must be at least 10 digits.';
     }
 
     if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) {
-      errors.supervisor_id = 'Please select your designated supervisor.';
+      errors.supervisor_id = 'Please select a supervisor.';
     }
 
-    if (!shiftStartTime.trim()) {
-      errors.shift_start_time = 'Shift start time is required.';
+    if (!street || street.trim().length < 2) {
+      errors.street = 'Street address is required.';
     }
-    if (!shiftEndTime.trim()) {
-      errors.shift_end_time = 'Shift end time is required.';
+    if (!city || city.trim().length < 2) {
+      errors.city = 'City/town is required.';
     }
-
-    if (!city.trim() || city.trim().length < 2) {
-      errors.city = 'City/Town/Village is required.';
-    }
-    if (!district.trim() || district.trim().length < 2) {
+    if (!district || district.trim().length < 2) {
       errors.district = 'District is required.';
     }
-    if (!stateVal.trim() && !stateId) {
+    if (!stateVal && !stateId) {
       errors.state = 'State is required.';
     }
 
-    if (!bankAccountNumber.trim()) {
-      errors.bank_account_number = 'Bank account number is required.';
-    } else {
-      const bankRes = validateBankAccountNumber(bankAccountNumber);
-      if (!bankRes.isValid) {
-        errors.bank_account_number = bankRes.error || 'Invalid bank account number (9 to 18 digits).';
-      }
+    if (!cleanBankAcc || cleanBankAcc.length < 9) {
+      errors.bank_account_number = 'Bank account number must be between 9 and 18 digits.';
     }
-
-    if (!bankIfscCode.trim()) {
-      errors.bank_ifsc_code = 'Bank IFSC code is required.';
-    } else {
-      const ifscRes = validateIfscCode(bankIfscCode);
-      if (!ifscRes.isValid) {
-        errors.bank_ifsc_code = ifscRes.error || 'Invalid IFSC code format (e.g. SBIN0001234).';
-      }
+    if (!cleanIfsc || cleanIfsc.length !== 11) {
+      errors.bank_ifsc_code = 'IFSC code must be exactly 11 characters.';
     }
-
     if (!bankDoc) {
-      errors.bank_doc = 'Bank account document (Passbook / Cheque / Statement) is required.';
-      setBankDocError('Bank account document (Passbook / Cheque / Statement) is required.');
+      setBankDocError('Please upload your bank passbook/cheque/statement.');
+      errors.bank_doc = 'Bank document is required.';
     }
 
-    if (!aadhaarNumber.trim()) {
-      errors.aadhaar_number = 'Aadhaar card number is required.';
-    } else {
-      const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
-      if (!aadhaarRes.isValid) {
-        errors.aadhaar_number = aadhaarRes.error || 'Invalid Aadhaar number.';
-      }
+    const cleanAadhaar = aadhaarNumber.replace(/\D/g, '');
+    if (cleanAadhaar.length !== 12) {
+      errors.aadhaar_number = 'Aadhaar number must be exactly 12 digits.';
     }
-
     if (!aadhaarDoc) {
-      errors.aadhaar_doc = 'Aadhaar document (Photo / PDF) is required.';
-      setAadhaarDocError('Aadhaar document (Photo / PDF) is required.');
+      setAadhaarDocError('Please upload your Aadhaar document.');
+      errors.aadhaar_doc = 'Aadhaar document is required.';
     }
 
     if (licenseNumber.trim()) {
@@ -306,13 +361,6 @@ export default function SignupScreen() {
 
     if (!password || password.length < 8) {
       errors.password = 'Password must be at least 8 characters long.';
-    } else {
-      const hasUppercase = /[A-Z]/.test(password);
-      const hasLowercase = /[a-z]/.test(password);
-      const hasDigit = /\d/.test(password);
-      if (!hasUppercase || !hasLowercase || !hasDigit) {
-        errors.password = 'Password must include uppercase, lowercase, and a number.';
-      }
     }
 
     if (password !== confirmPassword) {
@@ -326,6 +374,7 @@ export default function SignupScreen() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please correct the highlighted fields before submitting.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       return;
     }
 
@@ -374,8 +423,9 @@ export default function SignupScreen() {
         setErrorMessage(error.message);
         isSubmittingRef.current = false;
         setIsLoading(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       } else {
-        // Upload documents if selected and user was created
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         if (data?.user?.id) {
           const userId = data.user.id;
           if (bankDoc) {
@@ -427,87 +477,21 @@ export default function SignupScreen() {
       setErrorMessage(err?.message || 'An unexpected error occurred during signup.');
       isSubmittingRef.current = false;
       setIsLoading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     }
   };
-
-  const cleanPhone = phone.replace(/[^0-9+]/g, '');
-
-  const section1Complete = Boolean(
-    fullName.trim().length >= 2 &&
-    email.trim().length > 0 &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase()) &&
-    cleanPhone.length >= 10 &&
-    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId)
-  );
-
-  const section2Complete = Boolean(
-    shiftStartTime.trim().length > 0 &&
-    shiftEndTime.trim().length > 0
-  );
-
-  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
-  const cleanIfsc = bankIfscCode.trim().toUpperCase();
-
-  const section3Complete = Boolean(
-    city.trim().length >= 2 &&
-    district.trim().length >= 2 &&
-    (stateVal.trim().length > 0 || stateId !== null)
-  );
-
-  const section4Complete = Boolean(
-    cleanBankAcc.length >= 9 &&
-    cleanBankAcc.length <= 18 &&
-    validateBankAccountNumber(cleanBankAcc).isValid &&
-    cleanIfsc.length === 11 &&
-    validateIfscCode(cleanIfsc).isValid &&
-    Boolean(bankDoc)
-  );
-
-  const section5Complete = Boolean(
-    aadhaarNumber.replace(/\D/g, '').length === 12 &&
-    Boolean(aadhaarDoc)
-  );
-
-  const section6Complete = Boolean(
-    password.length >= 8 &&
-    confirmPassword.length >= 8 &&
-    password === confirmPassword &&
-    agreedToTerms
-  );
-
-  const isAllMandatoryFilled = Boolean(
-    section1Complete &&
-    section2Complete &&
-    section3Complete &&
-    section4Complete &&
-    section5Complete &&
-    section6Complete
-  );
-
-  const missingFields: string[] = [];
-  if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
-  if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) missingFields.push('Valid Email');
-  if (cleanPhone.length < 10) missingFields.push('10-digit Phone');
-  if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
-  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Hours');
-  if (!city.trim() || city.trim().length < 2) missingFields.push('City/Town');
-  if (!district.trim() || district.trim().length < 2) missingFields.push('District');
-  if (!stateVal.trim() && !stateId) missingFields.push('State');
-  if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) missingFields.push('Bank Account Number');
-  if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) missingFields.push('Bank IFSC Code');
-  if (!bankDoc) missingFields.push('Bank Document');
-  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
-  if (!aadhaarDoc) missingFields.push('Aadhaar Document');
-  if (!password || password.length < 8) missingFields.push('Password (8+ chars)');
-  if (password !== confirmPassword) missingFields.push('Matching Passwords');
-  if (!agreedToTerms) missingFields.push('Terms Agreement');
-
-  const missingMandatoryCount = missingFields.length;
 
   const canvasBackground = isDark ? '#0a0a0a' : '#fafafa';
   const cardBackground = isDark ? '#171717' : '#ffffff';
   const cardBorder = isDark ? '#262626' : '#ebebeb';
-  const primarySkyBlue = '#0ea5e9';
+  const iconColor = isDark ? '#737373' : '#9ca3af';
+
+  const supervisorOptions = useMemo(() => {
+    return supervisors.map((s) => ({
+      value: s.id,
+      label: s.full_name,
+    }));
+  }, [supervisors]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: canvasBackground }]}>
@@ -523,7 +507,7 @@ export default function SignupScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Main Card Container */}
+          {/* Main Card Container matching web mobile viewport */}
           <View style={styles.centerContainer}>
             <View
               style={[
@@ -534,13 +518,13 @@ export default function SignupScreen() {
                 },
               ]}
             >
-              {/* Brand Logo Centered */}
+              {/* Brand Logo Centered (clean wordmark without scissor lift SVG icon) */}
               <View style={styles.logoContainer}>
-                <ReachInternationalLogo size={28} />
+                <ReachInternationalLogo variant="full" size={26} showIcon={false} />
               </View>
 
               {/* Card Title */}
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
+              <Text style={[styles.title, { color: isDark ? '#ffffff' : '#0f172a' }]}>
                 Create an account
               </Text>
 
@@ -561,10 +545,10 @@ export default function SignupScreen() {
               {/* Section 1: Account & Role */}
               <MobileFormSectionCard
                 stepNumber={1}
-                title="Account & Role"
-                description="Your personal information, login email, and company operational role."
+                title="ACCOUNT & ROLE"
                 isMandatory={true}
                 isCompleted={section1Complete}
+                style={{ zIndex: 60 }}
               >
                 <Input
                   label="Full Name"
@@ -578,7 +562,7 @@ export default function SignupScreen() {
                   autoCapitalize="words"
                   autoComplete="name"
                   error={fieldErrors.full_name}
-                  leftIcon={<User size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<User size={15} color={iconColor} />}
                 />
 
                 <Input
@@ -594,7 +578,7 @@ export default function SignupScreen() {
                   keyboardType="email-address"
                   autoComplete="email"
                   error={fieldErrors.email}
-                  leftIcon={<Mail size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<Mail size={15} color={iconColor} />}
                 />
 
                 <Input
@@ -609,112 +593,99 @@ export default function SignupScreen() {
                   keyboardType="phone-pad"
                   autoComplete="tel"
                   error={fieldErrors.phone}
-                  leftIcon={<Phone size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<Phone size={15} color={iconColor} />}
                 />
 
-                {/* Role Selector Trigger */}
-                <View style={styles.selectGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                    Role Requested <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setRoleModalVisible(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.selectTrigger,
-                      {
-                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
-                        borderColor: isDark ? '#292c2f' : cardBorder,
-                      },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.selectValue, { color: theme.colors.ink }]}>
-                        {selectedRoleObj.label}
-                      </Text>
-                      <Text style={[styles.selectSubtext, { color: theme.colors.mute }]}>
-                        {selectedRoleObj.desc}
-                      </Text>
-                    </View>
-                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
-                  </TouchableOpacity>
-                </View>
+                {/* Role Selector using Reusable SearchableSelect with role names only */}
+                <SearchableSelect
+                  label="Role Requested"
+                  required
+                  options={SIGNUP_ROLES}
+                  value={selectedRole}
+                  onChange={(val) => {
+                    setSelectedRole(val);
+                    if (!isSupervisedRole(val)) {
+                      setSelectedSupervisorId('');
+                    }
+                  }}
+                  placeholder="Select role..."
+                  leftIcon={<User size={15} color={iconColor} />}
+                  error={fieldErrors.role}
+                  modalTitle="Select Account Role"
+                  presentation="dropdown"
+                  containerStyle={{ zIndex: 20 }}
+                />
 
-                {/* Conditional Supervisor Selector */}
+                {/* Conditional Supervisor Selector using Reusable SearchableSelect */}
                 {isSupervisedRole(selectedRole) && (
-                  <View style={[styles.selectGroup, { paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                      Select Supervisor <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setSupervisorModalVisible(true)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.selectTrigger,
-                        {
-                          backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
-                          borderColor: fieldErrors.supervisor_id ? '#ef4444' : isDark ? '#292c2f' : cardBorder,
-                        },
-                      ]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.selectValue,
-                            { color: selectedSupervisor ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
-                          ]}
-                        >
-                          {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor who oversees your work...'}
-                        </Text>
-                      </View>
-                      <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
-                    </TouchableOpacity>
-                    {fieldErrors.supervisor_id ? (
-                      <Text style={styles.errorText}>{fieldErrors.supervisor_id}</Text>
-                    ) : null}
+                  <View style={[styles.supervisorWrapper, { zIndex: 10 }]}>
+                    <SearchableSelect
+                      label="Select Supervisor"
+                      required
+                      options={supervisorOptions}
+                      value={selectedSupervisorId}
+                      onChange={(val) => {
+                        setSelectedSupervisorId(val);
+                        clearFieldError('supervisor_id');
+                      }}
+                      placeholder={
+                        loadingSupervisors
+                          ? 'Loading supervisors...'
+                          : supervisorOptions.length === 0
+                          ? 'No active supervisors found'
+                          : 'Select supervisor...'
+                      }
+                      leftIcon={<ShieldCheck size={15} color={iconColor} />}
+                      error={fieldErrors.supervisor_id}
+                      modalTitle="Select Supervisor"
+                      searchable
+                      searchPlaceholder="Search supervisor..."
+                      presentation="dropdown"
+                    />
                   </View>
                 )}
-
               </MobileFormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
               <MobileFormSectionCard
                 stepNumber={2}
-                title="Work Shift Schedule"
+                title="WORK SHIFT SCHEDULE"
                 isMandatory={true}
                 isCompleted={section2Complete}
-              >
-                <View style={{ gap: 10 }}>
-                  <TimeInput
-                    label="Shift Start Time"
-                    value={shiftStartTime}
-                    onChange={setShiftStartTime}
-                  />
-                  <TimeInput
-                    label="Shift End Time"
-                    value={shiftEndTime}
-                    onChange={setShiftEndTime}
-                  />
-                </View>
-
-                {shiftSummary?.isValid && (
-                  <View style={styles.shiftPill}>
-                    <Text style={styles.shiftPillText}>
+                style={{ zIndex: 50 }}
+                headerAction={
+                  shiftSummary?.isValid ? (
+                    <Text style={[styles.durationSmallText, { color: isDark ? '#38bdf8' : '#0284c7' }]}>
                       {shiftSummary.durationMinutes % 60 === 0
-                        ? `${shiftSummary.durationMinutes / 60}h`
-                        : `${Number(shiftSummary.durationHours.toFixed(1))}h`}
+                        ? `${shiftSummary.durationMinutes / 60} hrs`
+                        : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}
                     </Text>
-                  </View>
-                )}
+                  ) : null
+                }
+              >
+                <TimeInput
+                  label="Shift Start Time"
+                  value={shiftStartTime}
+                  onChange={setShiftStartTime}
+                  required
+                  toggleLayout="side-by-side"
+                />
+                <TimeInput
+                  label="Shift End Time"
+                  value={shiftEndTime}
+                  onChange={setShiftEndTime}
+                  required
+                  toggleLayout="side-by-side"
+                />
               </MobileFormSectionCard>
 
               {/* Section 3: Address Details */}
               <MobileFormSectionCard
                 stepNumber={3}
-                title="Address Details"
-                description="Field operations base location."
+                title="ADDRESS DETAILS"
                 isMandatory={true}
                 isCompleted={section3Complete}
+                style={{ zIndex: 40 }}
               >
                 <MobileAddressFields
                   street={street}
@@ -752,10 +723,10 @@ export default function SignupScreen() {
               {/* Section 4: Banking Details */}
               <MobileFormSectionCard
                 stepNumber={4}
-                title="Banking Details"
-                description="Bank account credentials and passbook document."
+                title="BANKING DETAILS"
                 isMandatory={true}
                 isCompleted={section4Complete}
+                style={{ zIndex: 30 }}
               >
                 <Input
                   label="Bank Account Number"
@@ -766,7 +737,7 @@ export default function SignupScreen() {
                   keyboardType="numeric"
                   maxLength={18}
                   error={fieldErrors.bank_account_number}
-                  leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<CreditCard size={15} color={iconColor} />}
                 />
 
                 <Input
@@ -778,13 +749,13 @@ export default function SignupScreen() {
                   autoCapitalize="characters"
                   maxLength={11}
                   error={fieldErrors.bank_ifsc_code}
-                  leftIcon={<Building2 size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<Building2 size={15} color={iconColor} />}
                 />
 
                 <MobileDocumentUploadCard
-                  title="Bank Account Document *"
-                  subtitle="Passbook front page, cancelled cheque, or statement (max 2 MB)"
+                  title="Bank Account Document"
                   docTypeCode="bank_document"
+                  required
                   selectedDoc={bankDoc}
                   onDocSelected={(doc) => {
                     setBankDoc(doc);
@@ -802,10 +773,10 @@ export default function SignupScreen() {
               {/* Section 5: Identity Verification */}
               <MobileFormSectionCard
                 stepNumber={5}
-                title="Identity Verification"
-                description="Statutory identity credentials and verification documents."
+                title="IDENTITY VERIFICATION"
                 isMandatory={true}
                 isCompleted={section5Complete}
+                style={{ zIndex: 20 }}
               >
                 <Input
                   label="Aadhaar Card Number"
@@ -816,23 +787,7 @@ export default function SignupScreen() {
                   keyboardType="numeric"
                   maxLength={14}
                   error={fieldErrors.aadhaar_number}
-                  leftIcon={<ShieldCheck size={16} color={isDark ? '#737373' : '#9ca3af'} />}
-                />
-
-                <MobileDocumentUploadCard
-                  title="Aadhaar Document *"
-                  subtitle="Front page or full e-Aadhaar PDF (max 2 MB)"
-                  docTypeCode="aadhaar"
-                  selectedDoc={aadhaarDoc}
-                  onDocSelected={(doc) => {
-                    setAadhaarDoc(doc);
-                    setAadhaarDocError(null);
-                  }}
-                  onDocRemoved={() => {
-                    setAadhaarDoc(null);
-                    setAadhaarDocError(null);
-                  }}
-                  errorMessage={aadhaarDocError}
+                  leftIcon={<ShieldCheck size={15} color={iconColor} />}
                 />
 
                 <Input
@@ -843,12 +798,28 @@ export default function SignupScreen() {
                   autoCapitalize="characters"
                   maxLength={25}
                   error={fieldErrors.license_number}
-                  leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<CreditCard size={15} color={iconColor} />}
+                />
+
+                <MobileDocumentUploadCard
+                  title="Aadhaar Document"
+                  docTypeCode="aadhaar"
+                  required
+                  selectedDoc={aadhaarDoc}
+                  onDocSelected={(doc) => {
+                    setAadhaarDoc(doc);
+                    setAadhaarDocError(null);
+                    clearFieldError('aadhaar_doc');
+                  }}
+                  onDocRemoved={() => {
+                    setAadhaarDoc(null);
+                    setAadhaarDocError(null);
+                  }}
+                  errorMessage={aadhaarDocError || fieldErrors.aadhaar_doc}
                 />
 
                 <MobileDocumentUploadCard
                   title="Licence Document"
-                  subtitle="Front page or smart card scan (max 2 MB)"
                   docTypeCode="driving_license"
                   selectedDoc={licenseDoc}
                   onDocSelected={(doc) => {
@@ -866,10 +837,10 @@ export default function SignupScreen() {
               {/* Section 6: Security Credentials */}
               <MobileFormSectionCard
                 stepNumber={6}
-                title="Security Credentials"
-                description="Secure password credentials for logging into the platform."
+                title="SECURITY CREDENTIALS"
                 isMandatory={true}
                 isCompleted={section6Complete}
+                style={{ zIndex: 10 }}
               >
                 <Input
                   label="Password"
@@ -884,7 +855,7 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoComplete="new-password"
                   error={fieldErrors.password}
-                  leftIcon={<Lock size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<Lock size={15} color={iconColor} />}
                 />
 
                 <Input
@@ -900,29 +871,38 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoComplete="new-password"
                   error={fieldErrors.confirm_password}
-                  leftIcon={<Lock size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  leftIcon={<Lock size={15} color={iconColor} />}
                 />
-
-                <Text style={[styles.helperCaption, { color: theme.colors.mute }]}>
-                  Password must be at least 8 characters long. Make sure both passwords match.
-                </Text>
               </MobileFormSectionCard>
 
               {/* Note Banner */}
-              <View style={styles.noteBox}>
-                <Info size={16} color="#0ea5e9" style={{ marginTop: 2 }} />
-                <Text style={styles.noteText}>
+              <View
+                style={[
+                  styles.noteBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : 'rgba(2, 132, 199, 0.08)',
+                    borderColor: isDark ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.2)',
+                  },
+                ]}
+              >
+                <Info size={15} color="#0284c7" style={{ marginTop: 2 }} />
+                <Text
+                  style={[
+                    styles.noteText,
+                    { color: isDark ? '#7dd3fc' : '#0369a1' },
+                  ]}
+                >
                   <Text style={{ fontWeight: '700' }}>Note: </Text>
-                  Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+                  Account status will be “pending” until approved by an administrator.
                 </Text>
               </View>
 
               {/* Terms and Privacy Agreement Checkbox */}
-              <View style={{ marginTop: 14, marginBottom: 12 }}>
+              <View style={{ marginTop: 10, marginBottom: 8 }}>
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
                   onPress={() => {
-                    triggerHaptic();
+                    Haptics.selectionAsync().catch(() => {});
                     setAgreedToTerms((prev) => {
                       const next = !prev;
                       if (next) clearFieldError('terms');
@@ -933,30 +913,30 @@ export default function SignupScreen() {
                 >
                   <View
                     style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 6,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 5,
                       borderWidth: 1.5,
-                      borderColor: agreedToTerms ? primarySkyBlue : cardBorder,
-                      backgroundColor: agreedToTerms ? primarySkyBlue : 'transparent',
+                      borderColor: agreedToTerms ? '#0284c7' : isDark ? '#404040' : '#d1d5db',
+                      backgroundColor: agreedToTerms ? '#0284c7' : 'transparent',
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginTop: 1,
                     }}
                   >
-                    {agreedToTerms && <Check size={13} color="#ffffff" />}
+                    {agreedToTerms && <Check size={12} color="#ffffff" strokeWidth={3} />}
                   </View>
-                  <Text style={{ flex: 1, fontSize: 12, color: theme.colors.mute, lineHeight: 18 }}>
-                    I agree to the{' '}
+                  <Text style={{ flex: 1, fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', lineHeight: 18 }}>
+                    I have read and agree to the{' '}
                     <Text
-                      style={{ color: primarySkyBlue, fontWeight: '600' }}
+                      style={{ color: '#0284c7', fontWeight: '600' }}
                       onPress={() => router.push('/(app)/terms')}
                     >
                       Terms of Service
                     </Text>{' '}
                     and{' '}
                     <Text
-                      style={{ color: primarySkyBlue, fontWeight: '600' }}
+                      style={{ color: '#0284c7', fontWeight: '600' }}
                       onPress={() => router.push('/(app)/privacy')}
                     >
                       Privacy Policy
@@ -965,34 +945,37 @@ export default function SignupScreen() {
                   </Text>
                 </TouchableOpacity>
                 {fieldErrors.terms && (
-                  <Text style={{ fontSize: 12.5, color: '#ef4444', marginTop: 4, marginLeft: 30 }}>
+                  <Text style={{ fontSize: 11.5, color: '#ef4444', marginTop: 4, marginLeft: 28 }}>
                     {fieldErrors.terms}
                   </Text>
                 )}
               </View>
 
-              {/* Gated Submit Button with multi-submit prevention */}
+              {/* Gated Submit Button matching web mobile view */}
               <MobileSubmitButton
                 isReady={isAllMandatoryFilled}
                 isLoading={isLoading}
                 onPress={handleSignup}
                 label="Request Platform Access"
-                loadingLabel="Submitting Registration..."
+                loadingLabel="Submitting Registration Request..."
                 missingCount={missingMandatoryCount}
-                helperText="All required information provided. Tap to submit your account request."
+                missingFields={missingFields}
               />
 
               {/* Card Footer */}
-              <View style={[styles.cardFooter, { borderTopColor: cardBorder }]}>
-                <Text style={[styles.cardFooterText, { color: theme.colors.mute }]}>
+              <View style={[styles.cardFooter, { borderTopColor: isDark ? '#262626' : '#ebebeb' }]}>
+                <Text style={[styles.cardFooterText, { color: isDark ? '#71717a' : '#888888' }]}>
                   Already have an account?
                 </Text>
                 <TouchableOpacity
-                  onPress={() => router.push('/(auth)/login')}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    router.push('/(auth)/login');
+                  }}
                   activeOpacity={0.7}
                   hitSlop={8}
                 >
-                  <Text style={[styles.signInLinkText, { color: primarySkyBlue }]}>
+                  <Text style={[styles.signInLinkText, { color: '#0284c7' }]}>
                     Sign in
                   </Text>
                 </TouchableOpacity>
@@ -1012,7 +995,7 @@ export default function SignupScreen() {
                 &copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.
               </Text>
 
-              {/* Quick Floating Theme Switcher */}
+              {/* Floating Theme Switcher */}
               <TouchableOpacity
                 style={[
                   styles.themeToggleBtn,
@@ -1021,7 +1004,10 @@ export default function SignupScreen() {
                     borderColor: cardBorder,
                   },
                 ]}
-                onPress={() => setMode(isDark ? 'light' : 'dark')}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setMode(isDark ? 'light' : 'dark');
+                }}
                 activeOpacity={0.7}
                 accessibilityLabel="Toggle Theme"
                 hitSlop={8}
@@ -1036,107 +1022,6 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Role Selection Modal */}
-      <Modal visible={roleModalVisible} animationType="slide" transparent onRequestClose={() => setRoleModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Account Role</Text>
-              <TouchableOpacity onPress={() => setRoleModalVisible(false)} style={styles.modalCloseBtn}>
-                <X size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-              {SIGNUP_ROLES.map((r) => {
-                const isSelected = selectedRole === r.value;
-                return (
-                  <TouchableOpacity
-                    key={r.value}
-                    onPress={() => {
-                      setSelectedRole(r.value);
-                      if (!isSupervisedRole(r.value)) {
-                        setSelectedSupervisorId('');
-                      }
-                      setRoleModalVisible(false);
-                    }}
-                    style={[
-                      styles.modalItemRow,
-                      { borderBottomColor: cardBorder },
-                      isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
-                        {r.label}
-                      </Text>
-                      <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>{r.desc}</Text>
-                    </View>
-                    {isSelected && <Check size={18} color={primarySkyBlue} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Supervisor Selection Modal */}
-      <Modal visible={supervisorModalVisible} animationType="slide" transparent onRequestClose={() => setSupervisorModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
-              <TouchableOpacity onPress={() => setSupervisorModalVisible(false)} style={styles.modalCloseBtn}>
-                <X size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <Input
-                placeholder="Search supervisor by name..."
-                value={supervisorSearch}
-                onChangeText={setSupervisorSearch}
-                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
-              />
-            </View>
-            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-              {supervisors
-                .filter((s) => s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase().trim()))
-                .map((s) => {
-                  const isSelected = selectedSupervisorId === s.id;
-                  return (
-                    <TouchableOpacity
-                      key={s.id}
-                      onPress={() => {
-                        setSelectedSupervisorId(s.id);
-                        setSupervisorModalVisible(false);
-                        setSupervisorSearch('');
-                        clearFieldError('supervisor_id');
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: cardBorder },
-                        isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
-                      ]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
-                          {s.full_name}
-                        </Text>
-                      </View>
-                      {isSelected && <Check size={18} color={primarySkyBlue} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              {supervisors.length === 0 && (
-                <View style={{ padding: 16, alignItems: 'center' }}>
-                  <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active supervisors found</Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1151,8 +1036,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 14,
+    paddingTop: 12,
     paddingBottom: 20,
   },
   centerContainer: {
@@ -1160,171 +1045,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   card: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 520,
     borderRadius: 20,
     borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
       },
       android: {
-        elevation: 6,
+        elevation: 3,
       },
     }),
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.5,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   bannerContainer: {
-    marginBottom: 14,
-  },
-  sectionCard: {
-    width: '100%',
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 14,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    marginBottom: 10,
-    borderBottomWidth: 1,
-  },
-  sectionHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    backgroundColor: 'rgba(14, 165, 233, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionBadgeText: {
-    color: '#0ea5e9',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  sectionTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  shiftPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.25)',
-  },
-  shiftPillText: {
-    color: '#0ea5e9',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  selectGroup: {
     marginBottom: 12,
-    width: '100%',
   },
-  fieldLabel: {
-    fontSize: 13.5,
-    fontWeight: '500',
-    marginBottom: 6,
-    letterSpacing: -0.1,
+  durationSmallText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 14,
   },
-  selectTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 46,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  selectValue: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectSubtext: {
-    fontSize: 12.5,
-    marginTop: 1,
-  },
-  twoColumnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  helperCaption: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    marginTop: 4,
+  supervisorWrapper: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 150, 150, 0.15)',
+    marginTop: 2,
   },
   noteBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    padding: 12,
+    padding: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.25)',
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 4,
   },
   noteText: {
     flex: 1,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: '#0ea5e9',
-  },
-  submitButton: {
-    height: 48,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    shadowColor: '#0ea5e9',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontSize: 11.5,
+    lineHeight: 16,
   },
   cardFooter: {
-    marginTop: 18,
-    paddingTop: 14,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1332,15 +1118,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardFooterText: {
-    fontSize: 13,
+    fontSize: 12.5,
   },
   signInLinkText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   screenFooter: {
     width: '100%',
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 4,
   },
   footerInner: {
@@ -1351,92 +1137,17 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 10.5,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   themeToggleBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 12.5,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    maxHeight: '75%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    paddingBottom: 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalListScroll: {
-    maxHeight: 380,
-  },
-  modalItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  modalItemTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalItemDesc: {
-    fontSize: 12.5,
-    marginTop: 2,
-  },
-  bankCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    gap: 10,
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  bankHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150, 150, 150, 0.25)',
-  },
-  bankTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  bankSubtitle: {
-    fontSize: 12,
   },
 });

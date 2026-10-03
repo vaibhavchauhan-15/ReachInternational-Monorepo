@@ -12,6 +12,8 @@ export interface KPICardProps {
   icon: LucideIcon | React.ComponentType<{ className?: string; size?: number | string; ref?: any }> | React.ReactNode;
   variant?: "default" | "warning" | "error" | "success" | "info";
   href?: string;
+  onClick?: () => void;
+  active?: boolean;
   subtitle?: string;
   trend?: {
     value: string | number;
@@ -64,6 +66,8 @@ export function KPICard({
   icon: Icon,
   variant = "default",
   href,
+  onClick,
+  active,
   subtitle,
   trend,
   className = "",
@@ -79,21 +83,18 @@ export function KPICard({
     iconRef.current?.stopAnimation?.();
   };
 
+  const isInteractive = Boolean(href || onClick);
+
   const content = (
     <Card
       padding="none"
+      onClick={onClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={`relative overflow-hidden p-3.5 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 group ${
-        href ? "hover:border-[var(--color-ink)]/30 hover:shadow-sm active:scale-[0.99] cursor-pointer" : ""
-      } ${styles.bg} ${styles.border} ${className}`}
+        isInteractive ? "hover:border-[var(--color-ink)]/30 hover:shadow-sm active:scale-[0.99] cursor-pointer" : ""
+      } ${active ? "ring-2 ring-[var(--color-link)] border-[var(--color-link)]" : styles.border} ${styles.bg} ${className}`}
     >
-      {/* Top Hairline Gradient Accent Bar */}
-      <div
-        className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${styles.accent} rounded-t-[var(--radius-md)]`}
-        aria-hidden="true"
-      />
-
       {/* Label and Icon Row — Optimized for Mobile & Desktop */}
       <div className="flex items-start justify-between gap-1.5 sm:gap-2">
         <span className="flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm font-medium text-[var(--color-mute)] leading-tight sm:leading-snug break-words line-clamp-2 min-h-[28px] sm:min-h-0">
@@ -113,22 +114,11 @@ export function KPICard({
         </div>
       </div>
 
-      {/* Value & Metadata */}
+      {/* Value */}
       <div className="mt-2.5 sm:mt-3">
         <div className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight tabular-nums ${styles.valueText}`}>
           {typeof value === "number" ? <AnimatedCounter value={value} /> : value}
         </div>
-
-        {(subtitle || trend) && (
-          <div className="mt-1 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] md:text-xs text-[var(--color-mute)]">
-            {trend && (
-              <span className={trend.isUp ? "text-emerald-600 dark:text-emerald-400 font-semibold shrink-0" : "text-rose-600 dark:text-rose-400 font-semibold shrink-0"}>
-                {trend.isUp ? "↑" : "↓"} {trend.value}
-              </span>
-            )}
-            {subtitle && <span className="truncate">{subtitle}</span>}
-          </div>
-        )}
       </div>
     </Card>
   );

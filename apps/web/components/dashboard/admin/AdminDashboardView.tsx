@@ -105,7 +105,6 @@ export async function AdminDashboardView({
             icon={AlertTriangle}
             href="/operations"
             variant={breakdowns > 0 ? "error" : "default"}
-            subtitle={breakdowns > 0 ? "Immediate inspection required" : "Zero breakdown events"}
           />
           <KPICard
             label="Overtime Entries"
@@ -113,7 +112,6 @@ export async function AdminDashboardView({
             icon={Timer}
             href="/operations"
             variant={overtime > 0 ? "warning" : "default"}
-            subtitle="Shifts exceeding standard hours"
           />
           <KPICard
             label="Shift Schedule Conflicts"
@@ -121,7 +119,6 @@ export async function AdminDashboardView({
             icon={Layers}
             href="/operations"
             variant={overlappingLogs > 0 ? "error" : "default"}
-            subtitle="Timeline overlap flags"
           />
         </KPIGrid>
       </div>

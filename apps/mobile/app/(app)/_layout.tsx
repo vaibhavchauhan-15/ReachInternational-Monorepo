@@ -61,8 +61,17 @@ export default function AppLayout() {
         <Tabs.Screen name="users" options={{ title: 'Users' }} />
         <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
         <Tabs.Screen name="payroll" options={{ title: 'Payroll' }} />
-        <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+        <Tabs.Screen name="settings/index" options={{ title: 'Settings' }} />
         <Tabs.Screen name="more" options={{ title: 'More' }} />
+
+        {/* Settings Module Dedicated Sub-Pages */}
+        <Tabs.Screen name="settings/account" options={{ title: 'Account Settings', href: null }} />
+        <Tabs.Screen name="settings/notification" options={{ title: 'Notification Settings', href: null }} />
+        <Tabs.Screen name="settings/preference" options={{ title: 'Preferences', href: null }} />
+        <Tabs.Screen name="settings/prefrence" options={{ href: null }} />
+        <Tabs.Screen name="settings/aboutapp" options={{ title: 'About App', href: null }} />
+        <Tabs.Screen name="setting/index" options={{ href: null }} />
+        <Tabs.Screen name="setting/[...slug]" options={{ href: null }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
         <Tabs.Screen name="running-logs" options={{ title: 'Running Logs', href: null }} />

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Highlight } from "@/components/ui/Highlight";
 import { RotateCcw } from "lucide-react";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { getPaginatedAuditLogsAction } from "@/app/actions/audit";
@@ -194,6 +195,7 @@ export function AuditClient({
 }: AuditClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentSearch = searchParams.get("search") || "";
   const [isPending, startTransition] = useTransition();
   const isDesktop = useMediaQuery("(min-width: 641px)");
 
@@ -555,12 +557,12 @@ export function AuditClient({
                           <>
                             {/* Machine */}
                             <td className="py-3 px-4 whitespace-nowrap font-mono font-bold text-[var(--color-ink)]">
-                              {log.entity_name || log.entity_id || meta.machine_code || "Machine"}
+                              <Highlight text={log.entity_name || log.entity_id || meta.machine_code || "Machine"} query={currentSearch} />
                             </td>
                             {/* Assigned Operator/Supervisor */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-semibold text-[var(--color-ink)]">
-                                {meta.operator_name || meta.supervisor_name || meta.user_name || details.operator_name || log.entity_name || "N/A"}
+                                <Highlight text={meta.operator_name || meta.supervisor_name || meta.user_name || details.operator_name || log.entity_name || "N/A"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {meta.supervisor_name ? "Supervisor" : "Operator"}
@@ -569,7 +571,7 @@ export function AuditClient({
                             {/* Assigned By */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-medium text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || meta.assigned_by_name || "Supervisor"}
+                                <Highlight text={log.actor_name || log.user?.full_name || meta.assigned_by_name || "Supervisor"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {log.actor_role || log.user?.role || "supervisor"}
@@ -600,16 +602,16 @@ export function AuditClient({
                           <>
                             {/* Machine */}
                             <td className="py-3 px-4 whitespace-nowrap font-mono font-bold text-[var(--color-ink)]">
-                              {log.entity_name || meta.machine_code || meta.machine_id || "Machine"}
+                              <Highlight text={log.entity_name || meta.machine_code || meta.machine_id || "Machine"} query={currentSearch} />
                             </td>
                             {/* Client Site */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-semibold text-[var(--color-ink)]">
-                                {meta.client_name || meta.company_name || (log.entity_type === "client" ? log.entity_name : "Client Site")}
+                                <Highlight text={meta.client_name || meta.company_name || (log.entity_type === "client" ? log.entity_name : "Client Site")} query={currentSearch} />
                               </div>
                               {meta.location && (
                                 <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[140px]">
-                                  {meta.location}
+                                  <Highlight text={meta.location} query={currentSearch} />
                                 </div>
                               )}
                             </td>
@@ -622,7 +624,7 @@ export function AuditClient({
                             {/* Action By */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-medium text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || "Staff"}
+                                <Highlight text={log.actor_name || log.user?.full_name || "Staff"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {log.actor_role || log.user?.role || "admin"}
@@ -630,7 +632,7 @@ export function AuditClient({
                             </td>
                             {/* Details */}
                             <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
-                              {description || JSON.stringify(details || meta)}
+                              <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
                             </td>
                           </>
                         ) : activeTab === "employees" ? (
@@ -638,11 +640,11 @@ export function AuditClient({
                             {/* Target Employee */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-bold text-[var(--color-ink)]">
-                                {log.entity_name || meta.full_name || meta.user_name || meta.email || "Employee"}
+                                <Highlight text={log.entity_name || meta.full_name || meta.user_name || meta.email || "Employee"} query={currentSearch} />
                               </div>
                               {meta.email && (
                                 <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[160px]">
-                                  {meta.email}
+                                  <Highlight text={meta.email} query={currentSearch} />
                                 </div>
                               )}
                             </td>
@@ -661,7 +663,7 @@ export function AuditClient({
                             {/* Approved / Done By */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-medium text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || "Admin"}
+                                <Highlight text={log.actor_name || log.user?.full_name || "Admin"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {log.actor_role || log.user?.role || "super_admin"}
@@ -669,7 +671,7 @@ export function AuditClient({
                             </td>
                             {/* Details */}
                             <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
-                              {description || JSON.stringify(details || meta)}
+                              <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
                             </td>
                           </>
                         ) : activeTab === "machine" ? (
@@ -677,11 +679,11 @@ export function AuditClient({
                             {/* Machine Code */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-mono font-bold text-[var(--color-ink)] text-sm">
-                                {log.entity_name || log.entity_id || meta.machine_code || "Machine"}
+                                <Highlight text={log.entity_name || log.entity_id || meta.machine_code || "Machine"} query={currentSearch} />
                               </div>
                               {meta.model && (
                                 <div className="text-[10px] text-[var(--color-mute)]">
-                                  Model: {meta.model}
+                                  Model: <Highlight text={meta.model} query={currentSearch} />
                                 </div>
                               )}
                             </td>
@@ -694,7 +696,7 @@ export function AuditClient({
                             {/* Changed By */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-medium text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || "Staff"}
+                                <Highlight text={log.actor_name || log.user?.full_name || "Staff"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {log.actor_role || log.user?.role || "admin"}
@@ -702,7 +704,7 @@ export function AuditClient({
                             </td>
                             {/* Modification Details */}
                             <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
-                              {description || JSON.stringify(details || meta)}
+                              <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
                             </td>
                           </>
                         ) : activeTab === "auth" ? (
@@ -710,11 +712,11 @@ export function AuditClient({
                             {/* User Account */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-bold text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || log.user?.email || "User"}
+                                <Highlight text={log.actor_name || log.user?.full_name || log.user?.email || "User"} query={currentSearch} />
                               </div>
                               {log.user?.email && (
                                 <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[160px]">
-                                  {log.user.email}
+                                  <Highlight text={log.user.email} query={currentSearch} />
                                 </div>
                               )}
                             </td>
@@ -736,7 +738,7 @@ export function AuditClient({
                             </td>
                             {/* Details */}
                             <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
-                              {description || JSON.stringify(details || meta)}
+                              <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
                             </td>
                           </>
                         ) : (
@@ -755,7 +757,7 @@ export function AuditClient({
                             {/* Target Entity */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-mono font-semibold text-[var(--color-ink)]">
-                                {log.entity_name || log.entity_id || "N/A"}
+                                <Highlight text={log.entity_name || log.entity_id || "N/A"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] uppercase tracking-wider">
                                 {log.entity_type || "Entity"}
@@ -764,7 +766,7 @@ export function AuditClient({
                             {/* Actor */}
                             <td className="py-3 px-4 whitespace-nowrap">
                               <div className="font-medium text-[var(--color-ink)]">
-                                {log.actor_name || log.user?.full_name || "System"}
+                                <Highlight text={log.actor_name || log.user?.full_name || "System"} query={currentSearch} />
                               </div>
                               <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
                                 {log.actor_role || log.user?.role || "system"}
@@ -772,7 +774,7 @@ export function AuditClient({
                             </td>
                             {/* Details */}
                             <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
-                              {description || JSON.stringify(details || meta)}
+                              <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
                             </td>
                           </>
                         )}
@@ -843,29 +845,29 @@ export function AuditClient({
                   {/* Domain-specific highlights on mobile */}
                   {activeTab === "assignments" && (meta.operator_name || meta.supervisor_name) && (
                     <div className="text-xs font-semibold text-[var(--color-primary)] mb-1">
-                      Assigned: {meta.operator_name || meta.supervisor_name}
+                      Assigned: <Highlight text={meta.operator_name || meta.supervisor_name} query={currentSearch} />
                     </div>
                   )}
 
                   {activeTab === "rentals" && (meta.client_name || meta.company_name) && (
                     <div className="text-xs font-semibold text-[var(--color-primary)] mb-1">
-                      Client: {meta.client_name || meta.company_name}
+                      Client: <Highlight text={meta.client_name || meta.company_name} query={currentSearch} />
                     </div>
                   )}
 
                   {/* Description / Summary */}
                   {description && (
                     <p className="text-xs text-[var(--color-subtle)] line-clamp-2 mb-2">
-                      {description}
+                      <Highlight text={description} query={currentSearch} />
                     </p>
                   )}
 
                   {/* Meta Strip */}
                   <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)] pt-2 border-t border-[var(--color-hairline)]">
                     <div className="flex items-center gap-1 font-mono">
-                      <span>By: {log.actor_name || log.user?.full_name || "System"}</span>
+                      <span>By: <Highlight text={log.actor_name || log.user?.full_name || "System"} query={currentSearch} /></span>
                       {log.entity_name && (
-                        <span>• <span className="text-[var(--color-ink)]">{log.entity_name}</span></span>
+                        <span>• <span className="text-[var(--color-ink)]"><Highlight text={log.entity_name} query={currentSearch} /></span></span>
                       )}
                     </div>
                     <div suppressHydrationWarning className="font-mono text-[10px]">

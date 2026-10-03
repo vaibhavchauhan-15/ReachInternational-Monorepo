@@ -35,9 +35,9 @@ export function PrimaryAction({
 
   const variantStyles = {
     primary: {
-      card: "bg-gradient-to-r from-[var(--color-ink)] via-[var(--color-ink)] to-[#262626] text-[var(--color-canvas)] hover:opacity-95 border-transparent shadow-sm",
-      iconBox: "bg-white/10 text-[var(--color-canvas)] border border-white/10",
-      badge: "bg-white/20 text-[var(--color-canvas)]",
+      card: "bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] text-[var(--color-ink)] hover:border-blue-500/40 border-blue-500/30 dark:border-blue-500/40 shadow-2xs",
+      iconBox: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-2xs",
+      badge: "bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold",
     },
     secondary: {
       card: "bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] text-[var(--color-ink)] hover:border-[var(--color-ink)]/30 border-[var(--color-hairline)]",

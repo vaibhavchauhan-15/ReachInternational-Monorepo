@@ -77,6 +77,44 @@ export async function createClient(
     };
 
     const supabase = await createSupabaseServerClient();
+
+    // Prevent duplicate active clients by company name
+    const { data: existingCompany } = await supabase
+      .from("clients")
+      .select("id, client_id, company_name")
+      .ilike("company_name", data.companyName.trim())
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (existingCompany) {
+      return {
+        success: false,
+        error: `A client named "${existingCompany.company_name}" already exists (${existingCompany.client_id || "Registered"}). Each client can only be registered once; add new locations as sites under this client.`,
+        fieldErrors: {
+          companyName: "A client with this company name already exists. Multiple locations should be added as sites under the client.",
+        },
+      };
+    }
+
+    if (data.gstin && data.gstin.trim()) {
+      const { data: existingGstin } = await supabase
+        .from("clients")
+        .select("id, client_id, company_name")
+        .eq("gstin", data.gstin.trim().toUpperCase())
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (existingGstin) {
+        return {
+          success: false,
+          error: `A client with GSTIN "${data.gstin.trim().toUpperCase()}" already exists (${existingGstin.company_name}).`,
+          fieldErrors: {
+            gstin: "This GSTIN is already registered to another client.",
+          },
+        };
+      }
+    }
+
     const { data: createdClient, error: dbError } = await supabase
       .from("clients")
       .insert([insertPayload])

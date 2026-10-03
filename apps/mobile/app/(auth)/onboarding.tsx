@@ -1,4 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * Reach International Mobile — User Onboarding Screen
+ * 95% identical replication of the Web Mobile Viewport Onboarding UI/UX,
+ * with 5% native smart phone optimizations:
+ * - Touch & haptic feedback on selectors, AM/PM buttons, uploads, and submit
+ * - Auto-populates all existing user profile details from Supabase database; blanks only null/missing fields
+ * - Clear inline feedback and gated submit guidance for mandatory fields
+ * - Canonical reusable primitives: Input, TimeInput, SearchableSelect, MobileFormSectionCard, MobileAddressFields, MobileSalaryField, MobileDocumentUploadCard, MobileSubmitButton
+ * - Saves remaining info to Supabase database, marks complete_profile = true, and unlocks the workspace.
+ */
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,20 +18,30 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Modal,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
+
+const loginPageImage = require('../../assets/loginpageimage.png');
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Button, Input, Card, TimeInput, useTheme, ReachInternationalLogo } from '../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { Input, Alert, TimeInput, SearchableSelect, useTheme } from '../../components/ui';
+import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
+  validateBankAccountNumber,
+  validateIfscCode,
+  formatIfscCode,
   computeShiftTiming,
   parseProfileShiftTime,
 } from '@reachinternational/utils';
+import { isSupervisedRole } from '@reachinternational/permissions';
 import {
   MobilePickedDocument,
   UserDocumentInfo,
@@ -36,176 +57,255 @@ import {
   MobileSubmitButton,
 } from '../../components/forms';
 import {
-  User as UserIcon,
+  User,
+  Mail,
   Phone,
   ShieldCheck,
   CreditCard,
-  ChevronDown,
-  X,
-  Check,
+  Building2,
   Info,
+  Sun,
+  Moon,
 } from 'lucide-react-native';
 
 const ONBOARDING_ROLES = [
-  { value: 'operator', label: 'Operator', desc: 'Machine duty & daily running hour logs' },
-  { value: 'supervisor', label: 'Supervisor', desc: 'Equipment monitoring & shift supervision' },
-  { value: 'manager', label: 'Manager', desc: 'Fleet operations, client accounts & asset management' },
-  { value: 'hr', label: 'HR', desc: 'Staff onboarding & personnel management' },
+  { value: 'operator', label: 'Operator' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'hr', label: 'HR' },
 ];
+
+function formatTimeTo12Hour(timeStr?: string | null): string {
+  if (!timeStr) return '';
+  const clean = timeStr.trim();
+  if (clean.includes('AM') || clean.includes('PM')) return clean;
+  const match = clean.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const mins = match[2];
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return `${String(hours).padStart(2, '0')}:${mins} ${period}`;
+  }
+  return clean;
+}
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDark, setMode } = useTheme();
   const { user, userProfile, refreshSession } = useAuth();
+  const { width, height } = useWindowDimensions();
 
+  // Responsive Breakpoints: Mobile (<=640px), Tablet (641px–1023px), Desktop (>=1024px)
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 641 && width < 1024;
+  const isShortScreen = height < 740;
+  const isTinyScreen = width < 360;
+  const showcaseWidth = isDesktop ? Math.min(540, Math.max(380, Math.round(width * 0.38))) : 0;
+  const primarySkyBlue = isDark ? '#0ea5e9' : '#0284c7';
+
+  // Form Fields State
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [monthlySalary, setMonthlySalary] = useState('');
+
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
+
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
-  const [aadhaarNumber, setAadhaarNumber] = useState('');
-  const [licenseNumber, setLicenseNumber] = useState('');
 
-  // Document attachments
-  const [existingDocs, setExistingDocs] = useState<Record<string, UserDocumentInfo>>({});
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankIfscCode, setBankIfscCode] = useState('');
+  const [bankDoc, setBankDoc] = useState<MobilePickedDocument | null>(null);
+  const [bankDocError, setBankDocError] = useState<string | null>(null);
+
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
+  const [aadhaarDocError, setAadhaarDocError] = useState<string | null>(null);
+  const [licenseNumber, setLicenseNumber] = useState('');
   const [licenseDoc, setLicenseDoc] = useState<MobilePickedDocument | null>(null);
-  const [aadhaarUploading, setAadhaarUploading] = useState(false);
-  const [licenseUploading, setLicenseUploading] = useState(false);
-  const [aadhaarProgress, setAadhaarProgress] = useState(0);
-  const [licenseProgress, setLicenseProgress] = useState(0);
-  const [aadhaarError, setAadhaarError] = useState<string | null>(null);
-  const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [licenseDocError, setLicenseDocError] = useState<string | null>(null);
+
+  // Supervisor Selection State
+  const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
+
+  // Existing documents already uploaded in DB
+  const [existingDocs, setExistingDocs] = useState<Record<string, UserDocumentInfo>>({});
 
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Pre-fill fields from existing profile if available
+  const clearFieldError = (fieldName: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  // If already onboarded, immediately route to dashboard
   useEffect(() => {
-    if (userProfile) {
-      if (userProfile.full_name && userProfile.full_name !== user?.email) {
-        setFullName(userProfile.full_name);
-      }
-      if (userProfile.phone) setPhone(userProfile.phone);
-      if (userProfile.role) setSelectedRole(userProfile.role);
-      if ((userProfile as any).monthly_salary) {
-        setMonthlySalary(String((userProfile as any).monthly_salary));
-      }
-      if (userProfile.shift_time) {
-        const parsed = parseProfileShiftTime(userProfile.shift_time);
-        if (parsed && parsed.startTime && parsed.endTime) {
-          setShiftStartTime(parsed.startTime);
-          setShiftEndTime(parsed.endTime);
+    if (userProfile?.complete_profile === true || (userProfile as any)?.complete_profile === 'yes') {
+      router.replace('/(app)/dashboard');
+    }
+  }, [userProfile?.complete_profile, router]);
+
+  // Load supervisors list for supervisor selector
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSupervisors() {
+      setLoadingSupervisors(true);
+      try {
+        const { data, error } = await supabase.rpc('get_active_supervisors_public');
+        if (!error && data && isMounted) {
+          setSupervisors(data as Array<{ id: string; full_name: string }>);
+        } else if (error) {
+          console.warn('[Onboarding] RPC error loading supervisors:', error.message);
+          const { data: directData } = await supabase
+            .from('users')
+            .select('id, full_name')
+            .eq('role', 'supervisor')
+            .in('status', ['active', 'approved']);
+          if (directData && isMounted && directData.length > 0) {
+            setSupervisors(directData as Array<{ id: string; full_name: string }>);
+          }
         }
+      } catch (err) {
+        console.warn('Failed to load supervisors for mobile onboarding:', err);
+      } finally {
+        if (isMounted) setLoadingSupervisors(false);
       }
-      if (userProfile.city) setCity(userProfile.city);
-      if (userProfile.district) setDistrict(userProfile.district);
-      if ((userProfile as any).street) {
-        setStreet((userProfile as any).street);
-      } else if (userProfile.address) {
-        setStreet(userProfile.address);
-      }
-      if (userProfile.state) setStateVal(userProfile.state);
-      if (userProfile.state_id) setStateId(userProfile.state_id);
-      if (userProfile.aadhaar_number) setAadhaarNumber(formatAadhaar(userProfile.aadhaar_number));
-      if (userProfile.license_number) setLicenseNumber(userProfile.license_number);
     }
-  }, [userProfile, user]);
 
-  // Load existing documents
+    loadSupervisors();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hydrate user info from database (auto-fills everything available; leaves blank only null inputs)
   useEffect(() => {
-    if (user?.id) {
-      fetchUserDocuments(user.id).then((docs) => {
-        const map: Record<string, UserDocumentInfo> = {};
-        docs.forEach((d) => {
-          map[d.document_type_code] = d;
-        });
-        setExistingDocs(map);
-      });
-    }
-  }, [user?.id]);
+    let isMounted = true;
 
-  const handleUploadDoc = async (
-    typeCode: 'aadhaar' | 'driving_license',
-    doc: MobilePickedDocument
-  ) => {
-    if (!user?.id) return;
+    async function loadUserData() {
+      if (!user?.id) return;
 
-    if (typeCode === 'aadhaar') {
-      setAadhaarUploading(true);
-      setAadhaarProgress(10);
-      setAadhaarError(null);
-    } else {
-      setLicenseUploading(true);
-      setLicenseProgress(10);
-      setLicenseError(null);
-    }
+      setEmail(user.email || '');
 
-    try {
-      const res = await uploadUserDocumentDirect({
-        userId: user.id,
-        documentTypeCode: typeCode,
-        doc,
-        onProgress: (p) => {
-          if (typeCode === 'aadhaar') setAadhaarProgress(p);
-          else setLicenseProgress(p);
-        },
-      });
-
-      if (!res.success) {
-        if (typeCode === 'aadhaar') setAadhaarError(res.error || 'Upload failed');
-        else setLicenseError(res.error || 'Upload failed');
-      } else {
+      // Load existing uploaded documents
+      try {
         const docs = await fetchUserDocuments(user.id);
-        const map: Record<string, UserDocumentInfo> = {};
-        docs.forEach((d) => {
-          map[d.document_type_code] = d;
-        });
-        setExistingDocs(map);
-        if (typeCode === 'aadhaar') setAadhaarDoc(null);
-        else setLicenseDoc(null);
+        if (isMounted) {
+          const map: Record<string, UserDocumentInfo> = {};
+          docs.forEach((d) => {
+            map[d.document_type_code] = d;
+          });
+          setExistingDocs(map);
+        }
+      } catch (dErr) {
+        console.warn('[Onboarding] Error loading documents:', dErr);
       }
-    } catch (err: any) {
-      if (typeCode === 'aadhaar') setAadhaarError(err.message || 'Upload error');
-      else setLicenseError(err.message || 'Upload error');
-    } finally {
-      if (typeCode === 'aadhaar') setAadhaarUploading(false);
-      else setLicenseUploading(false);
+
+      // Fetch fresh profile row from public.users
+      try {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profile && isMounted) {
+          // Full Name
+          if (profile.full_name && profile.full_name !== user.email) {
+            setFullName(profile.full_name);
+          }
+          // Phone
+          if (profile.phone) {
+            setPhone(profile.phone);
+          }
+          // Role
+          if (profile.role) {
+            setSelectedRole(profile.role);
+          }
+          // Supervisor
+          if (profile.supervisor_id) {
+            setSelectedSupervisorId(profile.supervisor_id);
+          }
+          // Monthly Salary
+          if (profile.monthly_salary !== null && profile.monthly_salary !== undefined) {
+            setMonthlySalary(String(profile.monthly_salary));
+          }
+          // Shift Timing
+          if (profile.shift_start_time) {
+            setShiftStartTime(formatTimeTo12Hour(profile.shift_start_time));
+          }
+          if (profile.shift_end_time) {
+            setShiftEndTime(formatTimeTo12Hour(profile.shift_end_time));
+          } else if (profile.shift_time) {
+            const parsed = parseProfileShiftTime(profile.shift_time);
+            if (parsed?.startTime && parsed?.endTime) {
+              setShiftStartTime(parsed.startTime);
+              setShiftEndTime(parsed.endTime);
+            }
+          }
+          // Address Details
+          if (profile.street) {
+            setStreet(profile.street);
+          } else if (profile.address) {
+            setStreet(profile.address);
+          }
+          if (profile.city) {
+            setCity(profile.city);
+          }
+          if (profile.district) {
+            setDistrict(profile.district);
+          }
+          if (profile.state) {
+            setStateVal(profile.state);
+          }
+          if (profile.state_id) {
+            setStateId(Number(profile.state_id));
+          }
+          // Banking Details
+          if (profile.bank_account_number) {
+            setBankAccountNumber(profile.bank_account_number);
+          }
+          if (profile.bank_ifsc_code) {
+            setBankIfscCode(profile.bank_ifsc_code);
+          }
+          // Identity Details
+          if (profile.aadhaar_number) {
+            setAadhaarNumber(formatAadhaar(profile.aadhaar_number));
+          }
+          if (profile.license_number) {
+            setLicenseNumber(profile.license_number);
+          }
+        }
+      } catch (pErr) {
+        console.warn('[Onboarding] Error loading user profile:', pErr);
+      }
     }
-  };
 
-  const handleDeleteDoc = async (typeCode: 'aadhaar' | 'driving_license') => {
-    if (!user?.id) return;
-    const existing = existingDocs[typeCode];
-    if (!existing) return;
+    loadUserData();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.email]);
 
-    const res = await deleteUserDocument(user.id, typeCode, existing.storage_path);
-    if (res.success) {
-      setExistingDocs((prev) => {
-        const next = { ...prev };
-        delete next[typeCode];
-        return next;
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (userProfile?.complete_profile === true || userProfile?.complete_profile === 'yes') {
-      router.replace('/(app)/dashboard' as any);
-    }
-  }, [userProfile, router]);
-
-  const selectedRoleObj = ONBOARDING_ROLES.find((r) => r.value === selectedRole) || ONBOARDING_ROLES[0];
-
-  const shiftSummary = React.useMemo(() => {
+  const shiftSummary = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
     return computeShiftTiming({
       startTime: shiftStartTime,
@@ -213,161 +313,82 @@ export default function OnboardingScreen() {
     });
   }, [shiftStartTime, shiftEndTime]);
 
-  const handleComplete = async () => {
-    if (isSubmittingRef.current || isLoading) return;
-    setErrorMessage('');
-
-    // Validations
-    if (!fullName.trim() || fullName.trim().length < 2) {
-      setErrorMessage('Full name is required (minimum 2 characters).');
-      return;
-    }
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.length < 10) {
-      setErrorMessage('Valid 10-digit mobile number is required.');
-      return;
-    }
-    if (!shiftStartTime.trim()) {
-      setErrorMessage('Shift start time is required.');
-      return;
-    }
-    if (!shiftEndTime.trim()) {
-      setErrorMessage('Shift end time is required.');
-      return;
-    }
-    if (!city.trim() || city.trim().length < 2) {
-      setErrorMessage('City/Town/Village is required.');
-      return;
-    }
-    if (!district.trim() || district.trim().length < 2) {
-      setErrorMessage('District is required.');
-      return;
-    }
-    if (!stateVal.trim() && !stateId) {
-      setErrorMessage('State is required.');
-      return;
-    }
-
-    const effectiveRole = userProfile?.role || selectedRole;
-    if (effectiveRole === 'operator') {
-      const sal = Number(monthlySalary);
-      if (!monthlySalary || isNaN(sal) || sal <= 0) {
-        setErrorMessage('Monthly salary is mandatory for operator accounts and must be greater than 0.');
-        return;
+  const handleBankAccountChange = (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 18);
+    setBankAccountNumber(clean);
+    clearFieldError('bank_account_number');
+    if (clean.length > 0 && (clean.length < 9 || clean.length > 18)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        bank_account_number: 'Account number must be between 9 and 18 digits.',
+      }));
+    } else if (clean.length >= 9) {
+      const res = validateBankAccountNumber(clean);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          bank_account_number: res.error || 'Invalid bank account number.',
+        }));
       }
     }
+  };
 
-    if (!aadhaarNumber.trim()) {
-      setErrorMessage('Aadhaar card number is required.');
-      return;
-    }
-    const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
-    if (!aadhaarRes.isValid) {
-      setErrorMessage(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
-      return;
-    }
-    const cleanAadhaar = aadhaarRes.clean || null;
-
-    let formattedLic: string | null = null;
-    if (licenseNumber.trim()) {
-      const licRes = validateLicenseNumber(licenseNumber);
-      if (!licRes.isValid) {
-        setErrorMessage(licRes.error || 'Please enter a valid driving licence number.');
-        return;
+  const handleBankIfscChange = (val: string) => {
+    const formatted = formatIfscCode(val);
+    setBankIfscCode(formatted);
+    clearFieldError('bank_ifsc_code');
+    if (formatted.length === 11) {
+      const res = validateIfscCode(formatted);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          bank_ifsc_code: res.error || 'Invalid IFSC code format (e.g. SBIN0001234).',
+        }));
       }
-      formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
     }
+  };
 
-    const finalShift =
-      shiftStartTime.trim() && shiftEndTime.trim()
-        ? `${shiftStartTime.trim()} - ${shiftEndTime.trim()}`
-        : shiftStartTime.trim() || shiftEndTime.trim() || null;
-
-    if (!user?.id) {
-      setErrorMessage('Authentication session expired. Please log in again.');
-      return;
+  const handleAadhaarChange = (val: string) => {
+    const formatted = formatAadhaar(val);
+    setAadhaarNumber(formatted);
+    clearFieldError('aadhaar_number');
+    const clean = formatted.replace(/\D/g, '');
+    if (clean.length === 12) {
+      const res = validateAadhaarNumber(clean);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          aadhaar_number: res.error || 'Invalid 12-digit Aadhaar number.',
+        }));
+      }
     }
+  };
 
-    isSubmittingRef.current = true;
-    setIsLoading(true);
-
-    try {
-      // 1. Attempt atomic RPC
-      const { error: rpcError } = await supabase.rpc('complete_user_onboarding_atomic', {
-        p_user_id: user.id,
-        p_full_name: fullName.trim(),
-        p_phone: cleanPhone,
-        p_role: effectiveRole,
-        p_shift_time: finalShift,
-        p_address: street.trim(),
-        p_city: city.trim(),
-        p_district: district.trim(),
-        p_state: stateVal.trim(),
-        p_state_id: stateId,
-        p_aadhaar_number: cleanAadhaar,
-        p_license_number: formattedLic,
-      });
-
-      if (!rpcError && (monthlySalary || street.trim())) {
-        await supabase
-          .from('users')
-          .update({
-            street: street.trim(),
-            address: street.trim(),
-            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
-          })
-          .eq('id', user.id);
+  const handleLicenseChange = (val: string) => {
+    const formatted = val.toUpperCase();
+    setLicenseNumber(formatted);
+    clearFieldError('license_number');
+    if (formatted.trim()) {
+      const res = validateLicenseNumber(formatted);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          license_number: res.error || 'Invalid driving licence format.',
+        }));
       }
-
-      if (rpcError) {
-        // Fallback: direct table update
-        console.warn('[Mobile Onboarding] RPC error, using direct table update fallback:', rpcError.message);
-        const { error: directError } = await supabase
-          .from('users')
-          .update({
-            full_name: fullName.trim(),
-            phone: cleanPhone,
-            shift_start_time: shiftStartTime.trim() || null,
-            shift_end_time: shiftEndTime.trim() || null,
-            street: street.trim(),
-            address: street.trim(),
-            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
-            city: city.trim(),
-            district: district.trim(),
-            state: stateVal.trim(),
-            state_id: stateId,
-            aadhaar_number: cleanAadhaar,
-            license_number: formattedLic,
-            complete_profile: true,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', user.id);
-
-        if (directError) {
-          setErrorMessage(directError.message || 'Failed to update profile. Please try again.');
-          isSubmittingRef.current = false;
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      await refreshSession();
-
-      router.replace('/(app)/dashboard' as any);
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'An unexpected error occurred. Please try again.');
-      isSubmittingRef.current = false;
-      setIsLoading(false);
     }
   };
 
   const cleanPhone = phone.replace(/[^0-9+]/g, '');
-  const effectiveRole = userProfile?.role || selectedRole;
+
+  const isOperator = selectedRole === 'operator';
+  const hasValidSalary = !isOperator || (Boolean(monthlySalary) && Number(monthlySalary) > 0);
 
   const section1Complete = Boolean(
     fullName.trim().length >= 2 &&
     cleanPhone.length >= 10 &&
-    (effectiveRole !== 'operator' || (monthlySalary && Number(monthlySalary) > 0))
+    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId) &&
+    hasValidSalary
   );
 
   const section2Complete = Boolean(
@@ -375,523 +396,1036 @@ export default function OnboardingScreen() {
     shiftEndTime.trim().length > 0
   );
 
+  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
+  const cleanIfsc = bankIfscCode.trim().toUpperCase();
+  const hasBankDoc = Boolean(bankDoc || existingDocs['bank_document'] || existingDocs['bank_passbook']);
+
   const section3Complete = Boolean(
+    street.trim().length >= 2 &&
     city.trim().length >= 2 &&
     district.trim().length >= 2 &&
     (stateVal.trim().length > 0 || stateId !== null)
   );
 
   const section4Complete = Boolean(
-    aadhaarNumber.replace(/\D/g, '').length === 12
+    cleanBankAcc.length >= 9 &&
+    cleanBankAcc.length <= 18 &&
+    validateBankAccountNumber(cleanBankAcc).isValid &&
+    cleanIfsc.length === 11 &&
+    validateIfscCode(cleanIfsc).isValid &&
+    hasBankDoc
+  );
+
+  const cleanAadhaar = aadhaarNumber.replace(/\D/g, '');
+  const hasAadhaarDoc = Boolean(aadhaarDoc || existingDocs['aadhaar']);
+
+  const section5Complete = Boolean(
+    cleanAadhaar.length === 12 &&
+    hasAadhaarDoc
   );
 
   const isAllMandatoryFilled = Boolean(
-    section1Complete && section2Complete && section3Complete && section4Complete
+    section1Complete &&
+    section2Complete &&
+    section3Complete &&
+    section4Complete &&
+    section5Complete
   );
 
   const missingFields: string[] = [];
   if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
-  if (cleanPhone.length < 10) missingFields.push('10-digit Phone');
-  if (effectiveRole === 'operator' && (!monthlySalary || Number(monthlySalary) <= 0)) missingFields.push('Monthly Salary');
-  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Hours');
-  if (!city.trim() || city.trim().length < 2) missingFields.push('City/Town');
+  if (cleanPhone.length < 10) missingFields.push('Mobile Number');
+  if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
+  if (isOperator && (!monthlySalary || Number(monthlySalary) <= 0)) missingFields.push('Monthly Salary');
+  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Timing');
+  if (!street.trim()) missingFields.push('Street Address');
+  if (!city.trim() || city.trim().length < 2) missingFields.push('City');
   if (!district.trim() || district.trim().length < 2) missingFields.push('District');
   if (!stateVal.trim() && !stateId) missingFields.push('State');
-  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
+  if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) missingFields.push('Bank Account Number');
+  if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) missingFields.push('IFSC Code');
+  if (!hasBankDoc) missingFields.push('Bank Document');
+  if (cleanAadhaar.length !== 12) missingFields.push('Aadhaar Number');
+  if (!hasAadhaarDoc) missingFields.push('Aadhaar Document');
 
   const missingMandatoryCount = missingFields.length;
 
+  const handleCompleteOnboarding = async () => {
+    if (isSubmittingRef.current || isLoading) return;
+
+    const errors: Record<string, string> = {};
+
+    if (!fullName || fullName.trim().length < 2) {
+      errors.full_name = 'Full name must be at least 2 characters.';
+    }
+    if (cleanPhone.length < 10) {
+      errors.phone = 'Mobile number must be at least 10 digits.';
+    }
+    if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) {
+      errors.supervisor_id = 'Please select a supervisor.';
+    }
+    if (isOperator && (!monthlySalary || Number(monthlySalary) <= 0)) {
+      errors.monthly_salary = 'Monthly salary is mandatory for operator accounts and must be greater than 0.';
+    }
+    if (!shiftStartTime.trim()) {
+      errors.shift_start_time = 'Shift start time is required.';
+    }
+    if (!shiftEndTime.trim()) {
+      errors.shift_end_time = 'Shift end time is required.';
+    }
+    if (!street || street.trim().length < 2) {
+      errors.street = 'Street address is required.';
+    }
+    if (!city || city.trim().length < 2) {
+      errors.city = 'City/town is required.';
+    }
+    if (!district || district.trim().length < 2) {
+      errors.district = 'District is required.';
+    }
+    if (!stateVal && !stateId) {
+      errors.state = 'State is required.';
+    }
+    if (!cleanBankAcc || cleanBankAcc.length < 9) {
+      errors.bank_account_number = 'Bank account number must be between 9 and 18 digits.';
+    }
+    if (!cleanIfsc || cleanIfsc.length !== 11) {
+      errors.bank_ifsc_code = 'IFSC code must be exactly 11 characters.';
+    }
+    if (!hasBankDoc) {
+      setBankDocError('Please upload your bank passbook/cheque/statement.');
+      errors.bank_doc = 'Bank document is required.';
+    }
+    if (cleanAadhaar.length !== 12) {
+      errors.aadhaar_number = 'Aadhaar number must be exactly 12 digits.';
+    }
+    if (!hasAadhaarDoc) {
+      setAadhaarDocError('Please upload your Aadhaar document.');
+      errors.aadhaar_doc = 'Aadhaar document is required.';
+    }
+    if (licenseNumber.trim()) {
+      const licRes = validateLicenseNumber(licenseNumber);
+      if (!licRes.isValid) {
+        errors.license_number = licRes.error || 'Invalid driving licence format.';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage('Please complete all mandatory fields highlighted below.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      return;
+    }
+
+    if (!user?.id) {
+      setErrorMessage('Authentication session expired. Please log in again.');
+      return;
+    }
+
+    setFieldErrors({});
+    isSubmittingRef.current = true;
+    setIsLoading(true);
+
+    const finalShift =
+      shiftStartTime.trim() && shiftEndTime.trim()
+        ? `${shiftStartTime.trim()} - ${shiftEndTime.trim()}`
+        : shiftStartTime.trim() || shiftEndTime.trim() || null;
+
+    try {
+      // 1. Upload newly selected documents
+      if (bankDoc) {
+        try {
+          await uploadUserDocumentDirect({
+            userId: user.id,
+            documentTypeCode: 'bank_document',
+            doc: bankDoc,
+          });
+        } catch (bErr) {
+          console.warn('[Onboarding] Bank document upload error:', bErr);
+        }
+      }
+      if (aadhaarDoc) {
+        try {
+          await uploadUserDocumentDirect({
+            userId: user.id,
+            documentTypeCode: 'aadhaar',
+            doc: aadhaarDoc,
+          });
+        } catch (uErr) {
+          console.warn('[Onboarding] Aadhaar document upload error:', uErr);
+        }
+      }
+      if (licenseDoc) {
+        try {
+          await uploadUserDocumentDirect({
+            userId: user.id,
+            documentTypeCode: 'driving_license',
+            doc: licenseDoc,
+          });
+        } catch (lErr) {
+          console.warn('[Onboarding] Licence document upload error:', lErr);
+        }
+      }
+
+      // 2. Persist all updated user profile information to public.users
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          full_name: fullName.trim(),
+          phone: cleanPhone,
+          role: selectedRole,
+          supervisor_id: isSupervisedRole(selectedRole) ? selectedSupervisorId || null : null,
+          shift_start_time: shiftStartTime.trim() || null,
+          shift_end_time: shiftEndTime.trim() || null,
+          street: street.trim(),
+          city: city.trim(),
+          district: district.trim(),
+          state: stateVal.trim(),
+          state_id: stateId,
+          monthly_salary: isOperator && monthlySalary ? Number(monthlySalary) : null,
+          bank_account_number: cleanBankAcc,
+          bank_ifsc_code: cleanIfsc,
+          aadhaar_number: cleanAadhaar,
+          license_number: licenseNumber.trim().toUpperCase() || null,
+          complete_profile: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        setErrorMessage(updateError.message || 'Failed to save profile details. Please try again.');
+        isSubmittingRef.current = false;
+        setIsLoading(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        return;
+      }
+
+      // Refresh session in auth state
+      await refreshSession();
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setSuccessMessage('Profile completed successfully! Directing to dashboard...');
+
+      setTimeout(() => {
+        router.replace('/(app)/dashboard');
+      }, 1000);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'An unexpected error occurred while saving profile.');
+      isSubmittingRef.current = false;
+      setIsLoading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    }
+  };
+
+  const canvasBackground = isDark ? '#0a0a0a' : '#fafafa';
+  const cardBackground = isDark ? '#171717' : '#ffffff';
+  const cardBorder = isDark ? '#262626' : '#ebebeb';
+  const iconColor = isDark ? '#737373' : '#9ca3af';
+
+  const supervisorOptions = useMemo(() => {
+    return supervisors.map((s) => ({
+      value: s.id,
+      label: s.full_name,
+    }));
+  }, [supervisors]);
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.container, { backgroundColor: theme.colors.canvas }]}
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor: canvasBackground,
+          flexDirection: isDesktop ? 'row' : 'column',
+        },
+      ]}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header Banner */}
-        <View style={styles.header}>
-          <ReachInternationalLogo size={26} style={{ marginBottom: 14 }} />
-          <View style={[styles.badge, { backgroundColor: theme.colors.link + '18', borderColor: theme.colors.link + '30' }]}>
-            <Text style={[styles.badgeText, { color: theme.colors.link }]}>Setup Required</Text>
+      {/* Dynamic Status Bar */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* ============================================================
+          Left: Visual & Industrial Fleet Showcase Panel (Desktop only >= 1024px)
+          Exact parity with Web app onboarding layout
+          ============================================================ */}
+      {isDesktop && (
+        <View
+          style={[
+            styles.desktopShowcasePanel,
+            {
+              width: showcaseWidth,
+              backgroundColor: isDark ? '#111111' : '#ffffff',
+              borderRightColor: cardBorder,
+            },
+          ]}
+        >
+          {/* Atmospheric Brand Glow */}
+          <View
+            style={[
+              styles.showcaseGlow,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(14, 165, 233, 0.12)'
+                  : 'rgba(2, 132, 199, 0.08)',
+              },
+            ]}
+          />
+
+          {/* Top Brand Logo */}
+          <View style={styles.showcaseLogoContainer}>
+            <ReachInternationalLogo variant="full" size={28} iconType="scissor" />
           </View>
-          <Text style={[styles.title, { color: theme.colors.ink }]}>Complete Profile</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-            Fill in your shift timings, operational site, and identity records to activate your account.
-          </Text>
-        </View>
 
-        {errorMessage ? (
-          <View style={[styles.errorBox, { backgroundColor: theme.colors.error + '15', borderColor: theme.colors.error + '40' }]}>
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        <Card variant="elevated" style={styles.formCard}>
-          {/* Section 1: Account Information & Role */}
-          <MobileFormSectionCard
-            stepNumber={1}
-            title="Account & Role"
-            description="Your full name, phone number, and organization role."
-            isMandatory={true}
-            isCompleted={section1Complete}
-          >
-            <Input
-              label="Full Name *"
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="e.g. Rahul Sharma"
-              autoCapitalize="words"
-              leftIcon={<UserIcon size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Mobile Number *"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+91 98765 43210"
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={16} color={theme.colors.mute} />}
-            />
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: theme.colors.ink }]}>
-                Assigned Role <Text style={styles.requiredStar}>*</Text>
-              </Text>
-              <TouchableOpacity
+          {/* Central Hero Stage: Title + Machinery Asset */}
+          <View style={styles.showcaseHeroContent}>
+            <View style={styles.showcaseHeadingBlock}>
+              <Text
                 style={[
-                  styles.selectTrigger,
-                  { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated },
+                  styles.showcaseTitle,
+                  { color: isDark ? '#ffffff' : '#0f172a' },
                 ]}
-                onPress={() => setRoleModalVisible(true)}
               >
-                <View style={styles.selectTriggerContent}>
-                  <Text style={[styles.selectTriggerText, { color: theme.colors.ink }]}>
-                    {selectedRoleObj.label}
-                  </Text>
-                  <Text style={[styles.selectTriggerDesc, { color: theme.colors.mute }]} numberOfLines={1}>
-                    {selectedRoleObj.desc}
-                  </Text>
-                </View>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
+                Complete setup.
+              </Text>
+              <Text style={[styles.showcaseSubtitle, { color: primarySkyBlue }]}>
+                Unlock operations.
+              </Text>
             </View>
 
-            {/* Monthly Salary Input for Operators */}
-            {effectiveRole === 'operator' && (
-              <View style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
-                <MobileSalaryField
-                  value={monthlySalary}
-                  onChangeText={setMonthlySalary}
-                  role={effectiveRole}
-                />
-              </View>
-            )}
-          </MobileFormSectionCard>
+            {/* Industrial Machinery Stage with Ground Pedestal */}
+            <View style={styles.machineStageContainer}>
+              <View
+                style={[
+                  styles.machinePedestalShadow,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(0, 0, 0, 0.85)'
+                      : 'rgba(0, 0, 0, 0.16)',
+                  },
+                ]}
+              />
+              <Image
+                source={loginPageImage}
+                style={[
+                  styles.machineImage,
+                  {
+                    maxHeight: Math.min(260, Math.max(160, height * 0.32)),
+                  },
+                ]}
+                resizeMode="contain"
+                accessible={true}
+                accessibilityLabel="Reach International Aerial Boom Lift Fleet Equipment"
+              />
+            </View>
+          </View>
 
-          {/* Section 2: Work Shift Schedule */}
-          <MobileFormSectionCard
-            stepNumber={2}
-            title="Work Shift Schedule"
-            description="Assigned shift schedule for operations."
-            isMandatory={true}
-            isCompleted={section2Complete}
+          {/* Bottom Info Badge */}
+          <View style={styles.showcaseBottomInfo}>
+            <View style={styles.greenDot} />
+            <Text style={[styles.showcaseBottomText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              One-time setup · Fast permanent verification
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* ============================================================
+          Right: Dedicated Onboarding Form Workspace (Responsive Mobile / Tablet / Desktop)
+          ============================================================ */}
+      <View style={[styles.mainWorkspace, { backgroundColor: canvasBackground }]}>
+        <KeyboardAvoidingView
+          enabled={Platform.OS === 'ios'}
+          behavior="padding"
+          style={styles.keyboardContainer}
+        >
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingHorizontal: isDesktop
+                  ? 32
+                  : isTablet
+                  ? 28
+                  : isTinyScreen
+                  ? 12
+                  : 16,
+                paddingVertical: isShortScreen ? 14 : 24,
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <View style={styles.timeInputsRow}>
-              <View style={styles.timeInputCol}>
+            {/* Main Card Container */}
+            <View style={styles.centerContainer}>
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: cardBackground,
+                    borderColor: cardBorder,
+                    maxWidth: isDesktop ? 620 : isTablet ? 580 : 520,
+                    paddingHorizontal: isDesktop
+                      ? 28
+                      : isTablet
+                      ? 24
+                      : isTinyScreen
+                      ? 14
+                      : 16,
+                  },
+                ]}
+              >
+                {/* Brand Logo Centered (clean wordmark without scissor lift SVG icon, hidden on Desktop since left showcase panel displays it) */}
+                {!isDesktop && (
+                  <View style={styles.logoContainer}>
+                    <ReachInternationalLogo variant="full" size={26} showIcon={false} />
+                  </View>
+                )}
+
+                {/* Card Title */}
+                <Text style={[styles.title, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+                  Complete Your Profile
+                </Text>
+                <Text style={[styles.subtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  Fill in your remaining profile and verification details to activate your account.
+                </Text>
+
+              {/* Global Error Banner */}
+              {errorMessage && Object.keys(fieldErrors).length === 0 ? (
+                <View style={styles.bannerContainer}>
+                  <Alert variant="error">{errorMessage}</Alert>
+                </View>
+              ) : null}
+
+              {/* Global Success Banner */}
+              {successMessage ? (
+                <View style={styles.bannerContainer}>
+                  <Alert variant="success">{successMessage}</Alert>
+                </View>
+              ) : null}
+
+              {/* Section 1: Account & Role */}
+              <MobileFormSectionCard
+                stepNumber={1}
+                title="ACCOUNT & ROLE"
+                isMandatory={true}
+                isCompleted={section1Complete}
+                style={{ zIndex: 50 }}
+              >
+                <Input
+                  label="Full Name"
+                  required
+                  placeholder="Rahul Sharma"
+                  value={fullName}
+                  onChangeText={(val) => {
+                    setFullName(val);
+                    clearFieldError('full_name');
+                  }}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  error={fieldErrors.full_name}
+                  leftIcon={<User size={15} color={iconColor} />}
+                />
+
+                <Input
+                  label="Email Address (Verified)"
+                  value={email}
+                  onChangeText={() => {}}
+                  editable={false}
+                  autoCapitalize="none"
+                  leftIcon={<Mail size={15} color={iconColor} />}
+                  helperText="Your authenticated corporate email account."
+                />
+
+                <Input
+                  label="Mobile Number"
+                  required
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChangeText={(val) => {
+                    setPhone(val);
+                    clearFieldError('phone');
+                  }}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  error={fieldErrors.phone}
+                  leftIcon={<Phone size={15} color={iconColor} />}
+                />
+
+                {/* Role Selector using Reusable SearchableSelect with role names only */}
+                <SearchableSelect
+                  label="Assigned Role"
+                  required
+                  options={ONBOARDING_ROLES}
+                  value={selectedRole}
+                  onChange={(val) => {
+                    setSelectedRole(val);
+                    if (!isSupervisedRole(val)) {
+                      setSelectedSupervisorId('');
+                    }
+                  }}
+                  placeholder="Select role..."
+                  leftIcon={<User size={15} color={iconColor} />}
+                  error={fieldErrors.role}
+                  modalTitle="Select Account Role"
+                  presentation="dropdown"
+                  containerStyle={{ zIndex: 20 }}
+                />
+
+                {/* Conditional Supervisor Selector using Reusable SearchableSelect */}
+                {isSupervisedRole(selectedRole) && (
+                  <View style={[styles.supervisorWrapper, { zIndex: 10 }]}>
+                    <SearchableSelect
+                      label="Select Supervisor"
+                      required
+                      options={supervisorOptions}
+                      value={selectedSupervisorId}
+                      onChange={(val) => {
+                        setSelectedSupervisorId(val);
+                        clearFieldError('supervisor_id');
+                      }}
+                      placeholder={
+                        loadingSupervisors
+                          ? 'Loading supervisors...'
+                          : supervisorOptions.length === 0
+                          ? 'No active supervisors found'
+                          : 'Select supervisor...'
+                      }
+                      leftIcon={<ShieldCheck size={15} color={iconColor} />}
+                      error={fieldErrors.supervisor_id}
+                      modalTitle="Select Supervisor"
+                      searchable
+                      searchPlaceholder="Search supervisor..."
+                      presentation="dropdown"
+                    />
+                  </View>
+                )}
+
+                {/* Monthly Salary Input for Operators */}
+                {isOperator && (
+                  <View style={styles.supervisorWrapper}>
+                    <MobileSalaryField
+                      value={monthlySalary}
+                      onChangeText={(val) => {
+                        setMonthlySalary(val);
+                        clearFieldError('monthly_salary');
+                      }}
+                      role={selectedRole}
+                      error={fieldErrors.monthly_salary}
+                    />
+                  </View>
+                )}
+              </MobileFormSectionCard>
+
+              {/* Section 2: Work Shift Schedule */}
+              <MobileFormSectionCard
+                stepNumber={2}
+                title="WORK SHIFT SCHEDULE"
+                isMandatory={true}
+                isCompleted={section2Complete}
+                style={{ zIndex: 40 }}
+                headerAction={
+                  shiftSummary?.isValid ? (
+                    <Text style={[styles.durationSmallText, { color: isDark ? '#38bdf8' : '#0284c7' }]}>
+                      {shiftSummary.durationMinutes % 60 === 0
+                        ? `${shiftSummary.durationMinutes / 60} hrs`
+                        : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}
+                    </Text>
+                  ) : null
+                }
+              >
                 <TimeInput
-                  label="Shift Start"
+                  label="Shift Start Time"
                   value={shiftStartTime}
                   onChange={setShiftStartTime}
                   required
+                  toggleLayout="side-by-side"
                 />
-              </View>
-              <View style={styles.timeInputCol}>
                 <TimeInput
-                  label="Shift End"
+                  label="Shift End Time"
                   value={shiftEndTime}
                   onChange={setShiftEndTime}
                   required
+                  toggleLayout="side-by-side"
                 />
-              </View>
-            </View>
+              </MobileFormSectionCard>
 
-            {shiftSummary?.isValid && (
-              <View style={[styles.shiftBadge, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '30' }]}>
-                <Text style={[styles.shiftBadgeText, { color: theme.colors.link }]}>
-                  {shiftSummary.isOvernight ? '🌙' : '☀️'} {shiftSummary.durationFormatted}
+              {/* Section 3: Address Details */}
+              <MobileFormSectionCard
+                stepNumber={3}
+                title="ADDRESS DETAILS"
+                isMandatory={true}
+                isCompleted={section3Complete}
+                style={{ zIndex: 30 }}
+              >
+                <MobileAddressFields
+                  street={street}
+                  city={city}
+                  district={district}
+                  stateName={stateVal}
+                  stateId={stateId}
+                  onStreetChange={(val) => {
+                    setStreet(val);
+                    clearFieldError('street');
+                  }}
+                  onCityChange={(val) => {
+                    setCity(val);
+                    clearFieldError('city');
+                  }}
+                  onDistrictChange={(val) => {
+                    setDistrict(val);
+                    clearFieldError('district');
+                  }}
+                  onStateChange={(id, name) => {
+                    setStateId(id);
+                    setStateVal(name);
+                    clearFieldError('state');
+                  }}
+                  errors={{
+                    street: fieldErrors.street,
+                    city: fieldErrors.city,
+                    district: fieldErrors.district,
+                    state: fieldErrors.state,
+                  }}
+                  required={true}
+                />
+              </MobileFormSectionCard>
+
+              {/* Section 4: Banking Details */}
+              <MobileFormSectionCard
+                stepNumber={4}
+                title="BANKING DETAILS"
+                isMandatory={true}
+                isCompleted={section4Complete}
+                style={{ zIndex: 20 }}
+              >
+                <Input
+                  label="Bank Account Number"
+                  required
+                  placeholder="9 to 18-digit Account Number"
+                  value={bankAccountNumber}
+                  onChangeText={handleBankAccountChange}
+                  keyboardType="numeric"
+                  maxLength={18}
+                  error={fieldErrors.bank_account_number}
+                  leftIcon={<CreditCard size={15} color={iconColor} />}
+                />
+
+                <Input
+                  label="IFSC Code"
+                  required
+                  placeholder="e.g. SBIN0001234"
+                  value={bankIfscCode}
+                  onChangeText={handleBankIfscChange}
+                  autoCapitalize="characters"
+                  maxLength={11}
+                  error={fieldErrors.bank_ifsc_code}
+                  leftIcon={<Building2 size={15} color={iconColor} />}
+                />
+
+                <MobileDocumentUploadCard
+                  title="Bank Account Document"
+                  docTypeCode="bank_document"
+                  required
+                  selectedDoc={bankDoc}
+                  existingDoc={existingDocs['bank_document'] || existingDocs['bank_passbook']}
+                  onDocSelected={(doc) => {
+                    setBankDoc(doc);
+                    setBankDocError(null);
+                    clearFieldError('bank_doc');
+                  }}
+                  onDocRemoved={async () => {
+                    if (existingDocs['bank_document']) {
+                      await deleteUserDocument(user!.id, 'bank_document', existingDocs['bank_document'].storage_path);
+                      setExistingDocs((prev) => {
+                        const copy = { ...prev };
+                        delete copy['bank_document'];
+                        return copy;
+                      });
+                    }
+                    setBankDoc(null);
+                    setBankDocError(null);
+                  }}
+                  errorMessage={bankDocError || fieldErrors.bank_doc}
+                />
+              </MobileFormSectionCard>
+
+              {/* Section 5: Identity Verification */}
+              <MobileFormSectionCard
+                stepNumber={5}
+                title="IDENTITY VERIFICATION"
+                isMandatory={true}
+                isCompleted={section5Complete}
+                style={{ zIndex: 10 }}
+              >
+                <Input
+                  label="Aadhaar Card Number"
+                  required
+                  placeholder="12-digit Aadhaar Number"
+                  value={aadhaarNumber}
+                  onChangeText={handleAadhaarChange}
+                  keyboardType="numeric"
+                  maxLength={14}
+                  error={fieldErrors.aadhaar_number}
+                  leftIcon={<ShieldCheck size={15} color={iconColor} />}
+                />
+
+                <Input
+                  label="Driving Licence Number (Optional)"
+                  placeholder="e.g. MH12 20110012345"
+                  value={licenseNumber}
+                  onChangeText={handleLicenseChange}
+                  autoCapitalize="characters"
+                  maxLength={25}
+                  error={fieldErrors.license_number}
+                  leftIcon={<CreditCard size={15} color={iconColor} />}
+                />
+
+                <MobileDocumentUploadCard
+                  title="Aadhaar Document"
+                  docTypeCode="aadhaar"
+                  required
+                  selectedDoc={aadhaarDoc}
+                  existingDoc={existingDocs['aadhaar']}
+                  onDocSelected={(doc) => {
+                    setAadhaarDoc(doc);
+                    setAadhaarDocError(null);
+                    clearFieldError('aadhaar_doc');
+                  }}
+                  onDocRemoved={async () => {
+                    if (existingDocs['aadhaar']) {
+                      await deleteUserDocument(user!.id, 'aadhaar', existingDocs['aadhaar'].storage_path);
+                      setExistingDocs((prev) => {
+                        const copy = { ...prev };
+                        delete copy['aadhaar'];
+                        return copy;
+                      });
+                    }
+                    setAadhaarDoc(null);
+                    setAadhaarDocError(null);
+                  }}
+                  errorMessage={aadhaarDocError || fieldErrors.aadhaar_doc}
+                />
+
+                <MobileDocumentUploadCard
+                  title="Licence Document"
+                  docTypeCode="driving_license"
+                  selectedDoc={licenseDoc}
+                  existingDoc={existingDocs['driving_license']}
+                  onDocSelected={(doc) => {
+                    setLicenseDoc(doc);
+                    setLicenseDocError(null);
+                  }}
+                  onDocRemoved={async () => {
+                    if (existingDocs['driving_license']) {
+                      await deleteUserDocument(user!.id, 'driving_license', existingDocs['driving_license'].storage_path);
+                      setExistingDocs((prev) => {
+                        const copy = { ...prev };
+                        delete copy['driving_license'];
+                        return copy;
+                      });
+                    }
+                    setLicenseDoc(null);
+                    setLicenseDocError(null);
+                  }}
+                  errorMessage={licenseDocError}
+                />
+              </MobileFormSectionCard>
+
+              {/* Informational Note Banner */}
+              <View
+                style={[
+                  styles.noteBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : 'rgba(2, 132, 199, 0.08)',
+                    borderColor: isDark ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.2)',
+                  },
+                ]}
+              >
+                <Info size={15} color="#0284c7" style={{ marginTop: 2 }} />
+                <Text
+                  style={[
+                    styles.noteText,
+                    { color: isDark ? '#7dd3fc' : '#0369a1' },
+                  ]}
+                >
+                  <Text style={{ fontWeight: '700' }}>One-time setup: </Text>
+                  Your profile details will be permanently saved. Once submitted, your workspace will be fully unlocked.
                 </Text>
               </View>
-            )}
-          </MobileFormSectionCard>
 
-          {/* Section 3: Work Location & Address */}
-          <MobileFormSectionCard
-            stepNumber={3}
-            title="Work Location & Address"
-            description="Operating site address and geographic base."
-            isMandatory={true}
-            isCompleted={section3Complete}
-          >
-            <MobileAddressFields
-              street={street}
-              city={city}
-              district={district}
-              stateName={stateVal}
-              stateId={stateId}
-              onStreetChange={setStreet}
-              onCityChange={setCity}
-              onDistrictChange={setDistrict}
-              onStateChange={(id, name) => {
-                setStateId(id);
-                setStateVal(name);
-              }}
-              required={true}
-            />
-          </MobileFormSectionCard>
-
-          {/* Section 4: Identity Verification */}
-          <MobileFormSectionCard
-            stepNumber={4}
-            title="Identity Verification"
-            description="Regulatory identity compliance documents."
-            isMandatory={true}
-            isCompleted={section4Complete}
-          >
-            <Input
-              label="Aadhaar Card Number *"
-              value={aadhaarNumber}
-              onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
-              placeholder="12-digit Aadhaar Number"
-              keyboardType="number-pad"
-              maxLength={14}
-              leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
-            />
-
-            <MobileDocumentUploadCard
-              title="Aadhaar Card Document"
-              subtitle="Front image or PDF (max 2 MB)"
-              docTypeCode="aadhaar"
-              selectedDoc={aadhaarDoc}
-              existingDoc={existingDocs['aadhaar']}
-              onDocSelected={(doc) => {
-                setAadhaarDoc(doc);
-                handleUploadDoc('aadhaar', doc);
-              }}
-              onDocRemoved={() => {
-                if (existingDocs['aadhaar']) {
-                  handleDeleteDoc('aadhaar');
-                } else {
-                  setAadhaarDoc(null);
-                }
-              }}
-              uploading={aadhaarUploading}
-              uploadProgress={aadhaarProgress}
-              errorMessage={aadhaarError}
-            />
-
-            <Input
-              label="Driving Licence Number (Optional)"
-              value={licenseNumber}
-              onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
-              placeholder="e.g. MH12 20110012345"
-              autoCapitalize="characters"
-              maxLength={25}
-              leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
-            />
-
-            <MobileDocumentUploadCard
-              title="Driving Licence Document"
-              subtitle="Front scan or PDF (max 2 MB)"
-              docTypeCode="driving_license"
-              selectedDoc={licenseDoc}
-              existingDoc={existingDocs['driving_license']}
-              onDocSelected={(doc) => {
-                setLicenseDoc(doc);
-                handleUploadDoc('driving_license', doc);
-              }}
-              onDocRemoved={() => {
-                if (existingDocs['driving_license']) {
-                  handleDeleteDoc('driving_license');
-                } else {
-                  setLicenseDoc(null);
-                }
-              }}
-              uploading={licenseUploading}
-              uploadProgress={licenseProgress}
-              errorMessage={licenseError}
-            />
-          </MobileFormSectionCard>
-
-          {/* One-Time Reassurance Banner */}
-          <View style={[styles.noticeBox, { backgroundColor: theme.colors.link + '12', borderColor: theme.colors.link + '30' }]}>
-            <Info size={16} color={theme.colors.link} style={{ marginTop: 1 }} />
-            <Text style={[styles.noticeText, { color: theme.colors.link, flex: 1 }]}>
-              <Text style={{ fontWeight: '700' }}>Fast One-Time Setup: </Text>
-              Your profile is verified once and saved permanently. Subsequent logins will route directly to your dashboard.
-            </Text>
+              {/* Gated Submit Button matching web mobile view */}
+              <MobileSubmitButton
+                isReady={isAllMandatoryFilled}
+                isLoading={isLoading}
+                onPress={handleCompleteOnboarding}
+                label="Save & Activate Account"
+                loadingLabel="Saving Profile..."
+                missingCount={missingMandatoryCount}
+                missingFields={missingFields}
+              />
+            </View>
           </View>
 
-          {/* Submit Button */}
-          <View style={styles.submitContainer}>
-            <MobileSubmitButton
-              isReady={isAllMandatoryFilled}
-              isLoading={isLoading}
-              onPress={handleComplete}
-              label="Complete Profile & Enter"
-              loadingLabel="Saving Profile..."
-              missingCount={missingMandatoryCount}
-              helperText="All required details completed. Ready to activate profile."
-            />
-          </View>
-        </Card>
-      </ScrollView>
+          {/* Bottom Screen Footer & Theme Toggle */}
+          <View style={styles.screenFooter}>
+            <View style={styles.footerInner}>
+              <Text
+                style={[
+                  styles.copyrightText,
+                  { color: isDark ? '#737373' : '#8f8f8f' },
+                ]}
+              >
+                &copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.
+              </Text>
 
-      {/* Role Picker Modal */}
-      <Modal visible={roleModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
-            <View style={[styles.modalHeader, { borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Your Role</Text>
-              <TouchableOpacity onPress={() => setRoleModalVisible(false)} hitSlop={8}>
-                <X size={20} color={theme.colors.mute} />
+              {/* Floating Theme Switcher */}
+              <TouchableOpacity
+                style={[
+                  styles.themeToggleBtn,
+                  {
+                    backgroundColor: isDark ? '#1e1e1e' : '#f0f0f0',
+                    borderColor: cardBorder,
+                  },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setMode(isDark ? 'light' : 'dark');
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Toggle Theme"
+                hitSlop={8}
+              >
+                {isDark ? (
+                  <Sun size={15} color="#e0e0e0" />
+                ) : (
+                  <Moon size={15} color="#333333" />
+                )}
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalList}>
-              {ONBOARDING_ROLES.map((r) => {
-                const isSelected = selectedRole === r.value;
-                return (
-                  <TouchableOpacity
-                    key={r.value}
-                    style={[
-                      styles.modalOption,
-                      { borderColor: theme.colors.hairline },
-                      isSelected && { backgroundColor: theme.colors.link + '15' },
-                    ]}
-                    onPress={() => {
-                      setSelectedRole(r.value);
-                      setRoleModalVisible(false);
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.optionLabel, { color: isSelected ? theme.colors.link : theme.colors.ink }]}>
-                        {r.label}
-                      </Text>
-                      <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
-                        {r.desc}
-                      </Text>
-                    </View>
-                    {isSelected && <Check size={18} color={theme.colors.link} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
           </View>
-        </View>
-      </Modal>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+    height: '100%',
+    width: '100%',
+  },
+  // Desktop Left Showcase Panel
+  desktopShowcasePanel: {
+    height: '100%',
+    borderRightWidth: 1,
+    paddingHorizontal: 40,
+    paddingVertical: 32,
+    justifyContent: 'space-between',
+    position: 'relative',
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  showcaseGlow: {
+    position: 'absolute',
+    top: '25%',
+    left: '10%',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    opacity: 0.8,
+    ...Platform.select({
+      web: {
+        filter: 'blur(50px)',
+      },
+      default: {},
+    }),
+  },
+  showcaseLogoContainer: {
+    alignItems: 'flex-start',
+    zIndex: 2,
+  },
+  showcaseHeroContent: {
+    marginVertical: 'auto',
+    alignItems: 'flex-start',
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    gap: 22,
+    zIndex: 2,
+    paddingVertical: 12,
+  },
+  showcaseHeadingBlock: {
+    width: '100%',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  showcaseTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  showcaseSubtitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  machineStageContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingVertical: 10,
+  },
+  machinePedestalShadow: {
+    position: 'absolute',
+    bottom: 6,
+    width: '85%',
+    maxWidth: 320,
+    height: 12,
+    borderRadius: 9999,
+    ...Platform.select({
+      web: {
+        filter: 'blur(4px)',
+      },
+      default: {
+        opacity: 0.5,
+      },
+    }),
+  },
+  machineImage: {
+    width: '100%',
+    maxWidth: 340,
+  },
+  showcaseBottomInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 2,
+  },
+  greenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  showcaseBottomText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  mainWorkspace: {
+    flex: 1,
+    height: '100%',
+    position: 'relative',
+  },
+  keyboardContainer: {
+    flex: 1,
+    height: '100%',
   },
   scrollContent: {
-    padding: spacingNumeric.lg,
-    paddingBottom: spacingNumeric['3xl'],
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
-  header: {
-    marginBottom: spacingNumeric.lg,
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    paddingVertical: 6,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  card: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
-  badgeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   title: {
     fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 6,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 19,
-    paddingHorizontal: 12,
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginBottom: 14,
   },
-  formCard: {
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-  },
-  sectionContainer: {
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    padding: 12,
+  bannerContainer: {
     marginBottom: 12,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-  },
-  stepPill: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  sectionTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    flex: 1,
-  },
-  shiftBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  shiftBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
+  durationSmallText: {
+    fontSize: 11,
+    fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 14,
   },
-  timeInputsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timeInputCol: {
-    flex: 1,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  col: {
-    flex: 1,
-  },
-  fieldGroup: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  requiredStar: {
-    color: '#ef4444',
-  },
-  selectTrigger: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectTriggerContent: {
-    flex: 1,
-    marginRight: 8,
-  },
-  selectTriggerText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
-  selectTriggerDesc: {
-    fontSize: 12.5,
+  supervisorWrapper: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 150, 150, 0.15)',
     marginTop: 2,
   },
-  errorBox: {
-    padding: 12,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  errorText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  noticeBox: {
+  noteBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     padding: 10,
-    borderRadius: radiusNumeric.md,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 6,
   },
-  noticeText: {
-    fontSize: 12,
+  noteText: {
+    flex: 1,
+    fontSize: 11.5,
     lineHeight: 16,
   },
-  submitContainer: {
-    marginTop: 4,
+  screenFooter: {
+    width: '100%',
+    paddingTop: 12,
+    paddingBottom: 4,
   },
-  modalOverlay: {
+  footerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  copyrightText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end',
+    fontSize: 10.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.3,
   },
-  modalContent: {
-    maxHeight: '80%',
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    paddingBottom: 30,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  themeToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalList: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderRadius: radiusNumeric.md,
-  },
-  optionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  optionDesc: {
-    fontSize: 12,
-    marginTop: 2,
+    justifyContent: 'center',
+    marginLeft: 12,
   },
 });

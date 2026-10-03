@@ -11,17 +11,12 @@ import {
   Platform,
   StatusBar,
   LayoutAnimation,
-  UIManager,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
-import {
-  OperationsFilterSelectorModal,
-  FilterSelectOption,
-} from '../../components/operations/OperationsFilterSelectorModal';
 import {
   OperationLogListSkeleton,
 } from '../../components/operations/OperationsSkeleton';
@@ -64,7 +59,6 @@ import {
   ChevronDown,
   ChevronUp,
   Phone,
-  RefreshCw,
   Printer,
   ChevronLeft,
   ChevronRight,
@@ -75,10 +69,6 @@ import {
   UserPlus,
 } from 'lucide-react-native';
 import { isManagerOrAbove } from '@reachinternational/permissions';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export type OpsTab = 'logs' | 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
@@ -278,20 +268,6 @@ export default function OperationsScreen() {
     setter((prev) => !prev);
   };
 
-  // Reusable Selector Modal State
-  const [selectorModalConfig, setSelectorModalConfig] = useState<{
-    visible: boolean;
-    title: string;
-    options: FilterSelectOption[];
-    selectedValue: string;
-    onSelect: (val: string) => void;
-  }>({
-    visible: false,
-    title: '',
-    options: [],
-    selectedValue: '',
-    onSelect: () => {},
-  });
 
   // Offline Sync State
   const { queue, isSyncing } = useOfflineQueue();
@@ -702,49 +678,27 @@ export default function OperationsScreen() {
     return machinesList.filter((m) => m.client_id && matchingClientIds.has(m.client_id));
   }, [machinesList, selectedClientId, clientsList]);
 
-  // Handlers for Selectors
-  const openMachineSelector = () => {
-    const options: FilterSelectOption[] = machinesList.map((m) => ({
-      id: m.id,
+  // Memoized Options for SearchableSelect
+  const machineSelectOptions = useMemo<SelectOption[]>(() => {
+    return machinesList.map((m) => ({
+      value: m.id,
       label: m.machine_id,
-      subLabel: [m.manufacturer, m.model].filter(Boolean).join(' ') || undefined,
+      description: [m.manufacturer, m.model].filter(Boolean).join(' ') || undefined,
       code: m.serial_number ? `S/N: ${m.serial_number}` : undefined,
       badge: m.status ? m.status.toUpperCase() : undefined,
       badgeVariant: m.status === 'rented' ? 'info' : m.status === 'available' ? 'success' : 'neutral',
     }));
+  }, [machinesList]);
 
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Machine',
-      options,
-      selectedValue: selectedMachineId,
-      onSelect: (val) => {
-        setSelectedMachineId(val);
-        setLogsPage(1);
-      },
-    });
-  };
-
-  const openMonthSelector = () => {
-    const options: FilterSelectOption[] = MONTH_OPTIONS.map((m) => ({
-      id: m.id,
+  const monthSelectOptions = useMemo<SelectOption[]>(() => {
+    return MONTH_OPTIONS.map((m) => ({
+      value: m.id,
       label: m.label,
     }));
+  }, []);
 
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Month',
-      options,
-      selectedValue: selectedMonth,
-      onSelect: (val) => {
-        setSelectedMonth(val);
-        setLogsPage(1);
-      },
-    });
-  };
-
-  const openClientSelector = () => {
-    const options: FilterSelectOption[] = clientsList.map((c) => {
+  const clientSelectOptions = useMemo<SelectOption[]>(() => {
+    return clientsList.map((c) => {
       const machineCount = machinesList.filter((m) => m.client_id === c.id).length;
       const parts = [(c as any).street, c.city, (c as any).district, c.state, (c as any).pincode]
         .filter(Boolean)
@@ -755,92 +709,46 @@ export default function OperationsScreen() {
           ? parts.join(', ')
           : ((c as any).address ? String((c as any).address).trim() : undefined);
       return {
-        id: c.id,
+        value: c.id,
         label: c.company_name,
-        subLabel: fullLoc,
+        description: fullLoc,
         badge: machineCount > 0 ? `${machineCount} ${machineCount === 1 ? 'M/C' : 'M/Cs'}` : undefined,
         badgeVariant: 'info',
       };
     });
+  }, [clientsList, machinesList]);
 
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Client',
-      options,
-      selectedValue: selectedClientId,
-      onSelect: (val) => {
-        setSelectedClientId(val);
-        setSelectedSiteLocation('');
-        setSelectedClientMachineId('all');
-        setLogsPage(1);
-      },
-    });
-  };
-
-  const openLocationSelector = () => {
-    const options: FilterSelectOption[] = [
-      { id: 'all', label: 'All Sites & Locations' },
+  const locationSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: 'all', label: 'All Sites & Locations' },
       ...clientLocations.map((loc) => ({
-        id: loc,
+        value: loc,
         label: loc,
       })),
     ];
+  }, [clientLocations]);
 
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Location',
-      options,
-      selectedValue: effectiveSiteLocation,
-      onSelect: (val) => {
-        setSelectedSiteLocation(val);
-        setLogsPage(1);
-      },
-    });
-  };
-
-  const openClientMachineSelector = () => {
-    const options: FilterSelectOption[] = [
-      { id: 'all', label: `All Machines (${clientMachines.length} Total)` },
+  const clientMachineSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: 'all', label: `All Machines (${clientMachines.length} Total)` },
       ...clientMachines.map((m) => ({
-        id: m.id,
+        value: m.id,
         label: m.machine_id,
-        subLabel: m.model,
+        description: m.model,
         code: m.serial_number ? `S/N: ${m.serial_number}` : undefined,
       })),
     ];
+  }, [clientMachines]);
 
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Machine',
-      options,
-      selectedValue: selectedClientMachineId,
-      onSelect: (val) => {
-        setSelectedClientMachineId(val);
-        setLogsPage(1);
-      },
-    });
-  };
-
-  const openOperatorSelector = () => {
-    const options: FilterSelectOption[] = activeOperators.map((op) => ({
-      id: op.id,
+  const operatorSelectOptions = useMemo<SelectOption[]>(() => {
+    return activeOperators.map((op) => ({
+      value: op.id,
       label: op.full_name,
-      subLabel: op.phone ? `ðŸ“ž ${op.phone}` : undefined,
+      description: op.phone ? `📞 ${op.phone}` : undefined,
       badge: 'OPERATOR',
       badgeVariant: 'warning',
     }));
-
-    setSelectorModalConfig({
-      visible: true,
-      title: 'Select Operator',
-      options,
-      selectedValue: selectedOperatorId,
-      onSelect: (val) => {
-        setSelectedOperatorId(val);
-        setLogsPage(1);
-      },
-    });
-  };
+  }, [activeOperators]);
 
   // Open Conflict Modal
   const handleOpenConflictModal = (log: HourLogRecord) => {
@@ -865,13 +773,6 @@ export default function OperationsScreen() {
       label: 'Export / Print Report',
       icon: <Printer size={16} color={theme.colors.ink} />,
       onPress: () => setShowExportModal(true),
-    });
-
-    list.push({
-      id: 'refresh-data',
-      label: 'Refresh Operations Data',
-      icon: <RefreshCw size={16} color={theme.colors.ink} />,
-      onPress: () => onRefresh(),
     });
 
     if (pendingConflicts.length > 0) {
@@ -987,7 +888,9 @@ export default function OperationsScreen() {
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          scrollEventThrottle={16}
+          indicatorStyle={isDark ? 'white' : 'black'}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
         >
           <MobileOperatorEntryCard
@@ -1003,14 +906,16 @@ export default function OperationsScreen() {
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          scrollEventThrottle={16}
+          indicatorStyle={isDark ? 'white' : 'black'}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
         >
           <MobileTodayShiftMonitorTab
             actorId={user?.id}
-            userRole={user?.role}
+            userRole={role || userProfile?.role}
             onEnterLog={(row) => {
-              if (isManagerOrAbove(user?.role)) {
+              if (isManagerTier) {
                 setAssistedRow(row);
               }
             }}
@@ -1027,7 +932,9 @@ export default function OperationsScreen() {
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          scrollEventThrottle={16}
+          indicatorStyle={isDark ? 'white' : 'black'}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
         >
           {/* Overtime Conflict Alert Banner */}
@@ -1299,152 +1206,140 @@ export default function OperationsScreen() {
             <View style={styles.dropdownsContainer}>
               {logsViewMode === 'machine' && (
                 <>
-                  <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Machine ({machinesList.length} Total)</Text>
-                    <TouchableOpacity
-                      onPress={openMachineSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedMachineObj ? `${selectedMachineObj.machine_id} Â· ${selectedMachineObj.model || ''}` : 'Select Machine...'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                  <SearchableSelect
+                    label={`Select Machine (${machinesList.length} Total)`}
+                    options={machineSelectOptions}
+                    value={selectedMachineId}
+                    onChange={(val) => {
+                      setSelectedMachineId(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Machine..."
+                    modalTitle="Select Machine"
+                    leftIcon={<Truck size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
 
-                  <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Month</Text>
-                    <TouchableOpacity
-                      onPress={openMonthSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]}>
-                        {MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'Select Month'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                  <SearchableSelect
+                    label="Select Month"
+                    options={monthSelectOptions}
+                    value={selectedMonth}
+                    onChange={(val) => {
+                      setSelectedMonth(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Month"
+                    modalTitle="Select Month"
+                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
                 </>
               )}
 
               {logsViewMode === 'client' && (
                 <>
-                  <View style={styles.dropdownField}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Client</Text>
+                  <SearchableSelect
+                    label="Select Client"
+                    rightElement={
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
                         <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientsList.length} Total</Text>
                       </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={openClientSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      {selectedClientObj ? (
-                        <Text style={[styles.selectorTriggerText, { color: theme.colors.ink, flex: 1 }]} numberOfLines={1}>
-                          <Text style={{ fontWeight: '700' }}>{selectedClientObj.company_name}</Text>
-                          {(() => {
-                            const parts = [(selectedClientObj as any).street, selectedClientObj.city, (selectedClientObj as any).district, selectedClientObj.state, (selectedClientObj as any).pincode]
-                              .filter(Boolean)
-                              .map((s) => String(s).trim())
-                              .filter(Boolean);
-                            const loc = parts.length > 0 ? parts.join(', ') : ((selectedClientObj as any).address ? String((selectedClientObj as any).address).trim() : '');
-                            return loc ? (
-                              <Text style={{ color: theme.colors.mute, fontWeight: '400', fontSize: 12.5 }}>
-                                {` â€¢ ${loc}`}
-                              </Text>
-                            ) : null;
-                          })()}
-                        </Text>
-                      ) : (
-                        <Text style={[styles.selectorTriggerText, { color: theme.colors.mute }]}>
-                          Select Client...
-                        </Text>
-                      )}
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                    }
+                    options={clientSelectOptions}
+                    value={selectedClientId}
+                    onChange={(val) => {
+                      setSelectedClientId(val);
+                      setSelectedSiteLocation('');
+                      setSelectedClientMachineId('all');
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Client..."
+                    modalTitle="Select Client"
+                    containerStyle={styles.dropdownField}
+                  />
 
-                  <View style={styles.dropdownField}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Location</Text>
+                  <SearchableSelect
+                    label="Select Location"
+                    rightElement={
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
                         <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientLocations.length} Total</Text>
                       </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={openLocationSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {effectiveSiteLocation === 'all' ? 'All Sites & Locations' : effectiveSiteLocation}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                    }
+                    options={locationSelectOptions}
+                    value={effectiveSiteLocation}
+                    onChange={(val) => {
+                      setSelectedSiteLocation(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Location..."
+                    modalTitle="Select Location"
+                    containerStyle={styles.dropdownField}
+                  />
 
-                  <View style={styles.dropdownField}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Machine</Text>
+                  <SearchableSelect
+                    label="Select Machine"
+                    rightElement={
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
                         <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientMachines.length} Total</Text>
                       </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={openClientMachineSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedClientMachineId === 'all'
-                          ? `All Machines (${clientMachines.length} Total)`
-                          : machinesList.find((m) => m.id === selectedClientMachineId)?.machine_id || 'Machine'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                    }
+                    options={clientMachineSelectOptions}
+                    value={selectedClientMachineId}
+                    onChange={(val) => {
+                      setSelectedClientMachineId(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Machine..."
+                    modalTitle="Select Machine"
+                    leftIcon={<Truck size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
 
-                  <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Month</Text>
-                    <TouchableOpacity
-                      onPress={openMonthSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]}>
-                        {MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'Select Month'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                  <SearchableSelect
+                    label="Select Month"
+                    options={monthSelectOptions}
+                    value={selectedMonth}
+                    onChange={(val) => {
+                      setSelectedMonth(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Month"
+                    modalTitle="Select Month"
+                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
                 </>
               )}
 
               {logsViewMode === 'operator' && (
                 <>
-                  <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Operator ({activeOperators.length} Total)</Text>
-                    <TouchableOpacity
-                      onPress={openOperatorSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedOperatorObj?.full_name || 'Select Operator...'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                  <SearchableSelect
+                    label={`Select Operator (${activeOperators.length} Total)`}
+                    options={operatorSelectOptions}
+                    value={selectedOperatorId}
+                    onChange={(val) => {
+                      setSelectedOperatorId(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Operator..."
+                    modalTitle="Select Operator"
+                    leftIcon={<User size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
 
-                  <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Month</Text>
-                    <TouchableOpacity
-                      onPress={openMonthSelector}
-                      style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                    >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]}>
-                        {MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'Select Month'}
-                      </Text>
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    </TouchableOpacity>
-                  </View>
+                  <SearchableSelect
+                    label="Select Month"
+                    options={monthSelectOptions}
+                    value={selectedMonth}
+                    onChange={(val) => {
+                      setSelectedMonth(val);
+                      setLogsPage(1);
+                    }}
+                    placeholder="Select Month"
+                    modalTitle="Select Month"
+                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
+                    containerStyle={styles.dropdownField}
+                  />
                 </>
               )}
             </View>
@@ -1570,35 +1465,26 @@ export default function OperationsScreen() {
                   </View>
 
                   {/* 3 Summary Metric Cards in Client Detail View (OT omitted for client) */}
-                  <View style={styles.metricsGrid4}>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Clock size={12} color={theme.colors.link} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>RUN</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-                        {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <AlertTriangle size={12} color={isDark ? '#fb7185' : '#f43f5e'} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                        {activeMetrics.breakdowns} {activeMetrics.breakdowns === 1 ? 'Event' : 'Events'}
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <FileText size={12} color={theme.colors.mute} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>SHIFTS</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                        {activeMetrics.totalLogs} {activeMetrics.totalLogs === 1 ? 'Shift' : 'Shifts'}
-                      </Text>
-                    </View>
-                  </View>
+                  <KPIGrid columns={3} style={{ marginVertical: spacingNumeric.xs }}>
+                    <KPICard
+                      label="Run Hours"
+                      value={`${Math.round(activeMetrics.runHours * 10) / 10} hrs`}
+                      icon={Clock}
+                      variant="info"
+                    />
+                    <KPICard
+                      label="Breakdowns"
+                      value={`${activeMetrics.breakdowns} ${activeMetrics.breakdowns === 1 ? 'Event' : 'Events'}`}
+                      icon={AlertTriangle}
+                      variant={activeMetrics.breakdowns > 0 ? 'error' : 'default'}
+                    />
+                    <KPICard
+                      label="Shifts"
+                      value={`${activeMetrics.totalLogs} ${activeMetrics.totalLogs === 1 ? 'Shift' : 'Shifts'}`}
+                      icon={FileText}
+                      variant="default"
+                    />
+                  </KPIGrid>
                 </>
               )}
             </Card>
@@ -1659,44 +1545,38 @@ export default function OperationsScreen() {
                     </View>
                   ) : null}
 
-                  <View style={[styles.metricsGrid4, { marginTop: (selectedOperatorObj?.phone || selectedOperatorObj?.email) ? 0 : 8 }]}>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Clock size={12} color={theme.colors.link} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>RUN</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-                        {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Zap size={12} color={isDark ? '#fbbf24' : '#d97706'} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>OT</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
-                        {Math.round(activeMetrics.otHours * 10) / 10} hrs
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <AlertTriangle size={12} color={isDark ? '#fb7185' : '#f43f5e'} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                        {activeMetrics.breakdowns} Events
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <FileText size={12} color={theme.colors.mute} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>LOGS</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                        {activeMetrics.totalLogs} Records
-                      </Text>
-                    </View>
-                  </View>
+                  <KPIGrid
+                    columns={4}
+                    style={{
+                      marginTop: (selectedOperatorObj?.phone || selectedOperatorObj?.email) ? 0 : 8,
+                      marginVertical: spacingNumeric.xs,
+                    }}
+                  >
+                    <KPICard
+                      label="Run Hours"
+                      value={`${Math.round(activeMetrics.runHours * 10) / 10} hrs`}
+                      icon={Clock}
+                      variant="info"
+                    />
+                    <KPICard
+                      label="Overtime"
+                      value={`${Math.round(activeMetrics.otHours * 10) / 10} hrs`}
+                      icon={Zap}
+                      variant={activeMetrics.otHours > 0 ? 'warning' : 'default'}
+                    />
+                    <KPICard
+                      label="Breakdowns"
+                      value={`${activeMetrics.breakdowns} Events`}
+                      icon={AlertTriangle}
+                      variant={activeMetrics.breakdowns > 0 ? 'error' : 'default'}
+                    />
+                    <KPICard
+                      label="Shift Records"
+                      value={`${activeMetrics.totalLogs} Records`}
+                      icon={FileText}
+                      variant="default"
+                    />
+                  </KPIGrid>
                 </>
               )}
             </Card>
@@ -2113,15 +1993,6 @@ export default function OperationsScreen() {
         />
       )}
 
-      {/* Reusable Filter Selector Sheet */}
-      <OperationsFilterSelectorModal
-        visible={selectorModalConfig.visible}
-        onClose={() => setSelectorModalConfig((prev) => ({ ...prev, visible: false }))}
-        title={selectorModalConfig.title}
-        options={selectorModalConfig.options}
-        selectedValue={selectorModalConfig.selectedValue}
-        onSelect={selectorModalConfig.onSelect}
-      />
 
       {/* Fast Log Entry Modal for Operators */}
       {targetMachineForLog && (
@@ -2132,6 +2003,9 @@ export default function OperationsScreen() {
           machineCode={targetMachineForLog.machine_id}
           model={targetMachineForLog.model}
           serialNumber={targetMachineForLog.serial_number}
+          currentUserId={user?.id || userProfile?.id}
+          currentUserRole={role || userProfile?.role}
+          currentUserName={userProfile?.full_name}
           initialShiftCode={(entryContext?.assigned_shift_code || entryContext?.operator?.shift_code) ?? undefined}
           initialAssignedShiftCodes={entryContext?.assigned_shift_codes}
           onSubmit={() => {
@@ -2150,6 +2024,9 @@ export default function OperationsScreen() {
           machineCode={editingLogRecord.machine_code || ''}
           model={editingLogRecord.machine?.model}
           serialNumber={editingLogRecord.machine?.serial_number}
+          currentUserId={user?.id || userProfile?.id}
+          currentUserRole={role || userProfile?.role}
+          currentUserName={userProfile?.full_name}
           existingLog={editingLogRecord}
           onSubmit={() => {
             setEditingLogRecord(null);
@@ -2159,19 +2036,36 @@ export default function OperationsScreen() {
       )}
 
       {/* Assisted Shift Entry Modal for Managers & Admins (Strictly above supervisor) */}
-      {assistedRow && isManagerOrAbove(user?.role) && (
+      {assistedRow && isManagerTier && (
         <MeterLogModal
-          visible={Boolean(assistedRow && isManagerOrAbove(user?.role))}
+          visible={Boolean(assistedRow && isManagerTier)}
           onClose={() => setAssistedRow(null)}
           machineId={assistedRow.machine_id}
           machineCode={assistedRow.machine_code}
+          model={assistedRow.machine_model || undefined}
+          serialNumber={assistedRow.machine_serial_number || undefined}
           targetOperatorId={assistedRow.operator_id || undefined}
           targetOperatorName={assistedRow.operator_name || undefined}
+          currentUserId={user?.id || userProfile?.id}
+          currentUserRole={role || userProfile?.role}
+          currentUserName={userProfile?.full_name}
           initialClientId={assistedRow.client_id || undefined}
           initialShiftCode={assistedRow.shift_code || undefined}
           initialAssignedShiftCodes={assistedRow.shift_code ? [assistedRow.shift_code] : undefined}
-          initialStartMeter={assistedRow.current_meter != null ? assistedRow.current_meter : undefined}
+          initialStartMeter={assistedRow.current_meter != null ? assistedRow.current_meter : (assistedRow.start_meter ?? undefined)}
           initialLogDate={assistedRow.log_date || undefined}
+          existingLog={assistedRow.log_id ? {
+            id: assistedRow.log_id,
+            machine_id: assistedRow.machine_id,
+            machine_code: assistedRow.machine_code,
+            log_date: assistedRow.log_date,
+            start_meter: assistedRow.start_meter,
+            end_meter: assistedRow.end_meter,
+            running_hours: assistedRow.running_hours,
+            shift_code: assistedRow.shift_code,
+            operator_id: assistedRow.operator_id,
+            client_id: assistedRow.client_id,
+          } : undefined}
           onSubmit={() => {
             setAssistedRow(null);
             handleDataRefresh();
@@ -2225,7 +2119,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: spacingNumeric.md,
-    paddingBottom: spacingNumeric['2xl'],
+    paddingBottom: 110,
   },
   conflictBanner: {
     borderRadius: radiusNumeric.lg,
@@ -2591,29 +2485,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     paddingTop: 4,
-  },
-  metricsGrid4: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: spacingNumeric.xs,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '45%',
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    gap: 2,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  kpiValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   logsListContainer: {
     gap: spacingNumeric.sm,

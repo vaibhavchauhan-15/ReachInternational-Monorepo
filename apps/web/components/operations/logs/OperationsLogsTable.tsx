@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { TooltipWrapper } from "@/components/ui";
+import { Highlight } from "@/components/ui/Highlight";
 import { ShieldAlert, ChevronUp, ChevronDown, MessageSquare, AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import type { MachineHourLog } from "@/lib/types/database";
 import {
@@ -25,6 +26,7 @@ export interface OperationsLogsTableProps {
   onPageSizeChange?: (newSize: number) => void;
   selectedMachineId?: string;
   clientMachines?: any[];
+  searchTerm?: string;
 }
 
 /**
@@ -434,6 +436,7 @@ export interface OperationsDailyLogRowProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onOpenConflictModal?: (log: MachineHourLog) => void;
+  searchTerm?: string;
 }
 
 /**
@@ -445,6 +448,7 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
   logsViewMode,
   showMachineColumn = true,
   onOpenConflictModal,
+  searchTerm,
 }: OperationsDailyLogRowProps) {
   const isClientView = logsViewMode === "client";
   const [isRowExpanded, setIsRowExpanded] = useState(false);
@@ -510,11 +514,11 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                 title={group.machineSerial ? `${group.machineModel} (SN: ${group.machineSerial})` : group.machineModel}
               >
                 <span className="font-bold text-[var(--color-ink)] truncate">
-                  {group.machineModel || "—"}
+                  <Highlight text={group.machineModel || "—"} query={searchTerm} />
                 </span>
                 {group.machineSerial && (
                   <span className="text-[10px] text-[var(--color-mute)] font-mono font-medium shrink-0">
-                    ({group.machineSerial})
+                    (<Highlight text={group.machineSerial} query={searchTerm} />)
                   </span>
                 )}
               </div>
@@ -523,7 +527,7 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
             <td className="px-3 py-2 font-semibold whitespace-nowrap text-xs">
               <div className="flex items-center gap-1.5 max-w-[220px]" title={group.locationStr || group.clientName}>
                 <span className="font-bold text-[var(--color-ink)] truncate">
-                  {group.clientName}
+                  <Highlight text={group.clientName} query={searchTerm} />
                 </span>
               </div>
             </td>
@@ -546,11 +550,11 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                   key={name}
                   className="inline-flex items-center px-1.5 py-0.5 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs font-semibold text-[var(--color-ink)]"
                 >
-                  {name}
+                  <Highlight text={name} query={searchTerm} />
                 </span>
               ))
             ) : (
-              <span>{group.operatorsDisplay}</span>
+              <span><Highlight text={group.operatorsDisplay} query={searchTerm} /></span>
             )}
           </div>
         </td>
@@ -635,7 +639,7 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                   </span>
                 </div>
                 <p className="font-sans text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed">
-                  {group.remarksDisplay || "No special remarks logged for this day."}
+                  <Highlight text={group.remarksDisplay || "No special remarks logged for this day."} query={searchTerm} />
                 </p>
               </div>
             </div>
@@ -778,6 +782,7 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
   onSortChange,
   selectedMachineId,
   clientMachines,
+  searchTerm,
 }: OperationsLogsTableProps) {
   const isClientView = logsViewMode === "client";
 
@@ -1000,6 +1005,7 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
                         logsViewMode={logsViewMode}
                         showMachineColumn={false}
                         onOpenConflictModal={onOpenConflictModal}
+                        searchTerm={searchTerm}
                       />
                     ))}
                   </tbody>
@@ -1110,6 +1116,7 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
                       logsViewMode={logsViewMode}
                       showMachineColumn={true}
                       onOpenConflictModal={onOpenConflictModal}
+                      searchTerm={searchTerm}
                     />
                   ))
                 )}

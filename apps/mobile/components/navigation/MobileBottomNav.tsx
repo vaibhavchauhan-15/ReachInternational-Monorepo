@@ -12,6 +12,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Keyboard,
+  Platform,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -202,7 +203,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
                 key={item.key}
                 item={item}
                 isActive={isActive}
-                onPress={() => router.push(item.href as any)}
+                onPress={() => {
+                  if (isActive) return;
+                  router.push(item.href as any);
+                }}
                 theme={theme}
               />
             );
@@ -234,11 +238,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 9999,
     borderWidth: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 24,
+        elevation: 12,
+      },
+    }),
   },
   navItemBtn: {
     flex: 1,

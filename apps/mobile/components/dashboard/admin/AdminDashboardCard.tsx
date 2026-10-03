@@ -1,8 +1,24 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Card, useTheme } from '../../ui';
+import { useTheme } from '../../ui/ThemeProvider';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { AdminDashboardDTO } from '@reachinternational/types';
+import {
+  KPIGrid,
+  KPICard,
+  PrimaryAction,
+} from '../shared';
+import {
+  Wrench,
+  Users,
+  Building2,
+  CalendarCheck,
+  Clock,
+  AlertTriangle,
+  Timer,
+  Layers,
+  FileSpreadsheet,
+} from 'lucide-react-native';
 
 export interface AdminDashboardCardProps {
   data: AdminDashboardDTO | null;
@@ -11,95 +27,127 @@ export interface AdminDashboardCardProps {
 export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) => {
   const { theme } = useTheme();
 
+  const totalMachines = data?.totalMachines ?? 0;
+  const activeUsers = data?.activeUsers ?? 0;
+  const totalClients = data?.totalClients ?? 0;
+  const activeAssignments = data?.activeAssignments ?? 0;
+  const todayLogs = data?.todayLogs ?? 0;
+  const breakdowns = data?.operationalKpis?.breakdowns ?? 0;
+  const overtime = data?.operationalKpis?.overtimeEntries ?? 0;
+  const overlappingLogs = data?.operationalKpis?.overlappingLogs ?? 0;
+
   return (
-    <>
-      <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
-        ORGANIZATION OVERVIEW
-      </Text>
-      <View style={styles.kpiGrid}>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-            {data?.totalMachines ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Machines</Text>
-        </Card>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-            {data?.activeUsers ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Active Users</Text>
-        </Card>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-            {data?.totalClients ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Clients</Text>
-        </Card>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.success }]}>
-            {data?.todayLogs ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Logs Today</Text>
-        </Card>
+    <View style={styles.container}>
+      {/* Core Fleet & Organization KPIs */}
+      <View style={styles.section}>
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+          FLEET & PERSONNEL SUMMARY
+        </Text>
+        <KPIGrid columns={5}>
+          <KPICard
+            label="Total Machines"
+            value={totalMachines}
+            icon={Wrench}
+            href="/machines"
+            variant="info"
+          />
+          <KPICard
+            label="Active Users"
+            value={activeUsers}
+            icon={Users}
+            href="/users"
+            variant="default"
+          />
+          <KPICard
+            label="Clients"
+            value={totalClients}
+            icon={Building2}
+            href="/clients"
+            variant="default"
+          />
+          <KPICard
+            label="Active Shifts"
+            value={activeAssignments}
+            icon={CalendarCheck}
+            href="/operations"
+            variant="warning"
+          />
+          <KPICard
+            label="Logs Today"
+            value={todayLogs}
+            icon={Clock}
+            href="/operations"
+            variant={todayLogs > 0 ? 'success' : 'default'}
+          />
+        </KPIGrid>
       </View>
 
-      <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.md }]}>
-        OPERATIONAL KPIS
-      </Text>
-      <View style={styles.kpiGrid}>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text
-            style={[
-              styles.kpiValue,
-              {
-                color:
-                  (data?.operationalKpis?.breakdowns ?? 0) > 0 ? '#dc2626' : theme.colors.ink,
-              },
-            ]}
-          >
-            {data?.operationalKpis?.breakdowns ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Breakdowns</Text>
-        </Card>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-            {data?.operationalKpis?.overtimeEntries ?? 0}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Overtime Shifts</Text>
-        </Card>
+      {/* Operational Telemetry & Exceptions */}
+      <View style={styles.section}>
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+          TODAY'S OPERATIONAL EXCEPTIONS
+        </Text>
+        <KPIGrid columns={3}>
+          <KPICard
+            label="Breakdowns Reported"
+            value={breakdowns}
+            icon={AlertTriangle}
+            href="/operations"
+            variant={breakdowns > 0 ? 'error' : 'default'}
+          />
+          <KPICard
+            label="Overtime Entries"
+            value={overtime}
+            icon={Timer}
+            href="/operations"
+            variant={overtime > 0 ? 'warning' : 'default'}
+          />
+          <KPICard
+            label="Schedule Conflicts"
+            value={overlappingLogs}
+            icon={Layers}
+            href="/operations"
+            variant={overlappingLogs > 0 ? 'error' : 'default'}
+          />
+        </KPIGrid>
       </View>
-    </>
+
+      {/* Quick Action Navigation */}
+      <View style={styles.section}>
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+          QUICK MANAGEMENT
+        </Text>
+        <PrimaryAction
+          title="Operations Hub & Running Logs"
+          description="Review daily operator submissions, meter readings, and client worksites"
+          href="/operations"
+          icon={FileSpreadsheet}
+          variant="primary"
+        />
+        <PrimaryAction
+          title="Machinery Fleet & Maintenance"
+          description="Configure machine assignments, track hours, and update equipment status"
+          href="/machines"
+          icon={Wrench}
+          variant="secondary"
+        />
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    gap: spacingNumeric.md,
+  },
+  section: {
+    marginBottom: spacingNumeric.xs,
+  },
   eyebrowHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: spacingNumeric.xs,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
-    marginBottom: spacingNumeric.xs,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '46%',
-    padding: spacingNumeric.md,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 2,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    textTransform: 'uppercase',
+    marginBottom: spacingNumeric.xs + 2,
   },
 });

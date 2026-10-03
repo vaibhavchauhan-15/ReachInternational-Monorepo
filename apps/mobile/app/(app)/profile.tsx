@@ -1,78 +1,186 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Platform,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, Badge, Button, useTheme, MobileHeader, ReachInternationalLogo, HeaderActionItem } from '../../components/ui';
-import { EditProfileModal } from '../../components/profile/EditProfileModal';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatDate, formatShiftTimingRange } from '@reachinternational/utils';
+import { useTheme, MobileHeader } from '../../components/ui';
+import {
+  toProfileView,
+  type ProfileViewModel,
+  type ProfileSection,
+  type ProfileRow,
+  formatDate,
+} from '@reachinternational/utils';
 import { supabase } from '../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import {
-  LogOut,
-  Sun,
-  Moon,
-  Shield,
+  Briefcase,
+  CreditCard,
+  Building2,
   ShieldCheck,
-  Building,
+  ShieldAlert,
+  Shield,
   MapPin,
   Phone,
-  Mail,
   User,
-  Clock,
-  FileText,
   Edit,
-  AlertTriangle,
-  XCircle,
-  RefreshCw,
-  Globe,
-  Wifi,
-  Bell,
+  ExternalLink,
+  Check,
   CheckCircle2,
-  Settings,
-  ChevronRight,
-  Trash2,
+  Copy,
   Eye,
   EyeOff,
-  Copy,
-  ExternalLink,
-  CreditCard,
-  Calendar,
-  Building2,
-  Briefcase,
+  Trash2,
+  RefreshCw,
+  Upload,
+  AlertTriangle,
+  XCircle,
+  FileText,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import {
-  getNotificationPermissionStatus,
-  type PermissionStatus,
-} from '../../lib/permissions';
-import { NotificationPermissionModal } from '../../components/permissions';
-import { notifyProfileRequestCancelled, notifyThemeToggled } from '../../lib/notifications';
-import { PostNotificationFeedModal } from '../../components/notifications';
+  pickIdentityDocument,
+  uploadUserDocumentDirect,
+  deleteUserDocument,
+  fetchUserDocuments,
+  type UserDocumentInfo,
+} from '../../lib/documents';
+import { EditProfileModal } from '../../components/profile/EditProfileModal';
+import {
+  MobileDocumentViewerModal,
+  type MobileViewerDoc,
+} from '../../components/documents/MobileDocumentViewerModal';
+import { notifyProfileRequestCancelled } from '../../lib/notifications';
+
+// ─── Section Icon Mapping ───────────────────────────────────────────
+const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  briefcase: Briefcase,
+  'credit-card': CreditCard,
+  building: Building2,
+  shield: ShieldCheck,
+  'map-pin': MapPin,
+  phone: Phone,
+  user: User,
+};
+
+// ─── Role Configuration (Matches Web Geist Color Scheme) ───────────
+const ROLE_CONFIG: Record<
+  string,
+  { label: string; bg: string; text: string; border: string; icon: React.ComponentType<{ size?: number; color?: string }> }
+> = {
+  super_admin: {
+    label: 'Super Admin',
+    bg: 'rgba(239, 68, 68, 0.1)',
+    text: '#ef4444',
+    border: 'rgba(239, 68, 68, 0.25)',
+    icon: ShieldAlert,
+  },
+  admin: {
+    label: 'Admin',
+    bg: 'rgba(245, 158, 11, 0.1)',
+    text: '#d97706',
+    border: 'rgba(245, 158, 11, 0.25)',
+    icon: ShieldCheck,
+  },
+  manager: {
+    label: 'Manager',
+    bg: 'rgba(99, 102, 241, 0.1)',
+    text: '#6366f1',
+    border: 'rgba(99, 102, 241, 0.25)',
+    icon: Shield,
+  },
+  supervisor: {
+    label: 'Supervisor',
+    bg: 'rgba(20, 184, 166, 0.1)',
+    text: '#0d9488',
+    border: 'rgba(20, 184, 166, 0.25)',
+    icon: Shield,
+  },
+  hr: {
+    label: 'HR',
+    bg: 'rgba(236, 72, 153, 0.1)',
+    text: '#db2777',
+    border: 'rgba(236, 72, 153, 0.25)',
+    icon: Shield,
+  },
+  operator: {
+    label: 'Operator',
+    bg: 'rgba(16, 185, 129, 0.1)',
+    text: '#059669',
+    border: 'rgba(16, 185, 129, 0.25)',
+    icon: Shield,
+  },
+};
+
+const DEFAULT_DOC_TYPES = [
+  { code: 'aadhaar', label: 'Aadhaar Card' },
+  { code: 'driving_license', label: 'Driving Licence' },
+  { code: 'bank_document', label: 'Bank Passbook / Cheque' },
+];
 
 export default function ProfileScreen() {
-  const { user, role, signOut, refreshSession, userProfile: authProfile } = useAuth();
-  const { theme, isDark, setMode } = useTheme();
+  const { user, role, refreshSession, userProfile: authProfile } = useAuth();
+  const { theme, isDark } = useTheme();
   const router = useRouter();
+
+  // Screen width for responsive 1-col mobile vs 2-col tablet/desktop
+  const [screenWidth, setScreenWidth] = useState(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.innerWidth;
+    }
+    return Dimensions.get('window').width;
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleResize = () => setScreenWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+    const sub = Dimensions.addEventListener('change', ({ window: w }) => {
+      setScreenWidth(w.width);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const isWide = screenWidth >= 640;
+
+  // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [dbUser, setDbUser] = useState<any>(authProfile || null);
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   const [isCancellingRequest, setIsCancellingRequest] = useState(false);
-  const [notificationStatus, setNotificationStatus] = useState<PermissionStatus>('undetermined');
-  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
-  const [feedModalVisible, setFeedModalVisible] = useState(false);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [userDocuments, setUserDocuments] = useState<UserDocumentInfo[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<{ code: string; label: string }[]>(DEFAULT_DOC_TYPES);
   const [assignedMachines, setAssignedMachines] = useState<any[]>([]);
 
+  // Document UI state
+  const [replacingCode, setReplacingCode] = useState<string | null>(null);
+  const [uploadingCode, setUploadingCode] = useState<string | null>(null);
+  const [activeViewerDoc, setActiveViewerDoc] = useState<MobileViewerDoc | null>(null);
+
+  // Fetch full user profile data
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [userRes, reqRes, notifRes, docRes, machineRes] = await Promise.all([
+      const [userRes, reqRes, docRes, machineRes, docTypeRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, employee_id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, email, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, doj, bank_account_number, bank_ifsc_code, total_pl_quota, pl_used_as_on_date, supervisor:users!supervisor_id(full_name)')
+          .select('id, employee_id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, email, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, doj, created_at, updated_at, bank_account_number, bank_ifsc_code, total_pl_quota, pl_used_as_on_date, supervisor:users!supervisor_id(full_name)')
           .eq('id', user.id)
           .maybeSingle(),
         supabase
@@ -82,17 +190,17 @@ export default function ProfileScreen() {
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .maybeSingle(),
-        getNotificationPermissionStatus(),
-        supabase
-          .from('user_documents')
-          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at')
-          .eq('user_id', user.id)
-          .order('document_type_code'),
+        fetchUserDocuments(user.id),
         supabase
           .from('machines')
           .select('id, machine_id, machine_name, model, status')
           .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}},current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`)
           .order('machine_id'),
+        supabase
+          .from('user_document_types')
+          .select('code, label')
+          .not('code', 'in', '("profile_photo","bank_passbook")')
+          .order('code'),
       ]);
 
       if (userRes.data) {
@@ -101,22 +209,11 @@ export default function ProfileScreen() {
           address: userRes.data.street || null,
         });
       }
-      setAssignedMachines(machineRes.data || []);
       setPendingRequest(reqRes.data || null);
-      setNotificationStatus(notifRes);
-
-      if (docRes.data && docRes.data.length > 0) {
-        const docsWithUrls = await Promise.all(
-          docRes.data.map(async (doc: any) => {
-            const { data: urlData } = await supabase.storage
-              .from('user_files')
-              .createSignedUrl(doc.storage_path, 300);
-            return { ...doc, signed_url: urlData?.signedUrl || null };
-          })
-        );
-        setUserDocuments(docsWithUrls);
-      } else {
-        setUserDocuments([]);
+      setUserDocuments(docRes || []);
+      setAssignedMachines(machineRes.data || []);
+      if (docTypeRes.data && docTypeRes.data.length > 0) {
+        setDocumentTypes(docTypeRes.data);
       }
     } catch (err) {
       console.warn('[ProfileScreen] Error fetching profile record:', err);
@@ -127,10 +224,19 @@ export default function ProfileScreen() {
     fetchProfileData();
   }, [fetchProfileData]);
 
-  const copyToClipboard = async (text: string, label: string) => {
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchProfileData();
+    if (refreshSession) refreshSession();
+    setRefreshing(false);
+  }, [fetchProfileData, refreshSession]);
+
+  // Copy helper with 2-second checkmark feedback
+  const handleCopy = async (text: string, label: string) => {
     try {
+      Haptics.selectionAsync().catch(() => {});
       if (Clipboard && Clipboard.setStringAsync) {
-        await Clipboard.setStringAsync(text.replace(/[\s\-]/g, ''));
+        await Clipboard.setStringAsync(text);
       }
     } catch {
       // Fallback
@@ -139,772 +245,739 @@ export default function ProfileScreen() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleLogout = async () => {
-    await signOut();
-    router.replace('/(auth)/login');
-  };
-
-  const handleAccountDeletionPress = () => {
-    Alert.alert(
-      'Request Account Deletion',
-      'This action is for permanent account de-provisioning and personal data erasure. It will not sign you out of your current session.\n\nAre you sure you want to proceed?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue to Deletion',
-          style: 'destructive',
-          onPress: () => router.push('/(app)/account-deletion' as any),
-        },
-      ]
-    );
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      if (refreshSession) {
-        await refreshSession();
-      }
-      await fetchProfileData();
-      const notifState = await getNotificationPermissionStatus();
-      setNotificationStatus(notifState);
-    } catch (e) {
-      console.error('[ProfileScreen] Refresh error:', e);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refreshSession, fetchProfileData]);
-
+  // Withdraw pending change request
   const handleCancelPendingRequest = () => {
     if (!pendingRequest?.id) return;
+    const executeWithdraw = async () => {
+      setIsCancellingRequest(true);
+      try {
+        const { error } = await supabase
+          .from('profile_change_requests')
+          .delete()
+          .eq('id', pendingRequest.id);
+        if (error) throw error;
+        notifyProfileRequestCancelled();
+        Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
+        await fetchProfileData();
+      } catch (err: any) {
+        Alert.alert('Error', err?.message || 'Failed to cancel the change request.');
+      } finally {
+        setIsCancellingRequest(false);
+      }
+    };
 
-    Alert.alert(
-      'Cancel Change Request',
-      'Are you sure you want to withdraw your pending profile update request?',
-      [
-        { text: 'Keep Request', style: 'cancel' },
-        {
-          text: 'Withdraw Request',
-          style: 'destructive',
-          onPress: async () => {
-            setIsCancellingRequest(true);
-            try {
-              const { error } = await supabase
-                .from('profile_change_requests')
-                .update({
-                  status: 'cancelled',
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', pendingRequest.id);
-
-              if (error) throw error;
-              notifyProfileRequestCancelled();
-              Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
-              await fetchProfileData();
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to cancel the change request.');
-            } finally {
-              setIsCancellingRequest(false);
-            }
-          },
-        },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      if (window.confirm('Withdraw Profile Change Request?\n\nThis will remove your pending submission.')) {
+        executeWithdraw();
+      }
+    } else {
+      Alert.alert(
+        'Withdraw Profile Change Request',
+        'Are you sure you want to withdraw this change request? It will be permanently removed.',
+        [
+          { text: 'Keep Request', style: 'cancel' },
+          { text: 'Withdraw', style: 'destructive', onPress: executeWithdraw },
+        ]
+      );
+    }
   };
 
-  // Authoritative data resolution: DB row -> Auth Context -> Auth user metadata
-  const profile = dbUser || authProfile || {};
-  const metadata = user?.user_metadata || {};
+  // Document upload handler
+  const handleUploadDocument = async (docTypeCode: string) => {
+    if (!user?.id) return;
+    try {
+      Haptics.selectionAsync().catch(() => {});
+      const picked = await pickIdentityDocument();
+      if (!picked) return;
 
-  const fullName = profile.full_name || metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
-  const userPhone = profile.phone || metadata.phone || '—';
-  
-  const shiftSchedule = useMemo(() => {
-    if (profile.shift_start_time && profile.shift_end_time) {
-      return formatShiftTimingRange(profile.shift_start_time, profile.shift_end_time);
-    }
-    if (profile.shift_time || metadata.shift_time) {
-      return profile.shift_time || metadata.shift_time;
-    }
-    return '09:00 AM — 06:00 PM';
-  }, [profile.shift_start_time, profile.shift_end_time, profile.shift_time, metadata.shift_time]);
+      setUploadingCode(docTypeCode);
+      const res = await uploadUserDocumentDirect({
+        userId: user.id,
+        documentTypeCode: docTypeCode,
+        doc: picked,
+      });
 
-  const machinesDisplay = useMemo(() => {
-    if (assignedMachines && assignedMachines.length > 0) {
-      return assignedMachines.map((m: any) => `${m.machine_id} (${m.model || m.machine_name})`).join(', ');
+      if (!res.success) {
+        Alert.alert('Upload Failed', res.error || 'Failed to upload document.');
+      } else {
+        setReplacingCode(null);
+        await fetchProfileData();
+      }
+    } catch (err: any) {
+      Alert.alert('Upload Error', err?.message || 'Failed to select document.');
+    } finally {
+      setUploadingCode(null);
     }
-    if (profile.role === 'operator' || profile.role === 'supervisor') {
-      return 'None currently assigned';
+  };
+
+  // Document delete handler
+  const handleDeleteDocument = (doc: UserDocumentInfo, label: string) => {
+    if (!user?.id) return;
+    const executeDelete = async () => {
+      try {
+        const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
+        if (!res.success) {
+          Alert.alert('Delete Failed', res.error || 'Could not delete document.');
+        } else {
+          await fetchProfileData();
+        }
+      } catch (err: any) {
+        Alert.alert('Error', err?.message || 'Failed to remove document.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete ${label}?\n\nAre you sure you want to remove this document?`)) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert(
+        `Delete ${label}`,
+        'Are you sure you want to remove this document?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: executeDelete },
+        ]
+      );
     }
-    return 'Fleet-wide Management';
-  }, [assignedMachines, profile.role]);
+  };
 
-  const dojDisplay = profile.doj ? formatDate(profile.doj) : profile.created_at ? formatDate(profile.created_at) : 'Not Configured';
-  const bankAccountDisplay = profile.bank_account_number || 'Not Configured';
-  const bankIfscDisplay = profile.bank_ifsc_code || 'Not Configured';
-  const plQuota = profile.total_pl_quota !== null && profile.total_pl_quota !== undefined ? Number(profile.total_pl_quota) : 12;
-  const plUsed = profile.pl_used_as_on_date !== null && profile.pl_used_as_on_date !== undefined ? Number(profile.pl_used_as_on_date) : 0;
-  const plBalanceDisplay = `${Math.max(0, plQuota - plUsed)} Days available (${plUsed} used)`;
-  
-  const city = profile.city || metadata.city;
-  const district = profile.district || metadata.district;
-  const state = profile.state || metadata.state;
-  const locationParts = [city, district, state].filter(Boolean);
-  const locationString = locationParts.length > 0 ? locationParts.join(', ') : '—';
-  
-  const rawAddress = profile.address || metadata.address;
-  const fullAddress = rawAddress
-    ? `${rawAddress}${locationString !== '—' ? `, ${locationString}` : ''}`
-    : locationString;
+  // Build authoritative profile view model
+  const mergedUserData = useMemo(() => {
+    const raw = dbUser || authProfile || {};
+    return {
+      ...raw,
+      assigned_machines: assignedMachines,
+    };
+  }, [dbUser, authProfile, assignedMachines]);
 
-  const rawAadhaar = profile.aadhaar_number || metadata.aadhaar_number;
-  const cleanAadhaar = rawAadhaar ? String(rawAadhaar).replace(/[\s\-]/g, "") : "";
+  const view: ProfileViewModel = useMemo(() => {
+    return toProfileView(mergedUserData);
+  }, [mergedUserData]);
+
+  // Role metadata
+  const userRoleKey = mergedUserData.role || role || 'operator';
+  const roleMeta = ROLE_CONFIG[userRoleKey] || {
+    label: (userRoleKey || 'Operator').replace('_', ' '),
+    bg: 'rgba(150, 150, 150, 0.1)',
+    text: theme.colors.mute,
+    border: 'rgba(150, 150, 150, 0.2)',
+    icon: User,
+  };
+  const RoleIcon = roleMeta.icon;
+
+  // Clean raw aadhaar for eye toggle
+  const rawAadhaar = mergedUserData.aadhaar_number;
+  const cleanAadhaar = rawAadhaar ? String(rawAadhaar).replace(/[\s\-]/g, '') : '';
   const formattedFullAadhaar = cleanAadhaar
     ? cleanAadhaar.length >= 12
       ? `${cleanAadhaar.slice(0, 4)} ${cleanAadhaar.slice(4, 8)} ${cleanAadhaar.slice(8, 12)}`
       : cleanAadhaar
-    : "Not Provided";
+    : 'Not Provided';
   const maskedAadhaar = cleanAadhaar
     ? cleanAadhaar.length >= 12
       ? `XXXX-XXXX-${cleanAadhaar.slice(-4)}`
       : cleanAadhaar
-    : "Not Provided";
-  const aadhaarDisplay = showFullAadhaar ? formattedFullAadhaar : maskedAadhaar;
-
-  const licenceDisplay = profile.license_number || metadata.license_number || 'Not Provided';
-  const currentRole = (profile.role || role || metadata.role || 'operator').replace(/_/g, ' ').toUpperCase();
-
-  const headerActions = useMemo<HeaderActionItem[]>(() => {
-    const list: HeaderActionItem[] = [];
-
-    list.push({
-      id: 'edit-profile',
-      label: 'Edit Profile & Shift Details',
-      icon: <Edit size={16} color={theme.colors.ink} />,
-      onPress: () => setEditModalVisible(true),
-    });
-
-    list.push({
-      id: 'refresh-profile',
-      label: 'Refresh Profile Data',
-      icon: <RefreshCw size={16} color={theme.colors.ink} />,
-      onPress: () => onRefresh(),
-    });
-
-    list.push({
-      id: 'settings',
-      label: 'Settings & Preferences',
-      icon: <Settings size={16} color={theme.colors.ink} />,
-      onPress: () => router.push('/(app)/settings' as any),
-    });
-
-    list.push({
-      id: 'theme-toggle',
-      label: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-      icon: isDark ? <Sun size={16} color={theme.colors.ink} /> : <Moon size={16} color={theme.colors.ink} />,
-      onPress: () => setMode(isDark ? 'light' : 'dark'),
-    });
-
-    list.push({
-      id: 'sign-out',
-      label: 'Sign Out of Account',
-      icon: <LogOut size={16} color="#ef4444" />,
-      destructive: true,
-      onPress: () => handleLogout(),
-    });
-
-    return list;
-  }, [theme.colors.ink, isDark, setMode, onRefresh, handleLogout]);
+    : 'Not Provided';
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
+      {/* Top Header: Back arrow + Profile Title + Search Quick Access Icon */}
       <MobileHeader
         title="Profile"
         showBack={true}
-        searchPlaceholder="Search profile details..."
-        actions={headerActions}
+        showLogo={false}
+        showMoreMenu={false}
+        showQuickAccess={true}
       />
 
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        contentContainerStyle={[styles.scrollContent, { backgroundColor: theme.colors.canvas }]}
+        showsVerticalScrollIndicator={true}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />
+        }
       >
-        {/* Pending Change Request Banner */}
-        {pendingRequest && (
+        <View style={styles.containerInner}>
+          {/* ─── Profile Header Card ─── */}
           <View
             style={[
-              styles.pendingBanner,
+              styles.card,
               {
-                backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                borderColor: 'rgba(245, 158, 11, 0.35)',
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
               },
             ]}
           >
-            <View style={styles.pendingHeader}>
-              <View style={styles.pendingTitleGroup}>
-                <AlertTriangle size={16} color="#d97706" />
-                <Text style={styles.pendingTitle}>Pending Profile Review</Text>
-              </View>
-              <Badge status="pending" customLabel="PENDING" />
-            </View>
-            <Text style={[styles.pendingDescription, { color: theme.colors.mute }]}>
-              A profile change request submitted on{' '}
-              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
-                {formatDate(pendingRequest.created_at)}
-              </Text>{' '}
-              is currently under review by{' '}
-              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
-                {pendingRequest.target_approver_role === 'super_admin'
-                  ? 'Super Administrator'
-                  : 'Administrator / Manager'}
-              </Text>
-              . New edits will overwrite this pending submission.
-            </Text>
-            <TouchableOpacity
-              style={styles.cancelRequestBtn}
-              onPress={handleCancelPendingRequest}
-              disabled={isCancellingRequest}
-            >
-              <XCircle size={14} color="#dc2626" />
-              <Text style={styles.cancelRequestText}>
-                {isCancellingRequest ? 'Cancelling...' : 'Withdraw Request'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* User Identity & Operations Card */}
-        <Card variant="elevated" style={styles.card}>
-          <View style={styles.avatarRow}>
-            <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-              <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                {fullName[0]?.toUpperCase() || 'R'}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.profileName, { color: theme.colors.ink, flexShrink: 1 }]}>{fullName}</Text>
-                {Boolean(profile.employee_id || metadata.employee_id) && (
-                  <View style={{ backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
-                      {profile.employee_id || metadata.employee_id}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.profileEmail, { color: theme.colors.mute }]}>{user?.email || 'N/A'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Employee ID Info Row */}
-          {Boolean(profile.employee_id || metadata.employee_id) && (
-            <>
-              <View style={styles.infoRow}>
-                <CreditCard size={14} color={theme.colors.link} />
-                <Text style={[styles.label, { color: theme.colors.mute }]}>Employee ID:</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const empId = profile.employee_id || metadata.employee_id;
-                    if (Clipboard && Clipboard.setStringAsync) {
-                      Clipboard.setStringAsync(empId);
-                    }
-                    setCopiedField('Employee ID');
-                    setTimeout(() => setCopiedField(null), 2000);
-                  }}
-                  activeOpacity={0.7}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                >
-                  <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace', fontWeight: '700' }]}>
-                    {profile.employee_id || metadata.employee_id}
+            <View style={styles.headerCardContent}>
+              <View style={styles.userInfoRow}>
+                {/* 56x56 Initial Letter Avatar */}
+                <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
+                  <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                    {view.name ? view.name.charAt(0).toUpperCase() : 'U'}
                   </Text>
-                  {copiedField === 'Employee ID' ? (
-                    <CheckCircle2 size={12} color="#10b981" />
-                  ) : (
-                    <Copy size={12} color={theme.colors.mute} />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <View style={styles.divider} />
-            </>
-          )}
+                </View>
 
-          {/* Role */}
-          <View style={styles.infoRow}>
-            <Shield size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>System Role:</Text>
-            <Badge status="active" customLabel={currentRole} />
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Shift Schedule */}
-          <View style={styles.infoRow}>
-            <Clock size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Shift Timing:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
-              {shiftSchedule}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Date of Joining */}
-          <View style={styles.infoRow}>
-            <Calendar size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Date of Joining:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]}>
-              {dojDisplay}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Assigned Machinery */}
-          <View style={styles.infoRow}>
-            <Building2 size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Machinery:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={2}>
-              {machinesDisplay}
-            </Text>
-          </View>
-
-          {/* Supervisor (only if set) */}
-          {Boolean(profile.supervisor?.full_name || metadata.supervisor_name) && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <User size={14} color={theme.colors.link} />
-                <Text style={[styles.label, { color: theme.colors.mute }]}>Supervisor:</Text>
-                <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {profile.supervisor?.full_name || metadata.supervisor_name}
-                </Text>
-              </View>
-            </>
-          )}
-
-          <View style={styles.divider} />
-
-          {/* Phone */}
-          <View style={styles.infoRow}>
-            <Phone size={14} color={theme.colors.mute} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Mobile Phone:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]}>{userPhone}</Text>
-            {userPhone !== '—' && (
-              <TouchableOpacity
-                style={styles.fieldActionBtn}
-                onPress={() => copyToClipboard(userPhone.replace(/\D/g, ''), "Phone")}
-                activeOpacity={0.7}
-                accessibilityLabel="Copy phone number"
-              >
-                {copiedField === "Phone" ? (
-                  <CheckCircle2 size={15} color="#10b981" />
-                ) : (
-                  <Copy size={15} color={theme.colors.mute} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Address */}
-          <View style={styles.infoRow}>
-            <MapPin size={14} color={theme.colors.success} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Address:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={2}>
-              {fullAddress}
-            </Text>
-          </View>
-
-          {/* Monthly Salary */}
-          {Boolean(profile.monthly_salary) && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <CreditCard size={14} color="#10b981" />
-                <Text style={[styles.label, { color: theme.colors.mute }]}>Monthly Salary:</Text>
-                <Text style={[styles.value, { color: '#10b981', fontWeight: '700' }]}>
-                  ₹{Number(profile.monthly_salary).toLocaleString('en-IN')} / mo
-                </Text>
-              </View>
-            </>
-          )}
-
-          {Boolean(profile.daily_rate && Number(profile.daily_rate) > 0) && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <CreditCard size={14} color="#10b981" />
-                <Text style={[styles.label, { color: theme.colors.mute }]}>Daily Wage:</Text>
-                <Text style={[styles.value, { color: theme.colors.ink }]}>
-                  ₹{Number(profile.daily_rate).toLocaleString('en-IN')} / day
-                </Text>
-              </View>
-            </>
-          )}
-
-          {Boolean(profile.ot_hourly_rate && Number(profile.ot_hourly_rate) > 0) && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <Clock size={14} color="#10b981" />
-                <Text style={[styles.label, { color: theme.colors.mute }]}>OT Rate:</Text>
-                <Text style={[styles.value, { color: theme.colors.ink }]}>
-                  ₹{Number(profile.ot_hourly_rate).toLocaleString('en-IN')} / hr
-                </Text>
-              </View>
-            </>
-          )}
-
-          {/* Leave Quota & Balance */}
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Briefcase size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Leave Balance:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
-              {plBalanceDisplay}
-            </Text>
-          </View>
-
-          {/* Banking Details */}
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Building size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Bank Account:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
-              {bankAccountDisplay}
-            </Text>
-            {bankAccountDisplay !== 'Not Configured' && (
-              <TouchableOpacity
-                style={styles.fieldActionBtn}
-                onPress={() => copyToClipboard(bankAccountDisplay, "Bank Account")}
-                activeOpacity={0.7}
-                accessibilityLabel="Copy bank account number"
-              >
-                {copiedField === "Bank Account" ? (
-                  <CheckCircle2 size={15} color="#10b981" />
-                ) : (
-                  <Copy size={15} color={theme.colors.mute} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Building size={14} color={theme.colors.link} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Bank IFSC:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
-              {bankIfscDisplay}
-            </Text>
-            {bankIfscDisplay !== 'Not Configured' && (
-              <TouchableOpacity
-                style={styles.fieldActionBtn}
-                onPress={() => copyToClipboard(bankIfscDisplay, "IFSC")}
-                activeOpacity={0.7}
-                accessibilityLabel="Copy IFSC code"
-              >
-                {copiedField === "IFSC" ? (
-                  <CheckCircle2 size={15} color="#10b981" />
-                ) : (
-                  <Copy size={15} color={theme.colors.mute} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Aadhaar Number */}
-          <View style={styles.infoRow}>
-            <ShieldCheck size={14} color="#6366f1" />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Aadhaar Card:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
-              {aadhaarDisplay}
-            </Text>
-            {Boolean(cleanAadhaar) && (
-              <View style={styles.inlineActionRow}>
-                <TouchableOpacity
-                  style={styles.fieldActionBtn}
-                  onPress={() => setShowFullAadhaar((prev) => !prev)}
-                  activeOpacity={0.7}
-                  accessibilityLabel={showFullAadhaar ? "Hide Aadhaar number" : "Reveal Aadhaar number"}
-                >
-                  {showFullAadhaar ? (
-                    <EyeOff size={15} color={theme.colors.mute} />
-                  ) : (
-                    <Eye size={15} color={theme.colors.mute} />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.fieldActionBtn}
-                  onPress={() => copyToClipboard(cleanAadhaar, "Aadhaar")}
-                  activeOpacity={0.7}
-                  accessibilityLabel="Copy Aadhaar number"
-                >
-                  {copiedField === "Aadhaar" ? (
-                    <CheckCircle2 size={15} color="#10b981" />
-                  ) : (
-                    <Copy size={15} color={theme.colors.mute} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Driving Licence */}
-          <View style={styles.infoRow}>
-            <FileText size={14} color="#8b5cf6" />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Driving Licence:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
-              {licenceDisplay}
-            </Text>
-            {licenceDisplay !== 'Not Provided' && (
-              <TouchableOpacity
-                style={styles.fieldActionBtn}
-                onPress={() => copyToClipboard(licenceDisplay, "Licence")}
-                activeOpacity={0.7}
-                accessibilityLabel="Copy driving licence number"
-              >
-                {copiedField === "Licence" ? (
-                  <CheckCircle2 size={15} color="#10b981" />
-                ) : (
-                  <Copy size={15} color={theme.colors.mute} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Identity Documents Status / Viewing */}
-          {userDocuments.length > 0 && (
-            <>
-              <View style={styles.divider} />
-              <View style={{ paddingTop: 2, paddingBottom: 2 }}>
-                <Text style={[styles.sectionEyebrow, { color: theme.colors.mute, marginBottom: 8 }]}>
-                  IDENTITY & BANKING DOCUMENTS
-                </Text>
-                {userDocuments.map((doc) => {
-                  const label =
-                    doc.document_type_code === 'aadhaar'
-                      ? 'Aadhaar Card'
-                      : doc.document_type_code === 'driving_license'
-                      ? 'Driving Licence'
-                      : 'Bank Passbook / Cheque';
-                  return (
-                    <View key={doc.id} style={styles.documentItemRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <FileText size={15} color={theme.colors.link} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.docName, { color: theme.colors.ink }]}>{label}</Text>
-                          <Text style={[styles.docMeta, { color: theme.colors.mute }]}>
-                            {doc.mime_type?.split('/')[1]?.toUpperCase()} · {(doc.file_size_bytes / 1024).toFixed(0)} KB
-                          </Text>
-                        </View>
+                {/* Name, EMP ID, Email, Role & Status Pills */}
+                <View style={styles.userDetails}>
+                  <View style={styles.userNameRow}>
+                    <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {view.name}
+                    </Text>
+                    {Boolean(mergedUserData?.employee_id) && (
+                      <View
+                        style={[
+                          styles.empBadge,
+                          {
+                            backgroundColor: theme.colors.canvas,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.empBadgeText, { color: theme.colors.mute }]}>
+                          {mergedUserData.employee_id}
+                        </Text>
                       </View>
-                      {doc.signed_url ? (
-                        <TouchableOpacity
-                          style={[
-                            styles.viewDocBtn,
-                            {
-                              backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
-                              borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#bfdbfe',
-                            },
-                          ]}
-                          onPress={() => Linking.openURL(doc.signed_url)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.viewDocBtnText, { color: theme.colors.link }]}>View</Text>
-                          <ExternalLink size={12} color={theme.colors.link} />
-                        </TouchableOpacity>
-                      ) : null}
+                    )}
+                  </View>
+
+                  <Text
+                    style={[styles.userEmail, { color: theme.colors.mute }]}
+                    numberOfLines={2}
+                    selectable
+                  >
+                    {view.email}
+                  </Text>
+
+                  <View style={styles.badgesRow}>
+                    <View
+                      style={[
+                        styles.roleBadge,
+                        {
+                          backgroundColor: roleMeta.bg,
+                          borderColor: roleMeta.border,
+                        },
+                      ]}
+                    >
+                      <RoleIcon size={12} color={roleMeta.text} />
+                      <Text style={[styles.roleBadgeText, { color: roleMeta.text }]}>
+                        {roleMeta.label}
+                      </Text>
                     </View>
-                  );
-                })}
-              </View>
-            </>
-          )}
 
-          {/* Edit Profile CTA */}
-          <Button
-            label="Edit Profile"
-            onPress={() => setEditModalVisible(true)}
-            variant="outline"
-            size="sm"
-            icon={<Edit size={14} color={theme.colors.link} />}
-            fullWidth
-            style={{ marginTop: spacingNumeric.sm + 4 }}
-          />
-        </Card>
-
-        {/* App Permissions & System Telemetry Card */}
-        <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>APP PERMISSIONS & TELEMETRY</Text>
-          
-          {/* INTERNET */}
-          <View style={styles.permissionItemRow}>
-            <View style={[styles.permIconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5' }]}>
-              <Globe size={16} color={isDark ? '#34d399' : '#059669'} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.permHeaderLine}>
-                <Text style={[styles.permName, { color: theme.colors.ink }]}>INTERNET</Text>
-                <Badge status="active" customLabel="ACTIVE" />
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          borderColor: 'rgba(16, 185, 129, 0.25)',
+                        },
+                      ]}
+                    >
+                      <View style={styles.activeDot} />
+                      <Text style={[styles.statusBadgeText, { color: '#059669' }]}>
+                        {(view.status || 'ACTIVE').toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
-                Supabase database sync & API communication
-              </Text>
+
+              {/* Edit Profile Button */}
+              <TouchableOpacity
+                style={[
+                  styles.editProfileBtn,
+                  {
+                    borderColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvas,
+                  },
+                ]}
+                onPress={() => setEditModalVisible(true)}
+                activeOpacity={0.7}
+                accessibilityLabel="Edit Profile"
+              >
+                <Edit size={14} color={theme.colors.link} />
+                <Text style={[styles.editProfileBtnText, { color: theme.colors.ink }]}>
+                  Edit Profile
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.divider} />
-
-          {/* ACCESS_NETWORK_STATE */}
-          <View style={styles.permissionItemRow}>
-            <View style={[styles.permIconBox, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe' }]}>
-              <Wifi size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.permHeaderLine}>
-                <Text style={[styles.permName, { color: theme.colors.ink }]}>ACCESS_NETWORK_STATE</Text>
-                <Badge status="active" customLabel="ACTIVE" />
-              </View>
-              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
-                Real-time online/offline reachability detection
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* POST_NOTIFICATIONS */}
-          <View style={styles.permissionItemRow}>
+          {/* ─── Pending Request Review Banner (if any) ─── */}
+          {pendingRequest && (
             <View
               style={[
-                styles.permIconBox,
+                styles.pendingBanner,
                 {
-                  backgroundColor:
-                    notificationStatus === 'granted'
-                      ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'
-                      : isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                  borderColor: 'rgba(245, 158, 11, 0.35)',
                 },
               ]}
             >
-              <Bell
-                size={16}
-                color={
-                  notificationStatus === 'granted'
-                    ? isDark ? '#34d399' : '#059669'
-                    : isDark ? '#fbbf24' : '#d97706'
-                }
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.permHeaderLine}>
-                <Text style={[styles.permName, { color: theme.colors.ink }]}>POST_NOTIFICATIONS</Text>
-                {notificationStatus === 'granted' ? (
-                  <Badge status="active" customLabel="ENABLED" />
-                ) : (
-                  <Badge status="pending" customLabel="NOT ENABLED" />
-                )}
+              <View style={styles.pendingHeader}>
+                <View style={styles.pendingTitleGroup}>
+                  <AlertTriangle size={15} color="#d97706" />
+                  <Text style={styles.pendingTitle}>Pending Profile Review</Text>
+                </View>
+                <View
+                  style={[
+                    styles.pendingPill,
+                    {
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      borderColor: 'rgba(245, 158, 11, 0.3)',
+                    },
+                  ]}
+                >
+                  <Text style={styles.pendingPillText}>PENDING</Text>
+                </View>
               </View>
-              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
-                Shift conflict warnings & urgent fleet dispatch
+              <Text style={[styles.pendingDesc, { color: theme.colors.mute }]}>
+                A profile change request submitted on{' '}
+                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                  {formatDate(pendingRequest.created_at)}
+                </Text>{' '}
+                is currently under review by{' '}
+                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                  {pendingRequest.target_approver_role === 'super_admin'
+                    ? 'Super Administrator'
+                    : 'Administrator / Manager'}
+                </Text>
+                . New edits will overwrite this pending submission.
               </Text>
+              <TouchableOpacity
+                style={styles.cancelRequestBtn}
+                onPress={handleCancelPendingRequest}
+                disabled={isCancellingRequest}
+                activeOpacity={0.7}
+              >
+                <XCircle size={13} color="#dc2626" />
+                <Text style={styles.cancelRequestText}>
+                  {isCancellingRequest ? 'Cancelling...' : 'Withdraw Request'}
+                </Text>
+              </TouchableOpacity>
             </View>
+          )}
+
+          {/* ─── Detail Sections Responsive Grid (1 col on mobile, 2 col on tablet/desktop) ─── */}
+          <View style={[styles.sectionsGrid, isWide && styles.sectionsGridWide]}>
+            {view.sections.map((section: ProfileSection) => {
+              const SectionIcon = SECTION_ICONS[section.iconName] || User;
+
+              return (
+                <View
+                  key={section.title}
+                  style={[
+                    styles.sectionCard,
+                    isWide && styles.sectionCardHalf,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  {/* Section Header: Sky blue icon + Uppercase tracking-wider title */}
+                  <View style={[styles.sectionHeader, { borderColor: theme.colors.hairline }]}>
+                    <SectionIcon size={16} color="#0284c7" />
+                    <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>
+                      {section.title}
+                    </Text>
+                  </View>
+
+                  {/* Section Rows with Hairline Separators */}
+                  <View style={styles.sectionBody}>
+                    {section.rows.map((row: ProfileRow, rIdx: number) => {
+                      const isAadhaar = row.label === 'Aadhaar';
+                      const isLast = rIdx === section.rows.length - 1;
+
+                      return (
+                        <View key={row.label} style={styles.rowWrap}>
+                          <View
+                            style={[
+                              styles.rowContent,
+                              isWide ? styles.rowContentWide : styles.rowContentMobile,
+                            ]}
+                          >
+                            {/* Label */}
+                            <Text
+                              style={[
+                                styles.rowLabel,
+                                isWide && styles.rowLabelWide,
+                                { color: theme.colors.mute },
+                              ]}
+                            >
+                              {row.label}
+                            </Text>
+
+                            {/* Value / Badges / Actions */}
+                            <View
+                              style={[
+                                styles.rowValueArea,
+                                isWide ? styles.rowValueAreaWide : styles.rowValueAreaMobile,
+                              ]}
+                            >
+                              {isAadhaar ? (
+                                <View style={styles.aadhaarArea}>
+                                  <Text
+                                    style={[
+                                      styles.rowValue,
+                                      styles.monoText,
+                                      { color: theme.colors.ink },
+                                    ]}
+                                    selectable
+                                  >
+                                    {showFullAadhaar ? formattedFullAadhaar : maskedAadhaar}
+                                  </Text>
+                                  {Boolean(cleanAadhaar) && (
+                                    <View style={styles.inlineActions}>
+                                      <TouchableOpacity
+                                        style={styles.iconActionBtn}
+                                        onPress={() => setShowFullAadhaar((prev) => !prev)}
+                                        activeOpacity={0.7}
+                                        accessibilityLabel={
+                                          showFullAadhaar ? 'Hide Aadhaar number' : 'Reveal Aadhaar number'
+                                        }
+                                      >
+                                        {showFullAadhaar ? (
+                                          <EyeOff size={14} color={theme.colors.mute} />
+                                        ) : (
+                                          <Eye size={14} color={theme.colors.mute} />
+                                        )}
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.iconActionBtn}
+                                        onPress={() => handleCopy(cleanAadhaar, 'Aadhaar')}
+                                        activeOpacity={0.7}
+                                        accessibilityLabel="Copy Aadhaar"
+                                      >
+                                        {copiedField === 'Aadhaar' ? (
+                                          <Check size={14} color="#10b981" />
+                                        ) : (
+                                          <Copy size={14} color={theme.colors.mute} />
+                                        )}
+                                      </TouchableOpacity>
+                                    </View>
+                                  )}
+                                </View>
+                              ) : row.href ? (
+                                <TouchableOpacity
+                                  style={styles.linkArea}
+                                  onPress={() => router.push(row.href as any)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={[styles.rowLink, { color: '#0284c7' }]}>
+                                    {row.value}
+                                  </Text>
+                                  <ExternalLink size={12} color="#0284c7" />
+                                </TouchableOpacity>
+                              ) : row.badge ? (
+                                <View style={styles.badgeArea}>
+                                  <View
+                                    style={[
+                                      styles.statusPill,
+                                      {
+                                        backgroundColor:
+                                          row.badge.variant === 'warning'
+                                            ? 'rgba(245, 158, 11, 0.1)'
+                                            : 'rgba(16, 185, 129, 0.1)',
+                                        borderColor:
+                                          row.badge.variant === 'warning'
+                                            ? 'rgba(245, 158, 11, 0.25)'
+                                            : 'rgba(16, 185, 129, 0.25)',
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.statusPillText,
+                                        {
+                                          color:
+                                            row.badge.variant === 'warning'
+                                              ? '#d97706'
+                                              : '#059669',
+                                        },
+                                      ]}
+                                    >
+                                      {row.badge.label}
+                                    </Text>
+                                  </View>
+                                </View>
+                              ) : (
+                                <View style={styles.valueWithCopyArea}>
+                                  <Text
+                                    style={[
+                                      styles.rowValue,
+                                      row.isMonospace && styles.monoText,
+                                      { color: theme.colors.ink },
+                                    ]}
+                                    selectable
+                                  >
+                                    {row.value}
+                                  </Text>
+                                  {row.copyable && row.copyValue && (
+                                    <TouchableOpacity
+                                      style={styles.iconActionBtn}
+                                      onPress={() => handleCopy(row.copyValue!, row.label)}
+                                      activeOpacity={0.7}
+                                      accessibilityLabel={`Copy ${row.label}`}
+                                    >
+                                      {copiedField === row.label ? (
+                                        <Check size={14} color="#10b981" />
+                                      ) : (
+                                        <Copy size={14} color={theme.colors.mute} />
+                                      )}
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Hairline Divider Between Rows */}
+                          {!isLast && (
+                            <View
+                              style={[
+                                styles.rowDivider,
+                                { backgroundColor: theme.colors.hairline },
+                              ]}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
           </View>
 
-          {notificationStatus !== 'granted' ? (
-            <Button
-              label="Enable Notifications"
-              onPress={() => setPermissionModalVisible(true)}
-              variant="outline"
-              size="sm"
-              icon={<Bell size={14} color={theme.colors.link} />}
-              fullWidth
-              style={{ marginTop: spacingNumeric.sm }}
-            />
-          ) : null}
-
-          <Button
-            label="Recent Notifications Feed"
-            onPress={() => setFeedModalVisible(true)}
-            variant="outline"
-            size="sm"
-            icon={<Bell size={14} color={theme.colors.ink} />}
-            fullWidth
-            style={{ marginTop: spacingNumeric.sm }}
-          />
-        </Card>
-
-        {/* System Preferences Card */}
-        <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>SYSTEM PREFERENCES</Text>
-          <Text style={[styles.label, { color: theme.colors.mute }]}>Color Appearance</Text>
-
-          <Button
-            label={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            onPress={() => {
-              const nextMode = isDark ? 'light' : 'dark';
-              setMode(nextMode);
-              notifyThemeToggled(nextMode === 'dark');
-            }}
-            variant="outline"
-            size="sm"
-            icon={isDark ? <Sun size={14} color={theme.colors.warning} /> : <Moon size={14} color={theme.colors.ink} />}
-            style={{ marginTop: spacingNumeric.xs }}
-          />
-        </Card>
-
-        {/* Account Deletion Entry Card */}
-        <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>ACCOUNT MANAGEMENT</Text>
-          <TouchableOpacity
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}
-            onPress={handleAccountDeletionPress}
+          {/* ─── Identity & Banking Documents Section ─── */}
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(220, 38, 38, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                <Trash2 size={16} color="#dc2626" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
-                  Request Account Deletion
-                </Text>
-                <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
-                  Permanent de-provisioning & personal data erasure
-                </Text>
-              </View>
+            {/* Header: Title + Subtitle */}
+            <View style={styles.docSectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>
+                IDENTITY & BANKING DOCUMENTS
+              </Text>
+              <Text style={[styles.docSectionSubtitle, { color: theme.colors.mute }]}>
+                Upload Aadhaar, Driving Licence, and Bank Passbook / Cheque for verification.
+              </Text>
             </View>
-            <ChevronRight size={16} color={theme.colors.mute} />
-          </TouchableOpacity>
-        </Card>
 
-        {/* Sign Out Button */}
-        <Button
-          label="Sign Out of Session"
-          onPress={handleLogout}
-          variant="danger"
-          shape="pill"
-          icon={<LogOut size={16} color="#ffffff" />}
-          fullWidth
-          style={{ marginTop: spacingNumeric.md }}
-        />
+            {/* Document Slots Responsive Grid */}
+            <View style={[styles.docGrid, isWide && styles.docGridWide]}>
+              {documentTypes.map((docType) => {
+                const existing = userDocuments.find(
+                  (d) => d.document_type_code === docType.code
+                );
+                const isReplacing = replacingCode === docType.code;
+                const isUploading = uploadingCode === docType.code;
 
-        {/* Brand Footer with Light/Dark Theme Polarity */}
-        <View style={styles.brandFooter}>
-          <ReachInternationalLogo size={18} showTagline={false} />
-          <Text style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-            Reach International v1.0.0 • Reaching All Heights
-          </Text>
+                // Format badge icon helper
+                const mime = (existing?.mime_type || '').toLowerCase();
+                const path = (existing?.storage_path || '').toLowerCase();
+                const isPdf = mime.includes('pdf') || path.endsWith('.pdf');
+                const isPng = mime.includes('png') || path.endsWith('.png');
+                const isJpg = mime.includes('jpg') || mime.includes('jpeg') || path.endsWith('.jpg') || path.endsWith('.jpeg');
+                const isWebp = mime.includes('webp') || path.endsWith('.webp');
+
+                return (
+                  <View
+                    key={docType.code}
+                    style={[
+                      styles.docSlotCard,
+                      isWide && styles.docSlotCardHalf,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    {/* Slot Title */}
+                    <Text style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
+                      {docType.label}
+                    </Text>
+
+                    {/* 1. Existing Document View (Click to preview, Replace, Delete) */}
+                    {existing && !isReplacing ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.existingDocCard,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                        onPress={() => {
+                          setActiveViewerDoc({
+                            title: docType.label,
+                            url: existing.signed_url || undefined,
+                            uri: existing.signed_url || undefined,
+                            mimeType: existing.mime_type,
+                            fileSizeBytes: existing.file_size_bytes,
+                            fileName: existing.storage_path.split('/').pop(),
+                          });
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        {/* Left: Format Pill + Uploaded Badge */}
+                        <View style={styles.existingDocLeft}>
+                          {/* File format icon */}
+                          <View
+                            style={[
+                              styles.formatBadge,
+                              isPdf
+                                ? styles.formatBadgePdf
+                                : isPng
+                                ? styles.formatBadgePng
+                                : isJpg
+                                ? styles.formatBadgeJpg
+                                : isWebp
+                                ? styles.formatBadgeWebp
+                                : styles.formatBadgeGeneric,
+                            ]}
+                          >
+                            {isPdf ? (
+                              <FileText size={12} color="#e11d48" />
+                            ) : (
+                              <ImageIcon size={12} color="#0284c7" />
+                            )}
+                            <Text
+                              style={[
+                                styles.formatBadgeText,
+                                {
+                                  color: isPdf
+                                    ? '#e11d48'
+                                    : isPng
+                                    ? '#059669'
+                                    : isJpg
+                                    ? '#0284c7'
+                                    : isWebp
+                                    ? '#d97706'
+                                    : theme.colors.ink,
+                                },
+                              ]}
+                            >
+                              {isPdf ? 'PDF' : isPng ? 'PNG' : isJpg ? 'JPG' : isWebp ? 'WEBP' : 'DOC'}
+                            </Text>
+                          </View>
+
+                          {/* Uploaded badge */}
+                          <View style={styles.uploadedBadge}>
+                            <Check size={11} color="#059669" />
+                            <Text style={styles.uploadedBadgeText}>Uploaded</Text>
+                          </View>
+                        </View>
+
+                        {/* Right: Replace + Delete Actions */}
+                        <View style={styles.existingDocRight}>
+                          <TouchableOpacity
+                            style={[
+                              styles.docActionBtn,
+                              {
+                                backgroundColor: theme.colors.canvas,
+                                borderColor: theme.colors.hairline,
+                              },
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              setReplacingCode(docType.code);
+                            }}
+                            activeOpacity={0.7}
+                            accessibilityLabel={`Replace ${docType.label}`}
+                          >
+                            <RefreshCw size={13} color={theme.colors.mute} />
+                            <Text style={[styles.docActionBtnText, { color: theme.colors.ink }]}>
+                              Replace
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.docDeleteBtn,
+                              {
+                                backgroundColor: theme.colors.canvas,
+                                borderColor: theme.colors.hairline,
+                              },
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleDeleteDocument(existing, docType.label);
+                            }}
+                            activeOpacity={0.7}
+                            accessibilityLabel={`Delete ${docType.label}`}
+                          >
+                            <Trash2 size={13} color="#dc2626" />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      /* 2. Upload Dropzone (When not uploaded or replacing) */
+                      <View style={styles.dropzoneWrap}>
+                        <TouchableOpacity
+                          style={[
+                            styles.dropzone,
+                            {
+                              backgroundColor: theme.colors.canvasElevated,
+                              borderColor: theme.colors.hairline,
+                            },
+                          ]}
+                          onPress={() => handleUploadDocument(docType.code)}
+                          disabled={isUploading}
+                          activeOpacity={0.7}
+                        >
+                          {isUploading ? (
+                            <View style={styles.uploadingBox}>
+                              <ActivityIndicator size="small" color={theme.colors.link} />
+                              <Text style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
+                                Uploading document...
+                              </Text>
+                            </View>
+                          ) : (
+                            <>
+                              <View style={styles.dropzoneRow}>
+                                <Upload size={14} color={theme.colors.mute} />
+                                <Text style={[styles.dropzoneTitle, { color: theme.colors.mute }]}>
+                                  {isReplacing ? 'Select replacement file' : 'Choose file to upload'}
+                                </Text>
+                              </View>
+                              <Text style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
+                                PDF, PNG, JPG, WEBP, or DOC
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+
+                        {/* Cancel replacement option */}
+                        {isReplacing && (
+                          <TouchableOpacity
+                            style={styles.cancelReplaceBtn}
+                            onPress={() => setReplacingCode(null)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.cancelReplaceText, { color: theme.colors.mute }]}>
+                              Cancel
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
         </View>
       </ScrollView>
 
+      {/* Edit Profile & Shift Times Modal */}
       <EditProfileModal
         visible={editModalVisible}
         currentUser={dbUser || authProfile}
@@ -915,35 +988,160 @@ export default function ProfileScreen() {
         }}
       />
 
-      <NotificationPermissionModal
-        visible={permissionModalVisible}
-        onClose={() => setPermissionModalVisible(false)}
-        onResolved={(status) => setNotificationStatus(status)}
-      />
-
-      <PostNotificationFeedModal
-        visible={feedModalVisible}
-        onClose={() => setFeedModalVisible(false)}
+      {/* In-App Document Viewer Modal */}
+      <MobileDocumentViewerModal
+        document={activeViewerDoc}
+        onClose={() => setActiveViewerDoc(null)}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: spacingNumeric.md, paddingBottom: spacingNumeric.xl },
-  card: { marginVertical: spacingNumeric.xs, padding: spacingNumeric.md },
-  pendingBanner: {
-    padding: spacingNumeric.sm + 4,
-    borderRadius: radiusNumeric.md,
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 48,
+  },
+  containerInner: {
+    width: '100%',
+    maxWidth: 896,
+    alignSelf: 'center',
+    gap: 20,
+  },
+
+  // ─── Profile Header Card ──────────────────────────────────────────
+  card: {
+    borderRadius: 16,
     borderWidth: 1,
-    marginBottom: spacingNumeric.sm,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  headerCardContent: {
+    gap: 16,
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatarCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarLetter: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  userDetails: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  empBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  empBadgeText: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+  },
+  userEmail: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 40,
+  },
+  editProfileBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+
+  // ─── Pending Request Review Banner ────────────────────────────────
+  pendingBanner: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
   },
   pendingHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'space-between',
   },
   pendingTitleGroup: {
     flexDirection: 'row',
@@ -955,146 +1153,361 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#d97706',
   },
-  pendingDescription: {
+  pendingPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pendingPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#d97706',
+  },
+  pendingDesc: {
     fontSize: 12,
     lineHeight: 17,
-    marginBottom: 8,
   },
   cancelRequestBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: radiusNumeric.sm,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 6,
     backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    marginTop: 2,
+    minHeight: 32,
   },
   cancelRequestText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#dc2626',
   },
-  avatarRow: {
+
+  // ─── Responsive Sections Grid ─────────────────────────────────────
+  sectionsGrid: {
+    gap: 20,
+  },
+  sectionsGridWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 20,
+        } as any)
+      : {}),
+  },
+  sectionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  sectionCardHalf: {
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingBottom: 8,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sectionBody: {
+    width: '100%',
+  },
+  rowWrap: {
+    width: '100%',
+  },
+  rowContent: {
+    paddingVertical: 10,
+  },
+  rowContentMobile: {
+    flexDirection: 'column',
+    gap: 3,
+  },
+  rowContentWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  rowLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  rowLabelWide: {
+    width: '35%',
+    flexShrink: 0,
+  },
+  rowValueArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowValueAreaMobile: {
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  rowValueAreaWide: {
+    width: '65%',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  rowValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  monoText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: -0.2,
+  },
+  rowDivider: {
+    height: 1,
+    width: '100%',
+  },
+
+  // Aadhaar, Link, Badge & Copy row elements
+  aadhaarArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconActionBtn: {
+    padding: 6,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 30,
+    minWidth: 30,
   },
-  avatarLetter: {
-    fontSize: 20,
-    fontWeight: '800',
+  linkArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  profileName: {
-    fontSize: 16.5,
-    fontWeight: '800',
-  },
-  profileEmail: {
+  rowLink: {
     fontSize: 12.5,
-    marginTop: 1,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
-  sectionEyebrow: {
+  badgeArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  valueWithCopyArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+
+  // ─── Identity & Banking Documents Section ─────────────────────────
+  docSectionHeader: {
+    marginBottom: 14,
+    gap: 3,
+  },
+  docSectionSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  docGrid: {
+    gap: 12,
+  },
+  docGridWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 14,
+        } as any)
+      : {}),
+  },
+  docSlotCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
+  },
+  docSlotCardHalf: {
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
+  },
+  docSlotTitle: {
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: spacingNumeric.xs,
   },
-  infoRow: {
+  existingDocCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    minHeight: 52,
+  },
+  existingDocLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  formatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  formatBadgePdf: {
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+    borderColor: 'rgba(244, 63, 94, 0.25)',
+  },
+  formatBadgePng: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  formatBadgeJpg: {
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    borderColor: 'rgba(14, 165, 233, 0.25)',
+  },
+  formatBadgeWebp: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  formatBadgeGeneric: {
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    borderColor: 'rgba(150, 150, 150, 0.25)',
+  },
+  formatBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  uploadedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  uploadedBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  existingDocRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  docActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    minHeight: 34,
+  },
+  docActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  docDeleteBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 7,
+    borderRadius: 6,
+    borderWidth: 1,
+    minHeight: 34,
+    minWidth: 34,
+  },
+  dropzoneWrap: {
+    gap: 6,
+  },
+  dropzone: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    minHeight: 64,
+  },
+  dropzoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dropzoneTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dropzoneHint: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  uploadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  label: { fontSize: 12.5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
-  value: { fontSize: 13.5, fontWeight: '700', flex: 1 },
-  divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.15)', marginVertical: spacingNumeric.xs + 2 },
-  brandFooter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacingNumeric.lg,
-    gap: 6,
+  cancelReplaceBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
-  brandFooterText: {
-    fontSize: 12,
+  cancelReplaceText: {
+    fontSize: 11,
     fontWeight: '500',
-    letterSpacing: 0.5,
-  },
-  permissionItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  permIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  permHeaderLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  permName: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  permSub: {
-    fontSize: 12.5,
-    lineHeight: 16,
-  },
-  inlineActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 4,
-  },
-  fieldActionBtn: {
-    padding: 6,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  documentItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: radiusNumeric.sm,
-    backgroundColor: 'rgba(150, 150, 150, 0.06)',
-    marginBottom: 6,
-  },
-  docName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  docMeta: {
-    fontSize: 12,
-    marginTop: 1,
-    fontFamily: 'monospace',
-  },
-  viewDocBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    minHeight: 32,
-  },
-  viewDocBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

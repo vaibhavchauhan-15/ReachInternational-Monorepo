@@ -65,7 +65,6 @@ export async function ManagerDashboardView({
             icon={CheckCircle2}
             href="/machines"
             variant="success"
-            subtitle="Generating site revenue"
           />
           <KPICard
             label="Active Shifts"
@@ -73,7 +72,6 @@ export async function ManagerDashboardView({
             icon={Layers}
             href="/operations"
             variant="info"
-            subtitle="Operators assigned"
           />
           <KPICard
             label="Spare / Idle"
@@ -81,7 +79,6 @@ export async function ManagerDashboardView({
             icon={Clock}
             href="/machines"
             variant="warning"
-            subtitle="Available for deployment"
           />
           <KPICard
             label="Breakdowns"
@@ -89,7 +86,6 @@ export async function ManagerDashboardView({
             icon={AlertTriangle}
             href="/machines"
             variant={breakdownFleet > 0 ? "error" : "default"}
-            subtitle={breakdownFleet > 0 ? "Needs repair" : "None"}
           />
         </KPIGrid>
       </div>
@@ -106,7 +102,6 @@ export async function ManagerDashboardView({
             icon={FileSpreadsheet}
             href="/operations"
             variant="default"
-            subtitle="Daily running log reports received"
           />
           <KPICard
             label="Total Running Hours Today"
@@ -114,7 +109,6 @@ export async function ManagerDashboardView({
             icon={Gauge}
             href="/operations"
             variant="info"
-            subtitle="Aggregated engine runtime today"
           />
         </div>
       </div>

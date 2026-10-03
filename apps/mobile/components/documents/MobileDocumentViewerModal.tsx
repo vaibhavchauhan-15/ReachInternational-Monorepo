@@ -46,7 +46,8 @@ import { useTheme } from '@/components/ui/ThemeProvider';
 export interface MobileViewerDoc {
   id?: string;
   title: string;
-  url: string;
+  url?: string;
+  uri?: string;
   mimeType: string;
   fileSizeBytes?: number;
   fileSize?: number;
@@ -118,12 +119,13 @@ export function MobileDocumentViewerModal({
   };
 
   // Google Docs viewer URL for Android PDF in WebView
-  const pdfViewerUri =
-    Platform.OS === 'android'
+  const pdfViewerUri: string = doc?.url
+    ? Platform.OS === 'android'
       ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(
-          doc.url
+          doc.url || ''
         )}`
-      : doc.url;
+      : doc.url || ''
+    : '';
 
   return (
     <Modal
@@ -314,7 +316,7 @@ export function MobileDocumentViewerModal({
           {isPdf && (
             <View style={styles.webViewWrapper}>
               <WebView
-                source={{ uri: pdfViewerUri }}
+                source={{ uri: pdfViewerUri || 'about:blank' } as any}
                 style={styles.webView}
                 startInLoadingState
                 renderLoading={() => (

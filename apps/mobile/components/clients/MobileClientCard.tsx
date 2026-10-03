@@ -9,7 +9,6 @@ import {
 import { Badge, useTheme, HighlightText } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  Building2,
   Edit2,
   Trash2,
   Copy,
@@ -45,6 +44,8 @@ export interface MobileClientCardProps {
     maintenance_allowance_minutes?: number;
     status: 'active' | 'inactive';
     deleted_at?: string | null;
+    client_sites?: { id: string; site_code: string; site_name: string; city: string; status: string }[];
+    site_count?: number;
   };
   canManageClients?: boolean;
   searchTerm?: string;
@@ -216,24 +217,24 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
 
         <View style={styles.specGridRow}>
           <View style={styles.specCol}>
-            <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
+              {Boolean(client.site_count && client.site_count > 1) && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(14, 165, 233, 0.3)' : '#bae6fd' }}>
+                  <MapPin size={9} color={isDark ? '#38bdf8' : '#0284c7'} />
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#38bdf8' : '#0284c7' }}>
+                    {client.site_count} Sites
+                  </Text>
+                </View>
+              )}
+            </View>
             <HighlightText
-              text={client.city || client.district || '—'}
+              text={client.city || client.district || client.address || '—'}
               query={searchTerm}
               style={[styles.specValue, { color: theme.colors.ink }]}
               matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
               numberOfLines={1}
             />
-          </View>
-
-          <View style={styles.specCol}>
-            <Text style={[styles.specLabel, { color: theme.colors.mute }]}>REGION / STATE</Text>
-            <Text
-              style={[styles.specValue, { color: theme.colors.ink }]}
-              numberOfLines={1}
-            >
-              {client.state || '—'}
-            </Text>
           </View>
         </View>
 
@@ -247,7 +248,7 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
           {allowanceLabel ? (
             <View style={[styles.allowanceBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }]}>
               <Text style={[styles.taxBadgeText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
-                {allowanceLabel} / machine / mo
+                {allowanceLabel}
               </Text>
             </View>
           ) : (
@@ -261,70 +262,53 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
       </View>
 
       {/* Touch Action Buttons Row (min 44px targets) */}
-      <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
-        <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            styles.detailsBtn,
-            { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.12)' : '#f0f9ff' },
-          ]}
-          onPress={() => onViewDetails(client)}
-          activeOpacity={0.7}
-        >
-          <Building2 size={14} color="#0284c7" />
-          <Text style={[styles.actionBtnText, { color: '#0284c7', fontWeight: '700' }]}>
-            View Details
-          </Text>
-        </TouchableOpacity>
+      {canManageClients && (
+        <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              styles.iconActionBtn,
+              { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+            ]}
+            onPress={() => onEdit(client)}
+            activeOpacity={0.7}
+            accessibilityLabel={`Edit ${client.company_name}`}
+          >
+            <Edit2 size={14} color={theme.colors.ink} />
+            <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Edit</Text>
+          </TouchableOpacity>
 
-        {canManageClients && (
-          <>
+          {onAddSite && (
             <TouchableOpacity
               style={[
                 styles.actionBtn,
                 styles.iconActionBtn,
                 { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
               ]}
-              onPress={() => onEdit(client)}
+              onPress={() => onAddSite(client)}
               activeOpacity={0.7}
-              accessibilityLabel={`Edit ${client.company_name}`}
+              accessibilityLabel={`Add Site to ${client.company_name}`}
             >
-              <Edit2 size={14} color={theme.colors.ink} />
-              <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Edit</Text>
+              <MapPin size={14} color="#10b981" />
+              <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Add Site</Text>
             </TouchableOpacity>
+          )}
 
-            {onAddSite && (
-              <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  styles.iconActionBtn,
-                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                ]}
-                onPress={() => onAddSite(client)}
-                activeOpacity={0.7}
-                accessibilityLabel={`Add Site to ${client.company_name}`}
-              >
-                <MapPin size={14} color="#10b981" />
-                <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Add Site</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                styles.iconActionBtn,
-                { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fff1f2' },
-              ]}
-              onPress={() => onDelete(client)}
-              activeOpacity={0.7}
-              accessibilityLabel={`Delete ${client.company_name}`}
-            >
-              <Trash2 size={14} color="#e11d48" />
-              <Text style={[styles.actionBtnText, { color: '#e11d48' }]}>Delete</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              styles.iconActionBtn,
+              { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fff1f2' },
+            ]}
+            onPress={() => onDelete(client)}
+            activeOpacity={0.7}
+            accessibilityLabel={`Delete ${client.company_name}`}
+          >
+            <Trash2 size={14} color="#e11d48" />
+            <Text style={[styles.actionBtnText, { color: '#e11d48' }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -450,9 +434,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
-  },
-  detailsBtn: {
-    flex: 1,
   },
   iconActionBtn: {
     borderWidth: 1,

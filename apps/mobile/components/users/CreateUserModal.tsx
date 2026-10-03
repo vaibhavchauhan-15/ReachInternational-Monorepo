@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { Button, Input, useTheme, SearchableSelect, type SelectOption } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -69,7 +69,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('operator');
-  const [rolePickerVisible, setRolePickerVisible] = useState(false);
   const [shiftTime, setShiftTime] = useState('Day Shift (08:00 AM - 08:00 PM)');
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
@@ -85,8 +84,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   // Supervisor State
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
   const [supervisorId, setSupervisorId] = useState('');
-  const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
-  const [supervisorSearch, setSupervisorSearch] = useState('');
 
   React.useEffect(() => {
     async function loadSupervisors() {
@@ -109,8 +106,23 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     ? USER_ROLES
     : USER_ROLES.filter((r) => r.value !== 'super_admin');
 
-  const selectedRoleObj = availableRoles.find((r) => r.value === role) || availableRoles[0];
-  const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
+  const roleSelectOptions = useMemo<SelectOption[]>(() => {
+    return availableRoles.map((r) => ({
+      value: r.value,
+      label: r.label,
+    }));
+  }, [availableRoles]);
+
+  const supervisorSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'None (Unassigned)' },
+      ...supervisors.map((s) => ({
+        value: s.id,
+        label: s.full_name,
+        description: s.email || undefined,
+      })),
+    ];
+  }, [supervisors]);
 
   const isOperator = role === 'operator';
   const cleanPhone = phone.replace(/[^0-9+]/g, '');
@@ -342,40 +354,29 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 leftIcon={<Phone size={16} color={theme.colors.mute} />}
               />
 
-              {/* Role Trigger */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Designated Role *</Text>
-                <TouchableOpacity
-                  onPress={() => setRolePickerVisible(true)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.roleTrigger,
-                    { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                  ]}
-                >
-                  <Text style={[styles.roleTriggerText, { color: theme.colors.ink }]}>{selectedRoleObj.label}</Text>
-                  <ChevronDown size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
+              {/* Designated Role Selector */}
+              <SearchableSelect
+                label="Designated Role"
+                required
+                options={roleSelectOptions}
+                value={role}
+                onChange={(val) => setRole(val)}
+                placeholder="Select designated role..."
+                modalTitle="Select System Role"
+                leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+              />
 
-              {/* Conditional Supervisor Trigger */}
+              {/* Conditional Supervisor Selector */}
               {isSupervisedRole(role) && (
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Assign Supervisor</Text>
-                  <TouchableOpacity
-                    onPress={() => setSupervisorModalVisible(true)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.roleTrigger,
-                      { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                    ]}
-                  >
-                    <Text style={[styles.roleTriggerText, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
-                      {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor...'}
-                    </Text>
-                    <ChevronDown size={16} color={theme.colors.mute} />
-                  </TouchableOpacity>
-                </View>
+                <SearchableSelect
+                  label="Assign Supervisor"
+                  options={supervisorSelectOptions}
+                  value={supervisorId}
+                  onChange={(val) => setSupervisorId(val)}
+                  placeholder="Select supervisor..."
+                  modalTitle="Select Supervisor"
+                  leftIcon={<User size={16} color={theme.colors.mute} />}
+                />
               )}
 
               <Input
@@ -484,115 +485,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             </View>
           </View>
         </View>
-
-        {/* Role Picker Modal */}
-        <Modal visible={rolePickerVisible} animationType="slide" transparent onRequestClose={() => setRolePickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select System Role</Text>
-                <TouchableOpacity onPress={() => setRolePickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
-                {availableRoles.map((r) => {
-                  const isSelected = role === r.value;
-                  return (
-                    <TouchableOpacity
-                      key={r.value}
-                      onPress={() => {
-                        setRole(r.value);
-                        setRolePickerVisible(false);
-                      }}
-                      style={[
-                        styles.roleItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <Text style={[styles.roleItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
-                        {r.label}
-                      </Text>
-                      {isSelected && <Check size={18} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Supervisor Picker Modal */}
-        <Modal visible={supervisorModalVisible} animationType="slide" transparent onRequestClose={() => setSupervisorModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
-                <TouchableOpacity onPress={() => setSupervisorModalVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
-                <Input
-                  placeholder="Search supervisor..."
-                  value={supervisorSearch}
-                  onChangeText={setSupervisorSearch}
-                  leftIcon={<User size={15} color={theme.colors.mute} />}
-                />
-              </View>
-
-              <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setSupervisorId('');
-                    setSupervisorModalVisible(false);
-                  }}
-                  style={[styles.roleItemRow, { borderBottomColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.roleItemText, { color: theme.colors.mute }]}>None (Unassigned)</Text>
-                  {!supervisorId && <Check size={18} color={theme.colors.link} />}
-                </TouchableOpacity>
-                {supervisors
-                  .filter((s) => {
-                    const q = supervisorSearch.toLowerCase().trim();
-                    if (!q) return true;
-                    return (
-                      s.full_name.toLowerCase().includes(q) ||
-                      (s.email && s.email.toLowerCase().includes(q))
-                    );
-                  })
-                  .map((s) => {
-                    const isSelected = supervisorId === s.id;
-                    return (
-                      <TouchableOpacity
-                        key={s.id}
-                        onPress={() => {
-                          setSupervisorId(s.id);
-                          setSupervisorModalVisible(false);
-                        }}
-                        style={[
-                          styles.roleItemRow,
-                          { borderBottomColor: theme.colors.hairline },
-                          isSelected && { backgroundColor: theme.colors.link + '12' },
-                        ]}
-                      >
-                        <View>
-                          <Text style={[styles.roleItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
-                            {s.full_name}
-                          </Text>
-                          {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
-                        </View>
-                        {isSelected && <Check size={18} color={theme.colors.link} />}
-                      </TouchableOpacity>
-                    );
-                  })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -679,18 +571,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  roleTrigger: {
-    height: 44,
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    paddingHorizontal: spacingNumeric.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  roleTriggerText: {
-    fontSize: 13,
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -699,42 +579,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.lg,
     paddingVertical: spacingNumeric.md,
     borderTopWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    maxHeight: '75%',
-    borderWidth: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.lg,
-    paddingVertical: spacingNumeric.md,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  roleListScroll: {
-    maxHeight: 300,
-  },
-  roleItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.lg,
-    paddingVertical: spacingNumeric.md,
-    borderBottomWidth: 1,
-  },
-  roleItemText: {
-    fontSize: 13,
   },
 });

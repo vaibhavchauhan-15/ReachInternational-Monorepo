@@ -108,6 +108,21 @@ const nextConfig: NextConfig = {
         destination: "/clients",
         permanent: true,
       },
+      {
+        source: "/setting",
+        destination: "/settings",
+        permanent: true,
+      },
+      {
+        source: "/setting/:slug*",
+        destination: "/settings/:slug*",
+        permanent: true,
+      },
+      {
+        source: "/settings/prefrence",
+        destination: "/settings/preference",
+        permanent: true,
+      },
     ];
 
   },

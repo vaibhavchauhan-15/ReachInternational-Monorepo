@@ -1,25 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, useTheme, MobileHeader, Skeleton, HeaderActionItem, Badge } from '../../components/ui';
+import { useTheme, MobileHeader } from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
-  Wrench,
-  AlertTriangle,
-  ArrowRight,
-  Gauge,
-  RefreshCw,
-} from 'lucide-react-native';
-import {
+  DashboardHeader,
+  AlertWidget,
+  DashboardSkeleton,
   OperatorDashboardCard,
   SupervisorDashboardCard,
   ManagerDashboardCard,
@@ -41,7 +34,6 @@ import type {
 export default function DashboardScreen() {
   const { user, role, userProfile } = useAuth();
   const { theme } = useTheme();
-  const router = useRouter();
 
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,173 +107,106 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [fetchDashboardData]);
 
-  const headerActions = useMemo<HeaderActionItem[]>(() => {
-    const list: HeaderActionItem[] = [
-      {
-        id: 'refresh-dashboard',
-        label: 'Refresh Dashboard',
-        icon: <RefreshCw size={16} color={theme.colors.ink} />,
-        onPress: () => onRefresh(),
-      },
-    ];
-
-    if (activeRole !== 'operator') {
-      list.push({
-        id: 'view-machines',
-        label: 'Machine Directory',
-        icon: <Wrench size={16} color={theme.colors.ink} />,
-        onPress: () => router.push('/(app)/machines' as any),
-      });
-      list.push({
-        id: 'view-operations',
-        label: 'Fleet Operations',
-        icon: <Gauge size={16} color={theme.colors.ink} />,
-        onPress: () => router.push('/(app)/operations' as any),
-      });
-    }
-
-    return list;
-  }, [theme.colors.ink, activeRole, router, onRefresh]);
-
-  // Extract alerts for the active role
+  // Extract alerts for the active role matching web AlertWidget
   const alerts: DashboardAlert[] = useMemo(() => {
     if (activeRole === 'super_admin') return superAdminData?.alerts || [];
     if (activeRole === 'admin') return adminData?.alerts || [];
     if (activeRole === 'manager') return managerData?.alerts || [];
     if (activeRole === 'supervisor') return supervisorData?.alerts || [];
     if (activeRole === 'hr') return hrData?.alerts || [];
-    if (activeRole === 'operator') return operatorData?.alerts || [];
+    if (activeRole === 'operator') {
+      if (operatorData?.alerts && operatorData.alerts.length > 0) {
+        return operatorData.alerts;
+      }
+      const isSubmitted = operatorData?.today?.entryStatus === 'submitted';
+      const isPartial = operatorData?.today?.entryStatus === 'partial';
+      const submittedCount = operatorData?.today?.submittedCount ?? 0;
+      const totalAssignedCount =
+        operatorData?.today?.totalAssignedCount ?? (operatorData?.assigned_shifts?.length || 1);
+      const totalHours = operatorData?.today?.totalRunningHoursToday ?? 0;
+
+      return [
+        isSubmitted
+          ? {
+              id: 'entry-submitted',
+              severity: 'success' as const,
+              title: "Today's Shift Logs Submitted",
+              description: `All assigned shifts (${totalHours}h total) are recorded for today.`,
+              actionUrl: '/operations?tab=history',
+            }
+          : isPartial
+          ? {
+              id: 'entry-partial',
+              severity: 'warning' as const,
+              title: `${submittedCount} of ${totalAssignedCount} Shifts Logged`,
+              description: `Recorded ${totalHours}h so far. Remember to submit remaining assigned shift(s).`,
+              actionUrl: '/operations',
+            }
+          : {
+              id: 'entry-pending',
+              severity: 'warning' as const,
+              title: "Today's Log Pending",
+              description: 'Daily running hours have not been submitted for today.',
+              actionUrl: '/operations',
+            },
+      ];
+    }
     return [];
   }, [activeRole, superAdminData, adminData, managerData, supervisorData, hrData, operatorData]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      {/* Flush edge-to-edge solid mobile top header: [Home] title + [Quick Search] */}
       <MobileHeader
-        title={`Welcome, ${userName}`}
-        searchPlaceholder="Search platform..."
-        actions={headerActions}
+        title="Home"
+        showLogo={false}
+        showBack={false}
+        showQuickAccess={true}
+        showQuickAccessCapsule={false}
+        showMoreMenu={false}
       />
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.link}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Alerts Banner if any */}
-        {alerts.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
-              ALERT
-            </Text>
-            {alerts.map((alert) => {
-              const isCrit = alert.severity === 'critical';
-              const isWarn = alert.severity === 'warning';
-              const bg = isCrit
-                ? 'rgba(239, 68, 68, 0.1)'
-                : isWarn
-                ? 'rgba(245, 158, 11, 0.1)'
-                : 'rgba(0, 112, 243, 0.1)';
-              const border = isCrit
-                ? 'rgba(239, 68, 68, 0.25)'
-                : isWarn
-                ? 'rgba(245, 158, 11, 0.25)'
-                : 'rgba(0, 112, 243, 0.25)';
-              const textColor = isCrit ? '#dc2626' : isWarn ? '#d97706' : theme.colors.link;
+      {isLoading ? (
+        <DashboardSkeleton kpiCount={activeRole === 'super_admin' ? 6 : activeRole === 'admin' ? 5 : 4} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.link}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Greeting Header */}
+          <DashboardHeader userName={userName} />
 
-              return (
-                <TouchableOpacity
-                  key={alert.id}
-                  style={[styles.alertCard, { backgroundColor: bg, borderColor: border }]}
-                  onPress={() => {
-                    if (alert.actionUrl) {
-                      const target = alert.actionUrl.startsWith('/operations')
-                        ? '/(app)/operations'
-                        : alert.actionUrl.startsWith('/machines')
-                        ? '/(app)/machines'
-                        : '/(app)/users';
-                      router.push(target as any);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <AlertTriangle size={18} color={textColor} style={{ marginTop: 2 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.alertTitle, { color: textColor }]}>
-                      {alert.title}
-                    </Text>
-                    {alert.description && (
-                      <Text style={[styles.alertDesc, { color: theme.colors.mute }]}>
-                        {alert.description}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+          {/* Critical & Informational Alerts */}
+          <AlertWidget alerts={alerts} />
 
-        {/* ---------------- ROLE-SPECIFIC DASHBOARD VIEWS ---------------- */}
-        {activeRole === 'operator' && <OperatorDashboardCard data={operatorData} />}
-        {activeRole === 'supervisor' && <SupervisorDashboardCard data={supervisorData} />}
-        {activeRole === 'manager' && <ManagerDashboardCard data={managerData} />}
-        {activeRole === 'admin' && <AdminDashboardCard data={adminData} />}
-        {activeRole === 'super_admin' && <SuperAdminDashboardCard data={superAdminData} />}
-        {activeRole === 'hr' && <HRDashboardCard data={hrData} />}
-
-        {/* Quick Nav Workflows (Common to non-operators) */}
-        {activeRole !== 'operator' && (
-          <>
-            <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.lg }]}>
-              OPERATIONAL WORKFLOWS
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => router.push('/(app)/operations' as any)}
-              activeOpacity={0.8}
-              style={styles.actionCardWrapper}
-            >
-              <Card variant="elevated" style={styles.actionCard}>
-                <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(0, 112, 243, 0.08)' }]}>
-                  <Gauge size={20} color={theme.colors.link} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Daily Running Hours</Text>
-                  <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
-                    Review operator logs, verify meters & analyze site runtime
-                  </Text>
-                </View>
-                <ArrowRight size={16} color={theme.colors.mute} />
-              </Card>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => router.push('/(app)/machines' as any)}
-              activeOpacity={0.8}
-              style={styles.actionCardWrapper}
-            >
-              <Card variant="elevated" style={styles.actionCard}>
-                <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.08)' }]}>
-                  <Wrench size={20} color="#6366f1" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Machinery Fleet</Text>
-                  <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
-                    Browse equipment inventory, track meters & check status
-                  </Text>
-                </View>
-                <ArrowRight size={16} color={theme.colors.mute} />
-              </Card>
-            </TouchableOpacity>
-          </>
-        )}
-      </ScrollView>
+          {/* Role-Specific Dashboard Views */}
+          {activeRole === 'super_admin' && (
+            <SuperAdminDashboardCard data={superAdminData} />
+          )}
+          {activeRole === 'admin' && (
+            <AdminDashboardCard data={adminData} />
+          )}
+          {activeRole === 'manager' && (
+            <ManagerDashboardCard data={managerData} />
+          )}
+          {activeRole === 'supervisor' && (
+            <SupervisorDashboardCard data={supervisorData} />
+          )}
+          {activeRole === 'hr' && (
+            <HRDashboardCard data={hrData} />
+          )}
+          {activeRole === 'operator' && (
+            <OperatorDashboardCard data={operatorData} />
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -291,57 +216,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacingNumeric.md,
-    paddingBottom: spacingNumeric['2xl'],
-  },
-  section: {
-    marginBottom: spacingNumeric.md,
-  },
-  eyebrowHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: spacingNumeric.xs,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: spacingNumeric.sm + 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 6,
-  },
-  alertTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
-  alertDesc: {
-    fontSize: 12.5,
-    marginTop: 2,
-  },
-  actionCardWrapper: {
-    marginBottom: spacingNumeric.sm,
-  },
-  actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacingNumeric.md,
-    gap: spacingNumeric.md,
-  },
-  actionIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  actionDesc: {
-    fontSize: 12,
+    paddingHorizontal: spacingNumeric.md,
+    paddingTop: spacingNumeric.sm,
+    paddingBottom: 96,
   },
 });

@@ -1,3 +1,4 @@
+export * from './shared';
 export * from './operator/OperatorDashboardCard';
 export * from './supervisor/SupervisorDashboardCard';
 export * from './manager/ManagerDashboardCard';

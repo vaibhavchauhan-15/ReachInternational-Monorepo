@@ -98,15 +98,18 @@ export function ClientDetailClient({
 }: ClientDetailClientProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const [prevInitialClient, setPrevInitialClient] = useState(initialClient);
   const [client, setClient] = useState<CRMClient>(initialClient);
+
+  if (initialClient !== prevInitialClient) {
+    setPrevInitialClient(initialClient);
+    setClient(initialClient);
+  }
+
   const [activeTab, setActiveTab] = useState<ClientDetailTabKey>("machines");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [tabSearch, setTabSearch] = useState("");
-
-  useEffect(() => {
-    setClient(initialClient);
-  }, [initialClient]);
 
   const canManage = ["super_admin", "admin", "manager"].includes(currentUserRole);
 
@@ -613,20 +616,33 @@ export function ClientDetailClient({
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
               <AnimatedMapPin size={16} className="text-emerald-500 shrink-0" />
-              Operational Site
+              Operational Sites
             </span>
-            {siteAddress !== "—" && (
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] lowercase font-normal text-sky-600 hover:underline flex items-center gap-0.5"
-                title="Open in Google Maps"
-              >
-                <ExternalLink size={10} />
-                <span>maps</span>
-              </a>
-            )}
+            <div className="flex items-center gap-1.5">
+              {initialSites && initialSites.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("sites")}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800 hover:underline cursor-pointer transition-colors"
+                  title="Click to view all saved sites"
+                >
+                  <span>{initialSites.length} {initialSites.length === 1 ? "Site" : "Sites"}</span>
+                  <ArrowRight size={10} />
+                </button>
+              )}
+              {siteAddress !== "—" && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] lowercase font-normal text-sky-600 hover:underline flex items-center gap-0.5"
+                  title="Open in Google Maps"
+                >
+                  <ExternalLink size={10} />
+                  <span>maps</span>
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2 text-xs">

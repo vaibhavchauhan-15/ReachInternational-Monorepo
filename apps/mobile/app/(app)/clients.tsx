@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking } from 'react-native';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -61,6 +62,8 @@ interface ClientItem {
   maintenance_allowance_minutes?: number;
   status: 'active' | 'inactive';
   deleted_at?: string | null;
+  client_sites?: { id: string; site_code: string; site_name: string; city: string; status: string }[];
+  site_count?: number;
 }
 
 const INITIAL_CLIENTS: ClientItem[] = [
@@ -111,6 +114,11 @@ interface MobileQueryCacheEntry {
   timestamp: number;
 }
 
+const DEFAULT_CLIENTS_FILTERS = {
+  activeFilter: 'all' as StatusFilter,
+  sortBy: 'company_name_asc' as ClientSortOptionType,
+};
+
 export default function ClientsScreen() {
   const { theme, isDark } = useTheme();
   const { role } = useAuth();
@@ -149,10 +157,7 @@ export default function ClientsScreen() {
   }>({
     storageKey: 'reach_filters_clients',
     defaultSearch: '',
-    defaultFilters: {
-      activeFilter: 'all',
-      sortBy: 'company_name_asc',
-    },
+    defaultFilters: DEFAULT_CLIENTS_FILTERS,
     debounceMs: 300,
   });
 
@@ -188,7 +193,23 @@ export default function ClientsScreen() {
     return count;
   }, [activeFilter, debouncedSearch, sortBy]);
 
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const filterAnim = useRef(new Animated.Value(0)).current;
+  const [panelContentHeight, setPanelContentHeight] = useState(0);
+  const isWeb = Platform.OS === 'web';
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Animated.timing(filterAnim, {
+      toValue: filterPanelOpen ? 1 : 0,
+      duration: 220,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [filterPanelOpen, filterAnim]);
+
   const handleResetAllFilters = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     resetListFilters();
   }, [resetListFilters]);
 
@@ -342,7 +363,7 @@ export default function ClientsScreen() {
         // C10 Lean projection: strictly returns CODE, COMPANY & TAX, CONTACT PERSON, PHONE, SITE LOCATION, STATUS
         // Absolutely zero relations (machines, logs, assignments, audits)
         const CLIENT_PROJECTION =
-          'id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes';
+          'id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes, client_sites(id, site_code, site_name, city, status)';
 
         let dbQuery = supabase
           .from('clients')
@@ -395,8 +416,27 @@ export default function ClientsScreen() {
 
         if (error) throw error;
         if (data && data.length > 0) {
-          const clientData = data as unknown as ClientItem[];
-          const finalCount = count ?? data.length;
+          // Defensive deduplication by client ID and normalized company name
+          const seenIds = new Set<string>();
+          const seenNames = new Set<string>();
+          const clientData: ClientItem[] = [];
+
+          for (const item of (data as any[])) {
+            if (!item || !item.id) continue;
+            const normName = (item.company_name || '').trim().toLowerCase();
+            if (seenIds.has(item.id) || (normName && seenNames.has(normName))) continue;
+            seenIds.add(item.id);
+            if (normName) seenNames.add(normName);
+
+            const sites = Array.isArray(item.client_sites) ? item.client_sites : [];
+            clientData.push({
+              ...item,
+              client_sites: sites,
+              site_count: sites.length,
+            });
+          }
+
+          const finalCount = count ?? clientData.length;
           mobileQueryCacheRef.current.set(cacheKey, {
             clients: clientData,
             total: finalCount,
@@ -509,6 +549,18 @@ export default function ClientsScreen() {
   const handleSave = () => {
     if (!companyName.trim()) {
       Alert.alert('Validation Error', 'Please enter a valid company name.');
+      return;
+    }
+
+    const normEntered = companyName.trim().toLowerCase();
+    const isDuplicate = clients.some(
+      (c) => c.company_name.trim().toLowerCase() === normEntered && (!editingClient || c.id !== editingClient.id)
+    );
+    if (isDuplicate) {
+      Alert.alert(
+        'Duplicate Client',
+        `A client named "${companyName.trim()}" already exists. Each client company can only be registered once. If this client has another location, please add it as a site under the existing client.`
+      );
       return;
     }
 
@@ -924,202 +976,224 @@ export default function ClientsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
+      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [3-Dot Actions] */}
       <MobileHeader
         title="Client Directory"
-        search={{
-          value: search,
-          onChangeText: handleSearchChange,
-          placeholder: 'Search by company, code, GST, PAN, city, state...',
-          onClear: () => handleSearchChange(''),
-          isSearching: isSearching,
-        }}
         actions={headerActions}
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        indicatorStyle={isDark ? 'white' : 'black'}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0070f3" />}
       >
         {/* Interactive 4-Card KPI Metric Grid */}
-        <View style={styles.kpiGrid}>
-          {/* Total Accounts Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+        <KPIGrid columns={4}>
+          <KPICard
+            label="Total Accounts"
+            value={kpis.total}
+            icon={Building2}
+            variant="default"
+            active={activeFilter === 'all'}
             onPress={() => handleFilterChange('all')}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor:
-                  activeFilter === 'all'
-                    ? theme.colors.ink
-                    : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL ACCOUNTS</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{kpis.total}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* Active Accounts Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="Active Accounts"
+            value={kpis.active}
+            icon={CheckCircle2}
+            variant="success"
+            active={activeFilter === 'active'}
             onPress={() => handleFilterChange(activeFilter === 'active' ? 'all' : 'active')}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor:
-                  activeFilter === 'active'
-                    ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5'
-                    : theme.colors.canvasElevated,
-                borderColor: activeFilter === 'active' ? '#10b981' : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>ACTIVE ACCOUNTS</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>{kpis.active}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* Inactive Accounts Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="Inactive / Churn"
+            value={kpis.inactive}
+            icon={AlertTriangle}
+            variant={kpis.inactive > 0 ? 'warning' : 'default'}
+            active={activeFilter === 'inactive'}
             onPress={() => handleFilterChange(activeFilter === 'inactive' ? 'all' : 'inactive')}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor:
-                  activeFilter === 'inactive'
-                    ? isDark ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb'
-                    : theme.colors.canvasElevated,
-                borderColor: activeFilter === 'inactive' ? '#f59e0b' : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: '#f59e0b' }]}>INACTIVE / CHURN</Text>
-            <Text style={[styles.kpiValue, { color: '#d97706' }]}>{kpis.inactive}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* Locations Covered Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="Active Cities"
+            value={kpis.locationsCovered || kpis.cities}
+            icon={MapPin}
+            variant="info"
             onPress={() => handleFilterChange('all')}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>ACTIVE CITIES</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.primary }]}>
-              {kpis.locationsCovered || kpis.cities}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          />
+        </KPIGrid>
 
-        {/* Search & Filter Toolbar Card */}
-        <View
-          style={[
-            styles.filterToolbar,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
+        {/* Canonical Reusable FilterToolbar & Search Architecture */}
+        <FilterToolbar
+          searchQuery={search}
+          onSearchChange={handleSearchChange}
+          placeholder="Search company, code, GST, PAN, city, state..."
+          searchVariant="pill"
+          isLoading={isSearching}
+          showFilterToggle={true}
+          isFilterOpen={filterPanelOpen}
+          onToggleFilter={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setFilterPanelOpen((prev) => !prev);
+          }}
+          activeFilterCount={activeFilterCount}
+          onResetFilters={handleResetAllFilters}
+          style={{ marginBottom: spacingNumeric.md }}
         >
-          {/* Top Search & Add CTA Row */}
-          <View style={styles.actionRow}>
-            <View style={styles.searchContainer}>
-              <Input
-                value={search}
-                onChangeText={handleSearchChange}
-                placeholder="Search company, code, GST, PAN, city..."
-                leftIcon={
-                  isSearching ? (
-                    <ActivityIndicator size="small" color={theme.colors.primary} />
-                  ) : (
-                    <Search size={16} color={theme.colors.mute} />
-                  )
-                }
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.addBtn, { backgroundColor: theme.colors.primary }]}
-              onPress={handleOpenAdd}
-              accessibilityLabel="Add client"
+          {/* Collapsible Filter Selectors Drawer */}
+          {isWeb ? (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
+                transition: 'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+                overflow: 'hidden',
+              }}
             >
-              <Plus size={18} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
+              <div style={{ minHeight: 0 }}>
+                <View style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}>
+                  <View style={styles.filterSelectorsGrid}>
+                    <View style={styles.selectorCol}>
+                      <DropdownFilterSelector
+                        label="Status"
+                        value={activeFilter}
+                        options={CLIENT_STATUS_FILTER_OPTIONS}
+                        onChange={(val) => handleFilterChange(val as StatusFilter)}
+                        minMenuWidth={160}
+                      />
+                    </View>
+                    <View style={styles.selectorCol}>
+                      <DropdownFilterSelector
+                        label="Sort By"
+                        value={sortBy}
+                        options={CLIENT_SORT_OPTIONS}
+                        onChange={(val) => {
+                          setSortBy(val as ClientSortOptionType);
+                          setPage(1);
+                        }}
+                        align="right"
+                        minMenuWidth={200}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </div>
+            </div>
+          ) : (
+            <Animated.View
+              style={[
+                styles.filterPanelAnimatedContainer,
+                {
+                  maxHeight: filterAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, Math.max(panelContentHeight, 150)],
+                  }),
+                  opacity: filterAnim,
+                },
+              ]}
+            >
+              <View
+                onLayout={(e) => setPanelContentHeight(e.nativeEvent.layout.height)}
+                style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
+              >
+                <View style={styles.filterSelectorsGrid}>
+                  <View style={styles.selectorCol}>
+                    <DropdownFilterSelector
+                      label="Status"
+                      value={activeFilter}
+                      options={CLIENT_STATUS_FILTER_OPTIONS}
+                      onChange={(val) => handleFilterChange(val as StatusFilter)}
+                      minMenuWidth={160}
+                    />
+                  </View>
+                  <View style={styles.selectorCol}>
+                    <DropdownFilterSelector
+                      label="Sort By"
+                      value={sortBy}
+                      options={CLIENT_SORT_OPTIONS}
+                      onChange={(val) => {
+                        setSortBy(val as ClientSortOptionType);
+                        setPage(1);
+                      }}
+                      align="right"
+                      minMenuWidth={200}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          )}
 
-          {/* Filter & Sort Selectors Row */}
-          <View style={styles.filterSelectorsRow}>
-            <View style={styles.selectorCol}>
-              <DropdownFilterSelector
-                label="Status"
-                value={activeFilter}
-                options={CLIENT_STATUS_FILTER_OPTIONS}
-                onChange={(val) => handleFilterChange(val as StatusFilter)}
-                minMenuWidth={160}
-              />
-            </View>
-            <View style={styles.selectorCol}>
-              <DropdownFilterSelector
-                label="Sort"
-                value={sortBy}
-                options={CLIENT_SORT_OPTIONS}
-                onChange={(val) => {
-                  setSortBy(val as ClientSortOptionType);
-                  setPage(1);
-                }}
-                align="right"
-                minMenuWidth={200}
-              />
-            </View>
-          </View>
-
-          {/* Active Filter Chips */}
+          {/* Active Filter Chips Row */}
           {activeFilterCount > 0 && (
-            <View style={[styles.activeChipsRow, { borderTopColor: theme.colors.hairline }]}>
-              <Text style={[styles.activeChipsLabel, { color: theme.colors.mute }]}>Active:</Text>
+            <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
+              <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+                Active Filters:
+              </Text>
+
               {debouncedSearch.trim() !== '' && (
-                <View style={[styles.activeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.activeChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                    "{debouncedSearch}"
+                <TouchableOpacity
+                  onPress={() => handleSearchChange('')}
+                  style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.badgeChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                    Search: "{debouncedSearch}"
                   </Text>
-                  <TouchableOpacity onPress={() => handleSearchChange('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <X size={12} color={theme.colors.mute} />
-                  </TouchableOpacity>
-                </View>
+                  <X size={12} color={theme.colors.mute} />
+                </TouchableOpacity>
               )}
+
               {activeFilter !== 'all' && (
-                <View style={[styles.activeChip, { backgroundColor: activeFilter === 'active' ? '#ecfdf5' : '#fffbeb', borderColor: activeFilter === 'active' ? '#a7f3d0' : '#fde68a' }]}>
-                  <Text style={[styles.activeChipText, { color: activeFilter === 'active' ? '#059669' : '#d97706' }]}>
-                    Status: {activeFilter === 'active' ? 'Active' : 'Inactive'}
+                <TouchableOpacity
+                  onPress={() => handleFilterChange('all')}
+                  style={[
+                    styles.badgeChip,
+                    {
+                      backgroundColor:
+                        activeFilter === 'active'
+                          ? isDark ? '#064e3b26' : '#ecfdf5'
+                          : isDark ? '#78350f26' : '#fffbeb',
+                      borderColor: activeFilter === 'active' ? '#10b98133' : '#f59e0b33',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeChipText,
+                      { color: activeFilter === 'active' ? '#059669' : '#d97706' },
+                    ]}
+                  >
+                    Status: {CLIENT_STATUS_FILTER_OPTIONS.find((s) => s.id === activeFilter)?.label || activeFilter}
                   </Text>
-                  <TouchableOpacity onPress={() => handleFilterChange('all')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <X size={12} color={activeFilter === 'active' ? '#059669' : '#d97706'} />
-                  </TouchableOpacity>
-                </View>
+                  <X size={12} color={activeFilter === 'active' ? '#059669' : '#d97706'} />
+                </TouchableOpacity>
               )}
+
               {sortBy !== 'company_name_asc' && (
-                <View style={[styles.activeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.activeChipText, { color: theme.colors.ink }]}>
+                <TouchableOpacity
+                  onPress={() => setSortBy('company_name_asc')}
+                  style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
                     Sort: {CLIENT_SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}
                   </Text>
-                  <TouchableOpacity onPress={() => setSortBy('company_name_asc')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <X size={12} color={theme.colors.mute} />
-                  </TouchableOpacity>
-                </View>
+                  <X size={12} color={theme.colors.mute} />
+                </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={handleResetAllFilters} style={styles.clearAllBtn}>
-                <Text style={[styles.clearAllText, { color: theme.colors.link }]}>Clear All</Text>
+
+              <TouchableOpacity onPress={handleResetAllFilters} style={styles.resetAllLink}>
+                <RotateCcw size={11} color={theme.colors.link} />
+                <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+                  Reset all
+                </Text>
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </FilterToolbar>
 
         {/* Client Cards List */}
         <View style={styles.listContainer}>
@@ -2113,108 +2187,67 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: spacingNumeric.md },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: spacingNumeric.md,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '47%',
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  filterToolbar: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.sm + 2,
+  filterPanelContent: {
+    paddingTop: 10,
+    borderTopWidth: 1,
     gap: spacingNumeric.sm,
-    marginBottom: spacingNumeric.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
-  actionRow: { flexDirection: 'row', gap: spacingNumeric.sm },
-  searchContainer: { flex: 1 },
-  addBtn: { width: 44, height: 44, borderRadius: radiusNumeric.md, justifyContent: 'center', alignItems: 'center' },
-  filterSelectorsRow: {
+  filterSelectorsGrid: {
     flexDirection: 'row',
     gap: 8,
-    alignItems: 'center',
   },
   selectorCol: {
     flex: 1,
   },
-  activeChipsRow: {
+  filterPanelAnimatedContainer: {
+    overflow: 'hidden',
+  },
+  activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
   },
-  activeChipsLabel: {
+  activeBadgesHeader: {
     fontSize: 12,
     fontWeight: '700',
     marginRight: 2,
   },
-  activeChip: {
+  badgeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  activeChipText: {
-    fontSize: 12.5,
+  badgeChipText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  clearAllBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 3,
+  resetAllLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
-  clearAllText: {
-    fontSize: 12.5,
+  resetAllLinkText: {
+    fontSize: 12,
     fontWeight: '700',
   },
   listContainer: { gap: spacingNumeric.sm },
   emptyCard: { padding: spacingNumeric.lg, alignItems: 'center' },
   emptyText: { fontSize: 13.5, fontWeight: '600' },
-  clientCard: { padding: spacingNumeric.md, borderRadius: radiusNumeric.md, gap: spacingNumeric.xs },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  codeText: { fontSize: 12.5, fontWeight: '800', fontFamily: 'monospace' },
-  clientName: { fontSize: 15.5, fontWeight: '800' },
-  tagRow: { flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
-  taxBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
-  taxBadgeText: { fontSize: 12, fontWeight: '700', fontFamily: 'monospace' },
-  subText: { fontSize: 12.5 },
-  cardDetails: { borderTopWidth: 1, paddingTop: 8, gap: 4 },
-  detailRow: { fontSize: 13 },
-  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, borderTopWidth: 1, paddingTop: 8 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 44 },
-  actionBtnText: { fontSize: 13, fontWeight: '700' },
+  codeText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.2,
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacingNumeric.md },
   modalContent: { borderRadius: radiusNumeric.lg, padding: spacingNumeric.md, gap: spacingNumeric.sm, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },

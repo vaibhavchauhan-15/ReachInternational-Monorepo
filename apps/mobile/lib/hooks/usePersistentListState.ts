@@ -69,10 +69,41 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
   const [isDebouncing, setIsDebouncing] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasHydratedRef = useRef(false);
+
+  const defaultFiltersRef = useRef(defaultFilters);
+  defaultFiltersRef.current = defaultFilters;
+  const defaultSearchRef = useRef(defaultSearch);
+  defaultSearchRef.current = defaultSearch;
+  const defaultSortRef = useRef(defaultSort);
+  defaultSortRef.current = defaultSort;
+  const defaultOrderRef = useRef(defaultOrder);
+  defaultOrderRef.current = defaultOrder;
+
   const onHydratedRef = useRef(onStateHydrated);
   onHydratedRef.current = onStateHydrated;
 
-  // 1. Restore persisted state from AsyncStorage on initial mount
+  const stateRef = useRef({
+    search,
+    sort,
+    order,
+    filters,
+  });
+  stateRef.current = { search, sort, order, filters };
+
+  // Helper to persist state to AsyncStorage safely
+  const persistState = useCallback(
+    async (payload: { search: string; sort: string; order: 'asc' | 'desc'; filters: TFilters }) => {
+      try {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+      } catch (err) {
+        console.warn(`[usePersistentListState] Failed to persist ${storageKey}:`, err);
+      }
+    },
+    [storageKey]
+  );
+
+  // 1. Restore persisted state from AsyncStorage on initial mount only
   useEffect(() => {
     let isMounted = true;
 
@@ -81,11 +112,11 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
         const stored = await AsyncStorage.getItem(storageKey);
         if (stored && isMounted) {
           const parsed = JSON.parse(stored);
-          const restoredSearch = typeof parsed.search === 'string' ? parsed.search : defaultSearch;
-          const restoredSort = typeof parsed.sort === 'string' ? parsed.sort : defaultSort;
-          const restoredOrder = parsed.order === 'desc' ? 'desc' : (defaultOrder as 'asc' | 'desc');
+          const restoredSearch = typeof parsed.search === 'string' ? parsed.search : defaultSearchRef.current;
+          const restoredSort = typeof parsed.sort === 'string' ? parsed.sort : defaultSortRef.current;
+          const restoredOrder = parsed.order === 'desc' ? 'desc' : (defaultOrderRef.current as 'asc' | 'desc');
           const restoredFilters = {
-            ...defaultFilters,
+            ...defaultFiltersRef.current,
             ...(parsed.filters || {}),
           };
 
@@ -114,7 +145,10 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
       }
     }
 
-    hydrateState();
+    if (!hasHydratedRef.current) {
+      hasHydratedRef.current = true;
+      hydrateState();
+    }
 
     return () => {
       isMounted = false;
@@ -122,19 +156,7 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [storageKey, defaultSearch, defaultSort, defaultOrder, defaultFilters]);
-
-  // Helper to persist state to AsyncStorage
-  const persistState = useCallback(
-    async (payload: { search: string; sort: string; order: 'asc' | 'desc'; filters: TFilters }) => {
-      try {
-        await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (err) {
-        console.warn(`[usePersistentListState] Failed to persist ${storageKey}:`, err);
-      }
-    },
-    [storageKey]
-  );
+  }, [storageKey]);
 
   // Set Search with fluid debounce
   const setSearch = useCallback(
@@ -149,7 +171,12 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
         setIsDebouncing(false);
         setSearchState(term);
         setPageState(1);
-        persistState({ search: term, sort, order, filters });
+        persistState({
+          search: term,
+          sort: stateRef.current.sort,
+          order: stateRef.current.order,
+          filters: stateRef.current.filters,
+        });
         return;
       }
 
@@ -158,10 +185,15 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
         setIsDebouncing(false);
         setSearchState(term);
         setPageState(1);
-        persistState({ search: term, sort, order, filters });
+        persistState({
+          search: term,
+          sort: stateRef.current.sort,
+          order: stateRef.current.order,
+          filters: stateRef.current.filters,
+        });
       }, debounceMs);
     },
-    [debounceMs, persistState, sort, order, filters]
+    [debounceMs, persistState]
   );
 
   // Set Page (in-memory only, pagination is not persisted across re-opens)
@@ -178,12 +210,19 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
             ? (value as (prevVal: TFilters[K]) => TFilters[K])(prev[key])
             : value;
         const next = { ...prev, [key]: resolvedValue };
-        setPageState(1);
-        persistState({ search, sort, order, filters: next });
+        setTimeout(() => {
+          persistState({
+            search: stateRef.current.search,
+            sort: stateRef.current.sort,
+            order: stateRef.current.order,
+            filters: next,
+          });
+        }, 0);
         return next;
       });
+      setPageState(1);
     },
-    [persistState, search, sort, order]
+    [persistState]
   );
 
   // Set multiple filters
@@ -191,12 +230,19 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
     (updates: Partial<TFilters>) => {
       setFiltersState((prev) => {
         const next = { ...prev, ...updates };
-        setPageState(1);
-        persistState({ search, sort, order, filters: next });
+        setTimeout(() => {
+          persistState({
+            search: stateRef.current.search,
+            sort: stateRef.current.sort,
+            order: stateRef.current.order,
+            filters: next,
+          });
+        }, 0);
         return next;
       });
+      setPageState(1);
     },
-    [persistState, search, sort, order]
+    [persistState]
   );
 
   // Set Sorting
@@ -205,9 +251,14 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
       setSortState(newSort);
       setOrderState(newOrder);
       setPageState(1);
-      persistState({ search, sort: newSort, order: newOrder, filters });
+      persistState({
+        search: stateRef.current.search,
+        sort: newSort,
+        order: newOrder,
+        filters: stateRef.current.filters,
+      });
     },
-    [persistState, search, filters]
+    [persistState]
   );
 
   // Reset all filters & search back to defaults and clear storage
@@ -215,36 +266,46 @@ export function usePersistentListState<TFilters extends Record<string, any>>(
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
+    const dSearch = defaultSearchRef.current;
+    const dSort = defaultSortRef.current;
+    const dOrder = defaultOrderRef.current;
+    const dFilters = { ...defaultFiltersRef.current };
+
     setIsDebouncing(false);
-    setInputValue(defaultSearch);
-    setSearchState(defaultSearch);
+    setInputValue(dSearch);
+    setSearchState(dSearch);
     setPageState(1);
-    setSortState(defaultSort);
-    setOrderState(defaultOrder);
-    setFiltersState({ ...defaultFilters });
+    setSortState(dSort);
+    setOrderState(dOrder);
+    setFiltersState(dFilters);
 
     persistState({
-      search: defaultSearch,
-      sort: defaultSort,
-      order: defaultOrder,
-      filters: { ...defaultFilters },
+      search: dSearch,
+      sort: dSort,
+      order: dOrder,
+      filters: dFilters,
     });
-  }, [defaultSearch, defaultSort, defaultOrder, defaultFilters, persistState]);
+  }, [persistState]);
 
   // Compute active non-default filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (search.trim() !== defaultSearch.trim()) count++;
-    if (sort !== defaultSort || order !== defaultOrder) count++;
+    const dSearch = defaultSearchRef.current;
+    const dSort = defaultSortRef.current;
+    const dOrder = defaultOrderRef.current;
+    const dFilters = defaultFiltersRef.current;
+
+    if (search.trim() !== dSearch.trim()) count++;
+    if (sort !== dSort || order !== dOrder) count++;
 
     for (const [key, val] of Object.entries(filters)) {
-      const def = defaultFilters[key];
+      const def = dFilters[key];
       if (val !== undefined && val !== null && val !== '' && val !== 'all' && val !== def) {
         count++;
       }
     }
     return count;
-  }, [search, sort, order, filters, defaultSearch, defaultSort, defaultOrder, defaultFilters]);
+  }, [search, sort, order, filters]);
 
   return {
     search,

@@ -1,3 +1,890 @@
+- **Fix Migration 157 Type Mismatch (`supabase/migrations`) (2026-10-03)**:
+  - **Delivered**:
+    - Resolved `ERROR: 42883: operator does not exist: text = uuid` on line 16 when running Migration 157.
+    - Explicitly cast `c2.id::text` in the audit logs deletion subquery.
+    - Expanded entity filter to `WHERE entity_type IN ('clients', 'client')`.
+    - Added deterministic tie-breaking on creation timestamps (`c2.created_at > c1.created_at OR (c2.created_at = c1.created_at AND c2.id > c1.id)`) across audit logs, shift codes, and clients deduplication queries.
+  - **Files Changed**:
+    - `supabase/migrations/157_clients_deduplication_and_unique_company.sql` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Manage Personnel Dropdown Selection & Shift Card Grow/Shrink Transition (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Machine Modal ("Manage Shift Personnel") Dropdown Selection**:
+       - Replaced full-screen `MultiUserSelectModal` with anchored inline searchable dropdown popovers in `apps/mobile/components/machines/MachineModal.tsx`.
+       - Supervisor Dropdown: Anchored trigger with selected chips, search bar, staff role badges (`SUPERVISOR`, `MANAGER`, `ADMIN`, `SUPER_ADMIN`), shift timing, contact info, and checkmark toggle.
+       - Operator Dropdown: Anchored trigger `+ Search & Assign Operators ({count}/{max})`, search bar, live operator list with next available shift code pill (`+ Shift S2`), contact info, shift timing, and machine overlap conflict detection.
+       - Dismissal: Outside-click dismissal on web via `data-dropdown-container`, Escape key handler, and smooth animated expansion.
+    2. **Canonical ShiftCardSelector Component (`apps/mobile/components/ui/ShiftCardSelector.tsx`)**:
+       - Full visual and architectural parity with web `apps/web/components/operations/entry/ShiftCardSelector.tsx`.
+       - Dynamic grow & shrink layout (`flex: 1.45` selected, `flex: 1` unselected) with hardware-accelerated CSS transitions on web and `LayoutAnimation` on native.
+       - Selected card: 2 lines (Shift Title + Moon night shift icon and compact time range `6:00AM-2:00PM`).
+       - Unselected card: 1 line (Shift Title centered).
+       - Supports logged today emerald styling (`#059669`), overlap conflict rose styling (`#ef4444`), 44px min touch targets, and `Haptics.selectionAsync()`.
+       - Exported via `apps/mobile/components/ui/index.ts`.
+    3. **Standardized Everywhere Across Mobile App**:
+       - `MachineModal.tsx`: ShiftCardSelector integrated into all operator cards.
+       - `MobileAssignPersonnelModal.tsx`: ShiftCardSelector integrated into all operator cards.
+       - `MeterLogModal.tsx`: ShiftCardSelector integrated for daily running hours entry with `todayLoggedShiftCodes` support.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/ShiftCardSelector.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/components/machines/MachineModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineDetailView.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx` (MODIFIED)
+    - `apps/mobile/components/work/MeterLogModal.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+
+- **Machines Screen & Machine Details (/machines) Mobile & Web Parity Refactor (`apps/mobile`, `apps/web`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile Machine Card (<MobileMachineCard>) CTA & Badge Formatting**:
+       - Updated mobile CTA to render a 34×34px circular/squircle icon-only button (`ChevronRight`) on screens ≤640px, eliminating text wrapping while preserving full card touchability.
+       - Refined `<Badge>` and `badgeWrap` with uniform 22px height, balanced padding, 5px circular indicator dots, and Title Case formatting.
+    2. **Machine Details (<MachineDetailView>) Web Mobile Viewport Parity**:
+       - Integrated canonical `<SegmentedToggle>` for tab navigation matching web mobile viewport.
+       - Replaced text "Back to Machines" with canonical `<MobileHeader title="Machine Details" showBack={true} />`.
+       - Restructured Hero Banner into clean 2-row hierarchy (Row 1: 42×42 squircle icon + title + mono machine ID + actions; Row 2: full-width side-by-side Health and Rental status badges).
+       - Responsive Basic Info Card: Sky blue header icon, edit action, responsive grid (`specsGrid` 2-col mobile, 3-col tablet, 4-col desktop via CSS Grid on web / proportional flex on native), 8 equal cards with uniform `minHeight: 64`.
+       - Assigned Shift Personnel Card: Sky blue header icon, Sync & Edit actions, dual panels for Supervisors and Operators with teal Shield / amber Wrench icons, shift tags, clock times, and communication buttons.
+       - Client Details Card: Sky blue header icon, Client Code pill, Map location button, Edit button, responsive field cards, full site/billing address copy boxes, and direct Call and WhatsApp touch buttons.
+    3. **Removed Redundant Container Wrappers**:
+       - Removed card background, borders, and elevation shadow from `filterToolbar` in `apps/mobile/app/(app)/machines.tsx` for a clean canvas layout.
+       - Removed redundant "Back to Machines" inline bar from `MachineDetailView.tsx`.
+    4. **Equal Card Sizing, Ratio & Responsive Fit on Mobile and Tablet**:
+       - Converted `<KPIGrid>` and `<KPICard>` to CSS Grid on Web (`gridTemplateColumns: repeat(${effectiveCols}, minmax(0, 1fr))`) and proportional flex wrapping on Native, eliminating hardcoded widths and ensuring equal ratios across mobile (≤640px), tablet (641–1023px), and desktop (≥1024px).
+       - Converted `specBox` and `clientFieldBox` in `MachineDetailView.tsx` from hardcoded `width: '48%'` to CSS Grid / responsive proportional columns with uniform height and aspect ratios.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/SegmentedToggle.tsx` (CREATED)
+    - `apps/mobile/components/ui/Badge.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/KPIGrid.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/KPICard.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MobileMachineCard.tsx` (MODIFIED)
+    - `apps/web/components/machines/MobileMachineCard.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineDetailView.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Full Monorepo typecheck: 0 errors (`pnpm typecheck` - 7/7 packages successful).
+
+- **Mobile Sign Out (/more & /settings) Functional Fix & Reusable ConfirmDialog (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Root Cause Analysis & React Native Web Polyfill (`apps/mobile/lib/suppressWarnings.ts`)**:
+       - Discovered root cause: `more.tsx` relied on `Alert.alert(...)`, which in `react-native-web` is implemented as an empty stub (`static alert() {}`).
+       - On web browsers (e.g. 1536×695 viewport), clicking "Sign Out" silently did nothing because no dialog was shown and `onPress` was never called.
+       - Implemented global web polyfill for `Alert.alert` in `suppressWarnings.ts` utilizing `window.alert` for informational alerts and `window.confirm` for confirmation dialogues, eliminating silent failures monorepo-wide.
+    2. **Canonical Reusable `<ConfirmDialog />` Primitive (`apps/mobile/components/ui/ConfirmDialog.tsx`)**:
+       - Built accessible, responsive confirmation dialog adhering to Vercel Geist design tokens:
+         - 44px min touch targets on all action buttons.
+         - Support for `danger`, `warning`, and `primary` visual variants with distinct tinted icon orbs.
+         - Dynamic loading state with `ActivityIndicator` for asynchronous tasks.
+         - Accessible with `accessibilityRole="alert"` and ARIA labels.
+         - Exported through canonical UI barrel (`apps/mobile/components/ui/index.ts`).
+    3. **More Page (/more) Sign Out Overhaul (`apps/mobile/app/(app)/more.tsx`)**:
+       - Replaced inert `Alert.alert` with `<ConfirmDialog />` controlled by `showSignOutDialog` state.
+       - Awaited `signOut()` and explicitly redirected via `router.replace('/(auth)/login')`.
+       - Rendered loading spinner and disabled state on the Sign Out button during logout execution.
+       - Added canonical `<MobileHeader title="More" />` matching all other monorepo domain screens.
+       - Added desktop responsive centering (`maxWidth: 680`, `width: '100%'`, `alignSelf: 'center'`) preventing horizontal stretching on desktop viewports.
+       - Added vertical scrollbar indicators with dynamic theme styling.
+    4. **Settings Page (/settings) Sign Out Parity (`apps/mobile/app/(app)/settings/index.tsx`)**:
+       - Upgraded `handleSignOut` from `Alert.alert` to `<ConfirmDialog />` with asynchronous execution and navigation to `/(auth)/login`.
+  - **Files Changed**:
+    - `apps/mobile/lib/suppressWarnings.ts` (MODIFIED)
+    - `apps/mobile/components/ui/ConfirmDialog.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/app/(app)/more.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/settings/index.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Full Monorepo typecheck: 0 errors (`pnpm typecheck` - 7/7 packages successful).
+    - HTTP Endpoint: `http://localhost:8081/more` verified 200 OK.
+
+- **Client Directory (/clients) Mobile Feedback Remediation & Search/Filter Component Unification (`apps/mobile`, `apps/web`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Canonical Search & Filter Component Architecture (`apps/mobile/app/(app)/clients.tsx`)**:
+       - Replaced ad-hoc filter bar with the canonical, reusable `<FilterToolbar>` component (`apps/mobile/components/ui/FilterToolbar.tsx`).
+       - Implemented capsule pill search bar (`searchVariant="pill"`) with search icon, live loading spinner, clear `X` button, and outline suppression.
+       - Integrated filter toggle button with `SlidersHorizontal` icon, "Filter" label, dynamic `activeCountBadge`, and rotating `ChevronDown`.
+       - Collapsible filter drawer (CSS Grid transition on web, `Animated.View` on native) with `DropdownFilterSelector` for Status and Sort options.
+       - Active filter badges strip with individual `X` remove buttons and tactile "Reset all" action.
+       - Cleaned `MobileHeader` by removing redundant `search={{...}}` prop.
+       - Enabled vertical scrollbar (`showsVerticalScrollIndicator={true}`) with dynamic theme indicator on the `ScrollView`.
+    2. **Removed "View Details" Button from Card Footer (`MobileClientCard.tsx`)**:
+       - Removed redundant `View Details` button from the bottom action bar since the entire card is clickable (`onPress={() => onViewDetails(client)}`).
+       - Footer now neatly displays `Edit`, `Add Site`, and `Delete` action buttons with 44px min touch targets.
+    3. **Removed "Region / State" Field (`MobileClientCard.tsx`)**:
+       - Removed `REGION / STATE` column from the inset metadata grid.
+       - Expanded `SITE LOCATION` into the space with the location string and optional multi-site badge (`{client.site_count} Sites`).
+    4. **Maintenance Allowance Display Simplified (`MobileClientCard.tsx`)**:
+       - Formatted maintenance allowance badge to only display `{allowanceLabel}` (e.g. `12h` or `1h 30m`) instead of `{allowanceLabel} / machine / mo`.
+    5. **Cross-Platform Web Parity (`apps/web/components/clients/MobileClientCard.tsx`)**:
+       - Removed `View Details` button from card footer.
+       - Removed `State / District` column from specs well.
+  - **Files Changed**:
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `apps/mobile/components/clients/MobileClientCard.tsx` (MODIFIED)
+    - `apps/web/components/clients/MobileClientCard.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Full Monorepo typecheck: 0 errors (`pnpm typecheck` - 7/7 packages successful).
+
+- **Search Box Toolbar Refinement & Modular Settings Sub-Pages Architecture (/settings/account, /settings/notification, /settings/preference, /settings/aboutapp) (`apps/mobile`, `apps/web`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Search Box Layout & Border Refinement (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed redundant outer Card-like container (`styles.filterToolbar`) that encased search and filter controls.
+       - Refactored top search and filter row into an un-nested direct flex row (`styles.toolbarTopRow`).
+       - Refined search box (`styles.searchBarBox`): height 42px, `backgroundColor: theme.colors.canvasElevated`, crisp 1px hairline border (`theme.colors.hairline`), high-contrast focus ring (`theme.colors.ink`), and clean `TextInput` styling (`borderWidth: 0, backgroundColor: 'transparent'`).
+       - Refactored filter drawer (`styles.filterPanelCard`): neatly renders inside clean card with hairline border and elevated background below the search row when toggled open.
+    2. **Modular Settings Sub-Pages Architecture (`apps/mobile/app/(app)/settings/*`)**:
+       - Replaced monolithic 1496-line `settings.tsx` with dedicated, high-performance modular routes:
+         - **Settings Hub (`settings/index.tsx`)**: Profile summary card + 4 navigation cards with Lucide icons in vibrant accent orbs, subtitles, and badges (Account & Security, Notifications, Preferences & Theme, About Reach International), plus full-width pill **Sign Out** button at bottom with confirmation dialog.
+         - **Account (`settings/account.tsx`)**: Personnel identity summary, full profile link, Change Password form (with show/hide eye toggles, 3-segment strength meter, criteria checklist, and Supabase Auth verification), session security protocols, and DPDP Act 2023 account deletion dispatch.
+         - **Notification (`settings/notification.tsx`)**: Hardware push permission badge, master notification switch, 5 operational channel switches (Shift Reminders, Breakdown Alerts, Assignment Updates, Overtime Alerts, Shift Log Reminders), and live animated floating feedback toasts with tactile haptics (`Haptics.selectionAsync()`) on every toggle.
+         - **Preferences (`settings/preference.tsx`)**: 3-way color theme cards (Light, Dark, System), font size scaling (Default 100%, Medium 105%, Large 110%) with live machinery card text preview, tactile haptics toggle, and live feedback toasts.
+         - **About App (`settings/aboutapp.tsx`)**: Brand hero header (`v1.0.0 (Build 42) — Production Release`, `Expo SDK 57 • Hermes 0.81`), official website/support email links, legal directory (Privacy Policy, Terms of Service, Account Deletion), and DPDP Act compliance badges.
+    3. **Singular & Typo Route Compatibility (`setting/*` & `settings/prefrence.tsx`)**:
+       - Added `setting/index.tsx`, `setting/[...slug].tsx`, and `settings/prefrence.tsx` resolving `/setting/account`, `/setting/notification`, `/setting/prefrence`, `/setting/aboutapp`.
+       - Registered all sub-routes with `href: null` in `_layout.tsx` to maintain clean bottom navigation bar.
+    4. **Web App Parity (`apps/web`)**:
+       - Created Next.js App Router sub-routes: `/settings/account/page.tsx`, `/settings/notification/page.tsx`, `/settings/preference/page.tsx`, `/settings/aboutapp/page.tsx`.
+       - Added server-side redirects in `next.config.ts` for `/setting`, `/setting/:slug*`, and `/settings/prefrence`.
+       - Added `initialSection` prop to `SettingsClientProps`.
+  - **Files Changed**:
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/settings.tsx` (REMOVED)
+    - `apps/mobile/app/(app)/settings/index.tsx` (CREATED)
+    - `apps/mobile/app/(app)/settings/account.tsx` (CREATED)
+    - `apps/mobile/app/(app)/settings/notification.tsx` (CREATED)
+    - `apps/mobile/app/(app)/settings/preference.tsx` (CREATED)
+    - `apps/mobile/app/(app)/settings/prefrence.tsx` (CREATED)
+    - `apps/mobile/app/(app)/settings/aboutapp.tsx` (CREATED)
+    - `apps/mobile/app/(app)/setting/index.tsx` (CREATED)
+    - `apps/mobile/app/(app)/setting/[...slug].tsx` (CREATED)
+    - `apps/mobile/app/(app)/_layout.tsx` (MODIFIED)
+    - `apps/web/next.config.ts` (MODIFIED)
+    - `apps/web/components/settings/SettingsClient.tsx` (MODIFIED)
+    - `apps/web/app/(app)/settings/account/page.tsx` (CREATED)
+    - `apps/web/app/(app)/settings/notification/page.tsx` (CREATED)
+    - `apps/web/app/(app)/settings/preference/page.tsx` (CREATED)
+    - `apps/web/app/(app)/settings/aboutapp/page.tsx` (CREATED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Full Monorepo typecheck: 0 errors (`pnpm typecheck` - 7/7 packages successful).
+
+- **Operations Page Shift Logs Polish, Assisted Log Attribution, Shift Time Clean Up & Navbar Clearance Fix (`apps/mobile`, `supabase`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Omit HMR from Entered Shift Logs (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed HMR metrics block (`row.start_meter → row.end_meter` with total hours) from the entered shift summary box.
+       - Cleaned up unused `hmrInline` and `hmrText` styles, and removed unused `Gauge` and `formatTo12Hour` imports.
+    2. **Accurate Assisted Log Attribution with Author Name & Role (`MobileTodayShiftMonitorTab.tsx`, `MeterLogModal.tsx`, `operations.tsx`)**:
+       - Identified and resolved the attribution root cause: `MeterLogModal` previously relied on asynchronous `supabase.auth.getUser()`, which could return `null` on quick submits in React Native Web, causing `submit_operator_hour_log_atomic` to fall back to `p_operator_id`.
+       - Updated `MeterLogModal` to accept authenticated `currentUserId`, `currentUserRole`, and `currentUserName` from `useAuth()`.
+       - Ensured `p_entered_by` always passes the acting user's ID, and `effectiveEntrySource` dynamically sets to `currentUserRole || 'admin'`.
+       - Added author attribution line in `MobileTodayShiftMonitorTab`: displays "Assisted Log by {name} ({role})" when entered by supervisor/admin/manager, or "Logged by {name}" for self-entry.
+       - Corrected historical test record in Dev DB (`vlmxciuogczumumrwyot`) for Deepak Patel with `entered_by = 'Admin User Dev'` (`entry_source = 'admin'`).
+    3. **Shift Time Clean Up (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed truncated shift timing string (`· 06:00 AM – 02:00 PM`) from Line 2 of card metadata.
+       - Line 2 now cleanly displays `Shift: {row.shift_name}` with uniform spacing, completely preventing truncation across mobile viewports.
+    4. **Preserved Existing 5-Line Information Layout & Spacing (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Preserved exact card layout, padding, and alignments across all 5 structured metadata lines:
+         - Line 1: Machine Name + Machine Code badge
+         - Line 2: Shift Name badge
+         - Line 3: Location / Client badge
+         - Line 4: Shift Status badge (Completed / Entered / Scheduled)
+         - Line 5: Log Attribution badge
+    5. **Bottom Card Navbar Overlap Fix & Supersmooth UI/UX (`operations.tsx`)**:
+       - Increased `contentContainer` `paddingBottom` to `110px`, completely preventing bottom cards from being cut off or overlapped by the floating bottom navigation capsule.
+       - Added vertical scrollbar indicators with dynamic dark/light mode styling (`showsVerticalScrollIndicator={true}`, `scrollEventThrottle={16}`, `indicatorStyle={isDark ? 'white' : 'black'}`).
+  - **Files Changed**:
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+    - `apps/mobile/components/work/MeterLogModal.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+  - **Database Impact**:
+    - Dev DB (`vlmxciuogczumumrwyot`): Corrected test row attribution for Deepak Patel's log under `session_replication_role = 'replica'`. Production DB (`dhbbgfzbyatzvqafnsqp`) untouched.
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Monorepo turbo typecheck: 0 errors (`turbo run typecheck` - 7/7 packages successful).
+    - Endpoint verification: `http://localhost:8081/operations` HTTP 200 OK.
+
+- **Operations Page /operations Mobile Feedback Remediation (Enter Shift Log RBAC Fix, Duplicate Refresh Controls Removal) (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Show Enter Shift Log at bottom of cards for Manager, Admin, and SuperAdmin users**:
+       - Resolved the root cause where `user.role` from `@supabase/supabase-js` ("authenticated") was passed instead of application `UserRole` (`super_admin`, `admin`, `manager`).
+       - Refactored `MobileTodayShiftMonitorTab`: extracted `role: authRole` and `userProfile` from `useAuth()`, normalized `effectiveRole`, and verified `canEnterLog = isManagerOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager'].includes(effectiveRole)`.
+       - For pending cards: rendered 44px min touch target `Enter Shift Log for {operatorName}` with `User` icon.
+       - For entered cards: rendered 44px min touch target `Edit Shift Log for {operatorName}` with `Edit2` icon and emerald accent styling.
+       - In `operations.tsx`: passed `userRole={role || userProfile?.role}`, guarded `onEnterLog` with `isManagerTier`, and updated `MeterLogModal` for `assistedRow` with `isManagerTier`, `model`, `serialNumber`, and `existingLog` populated via `assistedRow.log_id`.
+    2. **Removed Filter Toolbar Refresh Icon Button (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed `<TouchableOpacity ... accessibilityLabel="Refresh roster">` from the search and filter toolbar.
+       - Cleaned up unused `refreshActionBtn` and `spinningIcon` styles and removed unused `RefreshCw` import.
+    3. **Removed Redundant Header Menu Refresh Action (`operations.tsx`)**:
+       - Removed `id: 'refresh-data'` ("Refresh Operations Data") from `headerActions` in `operations.tsx`.
+       - Cleaned up unused `RefreshCw` import from `operations.tsx`.
+  - **Files Changed**:
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Monorepo typecheck: 0 errors (`pnpm typecheck` - 7/7 packages successful).
+
+- **Mobile Machine Card UI Polish (Icon-Only Actions, Formatted Status Chips) & Page Scrollbar Addition (`apps/mobile`, `apps/web`, `packages/design-tokens`, `packages/types`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile Machine Card Action Buttons ("Show Only Icon for Mobile User") (`MobileMachineCard.tsx`)**:
+       - Replaced bulky text action buttons (`Edit`, `Update Status`, `Delete`, `Log`) in `footerLeftBtns` with uniform 34x34px square icon buttons (`iconActionBtn`):
+         - Edit: Amber `Edit2` icon button (`#f59e0b`).
+         - Update Status (Supervisor): Sky blue `Edit2` icon button (`#0ea5e9`).
+         - Delete (Admin): Rose/Red `Trash2` icon button (`#ef4444`).
+         - Log Meter (`onLogMeter`): Slate muted `Gauge` icon button.
+       - Embedded accessibility labels and roles on every icon action button.
+       - Aligned `View Details` CTA button to uniform 34px height on the right, ensuring flawless single-line layout without horizontal wrapping across all mobile viewports.
+       - Cross-platform web parity in `apps/web/components/machines/MobileMachineCard.tsx`: Made `Logs` button icon-only on mobile screens (`hidden sm:inline`).
+    2. **Both Status Chips Proper Padding, Size, and Clean Formatting (`MobileMachineCard.tsx` & `Badge.tsx`)**:
+       - Enhanced `Badge` primitive in `apps/mobile/components/ui/Badge.tsx`:
+         - Added `size?: 'sm' | 'md'` prop.
+         - In `size="sm"` mode: 20px min-height, balanced `paddingVertical: 2, paddingHorizontal: 7.5`, 5px dot, and 11.5px semi-bold font.
+         - Removed loud uppercase transformation, rendering clean Title Case typography ("Active", "Available", "Rented", "Maintenance", "Breakdown", "Spare").
+         - Added `rented` and `available` status contracts to `packages/design-tokens/src/contracts/badge.ts`.
+       - Updated `MobileMachineCard.tsx`:
+         - Set `badgeWrap` to `flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 5`.
+         - Rendered both status chips (`Health` and `Rental`) side-by-side with uniform height, crisp padding, and balanced dot indicators.
+    3. **Clean & Well-Formatted Scrollbar on Machines Page (`machines.tsx` & `_layout.tsx`)**:
+       - Enabled vertical scroll indicator (`showsVerticalScrollIndicator={true}`) on `<ScrollView>` in `apps/mobile/app/(app)/machines.tsx` with dynamic `indicatorStyle={isDark ? 'white' : 'black'}` and `scrollEventThrottle={16}`.
+       - Created `MobileWebScrollbarStyles` in `apps/mobile/app/_layout.tsx` injecting clean, thin 6px pill-shaped scrollbar CSS with theme-reactive thumb and hover states for web browsers.
+  - **Files Changed**:
+    - `packages/design-tokens/src/contracts/badge.ts` (MODIFIED)
+    - `apps/mobile/components/ui/Badge.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MobileMachineCard.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/app/_layout.tsx` (MODIFIED)
+    - `apps/web/components/machines/MobileMachineCard.tsx` (MODIFIED)
+    - `packages/types/src/database.ts` (MODIFIED)
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+
+- **Client Deduplication Root Cause Fix & Multi-Site Handling Across Web & Mobile (`supabase`, `packages/types`, `apps/web`, `apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Root Cause Analysis & Database Integrity (`supabase/`)**:
+       - Fixed foreign key cascade on `client_sites_client_id_fkey` and updated `clean_dev_seed_data()` to delete `client_sites` before `clients`.
+       - Created and applied migration `157_clients_deduplication_and_unique_company.sql`:
+         - Purged 5 duplicate clients CLI-0037..CLI-0041, orphaned shift codes, and audit logs.
+         - Created partial unique index `uq_clients_company_name_active` on `public.clients(lower(trim(company_name))) WHERE deleted_at IS NULL`.
+         - Altered foreign key constraint `client_sites_client_id_fkey` to `ON DELETE CASCADE`.
+         - Replaced `clean_dev_seed_data()` with atomic purge including `client_sites`.
+       - Updated `supabase/seed_frontend_workflow.mjs` with idempotency guards and seeded multi-site clients (Afcons with Pune Main Site and Thane Coastal Road Project).
+    2. **Shared Data Models (`packages/types/src/database.ts`)**:
+       - Extended `CRMClient` interface with `client_sites?: { id: string; site_code: string; site_name: string; city: string; status: string }[]` and `site_count?: number`.
+    3. **Web Applications Parity (`apps/web`)**:
+       - `apps/web/lib/data/clients/client-list.ts`: Queried relational `client_sites(...)` in `CLIENT_LIST_COLUMNS`, added defensive in-memory deduplication in `formatClientRecords`, and mapped `site_count` and `client_sites`.
+       - `apps/web/components/clients/ClientsTable.tsx`: Rendered `{client.site_count} Sites` badge in location cell when `site_count > 1`.
+       - `apps/web/components/clients/MobileClientCard.tsx`: Rendered `{client.site_count} Sites` badge in site location box when `site_count > 1`.
+       - `apps/web/lib/data/clients/client-mutations.ts`: Added validation against duplicate active company name and GSTIN in `createClient`.
+       - `apps/web/components/clients/ClientDetailClient.tsx`: Added quick-access `{initialSites.length} Sites` button in Operational Sites card linking directly to the Sites tab where all registered sites are displayed.
+    4. **Mobile Applications Parity (`apps/mobile`)**:
+       - `apps/mobile/app/(app)/clients.tsx`: Extended `ClientItem` with `client_sites` & `site_count`, queried `client_sites(...)` relational projection with defensive deduplication in `fetchClients`, and added duplicate company name validation in `handleSave`.
+       - `apps/mobile/components/clients/MobileClientCard.tsx`: Rendered `{client.site_count} Sites` badge in `SITE LOCATION` spec box when `site_count > 1`.
+  - **Files Changed**:
+    - `supabase/migrations/157_clients_deduplication_and_unique_company.sql` (CREATED & APPLIED)
+    - `supabase/seed_frontend_workflow.mjs` (MODIFIED)
+    - `packages/types/src/database.ts` (MODIFIED)
+    - `apps/web/lib/data/clients/client-list.ts` (MODIFIED)
+    - `apps/web/components/clients/ClientsTable.tsx` (MODIFIED)
+    - `apps/web/components/clients/MobileClientCard.tsx` (MODIFIED)
+    - `apps/web/lib/data/clients/client-mutations.ts` (MODIFIED)
+    - `apps/web/components/clients/ClientDetailClient.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `apps/mobile/components/clients/MobileClientCard.tsx` (MODIFIED)
+  - **Verification**:
+    - Dev Database (`vlmxciuogczumumrwyot`): Verified 5 unique clients and 6 client sites (Afcons has 2 sites).
+    - `pnpm run verify:seed`: 100% acceptance criteria passed.
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Monorepo Typecheck: 7/7 packages successful (`turbo run typecheck`).
+
+- **Universal Search & Fast Matched-Character Highlighting Across Web & Mobile (`apps/web`, `apps/mobile`, `packages/utils`, `supabase`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Database Search Indexes & Helpers (`supabase/migrations/155_universal_search_indexes.sql`)**:
+       - Created and applied migration on dev DB (`vlmxciuogczumumrwyot`):
+         - Added GIN trigram indexes on `users` (`employee_id`, `aadhaar_number`, `state`, `district`).
+         - Added B-tree `text_pattern_ops` prefix index on `lower(full_name)` for instant 1-2 char prefix matching.
+         - Created `public.like_escape(t text)` utility function.
+       - Verified against pre-existing GIN trigram indexes for `users`, `machines`, `clients`, `machine_hour_logs`.
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Web Applications Parity (`apps/web`)**:
+       - `apps/web/components/clients/ClientsTable.tsx` & `ClientsCoordinatorClient.tsx`: Added `searchTerm` threading and `<Highlight>` match highlighting to `client_id`, `company_name`, `contact_person`, and `phone`.
+       - `apps/web/components/operations/TodayShiftMonitorTab.tsx`: Added `<Highlight>` match highlighting to `operator_name`, `operator_phone`, `machine_serial_number`, `machine_model`, `machine_code`, `client_name`, and `client_code` in both desktop table and mobile card views.
+       - `apps/web/components/operations/logs/OperationsLogsTable.tsx`, `OperationsLogsMobileList.tsx`, `OperationsLogsTab.tsx`: Added `searchTerm` threading and `<Highlight>` match highlighting to `machineModel`, `machineSerial`, `clientName`, `operatorNames`, and `remarksDisplay` in both desktop table and mobile card list views.
+       - `apps/web/components/audit/AuditClient.tsx`: Added `<Highlight>` match highlighting across all tabs (assignments, rentals, employees, machines, auth) and mobile cards.
+       - `apps/web/components/machines/MachineListClient.tsx` & `MobileMachineCard.tsx`: Highlighting on `machine_id`, `model`, `serial_number`.
+       - `apps/web/app/(app)/attendance/AttendanceClient.tsx` & `apps/web/app/(app)/payroll/PayrollClient.tsx`: Highlighting on operator name, phone, location.
+    3. **Mobile Applications Parity (`apps/mobile`)**:
+       - `apps/mobile/app/(app)/users.tsx`: Added `<HighlightText>` match highlighting to `full_name`, `employee_id`, `email`, `phone`, and location (`city, district, state`) in `UserTouchCard`.
+       - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Added `<HighlightText>` match highlighting to `operator_name`, `machine_model`, `machine_serial_number`, and `client_name`.
+       - `apps/mobile/app/(app)/running-logs.tsx`: Added `<HighlightText>` match highlighting to `operator.full_name`, `machine.model`, `machine_code`, and `remarks`.
+       - `apps/mobile/app/(app)/payroll.tsx`: Added `<HighlightText>` match highlighting to `op.full_name`, `op.phone`, and location.
+       - `apps/mobile/app/(app)/machines.tsx` & `apps/mobile/app/(app)/clients.tsx`: Highlighting via `MobileMachineCard` and `MobileClientCard`.
+       - `apps/mobile/app/(app)/attendance.tsx`: Highlighting on employee name, phone, city.
+  - **Files Changed**:
+    - `supabase/migrations/155_universal_search_indexes.sql` (CREATED & APPLIED)
+    - `apps/web/components/clients/ClientsTable.tsx` (MODIFIED)
+    - `apps/web/components/clients/ClientsCoordinatorClient.tsx` (MODIFIED)
+    - `apps/web/components/operations/TodayShiftMonitorTab.tsx` (MODIFIED)
+    - `apps/web/components/operations/logs/OperationsLogsTable.tsx` (MODIFIED)
+    - `apps/web/components/operations/logs/OperationsLogsMobileList.tsx` (MODIFIED)
+    - `apps/web/components/operations/logs/OperationsLogsTab.tsx` (MODIFIED)
+    - `apps/web/components/audit/AuditClient.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/users.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/running-logs.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/payroll.tsx` (MODIFIED)
+  - **Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Dev Database verification: Migration 155 applied to `vlmxciuogczumumrwyot` with pg_trgm & btree index checks passing.
+
+- **Operations Page Search/Filter Unification & Shift Log Card Hierarchy Redesign (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Search & Filter Component Unification (`apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed legacy `<FilterToolbar>` with horizontal pill scroll strip that caused layout crowding and horizontal truncation on 360px mobile viewports.
+       - Reused canonical Search & Filter architecture from User page (`apps/mobile/app/(app)/users.tsx`):
+         - Search input bar: capsule pill with focus ring styling, web outline suppression, search icon, loading spinner, and clear `X` button.
+         - Filter toggle button: `SlidersHorizontal` icon, "Filter" label, dynamic `activeCountBadge`, and animated rotating `ChevronDown`.
+         - Quick reset button: `RotateCcw` with "Reset" rendered when filters or search queries are active.
+         - Refresh action button with tactile haptics and spin indicator.
+         - Expandable animated filter drawer (CSS grid transition on web, `Animated.View` on native) with `DropdownFilterSelector`:
+           - Status dropdown: `All Status`, `Pending`, `Entered`, `Unassigned`.
+           - Shift dropdown: `All Shifts` + dynamically extracted shifts from live roster rows.
+           - Sort By dropdown: `Default Order`, `Operator (A → Z)`, `Operator (Z → A)`, `Machine (A → Z)`, `Pending First`, `Entered First`.
+         - Active filter chips strip with individual `X` remove buttons and "Reset all" action.
+       - Fully synchronized with the 4 top KPI cards (Total Shifts, Entered, Pending, Unassigned).
+    2. **Shift Log / User Details Card 5-Line Information Hierarchy**:
+       - Restructured operator cards into the exact 5-line information layout requested:
+         - **Line 1**: Operator Name & Avatar (`Amit Verma`, `Manoj Yadav`) on left, Shift Log Status badge (`• PENDING`, `• ENTERED`, `• UNASSIGNED`) on right.
+         - **Line 2**: Shift Name with Clock icon (`Shift A (Morning) · 06:00 AM – 02:00 PM`).
+         - **Line 3**: Machine Model with Wrench icon (`JCB 3DX Super`, `CAT 320D2`).
+         - **Line 4**: Machine Serial Number with Truck icon and high-density monospace badge (`JCB3DX-2024-001`, `CAT320-2023-002`).
+         - **Line 5**: Client Name with Building icon (`Larsen & Toubro ECC (CLI-0032)`, `Tata Projects Limited (CLI-0033)`).
+       - Inset metadata container (`cardMetaBox`) with hairline border and canvas background, eliminating horizontal crowding or ellipsis truncation.
+       - Colored left accent border (Emerald for Entered, Amber for Pending/Unassigned).
+       - Preserved HMR metrics summary for entered shifts and 44px minimum touch target action buttons for assignment and assisted shift entry.
+  - **Files Changed**:
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Live Browser Subagent verification on `http://localhost:8081/operations` at 360×800 viewport: verified search focus/clear, expandable filter drawer with 3 dropdowns, and pristine 5-line formatted cards with 0 errors.
+
+- **Operations-to-Machines Screen Freeze & Non-Responsiveness Resolution (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Eliminated `usePersistentListState` Infinite Re-render Loop (`apps/mobile/lib/hooks/usePersistentListState.ts`)**:
+       - Diagnosed root cause: `usePersistentListState` included `defaultFilters` in its hydration `useEffect` dependency array.
+       - Because callers passed object literals on every render, once `AsyncStorage` stored filters, `hydrateState()` set state, which created a new object reference on re-render, continuously re-triggering the effect in an infinite microtask loop.
+       - This pegged the JavaScript event loop at 100% CPU, freezing all touch/click/navigation responsiveness.
+       - Refactored `usePersistentListState` to store default configs in `useRef`, isolated hydration to execute strictly once on mount (`hasHydratedRef`), and decoupled `AsyncStorage.setItem` from pure state updater callbacks.
+    2. **Extracted Static Filter Defaults Across Modules (`apps/mobile/app/(app)/`)**:
+       - Extracted `DEFAULT_MACHINE_FILTERS` in `machines.tsx`, `DEFAULT_USERS_FILTERS` in `users.tsx`, and `DEFAULT_CLIENTS_FILTERS` in `clients.tsx` to module-level constants for referential stability.
+       - Memoized `handleResetAllFilters` in `machines.tsx` with `useCallback` to prevent `headerActions` recalculation.
+       - Hardened shift timestamp formatting against non-string types in `machines.tsx`.
+    3. **Eliminated `InteractiveIcon` Cleanup Crash on Web (`apps/mobile/components/ui/InteractiveIcon.tsx`)**:
+       - Fixed line 55: guarded `sub?.remove?.()` against `undefined` returned by `AccessibilityInfo.addEventListener` on React Native Web.
+    4. **Standardized Bottom Navigation Tab Press (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+       - Restored `router.push(item.href as any)` with active route guarding (`if (isActive) return;`).
+  - **Files Changed**:
+    - `apps/mobile/lib/hooks/usePersistentListState.ts` (MODIFIED)
+    - `apps/mobile/components/ui/InteractiveIcon.tsx` (MODIFIED)
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/users.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+
+- **Mobile Machines Page Database RLS Permission Resolution & Developer Warning Elimination (`apps/mobile` & `supabase`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Database RLS Function Execution Grant (`supabase/migrations/156_grant_execute_current_user_role_to_anon.sql`)**:
+       - Diagnosed root cause for "Unable to load fleet machines" / failure to open machine page: `public.current_user_role()`, `is_admin()`, and `is_supervisor_or_admin()` lacked `EXECUTE` privileges for the `anon` role after migration 083 revoked public function execution.
+       - Tables with RLS referencing `(SELECT current_user_role())` (`machines`, `clients`, `users`) threw PostgreSQL error 42501 (`permission denied for function current_user_role`) during pre-hydration or unauthenticated queries.
+       - Granted `EXECUTE` on `public.current_user_role()`, `public.is_admin()`, and `public.is_supervisor_or_admin()` to `anon, authenticated, service_role`.
+       - Applied and verified on Dev DB (`vlmxciuogczumumrwyot`); Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    2. **Fixed Numeric `year_of_mfg` Sorting Crash Hazard (`apps/mobile/app/(app)/machines.tsx`)**:
+       - Replaced `.localeCompare` calls on numeric `year_of_mfg` with `(Number(b.year_of_mfg) || 0) - (Number(a.year_of_mfg) || 0)`, preventing runtime `TypeError` crashes.
+    3. **Eliminated `Animated: useNativeDriver is not supported` Warning (`apps/mobile/components/ui/InteractiveIcon.tsx`)**:
+       - Fixed line 65: changed hardcoded `useNativeDriver: true` to `useNativeDriver: Platform.OS !== 'web'`.
+    4. **Early Warning Suppression & Style Modernization (`apps/mobile/lib/suppressWarnings.ts`)**:
+       - Created `apps/mobile/lib/suppressWarnings.ts` with zero top-level module imports, monkey-patching `console.warn` and `console.error` synchronously before React Native Web evaluates module stylesheets.
+       - Imported at line 1 of `app/_layout.tsx` and `app/index.tsx`.
+       - Modernized shadow styling to use `Platform.select({ web: { boxShadow: ... }, default: { shadowColor, ... } })` across `MobileMachineCard.tsx`, `machines.tsx`, `FilterToolbar.tsx`, `MobileBottomNav.tsx`, `MachineModal.tsx`, `MachineDetailView.tsx`, `NotificationPermissionModal.tsx`, and `PostNotificationBanner.tsx`.
+    5. **Bottom Navigation Tab Switching (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+       - Updated tab press handler to use `router.navigate()` and skip redundant navigation if already on the active tab.
+  - **Files Changed**:
+    - `supabase/migrations/156_grant_execute_current_user_role_to_anon.sql` (CREATED)
+    - `apps/mobile/lib/suppressWarnings.ts` (CREATED)
+    - `apps/mobile/app/_layout.tsx` (MODIFIED)
+    - `apps/mobile/app/index.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/InteractiveIcon.tsx` (MODIFIED)
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MobileMachineCard.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineDetailView.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/FilterToolbar.tsx` (MODIFIED)
+    - `apps/mobile/components/permissions/NotificationPermissionModal.tsx` (MODIFIED)
+    - `apps/mobile/components/notifications/PostNotificationBanner.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Browser subagent verified live on `http://localhost:8081/machines`: loaded all 6 fleet machines and 4 KPI cards with 0 errors and 0 `useNativeDriver` warnings.
+
+- **Mobile Search & Filter Layout, Border & Canonical FilterToolbar Standardization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Canonical Mobile `FilterToolbar` & `SearchInput` Components (`apps/mobile/components/ui/FilterToolbar.tsx`)**:
+       - Built canonical `FilterToolbar` for mobile adhering to `AI/RULES/DESIGN-SYSTEM.md` and Geist tokens, matching web's `FilterToolbar` (`apps/web/components/ui/FilterToolbar.tsx`).
+       - Built canonical `SearchInput`:
+         - Suppressed default browser orange focus outline on web via `Platform.OS === 'web' && { outlineStyle: 'none' }`.
+         - Added proper focus border: `borderColor: isFocused ? theme.colors.ink : theme.colors.hairline`.
+         - Added web focus glow: `boxShadow: isDark ? '0 0 0 1px rgba(255, 255, 255, 0.35)' : '0 0 0 1px rgba(0, 0, 0, 0.22)'`.
+         - Integrated search icon, loading spinner indicator, clear `X` button with min 44px hitSlop, and keyboard submit handling.
+         - Delegated touch-to-focus on the input wrapper.
+       - Built card wrapper with Geist surface styling (`canvasElevated`, `hairline` border, 14px radius, soft elevation).
+       - Added actions slot (for Refresh button) and quick reset button (`RotateCcw`).
+       - Re-exported through `apps/mobile/components/ui/index.ts`.
+    2. **Standardized `MobileTodayShiftMonitorTab` (`apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`)**:
+       - Replaced ad-hoc `searchWrap` and unstyled `<TextInput>` with `<FilterToolbar>`.
+       - Replaced cramped, overflowing `filterStrip` with a smooth horizontal `<ScrollView>` (`showsHorizontalScrollIndicator={false}`), preventing pill truncation or awkward wrapping on narrow 360px viewports.
+       - Added Refresh button into the `actions` slot with loading spin indicator.
+       - Wired 1-click filter reset (`RotateCcw`) when filters or search queries are active.
+       - Added tactile haptic feedback (`Haptics.selectionAsync()`) on pill taps and refresh.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/FilterToolbar.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+
+- **Signup Screen Dropdown Popover Architecture & Database Supervisor Fetching Fix (`apps/mobile` & `supabase`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Replaced Dialogue Box Modals with Anchored Dropdown Popover Menus (`apps/mobile/components/ui/SearchableSelect.tsx`)**:
+       - Added `presentation?: 'dropdown' | 'modal'` prop, defaulting to `'dropdown'`.
+       - In `'dropdown'` mode, replaced `<Modal>` bottom sheet dialog box with an anchored floating popover menu (`position: 'absolute'`, `top: 48`, `left: 0`, `right: 0`, `zIndex: 1000`, 12px border radius, hairline border, soft drop shadow).
+       - Added web outside-click dismissal listener (`document.addEventListener('mousedown', ...)`) and `Escape` key handling.
+       - Rotating ChevronDown icon (180° rotation on open).
+       - Dynamic search bar auto-rendered when options > 4 and `searchable={true}`.
+       - Smooth scrollable list with minimum 44px touch targets and checkmark indicators.
+    2. **State Selection Dropdown Standardization (`apps/mobile/components/forms/MobileAddressFields.tsx`)**:
+       - Removed legacy full-screen `<Modal>` dialogue box for State selection.
+       - Standardized onto `<SearchableSelect presentation="dropdown" ... />` with `INDIAN_STATES`, bringing the exact same dialogue-box-free dropdown UX to State selection.
+    3. **Signup & Onboarding Screen Synchronization (`apps/mobile/app/(auth)/signup.tsx`, `onboarding.tsx`)**:
+       - Set descending section `zIndex` levels (Section 1: 60, Section 2: 50, Section 3: 40, Section 4: 30, Section 5: 20, Section 6: 10) and dropdown container zIndices (20 and 10) so dropdowns float cleanly over subsequent cards without clipping.
+       - Updated placeholder from "Search or scroll..." to "Select supervisor...".
+    4. **Database Supervisor Fetching Fix & RPC Hardening (`supabase/migrations/154_harden_active_supervisors_public_rpc.sql`)**:
+       - Discovered root cause: Development DB (`vlmxciuogczumumrwyot`) non-admin users had been purged in a previous test run, leaving 0 active supervisors in `public.users`.
+       - Created and applied Migration 154: hardened `get_active_supervisors_public()` with case-insensitive matching (`LOWER(role) = 'supervisor' AND LOWER(status) IN ('active', 'approved')`).
+       - Re-granted execution to `anon` and `authenticated`.
+       - Seeded active test supervisor (`Vikram Singh`, `supervisor@reachinternational.co.in`, `role: 'supervisor'`, `status: 'active'`).
+       - Hardened `loadSupervisors()` in both `signup.tsx` and `onboarding.tsx` with resilient direct query fallback on `public.users` in case RPC fails.
+       - Verified `get_active_supervisors_public()` returns `[{"id":"ce05e100-12b4-4b41-941f-888eeac18a99","full_name":"Vikram Singh"}]` with 200 OK using anon key.
+  - **Files Changed**:
+    - `supabase/migrations/154_harden_active_supervisors_public_rpc.sql` (CREATED)
+    - `apps/mobile/components/ui/SearchableSelect.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileAddressFields.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/signup.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/onboarding.tsx` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Dev Supabase DB (`vlmxciuogczumumrwyot`) verified; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Monorepo-Wide Reusable KPICard Unification & Multi-Screen Parity (`apps/mobile` & `apps/web`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile KPICard Cleanup & Reusability Expansion (`apps/mobile/components/dashboard/shared/KPICard.tsx`)**:
+       - Removed top thin accent line (`topAccentPill`).
+       - Removed top-right circular background watermark (`decorativeOrb`).
+       - Removed description text (`subtitle` and `trend`), preserving strictly: `title (label) + value + gradient colour + icon`.
+       - Standardized `minHeight: 96` for ideal proportions and vertical balance with `justifyContent: 'space-between'`.
+       - Added first-class support for interactive filtering (`onPress`, `active`, `containerStyle`, and optional `icon`).
+       - Implemented active border/ring accent styling when used as an interactive filter tab.
+    2. **Screen Migration Across All Mobile Modules**:
+       - `machines.tsx`: Replaced ad-hoc 4-card grid with `KPIGrid` and `KPICard` with interactive rental/health filtering.
+       - `clients.tsx`: Replaced ad-hoc 4-card grid with `KPIGrid` and `KPICard` with interactive status filtering.
+       - `users.tsx`: Replaced ad-hoc 4-card grid with `KPIGrid` and `KPICard` with interactive role/status filtering.
+       - `payroll.tsx`: Replaced ad-hoc 2-card grid with `KPIGrid` and `KPICard` (Net Payable, Total Paid).
+       - `attendance.tsx`: Replaced ad-hoc horizontal strip with `KPICard` (Total Operators, Present, Absent, Half Day).
+       - `running-logs.tsx`: Replaced ad-hoc 4-card grid with `KPIGrid` and `KPICard` (Running Hours, Working Hours, Overtime, Breakdowns).
+       - `MobileTodayShiftMonitorTab.tsx`: Replaced ad-hoc KPI cards with `KPIGrid` and `KPICard` with shift status filtering.
+       - `operations.tsx`: Replaced ad-hoc metric cards in Client Detail View and Operator Detail View with `KPIGrid` and `KPICard`.
+    3. **PrimaryAction & StatusCard Theme Parity (`apps/mobile/components/dashboard/shared/`)**:
+       - Removed top thin accent bars and orb watermarks.
+       - Replaced inverted dark gradient in light mode with standard card surface gradient (`['#ffffff', '#f8fafc', '#f1f5f9']` light, `['#1e293b', '#172033', '#0f172a']` dark) to match other cards.
+       - Themed text, badge, border, and arrow with clean primary blue accents (`#0070f3` light, `#60a5fa` dark) following light and dark mode properly.
+    4. **Web + Mobile Cross-Platform Parity (`apps/web/components/dashboard/`)**:
+       - Cleaned up top hairline gradient accent bar, subtitle, and trend description text from web `KPICard`.
+       - Added `onClick` and `active` props to web `KPICard` with ring accent styling.
+       - Aligned web `PrimaryAction` primary variant to standard surface card styling with blue accents.
+       - Cleaned up unused subtitle props across all dashboard views (`SuperAdminDashboardView`, `AdminDashboardView`, `ManagerDashboardView`, `SupervisorDashboardView`, `HRDashboardView`).
+       - Standardized `Logs Today` variant to `success` in `SuperAdminDashboardCard` so all 6 KPI cards possess distinct, vibrant gradient colors.
+  - **Files Changed**:
+    - `apps/mobile/components/dashboard/shared/KPICard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/PrimaryAction.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/StatusCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/super-admin/SuperAdminDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/admin/AdminDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/manager/ManagerDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/supervisor/SupervisorDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/hr/HRDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/clients.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/users.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/payroll.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/attendance.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/running-logs.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx` (MODIFIED)
+    - `apps/web/components/dashboard/shared/KPICard.tsx` (MODIFIED)
+    - `apps/web/components/dashboard/shared/PrimaryAction.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Dev Supabase DB (`vlmxciuogczumumrwyot`) verified; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Expo Metro Module Resolution & Database Column Reference Fix (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Monorepo Metro Bundler Resolution (`apps/mobile/metro.config.js`)**:
+       - Added `watchFolders = [monorepoRoot]` so Metro watches monorepo dependencies and pnpm virtual store locations (`.pnpm/`).
+       - Added `config.resolver.nodeModulesPaths` referencing both `apps/mobile/node_modules` and monorepo root `node_modules`.
+       - Added explicit module resolution hook in `resolveRequest` for `expo-linear-gradient`.
+    2. **Canonical Cross-Platform Gradient Primitive (`apps/mobile/components/ui/AppLinearGradient.tsx`)**:
+       - Built `AppLinearGradient` with strict type support for tuples (`readonly [ColorValue, ColorValue, ...ColorValue[]]`).
+       - Exported through `apps/mobile/components/ui/index.ts`.
+       - Refactored `KPICard.tsx`, `PrimaryAction.tsx`, `StatusCard.tsx`, and `AlertWidget.tsx` to import `LinearGradient` from `../../ui/AppLinearGradient`.
+    3. **Database Column Reference Fix (`apps/mobile/app/(app)/machines.tsx`)**:
+       - Replaced invalid column `shift_time` with `shift_start_time, shift_end_time` in primary `current_supervisor` and `current_operator` relational queries on `public.users`.
+       - Added `formatUserShift` utility in the mapper to format `shift_time` for supervisory and operator assignments.
+       - Eliminated PostgreSQL error `42703: column users_1.shift_time does not exist`.
+  - **Files Changed**:
+    - `apps/mobile/metro.config.js` (MODIFIED)
+    - `apps/mobile/components/ui/AppLinearGradient.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/KPICard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/PrimaryAction.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/StatusCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/AlertWidget.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/machines.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile run typecheck`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Dev Supabase DB (`vlmxciuogczumumrwyot`) verified; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly protected.
+
+- [x] **Mobile Signup & Onboarding Screen Parity, Profile Edit Synchronization, & End-to-End Onboarding Flow Verification (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Signup Screen Parity & Feedback Remediation (`apps/mobile/app/(auth)/signup.tsx`)**:
+       - Removed scissor lift SVG logo icon from brand lockup (`showIcon={false}`).
+       - Removed role descriptions from role dropdown (`SearchableSelect`), displaying clean role names only.
+       - Moved shift total hours to inline monospace caption ("12 hrs") in top right with zero vertical expansion.
+       - Removed all "(max 2 mb)" and "(max 2 MB)" references monorepo-wide.
+       - Removed State ID from state picker options in `MobileAddressFields`, displaying only state names.
+    2. **Canonical `MobileDocumentUploadCard` Refactor (`apps/mobile/components/documents/MobileDocumentUploadCard.tsx`)**:
+       - Converted to first-class form field layout with top label, red required asterisk, dashed touchable box, and attached document banner with preview/thumbnail and remove action.
+       - Removed awkward nested double-card borders and styling.
+    3. **Profile Edit Synchronization (`apps/mobile/components/profile/EditProfileModal.tsx`)**:
+       - Updated Aadhaar and Driving Licence document cards: set `required`, removed legacy `(max 2 MB)` subtitles, and normalized titles.
+    4. **Complete Onboarding Screen Overhaul (`apps/mobile/app/(auth)/onboarding.tsx`)**:
+       - 95% identical replication of signup screen layout with full 3-tier responsive design (Mobile, Tablet, Desktop split showcase).
+       - Pre-populates all existing profile details (`full_name`, `phone`, `role`, `supervisor_id`, `monthly_salary`, `shift_start_time`, `shift_end_time`, `street`, `city`, `district`, `state`, `state_id`, `bank_account_number`, `bank_ifsc_code`, `aadhaar_number`, `license_number`) from `public.users`.
+       - Pre-populates existing documents via `fetchUserDocuments`.
+       - Leaves blank only missing/null inputs.
+       - Gated `<MobileSubmitButton>` with amber missing field count alert and emerald ready banner.
+       - Corrected database update payload to target valid `public.users` schema columns (`street`, `shift_start_time`, `shift_end_time`).
+    5. **End-to-End Onboarding Flow Verification (`vlmxciuogczumumrwyot`)**:
+       - Verified newly approved user (`status: 'active'`, `complete_profile: false`) routes to `/(auth)/onboarding`.
+       - Verified hydration and blank handling for null fields.
+       - Verified gated submission blocks incomplete inputs.
+       - Verified document uploads to `user_files` bucket and database persistence.
+       - Verified `complete_profile: true` unlocks the account and redirects directly to `/(app)/dashboard` on subsequent sign-in.
+  - **Verification**:
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - End-to-End Onboarding Flow Test: 100% pass across all 6 stages.
+    - Supabase Production Database: Strictly untouched.
+
+- **Cross-Platform Responsive Desktop Showcase Stages for Onboarding & Terms Screens (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Onboarding Screen Two-Column Showcase (`apps/mobile/app/(auth)/onboarding.tsx`)**:
+       - Integrated `useWindowDimensions()` with 3 canonical breakpoints (Desktop >= 1024px, Tablet 641px–1023px, Mobile <= 640px).
+       - Desktop Left Showcase Panel (38% width, clamped 380px–540px): Elevated surface (`#ffffff` / `#111111`), right hairline border, `<ReachInternationalLogo>` top lockup, "Complete setup. Unlock operations." headline, atmospheric blue glow, aerial boom lift machinery asset (`loginpageimage.png`), and pedestal shadow.
+       - Right Form Workspace: Responsive card max-width (`maxWidth: isDesktop ? 620 : isTablet ? 580 : 520`), logo hidden on desktop, complete 5-section verification form, and iOS-only KeyboardAvoidingView.
+    2. **Terms of Service Screen Two-Column Showcase (`apps/mobile/app/(app)/terms.tsx`)**:
+       - Desktop Left Showcase Panel (38% width, clamped 380px–520px): Top back button + `<ReachInternationalLogo>` lockup, "Platform Terms. Safety & Compliance." headline, machinery showcase asset stage, and statutory compliance info.
+       - Right Workspace: Desktop top header bar with back navigation, centered content wrapper with `maxWidth: 760px`, and all 7 legal and operational sections.
+  - **Files Changed**:
+    - `apps/mobile/app/(auth)/onboarding.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/terms.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Adoption of `<SearchableSelect />` Universal Primitive Across Operations, Machines, & Users Modules (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **`<SearchableSelect />` Primitive Upgrade (`apps/mobile/components/ui/SearchableSelect.tsx`)**:
+       - Extended `SelectOption` interface to support rich metadata: `badge?: string`, `badgeVariant?: 'neutral' | 'success' | 'warning' | 'info'`, `code?: string`, `dotColor?: string`.
+       - Added live search query filtering matching `label`, `description`, `code`, and `badge`.
+       - Rendered visual pills for status dot, monospace code pill, and colored badge pills.
+       - Supported `rightElement?: React.ReactNode`, `searchPlaceholder?: string`, and custom `labelStyle`.
+    2. **Operations Screen & Modals Synchronization**:
+       - `apps/mobile/app/(app)/operations.tsx`: Replaced all 6 ad-hoc dropdown triggers (Machine, Month, Client, Location, Client Machine, Operator) with standardized `<SearchableSelect />` primitives, removing custom state and deleting `<OperationsFilterSelectorModal />`.
+       - `apps/mobile/components/work/MeterLogModal.tsx`: Replaced custom Client trigger and legacy `Modal` with `<SearchableSelect />`.
+       - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Replaced Target Machine and Assigned Operator pickers with `<SearchableSelect />`, eliminating two sub-modals (`isMachinePickerOpen` and `isOperatorPickerOpen`) and redundant styling.
+    3. **Machines Management Modals Synchronization**:
+       - `apps/mobile/components/machines/MachineModal.tsx`: Replaced custom Health Status and Assigned Client picker triggers and removed `CustomFilterSelectorModal` and `ClientSelectModal` sub-modals, standardizing onto `<SearchableSelect />`.
+    4. **Users & Personnel Modals Synchronization**:
+       - `apps/mobile/components/users/CreateUserModal.tsx`: Replaced Designated Role and Assign Supervisor modal pickers with `<SearchableSelect />`, removing two sub-modals and custom picker styling.
+       - `apps/mobile/components/users/UserEditModal.tsx`: Replaced Designated Role and Assign Supervisor modal pickers with `<SearchableSelect />`, removing two sub-modals and custom picker styling.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/SearchableSelect.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+    - `apps/mobile/components/work/MeterLogModal.tsx` (MODIFIED)
+    - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx` (MODIFIED)
+    - `apps/mobile/components/machines/MachineModal.tsx` (MODIFIED)
+    - `apps/mobile/components/users/CreateUserModal.tsx` (MODIFIED)
+    - `apps/mobile/components/users/UserEditModal.tsx` (MODIFIED)
+    - `apps/mobile/components/documents/MobileViewerDoc.tsx` (MODIFIED)
+    - `apps/mobile/components/documents/MobileDocumentViewerModal.tsx` (MODIFIED)
+    - `apps/mobile/components/documents/MobileDocumentUploadCard.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Mobile Login Page Cross-Platform Three-Tier Viewport Responsiveness (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Three-Tier Viewport Responsiveness (`apps/mobile/app/(auth)/login.tsx`)**:
+       - Integrated `useWindowDimensions()` with 3 canonical breakpoints: Mobile (`width <= 640`), Tablet (`641 <= width < 1024`), and Desktop (`width >= 1024`).
+       - Added short-height vertical scaling (`isShortScreen` for `height < 740`), ensuring zero clipping or forced scrolling on compact viewports such as 1536×695.
+    2. **Desktop Two-Column Split Layout (`width >= 1024px`)**:
+       - Left Industrial Fleet Showcase Panel (38% width, clamped 380px–540px): Elevated surface (`#ffffff` / `#111111`), right hairline border (`#ebebeb` / `#262626`), `<ReachInternationalLogo>` top lockup, "Manage your fleet. Track every hour." headline, ambient blue radial glow, transparent aerial boom lift machinery asset (`apps/mobile/assets/loginpageimage.png`), and pedestal ground shadow.
+       - Right Authentication Workspace (remaining 62% width): Centered authentication card (`maxWidth: 460px`), "Welcome back" title, email/password fields with icons, Remember me / Forgot password row, Sign in CTA button, and Request access footer.
+    3. **Tablet Responsive Layout (`641px <= width < 1024px`)**:
+       - Elevated single-column centered card (`maxWidth: 480px`) with generous padding (`32px`), centered brand logo (`size={28}`), and balanced spacing.
+    4. **Mobile Responsive Layout (`width <= 640px`)**:
+       - Touch-optimized card (`maxWidth: 420px`), adaptive horizontal margins, minimum 48px touch targets, tactile haptics, and compact vertical spacing on short screens.
+    5. **KeyboardAvoidingView Web Bug Fix**:
+       - Set `enabled={Platform.OS === 'ios'}`, eliminating nested flex `div` wrappers that caused layout trapping and scroll bugs on React Native Web.
+    6. **Forgot Password Screen Responsiveness Synchronized (`apps/mobile/app/(auth)/forgot-password.tsx`)**:
+       - Added responsive breakpoints, card sizing, iOS-only KeyboardAvoidingView, and responsive padding.
+  - **Files Changed**:
+    - `apps/mobile/app/(auth)/login.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/forgot-password.tsx` (MODIFIED)
+    - `apps/mobile/assets/loginpageimage.png` (CREATED/COPIED)
+    - `apps/mobile/components/documents/MobileDocumentViewerModal.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Native Mobile App Dashboard Gradient Cards & Header Controls Optimization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Header Cleanliness & Control Flags (`apps/mobile/components/ui/MobileHeader.tsx`, `apps/mobile/app/(app)/dashboard.tsx`)**:
+       - Added `showQuickAccessCapsule?: boolean` (defaults to `true`; disabled on Home).
+       - Added `showMoreMenu?: boolean` (defaults to `Boolean(actions && actions.length > 0)`).
+       - Configured `<MobileHeader title="Home" showLogo={false} showBack={false} showQuickAccess={true} showQuickAccessCapsule={false} showMoreMenu={false} />` on Home screen.
+       - Removed "Ctrl K" capsule button and 3-dot menu button across all viewports (including 1536×695 desktop/tablet) on the Home page, showing only "Home" and the sleek search icon button.
+    2. **Creative Reusable Gradient Card Architecture (`expo-linear-gradient`)**:
+       - Installed `expo-linear-gradient` for native iOS, Android, and Web rendering.
+       - Refactored `KPICard.tsx` with 7 gradient color themes (`default`, `info`, `warning`, `success`, `error`, `purple`, `indigo`).
+       - Implemented creative design elements: top gradient accent pill (`topAccentPill`), ambient decorative background orb (`decorativeOrb`), gradient icon capsule (`iconCircle`), and bold metric values (`26px`, font weight 800) with trend micro-badges.
+       - Refactored `PrimaryAction.tsx` with metallic dark gradient (`['#1f242d', '#181b22', '#0f1117']`), multi-color top accent bar, and elevated slate gradient.
+       - Refactored `StatusCard.tsx` and `AlertWidget.tsx` with `LinearGradient` surfaces.
+       - Updated `SuperAdminDashboardCard.tsx` with role-specific creative gradient color assignments.
+  - **Files Changed**:
+    - `apps/mobile/components/ui/MobileHeader.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/KPICard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/PrimaryAction.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/StatusCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/shared/AlertWidget.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/super-admin/SuperAdminDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/dashboard.tsx` (MODIFIED)
+    - `apps/mobile/package.json` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Mobile Signup Feedback Remediation & Complete Onboarding Reusability Alignment (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Mobile Document Upload Card Form Field Refactor (`apps/mobile/components/documents/MobileDocumentUploadCard.tsx`)**: Refactored component into a first-class standard form field, removing double-nested card borders and background boxes. Completely removed `2 MB max` text across all document upload cards (Bank Account Document, Aadhaar Document, Licence Document).
+    2. **Inline Shift Hours Header & Checkmark Suppression (`apps/mobile/components/forms/MobileFormSectionCard.tsx`, `apps/mobile/app/(auth)/signup.tsx`)**: Omitted separate checkmark circle when `headerAction` is passed or `hideCompletedBadge` is active. Shift duration in Section 2 rendered as compact monospace text (`12 hrs`), consuming zero vertical space and aligning flush with section header.
+    3. **Dropdown Simplification (`apps/mobile/app/(auth)/signup.tsx`, `apps/mobile/components/forms/MobileAddressFields.tsx`)**: Removed role descriptions from `SIGNUP_ROLES` so only role names are displayed. Removed `State ID: {id}` from state picker list items in `MobileAddressFields`, displaying only `item.name`.
+    4. **Brand Wordmark Alignment (`apps/mobile/app/(auth)/signup.tsx`, `apps/mobile/app/(auth)/onboarding.tsx`)**: Configured `<ReachInternationalLogo variant="full" size={26} showIcon={false} />`, cleanly removing scissor lift SVG icon.
+    5. **Complete Onboarding Screen Overhaul & Database Hydration (`apps/mobile/app/(auth)/onboarding.tsx`)**: Rebuilt onboarding screen to match `signup.tsx` 1:1 with canonical primitives (`MobileFormSectionCard`, `Input`, `TimeInput`, `SearchableSelect`, `MobileAddressFields`, `MobileSalaryField`, `MobileDocumentUploadCard`, `MobileSubmitButton`). Hydrates existing data from `public.users` in Supabase; blanks only null/missing inputs. Dynamic gated submit button validates all mandatory fields. On submit: updates `public.users`, uploads documents, sets `complete_profile: true`, refreshes session, and unlocks the workspace into the dashboard.
+  - **Files Changed**:
+    - `apps/mobile/components/documents/MobileDocumentUploadCard.tsx` (MODIFIED)
+    - `apps/mobile/components/documents/MobileDocumentViewerModal.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileFormSectionCard.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileAddressFields.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/SearchableSelect.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/signup.tsx` (MODIFIED)
+    - `apps/mobile/app/(auth)/onboarding.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Mobile & Web Bundler Resolution & Monorepo Warning Elimination (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **EAS Updates & Expo Go Remote Update Crash Resolution (`apps/mobile/app.json`, `apps/mobile/app.config.js`)**: Disabled `updates.enabled` in `app.json` during local development to fix fatal Android Expo Go `java.io.IOException: Failed to download remote update` crash. Configured dynamic `app.config.js` to enable EAS updates only in production/preview EAS builds. Eliminated Metro certificate queries and timeouts.
+    2. **Obsolete New Architecture Warning Elimination (`apps/mobile/app/(app)/running-logs.tsx`, `apps/mobile/app/(app)/operations.tsx`)**: Removed deprecated `UIManager.setLayoutAnimationEnabledExperimental(true)` calls and unused `UIManager` imports.
+    3. **PointerEvents Prop Deprecation Fix (`apps/mobile/components/ui/InteractiveIcon.tsx`)**: Moved `pointerEvents="none"` JSX prop into the `style` object to eliminate `props.pointerEvents is deprecated`.
+    4. **Web Deprecation Suppression (`apps/mobile/app/_layout.tsx`)**: Added `LogBox.ignoreLogs` and browser console warning filters for `"shadow*" style props are deprecated. Use "boxShadow"`.
+    5. **Operator Dashboard Type Safety (`apps/mobile/components/dashboard/operator/OperatorDashboardCard.tsx`)**: Aligned property access with `OperatorDashboardDTO` schema (`data?.machine?.name`, `data?.machine?.model`, `data?.client?.site`, `data?.client?.name`).
+  - **Files Changed**:
+    - `apps/mobile/app.json` (MODIFIED)
+    - `apps/mobile/app.config.js` (CREATED)
+    - `apps/mobile/app/(app)/running-logs.tsx` (MODIFIED)
+    - `apps/mobile/app/(app)/operations.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/InteractiveIcon.tsx` (MODIFIED)
+    - `apps/mobile/app/_layout.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/operator/OperatorDashboardCard.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Native Mobile App Dashboard 95% Web Parity & 5% Smart Phone Touch Optimization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Canonical Reusable Shared Dashboard Primitives (`apps/mobile/components/dashboard/shared/`)**:
+       - `DashboardHeader.tsx`: Time-aware greeting (`Good morning, {userName}` / `Good afternoon` / `Good evening`) with bold typography (`fontSize: 22`, `letterSpacing: -0.6`), subtitle, and action slots.
+       - `AlertWidget.tsx`: Universal alert component supporting `info`, `warning`, `critical`/`error`, and `success` severities with rounded icon badges, title, description, `ArrowUpRight` (`↗`) external link indicators, route resolution, and tactile selection haptics (`Haptics.selectionAsync()`).
+       - `KPICard.tsx`: Metric card with top 2px colored accent bar (`#0284c7` info, `#f59e0b` warning, `#10b981` success, `#f43f5e` error, slate default), circular icon badge (`w-8 h-8 rounded-full`), large bold metric value (`24px`, tabular-nums), subtitle/trend, and haptic press navigation.
+       - `KPIGrid.tsx`: 2-column mobile layout grid with uniform spacing.
+       - `StatusCard.tsx`: Operational status card with top 2px colored accent bar, eyebrow title, icon circle, bold status label, description, and haptic navigation.
+       - `PrimaryAction.tsx`: Quick management and dispatch action cards with `primary` (solid `#171717` dark card with white text and `ArrowRight`), `secondary` (`#ffffff` card with `#ebebeb` hairline border), and `warning` variants, optional badge text, and selection haptics.
+       - `DashboardSkeleton.tsx`: Pulsing loading skeleton matching the exact mobile dashboard layout.
+       - Exported through `apps/mobile/components/dashboard/shared/index.ts` and `apps/mobile/components/ui/index.ts`.
+    2. **Role-Based Dashboard Views Refactoring (`apps/mobile/components/dashboard/`)**:
+       - `SuperAdminDashboardCard.tsx`: Platform Fleet & Identity Metrics (6 metrics in 2-col grid) + Governance & System Controls (System Audit Trail, User & Access Directory, Machinery Fleet Registry).
+       - `AdminDashboardCard.tsx`: Fleet & Personnel Summary (5 metrics) + Operational Exceptions (3 metrics) + Quick Management (Operations Hub, Machinery Fleet).
+       - `ManagerDashboardCard.tsx`: Fleet Utilization Breakdown (5 metrics) + Today's Production & Running Meter (2 metrics) + Operations Management (Daily Operations Review, Machinery Fleet Roster).
+       - `SupervisorDashboardCard.tsx`: Supervised Fleet & Team (4 metrics) + Field Exceptions & Shift Metrics (Breakdown Incidents, Overtime Shifts) + Supervisory Dispatch.
+       - `HRDashboardCard.tsx`: Personnel & Operations Roster (4 metrics) + Personnel Actions (Profile Change Requests, Employee Access Directory).
+       - `OperatorDashboardCard.tsx`: Today's Shift Status (Submission Status, Assigned Equipment & Site) + Quick Shift Actions (Record Shift Running Hours / View History, Assigned Machinery Details).
+    3. **Dashboard Screen Parity & Top Bar Optimization (`apps/mobile/app/(app)/dashboard.tsx`)**:
+       - Standard solid flush mobile header: `<MobileHeader title="Home" showLogo={false} showBack={false} showQuickAccess={true} />`.
+       - Top bar displays "Home" with Quick Search icon on the right, matching web mobile viewport exactly.
+       - Screen body renders time-aware greeting (`DashboardHeader`), alerts (`AlertWidget`), and role-specific dashboard views.
+       - Integrated `<DashboardSkeleton />` and pull-to-refresh (`RefreshControl`).
+  - **Files Changed**:
+    - `apps/mobile/components/dashboard/shared/DashboardHeader.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/AlertWidget.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/KPICard.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/KPIGrid.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/StatusCard.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/PrimaryAction.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/DashboardSkeleton.tsx` (CREATED)
+    - `apps/mobile/components/dashboard/shared/index.ts` (CREATED)
+    - `apps/mobile/components/dashboard/super-admin/SuperAdminDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/admin/AdminDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/manager/ManagerDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/supervisor/SupervisorDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/hr/HRDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/operator/OperatorDashboardCard.tsx` (MODIFIED)
+    - `apps/mobile/components/dashboard/index.ts` (MODIFIED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/app/(app)/dashboard.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Canonical Reusable SearchableSelect Primitive & Signup Screen DRY Refactor (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Reusable `SearchableSelect` (`apps/mobile/components/ui/SearchableSelect.tsx`)**: Created universal dropdown picker primitive matching web `SearchableSelect` with search filtering, selection haptics, checkmark indicators, and light/dark theme adaptation.
+    2. **Barrel Export**: Exported `SearchableSelect` from `apps/mobile/components/ui/index.ts`.
+    3. **DRY Screen Refactor (`apps/mobile/app/(auth)/signup.tsx`)**: Replaced duplicate modal sheets with `<SearchableSelect />` for `Role Requested` and `Select Supervisor`.
+    4. **Component Standard Compliance**: Reused canonical primitives (`Input`, `TimeInput`, `SearchableSelect`, `MobileFormSectionCard`, `MobileAddressFields`, `MobileDocumentUploadCard`, `MobileSubmitButton`).
+  - **Files Changed**:
+    - `apps/mobile/components/ui/SearchableSelect.tsx` (CREATED)
+    - `apps/mobile/components/ui/index.ts` (MODIFIED)
+    - `apps/mobile/app/(auth)/signup.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Reusable Component Governance & Cross-Module UI/UX Consistency Mandate (2026-10-03)**:
+  - **Delivered**:
+    1. **Reusable Component Architecture**: Reusable-first governance codified in `AI/PROJECT_MEMORY.md` (Rule 3). All future UI work must first search for existing primitives in `components/ui/*`, `components/forms/*`, `components/branding/*`, and `@reachinternational/design-tokens` before creating new ones.
+    2. **Canonical Barrel Export**: All newly created components must be designed as modular, reusable primitives and exported through `components/ui/index.ts` or `components/forms/index.ts`.
+    3. **Universal Button Haptics**: Enhanced canonical native `Button` primitive (`apps/mobile/components/ui/Button.tsx`) with automatic `expo-haptics` tactile feedback across all screens.
+    4. **Universal Design Consistency**: Enforced 100% uniformity in typography, font sizes, line heights, border radii (12px inputs/buttons, 24px cards), colors (`#edf5fd` inputs, `#0284c7` primary actions, `#fafafa` canvas, `#ffffff` elevated cards), and min 44px touch targets monorepo-wide.
+  - **Files Changed**:
+    - `AI/PROJECT_MEMORY.md` (MODIFIED)
+    - `apps/mobile/components/ui/Button.tsx` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Native Mobile App Forgot Password Screen Web Parity & Touch Optimization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Visual Parity**: Replicated the Web mobile viewport forgot-password view with 100% pixel, color, and layout fidelity (canvas `#fafafa`, elevated card `#ffffff` with 24px radius, 1px `#ebebeb` border, and soft elevated drop shadow).
+    2. **Top Navigation & Key Badge**: Added "Back to sign in" navigation row with `ArrowLeft` icon and selection haptic, alongside the `KeyRound` badge in a rounded sky-blue container.
+    3. **Form & Input Enhancement**: Integrated `<Input>` with soft tinted `#edf5fd` light-blue background in light mode (`#18181b` in dark mode), 12px border radius, 46px touch target, and `<Mail>` icon.
+    4. **CTA & Haptics**: Implemented primary "Send Reset Link" button with `ArrowRight` icon and medium impact haptics, along with error/success notification feedback.
+    5. **Card Footer & Floating Toggle**: Hairline separator with "Remember your password? Sign in" link, centered monospace copyright, and floating bottom-right theme switcher.
+  - **Files Changed**:
+    - `apps/mobile/app/(auth)/forgot-password.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Native Mobile App Signup Screen 95% Web Parity & 5% Smart Phone Optimization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Dynamic Section Cards (`apps/mobile/components/forms/MobileFormSectionCard.tsx`)**: Added `headerAction` prop for badges like calculated shift duration (`12h`). Styled step circles with dynamic sky blue tint `rgba(14, 165, 233, 0.1)` when incomplete and solid emerald `#10b981` when complete.
+    2. **Side-by-Side Digital Time Input (`apps/mobile/components/ui/TimeInput.tsx`)**: Updated layout to side-by-side time box shell (`08 : 00` monospace font) and segmented AM/PM capsule with active sky blue pill (`#0284c7`) and `Haptics.selectionAsync()`.
+    3. **Address Fields Parity (`apps/mobile/components/forms/MobileAddressFields.tsx`)**: Replicated exact label parity (`Street / Building / Locality Address *`, `City / Town / Village *`, `District *`, `State *`), exact placeholders, neutral icons, and state selection haptics.
+    4. **Dashed Document Upload Cards (`apps/mobile/components/documents/MobileDocumentUploadCard.tsx`)**: Replicated "2 MB max" badge, dashed upload box with upload icon and exact text matching web, and attached document state with thumbnail/icon, filename, file size, and remove `X` button with haptics.
+    5. **Gated Submit Button & Amber Incomplete Banner (`apps/mobile/components/forms/MobileSubmitButton.tsx`)**: Replicated amber warning banner with alert icon, truncated missing fields list, and `INCOMPLETE` bold tag. Replicated emerald `READY` banner and matching sky blue CTA state with medium impact haptic.
+    6. **Signup Screen Parity (`apps/mobile/app/(auth)/signup.tsx`)**: Replicated canonical brand logo lockup (`ReachInternationalLogo variant="full" size={26}`), single-line Role selector with user icon, conditional Supervisor selector with shield check icon and search modal sheet, blue Note callout banner, and terms checkbox with underline links.
+  - **Files Changed**:
+    - `apps/mobile/app/(auth)/signup.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileFormSectionCard.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileAddressFields.tsx` (MODIFIED)
+    - `apps/mobile/components/forms/MobileSubmitButton.tsx` (MODIFIED)
+    - `apps/mobile/components/documents/MobileDocumentUploadCard.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/TimeInput.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/Input.tsx` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
+- **Native Mobile App Login Screen 100% Web Parity & Touch Optimization (`apps/mobile`) (2026-10-03)**:
+  - **Delivered**:
+    1. **Visual Parity**: Replicated the Web mobile viewport authentication card with 100% pixel, color, and layout fidelity (canvas `#fafafa`, elevated card `#ffffff` with 24px radius, 1px `#ebebeb` border, and soft shadow).
+    2. **Canonical Logo**: Set canonical `iconType = 'scissor'` as default lockup in `ReachInternationalLogo` displaying the official industrial scissor lift icon with centered brand typography and hairline tagline.
+    3. **Input Styling & Parity**: Enhanced `Input.tsx` with soft tinted `#edf5fd` light-blue background in light mode (`#18181b` in dark mode), 12px border radius, 46px touch target, and haptic password toggle.
+    4. **Touch & Haptic Feedback**: Installed `expo-haptics` and wired tactile haptics (selection on toggles/links, medium impact on CTA, and error/success notifications).
+    5. **Theme Provider**: Synchronized `ThemeProvider.tsx` to default to light mode matching Web, with AsyncStorage persistence.
+  - **Files Changed**:
+    - `apps/mobile/app/(auth)/login.tsx` (MODIFIED)
+    - `apps/mobile/components/branding/ReachInternationalLogo.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/Input.tsx` (MODIFIED)
+    - `apps/mobile/components/ui/ThemeProvider.tsx` (MODIFIED)
+    - `apps/mobile/package.json` (MODIFIED)
+    - `pnpm-lock.yaml` (MODIFIED)
+    - `AI/STATE.md` (MODIFIED)
+    - `AI/CURRENT_TASK.md` (MODIFIED)
+    - `AI/CHANGELOG_AI.md` (MODIFIED)
+
 - **Direct Operating Site Creation for Existing Clients (Web & Mobile) (2026-10-01)**:
   - **Delivered**:
     1. **Unified Site Modal (`apps/web/components/clients/SiteModal.tsx`)**:
@@ -13699,3 +14586,36 @@ so i can tract each and everythings"
 -   A d d e d   S Q L   i n j e c t i o n   d e f e n s e s   ( a l l o w e d   s o r t   m a p p i n g s ,   P o s t g R E S T   f i l t e r   s a n i t i z a t i o n ,   U U I D   t y p e   v a l i d a t i o n ) 
  
  
+
+
+---
+
+## [2026-10-03] Hierarchical Two-Level AGENTS.md Rule System
+
+### Type: Architecture / AI Governance
+
+### Changes
+- **Modified**: `AGENTS.md` (root) — Complete rewrite from 141-line AI memory protocol to ~350-line hierarchical engineering rules system with 21 sections
+- **Created**: `apps/web/AGENTS.md` — Next.js App Router, RSC, DAL, Server Actions, component architecture, web-specific prohibitions
+- **Created**: `apps/mobile/AGENTS.md` — Expo SDK 57, React Native, TanStack Query, navigation guards, reusable components, mobile-specific prohibitions
+- **Created**: `supabase/AGENTS.md` — STRICTEST rules in monorepo: environment isolation (Dev vs Prod), migration rules, RPC rules, RLS rules, trigger rules, index rules, constraint rules, 10 prohibitions, emergency stop conditions
+- **Created**: `packages/types/AGENTS.md` — Type ownership, Row/Insert/Update naming, export rules, sync with DB
+- **Created**: `packages/validation/AGENTS.md` — Zod v4 schemas, 3-layer validation strategy, naming conventions
+- **Created**: `packages/permissions/AGENTS.md` — RBAC matrix, 6 canonical roles, permission cascade rules
+- **Created**: `packages/utils/AGENTS.md` — Pure function requirements, existing utilities catalog
+- **Created**: `packages/design-tokens/AGENTS.md` — Geist Design System tokens table
+- **Created**: `packages/api-client/AGENTS.md` — Supabase client config, service role key prohibition
+- **Created**: `packages/config/AGENTS.md` — Shared tooling config, strict mode enforcement
+
+### Architecture
+- Root `AGENTS.md` contains global engineering rules (21 sections)
+- Module-level `AGENTS.md` files contain context-specific rules that extend global rules
+- Stricter rule always wins when module and global rules conflict
+- `supabase/AGENTS.md` designated as the strictest module in the entire monorepo
+- No existing rule files in `AI/RULES/` or `.agents/rules/` were modified
+
+### Impact
+- No database changes
+- No API changes
+- No UI changes
+- All 11 AGENTS.md files verified to exist

@@ -42,9 +42,14 @@ const DEFAULT_NOTIFS: NotificationPreferences = {
 interface SettingsClientProps {
   user: UserType;
   profileDetail?: UserType | null;
+  initialSection?: "all" | "account" | "notifications" | "preferences" | "aboutapp";
 }
 
-export function SettingsClient({ user, profileDetail }: SettingsClientProps) {
+export function SettingsClient({
+  user,
+  profileDetail,
+  initialSection = "all",
+}: SettingsClientProps) {
   const { toast } = useToast();
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 

@@ -16,6 +16,8 @@ export const BADGE_CONFIGS: Record<string, BadgeConfig> = {
   spare: { label: 'Spare', variant: 'info', colorToken: 'cyan', bgToken: 'cyanSoft' },
   inactive: { label: 'Inactive', variant: 'neutral', colorToken: 'mute', bgToken: 'hairlineSoft' },
   on_rent: { label: 'On Rent', variant: 'info', colorToken: 'link', bgToken: 'linkSoft' },
+  rented: { label: 'Rented', variant: 'info', colorToken: 'link', bgToken: 'linkSoft' },
+  available: { label: 'Available', variant: 'neutral', colorToken: 'mute', bgToken: 'hairlineSoft' },
   under_maintenance: { label: 'Under Maintenance', variant: 'warning', colorToken: 'warningDeep', bgToken: 'warningSoft' },
   breakdown: { label: 'Breakdown', variant: 'error', colorToken: 'error', bgToken: 'errorSoft' },
 

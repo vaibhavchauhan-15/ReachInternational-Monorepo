@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { Button, Input, useTheme, SearchableSelect, type SelectOption } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -79,14 +79,9 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
 
-  // Dropdown Picker States
-  const [rolePickerVisible, setRolePickerVisible] = useState(false);
-
   // Supervisor State
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
   const [supervisorId, setSupervisorId] = useState('');
-  const [supervisorPickerVisible, setSupervisorPickerVisible] = useState(false);
-  const [supervisorSearch, setSupervisorSearch] = useState('');
   const [monthlySalary, setMonthlySalary] = useState('');
 
   // Working Location State
@@ -133,19 +128,30 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     }
   }, [visible]);
 
-  if (!user) return null;
-
-  const roleOptions = isSuperAdmin
-    ? ALL_ROLES
-    : ALL_ROLES.filter((r) => r.value !== 'super_admin');
-
-  const selectedRoleObj = ALL_ROLES.find((r) => r.value === role) || ALL_ROLES[0];
-  const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
-
-  const filteredSupervisors = supervisors.filter((s) =>
-    s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
-    (s.email && s.email.toLowerCase().includes(supervisorSearch.toLowerCase()))
+  const roleOptions = useMemo(
+    () => (isSuperAdmin ? ALL_ROLES : ALL_ROLES.filter((r) => r.value !== 'super_admin')),
+    [isSuperAdmin]
   );
+
+  const roleSelectOptions = useMemo<SelectOption[]>(() => {
+    return roleOptions.map((r) => ({
+      value: r.value,
+      label: r.label,
+    }));
+  }, [roleOptions]);
+
+  const supervisorSelectOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'None (Unassigned)' },
+      ...supervisors.map((s) => ({
+        value: s.id,
+        label: s.full_name,
+        description: s.email || undefined,
+      })),
+    ];
+  }, [supervisors]);
+
+  if (!user) return null;
 
   const isOperator = role === 'operator';
   const isSalaryRequired = isOperator;
@@ -249,12 +255,13 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
       // Sync employees directory record if present
       try {
+        const designation = ALL_ROLES.find((r) => r.value === role)?.label || role;
         await supabase
           .from('employees')
           .update({
             full_name: fullName.trim(),
             phone: cleanPhone,
-            designation: selectedRoleObj.label,
+            designation,
           })
           .eq('user_id', user.id);
       } catch {
@@ -386,40 +393,29 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               isMandatory={isOperator}
               isCompleted={section4Complete}
             >
-              {/* Designated Role Trigger */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Designated Role *</Text>
-                <TouchableOpacity
-                  onPress={() => setRolePickerVisible(true)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.pickerTrigger,
-                    { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                  ]}
-                >
-                  <Text style={[styles.pickerTriggerText, { color: theme.colors.ink }]}>{selectedRoleObj.label}</Text>
-                  <ChevronDown size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
+              {/* Designated Role Selector */}
+              <SearchableSelect
+                label="Designated Role"
+                required
+                options={roleSelectOptions}
+                value={role}
+                onChange={(val) => setRole(val)}
+                placeholder="Select designated role..."
+                modalTitle="Select System Role"
+                leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+              />
 
-              {/* Conditional Supervisor Trigger */}
+              {/* Conditional Supervisor Selector */}
               {isSupervisedRole(role) && (
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Assign Supervisor</Text>
-                  <TouchableOpacity
-                    onPress={() => setSupervisorPickerVisible(true)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.pickerTrigger,
-                      { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                    ]}
-                  >
-                    <Text style={[styles.pickerTriggerText, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
-                      {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor...'}
-                    </Text>
-                    <ChevronDown size={16} color={theme.colors.mute} />
-                  </TouchableOpacity>
-                </View>
+                <SearchableSelect
+                  label="Assign Supervisor"
+                  options={supervisorSelectOptions}
+                  value={supervisorId}
+                  onChange={(val) => setSupervisorId(val)}
+                  placeholder="Select supervisor..."
+                  modalTitle="Select Supervisor"
+                  leftIcon={<User size={16} color={theme.colors.mute} />}
+                />
               )}
 
               {/* Operator Monthly Salary */}
@@ -466,107 +462,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
             </View>
           </View>
         </View>
-
-        {/* Role Picker Modal */}
-        <Modal visible={rolePickerVisible} animationType="slide" transparent onRequestClose={() => setRolePickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select System Role</Text>
-                <TouchableOpacity onPress={() => setRolePickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-                {roleOptions.map((r) => {
-                  const isSelected = role === r.value;
-                  return (
-                    <TouchableOpacity
-                      key={r.value}
-                      onPress={() => {
-                        setRole(r.value);
-                        setRolePickerVisible(false);
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
-                        {r.label}
-                      </Text>
-                      {isSelected && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Supervisor Picker Modal */}
-        <Modal visible={supervisorPickerVisible} animationType="slide" transparent onRequestClose={() => setSupervisorPickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
-                <TouchableOpacity onPress={() => setSupervisorPickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
-                <Input
-                  placeholder="Search supervisor..."
-                  value={supervisorSearch}
-                  onChangeText={setSupervisorSearch}
-                  leftIcon={<User size={15} color={theme.colors.mute} />}
-                />
-              </View>
-
-              <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setSupervisorId('');
-                    setSupervisorPickerVisible(false);
-                  }}
-                  style={[styles.modalItemRow, { borderBottomColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.modalItemText, { color: theme.colors.mute }]}>None (Unassigned)</Text>
-                  {!supervisorId && <Check size={16} color={theme.colors.link} />}
-                </TouchableOpacity>
-
-                {filteredSupervisors.map((s) => {
-                  const isSelected = supervisorId === s.id;
-                  return (
-                    <TouchableOpacity
-                      key={s.id}
-                      onPress={() => {
-                        setSupervisorId(s.id);
-                        setSupervisorPickerVisible(false);
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <View>
-                        <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
-                          {s.full_name}
-                        </Text>
-                        {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
-                      </View>
-                      {isSelected && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -637,18 +532,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  pickerTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 44,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    paddingHorizontal: spacingNumeric.md,
-  },
-  pickerTriggerText: {
-    fontSize: 13,
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -657,42 +540,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.lg,
     paddingVertical: spacingNumeric.md,
     borderTopWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    maxHeight: '75%',
-    borderWidth: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.lg,
-    paddingVertical: spacingNumeric.md,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalListScroll: {
-    maxHeight: 320,
-  },
-  modalItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.lg,
-    paddingVertical: spacingNumeric.md,
-    borderBottomWidth: 1,
-  },
-  modalItemText: {
-    fontSize: 13,
   },
 });

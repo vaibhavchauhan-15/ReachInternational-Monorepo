@@ -21,6 +21,9 @@ export interface SelectableUser {
   phone?: string | null;
   email?: string | null;
   shift_time?: string | null;
+  role?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
 }
 
 export interface MultiUserSelectModalProps {

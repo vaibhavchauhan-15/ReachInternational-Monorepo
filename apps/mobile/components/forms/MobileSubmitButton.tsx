@@ -7,9 +7,9 @@ import {
   ActivityIndicator,
   type ViewStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../ui/ThemeProvider';
-import { Lock, ArrowRight, CheckCircle2 } from 'lucide-react-native';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { AlertCircle, CheckCircle2 } from 'lucide-react-native';
 
 export interface MobileSubmitButtonProps {
   isReady: boolean;
@@ -28,18 +28,18 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
   isLoading,
   onPress,
   label,
-  loadingLabel = 'Submitting...',
+  loadingLabel = 'Submitting Request...',
   missingCount = 0,
   missingFields,
-  helperText,
   style,
 }) => {
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const isExecutingRef = useRef(false);
 
   const handlePress = async () => {
     if (!isReady || isLoading || isExecutingRef.current) return;
     isExecutingRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await onPress();
     } finally {
@@ -54,156 +54,152 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
       if (missingFields.length <= 2) {
         return `Please fill: ${missingFields.join(', ')}`;
       }
-      return `Fill ${missingFields.length} fields: ${missingFields.slice(0, 2).join(', ')} +${missingFields.length - 2} more`;
+      return `Please fill ${missingFields.length} required fields: ${missingFields.slice(0, 2).join(', ')}...`;
     }
     if (missingCount > 0) {
-      return `${missingCount} mandatory ${missingCount === 1 ? 'field' : 'fields'} required to proceed`;
+      return `Please complete all mandatory fields (${missingCount} remaining)`;
     }
-    return 'Complete all mandatory fields to unlock submission';
+    return 'Please complete all mandatory fields to proceed';
   }, [missingFields, missingCount]);
 
   return (
     <View style={[styles.container, style]}>
-      {/* Helper Status Chip if Incomplete */}
+      {/* 1. Status Banner: Incomplete (Amber) or Ready (Emerald) matching web mobile viewport */}
       {!isReady && !isLoading && (
         <View
           style={[
-            styles.incompleteChip,
+            styles.statusBanner,
             {
-              backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : '#fff1f2',
-              borderColor: isDark ? 'rgba(244, 63, 94, 0.2)' : '#fecdd3',
+              backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.1)',
+              borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(245, 158, 11, 0.2)',
             },
           ]}
         >
-          <Lock size={12} color="#f43f5e" />
-          <Text style={styles.incompleteChipText} numberOfLines={1}>
-            {missingDescription}
+          <View style={styles.bannerLeft}>
+            <AlertCircle size={13} color="#d97706" style={{ marginTop: 1 }} />
+            <Text
+              style={[
+                styles.bannerText,
+                { color: isDark ? '#fbbf24' : '#b45309' },
+              ]}
+              numberOfLines={1}
+            >
+              {missingDescription}
+            </Text>
+          </View>
+          <Text style={[styles.tagText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
+            INCOMPLETE
           </Text>
         </View>
       )}
 
-      {/* Submit Button */}
+      {isReady && !isLoading && (
+        <View
+          style={[
+            styles.statusBanner,
+            {
+              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.1)',
+              borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.2)',
+            },
+          ]}
+        >
+          <View style={styles.bannerLeft}>
+            <CheckCircle2 size={13} color="#10b981" style={{ marginTop: 1 }} />
+            <Text
+              style={[
+                styles.bannerText,
+                { color: isDark ? '#34d399' : '#047857' },
+              ]}
+              numberOfLines={1}
+            >
+              All mandatory fields completed. Ready to submit.
+            </Text>
+          </View>
+          <Text style={[styles.tagText, { color: isDark ? '#34d399' : '#065f46' }]}>
+            READY
+          </Text>
+        </View>
+      )}
+
+      {/* 2. Submit Button */}
       <TouchableOpacity
         onPress={handlePress}
         disabled={isLocked}
-        activeOpacity={isReady ? 0.8 : 1}
+        activeOpacity={0.8}
         style={[
           styles.button,
           {
             backgroundColor: isReady
-              ? '#0070f3'
+              ? '#0284c7'
               : isDark
-              ? 'rgba(255, 255, 255, 0.08)'
-              : '#e5e7eb',
-            borderColor: isReady
-              ? '#0070f3'
-              : isDark
-              ? 'rgba(255, 255, 255, 0.12)'
-              : '#d1d5db',
-            opacity: isLoading ? 0.8 : isReady ? 1 : 0.6,
+              ? 'rgba(2, 132, 199, 0.35)'
+              : '#7dd3fc',
           },
         ]}
       >
         {isLoading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color="#ffffff" />
-            <Text style={styles.loadingText}>{loadingLabel}</Text>
+            <Text style={styles.buttonText}>{loadingLabel}</Text>
           </View>
         ) : (
-          <View style={styles.contentRow}>
-            <Text
-              style={[
-                styles.buttonText,
-                {
-                  color: isReady
-                    ? '#ffffff'
-                    : isDark
-                    ? theme.colors.mute
-                    : '#9ca3af',
-                },
-              ]}
-            >
-              {label}
-            </Text>
-            {isReady ? (
-              <ArrowRight size={16} color="#ffffff" strokeWidth={2.5} />
-            ) : (
-              <Lock size={14} color={isDark ? theme.colors.mute : '#9ca3af'} />
-            )}
-          </View>
+          <Text style={styles.buttonText}>{label}</Text>
         )}
       </TouchableOpacity>
-
-      {/* Optional Success Note or Helper Text */}
-      {isReady && !isLoading && (
-        <View style={styles.readyRow}>
-          <CheckCircle2 size={12} color="#10b981" />
-          <Text style={styles.readyText}>
-            {helperText || 'All mandatory requirements satisfied. Ready to submit.'}
-          </Text>
-        </View>
-      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
     gap: 8,
+    marginTop: 4,
   },
-  incompleteChip: {
+  statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: radiusNumeric.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
     borderWidth: 1,
+    gap: 8,
   },
-  incompleteChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#f43f5e',
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  bannerText: {
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   button: {
-    minHeight: 48,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
+    height: 46,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacingNumeric.md,
-  },
-  contentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    width: '100%',
   },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
-  loadingText: {
-    fontSize: 14,
-    fontWeight: '600',
+  buttonText: {
     color: '#ffffff',
-  },
-  readyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: 2,
-  },
-  readyText: {
-    fontSize: 12.5,
-    color: '#10b981',
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
   },
 });

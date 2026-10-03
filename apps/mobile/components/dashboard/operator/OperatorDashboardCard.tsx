@@ -1,250 +1,123 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Card, useTheme } from '../../ui';
+import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../ui/ThemeProvider';
 import { spacingNumeric } from '@reachinternational/design-tokens';
+import type { OperatorDashboardDTO } from '@reachinternational/types';
+import {
+  KPIGrid,
+  StatusCard,
+  PrimaryAction,
+} from '../shared';
 import {
   Wrench,
-  Building2,
-  FileCheck2,
-  AlertTriangle,
-  ArrowRight,
+  FileSpreadsheet,
 } from 'lucide-react-native';
-import type { OperatorDashboardDTO } from '@reachinternational/types';
 
 export interface OperatorDashboardCardProps {
   data: OperatorDashboardDTO | null;
 }
 
-export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({ data }) => {
-  const { theme, isDark } = useTheme();
-  const router = useRouter();
+export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
+  data,
+}) => {
+  const { theme } = useTheme();
 
   const isSubmitted = data?.today?.entryStatus === 'submitted';
+  const isPartial = data?.today?.entryStatus === 'partial';
+  const submittedCount = data?.today?.submittedCount ?? 0;
+  const totalAssignedCount =
+    data?.today?.totalAssignedCount ?? (data?.assigned_shifts?.length || 1);
+  const totalRunningHoursToday = data?.today?.totalRunningHoursToday ?? 0;
+
+  const machineName =
+    data?.machine?.name ||
+    data?.machine?.model ||
+    'Assigned Equipment';
+  const siteName =
+    data?.client?.site ||
+    data?.client?.name ||
+    'Operational Site';
 
   return (
-    <>
-      {/* Primary Action CTA Card / Alert Banner */}
-      <TouchableOpacity
-        onPress={() =>
-          router.push(
-            (isSubmitted
-              ? '/(app)/operations?tab=history'
-              : '/(app)/operations') as any
-          )
-        }
-        activeOpacity={0.85}
-        style={{ marginBottom: spacingNumeric.md }}
-        accessibilityRole="button"
-        accessibilityLabel={isSubmitted ? "Today's Log Submitted" : "Today's Log Pending"}
-      >
-        <Card
-          variant="elevated"
-          style={[
-            styles.ctaCard,
-            {
-              backgroundColor: isSubmitted
-                ? (isDark ? 'rgba(16, 185, 129, 0.12)' : '#ecfdf5')
-                : (isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb'),
-              borderColor: isSubmitted
-                ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0')
-                : (isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a'),
-            },
-          ]}
-        >
-          <View style={styles.ctaLeft}>
-            <View
-              style={[
-                styles.ctaIconWrap,
-                {
-                  backgroundColor: isSubmitted
-                    ? 'rgba(16, 185, 129, 0.18)'
-                    : 'rgba(245, 158, 11, 0.18)',
-                },
-              ]}
-            >
-              {isSubmitted ? (
-                <FileCheck2 size={22} color={isDark ? '#34d399' : '#059669'} />
-              ) : (
-                <AlertTriangle size={22} color={isDark ? '#fbbf24' : '#d97706'} />
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.ctaTitle,
-                  {
-                    color: isSubmitted
-                      ? (isDark ? '#34d399' : '#065f46')
-                      : (isDark ? '#fbbf24' : '#92400e'),
-                  },
-                ]}
-              >
-                {isSubmitted ? "Today's Log Submitted" : "Today's Log Pending"}
-              </Text>
-              <Text
-                style={[
-                  styles.ctaSubtitle,
-                  {
-                    color: isSubmitted
-                      ? (isDark ? '#6ee7b7' : '#047857')
-                      : (isDark ? '#fcd34d' : '#b45309'),
-                  },
-                ]}
-              >
-                {isSubmitted
-                  ? 'Daily shift running hours are recorded. Tap to view or update.'
-                  : 'Daily running hours have not been submitted for today.'}
-              </Text>
-            </View>
-          </View>
-          <ArrowRight
-            size={18}
-            color={
+    <View style={styles.container}>
+      {/* Today's Shift Status */}
+      <View style={styles.section}>
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+          TODAY'S SHIFT STATUS
+        </Text>
+        <KPIGrid columns={2}>
+          <StatusCard
+            title="Submission Status"
+            status={isSubmitted ? 'success' : isPartial ? 'warning' : 'pending'}
+            label={
               isSubmitted
-                ? (isDark ? '#34d399' : '#059669')
-                : (isDark ? '#fbbf24' : '#d97706')
+                ? totalAssignedCount > 1
+                  ? `All ${totalAssignedCount} Shifts Done`
+                  : 'Submitted Today'
+                : isPartial
+                ? `${submittedCount}/${totalAssignedCount} Shifts Logged`
+                : 'Pending Submission'
             }
+            description={
+              isSubmitted
+                ? `${totalRunningHoursToday}h recorded for today.`
+                : isPartial
+                ? `${submittedCount} of ${totalAssignedCount} shifts recorded (${totalRunningHoursToday}h).`
+                : 'Daily running hours not submitted yet.'
+            }
+            href={isSubmitted ? '/operations?tab=history' : '/operations'}
           />
-        </Card>
-      </TouchableOpacity>
 
-      {/* Shift & Meter Status */}
-      <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
-        TODAY'S SHIFT TELEMETRY
-      </Text>
-      <View style={styles.kpiGrid}>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Log Status</Text>
-          <Text
-            style={[
-              styles.kpiValue,
-              {
-                color: isSubmitted ? theme.colors.success : '#d97706',
-              },
-            ]}
-          >
-            {isSubmitted ? 'Submitted' : 'Pending'}
-          </Text>
-        </Card>
-        <Card variant="elevated" style={styles.kpiCard}>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Last Meter (HMR)</Text>
-          <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-            {data?.today?.lastHmr != null
-              ? `${data.today.lastHmr.toFixed(1)}`
-              : '—'}
-          </Text>
-        </Card>
+          <StatusCard
+            title="Equipment & Site"
+            status="pending"
+            label={machineName}
+            description={siteName}
+            href="/machines"
+          />
+        </KPIGrid>
       </View>
 
-      {/* Equipment & Worksite Cards */}
-      <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.md }]}>
-        ASSIGNED EQUIPMENT & WORKSITE
-      </Text>
-      <Card variant="elevated" style={styles.infoCard}>
-        <View style={styles.infoRow}>
-          <Wrench size={18} color={theme.colors.link} />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.infoCardTitle, { color: theme.colors.ink }]}>
-              {data?.machine?.model || 'No Machine Assigned'}
-            </Text>
-            <Text style={[styles.infoCardDesc, { color: theme.colors.mute }]}>
-              ID: {data?.machine?.name || '—'} • Serial: {data?.machine?.serialNumber || '—'}
-            </Text>
-          </View>
-        </View>
-      </Card>
-
-      <Card variant="elevated" style={[styles.infoCard, { marginTop: 8 }]}>
-        <View style={styles.infoRow}>
-          <Building2 size={18} color={theme.colors.success} />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.infoCardTitle, { color: theme.colors.ink }]}>
-              {data?.client?.name || 'No Client Assigned'}
-            </Text>
-            <Text style={[styles.infoCardDesc, { color: theme.colors.mute }]}>
-              Site: {data?.client?.site || '—'}
-            </Text>
-          </View>
-        </View>
-      </Card>
-    </>
+      {/* Quick Shift Actions */}
+      <View style={styles.section}>
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+          QUICK ACTIONS
+        </Text>
+        <PrimaryAction
+          title={isSubmitted ? 'View Shift Logs & History' : 'Record Shift Running Hours'}
+          description={
+            isSubmitted
+              ? "Review today's submitted hours and past machine logs"
+              : 'Submit opening/closing HMR, fuel, and site operation notes'
+          }
+          href={isSubmitted ? '/operations?tab=history' : '/operations'}
+          icon={FileSpreadsheet}
+          variant={isSubmitted ? 'secondary' : 'primary'}
+        />
+        <PrimaryAction
+          title="Assigned Machinery Details"
+          description="View machine specifications, current meter reading, and equipment status"
+          href="/machines"
+          icon={Wrench}
+          variant="secondary"
+        />
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    gap: spacingNumeric.md,
+  },
+  section: {
+    marginBottom: spacingNumeric.xs,
+  },
   eyebrowHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: spacingNumeric.xs,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
-    marginBottom: spacingNumeric.xs,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '46%',
-    padding: spacingNumeric.md,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 2,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  ctaCard: {
-    padding: spacingNumeric.md,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  ctaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: spacingNumeric.sm,
-  },
-  ctaIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacingNumeric.md,
-  },
-  ctaTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  ctaSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  infoCard: {
-    padding: spacingNumeric.md,
-    borderRadius: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  infoCardDesc: {
-    fontSize: 12,
-    marginTop: 2,
+    textTransform: 'uppercase',
+    marginBottom: spacingNumeric.xs + 2,
   },
 });

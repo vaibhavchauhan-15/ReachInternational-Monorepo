@@ -10,10 +10,9 @@ import {
   Platform,
   StatusBar,
   LayoutAnimation,
-  UIManager,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -37,11 +36,9 @@ import {
   RefreshCw,
   Printer,
   FileText,
+  Gauge,
+  Zap,
 } from 'lucide-react-native';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
@@ -348,30 +345,32 @@ export default function RunningLogsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
       >
         {/* KPI Summary Cards */}
-        <View style={styles.kpiGrid}>
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>RUNNING HOURS</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{summaryMetrics.totalRunningHours}h</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.mute }]}>{summaryMetrics.totalDays} Days Logged</Text>
-          </View>
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>WORKING HOURS</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>{summaryMetrics.totalWorkingHours}h</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.mute }]}>{summaryMetrics.totalShifts} Shifts</Text>
-          </View>
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>OVERTIME</Text>
-            <Text style={[styles.kpiValue, { color: '#0070f3' }]}>{summaryMetrics.totalOvertimeHours}h</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.mute }]}>Overtime Total</Text>
-          </View>
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWNS</Text>
-            <Text style={[styles.kpiValue, { color: summaryMetrics.totalBreakdowns > 0 ? '#ef4444' : theme.colors.ink }]}>
-              {summaryMetrics.totalBreakdowns}
-            </Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.mute }]}>Incidents</Text>
-          </View>
-        </View>
+        <KPIGrid columns={4}>
+          <KPICard
+            label="Running Hours"
+            value={`${summaryMetrics.totalRunningHours}h`}
+            icon={Clock}
+            variant="default"
+          />
+          <KPICard
+            label="Working Hours"
+            value={`${summaryMetrics.totalWorkingHours}h`}
+            icon={Gauge}
+            variant="success"
+          />
+          <KPICard
+            label="Overtime"
+            value={`${summaryMetrics.totalOvertimeHours}h`}
+            icon={Zap}
+            variant="info"
+          />
+          <KPICard
+            label="Breakdowns"
+            value={summaryMetrics.totalBreakdowns}
+            icon={AlertTriangle}
+            variant={summaryMetrics.totalBreakdowns > 0 ? 'error' : 'default'}
+          />
+        </KPIGrid>
 
         {/* Expand / Collapse All Toggle Strip */}
         <View style={styles.controlsStrip}>
@@ -490,9 +489,11 @@ export default function RunningLogsScreen() {
                         </View>
 
                         <View style={styles.shiftItemBottom}>
-                          <Text style={[styles.shiftOperatorText, { color: theme.colors.body }]}>
-                            {log.operator?.full_name || 'Unassigned'} • {log.machine?.model || log.machine_code}
-                          </Text>
+                          <HighlightText
+                            text={`${log.operator?.full_name || 'Unassigned'} • ${log.machine?.model || log.machine_code}`}
+                            query={debouncedSearch}
+                            style={[styles.shiftOperatorText, { color: theme.colors.body }]}
+                          />
                           {log.overtime_hours ? (
                             <Text style={[styles.shiftOtText, { color: '#0070f3' }]}>
                               +{log.overtime_hours}h OT
@@ -501,9 +502,11 @@ export default function RunningLogsScreen() {
                         </View>
 
                         {log.remarks && (
-                          <Text style={[styles.shiftRemarksText, { color: theme.colors.mute }]}>
-                            {log.remarks}
-                          </Text>
+                          <HighlightText
+                            text={log.remarks}
+                            query={debouncedSearch}
+                            style={[styles.shiftRemarksText, { color: theme.colors.mute }]}
+                          />
                         )}
                       </View>
                     ))}
@@ -602,32 +605,6 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
     paddingBottom: spacingNumeric.xl * 2,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
-  },
-  kpiCard: {
-    width: '48%',
-    flexGrow: 1,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  kpiSub: {
-    fontSize: 12,
-    marginTop: 2,
   },
   controlsStrip: {
     flexDirection: 'row',

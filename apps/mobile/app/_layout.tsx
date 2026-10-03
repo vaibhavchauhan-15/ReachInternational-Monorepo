@@ -1,3 +1,5 @@
+import '../lib/suppressWarnings';
+
 /**
  * ServiceCentric Mobile — Root Layout
  * Wraps top-level Expo Router navigation with QueryClientProvider, AuthProvider, and StatusBar.
@@ -56,6 +58,45 @@ function MobileGoogleAnalytics() {
     `;
     document.head.appendChild(initScript);
   }, []);
+
+  return null;
+}
+
+function MobileWebScrollbarStyles() {
+  const { isDark } = useTheme();
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const styleId = 'reach-mobile-scrollbar-styles';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    const thumbColor = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.22)';
+    const thumbHover = isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.38)';
+    styleEl.innerHTML = `
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: ${thumbColor} transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: ${thumbColor};
+        border-radius: 9999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: ${thumbHover};
+      }
+    `;
+  }, [isDark]);
 
   return null;
 }
@@ -211,6 +252,7 @@ function ThemedAppContainer() {
       <MobileOperatorAlertsListener />
       <MobileAgentation />
       <MobileGoogleAnalytics />
+      <MobileWebScrollbarStyles />
     </View>
   );
 }

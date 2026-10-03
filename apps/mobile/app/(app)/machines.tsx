@@ -15,7 +15,7 @@ import {
   Easing,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
+import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { MachineModal } from '../../components/machines/MachineModal';
@@ -45,6 +45,9 @@ import {
   SlidersHorizontal,
   AlertCircle,
   RefreshCw,
+  CheckCircle2,
+  Building2,
+  AlertTriangle,
 } from 'lucide-react-native';
 
 export type RentalFilterType = 'all' | 'available' | 'rented';
@@ -82,6 +85,13 @@ const SORT_OPTIONS: FilterOption[] = [
   { id: 'lowest_hmr', label: 'Lowest HMR' },
 ];
 
+const DEFAULT_MACHINE_FILTERS = {
+  rentalFilter: 'all' as RentalFilterType,
+  healthFilter: 'all' as HealthFilterType,
+  supervisorFilter: 'all',
+  sortBy: 'machine_id_asc' as SortOptionType,
+};
+
 const MACHINE_SELECT_COLUMNS = `
   id,
   machine_id,
@@ -106,8 +116,8 @@ const MACHINE_SELECT_COLUMNS = `
     city,
     state
   ),
-  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time, role),
-  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time, role)
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role),
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role)
 `;
 
 export default function MachinesScreen() {
@@ -152,12 +162,7 @@ export default function MachinesScreen() {
   }>({
     storageKey: 'reach_filters_machines',
     defaultSearch: '',
-    defaultFilters: {
-      rentalFilter: 'all',
-      healthFilter: 'all',
-      supervisorFilter: 'all',
-      sortBy: 'machine_id_asc',
-    },
+    defaultFilters: DEFAULT_MACHINE_FILTERS,
     debounceMs: 280,
   });
 
@@ -350,11 +355,11 @@ export default function MachinesScreen() {
               .in('id', Array.from(allUserIds));
 
             (usersData || []).forEach((u: any) => {
+              const sStart = u.shift_start_time ? String(u.shift_start_time).slice(0, 5) : '';
+              const sEnd = u.shift_end_time ? String(u.shift_end_time).slice(0, 5) : '';
               usersMap.set(u.id, {
                 ...u,
-                shift_time: (u.shift_start_time && u.shift_end_time)
-                  ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}`
-                  : null,
+                shift_time: (sStart && sEnd) ? `${sStart} - ${sEnd}` : null,
               });
             });
           } catch (uErr) {
@@ -459,12 +464,26 @@ export default function MachinesScreen() {
               ? [m.current_operator_id]
               : [];
 
+          const formatUserShift = (u: any) => {
+            if (!u) return null;
+            if (u.shift_time) return u;
+            const startStr = u.shift_start_time ? String(u.shift_start_time).slice(0, 5) : '';
+            const endStr = u.shift_end_time ? String(u.shift_end_time).slice(0, 5) : '';
+            return {
+              ...u,
+              shift_time: (startStr && endStr) ? `${startStr} - ${endStr}` : null,
+            };
+          };
+
+          const rawSup = m.current_supervisor?.id ? formatUserShift(m.current_supervisor) : null;
+          const rawOp = m.current_operator?.id ? formatUserShift(m.current_operator) : null;
+
           const sups = supIds
-            .map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null))
+            .map((id: string) => usersMap.get(id) || (rawSup?.id === id ? rawSup : null))
             .filter(Boolean);
 
           const ops = opIds
-            .map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null))
+            .map((id: string) => usersMap.get(id) || (rawOp?.id === id ? rawOp : null))
             .filter(Boolean);
 
           const clientObj = m.client || (m.client_id ? clientsMap.get(m.client_id) : null) || null;
@@ -475,8 +494,8 @@ export default function MachinesScreen() {
             supervisors: sups,
             operators: ops,
             active_assignments: activeAssignments,
-            current_supervisor: sups[0] || m.current_supervisor || null,
-            current_operator: ops[0] || m.current_operator || null,
+            current_supervisor: sups[0] || rawSup || null,
+            current_operator: ops[0] || rawOp || null,
           };
         });
 
@@ -608,9 +627,9 @@ export default function MachinesScreen() {
     return count;
   }, [rentalFilter, healthFilter, supervisorFilter, debouncedSearch, sortBy]);
 
-  const handleResetAllFilters = () => {
+  const handleResetAllFilters = useCallback(() => {
     resetListFilters();
-  };
+  }, [resetListFilters]);
 
   // Client-side search, filtering and sorting
   const filteredAndSortedMachines = useMemo(() => {
@@ -654,8 +673,8 @@ export default function MachinesScreen() {
       if (sortBy === 'machine_id_asc') return (a.machine_id || '').localeCompare(b.machine_id || '');
       if (sortBy === 'machine_id_desc') return (b.machine_id || '').localeCompare(a.machine_id || '');
       if (sortBy === 'model_asc') return (a.model || '').localeCompare(b.model || '');
-      if (sortBy === 'newest_yum') return (b.year_of_mfg || '').localeCompare(a.year_of_mfg || '');
-      if (sortBy === 'oldest_yum') return (a.year_of_mfg || '').localeCompare(b.year_of_mfg || '');
+      if (sortBy === 'newest_yum') return (Number(b.year_of_mfg) || 0) - (Number(a.year_of_mfg) || 0);
+      if (sortBy === 'oldest_yum') return (Number(a.year_of_mfg) || 0) - (Number(b.year_of_mfg) || 0);
       if (sortBy === 'highest_hmr') return (Number(b.hour_meter) || 0) - (Number(a.hour_meter) || 0);
       if (sortBy === 'lowest_hmr') return (Number(a.hour_meter) || 0) - (Number(b.hour_meter) || 0);
       return 0;
@@ -752,7 +771,9 @@ export default function MachinesScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        indicatorStyle={isDark ? 'white' : 'black'}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -839,103 +860,55 @@ export default function MachinesScreen() {
         ) : (
           <>
         {/* Interactive 4-Card KPI Metric Grid */}
-        <View style={styles.kpiGrid}>
-          {/* Total Machines Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+        <KPIGrid columns={4}>
+          <KPICard
+            label="Total Machines"
+            value={statsSummary.totalCount}
+            icon={Wrench}
+            variant="default"
+            active={rentalFilter === 'all' && healthFilter === 'all'}
             onPress={() => {
               setRentalFilter('all');
               setHealthFilter('all');
             }}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor:
-                  rentalFilter === 'all' && healthFilter === 'all'
-                    ? theme.colors.ink
-                    : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL MACHINES</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{statsSummary.totalCount}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* Available Fleet Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="Available Fleet"
+            value={statsSummary.availableCount}
+            icon={CheckCircle2}
+            variant="success"
+            active={rentalFilter === 'available'}
             onPress={() => {
               setRentalFilter((prev) => (prev === 'available' ? 'all' : 'available'));
             }}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor:
-                  rentalFilter === 'available'
-                    ? isDark ? '#064e3b26' : '#ecfdf5'
-                    : theme.colors.canvasElevated,
-                borderColor: rentalFilter === 'available' ? '#10b981' : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>AVAILABLE FLEET</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>{statsSummary.availableCount}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* On Rent Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="On Rent"
+            value={statsSummary.rentedCount}
+            icon={Building2}
+            variant="info"
+            active={rentalFilter === 'rented'}
             onPress={() => {
               setRentalFilter((prev) => (prev === 'rented' ? 'all' : 'rented'));
             }}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor:
-                  rentalFilter === 'rented'
-                    ? isDark ? '#0c4a6e26' : '#f0f9ff'
-                    : theme.colors.canvasElevated,
-                borderColor: rentalFilter === 'rented' ? '#0ea5e9' : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: '#0ea5e9' }]}>ON RENT</Text>
-            <Text style={[styles.kpiValue, { color: '#0284c7' }]}>{statsSummary.rentedCount}</Text>
-          </TouchableOpacity>
+          />
 
-          {/* Breakdown Events Card */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <KPICard
+            label="Breakdown Events"
+            value={statsSummary.breakdownCount}
+            icon={AlertTriangle}
+            variant={statsSummary.breakdownCount > 0 ? 'error' : 'default'}
+            active={healthFilter === 'breakdown'}
             onPress={() => {
               setHealthFilter((prev) => (prev === 'breakdown' ? 'all' : 'breakdown'));
             }}
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor:
-                  healthFilter === 'breakdown'
-                    ? isDark ? '#7f1d1d26' : '#fff1f2'
-                    : theme.colors.canvasElevated,
-                borderColor: healthFilter === 'breakdown' ? '#ef4444' : theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: '#ef4444' }]}>BREAKDOWN EVENTS</Text>
-            <Text style={[styles.kpiValue, { color: '#dc2626' }]}>{statsSummary.breakdownCount}</Text>
-          </TouchableOpacity>
-        </View>
+          />
+        </KPIGrid>
 
-        {/* FilterToolbar Card Wrapper */}
-        <View
-          style={[
-            styles.filterToolbar,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
+        {/* FilterToolbar Container */}
+        <View style={styles.filterToolbar}>
           {/* Top Search & Filter Action Row */}
           <View style={styles.toolbarTopRow}>
             {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
@@ -1714,44 +1687,9 @@ const styles = StyleSheet.create({
     paddingBottom: 90,
     gap: spacingNumeric.md,
   },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '47%',
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 4,
-  },
   filterToolbar: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
     gap: spacingNumeric.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    marginBottom: spacingNumeric.xs,
   },
   toolbarTopRow: {
     flexDirection: 'row',

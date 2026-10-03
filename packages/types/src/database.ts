@@ -720,6 +720,7 @@ export interface TodayShiftMonitorRow {
   shift_end: string | null;
   status: "entered" | "pending" | "unassigned";
   log_id: string | null;
+  hour_log_id?: string | null;
   entered_by: string | null;
   entered_by_name: string | null;
   entry_source: string | null;
@@ -1204,7 +1205,16 @@ export interface CRMClient {
   status: "active" | "inactive";
   deleted_at?: string | null;
   created_at: string;
-  updated_at?: string;
+  /** Operational sites associated with this client */
+  client_sites?: {
+    id: string;
+    site_code: string;
+    site_name: string;
+    city: string;
+    status: string;
+  }[];
+  /** Count of operational sites for this client */
+  site_count?: number;
   /** @deprecated Backward compatibility alias mapped from company_name */
   client_name?: string;
   /** @deprecated Backward compatibility optional alias */

@@ -24,6 +24,9 @@ import {
   HeaderActionItem,
   DropdownFilterSelector,
   type FilterOption,
+  KPICard,
+  KPIGrid,
+  HighlightText,
 } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
@@ -69,6 +72,7 @@ import {
   AlertTriangle,
   Globe,
   Smartphone,
+  Wrench,
 } from 'lucide-react-native';
 
 const ROLE_FILTER_OPTIONS: FilterOption[] = [
@@ -265,6 +269,7 @@ interface UserTouchCardProps {
   theme: any;
   onPress: (user: UserRecord) => void;
   onLongPress: (user: UserRecord) => void;
+  searchTerm?: string;
 }
 
 const UserTouchCard = React.memo(function UserTouchCard({
@@ -274,6 +279,7 @@ const UserTouchCard = React.memo(function UserTouchCard({
   theme,
   onPress,
   onLongPress,
+  searchTerm,
 }: UserTouchCardProps) {
   const accentColor = getRoleAccentColor(u.role);
 
@@ -320,20 +326,28 @@ const UserTouchCard = React.memo(function UserTouchCard({
             )}
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <Text style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]} numberOfLines={1}>
-                  {truncateText(u.full_name, 20)}
-                </Text>
+                <HighlightText
+                  text={truncateText(u.full_name, 20)}
+                  query={searchTerm}
+                  style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
+                  numberOfLines={1}
+                />
                 {u.employee_id ? (
                   <View style={{ backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
-                    <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
-                      {u.employee_id}
-                    </Text>
+                    <HighlightText
+                      text={u.employee_id}
+                      query={searchTerm}
+                      style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}
+                    />
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.userEmail, { color: theme.colors.mute }]} numberOfLines={1}>
-                {truncateText(u.email, 28)}
-              </Text>
+              <HighlightText
+                text={truncateText(u.email, 28)}
+                query={searchTerm}
+                style={[styles.userEmail, { color: theme.colors.mute }]}
+                numberOfLines={1}
+              />
             </View>
           </View>
 
@@ -368,9 +382,11 @@ const UserTouchCard = React.memo(function UserTouchCard({
             {u.phone ? (
               <View style={styles.metaChip}>
                 <Phone size={11} color={theme.colors.mute} />
-                <Text style={[styles.metaChipText, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
-                  {u.phone}
-                </Text>
+                <HighlightText
+                  text={u.phone}
+                  query={searchTerm}
+                  style={[styles.metaChipText, { color: theme.colors.ink, fontFamily: 'monospace' }]}
+                />
               </View>
             ) : null}
           </View>
@@ -379,9 +395,11 @@ const UserTouchCard = React.memo(function UserTouchCard({
           {(u.city || u.state) && (
             <View style={styles.metaChipRow}>
               <MapPin size={11} color={theme.colors.mute} />
-              <Text style={[styles.metaChipText, { color: theme.colors.mute }]}>
-                {[u.city, u.district, u.state].filter(Boolean).join(', ')}
-              </Text>
+              <HighlightText
+                text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                query={searchTerm}
+                style={[styles.metaChipText, { color: theme.colors.mute }]}
+              />
             </View>
           )}
 
@@ -400,6 +418,15 @@ const UserTouchCard = React.memo(function UserTouchCard({
     </TouchableOpacity>
   );
 });
+
+const DEFAULT_USERS_FILTERS = {
+  roleFilter: 'all',
+  statusFilter: 'all',
+  stateFilter: 'all',
+  kycFilter: 'all',
+  dateRangeFilter: 'all',
+  sortBy: 'newest',
+};
 
 export default function UsersScreen() {
   const { theme, isDark } = useTheme();
@@ -443,14 +470,7 @@ export default function UsersScreen() {
   }>({
     storageKey: 'reach_filters_users',
     defaultSearch: typeof localParams.search === 'string' ? localParams.search.trim() : '',
-    defaultFilters: {
-      roleFilter: 'all',
-      statusFilter: 'all',
-      stateFilter: 'all',
-      kycFilter: 'all',
-      dateRangeFilter: 'all',
-      sortBy: 'newest',
-    },
+    defaultFilters: DEFAULT_USERS_FILTERS,
     debounceMs: 280,
   });
 
@@ -1524,9 +1544,10 @@ export default function UsersScreen() {
         theme={theme}
         onPress={handleUserCardPress}
         onLongPress={handleUserCardLongPress}
+        searchTerm={debouncedSearch}
       />
     ),
-    [selectedIds, isSelectMode, theme, handleUserCardPress, handleUserCardLongPress]
+    [selectedIds, isSelectMode, theme, handleUserCardPress, handleUserCardLongPress, debouncedSearch]
   );
 
   const keyExtractor = useCallback((item: UserRecord) => item.id, []);
@@ -1645,94 +1666,52 @@ export default function UsersScreen() {
         ListHeaderComponent={
           <View style={styles.listHeaderWrapper}>
             {/* Interactive 4-Card KPI Metric Grid */}
-            <View style={styles.kpiGrid}>
-              {/* Card 1: Total Users */}
-              <TouchableOpacity
-                activeOpacity={0.8}
+            <KPIGrid columns={4}>
+              <KPICard
+                label="Total Staff"
+                value={totalUsersCount || users.length}
+                icon={Users}
+                variant="default"
+                active={roleFilter === 'all' && statusFilter === 'all'}
                 onPress={() => {
                   setRoleFilter('all');
                   setStatusFilter('all');
                 }}
-                style={[
-                  styles.kpiCard,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor:
-                      roleFilter === 'all' && statusFilter === 'all'
-                        ? theme.colors.ink
-                        : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL STAFF</Text>
-                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                  {totalUsersCount || users.length}
-                </Text>
-              </TouchableOpacity>
+              />
 
-              {/* Card 2: Active Users */}
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <KPICard
+                label="Active Staff"
+                value={activeCount}
+                icon={UserCheck}
+                variant="success"
+                active={statusFilter === 'active'}
                 onPress={() => {
                   setStatusFilter((prev) => (prev === 'active' ? 'all' : 'active'));
                 }}
-                style={[
-                  styles.kpiCard,
-                  {
-                    backgroundColor:
-                      statusFilter === 'active'
-                        ? isDark ? '#064e3b26' : '#ecfdf5'
-                        : theme.colors.canvasElevated,
-                    borderColor: statusFilter === 'active' ? '#10b981' : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text style={[styles.kpiLabel, { color: '#10b981' }]}>ACTIVE</Text>
-                <Text style={[styles.kpiValue, { color: '#059669' }]}>{activeCount}</Text>
-              </TouchableOpacity>
+              />
 
-              {/* Card 3: Operators */}
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <KPICard
+                label="Operators"
+                value={operatorCount}
+                icon={Wrench}
+                variant="warning"
+                active={roleFilter === 'operator'}
                 onPress={() => {
                   setRoleFilter((prev) => (prev === 'operator' ? 'all' : 'operator'));
                 }}
-                style={[
-                  styles.kpiCard,
-                  {
-                    backgroundColor:
-                      roleFilter === 'operator'
-                        ? isDark ? '#78350f26' : '#fffbeb'
-                        : theme.colors.canvasElevated,
-                    borderColor: roleFilter === 'operator' ? '#d97706' : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text style={[styles.kpiLabel, { color: '#d97706' }]}>OPERATORS</Text>
-                <Text style={[styles.kpiValue, { color: '#b45309' }]}>{operatorCount}</Text>
-              </TouchableOpacity>
+              />
 
-              {/* Card 4: Pending Approvals */}
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <KPICard
+                label="Pending Approvals"
+                value={pendingCount}
+                icon={Clock}
+                variant={pendingCount > 0 ? 'purple' : 'default'}
+                active={statusFilter === 'pending'}
                 onPress={() => {
                   setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'));
                 }}
-                style={[
-                  styles.kpiCard,
-                  {
-                    backgroundColor:
-                      statusFilter === 'pending'
-                        ? isDark ? '#78350f26' : '#fffbeb'
-                        : theme.colors.canvasElevated,
-                    borderColor: statusFilter === 'pending' ? '#f59e0b' : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text style={[styles.kpiLabel, { color: '#f59e0b' }]}>PENDING</Text>
-                <Text style={[styles.kpiValue, { color: '#d97706' }]}>{pendingCount}</Text>
-              </TouchableOpacity>
-            </View>
+              />
+            </KPIGrid>
 
             {/* FilterToolbar Card Wrapper */}
             <View
@@ -2488,34 +2467,6 @@ const styles = StyleSheet.create({
   retryInitialBtnText: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '47%',
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 4,
   },
   filterToolbar: {
     borderRadius: radiusNumeric.lg,

@@ -12,6 +12,8 @@ export interface MobileFormSectionCardProps {
   isMandatory?: boolean;
   isCompleted?: boolean;
   isReadOnly?: boolean;
+  headerAction?: React.ReactNode;
+  hideCompletedBadge?: boolean;
   children: React.ReactNode;
   style?: ViewStyle;
 }
@@ -24,6 +26,8 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
   isMandatory = false,
   isCompleted = false,
   isReadOnly = false,
+  headerAction,
+  hideCompletedBadge = false,
   children,
   style,
 }) => {
@@ -39,14 +43,16 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
             ? isDark
               ? 'rgba(52, 211, 153, 0.8)'
               : '#10b981'
-            : theme.colors.hairline,
+            : isDark
+            ? '#262626'
+            : '#ebebeb',
           borderWidth: isCompleted && !isReadOnly ? 1.5 : 1,
         },
         style,
       ]}
     >
       {/* Header Bar */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+      <View style={[styles.header, { borderBottomColor: isDark ? '#262626' : '#f0f0f0' }]}>
         <View style={styles.titleRow}>
           {stepNumber !== undefined && (
             <View
@@ -60,18 +66,30 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
                       ? 'rgba(255, 255, 255, 0.05)'
                       : 'rgba(0, 0, 0, 0.04)'
                     : isDark
-                    ? 'rgba(255, 255, 255, 0.1)'
-                    : 'rgba(0, 0, 0, 0.06)',
+                    ? 'rgba(14, 165, 233, 0.15)'
+                    : 'rgba(14, 165, 233, 0.1)',
                   borderColor: isCompleted && !isReadOnly
                     ? '#10b981'
-                    : theme.colors.hairline,
+                    : isReadOnly
+                    ? theme.colors.hairline
+                    : isDark
+                    ? 'rgba(14, 165, 233, 0.3)'
+                    : 'rgba(14, 165, 233, 0.25)',
                 },
               ]}
             >
               <Text
                 style={[
                   styles.stepNumberText,
-                  { color: isCompleted && !isReadOnly ? '#ffffff' : theme.colors.ink },
+                  {
+                    color: isCompleted && !isReadOnly
+                      ? '#ffffff'
+                      : isReadOnly
+                      ? theme.colors.mute
+                      : isDark
+                      ? '#38bdf8'
+                      : '#0284c7',
+                  },
                 ]}
               >
                 {stepNumber}
@@ -92,6 +110,8 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
 
         {/* Badges */}
         <View style={styles.badgeRow}>
+          {headerAction}
+
           {isReadOnly ? (
             <View
               style={[
@@ -105,11 +125,11 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
               <Lock size={10} color={theme.colors.mute} />
               <Text style={[styles.readOnlyBadgeText, { color: theme.colors.mute }]}>Read-only</Text>
             </View>
-          ) : isCompleted ? (
+          ) : isCompleted && !headerAction && !hideCompletedBadge ? (
             <View style={styles.completedBadge}>
               <Check size={12} color="#10b981" strokeWidth={2.5} />
             </View>
-          ) : !isMandatory ? (
+          ) : !isMandatory && !isCompleted ? (
             <View
               style={[
                 styles.optionalBadge,
@@ -162,21 +182,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNumberText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
   },
   title: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   badgeRow: {
@@ -185,31 +205,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   completedBadge: {
-    flexDirection: 'row',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  completedBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#10b981',
-  },
-  mandatoryBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  mandatoryBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#f43f5e',
   },
   optionalBadge: {
     paddingHorizontal: 7,
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   optionalBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
   },
   readOnlyBadge: {
@@ -231,7 +234,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   readOnlyBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
   },
   description: {

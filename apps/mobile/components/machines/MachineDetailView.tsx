@@ -10,8 +10,9 @@ import {
   Platform,
   TextInput,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
-import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -47,10 +48,12 @@ import {
   ArrowRight,
   ArrowRightLeft,
   FileText,
+  Info,
 } from 'lucide-react-native';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
 import { CustomFilterSelectorModal } from './CustomFilterSelectorModal';
+import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
 
 export interface MachineDetailViewProps {
   machine: any;
@@ -263,9 +266,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   // Modals
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
+  const [heroMenuVisible, setHeroMenuVisible] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Responsive dimensions for 3-tier viewports (Mobile <=640px, Tablet 641-1023px, Desktop >=1024px)
+  const { width: windowWidth } = useWindowDimensions();
+  const isMobile = windowWidth <= 640;
+  const isTablet = windowWidth > 640 && windowWidth < 1024;
+  const numCols = isMobile ? 2 : isTablet ? 3 : 4;
 
   // Running Logs State (Lazy loaded)
   const [hourLogs, setHourLogs] = useState<any[] | null>(null);
@@ -330,21 +340,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const hasLinkedClient = Boolean(clientCompanyName || fullSiteAddress || clientPhone);
 
   // Supervisors & Operators
-  const supervisors = Array.isArray(machine.supervisors)
-    ? machine.supervisors.filter((s: any) => Boolean(s?.full_name))
-    : Array.isArray(machine.supervisor_ids)
-    ? []
-    : machine.current_supervisor?.full_name
-    ? [machine.current_supervisor]
-    : [];
+  const supervisors = useMemo(() => {
+    if (Array.isArray(machine.supervisors) && machine.supervisors.length > 0) {
+      return machine.supervisors.filter((s: any) => Boolean(s?.full_name));
+    }
+    if (machine.current_supervisor?.full_name) {
+      return [machine.current_supervisor];
+    }
+    return [];
+  }, [machine.supervisors, machine.current_supervisor]);
 
-  const operators = Array.isArray(machine.operators)
-    ? machine.operators.filter((o: any) => Boolean(o?.full_name))
-    : Array.isArray(machine.operator_ids)
-    ? []
-    : machine.current_operator?.full_name
-    ? [machine.current_operator]
-    : [];
+  const operators = useMemo(() => {
+    if (Array.isArray(machine.operators) && machine.operators.length > 0) {
+      return machine.operators.filter((o: any) => Boolean(o?.full_name));
+    }
+    if (machine.current_operator?.full_name) {
+      return [machine.current_operator];
+    }
+    return [];
+  }, [machine.operators, machine.current_operator]);
 
   // Copy handlers
   const handleCopy = (setter: (v: boolean) => void) => {
@@ -949,19 +963,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Back Navigation Bar (Screenshot 2 Match) */}
-      <View style={[styles.navBar, { borderBottomColor: theme.colors.hairline }]}>
-        <TouchableOpacity
-          onPress={onBack}
-          activeOpacity={0.7}
-          style={styles.backBtn}
-        >
-          <ChevronLeft size={16} color={theme.colors.mute} />
-          <Text style={[styles.backBtnText, { color: theme.colors.mute }]}>
-            Back to Machines
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Top Standardized Mobile Header */}
+      <MobileHeader
+        title="Machine Details"
+        showBack={true}
+        onPressBack={onBack}
+      />
 
       <ScrollView
         style={styles.scrollArea}
@@ -976,7 +983,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
       >
         {/* STATIC HEADER & NAVIGATION ZONE */}
         <View style={[styles.stickyHeaderZone, { backgroundColor: theme.colors.canvas }]}>
-          {/* HERO BANNER CARD (Screenshot 2 Match) */}
+          {/* HERO BANNER CARD */}
           <View
             style={[
               styles.heroCard,
@@ -986,201 +993,144 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               },
             ]}
           >
-          <View style={styles.heroMainRow}>
-            {/* Scissor Lift Logo Icon in Theme-Adaptive Squircle */}
+            {/* Row 1: Left squircle + Title & Subtitle + Right Actions */}
+            <View style={styles.heroMainRow}>
+              {/* Scissor Lift Logo Icon in Theme-Adaptive Squircle */}
+              <View
+                style={[
+                  styles.scissorSquircle,
+                  {
+                    backgroundColor: isDark ? '#18181b' : '#f1f5f9',
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <ScissorLiftLogoIcon size={22} />
+              </View>
+
+              {/* Title & Subtitle */}
+              <View style={styles.heroTitleWrap}>
+                <Text style={[styles.heroTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {displayTitle}
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={[styles.specBoxValueMono, { fontSize: 11.5, color: theme.colors.mute }]}>
+                    {machine.machine_id}
+                  </Text>
+                  {Boolean(machine.manufacturer) && (
+                    <>
+                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>•</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '500', color: theme.colors.mute }} numberOfLines={1}>
+                        {machine.manufacturer}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {/* Right Action Buttons: Edit & Delete */}
+              <View style={styles.heroActionBtns}>
+                {canManage ? (
+                  <TouchableOpacity
+                    onPress={() => setHeroMenuVisible(true)}
+                    style={[
+                      styles.heroEditBtn,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Edit Machine Options"
+                  >
+                    <Edit2 size={13} color={theme.colors.ink} />
+                    <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Edit</Text>
+                    <ChevronDown size={11} color={theme.colors.mute} />
+                  </TouchableOpacity>
+                ) : isSupervisor ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditSection('personnel');
+                      setEditModalVisible(true);
+                    }}
+                    style={[
+                      styles.heroEditBtn,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Assign Operator"
+                  >
+                    <UserCheck size={13} color="#0d9488" />
+                    <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Assign</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {canDelete && (
+                  <TouchableOpacity
+                    onPress={() => setDeleteDialogVisible(true)}
+                    style={styles.circleDeleteBtn}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Delete Machine"
+                  >
+                    <Trash2 size={14} color="#ffffff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Row 2: Status Badges Row (full width, side-by-side, clean padding, formatted) */}
             <View
               style={[
-                styles.scissorSquircle,
+                styles.heroBadgeRow,
                 {
-                  backgroundColor: isDark ? '#18181b' : '#f1f5f9',
-                  borderColor: theme.colors.hairline,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.colors.hairline,
+                  paddingTop: 10,
+                  marginTop: 10,
                 },
               ]}
             >
-              <ScissorLiftLogoIcon size={24} />
-            </View>
-
-            {/* Title & Status Badges */}
-            <View style={styles.heroTitleWrap}>
-              <Text style={[styles.heroTitle, { color: theme.colors.ink }]} numberOfLines={2}>
-                {displayTitle}
-              </Text>
-
-              <View style={styles.heroBadgeRow}>
-                {machine.health_status === 'breakdown' && (
-                  <Badge status="breakdown" customLabel="Breakdown" />
-                )}
-                {machine.health_status === 'under_maintenance' && (
-                  <Badge status="under_maintenance" customLabel="Maintenance" />
-                )}
-                {machine.health_status === 'spare' && (
-                  <Badge status="spare" customLabel="Spare" />
-                )}
-                {(!machine.health_status || machine.health_status === 'active') && (
-                  <Badge status="active" customLabel="Active" />
-                )}
-
-                <Badge
-                  status={machine.status === 'rented' ? 'in_transit' : 'available'}
-                  customLabel={machine.status === 'rented' ? 'On Rent' : 'Available'}
-                />
-              </View>
-            </View>
-
-            {/* Action Buttons: Share, Edit & Red Delete */}
-            <View style={styles.heroActionBtns}>
-              <TouchableOpacity
-                onPress={() => setShareModalVisible(true)}
-                style={[
-                  styles.circleEditBtn,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                activeOpacity={0.7}
-                accessibilityLabel="Share Machine Link"
-              >
-                <Share2 size={15} color={theme.colors.ink} />
-              </TouchableOpacity>
-              {(canManage || isSupervisor) && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditSection(isSupervisor ? 'personnel' : 'all');
-                    setEditModalVisible(true);
-                  }}
-                  style={[
-                    styles.circleEditBtn,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  accessibilityLabel={isSupervisor ? 'Assign Operator' : 'Edit Machine'}
-                >
-                  <Edit2 size={15} color={theme.colors.ink} />
-                </TouchableOpacity>
+              {machine.health_status === 'breakdown' && (
+                <Badge status="breakdown" customLabel="Breakdown" />
+              )}
+              {machine.health_status === 'under_maintenance' && (
+                <Badge status="under_maintenance" customLabel="Under Maintenance" />
+              )}
+              {machine.health_status === 'spare' && (
+                <Badge status="spare" customLabel="Spare" />
+              )}
+              {(!machine.health_status || machine.health_status === 'active') && (
+                <Badge status="active" customLabel="Active" />
               )}
 
-              {canDelete && (
-                <TouchableOpacity
-                  onPress={() => setDeleteDialogVisible(true)}
-                  style={styles.circleDeleteBtn}
-                  activeOpacity={0.7}
-                >
-                  <Trash2 size={15} color="#ffffff" />
-                </TouchableOpacity>
-              )}
+              <Badge
+                status={machine.status === 'rented' ? 'in_transit' : machine.status === 'under_maintenance' ? 'under_maintenance' : 'available'}
+                customLabel={machine.status === 'rented' ? 'On Rent' : machine.status === 'under_maintenance' ? 'Under Maintenance' : 'Available'}
+              />
             </View>
           </View>
-        </View>
 
-        {/* SEGMENTED TAB TOGGLE (Screenshot 2 Match) */}
-        <View style={[styles.tabBarWrap, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          <TouchableOpacity
-            onPress={() => setActiveTab('overview')}
-            activeOpacity={0.7}
-            style={[
-              styles.tabPill,
-              activeTab === 'overview' && [
-                styles.tabPillActive,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ],
+          {/* TAB NAVIGATION TOGGLE / NAVBAR */}
+          <SegmentedToggle
+            items={[
+              { id: 'overview', label: 'Basic Info' },
+              { id: 'running_hours', label: 'HMR', count: hasLoadedLogs && hourLogs && hourLogs.length > 0 ? hourLogs.length : undefined },
+              ...(normalizedRole !== 'operator' ? [{ id: 'audit_trail', label: 'Audit', count: hasLoadedAudit && auditLogs && auditLogs.length > 0 ? auditLogs.length : undefined }] : []),
             ]}
-          >
-            <Text
-              style={[
-                styles.tabPillText,
-                {
-                  color: activeTab === 'overview' ? theme.colors.link : theme.colors.mute,
-                  fontWeight: activeTab === 'overview' ? '700' : '500',
-                },
-              ]}
-            >
-              Basic Info
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setActiveTab('running_hours')}
-            activeOpacity={0.7}
-            style={[
-              styles.tabPill,
-              activeTab === 'running_hours' && [
-                styles.tabPillActive,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ],
-            ]}
-          >
-            <Text
-              style={[
-                styles.tabPillText,
-                {
-                  color: activeTab === 'running_hours' ? theme.colors.link : theme.colors.mute,
-                  fontWeight: activeTab === 'running_hours' ? '700' : '500',
-                },
-              ]}
-            >
-              HMR
-            </Text>
-            {hasLoadedLogs && hourLogs && hourLogs.length > 0 && (
-              <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.tabCountText, { color: theme.colors.link }]}>
-                  {hourLogs.length}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {normalizedRole !== 'operator' && (
-            <TouchableOpacity
-              onPress={() => setActiveTab('audit_trail')}
-              activeOpacity={0.7}
-              style={[
-                styles.tabPill,
-                activeTab === 'audit_trail' && [
-                  styles.tabPillActive,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabPillText,
-                  {
-                    color: activeTab === 'audit_trail' ? theme.colors.link : theme.colors.mute,
-                    fontWeight: activeTab === 'audit_trail' ? '700' : '500',
-                  },
-                ]}
-              >
-                Audit
-              </Text>
-              {hasLoadedAudit && auditLogs && auditLogs.length > 0 && (
-                <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
-                  <Text style={[styles.tabCountText, { color: theme.colors.link }]}>
-                    {auditLogs.length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
+            value={activeTab}
+            onChange={(val) => setActiveTab(val as any)}
+            size="sm"
+          />
         </View>
 
-        {/* TAB 1: BASIC INFO & CLIENT DETAILS (Screenshot 2 Match) */}
+        {/* TAB 1: BASIC INFO, PERSONNEL & CLIENT DETAILS */}
         {activeTab === 'overview' && (
           <View style={styles.tabContentArea}>
-            {/* 1. Basic Info Specs Grid Card (Screenshot 2 Match) */}
+            {/* 1. Basic Info Specs Grid Card */}
             <View
               style={[
                 styles.contentCard,
@@ -1191,9 +1141,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               ]}
             >
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
-                  Basic Info
-                </Text>
+                <View style={styles.cardHeaderLeft}>
+                  <Info size={16} color="#0284c7" />
+                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                    Basic Info
+                  </Text>
+                </View>
                 {canManage && (
                   <TouchableOpacity
                     onPress={() => {
@@ -1201,30 +1154,47 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       setEditModalVisible(true);
                     }}
                     style={[
-                      styles.circleEditBtn,
+                      styles.headerActionBtnSm,
                       {
                         backgroundColor: theme.colors.canvas,
                         borderColor: theme.colors.hairline,
-                        width: 32,
-                        height: 32,
                       },
                     ]}
                     activeOpacity={0.7}
                     accessibilityLabel="Edit Basic Info"
                   >
-                    <Edit2 size={13} color={theme.colors.ink} />
+                    <Edit2 size={12} color={theme.colors.ink} />
+                    <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              <View style={styles.specsGrid}>
-                {/* Machine ID */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+              <View
+                style={[
+                  styles.specsGrid,
+                  Platform.OS === 'web' && ({
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${numCols}, minmax(0, 1fr))`,
+                    gap: 10,
+                  } as any),
+                ]}
+              >
+                {/* 1. Machine ID */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                       MACHINE ID
                     </Text>
-                    <TouchableOpacity onPress={() => handleCopy(setCopiedId)}>
+                    <TouchableOpacity onPress={() => handleCopy(setCopiedId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       {copiedId ? (
                         <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                       ) : (
@@ -1237,12 +1207,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Model */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 2. Model */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
                     {Boolean(machine.model) && (
-                      <TouchableOpacity onPress={() => handleCopy(setCopiedModel)}>
+                      <TouchableOpacity onPress={() => handleCopy(setCopiedModel)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         {copiedModel ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
@@ -1256,12 +1235,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Serial No */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 3. Serial No */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
                     {Boolean(machine.serial_number) && (
-                      <TouchableOpacity onPress={() => handleCopy(setCopiedSerial)}>
+                      <TouchableOpacity onPress={() => handleCopy(setCopiedSerial)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         {copiedSerial ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
@@ -1270,13 +1258,22 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </TouchableOpacity>
                     )}
                   </View>
-                  <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
+                  <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                     {machine.serial_number || '—'}
                   </Text>
                 </View>
 
-                {/* Year of Mfg */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 4. Year of Mfg */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     YEAR OF MFG (YUM)
                   </Text>
@@ -1285,8 +1282,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Manufacturer */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 5. Manufacturer */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     MANUFACTURER
                   </Text>
@@ -1295,8 +1301,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Hour Meter (HMR) in bold blue */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 6. Hour Meter (HMR) */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     HOUR METER (HMR)
                   </Text>
@@ -1305,12 +1320,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Supervisors */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 7. Supervisors */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SUPERVISORS</Text>
                     {supervisors.length > 0 && (
-                      <Text style={styles.specCountBadge}>{supervisors.length}</Text>
+                      <View style={[styles.tabCountPill, { backgroundColor: '#0284c718' }]}>
+                        <Text style={[styles.tabCountText, { color: '#0284c7' }]}>{supervisors.length}</Text>
+                      </View>
                     )}
                   </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
@@ -1318,14 +1344,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Operators */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {/* 8. Operators */}
+                <View
+                  style={[
+                    styles.specBox,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                    },
+                  ]}
+                >
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>OPERATORS</Text>
                     {operators.length > 0 && (
-                      <Text style={[styles.specCountBadge, { color: '#f59e0b' }]}>
-                        {operators.length}
-                      </Text>
+                      <View style={[styles.tabCountPill, { backgroundColor: '#d9770618' }]}>
+                        <Text style={[styles.tabCountText, { color: '#d97706' }]}>{operators.length}</Text>
+                      </View>
                     )}
                   </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
@@ -1335,7 +1370,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               </View>
             </View>
 
-            {/* 2. Assigned Shift Personnel (24h Fleet Coverage) (Screenshot 2 Match) */}
+            {/* 2. Assigned Shift Personnel (24h Fleet Coverage) */}
             <View
               style={[
                 styles.contentCard,
@@ -1347,34 +1382,60 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             >
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.cardHeaderLeft}>
-                  <Users size={16} color={theme.colors.link} />
+                  <Users size={16} color="#0284c7" />
                   <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
                     Assigned Shift Personnel
                   </Text>
                 </View>
 
-                {canAssignOperator && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <TouchableOpacity
-                    onPress={() => {
-                      setEditSection('personnel');
-                      setEditModalVisible(true);
-                    }}
-                    style={styles.manageStaffBtn}
+                    onPress={handleRefresh}
+                    style={[
+                      styles.headerActionBtnSm,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Sync Personnel"
                   >
-                    <Edit2 size={12} color={theme.colors.link} />
-                    <Text style={[styles.manageStaffText, { color: theme.colors.link }]}>
-                      {isSupervisor ? 'Assign Operator' : 'Manage Staff'}
-                    </Text>
+                    <RefreshCw size={12} color={theme.colors.mute} />
+                    <Text style={[styles.headerActionBtnSmText, { color: theme.colors.mute }]}>Sync</Text>
                   </TouchableOpacity>
-                )}
+
+                  {canAssignOperator && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditSection('personnel');
+                        setEditModalVisible(true);
+                      }}
+                      style={[
+                        styles.headerActionBtnSm,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Manage Staff"
+                    >
+                      <Edit2 size={12} color={theme.colors.ink} />
+                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>
+                        {isSupervisor ? 'Assign' : 'Edit'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
-              <View style={styles.personnelSectionBody}>
+              <View style={[styles.personnelSectionBody, { flexDirection: isMobile ? 'column' : 'row', gap: 12 }]}>
                 {/* Supervisors Panel */}
-                <View style={[styles.personnelSubBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View style={[styles.personnelSubBox, { flex: 1, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
-                      <Shield size={14} color="#10b981" />
+                      <Shield size={14} color="#0d9488" />
                       <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
                         Supervisors ({supervisors.length})
                       </Text>
@@ -1408,9 +1469,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           </View>
 
                           <View style={styles.clockRow}>
-                            <Clock size={11} color="#10b981" />
-                            <Text style={styles.clockTimeText}>
-                              {s.shift_time || '09:30:00 - 06:30 PM'}
+                            <Clock size={11} color="#0d9488" />
+                            <Text style={[styles.clockTimeText, { color: '#0d9488' }]}>
+                              {s.shift_time || '09:30 AM - 06:30 PM'}
                             </Text>
                           </View>
                         </View>
@@ -1446,10 +1507,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
 
                 {/* Operators Panel */}
-                <View style={[styles.personnelSubBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View style={[styles.personnelSubBox, { flex: 1, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
-                      <Wrench size={14} color="#f59e0b" />
+                      <Wrench size={14} color="#d97706" />
                       <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
                         Operators ({operators.length})
                       </Text>
@@ -1477,14 +1538,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             <Text style={[styles.staffName, { color: theme.colors.ink }]}>
                               {o.full_name}
                             </Text>
-                            <Text style={[styles.staffShiftTag, { color: '#f59e0b' }]}>
+                            <Text style={[styles.staffShiftTag, { color: '#d97706' }]}>
                               {o.shift_code ? `Shift ${o.shift_code}` : `Shift ${idx + 1}`}
                             </Text>
                           </View>
 
                           <View style={styles.clockRow}>
-                            <Clock size={11} color="#10b981" />
-                            <Text style={styles.clockTimeText}>
+                            <Clock size={11} color="#d97706" />
+                            <Text style={[styles.clockTimeText, { color: '#d97706' }]}>
                               {o.shift_time || '24h Rotating Shift'}
                             </Text>
                           </View>
@@ -1534,7 +1595,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             >
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.cardHeaderLeft}>
-                  <Building2 size={16} color={theme.colors.link} />
+                  <Building2 size={16} color="#0284c7" />
                   <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
                     Client Details
                   </Text>
@@ -1549,18 +1610,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <TouchableOpacity
                       onPress={handleOpenMap}
                       style={[
-                        styles.circleEditBtn,
+                        styles.headerActionBtnSm,
                         {
                           backgroundColor: theme.colors.canvas,
                           borderColor: theme.colors.hairline,
-                          width: 32,
-                          height: 32,
                         },
                       ]}
                       activeOpacity={0.7}
                       accessibilityLabel="Open Map Location"
                     >
-                      <MapPin size={13} color="#0ea5e9" />
+                      <MapPin size={12} color="#0284c7" />
+                      <Text style={[styles.headerActionBtnSmText, { color: '#0284c7' }]}>Map</Text>
                     </TouchableOpacity>
                   ) : null}
                   {canManage && (
@@ -1570,18 +1630,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         setEditModalVisible(true);
                       }}
                       style={[
-                        styles.circleEditBtn,
+                        styles.headerActionBtnSm,
                         {
                           backgroundColor: theme.colors.canvas,
                           borderColor: theme.colors.hairline,
-                          width: 32,
-                          height: 32,
                         },
                       ]}
                       activeOpacity={0.7}
                       accessibilityLabel="Edit Client Details"
                     >
-                      <Edit2 size={13} color={theme.colors.ink} />
+                      <Edit2 size={12} color={theme.colors.ink} />
+                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1589,22 +1648,31 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
               {hasLinkedClient ? (
                 <View style={styles.clientDetailsBody}>
-                  <View style={styles.clientGrid}>
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                  <View
+                    style={[
+                      styles.clientGrid,
+                      Platform.OS === 'web' && ({
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? 'repeat(1, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))',
+                        gap: 10,
+                      } as any),
+                    ]}
+                  >
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                       <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CLIENT NAME</Text>
                       <Text style={[styles.clientNameValue, { color: theme.colors.ink }]}>
                         {clientCompanyName}
                       </Text>
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                       <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
                       <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
                         {clientContactPerson || '—'}
                       </Text>
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                       <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
                       {clientPhone ? (
                         <TouchableOpacity onPress={() => handleCall(clientPhone)}>
@@ -1617,7 +1685,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       )}
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                       <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CITY & STATE</Text>
                       <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
                         {clientLocation || '—'}
@@ -1625,11 +1693,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </View>
 
                     {clientGstin ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
                           <TouchableOpacity onPress={() => handleCopy(setCopiedGstin)}>
-                            {copiedGstin ? <Check size={11} color={theme.colors.success} /> : <Copy size={11} color={theme.colors.mute} />}
+                            {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </TouchableOpacity>
                         </View>
                         <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
@@ -1639,11 +1707,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     ) : null}
 
                     {clientPan ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
                           <TouchableOpacity onPress={() => handleCopy(setCopiedPan)}>
-                            {copiedPan ? <Check size={11} color={theme.colors.success} /> : <Copy size={11} color={theme.colors.mute} />}
+                            {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </TouchableOpacity>
                         </View>
                         <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
@@ -1659,7 +1727,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
                         <TouchableOpacity onPress={() => handleCopy(setCopiedSiteAddress)}>
-                          {copiedSiteAddress ? <Check size={11} color={theme.colors.success} /> : <Copy size={11} color={theme.colors.mute} />}
+                          {copiedSiteAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </TouchableOpacity>
                       </View>
                       <Text style={[styles.addressText, { color: theme.colors.ink }]}>
@@ -1674,7 +1742,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>BILLING ADDRESS</Text>
                         <TouchableOpacity onPress={() => handleCopy(setCopiedBillingAddress)}>
-                          {copiedBillingAddress ? <Check size={11} color={theme.colors.success} /> : <Copy size={11} color={theme.colors.mute} />}
+                          {copiedBillingAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </TouchableOpacity>
                       </View>
                       <Text style={[styles.addressText, { color: theme.colors.ink }]}>
@@ -1710,11 +1778,22 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
               ) : (
                 <View style={styles.noClientBox}>
-                  <Building2 size={24} color={theme.colors.mute} />
-                  <Text style={[styles.noClientTitle, { color: theme.colors.ink }]}>No Client Assigned</Text>
+                  <Building2 size={28} color={theme.colors.mute} />
+                  <Text style={[styles.noClientTitle, { color: theme.colors.ink, marginTop: 4 }]}>No Client Assigned</Text>
                   <Text style={[styles.noClientSub, { color: theme.colors.mute }]}>
                     This machine is currently available in the fleet inventory and has not been leased to a client account.
                   </Text>
+                  {canManage && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditSection('client');
+                        setEditModalVisible(true);
+                      }}
+                      style={[styles.headerActionBtnSm, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink, marginTop: 8, height: 34, paddingHorizontal: 12 }]}
+                    >
+                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.canvas }]}>Assign Client</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -2805,6 +2884,102 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         }}
       />
 
+      {/* Hero Edit Options Modal Popup */}
+      <Modal
+        visible={heroMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setHeroMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.heroMenuOverlay}
+          activeOpacity={1}
+          onPress={() => setHeroMenuVisible(false)}
+        >
+          <View
+            style={[
+              styles.heroMenuPopup,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }}>
+              <Text style={[styles.heroMenuHeaderTitle, { color: theme.colors.mute }]}>
+                EDIT MACHINE OPTIONS
+              </Text>
+              <TouchableOpacity onPress={() => setHeroMenuVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={15} color={theme.colors.mute} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.heroMenuItem}
+              onPress={() => {
+                setHeroMenuVisible(false);
+                setEditSection('info');
+                setEditModalVisible(true);
+              }}
+            >
+              <View style={[styles.heroMenuIconBox, { backgroundColor: '#f59e0b18' }]}>
+                <Wrench size={16} color="#d97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                  Edit Machine Info
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                  Specs, HMR & Health Status
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.heroMenuItem}
+              onPress={() => {
+                setHeroMenuVisible(false);
+                setEditSection('personnel');
+                setEditModalVisible(true);
+              }}
+            >
+              <View style={[styles.heroMenuIconBox, { backgroundColor: '#0d948818' }]}>
+                <Shield size={16} color="#0d9488" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                  Edit Personnel
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                  Supervisors & Operators
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.heroMenuItem}
+              onPress={() => {
+                setHeroMenuVisible(false);
+                setEditSection('client');
+                setEditModalVisible(true);
+              }}
+            >
+              <View style={[styles.heroMenuIconBox, { backgroundColor: '#0284c718' }]}>
+                <Building2 size={16} color="#0284c7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                  Edit Client Assignment
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                  Client & Rental Fleet Status
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Shared Link Preview Modal */}
       <SharedLinkPreviewCard
         asModal={true}
@@ -2821,23 +2996,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  navBar: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: spacingNumeric.sm,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    minHeight: 36,
-  },
-  backBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   scrollArea: {
     flex: 1,
@@ -2863,9 +3021,9 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   scissorSquircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: '#171717',
     borderWidth: 1,
     borderColor: '#262626',
@@ -2874,23 +3032,101 @@ const styles = StyleSheet.create({
   },
   heroTitleWrap: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   heroTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
   heroBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
+    gap: 8,
+    flexWrap: 'nowrap',
   },
   heroActionBtns: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  heroEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+  },
+  heroEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  headerActionBtnSm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 30,
+    paddingHorizontal: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  headerActionBtnSmText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  heroMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  heroMenuPopup: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.md,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 6,
+      },
+    }),
+  },
+  heroMenuHeaderTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  heroMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: radiusNumeric.md,
+  },
+  heroMenuIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: radiusNumeric.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroMenuItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   circleEditBtn: {
     width: 34,
@@ -2925,11 +3161,18 @@ const styles = StyleSheet.create({
   },
   tabPillActive: {
     borderWidth: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+      },
+    }),
   },
   tabPillText: {
     fontSize: 13,
@@ -3000,12 +3243,11 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   specBox: {
-    width: '48%',
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    padding: spacingNumeric.sm,
-    minHeight: 52,
-    justifyContent: 'center',
+    padding: 10,
+    minHeight: 64,
+    justifyContent: 'space-between',
   },
   specBoxHeader: {
     flexDirection: 'row',
@@ -3166,12 +3408,11 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   clientFieldBox: {
-    width: '48%',
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.sm,
-    minHeight: 52,
-    justifyContent: 'center',
+    minHeight: 60,
+    justifyContent: 'space-between',
   },
   clientNameValue: {
     fontSize: 13,

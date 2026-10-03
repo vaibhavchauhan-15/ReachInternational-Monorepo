@@ -133,7 +133,7 @@ export function MobileMachineCard({
         </div>
 
         {/* Health & Status Badges */}
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <div className="flex items-center justify-end gap-1.5 shrink-0 flex-wrap">
           {machine.health_status === "breakdown" && (
             <Badge variant="overdue" dot className="whitespace-nowrap text-xs">
               Breakdown
@@ -330,11 +330,11 @@ export function MobileMachineCard({
                 router.push(`/machines/${machine.id}?tab=running_hours`);
               }
             }}
-            className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="h-8 w-8 sm:w-auto sm:px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center sm:gap-1.5 cursor-pointer shadow-2xs"
             title="View Machine Running Logs (HMR)"
           >
             <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-            <span>Logs</span>
+            <span className="hidden sm:inline">Logs</span>
           </button>
         </div>
 
@@ -342,18 +342,19 @@ export function MobileMachineCard({
           <button
             type="button"
             onClick={() => onViewDetails(machine)}
-            className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+            className="h-8 w-8 sm:w-auto px-0 sm:px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
             title="View Machine Details"
           >
-            <span>View Details</span>
+            <span className="hidden sm:inline">View Details</span>
             <AnimatedChevronRight size={14} className="shrink-0" />
           </button>
         ) : (
           <Link
             href={`/machines/${machine.id}`}
-            className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+            className="h-8 w-8 sm:w-auto px-0 sm:px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1 shadow-2xs"
+            title="View Machine Details"
           >
-            <span>View Details</span>
+            <span className="hidden sm:inline">View Details</span>
             <AnimatedChevronRight size={14} className="shrink-0" />
           </Link>
         )}

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useTransition, useCallback, useRef
 import { useRouter } from "next/navigation";
 import { getTodayShiftMonitorAction } from "@/app/actions/operators";
 import { Badge, useToast, Button, EmptyState } from "@/components/ui";
+import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { getISTDateString } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow } from "@/lib/data/operations/today-shift-monitor";
@@ -476,9 +477,9 @@ export function TodayShiftMonitorTab({
                         </div>
                       ) : (
                         <>
-                          <div className="font-medium text-[var(--color-ink)]">{row.operator_name}</div>
+                          <div className="font-medium text-[var(--color-ink)]"><Highlight text={row.operator_name} query={searchQuery} /></div>
                           {row.operator_phone && (
-                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{row.operator_phone}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5"><Highlight text={row.operator_phone} query={searchQuery} /></div>
                           )}
                         </>
                       )}
@@ -495,19 +496,19 @@ export function TodayShiftMonitorTab({
                         title={`Assign personnel to ${row.machine_code}`}
                       >
                         <div className="font-mono text-[11px] font-medium text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
-                          {row.machine_serial_number || row.machine_code}
+                          <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
                         </div>
                         <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                          {row.machine_model && <span>{row.machine_model} · </span>}
-                          {row.machine_code}
+                          {row.machine_model && <span><Highlight text={row.machine_model} query={searchQuery} /> · </span>}
+                          <Highlight text={row.machine_code} query={searchQuery} />
                         </div>
                       </button>
                     </td>
                     {/* Client: name + client_id below */}
                     <td className="px-3 py-2 max-w-[160px]">
-                      <div className="text-[var(--color-ink)] truncate">{row.client_name}</div>
+                      <div className="text-[var(--color-ink)] truncate"><Highlight text={row.client_name} query={searchQuery} /></div>
                       {(row.client_code || row.client_id) && (
-                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">{row.client_code || row.client_id}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate"><Highlight text={row.client_code || row.client_id} query={searchQuery} /></div>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -631,9 +632,9 @@ export function TodayShiftMonitorTab({
                       </div>
                     ) : (
                       <>
-                        <div className="font-bold text-sm sm:text-base text-[var(--color-ink)] truncate">{row.operator_name}</div>
+                        <div className="font-bold text-sm sm:text-base text-[var(--color-ink)] truncate"><Highlight text={row.operator_name} query={searchQuery} /></div>
                         {row.operator_phone && (
-                          <div className="text-xs text-muted-foreground font-mono mt-0.5">{row.operator_phone}</div>
+                          <div className="text-xs text-muted-foreground font-mono mt-0.5"><Highlight text={row.operator_phone} query={searchQuery} /></div>
                         )}
                       </>
                     )}
@@ -654,13 +655,13 @@ export function TodayShiftMonitorTab({
                   className="w-full text-left space-y-0.5 p-1.5 -m-1 rounded hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
                   <div className="text-xs text-[var(--color-ink)] font-mono font-semibold">
-                    {row.machine_serial_number || row.machine_code}
-                    {row.machine_model && <span className="text-muted-foreground font-normal"> · {row.machine_model}</span>}
+                    <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
+                    {row.machine_model && <span className="text-muted-foreground font-normal"> · <Highlight text={row.machine_model} query={searchQuery} /></span>}
                   </div>
-                  <div className="text-xs text-muted-foreground font-mono">{row.machine_code}</div>
+                  <div className="text-xs text-muted-foreground font-mono"><Highlight text={row.machine_code} query={searchQuery} /></div>
                   <div className="text-xs text-muted-foreground">
-                    {row.client_name}
-                    {(row.client_code || row.client_id) && <span className="font-mono font-medium"> · {row.client_code || row.client_id}</span>}
+                    <Highlight text={row.client_name} query={searchQuery} />
+                    {(row.client_code || row.client_id) && <span className="font-mono font-medium"> · <Highlight text={row.client_code || row.client_id} query={searchQuery} /></span>}
                   </div>
                 </button>
 

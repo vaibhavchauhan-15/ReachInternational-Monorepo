@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { Button, Badge } from "@/components/ui";
+import { Highlight } from "@/components/ui/Highlight";
 import { ShieldAlert, RotateCcw, Calendar, MessageSquare, Clock, AlertTriangle } from "lucide-react";
 import type { MachineHourLog } from "@/lib/types/database";
 import { MobileOperationsLogCardSkeletonList } from "../skeletons/OperationsSkeletons";
@@ -25,6 +26,7 @@ export interface OperationsLogsMobileListProps {
   onPageSizeChange?: (newSize: number) => void;
   selectedMachineId?: string;
   clientMachines?: any[];
+  searchTerm?: string;
   // Mobile Lazy Loading Scroll Props
   mobileLogsList?: MachineHourLog[];
   isLoadingMoreMobile?: boolean;
@@ -45,12 +47,14 @@ export interface OperationsDailyLogMobileCardProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onOpenConflictModal?: (log: MachineHourLog) => void;
+  searchTerm?: string;
 }
 
 export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyLogMobileCard({
   group,
   logsViewMode,
   onOpenConflictModal,
+  searchTerm,
 }: OperationsDailyLogMobileCardProps) {
   const isClientView = logsViewMode === "client";
   const [isRemarksOpen, setIsRemarksOpen] = useState(false);
@@ -95,7 +99,7 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
 
         <div className="text-right truncate max-w-[170px]">
           <span className="font-bold text-sm text-[var(--color-ink)] block truncate">
-            {isClientView && group.machineModel ? group.machineModel : group.clientName}
+            <Highlight text={isClientView && group.machineModel ? group.machineModel : group.clientName} query={searchTerm} />
           </span>
         </div>
       </div>
@@ -113,7 +117,7 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
           <div className="flex items-center gap-1.5 flex-wrap max-w-full">
             <span className="text-xs text-[var(--color-mute)]">Operator:</span>
             <span className="font-semibold text-[var(--color-ink)] text-xs" title={group.operatorsDisplay}>
-              {group.operatorsDisplay}
+              <Highlight text={group.operatorsDisplay} query={searchTerm} />
             </span>
           </div>
         </div>
@@ -194,7 +198,7 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
               <div className="mt-1.5 space-y-2">
                 {group.remarksDisplay && (
                   <p className="p-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed italic">
-                    {group.remarksDisplay}
+                    <Highlight text={group.remarksDisplay} query={searchTerm} />
                   </p>
                 )}
                 {group.totalBreakdownHours > 0 && (() => {
@@ -303,6 +307,7 @@ export const OperationsLogsMobileList = React.memo(function OperationsLogsMobile
   loadMoreMobileError,
   onMobileRetry,
   mobileSentinelRef,
+  searchTerm,
 }: OperationsLogsMobileListProps) {
   const isClientView = logsViewMode === "client";
   const displayLogs = mobileLogsList && mobileLogsList.length > 0 ? mobileLogsList : logs;
@@ -432,6 +437,7 @@ export const OperationsLogsMobileList = React.memo(function OperationsLogsMobile
                   dayIndex={dayIdx}
                   logsViewMode={logsViewMode}
                   onOpenConflictModal={onOpenConflictModal}
+                  searchTerm={searchTerm}
                 />
               ))}
 
@@ -483,6 +489,7 @@ export const OperationsLogsMobileList = React.memo(function OperationsLogsMobile
                 dayIndex={dayIdx}
                 logsViewMode={logsViewMode}
                 onOpenConflictModal={onOpenConflictModal}
+                searchTerm={searchTerm}
               />
             ))
           )}

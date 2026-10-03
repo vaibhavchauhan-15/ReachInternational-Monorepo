@@ -4,11 +4,13 @@ import { memo } from "react";
 import Link from "next/link";
 import { AnimatedEye, AnimatedEdit, AnimatedTrash } from "@/components/ui/animated-icons";
 import { TableRow, TableCell, Badge, TooltipWrapper } from "@/components/ui";
+import { highlightText } from "@/components/ui/Highlight";
 import type { Machine } from "@/lib/types/database";
 
 interface MachineRowProps {
   machine: Machine;
   isAdmin: boolean;
+  searchTerm?: string;
   onEdit: (machine: Machine) => void;
   onDelete: (machine: Machine) => void;
 }
@@ -36,6 +38,7 @@ function getRentalStatusBadge(status: string) {
 export const MachineRow = memo(function MachineRow({
   machine,
   isAdmin,
+  searchTerm,
   onEdit,
   onDelete,
 }: MachineRowProps) {
@@ -47,13 +50,13 @@ export const MachineRow = memo(function MachineRow({
             href={`/machines/${machine.id}`}
             className="label-sm text-[var(--color-ink)] hover:underline font-bold font-mono text-sm flex items-center gap-1.5"
           >
-            {machine.machine_id}
+            {highlightText(machine.machine_id, searchTerm)}
           </Link>
-          {machine.model && <span className="body-sm text-[var(--color-ink)] font-semibold">{machine.model}</span>}
+          {machine.model && <span className="body-sm text-[var(--color-ink)] font-semibold">{highlightText(machine.model, searchTerm)}</span>}
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-mute)] mt-0.5">
-            {machine.serial_number && <span>Sr: {machine.serial_number}</span>}
+            {machine.serial_number && <span>Sr: {highlightText(machine.serial_number, searchTerm)}</span>}
             {machine.year_of_mfg && <span>• YUM: {machine.year_of_mfg}</span>}
-            {machine.manufacturer && <span>• Mfg: {machine.manufacturer}</span>}
+            {machine.manufacturer && <span>• Mfg: {highlightText(machine.manufacturer, searchTerm)}</span>}
           </div>
         </div>
       </TableCell>
@@ -68,10 +71,10 @@ export const MachineRow = memo(function MachineRow({
       <TableCell>
         <div className="flex flex-col">
           <span className="font-semibold text-xs text-[var(--color-ink)] truncate max-w-[130px]" title={machine.client?.company_name || machine.customer_name || "Unassigned"}>
-            {machine.client?.company_name || machine.customer_name || "—"}
+            {highlightText(machine.client?.company_name || machine.customer_name || "—", searchTerm)}
           </span>
           {machine.client?.code ? (
-            <span className="text-[10px] font-mono text-[var(--color-mute)]">{machine.client.code}</span>
+            <span className="text-[10px] font-mono text-[var(--color-mute)]">{highlightText(machine.client.code, searchTerm)}</span>
           ) : (
             <span className="text-[11px] text-[var(--color-mute)]">Assigned Client</span>
           )}

@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, HighlightText } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
@@ -801,37 +801,37 @@ export default function AttendanceScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.kpiRow}
             >
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.kpiHeader}>
-                  <Users size={14} color={theme.colors.mute} />
-                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Total Operators</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{kpis.totalEmployees}</Text>
-              </View>
+              <KPICard
+                label="Total Operators"
+                value={kpis.totalEmployees}
+                icon={Users}
+                variant="default"
+                containerStyle={{ width: 140, flex: 0 }}
+              />
 
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.kpiHeader}>
-                  <UserCheck size={14} color="#16a34a" />
-                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Present</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: '#16a34a' }]}>{kpis.presentCount}</Text>
-              </View>
+              <KPICard
+                label="Present"
+                value={kpis.presentCount}
+                icon={UserCheck}
+                variant="success"
+                containerStyle={{ width: 140, flex: 0 }}
+              />
 
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.kpiHeader}>
-                  <UserX size={14} color="#dc2626" />
-                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Absent</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: '#dc2626' }]}>{kpis.absentCount}</Text>
-              </View>
+              <KPICard
+                label="Absent"
+                value={kpis.absentCount}
+                icon={UserX}
+                variant={kpis.absentCount > 0 ? 'error' : 'default'}
+                containerStyle={{ width: 140, flex: 0 }}
+              />
 
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.kpiHeader}>
-                  <Clock size={14} color="#d97706" />
-                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Half Day</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: '#d97706' }]}>{kpis.halfDayCount}</Text>
-              </View>
+              <KPICard
+                label="Half Day"
+                value={kpis.halfDayCount}
+                icon={Clock}
+                variant={kpis.halfDayCount > 0 ? 'warning' : 'default'}
+                containerStyle={{ width: 140, flex: 0 }}
+              />
             </ScrollView>
 
             {/* Search Input */}
@@ -1122,26 +1122,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     paddingBottom: spacingNumeric.md,
-  },
-  kpiCard: {
-    width: 124,
-    padding: 12,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
-  kpiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 6,
-  },
-  kpiTitle: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: '700',
   },
   searchBox: {
     flexDirection: 'row',

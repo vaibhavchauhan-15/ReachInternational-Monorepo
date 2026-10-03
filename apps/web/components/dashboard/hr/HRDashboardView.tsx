@@ -60,7 +60,6 @@ export async function HRDashboardView({
             icon={UserCheck}
             href="/users"
             variant="info"
-            subtitle="Personnel deployed on site"
           />
           <KPICard
             label="Pending Profile Changes"
@@ -68,11 +67,6 @@ export async function HRDashboardView({
             icon={FileEdit}
             href="/users"
             variant={pendingProfileChanges > 0 ? "warning" : "default"}
-            subtitle={
-              pendingProfileChanges > 0
-                ? "Awaiting HR verification"
-                : "No pending requests"
-            }
           />
           <KPICard
             label="Logs Recorded Today"
@@ -80,7 +74,6 @@ export async function HRDashboardView({
             icon={Clock}
             href="/operations"
             variant={todayLogsCount > 0 ? "success" : "default"}
-            subtitle="Daily attendance indicator"
           />
         </KPIGrid>
       </div>

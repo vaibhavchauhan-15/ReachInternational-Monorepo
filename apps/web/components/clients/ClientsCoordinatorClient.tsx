@@ -1498,6 +1498,7 @@ export function ClientsCoordinatorClient({
             canManageClients={canManageClients}
             sortField={currentSort}
             sortOrder={currentOrder}
+            searchTerm={localSearchTerm}
             onSortChange={handleSortChange}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}

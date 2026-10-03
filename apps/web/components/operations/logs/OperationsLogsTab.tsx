@@ -2108,6 +2108,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         onOpenConflictModal={handleOpenConflictModal}
         currentSort={activeSort}
         onSortChange={handleSortChange}
+        searchTerm={committedSearch}
       />
 
       {/* MOBILE TOUCH CARDS */}
@@ -2129,6 +2130,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         loadMoreMobileError={loadMoreMobileError}
         onMobileRetry={handleMobileRetry}
         mobileSentinelRef={mobileSentinelRef}
+        searchTerm={committedSearch}
       />
 
       {/* DYNAMIC ON-DEMAND MODALS */}

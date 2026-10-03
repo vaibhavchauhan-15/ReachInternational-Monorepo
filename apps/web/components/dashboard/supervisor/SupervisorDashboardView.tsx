@@ -71,7 +71,6 @@ export async function SupervisorDashboardView({
             icon={CheckCircle2}
             href="/operations"
             variant="success"
-            subtitle={`${submitted} of ${assignedOperators} received`}
           />
           <KPICard
             label="Submissions Pending"
@@ -79,7 +78,6 @@ export async function SupervisorDashboardView({
             icon={Clock}
             href="/operations"
             variant={pending > 0 ? "warning" : "default"}
-            subtitle={pending > 0 ? "Awaiting operator entry" : "All logs submitted"}
           />
         </KPIGrid>
       </div>
@@ -106,7 +104,6 @@ export async function SupervisorDashboardView({
             icon={Timer}
             href="/operations"
             variant={overtimeEntries > 0 ? "info" : "default"}
-            subtitle="Operators logging extended work hours"
           />
         </div>
       </div>

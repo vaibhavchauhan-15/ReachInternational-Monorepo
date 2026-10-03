@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Badge, useTheme, HighlightText } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -39,11 +40,13 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   onViewDetails,
 }) => {
   const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isMobile = width <= 640;
   const [copied, setCopied] = useState(false);
 
-  const handleCopyId = () => {
+  const handleCopyId = (e?: any) => {
+    e?.stopPropagation?.();
     if (!machine.machine_id) return;
-    // Simple state indicator
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
@@ -71,7 +74,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   const clientName = machine.client?.company_name || machine.customer_name || '—';
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={() => onViewDetails(machine)}
       style={[
         styles.card,
         {
@@ -122,21 +127,22 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         {/* Badges Column */}
         <View style={styles.badgeWrap}>
           {machine.health_status === 'breakdown' && (
-            <Badge status="breakdown" customLabel="Breakdown" />
+            <Badge status="breakdown" customLabel="Breakdown" size="sm" />
           )}
           {machine.health_status === 'under_maintenance' && (
-            <Badge status="under_maintenance" customLabel="Maintenance" />
+            <Badge status="under_maintenance" customLabel="Maintenance" size="sm" />
           )}
           {machine.health_status === 'spare' && (
-            <Badge status="spare" customLabel="Spare" />
+            <Badge status="spare" customLabel="Spare" size="sm" />
           )}
           {(!machine.health_status || machine.health_status === 'active') && (
-            <Badge status="active" customLabel="Active" />
+            <Badge status="active" customLabel="Active" size="sm" />
           )}
 
           <Badge
-            status={machine.status === 'rented' ? 'in_transit' : 'available'}
+            status={machine.status === 'rented' ? 'rented' : 'available'}
             customLabel={machine.status === 'rented' ? 'Rented' : 'Available'}
+            size="sm"
           />
         </View>
       </View>
@@ -308,85 +314,132 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         <View style={styles.footerLeftBtns}>
           {isAdmin && (
             <TouchableOpacity
-              onPress={() => onEdit(machine)}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onEdit(machine);
+              }}
               style={[
-                styles.actionBtn,
+                styles.iconActionBtn,
                 {
                   backgroundColor: theme.colors.canvas,
                   borderColor: theme.colors.hairline,
                 },
               ]}
               activeOpacity={0.7}
+              accessibilityLabel="Edit Machine"
+              accessibilityRole="button"
             >
-              <Edit2 size={12} color="#f59e0b" />
-              <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Edit</Text>
+              <Edit2 size={14} color="#f59e0b" />
             </TouchableOpacity>
           )}
 
           {isSupervisor && !isAdmin && (
             <TouchableOpacity
-              onPress={() => onEdit(machine)}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onEdit(machine);
+              }}
               style={[
-                styles.actionBtn,
+                styles.iconActionBtn,
                 {
                   backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
+                  borderColor: isDark ? 'rgba(14, 165, 233, 0.35)' : 'rgba(14, 165, 233, 0.25)',
                 },
               ]}
               activeOpacity={0.7}
+              accessibilityLabel="Update Machine Status"
+              accessibilityRole="button"
             >
-              <Edit2 size={12} color="#0ea5e9" />
-              <Text style={[styles.actionBtnText, { color: '#0ea5e9' }]}>Update Status</Text>
+              <Edit2 size={14} color="#0ea5e9" />
             </TouchableOpacity>
           )}
 
           {isAdmin && (
             <TouchableOpacity
-              onPress={() => onDelete(machine)}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onDelete(machine);
+              }}
               style={[
-                styles.actionBtn,
+                styles.iconActionBtn,
                 {
-                  backgroundColor: '#ef444412',
-                  borderColor: '#ef444430',
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.08)',
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.32)' : 'rgba(239, 68, 68, 0.22)',
                 },
               ]}
               activeOpacity={0.7}
+              accessibilityLabel="Delete Machine"
+              accessibilityRole="button"
             >
-              <Trash2 size={12} color="#ef4444" />
-              <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Delete</Text>
+              <Trash2 size={14} color="#ef4444" />
             </TouchableOpacity>
           )}
 
           {onLogMeter && (
             <TouchableOpacity
-              onPress={() => onLogMeter(machine)}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onLogMeter(machine);
+              }}
               style={[
-                styles.actionBtn,
+                styles.iconActionBtn,
                 {
                   backgroundColor: theme.colors.canvas,
                   borderColor: theme.colors.hairline,
                 },
               ]}
               activeOpacity={0.7}
+              accessibilityLabel="Log Running Hours (HMR)"
+              accessibilityRole="button"
             >
-              <Gauge size={12} color={theme.colors.mute} />
-              <Text style={[styles.actionBtnText, { color: theme.colors.ink }]}>Log</Text>
+              <Gauge size={14} color={theme.colors.mute} />
             </TouchableOpacity>
           )}
         </View>
 
-        <TouchableOpacity
-          onPress={() => onViewDetails(machine)}
-          style={[styles.viewDetailsBtn, { backgroundColor: theme.colors.link + '15' }]}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.viewDetailsText, { color: theme.colors.link }]}>
-            View Details
-          </Text>
-          <ChevronRight size={13} color={theme.colors.link} />
-        </TouchableOpacity>
+        {isMobile ? (
+          <TouchableOpacity
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onViewDetails(machine);
+            }}
+            style={[
+              styles.iconActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(0, 112, 243, 0.16)' : 'rgba(0, 112, 243, 0.09)',
+                borderColor: isDark ? 'rgba(0, 112, 243, 0.35)' : 'rgba(0, 112, 243, 0.22)',
+              },
+            ]}
+            activeOpacity={0.7}
+            accessibilityLabel="View Machine Details"
+            accessibilityRole="button"
+          >
+            <ChevronRight size={16} color={theme.colors.link} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onViewDetails(machine);
+            }}
+            style={[
+              styles.viewDetailsBtn,
+              {
+                backgroundColor: isDark ? 'rgba(0, 112, 243, 0.15)' : 'rgba(0, 112, 243, 0.08)',
+              },
+            ]}
+            activeOpacity={0.8}
+            accessibilityLabel="View Machine Details"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.viewDetailsText, { color: theme.colors.link }]}>
+              View Details
+            </Text>
+            <ChevronRight size={13} color={theme.colors.link} />
+          </TouchableOpacity>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -397,11 +450,18 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3.5,
     padding: spacingNumeric.md,
     gap: spacingNumeric.sm,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 6,
+        elevation: 3,
+      },
+    }),
   },
   headerRow: {
     flexDirection: 'row',
@@ -433,9 +493,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   badgeWrap: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'nowrap',
+    gap: 6,
+    flexShrink: 0,
   },
   metaRow: {
     flexDirection: 'row',
@@ -529,31 +592,32 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
   },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 6,
+  iconActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    minHeight: 36,
-  },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { cursor: 'pointer' },
+      default: {},
+    }),
   },
   viewDetailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 6,
-    minHeight: 36,
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: radiusNumeric.md,
+    ...Platform.select({
+      web: { cursor: 'pointer' },
+      default: {},
+    }),
   },
   viewDetailsText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
   },
 });

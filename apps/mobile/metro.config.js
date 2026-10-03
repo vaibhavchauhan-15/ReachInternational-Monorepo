@@ -1,7 +1,19 @@
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, '../..');
+
+const config = getDefaultConfig(projectRoot);
+
+// 1. Watch all files within the monorepo root to allow resolving pnpm symlinks
+config.watchFolders = [monorepoRoot];
+
+// 2. Let Metro know where to resolve packages and in what order
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(monorepoRoot, 'node_modules'),
+];
 
 const originalResolveRequest = config.resolver?.resolveRequest;
 
@@ -31,6 +43,22 @@ config.resolver = {
         type: 'sourceFile',
       };
     }
+
+    // Explicitly resolve expo-linear-gradient across pnpm symlinks in monorepo
+    if (moduleName === 'expo-linear-gradient') {
+      try {
+        const resolved = require.resolve('expo-linear-gradient', {
+          paths: [projectRoot, monorepoRoot],
+        });
+        return {
+          filePath: resolved,
+          type: 'sourceFile',
+        };
+      } catch {
+        // Fall through to default resolver
+      }
+    }
+
     if (originalResolveRequest) {
       return originalResolveRequest(context, moduleName, platform);
     }

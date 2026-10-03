@@ -8,6 +8,7 @@ import {
   Animated,
   AccessibilityInfo,
   StyleSheet,
+  Platform,
   type ViewStyle,
   type StyleProp,
 } from 'react-native';
@@ -51,7 +52,9 @@ export const InteractiveIcon: React.FC<InteractiveIconProps> = ({
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
       isReducedMotion.current = enabled;
     });
-    return () => sub.remove();
+    return () => {
+      sub?.remove?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export const InteractiveIcon: React.FC<InteractiveIconProps> = ({
 
     Animated.spring(anim, {
       toValue: effectivePressed ? 1 : 0,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
       tension: 300,
       friction: 22,
     }).start();
@@ -147,7 +150,7 @@ export const InteractiveIcon: React.FC<InteractiveIconProps> = ({
   }
 
   return (
-    <Animated.View style={[styles.container, { transform }, style]} pointerEvents="none">
+    <Animated.View style={[styles.container, { transform, pointerEvents: 'none' }, style]}>
       {icon}
     </Animated.View>
   );

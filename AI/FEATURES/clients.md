@@ -334,5 +334,37 @@ Audit         not loaded (unmounted until tab click)
   - `@reachinternational/validation`: `SiteSchema` with ReDoS-safe bounds and 6-digit pincode validator.
   - `@reachinternational/utils`: `normText`, `addressKey`, `formatAddress`, and 5/5 unit tests.
 
+---
 
+## 19. Client Deduplication & Multi-Site Directory Parity (2026-10-03)
+- **Root Cause & Database Guarantee (Migration 157)**:
+  - Resolved duplicate clients generated when `clean_dev_seed_data()` failed on FK restrictions against `client_sites`.
+  - Added partial unique index `uq_clients_company_name_active` on `public.clients(lower(trim(company_name))) WHERE deleted_at IS NULL`.
+  - Changed `client_sites_client_id_fkey` constraint to `ON DELETE CASCADE`.
+  - Updated `clean_dev_seed_data()` RPC to cleanly purge `client_sites` prior to `clients`.
+  - Added server-side duplicate check in `createClientAction` preventing duplicate active companies or duplicate GSTIN numbers.
+- **Multi-Site Architecture**:
+  - A client may have one or multiple operational sites (e.g. Afcons Infrastructure with Pune Main Site and Thane Coastal Road Project).
+  - Clients list queries (`CLIENT_LIST_COLUMNS`) embed `client_sites(id, site_code, site_name, city, status)`.
+  - Directory views (both Web desktop table, Web mobile card, and Native mobile card) display single unique client rows. When `site_count > 1`, a `{site_count} Sites` indicator badge is rendered in the location cell.
+  - Client Details page (`/clients/[id]`) provides direct access to all registered operational sites under the "Sites" tab, with an Operational Sites summary card shortcut button.
+- **Defensive Deduplication in Data Fetchers**:
+  - `apps/web/lib/data/clients/client-list.ts`: `formatClientRecords` performs in-memory deduplication by client ID and normalized company name before delivering rows to client components.
+  - `apps/mobile/app/(app)/clients.tsx`: `fetchClients` maps results through a deduplication map before updating local state.
 
+---
+
+## 20. Mobile Search/Filter Unification & Card UI Polish (2026-10-03)
+- **Unified Search & Filter Architecture (`apps/mobile/app/(app)/clients.tsx`)**:
+  - Replaced ad-hoc filter bar with canonical, reusable `<FilterToolbar>` component from `apps/mobile/components/ui/FilterToolbar.tsx`.
+  - Capsule pill search input (`searchVariant="pill"`) with web outline suppression, focus ring, search icon, loading spinner, and clear `X` button.
+  - Filter toggle button (`SlidersHorizontal` icon, "Filter" label, dynamic `activeCountBadge`, rotating `ChevronDown`).
+  - Expandable animated filter drawer (CSS Grid on web, `Animated.View` on native) containing `DropdownFilterSelector` for Status and Sort options.
+  - Active filter chips strip with individual `X` remove buttons and tactile "Reset all" action.
+  - Removed duplicate `search` prop from `MobileHeader`.
+  - Added vertical scrollbar (`showsVerticalScrollIndicator={true}`) with dynamic theme indicator.
+- **Card UI & Information Density Polish (`MobileClientCard.tsx`)**:
+  - Removed redundant "View Details" button from card footer since the entire card is clickable (`onPress={() => onViewDetails(client)}`).
+  - Removed "REGION / STATE" column, allowing `SITE LOCATION` to cleanly display the city and multi-site badge without horizontal crowding.
+  - Simplified monthly maintenance allowance badge to only display `{allowanceLabel}` (e.g. `12h` or `1h 30m`) instead of `{allowanceLabel} / machine / mo`.
+  - Maintained cross-platform parity in `apps/web/components/clients/MobileClientCard.tsx`.

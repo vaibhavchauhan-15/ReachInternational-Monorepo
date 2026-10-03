@@ -12,6 +12,7 @@ import {
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { InteractiveIcon } from './InteractiveIcon';
@@ -56,6 +57,8 @@ export const Button: React.FC<ButtonProps> = ({
   const handlePress = async () => {
     if (disabled || effectiveLoading || isExecutingRef.current) return;
     if (!onPress) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     try {
       const result: unknown = (onPress as () => unknown)();

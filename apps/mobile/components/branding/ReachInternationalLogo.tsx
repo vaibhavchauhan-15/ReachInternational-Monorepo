@@ -322,7 +322,7 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
   size = 32,
   showIcon = true,
   showTagline = true,
-  iconType = 'emblem',
+  iconType = 'scissor',
   style,
   variant = 'full',
   themeVariant,

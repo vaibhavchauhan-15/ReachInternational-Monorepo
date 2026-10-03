@@ -1,8 +1,3 @@
-/**
- * Reach International Mobile — Native Input Primitive
- * Text input with label, required asterisk, left icon, right icon/password toggle, error text, and theme support.
- */
-
 import React, { useState } from 'react';
 import {
   View,
@@ -15,8 +10,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface InputProps extends TextInputProps {
   label?: string;
@@ -60,23 +55,30 @@ export const Input: React.FC<InputProps> = ({
     if (onBlur) onBlur(e);
   };
 
-  const borderColor = error
-    ? theme.colors.error
-    : isFocused
-    ? '#0ea5e9'
-    : isDark
-    ? '#292c2f'
-    : theme.colors.hairline;
+  const handleTogglePassword = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setIsPasswordVisible((prev) => !prev);
+  };
 
   const effectiveSecureTextEntry = isPassword
     ? !isPasswordVisible
     : secureTextEntry;
 
+  const inputBg = isDark
+    ? '#121212'
+    : '#fafafa';
+
+  const borderColor = error
+    ? '#ef4444'
+    : isFocused
+    ? (isDark ? '#38bdf8' : '#0284c7')
+    : (isDark ? '#262626' : '#ebebeb');
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: theme.colors.ink }]}>
+          <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
             {label}
             {required && <Text style={{ color: '#ef4444', fontWeight: '700' }}> *</Text>}
           </Text>
@@ -87,25 +89,23 @@ export const Input: React.FC<InputProps> = ({
         style={[
           styles.inputWrapper,
           {
-            backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
+            backgroundColor: error
+              ? (isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.04)')
+              : inputBg,
             borderColor,
+            borderWidth: isFocused || error ? 1.5 : 1,
           },
-          error
-            ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.06)' : 'rgba(239, 68, 68, 0.04)' }
-            : isFocused
-            ? { borderColor: '#0ea5e9' }
-            : null,
         ]}
       >
         {leftIcon && <View style={styles.leftIconContainer}>{leftIcon}</View>}
 
         <TextInput
-          placeholderTextColor={isDark ? '#525252' : '#9ca3af'}
+          placeholderTextColor={isDark ? '#71717a' : '#9ca3af'}
           secureTextEntry={effectiveSecureTextEntry}
           style={[
             styles.input,
             {
-              color: theme.colors.ink,
+              color: isDark ? '#f8fafc' : '#0f172a',
             },
             style,
           ]}
@@ -117,14 +117,15 @@ export const Input: React.FC<InputProps> = ({
         {isPassword ? (
           <TouchableOpacity
             style={styles.rightIconContainer}
-            onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-            hitSlop={8}
+            onPress={handleTogglePassword}
+            hitSlop={12}
             activeOpacity={0.7}
+            accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
           >
             {isPasswordVisible ? (
-              <EyeOff size={16} color={isDark ? '#737373' : '#9ca3af'} />
+              <EyeOff size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             ) : (
-              <Eye size={16} color={isDark ? '#737373' : '#9ca3af'} />
+              <Eye size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             )}
           </TouchableOpacity>
         ) : rightIcon ? (
@@ -132,7 +133,7 @@ export const Input: React.FC<InputProps> = ({
             style={styles.rightIconContainer}
             onPress={onRightIconPress}
             disabled={!onRightIconPress}
-            hitSlop={8}
+            hitSlop={12}
             activeOpacity={0.7}
           >
             {rightIcon}
@@ -141,7 +142,7 @@ export const Input: React.FC<InputProps> = ({
       </View>
 
       {error ? (
-        <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+        <Text style={[styles.errorText, { color: '#ef4444' }]}>{error}</Text>
       ) : helperText ? (
         <Text style={[styles.helperText, { color: theme.colors.mute }]}>{helperText}</Text>
       ) : null}
@@ -151,25 +152,24 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacingNumeric.sm + 2,
+    marginBottom: 12,
     width: '100%',
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   label: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.1,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    borderWidth: 1,
-    borderRadius: radiusNumeric.sm + 2,
+    height: 44,
+    borderRadius: 12,
     paddingHorizontal: 12,
   },
   leftIconContainer: {
@@ -187,16 +187,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     fontSize: 13.5,
+    fontWeight: '500',
     paddingVertical: 0,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   errorText: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     marginTop: 4,
     fontWeight: '500',
   },
   helperText: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     marginTop: 4,
   },
 });

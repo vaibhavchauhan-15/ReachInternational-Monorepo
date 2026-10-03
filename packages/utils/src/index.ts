@@ -18,5 +18,6 @@ export * from './search';
 export * from './shift';
 export * from './maintenance';
 export * from './address';
+export * from './profile-view';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";

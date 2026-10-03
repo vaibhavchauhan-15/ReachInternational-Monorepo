@@ -2,7 +2,6 @@
 
 import { useState, memo } from "react";
 import {
-  AnimatedChevronRight,
   AnimatedCopy,
   AnimatedCheck,
 } from "@/components/ui/animated-icons";
@@ -155,7 +154,15 @@ export const MobileClientCard = memo(function MobileClientCard({
             </span>
           </div>
           <div>
-            <span className="text-[var(--color-mute)] font-medium block">Site Location:</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--color-mute)] font-medium block">Site Location:</span>
+              {client.site_count && client.site_count > 1 ? (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                  <MapPin size={10} className="shrink-0" />
+                  {client.site_count} Sites
+                </span>
+              ) : null}
+            </div>
             <span
               className="font-bold text-xs text-[var(--color-ink)] mt-0.5 truncate block"
               title={client.address || client.street || client.city || "—"}
@@ -165,7 +172,7 @@ export const MobileClientCard = memo(function MobileClientCard({
           </div>
         </div>
 
-        <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-xs">
+        <div className="pt-2 border-t border-[var(--color-hairline)] text-xs">
           <div>
             <span className="text-[var(--color-mute)] font-medium block">Phone:</span>
             {client.phone ? (
@@ -181,91 +188,65 @@ export const MobileClientCard = memo(function MobileClientCard({
               <span className="text-xs text-[var(--color-mute)] italic mt-0.5 block">—</span>
             )}
           </div>
-          <div>
-            <span className="text-[var(--color-mute)] font-medium block">State / District:</span>
-            <span
-              className="font-semibold text-xs text-[var(--color-ink)] mt-0.5 truncate block"
-              title={[client.district, client.state, client.pincode].filter(Boolean).join(", ")}
-            >
-              {[client.district, client.state].filter(Boolean).join(", ") || "—"}
-            </span>
-          </div>
         </div>
       </div>
 
       {/* Action Footer */}
-      <div
-        className="flex items-center justify-between pt-1 border-t border-[var(--color-hairline)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2">
-          {canManageClients && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditClient(client);
-                }}
-                className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Edit Client Information"
-              >
-                <Edit2 size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                <span>Edit</span>
-              </button>
-
-              {!isSoftDeleted && onAddSiteClient && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddSiteClient(client);
-                  }}
-                  className="h-8 px-2.5 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Add Site Location"
-                >
-                  <MapPin size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>Add Site</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isSoftDeleted && onRestoreClient) {
-                    onRestoreClient(client);
-                  } else {
-                    onDeleteClient(client);
-                  }
-                }}
-                className="h-8 w-8 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-700 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
-                title={isSoftDeleted ? "Restore Client" : "Delete Client"}
-                aria-label={isSoftDeleted ? "Restore Client" : "Delete Client"}
-              >
-                {isSoftDeleted ? (
-                  <RotateCcw size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                ) : (
-                  <Trash2 size={14} className="shrink-0" />
-                )}
-              </button>
-            </>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewClient(client);
-          }}
-          className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
-          title="View Client Details"
+      {canManageClients && (
+        <div
+          className="flex items-center gap-2 pt-1 border-t border-[var(--color-hairline)]"
+          onClick={(e) => e.stopPropagation()}
         >
-          <span>View Details</span>
-          <AnimatedChevronRight size={14} className="shrink-0" />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditClient(client);
+            }}
+            className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Edit Client Information"
+          >
+            <Edit2 size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+            <span>Edit</span>
+          </button>
+
+          {!isSoftDeleted && onAddSiteClient && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddSiteClient(client);
+              }}
+              className="h-8 px-2.5 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Add Site Location"
+            >
+              <MapPin size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Add Site</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isSoftDeleted && onRestoreClient) {
+                onRestoreClient(client);
+              } else {
+                onDeleteClient(client);
+              }
+            }}
+            className="h-8 w-8 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-700 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
+            title={isSoftDeleted ? "Restore Client" : "Delete Client"}
+            aria-label={isSoftDeleted ? "Restore Client" : "Delete Client"}
+          >
+            {isSoftDeleted ? (
+              <RotateCcw size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : (
+              <Trash2 size={14} className="shrink-0" />
+            )}
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 });

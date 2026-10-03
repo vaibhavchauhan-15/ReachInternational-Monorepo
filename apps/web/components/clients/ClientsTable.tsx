@@ -1,9 +1,10 @@
 "use client";
 
 import React, { memo } from "react";
-import { Building2, Phone, Receipt, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Building2, Phone, Receipt, ArrowUpDown, ArrowUp, ArrowDown, MapPin } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { Pagination } from "@/components/ui";
+import { Highlight } from "@/components/ui/Highlight";
 import { ClientTableSkeletonRows } from "./ClientsSkeletons";
 import { ClientRowActionsMenu } from "./ClientRowActionsMenu";
 
@@ -25,11 +26,13 @@ interface ClientsTableProps {
   onDeleteClient: (client: CRMClient) => void;
   onRestoreClient?: (client: CRMClient) => void;
   onAddSiteClient?: (client: CRMClient) => void;
+  searchTerm?: string;
 }
 
 const ClientTableRow = memo(function ClientTableRow({
   client,
   canManageClients,
+  searchTerm,
   onViewClient,
   onEditClient,
   onDeleteClient,
@@ -38,6 +41,7 @@ const ClientTableRow = memo(function ClientTableRow({
 }: {
   client: CRMClient;
   canManageClients: boolean;
+  searchTerm?: string;
   onViewClient: (client: CRMClient) => void;
   onEditClient: (client: CRMClient) => void;
   onDeleteClient: (client: CRMClient) => void;
@@ -64,13 +68,13 @@ const ClientTableRow = memo(function ClientTableRow({
     >
       {/* Client ID */}
       <td className="py-2.5 px-4 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
-        <span>{client.client_id || client.code}</span>
+        <span><Highlight text={client.client_id || client.code || ""} query={searchTerm || ""} /></span>
       </td>
 
       {/* Company & Tax */}
       <td className="py-2.5 px-4 max-w-[260px]">
         <div className="font-bold text-[var(--color-ink)] group-hover:text-sky-600 text-left transition-colors truncate">
-          {client.company_name || client.client_name}
+          <Highlight text={client.company_name || client.client_name || ""} query={searchTerm || ""} />
         </div>
         {(client.gstin || client.pan_number) && (
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -90,7 +94,7 @@ const ClientTableRow = memo(function ClientTableRow({
 
       {/* Contact Person */}
       <td className="py-2.5 px-4 font-medium text-[var(--color-body)] whitespace-nowrap">
-        {client.contact_person || "—"}
+        <Highlight text={client.contact_person || "—"} query={searchTerm || ""} />
       </td>
 
       {/* Phone */}
@@ -103,7 +107,7 @@ const ClientTableRow = memo(function ClientTableRow({
               onClick={(e) => e.stopPropagation()}
               className="hover:text-sky-600"
             >
-              {client.phone}
+              <Highlight text={client.phone} query={searchTerm || ""} />
             </a>
           </div>
         ) : (
@@ -113,8 +117,19 @@ const ClientTableRow = memo(function ClientTableRow({
 
       {/* Site Location */}
       <td className="py-2.5 px-4 max-w-[280px]">
-        <div className="font-medium text-[var(--color-body)] truncate" title={client.address || client.street}>
-          {client.address || client.street || "—"}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="font-medium text-[var(--color-body)] truncate" title={client.address || client.street}>
+            {client.address || client.street || "—"}
+          </div>
+          {client.site_count && client.site_count > 1 ? (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20 whitespace-nowrap shrink-0"
+              title={`${client.site_count} operational sites saved. Click to view all sites in Client Details.`}
+            >
+              <MapPin className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+              {client.site_count} Sites
+            </span>
+          ) : null}
         </div>
         {client.is_billing_address_different && (
           <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
@@ -179,6 +194,7 @@ export const ClientsTable = memo(function ClientsTable({
   onDeleteClient,
   onRestoreClient,
   onAddSiteClient,
+  searchTerm,
 }: ClientsTableProps) {
   function renderSortIcon(column: string) {
     if (sortField !== column) {
@@ -263,6 +279,7 @@ export const ClientsTable = memo(function ClientsTable({
                   key={client.id}
                   client={client}
                   canManageClients={canManageClients}
+                  searchTerm={searchTerm}
                   onViewClient={onViewClient}
                   onEditClient={onEditClient}
                   onDeleteClient={onDeleteClient}

@@ -5,7 +5,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import {
   CLIENT_KEYS,
-  serializeClientFilter,
   encodeClientCursor,
   decodeClientCursor,
   type ClientDirectoryFilter,
@@ -28,7 +27,7 @@ export interface PaginatedClientsResponse {
  * Excludes heavy billing addresses, audit history, relational equipment, and machine logs.
  */
 export const CLIENT_LIST_COLUMNS =
-  "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes";
+  "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes, client_sites(id, site_code, site_name, city, status)";
 
 const ALLOWED_SORT_COLUMNS: Record<string, string> = {
   company_name: "company_name",
@@ -42,15 +41,32 @@ const ALLOWED_SORT_COLUMNS: Record<string, string> = {
 
 /**
  * Formats database rows into CRMClient with computed unified address string and default flags.
+ * Includes defensive deduplication by client ID and normalized company name to prevent duplicate rows.
  */
 function formatClientRecords(records: any[]): CRMClient[] {
-  return records.map((client) => {
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
+
+  const uniqueRecords = records.filter((client) => {
+    if (!client || !client.id) return false;
+    const normName = (client.company_name || "").trim().toLowerCase();
+    if (seenIds.has(client.id) || (normName && seenNames.has(normName))) {
+      return false;
+    }
+    seenIds.add(client.id);
+    if (normName) seenNames.add(normName);
+    return true;
+  });
+
+  return uniqueRecords.map((client) => {
     const street = (client.street || "").trim();
     const fullAddress = [street, client.city, client.district, client.state, client.pincode]
       .filter(Boolean)
       .map((s) => String(s).trim())
       .filter(Boolean)
       .join(", ");
+
+    const sites = Array.isArray(client.client_sites) ? client.client_sites : [];
 
     return {
       ...client,
@@ -60,6 +76,8 @@ function formatClientRecords(records: any[]): CRMClient[] {
       client_name: client.company_name,
       machine_count: 0,
       open_complaints: 0,
+      client_sites: sites,
+      site_count: sites.length,
       status: client.status ?? "active",
     };
   });
@@ -191,11 +209,17 @@ function getCachedClientList(filter?: ClientDirectoryFilter) {
       const lastItem = clients[clients.length - 1];
       const nextCursor =
         hasMore && lastItem
-          ? encodeClientCursor(lastItem[sortCol as keyof CRMClient] ?? lastItem.company_name, lastItem.id)
+          ? encodeClientCursor(
+              (lastItem[sortCol as keyof CRMClient] as string | number | boolean) ?? lastItem.company_name,
+              lastItem.id
+            )
           : null;
       const prevCursor =
         (page > 1 || filter?.afterCursor) && firstItem
-          ? encodeClientCursor(firstItem[sortCol as keyof CRMClient] ?? firstItem.company_name, firstItem.id)
+          ? encodeClientCursor(
+              (firstItem[sortCol as keyof CRMClient] as string | number | boolean) ?? firstItem.company_name,
+              firstItem.id
+            )
           : null;
 
       return {

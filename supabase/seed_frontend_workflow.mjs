@@ -634,35 +634,111 @@ async function ensureAuthUser(userSpec, initialEmailConfirm = false) {
     const createdClients = [];
 
     for (const c of clientSpecs) {
-      const { data: clientRow, error: cErr } = await admin
+      let clientRow;
+      const { data: existingClient } = await admin
         .from('clients')
-        .insert({
-          company_name: c.company_name,
-          contact_person: c.contact_person,
-          phone: c.phone,
-          gstin: c.gstin,
-          pan_number: c.pan_number,
-          street: c.street,
-          city: c.city,
-          district: c.district,
-          state: c.state,
-          pincode: c.pincode,
-          is_billing_address_different: c.is_billing_address_different,
-          status: c.status,
-          maintenance_allowance_minutes: c.maintenance_allowance_minutes,
-        })
         .select('*')
-        .single();
+        .ilike('company_name', c.company_name)
+        .is('deleted_at', null)
+        .maybeSingle();
 
-      if (cErr) throw new Error(`Client insert failed for ${c.company_name}: ${cErr.message}`);
+      if (existingClient) {
+        clientRow = existingClient;
+        console.log(`  ✓ Reusing Existing Client: ${clientRow.company_name} (Code: ${clientRow.code || clientRow.client_id})`);
+      } else {
+        const { data: inserted, error: cErr } = await admin
+          .from('clients')
+          .insert({
+            company_name: c.company_name,
+            contact_person: c.contact_person,
+            phone: c.phone,
+            gstin: c.gstin,
+            pan_number: c.pan_number,
+            street: c.street,
+            city: c.city,
+            district: c.district,
+            state: c.state,
+            pincode: c.pincode,
+            is_billing_address_different: c.is_billing_address_different,
+            status: c.status,
+            maintenance_allowance_minutes: c.maintenance_allowance_minutes,
+          })
+          .select('*')
+          .single();
 
-      // Seed client shift codes (A, B, C) matching frontend expectation
-      const shiftTemplates = [
-        { client_id: clientRow.id, code: 'A', name: 'Shift A (Morning)', start_time: '06:00:00', end_time: '14:00:00', crosses_midnight: false, scheduled_minutes: 480, normal_minutes: 480, display_order: 1, is_active: true },
-        { client_id: clientRow.id, code: 'B', name: 'Shift B (Evening)', start_time: '14:00:00', end_time: '22:00:00', crosses_midnight: false, scheduled_minutes: 480, normal_minutes: 480, display_order: 2, is_active: true },
-        { client_id: clientRow.id, code: 'C', name: 'Shift C (Night)', start_time: '22:00:00', end_time: '06:00:00', crosses_midnight: true, scheduled_minutes: 480, normal_minutes: 480, display_order: 3, is_active: true },
-      ];
-      await admin.from('client_shift_codes').insert(shiftTemplates);
+        if (cErr) throw new Error(`Client insert failed for ${c.company_name}: ${cErr.message}`);
+        clientRow = inserted;
+        console.log(`  ✓ Created Client: ${clientRow.company_name} (Code: ${clientRow.code || clientRow.client_id}, Maint: ${c.maintenance_allowance_minutes}m)`);
+      }
+
+      // Seed client shift codes (A, B, C) matching frontend expectation if not present
+      const { data: existingShifts } = await admin
+        .from('client_shift_codes')
+        .select('id')
+        .eq('client_id', clientRow.id);
+
+      if (!existingShifts || existingShifts.length === 0) {
+        const shiftTemplates = [
+          { client_id: clientRow.id, code: 'A', name: 'Shift A (Morning)', start_time: '06:00:00', end_time: '14:00:00', crosses_midnight: false, scheduled_minutes: 480, normal_minutes: 480, display_order: 1, is_active: true },
+          { client_id: clientRow.id, code: 'B', name: 'Shift B (Evening)', start_time: '14:00:00', end_time: '22:00:00', crosses_midnight: false, scheduled_minutes: 480, normal_minutes: 480, display_order: 2, is_active: true },
+          { client_id: clientRow.id, code: 'C', name: 'Shift C (Night)', start_time: '22:00:00', end_time: '06:00:00', crosses_midnight: true, scheduled_minutes: 480, normal_minutes: 480, display_order: 3, is_active: true },
+        ];
+        await admin.from('client_shift_codes').insert(shiftTemplates);
+      }
+
+      // Seed client sites if not present
+      const { data: existingSites } = await admin
+        .from('client_sites')
+        .select('id')
+        .eq('client_id', clientRow.id);
+
+      if (!existingSites || existingSites.length === 0) {
+        const stateMap = {
+          'Delhi': 7,
+          'Maharashtra': 27,
+          'Telangana': 36,
+          'Gujarat': 24,
+        };
+        const stId = stateMap[c.state] || 27;
+
+        const sitesToInsert = [
+          {
+            client_id: clientRow.id,
+            site_name: `${c.company_name} - ${c.city} Main Site`,
+            street: c.street,
+            city: c.city,
+            district: c.district,
+            state_id: stId,
+            pincode: c.pincode,
+            status: 'active',
+          },
+        ];
+
+        // For Afcons Infrastructure, add a second site to explicitly test multi-site clients
+        if (c.company_name === 'Afcons Infrastructure') {
+          sitesToInsert.push({
+            client_id: clientRow.id,
+            site_name: 'Afcons Thane Coastal Road Project',
+            street: 'Ghodbunder Road, Majiwada',
+            city: 'Thane',
+            district: 'Thane',
+            state_id: 27,
+            pincode: '400607',
+            status: 'active',
+          });
+        }
+
+        const { data: insertedSites, error: siteErr } = await admin
+          .from('client_sites')
+          .insert(sitesToInsert)
+          .select('id, site_code, site_name');
+
+        if (siteErr) {
+          console.warn(`  ⚠️ Failed to insert site for ${c.company_name}:`, siteErr.message);
+        } else {
+          console.log(`  ✓ Created ${insertedSites.length} site(s) for ${c.company_name}`);
+        }
+      }
 
       // Audit log
       await admin.from('audit_logs').insert({
@@ -697,6 +773,13 @@ async function ensureAuthUser(userSpec, initialEmailConfirm = false) {
       const client = createdClients[mf.client_idx];
       const operator = operatorUserMap[mf.op_idx];
 
+      const { data: clientSites } = await admin
+        .from('client_sites')
+        .select('id')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: true });
+      const siteId = clientSites && clientSites.length > 0 ? clientSites[0].id : null;
+
       const { data: mRow, error: mErr } = await admin
         .from('machines')
         .insert({
@@ -711,6 +794,7 @@ async function ensureAuthUser(userSpec, initialEmailConfirm = false) {
           health_status: 'active',
           ownership_type: 'company_owned',
           client_id: client.id,
+          site_id: siteId,
           customer_name: client.company_name,
           customer_mobile: client.phone,
           customer_address: client.street,

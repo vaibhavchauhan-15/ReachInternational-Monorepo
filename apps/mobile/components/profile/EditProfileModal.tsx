@@ -791,8 +791,8 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               />
 
               <MobileDocumentUploadCard
-                title="Aadhaar Card Document *"
-                subtitle="Front page image or PDF (max 2 MB)"
+                title="Aadhaar Card Document"
+                required
                 docTypeCode="aadhaar"
                 selectedDoc={aadhaarDoc}
                 existingDoc={existingDocs['aadhaar']}
@@ -829,8 +829,8 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               />
 
               <MobileDocumentUploadCard
-                title="Driving Licence Document *"
-                subtitle="Smart card scan or PDF (max 2 MB)"
+                title="Driving Licence Document"
+                required
                 docTypeCode="driving_license"
                 selectedDoc={licenseDoc}
                 existingDoc={existingDocs['driving_license']}

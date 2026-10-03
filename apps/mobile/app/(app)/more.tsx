@@ -3,18 +3,19 @@
  * Mirrors web /more: profile header, overflow nav tiles, account rows, sign out.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
+import { MobileHeader, ConfirmDialog } from '../../components/ui';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getNavForRole, labelFor } from '@reachinternational/permissions';
 import type { UserRole } from '@reachinternational/types';
@@ -64,6 +65,9 @@ export default function MoreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [showSignOutDialog, setShowSignOutDialog] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
   const normalizedRole = ((role || 'operator') as string).toLowerCase() as UserRole;
   const { more, hasMore } = getNavForRole(normalizedRole);
 
@@ -72,18 +76,20 @@ export default function MoreScreen() {
   const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
 
   const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => signOut(),
-        },
-      ],
-    );
+    setShowSignOutDialog(true);
+  };
+
+  const handleConfirmSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut();
+      setShowSignOutDialog(false);
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('[MoreScreen] Sign out error:', err);
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const toggleTheme = () => {
@@ -92,12 +98,21 @@ export default function MoreScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      <MobileHeader
+        title="More"
+        showBack={false}
+        showQuickAccess={true}
+        showQuickAccessCapsule={false}
+        showMoreMenu={false}
+      />
       <ScrollView
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 100 },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        indicatorStyle={isDark ? 'white' : 'black'}
+        scrollEventThrottle={16}
       >
         {/* ─── Profile Header ─── */}
         <TouchableOpacity
@@ -231,14 +246,38 @@ export default function MoreScreen() {
         {/* ─── Sign Out ─── */}
         <TouchableOpacity
           onPress={handleSignOut}
-          style={styles.signOutBtn}
+          disabled={isSigningOut}
+          style={[styles.signOutBtn, isSigningOut && { opacity: 0.6 }]}
           activeOpacity={0.7}
+          accessibilityRole="button"
           accessibilityLabel="Sign Out"
         >
-          <LogOut size={16} color="#dc2626" />
-          <Text style={styles.signOutText}>Sign Out</Text>
+          {isSigningOut ? (
+            <ActivityIndicator size="small" color="#dc2626" />
+          ) : (
+            <>
+              <LogOut size={16} color="#dc2626" />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ─── Confirm Sign Out Dialog ─── */}
+      <ConfirmDialog
+        visible={showSignOutDialog}
+        onClose={() => {
+          if (!isSigningOut) setShowSignOutDialog(false);
+        }}
+        onConfirm={handleConfirmSignOut}
+        title="Sign Out"
+        message="Are you sure you want to sign out of Reach International?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSigningOut}
+        icon={<LogOut size={22} color={theme.colors.error} />}
+      />
     </View>
   );
 }
@@ -250,6 +289,9 @@ const styles = StyleSheet.create({
   content: {
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   // Profile card
   profileCard: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -9,15 +9,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
-import { Input, useTheme } from '../ui';
+import * as Haptics from 'expo-haptics';
+import { Input, useTheme, SearchableSelect, ShiftCardSelector, type SelectOption } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
-import { X, ChevronDown, AlertCircle, Check, Clock } from 'lucide-react-native';
-import { MultiUserSelectModal, type SelectableUser } from './MultiUserSelectModal';
-import { ClientSelectModal, type SelectableClient } from './ClientSelectModal';
-import { CustomFilterSelectorModal, type FilterOption } from './CustomFilterSelectorModal';
+import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from 'lucide-react-native';
+import { type SelectableUser } from './MultiUserSelectModal';
+import { type SelectableClient } from './ClientSelectModal';
 
 export interface MachineModalProps {
   visible: boolean;
@@ -28,16 +29,11 @@ export interface MachineModalProps {
   initialSection?: 'all' | 'info' | 'personnel' | 'client';
 }
 
-const HEALTH_OPTIONS: FilterOption[] = [
-  { id: 'active', label: 'Active', dotColor: '#10b981' },
-  { id: 'spare', label: 'Spare', dotColor: '#06b6d4' },
-  { id: 'under_maintenance', label: 'Under Maintenance', dotColor: '#f59e0b' },
-  { id: 'breakdown', label: 'Breakdown', dotColor: '#ef4444' },
-];
-
-const RENTAL_OPTIONS: FilterOption[] = [
-  { id: 'available', label: 'Available', dotColor: '#10b981' },
-  { id: 'rented', label: 'Rented', dotColor: '#0ea5e9' },
+const HEALTH_OPTIONS: SelectOption[] = [
+  { value: 'active', label: 'Active', dotColor: '#10b981' },
+  { value: 'spare', label: 'Spare', dotColor: '#06b6d4' },
+  { value: 'under_maintenance', label: 'Under Maintenance', dotColor: '#f59e0b' },
+  { value: 'breakdown', label: 'Breakdown', dotColor: '#ef4444' },
 ];
 
 export const DEFAULT_MOBILE_SHIFTS: Array<{
@@ -103,7 +99,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   userRole,
   initialSection = 'all',
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const normalizedRole = (userRole || '').toLowerCase();
   const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
@@ -131,12 +127,53 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   const [clientsList, setClientsList] = useState<SelectableClient[]>([]);
   const [activeAssignmentsList, setActiveAssignmentsList] = useState<MobileActiveAssignment[]>([]);
 
-  // Sub-modals
-  const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
-  const [operatorModalOpen, setOperatorModalOpen] = useState(false);
-  const [clientModalOpen, setClientModalOpen] = useState(false);
-  const [healthModalOpen, setHealthModalOpen] = useState(false);
-  const [rentalModalOpen, setRentalModalOpen] = useState(false);
+  // Dropdown popover states
+  const [isSupervisorDropdownOpen, setIsSupervisorDropdownOpen] = useState(false);
+  const [isOperatorDropdownOpen, setIsOperatorDropdownOpen] = useState(false);
+  const [supervisorSearchQuery, setSupervisorSearchQuery] = useState('');
+  const [operatorSearchQuery, setOperatorSearchQuery] = useState('');
+
+  // Web outside-click and Escape key dismissal
+  useEffect(() => {
+    if (Platform.OS !== 'web' || (!isSupervisorDropdownOpen && !isOperatorDropdownOpen)) return;
+
+    const handleWebClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (!target.closest('[data-dropdown-container]')) {
+        setIsSupervisorDropdownOpen(false);
+        setIsOperatorDropdownOpen(false);
+      }
+    };
+
+    const handleWebKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSupervisorDropdownOpen(false);
+        setIsOperatorDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleWebClick);
+    document.addEventListener('keydown', handleWebKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleWebClick);
+      document.removeEventListener('keydown', handleWebKeyDown);
+    };
+  }, [isSupervisorDropdownOpen, isOperatorDropdownOpen]);
+
+  // Memoized client options for SearchableSelect
+  const clientOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'None (Unassigned / Available)' },
+      ...clientsList.map((c) => ({
+        value: c.id,
+        label: c.company_name,
+        code: c.code,
+        description: [c.contact_person, c.phone, c.city].filter(Boolean).join(' • ') || undefined,
+      })),
+    ];
+  }, [clientsList]);
 
   // Errors & loading
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -212,6 +249,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       }
       setFieldErrors({});
       setFormError('');
+      setIsSupervisorDropdownOpen(false);
+      setIsOperatorDropdownOpen(false);
+      setSupervisorSearchQuery('');
+      setOperatorSearchQuery('');
       fetchDropdownOptions();
     }
   }, [visible, machineToEdit]);
@@ -273,13 +314,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       const [supsRes, opsRes, clientsRes, assignmentsRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, full_name, phone, email, shift_start_time, shift_end_time')
+          .select('id, full_name, phone, email, role, shift_start_time, shift_end_time')
           .in('role', ['supervisor', 'manager', 'admin', 'super_admin'])
           .eq('status', 'active')
           .order('full_name', { ascending: true }),
         supabase
           .from('users')
-          .select('id, full_name, phone, email, shift_start_time, shift_end_time')
+          .select('id, full_name, phone, email, role, shift_start_time, shift_end_time')
           .eq('role', 'operator')
           .eq('status', 'active')
           .order('full_name', { ascending: true }),
@@ -363,11 +404,69 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     return null;
   };
 
+  const filteredSupervisors = useMemo(() => {
+    if (!supervisorSearchQuery.trim()) return supervisorsList;
+    const q = supervisorSearchQuery.toLowerCase().trim();
+    return supervisorsList.filter(
+      (s) =>
+        s.full_name?.toLowerCase().includes(q) ||
+        s.phone?.toLowerCase().includes(q) ||
+        s.shift_time?.toLowerCase().includes(q) ||
+        s.role?.toLowerCase().includes(q)
+    );
+  }, [supervisorsList, supervisorSearchQuery]);
+
+  const filteredOperators = useMemo(() => {
+    if (!operatorSearchQuery.trim()) return operatorsList;
+    const q = operatorSearchQuery.toLowerCase().trim();
+    return operatorsList.filter(
+      (o) =>
+        o.full_name?.toLowerCase().includes(q) ||
+        o.phone?.toLowerCase().includes(q) ||
+        o.shift_time?.toLowerCase().includes(q)
+    );
+  }, [operatorsList, operatorSearchQuery]);
+
+  const handleToggleSupervisor = (id: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSupervisorIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   const handleRemoveSupervisor = (id: string) => {
+    Haptics.selectionAsync().catch(() => {});
     setSupervisorIds((prev) => prev.filter((item) => item !== id));
   };
 
+  const getNextAvailableShift = () => {
+    const assignedCodes = new Set(
+      operatorIds.map((id) => (operatorShifts[id] || '').toUpperCase())
+    );
+    const unused = clientShifts.find((s) => !assignedCodes.has(s.code.toUpperCase()));
+    return unused || clientShifts[operatorIds.length % clientShifts.length] || clientShifts[0];
+  };
+
+  const handleAddOperator = (op: SelectableUser) => {
+    if (operatorIds.includes(op.id)) {
+      handleRemoveOperator(op.id);
+      return;
+    }
+    if (operatorIds.length >= maxMobileShifts) return;
+    Haptics.selectionAsync().catch(() => {});
+    const nextShift = getNextAvailableShift();
+    setOperatorIds((prev) => [...prev, op.id]);
+    setOperatorShifts((prev) => ({
+      ...prev,
+      [op.id]: nextShift.code,
+    }));
+    if (operatorIds.length + 1 >= maxMobileShifts) {
+      setIsOperatorDropdownOpen(false);
+    }
+  };
+
   const handleRemoveOperator = (id: string) => {
+    Haptics.selectionAsync().catch(() => {});
     setOperatorIds((prev) => prev.filter((item) => item !== id));
     setOperatorShifts((prev) => {
       const next = { ...prev };
@@ -377,26 +476,11 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   };
 
   const handleSelectOperatorShift = (opId: string, shiftCode: string) => {
+    Haptics.selectionAsync().catch(() => {});
     setOperatorShifts((prev) => ({
       ...prev,
       [opId]: shiftCode,
     }));
-  };
-
-  const handleOperatorSelectConfirm = (selectedIds: string[]) => {
-    const cappedIds = selectedIds.slice(0, maxMobileShifts);
-    const nextShifts = { ...operatorShifts };
-    const usedCodes = new Set(cappedIds.map((id) => nextShifts[id]).filter(Boolean));
-    cappedIds.forEach((id) => {
-      if (!nextShifts[id]) {
-        const unused = clientShifts.find((s) => !usedCodes.has(s.code.toUpperCase()));
-        const codeToAssign = unused ? unused.code : clientShifts[0]?.code || 'S1';
-        nextShifts[id] = codeToAssign;
-        usedCodes.add(codeToAssign);
-      }
-    });
-    setOperatorShifts(nextShifts);
-    setOperatorIds(cappedIds);
   };
 
   const handleSave = async () => {
@@ -760,46 +844,19 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
                   {/* Health Status Dropdown (Shifted into Machine Info) */}
                   <View style={styles.fieldGroup}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Health Status</Text>
-                    <TouchableOpacity
-                      onPress={() => setHealthModalOpen(true)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.singleSelectTrigger,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.selectLeft}>
-                        <View
-                          style={[
-                            styles.statusDot,
-                            {
-                              backgroundColor:
-                                healthStatus === 'active'
-                                  ? '#10b981'
-                                  : healthStatus === 'spare'
-                                  ? '#06b6d4'
-                                  : healthStatus === 'under_maintenance'
-                                  ? '#f59e0b'
-                                  : '#ef4444',
-                            },
-                          ]}
-                        />
-                        <Text style={[styles.selectValueText, { color: theme.colors.ink }]}>
-                          {healthStatus === 'active'
-                            ? 'Active'
-                            : healthStatus === 'spare'
-                            ? 'Spare'
-                            : healthStatus === 'under_maintenance'
-                            ? 'Under Maintenance'
-                            : 'Breakdown'}
-                        </Text>
-                      </View>
-                      <ChevronDown size={14} color={theme.colors.mute} />
-                    </TouchableOpacity>
+                    <SearchableSelect
+                      label="Health Status"
+                      options={HEALTH_OPTIONS}
+                      value={healthStatus}
+                      onChange={(val) => {
+                        setHealthStatus(val);
+                        if (val === 'spare' && rentalStatus !== 'rented') {
+                          setRentalStatus('rented');
+                        }
+                      }}
+                      placeholder="Select health status..."
+                      modalTitle="Select Health Status"
+                    />
                   </View>
                 </View>
               </View>
@@ -817,7 +874,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                 <View style={styles.sectionFields}>
                   {/* Assigned Supervisors */}
                   {!isSupervisor ? (
-                    <View style={styles.fieldGroup}>
+                    <View
+                      style={styles.fieldGroup}
+                      {...({ 'data-dropdown-container': 'true' } as any)}
+                    >
                       <View style={styles.labelRow}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                           Assigned Supervisors
@@ -828,13 +888,18 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       </View>
 
                       <TouchableOpacity
-                        onPress={() => setSupervisorModalOpen(true)}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setIsSupervisorDropdownOpen((prev) => !prev);
+                          setIsOperatorDropdownOpen(false);
+                          setSupervisorSearchQuery('');
+                        }}
                         activeOpacity={0.7}
                         style={[
                           styles.multiSelectTrigger,
                           {
                             backgroundColor: theme.colors.canvasElevated,
-                            borderColor: theme.colors.hairline,
+                            borderColor: isSupervisorDropdownOpen ? theme.colors.ink : theme.colors.hairline,
                           },
                         ]}
                       >
@@ -859,8 +924,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                   {s.full_name}
                                 </Text>
                                 <TouchableOpacity
-                                  onPress={() => handleRemoveSupervisor(s.id)}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  onPress={(e) => {
+                                    // @ts-ignore
+                                    e?.stopPropagation?.();
+                                    handleRemoveSupervisor(s.id);
+                                  }}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
                                   <X size={11} color={theme.colors.mute} />
                                 </TouchableOpacity>
@@ -872,17 +941,187 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         <View style={styles.triggerRightActions}>
                           {supervisorIds.length > 0 && (
                             <TouchableOpacity
-                              onPress={() => setSupervisorIds([])}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              onPress={(e) => {
+                                // @ts-ignore
+                                e?.stopPropagation?.();
+                                Haptics.selectionAsync().catch(() => {});
+                                setSupervisorIds([]);
+                              }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
                               <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
                                 Clear
                               </Text>
                             </TouchableOpacity>
                           )}
-                          <ChevronDown size={14} color={theme.colors.mute} />
+                          <ChevronDown
+                            size={14}
+                            color={isSupervisorDropdownOpen ? '#0284c7' : theme.colors.mute}
+                            style={{
+                              transform: [{ rotate: isSupervisorDropdownOpen ? '180deg' : '0deg' }],
+                            }}
+                          />
                         </View>
                       </TouchableOpacity>
+
+                      {/* Supervisor Dropdown Popover */}
+                      {isSupervisorDropdownOpen && (
+                        <View
+                          style={[
+                            styles.dropdownPopoverPanel,
+                            {
+                              backgroundColor: theme.colors.canvasElevated,
+                              borderColor: theme.colors.hairline,
+                            },
+                          ]}
+                        >
+                          {/* Search Input */}
+                          <View
+                            style={[
+                              styles.dropdownSearchBox,
+                              {
+                                backgroundColor: theme.colors.canvas,
+                                borderColor: theme.colors.hairline,
+                              },
+                            ]}
+                          >
+                            <Search size={14} color={theme.colors.mute} />
+                            <TextInput
+                              style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
+                              placeholder="Search supervisors by name, phone..."
+                              placeholderTextColor={theme.colors.mute}
+                              value={supervisorSearchQuery}
+                              onChangeText={setSupervisorSearchQuery}
+                              autoFocus
+                            />
+                            {supervisorSearchQuery ? (
+                              <TouchableOpacity onPress={() => setSupervisorSearchQuery('')} hitSlop={8}>
+                                <X size={13} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+
+                          {/* Subheader: Selected Count + Deselect / Clear */}
+                          <View
+                            style={[
+                              styles.dropdownSubHeader,
+                              { borderBottomColor: theme.colors.hairline },
+                            ]}
+                          >
+                            <Text style={[styles.selectionCountText, { color: theme.colors.mute }]}>
+                              {supervisorIds.length} of {supervisorsList.length} selected
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                if (supervisorIds.length > 0) {
+                                  setSupervisorIds([]);
+                                } else {
+                                  setSupervisorIds(supervisorsList.map((s) => s.id));
+                                }
+                              }}
+                              hitSlop={6}
+                            >
+                              <Text style={styles.deselectAllActionText}>
+                                {supervisorIds.length > 0 ? 'Clear All' : 'Select All'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Supervisors List */}
+                          <ScrollView
+                            style={styles.dropdownScrollList}
+                            nestedScrollEnabled
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={true}
+                          >
+                            {filteredSupervisors.length === 0 ? (
+                              <View style={styles.emptyDropdownList}>
+                                <Text style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
+                                  No supervisors matching search
+                                </Text>
+                              </View>
+                            ) : (
+                              filteredSupervisors.map((s) => {
+                                const isSelected = supervisorIds.includes(s.id);
+                                const roleUpper = (s.role || 'SUPERVISOR').toUpperCase();
+                                return (
+                                  <TouchableOpacity
+                                    key={s.id}
+                                    onPress={() => handleToggleSupervisor(s.id)}
+                                    activeOpacity={0.7}
+                                    style={[
+                                      styles.dropdownStaffItem,
+                                      {
+                                        backgroundColor: isSelected
+                                          ? (isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff')
+                                          : theme.colors.canvas,
+                                        borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
+                                      },
+                                    ]}
+                                  >
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                      <View style={styles.staffTitleRow}>
+                                        <Text
+                                          style={[
+                                            styles.staffNameText,
+                                            { color: isSelected ? '#0284c7' : theme.colors.ink },
+                                          ]}
+                                          numberOfLines={1}
+                                        >
+                                          {s.full_name}
+                                        </Text>
+                                        <View
+                                          style={[
+                                            styles.staffRolePill,
+                                            {
+                                              backgroundColor: isDark
+                                                ? 'rgba(56, 189, 248, 0.15)'
+                                                : '#e0f2fe',
+                                            },
+                                          ]}
+                                        >
+                                          <Text style={[styles.staffRolePillText, { color: '#0284c7' }]}>
+                                            {roleUpper}
+                                          </Text>
+                                        </View>
+                                      </View>
+
+                                      {/* Timing & Phone */}
+                                      <View style={styles.staffMetaRow}>
+                                        <Clock size={11} color="#10b981" />
+                                        <Text style={styles.staffTimingText}>
+                                          {s.shift_start_time && s.shift_end_time
+                                            ? `${formatTo12Hour(s.shift_start_time)} - ${formatTo12Hour(s.shift_end_time)}`
+                                            : s.shift_time || '08:00 - 20:00'}
+                                        </Text>
+                                        {s.phone && (
+                                          <Text style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
+                                            • {s.phone}
+                                          </Text>
+                                        )}
+                                      </View>
+                                    </View>
+
+                                    {/* Checkbox indicator */}
+                                    <View
+                                      style={[
+                                        styles.checkboxIndicator,
+                                        {
+                                          borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
+                                          backgroundColor: isSelected ? '#0284c7' : 'transparent',
+                                        },
+                                      ]}
+                                    >
+                                      {isSelected && <Check size={12} color="#ffffff" />}
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })
+                            )}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
                   ) : (
                     <View style={styles.fieldGroup}>
@@ -933,7 +1172,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                   )}
 
                   {/* Assigned Operators */}
-                  <View style={styles.fieldGroup}>
+                  <View
+                    style={styles.fieldGroup}
+                    {...({ 'data-dropdown-container': 'true' } as any)}
+                  >
                     <View style={styles.labelRow}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                         Assigned Operators (24h)
@@ -943,23 +1185,196 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       </Text>
                     </View>
 
-                    {operatorIds.length < maxMobileShifts && (
+                    {operatorIds.length < maxMobileShifts ? (
                       <TouchableOpacity
-                        onPress={() => setOperatorModalOpen(true)}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setIsOperatorDropdownOpen((prev) => !prev);
+                          setIsSupervisorDropdownOpen(false);
+                          setOperatorSearchQuery('');
+                        }}
                         activeOpacity={0.7}
                         style={[
                           styles.addOperatorTrigger,
                           {
                             backgroundColor: theme.colors.canvasElevated,
-                            borderColor: theme.colors.hairline,
+                            borderColor: isOperatorDropdownOpen ? theme.colors.ink : theme.colors.hairline,
                           },
                         ]}
                       >
                         <Text style={[styles.addOperatorText, { color: theme.colors.ink }]}>
                           + Search & Assign Operators ({operatorIds.length}/{maxMobileShifts})
                         </Text>
-                        <ChevronDown size={14} color={theme.colors.mute} />
+                        <ChevronDown
+                          size={14}
+                          color={isOperatorDropdownOpen ? '#0284c7' : theme.colors.mute}
+                          style={{
+                            transform: [{ rotate: isOperatorDropdownOpen ? '180deg' : '0deg' }],
+                          }}
+                        />
                       </TouchableOpacity>
+                    ) : null}
+
+                    {/* Operator Dropdown Popover */}
+                    {isOperatorDropdownOpen && operatorIds.length < maxMobileShifts && (
+                      <View
+                        style={[
+                          styles.dropdownPopoverPanel,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        {/* Search Input */}
+                        <View
+                          style={[
+                            styles.dropdownSearchBox,
+                            {
+                              backgroundColor: theme.colors.canvas,
+                              borderColor: theme.colors.hairline,
+                            },
+                          ]}
+                        >
+                          <Search size={14} color={theme.colors.mute} />
+                          <TextInput
+                            style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
+                            placeholder="Search operators by name, phone..."
+                            placeholderTextColor={theme.colors.mute}
+                            value={operatorSearchQuery}
+                            onChangeText={setOperatorSearchQuery}
+                            autoFocus
+                          />
+                          {operatorSearchQuery ? (
+                            <TouchableOpacity onPress={() => setOperatorSearchQuery('')} hitSlop={8}>
+                              <X size={13} color={theme.colors.mute} />
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+
+                        {/* Operators List */}
+                        <ScrollView
+                          style={styles.dropdownScrollList}
+                          nestedScrollEnabled
+                          keyboardShouldPersistTaps="handled"
+                          showsVerticalScrollIndicator={true}
+                        >
+                          {filteredOperators.length === 0 ? (
+                            <View style={styles.emptyDropdownList}>
+                              <Text style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
+                                {operatorSearchQuery ? 'No matching operators found' : 'All operators assigned'}
+                              </Text>
+                            </View>
+                          ) : (
+                            filteredOperators.map((op) => {
+                              const isAlreadyAssigned = operatorIds.includes(op.id);
+                              const nextShift = getNextAvailableShift();
+                              const conflict = getOperatorConflict(op.id, nextShift.code);
+
+                              return (
+                                <TouchableOpacity
+                                  key={op.id}
+                                  onPress={() => handleAddOperator(op)}
+                                  activeOpacity={0.7}
+                                  style={[
+                                    styles.dropdownStaffItem,
+                                    {
+                                      backgroundColor: isAlreadyAssigned
+                                        ? (isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff')
+                                        : theme.colors.canvas,
+                                      borderColor: isAlreadyAssigned ? '#0284c7' : theme.colors.hairline,
+                                    },
+                                  ]}
+                                >
+                                  <View style={{ flex: 1, minWidth: 0 }}>
+                                    <View style={styles.staffTitleRow}>
+                                      <Text
+                                        style={[
+                                          styles.staffNameText,
+                                          { color: isAlreadyAssigned ? '#0284c7' : theme.colors.ink },
+                                        ]}
+                                        numberOfLines={1}
+                                      >
+                                        {op.full_name}
+                                      </Text>
+                                      {isAlreadyAssigned && (
+                                        <View
+                                          style={[
+                                            styles.staffRolePill,
+                                            {
+                                              backgroundColor: isDark
+                                                ? 'rgba(56, 189, 248, 0.15)'
+                                                : '#e0f2fe',
+                                            },
+                                          ]}
+                                        >
+                                          <Text style={[styles.staffRolePillText, { color: '#0284c7' }]}>
+                                            ASSIGNED
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </View>
+
+                                    {/* Timing & Phone */}
+                                    <View style={styles.staffMetaRow}>
+                                      <Clock size={11} color="#10b981" />
+                                      <Text style={styles.staffTimingText}>
+                                        {op.shift_start_time && op.shift_end_time
+                                          ? `${formatTo12Hour(op.shift_start_time)} - ${formatTo12Hour(op.shift_end_time)}`
+                                          : op.shift_time || '06:00 - 14:00'}
+                                      </Text>
+                                      {op.phone && (
+                                        <Text style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
+                                          • {op.phone}
+                                        </Text>
+                                      )}
+                                    </View>
+
+                                    {/* Conflict indication if any */}
+                                    {conflict && (
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                        <AlertCircle size={10} color="#ef4444" />
+                                        <Text style={{ fontSize: 10, color: '#ef4444', fontWeight: '600' }} numberOfLines={1}>
+                                          Assigned to {conflict.machine_code} ({formatTo12Hour(conflict.shift_start_time) || conflict.shift_start_time} - {formatTo12Hour(conflict.shift_end_time) || conflict.shift_end_time})
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+
+                                  {/* Action badge on right */}
+                                  {isAlreadyAssigned ? (
+                                    <View
+                                      style={[
+                                        styles.checkboxIndicator,
+                                        {
+                                          borderColor: '#0284c7',
+                                          backgroundColor: '#0284c7',
+                                        },
+                                      ]}
+                                    >
+                                      <Check size={12} color="#ffffff" />
+                                    </View>
+                                  ) : (
+                                    <View
+                                      style={[
+                                        styles.assignShiftActionBadge,
+                                        {
+                                          backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe',
+                                          borderColor: isDark ? 'rgba(56, 189, 248, 0.25)' : '#bae6fd',
+                                        },
+                                      ]}
+                                    >
+                                      <Text style={[styles.assignShiftActionText, { color: '#0284c7' }]}>
+                                        + Shift {nextShift.code}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })
+                          )}
+                        </ScrollView>
+                      </View>
                     )}
 
                     {selectedOperators.length === 0 ? (
@@ -997,60 +1412,35 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             >
                               <View style={styles.operatorCardHeader}>
                                 <View style={styles.operatorCardInfo}>
-                                  <Text style={[styles.operatorCardName, { color: theme.colors.ink }]}>
-                                    {o.full_name}
-                                  </Text>
-                                  <View style={[styles.shiftBadge, conflictMsg ? { backgroundColor: '#ef444420' } : null]}>
-                                    <Text style={[styles.shiftBadgeText, conflictMsg ? { color: '#ef4444' } : null]}>
-                                      Shift {currentShift}
-                                    </Text>
+                                  <View style={styles.operatorIndexBadge}>
+                                    <Text style={styles.operatorIndexText}>{idx + 1}</Text>
+                                  </View>
+                                  <View style={{ flex: 1, minWidth: 0 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                      <Text style={[styles.operatorCardName, { color: theme.colors.ink }]} numberOfLines={1}>
+                                        {o.full_name}
+                                      </Text>
+                                      <View style={[styles.shiftBadge, conflictMsg ? { backgroundColor: '#ef444420', borderColor: '#ef444450' } : null]}>
+                                        <Text style={[styles.shiftBadgeText, conflictMsg ? { color: '#ef4444' } : null]}>
+                                          Shift {currentShift}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                    {(o.phone || o.email) && (
+                                      <Text style={[styles.operatorContactSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
+                                        {[o.phone, o.email].filter(Boolean).join(' • ')}
+                                      </Text>
+                                    )}
                                   </View>
                                 </View>
                                 <TouchableOpacity
                                   onPress={() => handleRemoveOperator(o.id)}
                                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                   style={styles.removeOperatorBtn}
+                                  accessibilityLabel={`Remove ${o.full_name}`}
                                 >
                                   <X size={15} color={theme.colors.mute} />
                                 </TouchableOpacity>
-                              </View>
-
-                              {/* Shift Selection Chips */}
-                              <View style={styles.shiftChipsRow}>
-                                {clientShifts.map((sc) => {
-                                  const isSelected = currentShift.toUpperCase() === sc.code.toUpperCase();
-                                  const isShiftConflicting = Boolean(getOperatorConflict(o.id, sc.code));
-                                  return (
-                                    <TouchableOpacity
-                                      key={sc.code}
-                                      onPress={() => handleSelectOperatorShift(o.id, sc.code)}
-                                      activeOpacity={0.7}
-                                      style={[
-                                        styles.shiftChip,
-                                        {
-                                          backgroundColor: isSelected
-                                            ? (isShiftConflicting ? '#ef4444' : '#0ea5e9')
-                                            : theme.colors.canvas,
-                                          borderColor: isSelected
-                                            ? (isShiftConflicting ? '#dc2626' : '#0284c7')
-                                            : (isShiftConflicting ? '#ef444460' : theme.colors.hairline),
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={[
-                                          styles.shiftChipText,
-                                          {
-                                            color: isSelected ? '#ffffff' : (isShiftConflicting ? '#ef4444' : theme.colors.ink),
-                                            fontWeight: isSelected ? '700' : '500',
-                                          },
-                                        ]}
-                                      >
-                                        Shift {sc.code}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  );
-                                })}
                               </View>
 
                               {/* Overlap Conflict Pill */}
@@ -1060,6 +1450,23 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                   <Text style={styles.operatorConflictText}>{conflictMsg}</Text>
                                 </View>
                               )}
+
+                              {/* Shift Selection: Smooth Grow & Shrink ShiftCardSelector */}
+                              <View style={styles.shiftSelectionSection}>
+                                <View style={styles.shiftSelectionHeader}>
+                                  <Clock size={11} color="#0284c7" />
+                                  <Text style={[styles.shiftSelectionLabel, { color: theme.colors.mute }]}>
+                                    SELECT ASSIGNED SHIFT:
+                                  </Text>
+                                </View>
+
+                                <ShiftCardSelector
+                                  shiftCodes={clientShifts}
+                                  selectedCode={currentShift}
+                                  onSelect={(sc) => handleSelectOperatorShift(o.id, sc.code)}
+                                  isConflicting={(code) => Boolean(getOperatorConflict(o.id, code))}
+                                />
+                              </View>
                             </View>
                           );
                         })}
@@ -1082,56 +1489,22 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                 <View style={styles.sectionFields}>
                   {/* Assigned Client */}
                   <View style={styles.fieldGroup}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                      Assigned Client
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setClientModalOpen(true)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.singleSelectTrigger,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.selectLeft}>
-                        {selectedClient ? (
-                          <View style={styles.clientChipRow}>
-                            <Text style={[styles.clientNameText, { color: theme.colors.ink }]}>
-                              {selectedClient.company_name}
-                            </Text>
-                            {selectedClient.code && (
-                              <View style={styles.clientCodeBadge}>
-                                <Text style={styles.clientCodeText}>
-                                  {selectedClient.code}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        ) : (
-                          <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                            Search or select client to rent...
-                          </Text>
-                        )}
-                      </View>
-
-                      <View style={styles.triggerRightActions}>
-                        {selectedClient && (
-                          <TouchableOpacity
-                            onPress={() => {
-                              setSelectedClient(null);
-                              setRentalStatus('available');
-                            }}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <X size={14} color={theme.colors.mute} />
-                          </TouchableOpacity>
-                        )}
-                        <ChevronDown size={14} color={theme.colors.mute} />
-                      </View>
-                    </TouchableOpacity>
+                    <SearchableSelect
+                      label="Assigned Client"
+                      options={clientOptions}
+                      value={selectedClient?.id || ''}
+                      onChange={(val) => {
+                        const found = clientsList.find((c) => c.id === val) || null;
+                        setSelectedClient(found);
+                        if (found) {
+                          setRentalStatus('rented');
+                        } else {
+                          setRentalStatus('available');
+                        }
+                      }}
+                      placeholder="Search or select client to rent..."
+                      modalTitle="Select Client"
+                    />
                   </View>
 
                   {/* Automatic Rental Status Indicator */}
@@ -1212,68 +1585,6 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           </ScrollView>
 
           {/* Sub-Modals */}
-          <MultiUserSelectModal
-            visible={supervisorModalOpen}
-            onClose={() => setSupervisorModalOpen(false)}
-            title="Assigned Supervisors"
-            users={supervisorsList}
-            selectedIds={supervisorIds}
-            onConfirm={setSupervisorIds}
-            roleLabel="supervisors"
-          />
-
-          <MultiUserSelectModal
-            visible={operatorModalOpen}
-            onClose={() => setOperatorModalOpen(false)}
-            title="Assigned Operators (24h)"
-            users={operatorsList}
-            selectedIds={operatorIds}
-            onConfirm={handleOperatorSelectConfirm}
-            roleLabel="operators"
-          />
-
-          <ClientSelectModal
-            visible={clientModalOpen}
-            onClose={() => setClientModalOpen(false)}
-            clients={clientsList}
-            selectedClientId={selectedClient?.id}
-            onSelect={(client) => {
-              setSelectedClient(client);
-              if (client) {
-                setRentalStatus('rented');
-              } else {
-                setRentalStatus('available');
-              }
-            }}
-          />
-
-          <CustomFilterSelectorModal
-            visible={healthModalOpen}
-            onClose={() => setHealthModalOpen(false)}
-            title="Select Health Status"
-            options={HEALTH_OPTIONS}
-            selectedValue={healthStatus}
-            onSelect={(val) => {
-              setHealthStatus(val);
-              if (val === 'spare' && rentalStatus !== 'rented') {
-                setRentalStatus('rented');
-              }
-            }}
-          />
-
-          <CustomFilterSelectorModal
-            visible={rentalModalOpen}
-            onClose={() => setRentalModalOpen(false)}
-            title="Select Rental Status"
-            options={RENTAL_OPTIONS}
-            selectedValue={rentalStatus}
-            onSelect={(val) => {
-              setRentalStatus(val);
-              if (val === 'available') {
-                setSelectedClient(null);
-              }
-            }}
-          />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1290,11 +1601,18 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radiusNumeric.lg,
     borderTopRightRadius: radiusNumeric.lg,
     maxHeight: '92%',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 16,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 -8px 20px rgba(0, 0, 0, 0.35)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 20,
+        elevation: 16,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
@@ -1532,30 +1850,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  clientChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.xs,
-    flex: 1,
-  },
-  clientNameText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
-  clientCodeBadge: {
-    backgroundColor: '#0ea5e918',
-    borderColor: '#0ea5e940',
-    borderWidth: 1,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  clientCodeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0ea5e9',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
   bottomButtonsWrap: {
     gap: spacingNumeric.sm,
     marginTop: spacingNumeric.xs,
@@ -1602,5 +1896,171 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ef4444',
     flex: 1,
+  },
+  dropdownPopoverPanel: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.sm,
+    marginTop: 4,
+    marginBottom: spacingNumeric.xs,
+    maxHeight: 260,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 6,
+      },
+    }),
+  },
+  dropdownSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    height: 38,
+    marginBottom: 8,
+  },
+  dropdownSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  dropdownSubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingBottom: 6,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+  },
+  selectionCountText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+  },
+  deselectAllActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0284c7',
+  },
+  dropdownScrollList: {
+    maxHeight: 180,
+  },
+  emptyDropdownList: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyDropdownText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  dropdownStaffItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginBottom: 6,
+    minHeight: 44,
+  },
+  staffTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  staffNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  staffRolePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: radiusNumeric.sm,
+  },
+  staffRolePillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  staffMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  staffTimingText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10b981',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  staffPhoneText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  checkboxIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  assignShiftActionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    marginLeft: 8,
+  },
+  assignShiftActionText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  operatorIndexBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  operatorIndexText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  operatorContactSubtitle: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 1,
+  },
+  shiftSelectionSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  shiftSelectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  shiftSelectionLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

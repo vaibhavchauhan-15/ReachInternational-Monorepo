@@ -59,6 +59,8 @@ export interface MobileHeaderProps {
   showRoleBadge?: boolean;
   showLogo?: boolean;
   showQuickAccess?: boolean;
+  showQuickAccessCapsule?: boolean;
+  showMoreMenu?: boolean;
   onQuickAccessPress?: () => void;
   onPressBack?: () => void;
   rightAction?: React.ReactNode;
@@ -82,6 +84,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   showRoleBadge = false,
   showLogo = true,
   showQuickAccess = true,
+  showQuickAccessCapsule = true,
+  showMoreMenu,
   onQuickAccessPress,
   onPressBack,
   rightAction,
@@ -515,7 +519,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 </TouchableOpacity>
               )
             ) : showQuickAccess ? (
-              isWide ? (
+              isWide && showQuickAccessCapsule ? (
                 /* Wide Viewport (Desktop / Tablet): Pill Capsule with Quick Access label & ⌘K / Ctrl K pill */
                 <TouchableOpacity
                   onPress={handleQuickAccessPress}
@@ -549,7 +553,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   </View>
                 </TouchableOpacity>
               ) : (
-                /* Compact Phone Viewport: Sleek 36×36 Quick Access Icon Button */
+                /* Compact Phone Viewport / Dedicated Sleek 36×36 Quick Access Icon Button */
                 <TouchableOpacity
                   onPress={handleQuickAccessPress}
                   activeOpacity={0.7}
@@ -569,22 +573,24 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             ) : null}
 
             {/* 3-DOT MENU BUTTON FOR OTHER ACTIONS */}
-            <View ref={menuTriggerRef} collapsable={false}>
-              <TouchableOpacity
-                onPress={openActionMenu}
-                activeOpacity={0.7}
-                style={[
-                  styles.iconBtn,
-                  {
-                    backgroundColor: menuOpen ? theme.colors.hairline : theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                accessibilityLabel="Other Actions"
-              >
-                <MoreVertical size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
-            </View>
+            {(showMoreMenu !== undefined ? showMoreMenu : Boolean(actions && actions.length > 0)) && (
+              <View ref={menuTriggerRef} collapsable={false}>
+                <TouchableOpacity
+                  onPress={openActionMenu}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.iconBtn,
+                    {
+                      backgroundColor: menuOpen ? theme.colors.hairline : theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityLabel="Other Actions"
+                >
+                  <MoreVertical size={18} color={theme.colors.ink} />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       )}

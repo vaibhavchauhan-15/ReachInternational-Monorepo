@@ -10,10 +10,10 @@ import {
   Platform,
   Switch,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme } from '../ui';
+import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2 } from 'lucide-react-native';
+import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2, Building2 } from 'lucide-react-native';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
 import {
@@ -42,6 +42,9 @@ export interface MeterLogModalProps {
   existingLog?: any;
   targetOperatorId?: string;
   targetOperatorName?: string;
+  currentUserId?: string;
+  currentUserRole?: string;
+  currentUserName?: string;
   initialShiftCode?: string;
   initialClientId?: string;
   initialStartMeter?: number | string;
@@ -60,6 +63,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   existingLog,
   targetOperatorId,
   targetOperatorName,
+  currentUserId,
+  currentUserRole,
+  currentUserName,
   initialShiftCode,
   initialClientId,
   initialStartMeter,
@@ -133,7 +139,21 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   // Client Selection
   const [clients, setClients] = useState<Array<{ id: string; name: string; client_name?: string; street?: string; address?: string; city?: string; district?: string; state?: string; pincode?: string }>>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [clientModalVisible, setClientModalVisible] = useState(false);
+
+  const clientOptions = React.useMemo<SelectOption[]>(() => {
+    return clients.map((c) => {
+      const parts = [c.street, c.city, c.district, c.state, c.pincode]
+        .filter(Boolean)
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+      const loc = parts.length > 0 ? parts.join(', ') : (c.address ? String(c.address).trim() : '');
+      return {
+        value: c.id,
+        label: c.name || c.client_name || 'Client',
+        description: loc || undefined,
+      };
+    });
+  }, [clients]);
 
   // Client Shift Codes & Operator Assigned Shifts
   const [shiftCodes, setShiftCodes] = useState<any[]>([]);
@@ -523,7 +543,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     if (fullAddr) {
       setLocation(fullAddr);
     }
-    setClientModalVisible(false);
   };
 
   const handleStartMeterChange = (val: string) => {
@@ -586,10 +605,14 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
+    let userId = currentUserId;
+    if (!userId) {
+      const { data: userData } = await supabase.auth.getUser();
+      userId = userData?.user?.id;
+    }
     const effectiveOperatorId = targetOperatorId || userId;
     const isAssisted = Boolean(targetOperatorId && targetOperatorId !== userId);
+    const effectiveEntrySource = isAssisted ? (currentUserRole || 'admin') : 'operator';
 
     const isUnassigned = assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode);
     if (isUnassigned && !isAssisted) {
@@ -626,8 +649,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
     try {
       if (isAssisted && userId) {
-        const { data: userRow } = await supabase.from('users').select('role').eq('id', userId).single();
-        if (userRow && !['super_admin', 'admin', 'manager'].includes(userRow.role)) {
+        const callerRole = currentUserRole || (await supabase.from('users').select('role').eq('id', userId).single()).data?.role;
+        if (callerRole && !['super_admin', 'admin', 'manager'].includes(callerRole)) {
           setError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
           setIsSubmitting(false);
           return;
@@ -678,7 +701,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         remarks: remarksPayload || null,
         operator_id: effectiveOperatorId || null,
         entered_by: userId || null,
-        entry_source: isAssisted ? 'supervisor' : 'operator',
+        entry_source: effectiveEntrySource,
         log_date: shiftStats.resolvedStartDate,
         end_date: shiftStats.resolvedEndDate,
         start_datetime: shiftStats.startDateTime?.toISOString(),
@@ -736,6 +759,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           end_datetime: shiftStats.endDateTime?.toISOString(),
         };
         if (selectedClientId) updatePayload.client_id = selectedClientId;
+        if (isAssisted && userId) {
+          updatePayload.entered_by = userId;
+          updatePayload.entry_source = effectiveEntrySource;
+        }
 
         const { error: updateErr } = await supabase
           .from('machine_hour_logs')
@@ -884,7 +911,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           remarks: remarksPayload || null,
           operator_id: effectiveOperatorId || null,
           entered_by: userId || null,
-          entry_source: isAssisted ? 'supervisor' : 'operator',
+          entry_source: effectiveEntrySource,
           idempotency_key: idempotencyKey,
           log_date: shiftStats.resolvedStartDate,
           end_date: shiftStats.resolvedEndDate,
@@ -927,7 +954,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   event: 'assisted_shift_logged',
                   payload: {
                     title: 'Shift Logged on Your Behalf',
-                    body: `A supervisor recorded your shift on equipment ${machineCode || 'Equipment'} (${runningHours}h).`,
+                    body: `${currentUserName || 'A manager/admin'} recorded your shift on equipment ${machineCode || 'Equipment'} (${runningHours}h).`,
                     operatorId: effectiveOperatorId,
                     machineCode: machineCode || 'Equipment',
                     runningHours,
@@ -1152,23 +1179,24 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </ScrollView>
             </View>
 
-            {/* Client Selector Trigger */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Client / Customer Site</Text>
-              <TouchableOpacity
-                onPress={() => setClientModalVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.clientSelectTrigger,
-                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <Text style={[styles.clientSelectText, { color: selectedClientObj ? theme.colors.ink : theme.colors.mute }]}>
-                  {selectedClientObj ? selectedClientObj.name : 'Select assigned client...'}
-                </Text>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
+            {/* Client Selector */}
+            <SearchableSelect
+              label="Client / Customer Site"
+              options={clientOptions}
+              value={selectedClientId || ''}
+              onChange={(val) => {
+                const found = clients.find((c) => c.id === val);
+                if (found) {
+                  handleSelectClient(found);
+                } else {
+                  setSelectedClientId(val || null);
+                }
+              }}
+              placeholder="Select assigned client..."
+              modalTitle="Select Customer / Client"
+              leftIcon={<Building2 size={15} color={theme.colors.mute} />}
+              containerStyle={{ marginBottom: 14 }}
+            />
 
             <Input
               label="Site Location / Address"
@@ -1242,84 +1270,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       </Text>
                     </TouchableOpacity>
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                    {shiftCodes.map((s) => {
-                      const isSelected = selectedShiftCode === s.code;
-                      const hasAssignedShifts = assignedShiftCodes.length > 0;
-                      const isAssigned = assignedShiftCodes.includes(s.code);
-                      const isLogged = todayLoggedCodes.includes(s.code);
-                      const loggedRow = todayLogs.find((l) => l.shift_code === s.code);
-                      const subtitle = getShiftSubtitle(s);
-                      return (
-                        <TouchableOpacity
-                          key={s.id}
-                          onPress={() => handleSelectShift(s)}
-                          style={{
-                            minHeight: 44,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 10,
-                            borderWidth: 1.5,
-                            borderColor: isLogged
-                              ? isSelected
-                                ? '#059669'
-                                : '#10b981'
-                              : isSelected
-                              ? theme.colors.link
-                              : theme.colors.hairline,
-                            backgroundColor: isLogged
-                              ? isSelected
-                                ? '#059669'
-                                : 'rgba(16, 185, 129, 0.12)'
-                              : isSelected
-                              ? theme.colors.link
-                              : theme.colors.canvasElevated,
-                            justifyContent: 'center',
-                            alignItems: isSelected ? 'flex-start' : 'center',
-                          }}
-                        >
-                          {isSelected ? (
-                            /* EXPANDED (SELECTED) STATE: Exactly TWO lines (Name and Shift Time) */
-                            <View style={{ justifyContent: 'center' }}>
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '800',
-                                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                                  color: theme.colors.onPrimary,
-                                }}
-                              >
-                                {isLogged ? `✓ Shift ${s.code}` : `Shift ${s.code}`}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontSize: 10.5,
-                                  fontWeight: '500',
-                                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                                  color: 'rgba(255,255,255,0.9)',
-                                  marginTop: 2,
-                                }}
-                              >
-                                {formatTo12Hour(s.start_time) || s.start_time} - {formatTo12Hour(s.end_time) || s.end_time}
-                              </Text>
-                            </View>
-                          ) : (
-                            /* CLOSED (UNSELECTED) STATE: Exactly ONE line (Only Name) */
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: '700',
-                                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                                color: isLogged ? '#059669' : theme.colors.ink,
-                              }}
-                            >
-                              {isLogged ? `✓ Shift ${s.code}` : `Shift ${s.code}`}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                  <ShiftCardSelector
+                    shiftCodes={shiftCodes}
+                    selectedCode={selectedShiftCode || undefined}
+                    onSelect={(s) => handleSelectShift(s)}
+                    todayLoggedShiftCodes={todayLoggedCodes}
+                  />
                   {selectedShiftCode && todayLoggedCodes.includes(selectedShiftCode) && (
                     <View
                       style={{
@@ -1579,43 +1535,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           </View>
         </View>
 
-        {/* Client Selection Modal */}
-        <Modal visible={clientModalVisible} animationType="slide" transparent onRequestClose={() => setClientModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Customer / Client</Text>
-                <TouchableOpacity onPress={() => setClientModalVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-                {clients.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    onPress={() => handleSelectClient(c)}
-                    style={[
-                      styles.clientItemRow,
-                      { borderBottomColor: theme.colors.hairline },
-                      selectedClientId === c.id && { backgroundColor: theme.colors.link + '12' },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.clientItemName, { color: selectedClientId === c.id ? theme.colors.link : theme.colors.ink, fontWeight: selectedClientId === c.id ? '700' : '600' }]}>
-                        {c.name}
-                      </Text>
-                      <Text style={[styles.clientItemLoc, { color: theme.colors.mute }]}>
-                        {[c.street, c.city, c.district, c.state, c.pincode].filter(Boolean).join(', ') || 'No address logged'}
-                      </Text>
-                    </View>
-                    {selectedClientId === c.id && <Check size={18} color={theme.colors.link} />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </KeyboardAvoidingView>
     </Modal>
   );

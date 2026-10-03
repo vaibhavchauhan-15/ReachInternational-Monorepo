@@ -1,7 +1,11 @@
 /**
  * ReachInternational Mobile — Mobile Document Upload Card
- * Reusable card for uploading, viewing, and replacing identity documents (Aadhaar, Licence).
- * Strictly adheres to Vercel Geist design tokens, min 44px touch targets, and real progress.
+ * Matches web mobile viewport 95% identically:
+ * - Direct form field alignment matching Input/Select (no awkward double-nested card)
+ * - Label with required asterisk
+ * - Dashed upload box with Upload icon
+ * - Attached document banner with thumbnail/icon, filename, size, and remove button
+ * - 5% native optimizations (Haptics, smooth picking, tactile feedback).
  */
 
 import React, { useState } from 'react';
@@ -11,19 +15,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
+  Image,
+  type ViewStyle,
 } from 'react-native';
-import * as Linking from 'expo-linking';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../ui/ThemeProvider';
 import {
   FileText,
   Upload,
-  Trash2,
-  ExternalLink,
-  CheckCircle,
-  AlertCircle,
-  FileCheck,
-  Image as ImageIcon,
+  X,
 } from 'lucide-react-native';
 import {
   MobilePickedDocument,
@@ -47,11 +47,12 @@ export interface MobileDocumentUploadCardProps {
   uploading?: boolean;
   uploadProgress?: number;
   errorMessage?: string | null;
+  style?: ViewStyle;
 }
 
 export function MobileDocumentUploadCard({
   title,
-  subtitle = 'PDF, PNG, JPG, WEBP, or DOC',
+  subtitle,
   docTypeCode,
   required = false,
   selectedDoc,
@@ -61,92 +62,65 @@ export function MobileDocumentUploadCard({
   uploading = false,
   uploadProgress = 0,
   errorMessage,
+  style,
 }: MobileDocumentUploadCardProps) {
   const { theme, isDark } = useTheme();
-
   const [viewerDoc, setViewerDoc] = useState<MobileViewerDoc | null>(null);
 
   const handlePick = async () => {
     try {
+      Haptics.selectionAsync().catch(() => {});
       const doc = await pickIdentityDocument();
       if (doc) {
         onDocSelected(doc);
       }
     } catch (err: any) {
-      // Error handled via parent or prompt
+      // Handled by parent or silent catch
     }
   };
 
-  const handleOpenViewer = () => {
-    if (isExisting && existingDoc?.signed_url) {
+  const handleRemove = () => {
+    Haptics.selectionAsync().catch(() => {});
+    onDocRemoved();
+  };
+
+  const hasFile = Boolean(selectedDoc || existingDoc);
+  const isImage = selectedDoc?.mimeType?.startsWith('image/') || existingDoc?.mime_type?.startsWith('image/');
+
+  const defaultPlaceholder = docTypeCode === 'bank_document' || docTypeCode === 'bank_passbook'
+    ? 'Upload Passbook / Cheque / Statement (JPG, PNG, PDF)'
+    : docTypeCode === 'aadhaar'
+    ? 'Upload Aadhaar (JPG, PNG, PDF)'
+    : 'Upload Licence (JPG, PNG, PDF)';
+
+  const cleanTitle = title.replace(/\s*\*+$/, '');
+
+  const openViewer = () => {
+    if (selectedDoc) {
       setViewerDoc({
-        id: existingDoc.id,
-        title,
-        url: existingDoc.signed_url,
-        mimeType: existingDoc.mime_type,
-        fileSizeBytes: existingDoc.file_size_bytes,
-        fileName: existingDoc.storage_path.split('/').pop(),
-      });
-    } else if (selectedDoc?.uri) {
-      setViewerDoc({
-        title,
+        title: cleanTitle,
         url: selectedDoc.uri,
         mimeType: selectedDoc.mimeType,
-        fileSizeBytes: selectedDoc.size,
         fileName: selectedDoc.name,
+      });
+    } else if (existingDoc) {
+      setViewerDoc({
+        title: cleanTitle,
+        url: existingDoc.storage_path,
+        mimeType: existingDoc.mime_type,
+        fileName: existingDoc.storage_path.split('/').pop(),
       });
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (!bytes || bytes === 0) return '0 KB';
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const hasFile = !!selectedDoc || !!existingDoc;
-  const isExisting = !selectedDoc && !!existingDoc;
-
-  const cardBg = isDark ? '#141414' : '#ffffff';
-  const cardBorder = isDark ? '#262626' : '#ebebeb';
-  const accentBlue = '#0ea5e9';
-
-  const docMime = (selectedDoc?.mimeType || existingDoc?.mime_type || '').toLowerCase();
-  const isPdf = docMime === 'application/pdf' || (selectedDoc?.name || existingDoc?.storage_path || '').endsWith('.pdf');
-  const isPng = docMime.includes('png');
-  const isJpg = docMime.includes('jpg') || docMime.includes('jpeg');
-
-  const formatIconColor = isPdf ? '#f43f5e' : isPng ? '#10b981' : isJpg ? '#0ea5e9' : theme.colors.mute;
-
   return (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: theme.colors.ink }]}>
-              {title}
-            </Text>
-            {required && <Text style={styles.requiredStar}>*</Text>}
-          </View>
-          <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-            {subtitle}
-          </Text>
-        </View>
-
-        {/* Status Badge */}
-        {existingDoc && !selectedDoc && (
-          <View style={[styles.badge, { backgroundColor: 'rgba(34, 197, 94, 0.12)', borderColor: 'rgba(34, 197, 94, 0.3)' }]}>
-            <CheckCircle size={12} color="#16a34a" />
-            <Text style={[styles.badgeText, { color: '#16a34a' }]}>Uploaded</Text>
-          </View>
-        )}
-        {selectedDoc && (
-          <View style={[styles.badge, { backgroundColor: 'rgba(14, 165, 233, 0.12)', borderColor: 'rgba(14, 165, 233, 0.3)' }]}>
-            <FileCheck size={12} color={accentBlue} />
-            <Text style={[styles.badgeText, { color: accentBlue }]}>Selected</Text>
-          </View>
-        )}
+    <View style={[styles.fieldContainer, style]}>
+      {/* Label Row */}
+      <View style={styles.labelRow}>
+        <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+          {cleanTitle}
+        </Text>
+        {required && <Text style={styles.requiredStar}>*</Text>}
       </View>
 
       {/* Progress Bar (when uploading) */}
@@ -156,7 +130,7 @@ export function MobileDocumentUploadCard({
             <View
               style={[
                 styles.progressBarFill,
-                { width: `${Math.min(Math.max(uploadProgress, 5), 100)}%`, backgroundColor: accentBlue },
+                { width: `${Math.min(Math.max(uploadProgress, 5), 100)}%`, backgroundColor: '#0284c7' },
               ]}
             />
           </View>
@@ -166,139 +140,109 @@ export function MobileDocumentUploadCard({
         </View>
       )}
 
-      {/* Error message */}
-      {errorMessage && (
-        <View style={styles.errorBox}>
-          <AlertCircle size={14} color="#ef4444" />
-          <Text style={styles.errorText}>{errorMessage}</Text>
+      {/* Empty State: Dashed Upload Box */}
+      {!hasFile ? (
+        <TouchableOpacity
+          onPress={handlePick}
+          activeOpacity={0.7}
+          disabled={uploading}
+          style={[
+            styles.dashedBox,
+            {
+              borderColor: errorMessage
+                ? '#ef4444'
+                : isDark
+                ? '#333333'
+                : '#d1d5db',
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
+            },
+          ]}
+        >
+          {uploading ? (
+            <ActivityIndicator size="small" color="#0284c7" />
+          ) : (
+            <View style={styles.dashedInner}>
+              <Upload size={15} color={isDark ? '#737373' : '#9ca3af'} />
+              <Text
+                style={[
+                  styles.dashedText,
+                  { color: isDark ? '#71717a' : '#9ca3af' },
+                ]}
+                numberOfLines={1}
+              >
+                {subtitle || defaultPlaceholder}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      ) : (
+        /* Attached Document Banner */
+        <View
+          style={[
+            styles.attachedRow,
+            {
+              backgroundColor: isDark ? 'rgba(2, 132, 199, 0.1)' : 'rgba(2, 132, 199, 0.05)',
+              borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.2)',
+            },
+          ]}
+        >
+          {/* Thumbnail / Icon clickable for viewer */}
+          <TouchableOpacity onPress={openViewer} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+            {isImage && selectedDoc?.uri ? (
+              <Image
+                source={{ uri: selectedDoc.uri }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.fileIconBox,
+                  { backgroundColor: isDark ? '#262626' : '#e2e8f0' },
+                ]}
+              >
+                <FileText size={18} color="#0284c7" />
+              </View>
+            )}
+
+            {/* Details */}
+            <View style={styles.fileDetails}>
+              <Text
+                style={[
+                  styles.fileName,
+                  { color: isDark ? '#f8fafc' : '#0f172a' },
+                ]}
+                numberOfLines={1}
+              >
+                {selectedDoc?.name || existingDoc?.storage_path.split('/').pop() || 'Document attached'}
+              </Text>
+              <Text style={[styles.fileMeta, { color: isDark ? '#71717a' : '#9ca3af' }]}>
+                {selectedDoc?.size
+                  ? `${(selectedDoc.size / 1024).toFixed(0)} KB · Attached`
+                  : existingDoc?.file_size_bytes
+                  ? `${(existingDoc.file_size_bytes / 1024).toFixed(0)} KB · Uploaded`
+                  : 'Attached'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Remove Button */}
+          <TouchableOpacity
+            onPress={handleRemove}
+            disabled={uploading}
+            hitSlop={10}
+            style={styles.removeBtn}
+            accessibilityLabel="Remove attached document"
+          >
+            <X size={15} color={isDark ? '#a1a1aa' : '#6b7280'} />
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Content Area */}
-      {hasFile ? (
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleOpenViewer}
-          style={[
-            styles.fileRow,
-            {
-              backgroundColor: isDark ? '#1a1a1a' : '#f9fafb',
-              borderColor: cardBorder,
-            },
-          ]}
-        >
-          {/* Format-specific Icon Placeholder */}
-          <View
-            style={[
-              styles.fileIconBox,
-              {
-                backgroundColor: isPdf
-                  ? 'rgba(244, 63, 94, 0.1)'
-                  : isPng
-                  ? 'rgba(16, 185, 129, 0.1)'
-                  : isJpg
-                  ? 'rgba(14, 165, 233, 0.1)'
-                  : 'rgba(156, 163, 175, 0.1)',
-                borderColor: isPdf
-                  ? 'rgba(244, 63, 94, 0.25)'
-                  : isPng
-                  ? 'rgba(16, 185, 129, 0.25)'
-                  : isJpg
-                  ? 'rgba(14, 165, 233, 0.25)'
-                  : 'rgba(156, 163, 175, 0.25)',
-              },
-            ]}
-          >
-            {isPng || isJpg ? (
-              <ImageIcon size={16} color={formatIconColor} />
-            ) : (
-              <FileText size={16} color={formatIconColor} />
-            )}
-            <Text style={[styles.formatBadgeText, { color: formatIconColor }]}>
-              {isPdf ? 'PDF' : isPng ? 'PNG' : isJpg ? 'JPG' : 'DOC'}
-            </Text>
-          </View>
-
-          <View style={{ flex: 1, marginRight: 8, justifyContent: 'center' }}>
-            {selectedDoc ? (
-              <View
-                style={[
-                  styles.badge,
-                  {
-                    backgroundColor: 'rgba(14, 165, 233, 0.12)',
-                    borderColor: 'rgba(14, 165, 233, 0.3)',
-                    alignSelf: 'flex-start',
-                  },
-                ]}
-              >
-                <FileCheck size={11} color={accentBlue} />
-                <Text style={[styles.badgeText, { color: accentBlue }]}>Selected</Text>
-              </View>
-            ) : (
-              <View
-                style={[
-                  styles.badge,
-                  {
-                    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-                    borderColor: 'rgba(34, 197, 94, 0.3)',
-                    alignSelf: 'flex-start',
-                  },
-                ]}
-              >
-                <CheckCircle size={11} color="#16a34a" />
-                <Text style={[styles.badgeText, { color: '#16a34a' }]}>Uploaded</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Action Buttons: Replace & Delete (View button removed as card is clickable) */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.iconButton, { borderColor: cardBorder }]}
-              onPress={handlePick}
-              disabled={uploading}
-              accessibilityLabel="Replace document"
-              hitSlop={8}
-            >
-              <Upload size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.iconButton, { borderColor: 'rgba(239, 68, 68, 0.2)' }]}
-              onPress={onDocRemoved}
-              disabled={uploading}
-              accessibilityLabel="Remove document"
-              hitSlop={8}
-            >
-              <Trash2 size={16} color="#ef4444" />
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[
-            styles.uploadButton,
-            {
-              backgroundColor: isDark ? '#1a1a1a' : '#f4f4f5',
-              borderColor: cardBorder,
-            },
-          ]}
-          onPress={handlePick}
-          disabled={uploading}
-          activeOpacity={0.7}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color={accentBlue} />
-          ) : (
-            <>
-              <Upload size={18} color={theme.colors.ink} style={{ marginRight: 8 }} />
-              <Text style={[styles.uploadButtonText, { color: theme.colors.ink }]}>
-                Choose File (PDF, PNG, JPG, DOC)
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-      )}
+      {/* Error Message */}
+      {errorMessage ? (
+        <Text style={styles.errorText}>{errorMessage}</Text>
+      ) : null}
 
       {/* In-App Mobile Document Viewer Modal */}
       <MobileDocumentViewerModal
@@ -310,137 +254,103 @@ export function MobileDocumentUploadCard({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  fieldContainer: {
+    width: '100%',
     marginBottom: 8,
   },
-  titleRow: {
+  labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginBottom: 6,
+    gap: 3,
   },
-  title: {
+  label: {
     fontSize: 13,
     fontWeight: '600',
-    letterSpacing: -0.2,
+    letterSpacing: -0.1,
   },
   requiredStar: {
     color: '#ef4444',
     fontSize: 13,
     fontWeight: '700',
   },
-  subtitle: {
-    fontSize: 13.5,
-    marginTop: 2,
+  dashedBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  badge: {
+  dashedInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 9999,
-    borderWidth: 1,
+    justifyContent: 'center',
+    gap: 8,
   },
-  badgeText: {
+  dashedText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  attachedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+  },
+  thumbnail: {
+    width: 38,
+    height: 38,
+    borderRadius: 6,
+  },
+  fileIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  fileName: {
     fontSize: 12,
     fontWeight: '600',
+    marginBottom: 2,
+  },
+  fileMeta: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  removeBtn: {
+    padding: 6,
+    borderRadius: 6,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: '500',
   },
   progressContainer: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   progressBarBg: {
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: 4,
   },
   progressBarFill: {
     height: '100%',
     borderRadius: 2,
   },
   progressText: {
-    fontSize: 12,
-    textAlign: 'right',
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-  },
-  errorText: {
-    fontSize: 12.5,
-    color: '#ef4444',
-    flex: 1,
-  },
-  fileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
-  },
-  fileIconBox: {
-    height: 38,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    marginRight: 10,
-  },
-  formatBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  fileName: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  fileMeta: {
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 2,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 6,
-    height: 44, // Minimum 44px touch target per responsive rules
-    paddingHorizontal: 14,
-  },
-  uploadButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
 });

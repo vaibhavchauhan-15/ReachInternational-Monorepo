@@ -1,6 +1,7 @@
 /**
  * ReachInternational Mobile — Native Time Input Primitive
  * Separate Hours (1-12) & Minutes (0-60, auto-0) fields with AM/PM toggle and inline validation.
+ * 95% identical to web mobile viewport with 5% native optimizations (haptics, smooth focus).
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -10,8 +11,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Platform,
   type ViewStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
@@ -28,7 +31,7 @@ export interface TimeInputProps {
   isInvalid?: boolean;
   hideErrorMessage?: boolean;
   helperText?: string;
-  /** Layout arrangement of the AM/PM toggle relative to time picker box. Defaults to "stacked" for mobile optimization. */
+  /** Layout arrangement of the AM/PM toggle relative to time picker box. Defaults to "side-by-side" matching web viewport. */
   toggleLayout?: 'stacked' | 'side-by-side';
 }
 
@@ -107,7 +110,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   helperText,
   toggleLayout = 'side-by-side',
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const parsed = useMemo(() => parseTimeString(value), [value]);
   const [hour, setHour] = useState<string>(parsed.hour);
@@ -292,6 +295,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   };
 
   const handlePeriodChange = (newPeriod: 'AM' | 'PM') => {
+    Haptics.selectionAsync().catch(() => {});
     setTouched(true);
     setPeriod(newPeriod);
     emitFormattedTime(hour, minute, newPeriod);
@@ -301,16 +305,23 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   const minuteInputRef = React.useRef<TextInput>(null);
 
   const containerBorderColor = validation.hasError
-    ? theme.colors.error
-    : theme.colors.hairline;
+    ? '#ef4444'
+    : isDark
+    ? '#262626'
+    : '#ebebeb';
+
+  const shellBg = isDark ? '#141414' : '#fafafa';
+  const periodCapsuleBg = isDark ? '#18181b' : '#f3f4f6';
 
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
-        <Text style={[styles.label, { color: theme.colors.body }]}>
-          {label}
-          {required && <Text style={{ color: theme.colors.error }}> *</Text>}
-        </Text>
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+            {label}
+            {required && <Text style={{ color: '#ef4444', fontWeight: '700' }}> *</Text>}
+          </Text>
+        </View>
       )}
 
       {/* Time Picker Controls: Time Box and Separate AM/PM Toggle */}
@@ -325,7 +336,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             styles.timeBoxShell,
             toggleLayout === 'side-by-side' && { flex: 1 },
             {
-              backgroundColor: theme.colors.canvasElevated,
+              backgroundColor: shellBg,
               borderColor: containerBorderColor,
             },
           ]}
@@ -348,13 +359,16 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               }}
               onBlur={handleHourBlur}
               placeholder="08"
-              placeholderTextColor={theme.colors.faint}
+              placeholderTextColor={isDark ? '#71717a' : '#9ca3af'}
               editable={!disabled}
               selectTextOnFocus
-              style={[styles.digitInput, { color: theme.colors.ink }]}
+              style={[
+                styles.digitInput,
+                { color: isDark ? '#f8fafc' : '#0f172a' },
+              ]}
             />
 
-            <Text style={[styles.colonText, { color: theme.colors.mute }]}>:</Text>
+            <Text style={[styles.colonText, { color: isDark ? '#71717a' : '#9ca3af' }]}>:</Text>
 
             <TextInput
               ref={minuteInputRef}
@@ -364,10 +378,13 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               onChangeText={handleMinuteChange}
               onBlur={handleMinuteBlur}
               placeholder="00"
-              placeholderTextColor={theme.colors.faint}
+              placeholderTextColor={isDark ? '#71717a' : '#9ca3af'}
               editable={!disabled}
               selectTextOnFocus
-              style={[styles.digitInput, { color: theme.colors.ink }]}
+              style={[
+                styles.digitInput,
+                { color: isDark ? '#f8fafc' : '#0f172a' },
+              ]}
             />
           </View>
         </View>
@@ -378,8 +395,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             styles.periodContainer,
             toggleLayout === 'side-by-side' ? styles.periodContainerSide : styles.periodContainerStacked,
             {
-              borderColor: theme.colors.hairline,
-              backgroundColor: theme.colors.canvas,
+              borderColor: isDark ? '#262626' : '#e5e7eb',
+              backgroundColor: periodCapsuleBg,
             },
           ]}
         >
@@ -390,10 +407,10 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             style={[
               styles.periodBtn,
               period === 'AM' && {
-                backgroundColor: theme.colors.link,
-                shadowColor: '#000',
+                backgroundColor: '#0284c7',
+                shadowColor: '#0284c7',
                 shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.25,
                 shadowRadius: 2,
                 elevation: 1,
               },
@@ -403,7 +420,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'AM' ? '#ffffff' : theme.colors.mute,
+                  color: period === 'AM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
                   fontWeight: period === 'AM' ? '800' : '700',
                 },
               ]}
@@ -419,10 +436,10 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             style={[
               styles.periodBtn,
               period === 'PM' && {
-                backgroundColor: theme.colors.link,
-                shadowColor: '#000',
+                backgroundColor: '#0284c7',
+                shadowColor: '#0284c7',
                 shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.25,
                 shadowRadius: 2,
                 elevation: 1,
               },
@@ -432,7 +449,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'PM' ? '#ffffff' : theme.colors.mute,
+                  color: period === 'PM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
                   fontWeight: period === 'PM' ? '800' : '700',
                 },
               ]}
@@ -445,7 +462,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
       {/* Inline Validation Error Message */}
       {validation.errorMessage ? (
-        <Text style={[styles.errorText, { color: theme.colors.error }]}>
+        <Text style={[styles.errorText, { color: '#ef4444' }]}>
           {validation.errorMessage}
         </Text>
       ) : helperText ? (
@@ -459,15 +476,18 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacingNumeric.sm,
+    marginBottom: 10,
     width: '100%',
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
   label: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: -0.1,
   },
   stackedCol: {
     flexDirection: 'column',
@@ -478,43 +498,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 4,
+    gap: 8,
   },
   timeBoxShell: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     height: 44,
-    paddingHorizontal: 4,
-    borderRadius: radiusNumeric.sm,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     borderWidth: 1,
   },
   digitalCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 4,
   },
   digitInput: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
-    width: 34,
-    height: 40,
+    width: 36,
+    height: 38,
     padding: 0,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontVariant: ['tabular-nums'],
   },
   colonText: {
     fontSize: 16,
     fontWeight: '700',
     paddingHorizontal: 2,
-    opacity: 0.7,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   periodContainer: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderRadius: radiusNumeric.sm,
-    padding: 2,
+    borderRadius: 12,
+    padding: 2.5,
     gap: 2,
     alignItems: 'center',
   },
@@ -530,23 +551,23 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     minHeight: 34,
-    minWidth: 40,
-    paddingHorizontal: 9,
-    borderRadius: 4,
+    minWidth: 42,
+    paddingHorizontal: 10,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },
   periodText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
   },
   errorText: {
-    fontSize: 12,
+    fontSize: 11.5,
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   helperText: {
-    fontSize: 12,
+    fontSize: 11.5,
     marginTop: 4,
   },
 });

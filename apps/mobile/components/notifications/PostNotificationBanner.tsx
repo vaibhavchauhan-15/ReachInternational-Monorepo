@@ -243,11 +243,18 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     padding: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    elevation: 20,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 6px 16px rgba(0, 0, 0, 0.28)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28,
+        shadowRadius: 16,
+        elevation: 20,
+      },
+    }),
     gap: 10,
   },
   iconWrap: {

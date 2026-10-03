@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
@@ -372,47 +372,21 @@ export default function PayrollScreen() {
         </ScrollView>
 
         {/* KPI Strip */}
-        <View style={styles.kpiGrid}>
-          <View
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>
-              Net Payable
-            </Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>
-              ₹{summaryKpis.totalNet.toLocaleString('en-IN')}
-            </Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.mute }]}>
-              Gross: ₹{summaryKpis.totalGross.toLocaleString('en-IN')}
-            </Text>
-          </View>
+        <KPIGrid columns={2}>
+          <KPICard
+            label="Net Payable"
+            value={`₹${summaryKpis.totalNet.toLocaleString('en-IN')}`}
+            icon={Banknote}
+            variant="success"
+          />
 
-          <View
-            style={[
-              styles.kpiCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>
-              Paid vs Unpaid
-            </Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-              ₹{summaryKpis.totalPaid.toLocaleString('en-IN')}
-            </Text>
-            <Text style={[styles.kpiSub, { color: '#d97706' }]}>
-              Unpaid bal: ₹{summaryKpis.totalBalance.toLocaleString('en-IN')}
-            </Text>
-          </View>
-        </View>
+          <KPICard
+            label="Total Paid"
+            value={`₹${summaryKpis.totalPaid.toLocaleString('en-IN')}`}
+            icon={CreditCard}
+            variant="info"
+          />
+        </KPIGrid>
 
         {/* Search Bar */}
         <View
@@ -526,16 +500,18 @@ export default function PayrollScreen() {
                         <Text style={[styles.slBadge, { color: theme.colors.mute, borderColor: theme.colors.hairline }]}>
                           #{op.sl_no || idx + 1}
                         </Text>
-                        <Text
+                        <HighlightText
+                          text={op.full_name}
+                          query={searchQuery}
                           style={[styles.operatorName, { color: theme.colors.ink }]}
                           numberOfLines={1}
-                        >
-                          {op.full_name}
-                        </Text>
+                        />
                       </View>
-                      <Text style={[styles.operatorLocation, { color: theme.colors.mute }]}>
-                        {op.phone || 'No phone'} • {op.city || op.state || 'No location'}
-                      </Text>
+                      <HighlightText
+                        text={`${op.phone || 'No phone'} • ${op.city || op.state || 'No location'}`}
+                        query={searchQuery}
+                        style={[styles.operatorLocation, { color: theme.colors.mute }]}
+                      />
                     </TouchableOpacity>
 
                     <View style={styles.headerRight}>
@@ -969,30 +945,6 @@ const styles = StyleSheet.create({
   },
   monthPillText: {
     fontSize: 13,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    gap: spacingNumeric.sm,
-  },
-  kpiCard: {
-    flex: 1,
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  kpiSub: {
-    fontSize: 12,
-    marginTop: 2,
   },
   searchBar: {
     flexDirection: 'row',
