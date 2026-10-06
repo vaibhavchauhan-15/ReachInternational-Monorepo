@@ -18,6 +18,7 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
    - `UI-UX.md`
    - `VALIDATION-ERROR-RESILIENCE.md`
    - `MULTI-AGENT-ENGINEERING-TEAM.md`
+   - `WEB-MOBILE-PARITY.md`
 
 2. **Cross-Platform UI & Agent System Rules**:
    `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\.agents\rules`
@@ -26,6 +27,13 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
    - `responsive_cross_platform_design.md`
    - `global_responsive_design.md`
    - `web_mobile_ui_consistency.md`
+   - `web_mobile_parity.md`
+   - `native_backend_architecture.md`
+
+3. **Cross-Platform & Native Agent Skills**:
+   `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\.agents\skills`
+   - `web-mobile-parity\SKILL.md` (100% Web & Mobile parity across UI/UX, behavior, responsiveness, design, layout, color, theme, typography)
+   - `native-backend-architecture\SKILL.md` (Native mobile backend, TanStack Query, SecureStore, touch ergonomics)
 
 ---
 
