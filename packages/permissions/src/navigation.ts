@@ -1,6 +1,5 @@
 import type { UserRole } from "@reachinternational/types";
 
-// ─── Nav destination keys ───────────────────────────────────────
 export type NavKey =
   | "home"
   | "operations"
@@ -11,7 +10,9 @@ export type NavKey =
   | "audit"
   | "payroll"
   | "attendance"
-  | "hr";
+  | "hr"
+  | "settings"
+  | "profile";
 
 // ─── Nav item definition ───────────────────────────────────────
 export interface NavItem {
@@ -166,6 +167,22 @@ export const NAV_ITEMS: NavItem[] = [
       "operator",
     ],
   },
+  {
+    key: "settings",
+    label: "Settings",
+    href: "/settings",
+    icon: "settings",
+    match: ["/settings", "/setting"],
+    roles: CANONICAL_NAV_ROLES,
+  },
+  {
+    key: "profile",
+    label: "Profile",
+    href: "/profile",
+    icon: "user",
+    match: ["/profile"],
+    roles: CANONICAL_NAV_ROLES,
+  },
 ];
 
 // ─── Centralized Role Home Routes ───────────────────────────────
@@ -213,7 +230,7 @@ export const ACTIVE_PROTECTED_ROUTES: readonly string[] = [
   "/attendance",
   "/audit",
   "/settings",
-  "/more",
+
   "/profile",
   "/onboarding",
 ];
@@ -285,7 +302,6 @@ export function isRouteAllowedForRole(pathname: string, role: UserRole): boolean
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/profile") ||
-    pathname.startsWith("/more") ||
     pathname.startsWith("/onboarding")
   ) {
     return true;
@@ -338,5 +354,9 @@ export function getNavForRole(role: UserRole): NavForRole {
 
 export function labelFor(item: NavItem, role: UserRole): string {
   return item.roleLabel?.[role] ?? item.label;
+}
+
+export function getDrawerItems(role: UserRole): NavItem[] {
+  return getNavForRole(role).more;
 }
 

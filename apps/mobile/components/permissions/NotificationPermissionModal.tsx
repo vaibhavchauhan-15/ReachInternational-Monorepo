@@ -1,22 +1,15 @@
-/**
- * ReachInternational Mobile — Notification Permission Primer Modal
- * Presents a value-first explanation of why notifications are requested,
- * before triggering the native OS (Android 13+) or Web browser permission dialog.
- * Conforms to Vercel Geist design tokens and min 44px touch targets.
- */
-
+import { Text } from '../ui/Text';
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '@/lib/interaction/haptics';
 import {
   requestNotificationPermission,
   dismissNotificationPrompt,
@@ -39,12 +32,13 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
   const { theme, isDark } = useTheme();
   const [isRequesting, setIsRequesting] = useState(false);
 
-  if (!visible) return null;
-
   const handleEnable = async () => {
     setIsRequesting(true);
     try {
       const status = await requestNotificationPermission();
+      if (status === 'granted') {
+        haptics.success();
+      }
       if (onResolved) {
         onResolved(status);
       }
@@ -66,42 +60,35 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={handleDismiss}
+      onClose={handleDismiss}
+      variant="center"
     >
-      <View style={styles.overlay}>
-        <TouchableWithoutFeedback onPress={handleDismiss}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
-        <View
+      <View
+        style={[
+          styles.cardContainer,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        {/* Close X Button */}
+        <Touchable
+          preset="icon"
           style={[
-            styles.cardContainer,
+            styles.closeBtn,
             {
-              backgroundColor: theme.colors.canvasElevated,
+              backgroundColor: isDark ? '#262626' : '#f4f4f5',
               borderColor: theme.colors.hairline,
             },
           ]}
+          onPress={handleDismiss}
+          accessibilityLabel="Close notification permission dialog"
         >
-          {/* Close X Button */}
-          <TouchableOpacity
-            style={[
-              styles.closeBtn,
-              {
-                backgroundColor: isDark ? '#262626' : '#f4f4f5',
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-            onPress={handleDismiss}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Close notification permission dialog"
-          >
-            <X size={16} color={theme.colors.mute} />
-          </TouchableOpacity>
+          <X size={16} color={theme.colors.mute} />
+        </Touchable>
 
           {/* Hero Emblem Icon */}
           <View style={styles.heroSection}>
@@ -214,7 +201,8 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
           {/* Action Buttons */}
           <View style={styles.actionsRow}>
             {/* Primary Action Button */}
-            <TouchableOpacity
+            <Touchable
+              preset="button"
               style={[
                 styles.primaryBtn,
                 {
@@ -223,7 +211,6 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
               ]}
               onPress={handleEnable}
               disabled={isRequesting}
-              activeOpacity={0.8}
             >
               {isRequesting ? (
                 <ActivityIndicator size="small" color={theme.colors.canvas} />
@@ -235,10 +222,12 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
                   </Text>
                 </>
               )}
-            </TouchableOpacity>
+            </Touchable>
 
             {/* Secondary Dismiss Action Button */}
-            <TouchableOpacity
+            <Touchable
+              preset="button"
+              haptic={false}
               style={[
                 styles.secondaryBtn,
                 {
@@ -248,16 +237,14 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
               ]}
               onPress={handleDismiss}
               disabled={isRequesting}
-              activeOpacity={0.7}
             >
               <Text style={[styles.secondaryBtnText, { color: theme.colors.mute }]}>
                 Maybe Later
               </Text>
-            </TouchableOpacity>
+            </Touchable>
           </View>
         </View>
-      </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -318,15 +305,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.4,
     textAlign: 'center',
     marginBottom: 6,
   },
   subtitle: {
-    fontSize: 12,
-    lineHeight: 17,
     textAlign: 'center',
     paddingHorizontal: 8,
   },
@@ -354,13 +336,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bulletTitle: {
-    fontSize: 12,
-    fontWeight: '700',
     marginBottom: 2,
   },
   bulletDesc: {
-    fontSize: 13,
-    lineHeight: 15,
   },
   actionsRow: {
     gap: 8,
@@ -375,9 +353,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.md,
   },
   primaryBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   secondaryBtn: {
     alignItems: 'center',
@@ -388,7 +363,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.md,
   },
   secondaryBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

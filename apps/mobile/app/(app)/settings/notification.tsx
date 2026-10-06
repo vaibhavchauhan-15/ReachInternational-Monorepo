@@ -8,23 +8,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Switch,
   Platform,
-  Animated,
-} from 'react-native';
+  Animated} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 import {
   Card,
   Badge,
   Button,
   useTheme,
-  MobileHeader,
-} from '../../../components/ui';
+  MobileHeader, Text } from '../../../components/ui';
 import { NotificationPermissionModal } from '../../../components/permissions';
 import { getNotificationPermissionStatus, type PermissionStatus } from '../../../lib/permissions';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -40,6 +36,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react-native';
+import { haptics } from '../../../lib/interaction/haptics';
 
 const NOTIF_PREFS_KEY = '@reach:notification_preferences';
 
@@ -122,7 +119,7 @@ export default function NotificationSettingsScreen() {
 
   // Handle Toggle with Feedback
   const handleToggle = async (key: keyof NotificationPreferences, label: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     const updatedValue = !prefs[key];
     const updatedPrefs = { ...prefs, [key]: updatedValue };
     setPrefs(updatedPrefs);
@@ -429,8 +426,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   toastText: {
-    fontSize: 13,
-    fontWeight: '700',
     flex: 1,
   },
   card: {
@@ -457,17 +452,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
   },
   sectionSubtitle: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   cardDescription: {
-    fontSize: 12.5,
-    lineHeight: 18,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -475,11 +464,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   toggleTitle: {
-    fontSize: 15,
-    fontWeight: '700',
   },
   toggleSubtitle: {
-    fontSize: 12,
     marginTop: 2,
   },
   channelRow: {
@@ -489,12 +475,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   channelTitle: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   channelDesc: {
-    fontSize: 12,
-    lineHeight: 16,
     marginTop: 2,
   },
   divider: {

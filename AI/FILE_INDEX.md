@@ -1,4 +1,4 @@
-# File Index — ServiceCentric
+# File Index — ReachInternational
 
 This index maps features directly to exact file paths. AI agents must use this to read ONLY the relevant files for a given task.
 
@@ -39,9 +39,9 @@ This index maps features directly to exact file paths. AI agents must use this t
 - Cron Route: `app/api/cron/send-reminders/route.ts`
 
 ## 6. Shared Layout & Design System
-- Design Tokens & Rules: `DESIGN.md` (Vercel Geist Design System), `AI/UI_RULES.md`, `.agents/rules/responsive_cross_platform_design.md`
+- Design Tokens & Rules: Root `DESIGN.md` (Vercel Geist Design System), `AI/RULES/DESIGN-SYSTEM.md`, `.agents/rules/web_mobile_ui_consistency.md`
 - Shared Packages: `@reachinternational/design-tokens`
-- Navigation: `components/layout/MobileBottomNav.tsx`, `components/layout/PublicNavbar.tsx`, `components/layout/Navbar.tsx`, `components/layout/AppSidebar.tsx`
+- Navigation: `components/navigation/BottomNav.tsx`, `components/layout/PublicNavbar.tsx`, `components/layout/Navbar.tsx`, `components/layout/AppSidebar.tsx`
 - UI Design System (`components/ui/`):
   - `EnterpriseTable.tsx`, `Table.tsx`
   - `MetricCard.tsx`, `Card.tsx`, `Badge.tsx`, `Button.tsx`, `Input.tsx`
@@ -54,10 +54,10 @@ This index maps features directly to exact file paths. AI agents must use this t
 - Styles: `app/globals.css`
 
 ## 8. Architecture & AI Agent Rules
+- Authoritative System Architecture: Root `ARCHITECTURE.md`
 - Authoritative Architecture Rules: `AI/RULES/ARCHITECTURE.md`
-- Monorepo & Layering Memory: `AI/ARCHITECTURE.md`
 - Core AI Memory & Protocol: `AGENTS.md`, `AI/PROJECT_MEMORY.md`, `AI/STATE.md`, `AI/CURRENT_TASK.md`
-- Design Tokens & Responsive UI Rules: `DESIGN.md`, `AI/RULES/DESIGN-SYSTEM.md`, `AI/RULES/UI-UX.md`, `AI/UI_RULES.md`, `.agents/rules/responsive_cross_platform_design.md`
+- Design Tokens & Responsive UI Rules: `DESIGN.md`, `AI/RULES/DESIGN-SYSTEM.md`, `AI/RULES/UI-UX.md`, `.agents/rules/web_mobile_ui_consistency.md`
 - Authoritative Performance & Optimization Rules: `AI/RULES/PERFORMANCE.md`, `AI/PERFORMANCE_RULES.md`
 - Authoritative Security Engineering Rules: `AI/RULES/SECURITY.md`, `AI/SECURITY_RULES.md`
 - Authoritative Authentication & Authorization Rules: `AI/RULES/AUTHENTICATION-AUTHORIZATION.md`
@@ -67,8 +67,14 @@ This index maps features directly to exact file paths. AI agents must use this t
 - Authoritative SEO, Metadata & Discoverability Rules: `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`
 - Authoritative Observability, Monitoring & Logging Rules: `AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`
 - Authoritative Deployment, DevOps & Release Rules: `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`
+- Authoritative Web & Mobile Parity Rules: `AI/RULES/WEB-MOBILE-PARITY.md`, `.agents/rules/web_mobile_parity.md`
+- Authoritative Native Backend Architecture Rules: `.agents/rules/native_backend_architecture.md`
+- Authoritative Parity Agent Skill: `.agents/skills/web-mobile-parity/SKILL.md`
+- Authoritative Native Backend Architecture Skill: `.agents/skills/native-backend-architecture/SKILL.md`
 - Cross-Platform Responsive UI Rules: `.agents/rules/responsive_cross_platform_design.md`
 - Web & Mobile UI Consistency Rules: `.agents/rules/web_mobile_ui_consistency.md`
+- Global Responsive Design Rules: `.agents/rules/global_responsive_design.md`
+- Mandatory Rules Enforcement: `.agents/rules/mandatory_rules_reading_and_enforcement.md`
 
 ## 9. Client Directory & CRM
 - Web Pages: `apps/web/app/(app)/clients/page.tsx`, `apps/web/app/(app)/clients/loading.tsx`

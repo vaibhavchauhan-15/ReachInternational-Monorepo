@@ -7,15 +7,14 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Platform,
 } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { AppModal } from '../ui/AppModal';
+import { Button, Input, useTheme, Text } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, ShieldAlert, Check, Clock, AlertTriangle, Info, ArrowRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -148,22 +147,21 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View
-          style={[
-            styles.modalContent,
-            { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-          ]}
-        >
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
+      <View
+        style={[
+          styles.modalContent,
+          { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+        ]}
+      >
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <ShieldAlert size={18} color={isDark ? '#fbbf24' : '#d97706'} />
-                <Text style={[styles.title, { color: theme.colors.ink }]}>Resolve Overtime Conflict</Text>
+                <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>Resolve Overtime Conflict</Text>
               </View>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <Text variant="subheading" style={[styles.subtitle, { color: theme.colors.mute }]}>
                 {log.machine_code} {log.machine?.model ? `• ${log.machine.model}` : ''} • {log.operator?.full_name || 'Operator'}
               </Text>
             </View>
@@ -185,7 +183,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
             >
               <View style={styles.alertHeaderTopRow}>
                 <View style={[styles.severityPill, { backgroundColor: isDark ? '#d97706' : '#d97706' }]}>
-                  <Text style={styles.severityPillText}>{conflictDetails.badgeText}</Text>
+                  <Text variant="caption" style={styles.severityPillText}>{conflictDetails.badgeText}</Text>
                 </View>
                 {conflictDetails.overtimeHoursText && (
                   <View
@@ -198,34 +196,34 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                       },
                     ]}
                   >
-                    <Text style={[styles.otChipText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
+                    <Text variant="caption" style={[styles.otChipText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
                       {conflictDetails.overtimeHoursText}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.alertHeading, { color: theme.colors.ink }]}>
+              <Text variant="heading" style={[styles.alertHeading, { color: theme.colors.ink }]}>
                 {conflictDetails.title}
               </Text>
-              <Text style={[styles.alertNarrative, { color: isDark ? '#fcd34d' : '#92400e' }]}>
+              <Text variant="caption" style={[styles.alertNarrative, { color: isDark ? '#fcd34d' : '#92400e' }]}>
                 {conflictDetails.description}
               </Text>
             </View>
 
             {/* Structured Incident Breakdown */}
             <View style={[styles.summaryCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Incident Breakdown</Text>
+              <Text variant="subheading" style={[styles.sectionTitle, { color: theme.colors.ink }]}>Incident Breakdown</Text>
               
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Target Equipment</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Target Equipment</Text>
+                  <Text variant="body" style={[styles.summaryValue, { color: theme.colors.ink }]}>
                     {log.machine_code} {log.machine?.model ? `(${log.machine.model})` : ''}
                   </Text>
                 </View>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Operator</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Operator</Text>
+                  <Text variant="body" style={[styles.summaryValue, { color: theme.colors.ink }]}>
                     {log.operator?.full_name || 'Operator'}
                   </Text>
                 </View>
@@ -235,12 +233,12 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
 
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Shift Log Date</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>{log.log_date}</Text>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Shift Log Date</Text>
+                  <Text variant="body" style={[styles.summaryValue, { color: theme.colors.ink }]}>{log.log_date}</Text>
                 </View>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Recorded Timings</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Recorded Timings</Text>
+                  <Text variant="body" style={[styles.summaryValue, { color: theme.colors.ink }]}>
                     {formatShiftTimingRange(log.start_time, log.end_time)}
                   </Text>
                 </View>
@@ -250,14 +248,14 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
 
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Total Duration</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.link }]}>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Total Duration</Text>
+                  <Text variant="body" style={[styles.summaryValue, { color: theme.colors.link }]}>
                     {log.running_hours ?? 0} hrs
                   </Text>
                 </View>
                 <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>Overtime Claimed</Text>
-                  <Text style={[styles.summaryValue, { color: isDark ? '#fbbf24' : '#b45309', fontWeight: '800' }]}>
+                  <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>Overtime Claimed</Text>
+                  <Text variant="subheading" style={[styles.summaryValue, { color: isDark ? '#fbbf24' : '#b45309' }]}>
                     {log.overtime_hours ? `+${log.overtime_hours} hrs OT` : 'None'}
                   </Text>
                 </View>
@@ -268,7 +266,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                   <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
                   <View style={styles.conflictEntityRow}>
                     <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isDark ? '#f87171' : '#b91c1c' }}>
+                    <Text variant="label" style={{ color: isDark ? '#f87171' : '#b91c1c' }}>
                       Conflicting Equipment: {conflictDetails.conflictingEntity}
                     </Text>
                   </View>
@@ -288,14 +286,14 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
             >
               <View style={styles.riskHeader}>
                 <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
-                <Text style={[styles.riskTitle, { color: isDark ? '#f87171' : '#b91c1c' }]}>
+                <Text variant="subheading" style={[styles.riskTitle, { color: isDark ? '#f87171' : '#b91c1c' }]}>
                   Operational Risk & Compliance Warning
                 </Text>
               </View>
               {conflictDetails.bulletWarnings.map((warn, i) => (
                 <View key={i} style={styles.bulletRow}>
-                  <Text style={[styles.bulletDot, { color: isDark ? '#f87171' : '#dc2626' }]}>•</Text>
-                  <Text style={[styles.bulletText, { color: isDark ? '#fca5a5' : '#7f1d1d' }]}>{warn}</Text>
+                  <Text variant="body" style={[styles.bulletDot, { color: isDark ? '#f87171' : '#dc2626' }]}>•</Text>
+                  <Text variant="caption" style={[styles.bulletText, { color: isDark ? '#fca5a5' : '#7f1d1d' }]}>{warn}</Text>
                 </View>
               ))}
             </View>
@@ -311,12 +309,12 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 ]}
               >
                 <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
-                <Text style={{ color: isDark ? '#f87171' : '#b91c1c', fontSize: 12.5, fontWeight: '600', flex: 1 }}>{error}</Text>
+                <Text variant="caption" style={{ color: isDark ? '#f87171' : '#b91c1c', flex: 1 }}>{error}</Text>
               </View>
             ) : null}
 
             {/* Resolution Action Toggle */}
-            <Text style={[styles.label, { color: theme.colors.mute, marginTop: 8 }]}>Supervisor Action *</Text>
+            <Text variant="label" style={[styles.label, { color: theme.colors.mute, marginTop: 8 }]}>Supervisor Action *</Text>
             <View style={styles.actionToggleRow}>
               <TouchableOpacity
                 onPress={() => setAction('acknowledge')}
@@ -330,11 +328,11 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Check size={14} color={action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute} />
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0369a1') : theme.colors.mute }}>
+                  <Text variant="label" style={{ color: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0369a1') : theme.colors.mute }}>
                     Acknowledge
                   </Text>
                 </View>
-                <Text style={{ fontSize: 12, color: theme.colors.mute, marginTop: 4 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.acknowledgeAdvice}
                 </Text>
               </TouchableOpacity>
@@ -351,11 +349,11 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Clock size={14} color={action === 'adjust' ? (isDark ? '#fbbf24' : '#d97706') : theme.colors.mute} />
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: action === 'adjust' ? (isDark ? '#fbbf24' : '#b45309') : theme.colors.mute }}>
+                  <Text variant="label" style={{ color: action === 'adjust' ? (isDark ? '#fbbf24' : '#b45309') : theme.colors.mute }}>
                     Adjust Time
                   </Text>
                 </View>
-                <Text style={{ fontSize: 12, color: theme.colors.mute, marginTop: 4 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.adjustAdvice}
                 </Text>
               </TouchableOpacity>
@@ -391,9 +389,8 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                   >
                     <Info size={13} color={adjustedCalculation.valid ? (isDark ? '#34d399' : '#059669') : (isDark ? '#f87171' : '#dc2626')} />
                     <Text
+                      variant="caption"
                       style={{
-                        fontSize: 12.5,
-                        fontWeight: '600',
                         color: adjustedCalculation.valid ? (isDark ? '#34d399' : '#047857') : (isDark ? '#f87171' : '#b91c1c'),
                         flex: 1,
                       }}
@@ -432,9 +429,8 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               style={{ flex: 1, minHeight: 44 }}
             />
           </View>
-        </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -457,13 +453,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacingNumeric.sm,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
+  title: {},
   subtitle: {
-    fontSize: 13.5,
-    fontWeight: '600',
     marginTop: 2,
   },
   closeBtn: {
@@ -487,30 +478,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   severityPillText: {
-    fontSize: 12,
-    fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: 0.5,
   },
   otChip: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
-  otChipText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+  otChipText: {},
   alertHeading: {
-    fontSize: 14.5,
-    fontWeight: '800',
     marginTop: 2,
   },
-  alertNarrative: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    fontWeight: '500',
-  },
+  alertNarrative: {},
   summaryCard: {
     padding: spacingNumeric.sm,
     borderRadius: radiusNumeric.md,
@@ -518,8 +497,6 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
     marginBottom: 6,
   },
   summaryGrid: {
@@ -530,14 +507,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   summaryValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
     marginTop: 2,
   },
   conflictEntityRow: {
@@ -559,23 +531,14 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 2,
   },
-  riskTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
+  riskTitle: {},
   bulletRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
   },
-  bulletDot: {
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
+  bulletDot: {},
   bulletText: {
-    fontSize: 12.5,
-    lineHeight: 16,
     flex: 1,
   },
   divider: {
@@ -595,8 +558,6 @@ const styles = StyleSheet.create({
     maxHeight: 460,
   },
   label: {
-    fontSize: 13.5,
-    fontWeight: '700',
     marginBottom: 6,
   },
   actionToggleRow: {

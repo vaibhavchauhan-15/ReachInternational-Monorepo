@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { Text } from '../ui/Text';
 import Svg, { Rect, Circle, Path, Line, G } from 'react-native-svg';
 import { useTheme } from '../ui/ThemeProvider';
 
@@ -396,11 +397,11 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
             ]}
           >
             <Text
+              variant="label"
               style={[
                 styles.monogramText,
                 {
                   color: useLightLogo ? '#38bdf8' : '#0284c7',
-                  fontSize: Math.round(size * 0.42),
                 },
               ]}
             >
@@ -438,19 +439,20 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
         {/* Brand Name Row */}
         <View style={styles.brandRow}>
           <Text
+            variant="heading"
             style={[
               styles.reachText,
-              { color: brandReachColor, fontSize: reachFontSize },
+              { color: brandReachColor },
             ]}
           >
             REACH
           </Text>
           <Text
+            variant="heading"
             style={[
               styles.internationalText,
               {
                 color: brandInternationalColor,
-                fontSize: internationalFontSize,
               },
             ]}
           >
@@ -463,9 +465,10 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
           <View style={styles.taglineContainer}>
             <View style={[styles.divider, { backgroundColor: dividerColor }]} />
             <Text
+              variant="caption"
               style={[
                 styles.taglineText,
-                { color: taglineColor, fontSize: taglineFontSize },
+                { color: taglineColor },
               ]}
               numberOfLines={1}
             >
@@ -481,61 +484,41 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   compactContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   monogramBadge: {
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   monogramText: {
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
+    },
   emblemContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   textContainer: {
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   reachText: {
-    fontWeight: '900',
-    letterSpacing: -0.4,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   internationalText: {
-    fontWeight: '800',
-    letterSpacing: -0.2,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   taglineContainer: {
     marginTop: 1,
-    width: '100%',
-  },
+    width: '100%' },
   divider: {
     height: 1,
     width: '100%',
     borderRadius: 1,
     marginBottom: 2,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   taglineText: {
-    fontWeight: '600',
-    letterSpacing: 2.0,
-    textTransform: 'uppercase',
-  },
-});
+    textTransform: 'uppercase' } });

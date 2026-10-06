@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -10,10 +9,11 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme, MobileHeader } from '../../components/ui';
+import { useTheme, MobileHeader , Text } from '../../components/ui';
 import {
   toProfileView,
   type ProfileViewModel,
@@ -23,7 +23,6 @@ import {
 } from '@reachinternational/utils';
 import { supabase } from '../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
 import {
   Briefcase,
   CreditCard,
@@ -62,6 +61,7 @@ import {
   type MobileViewerDoc,
 } from '../../components/documents/MobileDocumentViewerModal';
 import { notifyProfileRequestCancelled } from '../../lib/notifications';
+import { haptics } from '../../lib/interaction/haptics';
 
 // ─── Section Icon Mapping ───────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -234,7 +234,7 @@ export default function ProfileScreen() {
   // Copy helper with 2-second checkmark feedback
   const handleCopy = async (text: string, label: string) => {
     try {
-      Haptics.selectionAsync().catch(() => {});
+      haptics.select();
       if (Clipboard && Clipboard.setStringAsync) {
         await Clipboard.setStringAsync(text);
       }
@@ -286,7 +286,7 @@ export default function ProfileScreen() {
   const handleUploadDocument = async (docTypeCode: string) => {
     if (!user?.id) return;
     try {
-      Haptics.selectionAsync().catch(() => {});
+      haptics.select();
       const picked = await pickIdentityDocument();
       if (!picked) return;
 
@@ -386,8 +386,6 @@ export default function ProfileScreen() {
       <MobileHeader
         title="Profile"
         showBack={true}
-        showLogo={false}
-        showMoreMenu={false}
         showQuickAccess={true}
       />
 
@@ -534,11 +532,11 @@ export default function ProfileScreen() {
               </View>
               <Text style={[styles.pendingDesc, { color: theme.colors.mute }]}>
                 A profile change request submitted on{' '}
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                <Text variant="label" style={{ color: theme.colors.ink }}>
                   {formatDate(pendingRequest.created_at)}
                 </Text>{' '}
                 is currently under review by{' '}
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                <Text variant="label" style={{ color: theme.colors.ink }}>
                   {pendingRequest.target_approver_role === 'super_admin'
                     ? 'Super Administrator'
                     : 'Administrator / Manager'}
@@ -761,13 +759,10 @@ export default function ProfileScreen() {
               },
             ]}
           >
-            {/* Header: Title + Subtitle */}
+            {/* Header: Title */}
             <View style={styles.docSectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>
                 IDENTITY & BANKING DOCUMENTS
-              </Text>
-              <Text style={[styles.docSectionSubtitle, { color: theme.colors.mute }]}>
-                Upload Aadhaar, Driving Licence, and Bank Passbook / Cheque for verification.
               </Text>
             </View>
 
@@ -787,6 +782,7 @@ export default function ProfileScreen() {
                 const isPng = mime.includes('png') || path.endsWith('.png');
                 const isJpg = mime.includes('jpg') || mime.includes('jpeg') || path.endsWith('.jpg') || path.endsWith('.jpeg');
                 const isWebp = mime.includes('webp') || path.endsWith('.webp');
+                const isImage = isPng || isJpg || isWebp || mime.startsWith('image/');
 
                 return (
                   <View
@@ -800,10 +796,18 @@ export default function ProfileScreen() {
                       },
                     ]}
                   >
-                    {/* Slot Title */}
-                    <Text style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
-                      {docType.label}
-                    </Text>
+                    {/* Slot Header Row */}
+                    <View style={styles.docSlotHeaderRow}>
+                      <Text style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
+                        {docType.label}
+                      </Text>
+                      {existing && !isReplacing && (
+                        <View style={styles.uploadedBadgeSmall}>
+                          <Check size={10} color="#059669" />
+                          <Text variant="caption" style={styles.uploadedBadgeSmallText}>Uploaded</Text>
+                        </View>
+                      )}
+                    </View>
 
                     {/* 1. Existing Document View (Click to preview, Replace, Delete) */}
                     {existing && !isReplacing ? (
@@ -827,52 +831,40 @@ export default function ProfileScreen() {
                         }}
                         activeOpacity={0.8}
                       >
-                        {/* Left: Format Pill + Uploaded Badge */}
+                        {/* Left: Thumbnail/Icon + Details */}
                         <View style={styles.existingDocLeft}>
-                          {/* File format icon */}
-                          <View
-                            style={[
-                              styles.formatBadge,
-                              isPdf
-                                ? styles.formatBadgePdf
-                                : isPng
-                                ? styles.formatBadgePng
-                                : isJpg
-                                ? styles.formatBadgeJpg
-                                : isWebp
-                                ? styles.formatBadgeWebp
-                                : styles.formatBadgeGeneric,
-                            ]}
-                          >
-                            {isPdf ? (
-                              <FileText size={12} color="#e11d48" />
-                            ) : (
-                              <ImageIcon size={12} color="#0284c7" />
-                            )}
-                            <Text
-                              style={[
-                                styles.formatBadgeText,
-                                {
-                                  color: isPdf
-                                    ? '#e11d48'
-                                    : isPng
-                                    ? '#059669'
-                                    : isJpg
-                                    ? '#0284c7'
-                                    : isWebp
-                                    ? '#d97706'
-                                    : theme.colors.ink,
-                                },
-                              ]}
-                            >
-                              {isPdf ? 'PDF' : isPng ? 'PNG' : isJpg ? 'JPG' : isWebp ? 'WEBP' : 'DOC'}
-                            </Text>
-                          </View>
+                          {isImage && existing.signed_url ? (
+                            <Image
+                              source={{ uri: existing.signed_url }}
+                              style={styles.docThumbImage}
+                              resizeMode="cover"
+                            />
+                          ) : isPdf ? (
+                            <View style={[styles.formatBadgeSquare, styles.formatBadgePdf]}>
+                              <FileText size={18} color="#e11d48" />
+                            </View>
+                          ) : (
+                            <View style={[styles.formatBadgeSquare, styles.formatBadgeGeneric]}>
+                              <FileText size={18} color={theme.colors.mute} />
+                            </View>
+                          )}
 
-                          {/* Uploaded badge */}
-                          <View style={styles.uploadedBadge}>
-                            <Check size={11} color="#059669" />
-                            <Text style={styles.uploadedBadgeText}>Uploaded</Text>
+                          <View style={styles.existingDocDetails}>
+                            <Text
+                              variant="caption"
+                              style={[styles.existingDocFileName, { color: theme.colors.ink }]}
+                              numberOfLines={1}
+                            >
+                              {existing.storage_path.split('/').pop() || docType.label}
+                            </Text>
+                            <Text
+                              variant="caption"
+                              style={[styles.existingDocMeta, { color: theme.colors.mute }]}
+                              numberOfLines={1}
+                            >
+                              {isPdf ? 'PDF' : isImage ? (path.split('.').pop()?.toUpperCase() || 'IMAGE') : 'DOC'}
+                              {existing.file_size_bytes ? ` • ${(Number(existing.file_size_bytes) / 1024).toFixed(0)} KB` : ''}
+                            </Text>
                           </View>
                         </View>
 
@@ -999,18 +991,15 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
     padding: 16,
-    paddingBottom: 48,
-  },
+    paddingBottom: 48 },
   containerInner: {
     width: '100%',
     maxWidth: 896,
     alignSelf: 'center',
-    gap: 20,
-  },
+    gap: 20 },
 
   // ─── Profile Header Card ──────────────────────────────────────────
   card: {
@@ -1021,66 +1010,47 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
-    elevation: 1,
-  },
+    elevation: 1 },
   headerCardContent: {
-    gap: 16,
-  },
+    gap: 16 },
   userInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-  },
+    gap: 14 },
   avatarCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatarLetter: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
+    },
   userDetails: {
     flex: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   userNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
-  },
+    gap: 8 },
   userName: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
+    },
   empBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 4,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   empBadgeText: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '700',
-  },
+    },
   userEmail: {
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
-  },
+    marginTop: 2 },
   badgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 8,
-  },
+    marginTop: 8 },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1088,13 +1058,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 2.5,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   roleBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
+    textTransform: 'capitalize' },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1102,19 +1068,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 2.5,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   activeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10b981',
-  },
+    backgroundColor: '#10b981' },
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
+    },
   editProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1124,50 +1085,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
-    minHeight: 40,
-  },
+    minHeight: 40 },
   editProfileBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
 
   // ─── Pending Request Review Banner ────────────────────────────────
   pendingBanner: {
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 8,
-  },
+    gap: 8 },
   pendingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   pendingTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   pendingTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#d97706',
-  },
+    color: '#d97706' },
   pendingPill: {
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   pendingPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#d97706',
-  },
+    color: '#d97706' },
   pendingDesc: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
+    },
   cancelRequestBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1178,18 +1124,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(220, 38, 38, 0.08)',
     marginTop: 2,
-    minHeight: 32,
-  },
+    minHeight: 32 },
   cancelRequestText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#dc2626',
-  },
+    color: '#dc2626' },
 
   // ─── Responsive Sections Grid ─────────────────────────────────────
   sectionsGrid: {
-    gap: 20,
-  },
+    gap: 20 },
   sectionsGridWide: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1198,10 +1139,8 @@ const styles = StyleSheet.create({
       ? ({
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 20,
-        } as any)
-      : {}),
-  },
+          gap: 20 } as any)
+      : {}) },
   sectionCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1210,144 +1149,104 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
-    elevation: 1,
-  },
+    elevation: 1 },
   sectionCardHalf: {
-    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
-  },
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}) },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingBottom: 8,
     marginBottom: 4,
-    borderBottomWidth: 1,
-  },
+    borderBottomWidth: 1 },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+    textTransform: 'uppercase' },
   sectionBody: {
-    width: '100%',
-  },
+    width: '100%' },
   rowWrap: {
-    width: '100%',
-  },
+    width: '100%' },
   rowContent: {
-    paddingVertical: 10,
-  },
+    paddingVertical: 10 },
   rowContentMobile: {
     flexDirection: 'column',
-    gap: 3,
-  },
+    gap: 3 },
   rowContentWide: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-  },
+    gap: 12 },
   rowLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+    },
   rowLabelWide: {
     width: '35%',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   rowValueArea: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   rowValueAreaMobile: {
     justifyContent: 'flex-start',
     flexWrap: 'wrap',
-    gap: 6,
-  },
+    gap: 6 },
   rowValueAreaWide: {
     width: '65%',
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
-    gap: 6,
-  },
+    gap: 6 },
   rowValue: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+    },
   monoText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: -0.2,
-  },
+    },
   rowDivider: {
     height: 1,
-    width: '100%',
-  },
+    width: '100%' },
 
   // Aadhaar, Link, Badge & Copy row elements
   aadhaarArea: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   inlineActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   iconActionBtn: {
     padding: 6,
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 30,
-    minWidth: 30,
-  },
+    minWidth: 30 },
   linkArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   rowLink: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
+    textDecorationLine: 'underline' },
   badgeArea: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statusPill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   statusPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   valueWithCopyArea: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
 
   // ─── Identity & Banking Documents Section ─────────────────────────
   docSectionHeader: {
     marginBottom: 14,
-    gap: 3,
-  },
+    gap: 3 },
   docSectionSubtitle: {
-    fontSize: 11,
-    lineHeight: 15,
-  },
+    },
   docGrid: {
-    gap: 12,
-  },
+    gap: 12 },
   docGridWide: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1356,23 +1255,57 @@ const styles = StyleSheet.create({
       ? ({
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 14,
-        } as any)
-      : {}),
-  },
+          gap: 14 } as any)
+      : {}) },
   docSlotCard: {
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
-    gap: 10,
-  },
+    gap: 10 },
   docSlotCardHalf: {
-    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
-  },
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}) },
+  docSlotHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between' },
   docSlotTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
+  uploadedBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.25)' },
+  uploadedBadgeSmallText: {
+    color: '#059669' },
+  docThumbImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(150, 150, 150, 0.2)' },
+  formatBadgeSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2 },
+  formatBadgeSquareText: {
+    },
+  existingDocDetails: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2 },
+  existingDocFileName: {
+    },
+  existingDocMeta: {
+    },
   existingDocCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1380,15 +1313,13 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
-    minHeight: 52,
-  },
+    minHeight: 52 },
   existingDocLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     flex: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   formatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1396,33 +1327,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   formatBadgePdf: {
     backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderColor: 'rgba(244, 63, 94, 0.25)',
-  },
+    borderColor: 'rgba(244, 63, 94, 0.25)' },
   formatBadgePng: {
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
+    borderColor: 'rgba(16, 185, 129, 0.25)' },
   formatBadgeJpg: {
     backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    borderColor: 'rgba(14, 165, 233, 0.25)',
-  },
+    borderColor: 'rgba(14, 165, 233, 0.25)' },
   formatBadgeWebp: {
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: 'rgba(245, 158, 11, 0.25)',
-  },
+    borderColor: 'rgba(245, 158, 11, 0.25)' },
   formatBadgeGeneric: {
     backgroundColor: 'rgba(150, 150, 150, 0.1)',
-    borderColor: 'rgba(150, 150, 150, 0.25)',
-  },
+    borderColor: 'rgba(150, 150, 150, 0.25)' },
   formatBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   uploadedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1432,19 +1354,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
+    borderColor: 'rgba(16, 185, 129, 0.25)' },
   uploadedBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#059669',
-  },
+    color: '#059669' },
   existingDocRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   docActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1453,12 +1370,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    minHeight: 34,
-  },
+    minHeight: 34 },
   docActionBtnText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-  },
+    },
   docDeleteBtn: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1466,11 +1380,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     minHeight: 34,
-    minWidth: 34,
-  },
+    minWidth: 34 },
   dropzoneWrap: {
-    gap: 6,
-  },
+    gap: 6 },
   dropzone: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
@@ -1480,34 +1392,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    minHeight: 64,
-  },
+    minHeight: 64 },
   dropzoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   dropzoneTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+    },
   dropzoneHint: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   uploadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   cancelReplaceBtn: {
     alignSelf: 'flex-end',
     paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
+    paddingHorizontal: 6 },
   cancelReplaceText: {
-    fontSize: 11,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-  },
-});
+    textDecorationLine: 'underline' } });

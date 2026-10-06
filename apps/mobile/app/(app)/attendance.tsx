@@ -1,29 +1,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Modal,
   Alert,
   Platform,
   RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid, type HeaderActionItem , Text, AppModal } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
+import { AttendanceListSkeleton, AttendanceDetailSkeleton } from '../../components/attendance';
 import { supabase } from '../../lib/supabase';
 import {
   CalendarCheck,
   Calendar,
   Search,
   Clock,
+  RefreshCw,
   Users,
   UserCheck,
   UserX,
@@ -733,13 +732,27 @@ export default function AttendanceScreen() {
     );
   };
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    return [
+      {
+        id: 'refresh-attendance',
+        label: 'Refresh Attendance',
+        icon: <RefreshCw size={15} color={theme.colors.ink} />,
+        onPress: onRefresh,
+      },
+    ];
+  }, [theme.colors.ink, onRefresh]);
+
   if (!isAllowed) {
     return null;
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <MobileHeader title={isOperator ? 'My Attendance' : 'Attendance'} />
+      <MobileHeader
+        title={isOperator ? 'My Attendance' : 'Attendance'}
+        actions={headerActions}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -781,10 +794,7 @@ export default function AttendanceScreen() {
 
         {isOperator ? (
           loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.ink} />
-              <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading attendance...</Text>
-            </View>
+            <AttendanceDetailSkeleton />
           ) : detailData ? (
             renderDetailBody(detailData)
           ) : (
@@ -899,10 +909,7 @@ export default function AttendanceScreen() {
 
             {/* List Content */}
             {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.ink} />
-                <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading attendance...</Text>
-              </View>
+              <AttendanceListSkeleton count={4} showKpi={false} />
             ) : filteredEmployees.length === 0 ? (
               <EmptyState
                 title="No Attendance Found"
@@ -1033,11 +1040,10 @@ export default function AttendanceScreen() {
 
       {/* Employee Detail / Calendar Modal (Managers & Admins only) */}
       {!isOperator && (
-        <Modal
+        <AppModal
           visible={!!selectedEmployee}
-          animationType="slide"
-          transparent={false}
-          onRequestClose={() => setSelectedEmployee(null)}
+          onClose={() => setSelectedEmployee(null)}
+          variant="fullscreen"
         >
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.canvas, paddingTop: insets.top }]}>
             {/* Modal Header */}
@@ -1060,10 +1066,7 @@ export default function AttendanceScreen() {
             </View>
 
             {detailLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.ink} />
-                <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading daily calendar...</Text>
-              </View>
+              <AttendanceDetailSkeleton />
             ) : detailData ? (
               <ScrollView
                 style={styles.modalScroll}
@@ -1076,7 +1079,7 @@ export default function AttendanceScreen() {
               </ScrollView>
             ) : null}
           </View>
-        </Modal>
+        </AppModal>
       )}
     </View>
   );
@@ -1114,10 +1117,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  monthLabelText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  monthLabelText: {  },
   kpiRow: {
     flexDirection: 'row',
     gap: 10,
@@ -1133,18 +1133,13 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   searchInput: {
-    flex: 1,
-    fontSize: 14,
-    height: 44,
+    flex: 1,    height: 44,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -1163,19 +1158,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  filterChipText: {  },
   loadingContainer: {
     paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-  },
+    marginTop: 10,  },
   cardList: {
     gap: 12,
   },
@@ -1193,10 +1183,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  empName: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
+  empName: {    flex: 1,
     marginRight: 8,
   },
   statusBadge: {
@@ -1213,12 +1200,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  statusBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
+  statusBadgeText: {    textTransform: 'uppercase',  },
   empAvatar: {
     width: 36,
     height: 36,
@@ -1227,21 +1209,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  empAvatarText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  empAvatarText: {  },
   roleBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 4,
     borderWidth: 1,
   },
-  roleBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  roleBadgeText: {  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1251,9 +1226,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  metaText: {
-    fontSize: 12.5,
-  },
+  metaText: {  },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1265,14 +1238,8 @@ const styles = StyleSheet.create({
   statCol: {
     alignItems: 'center',
   },
-  statVal: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  statLbl: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
+  statVal: {  },
+  statLbl: {    marginTop: 2,
   },
   statDivider: {
     width: 1,
@@ -1288,17 +1255,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  hoursLabel: {
-    fontSize: 12.5,
-  },
-  hoursValue: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  otBadge: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+  hoursLabel: {  },
+  hoursValue: {  },
+  otBadge: {  },
   viewDetailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1307,10 +1266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     justifyContent: 'center',
   },
-  viewDetailText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0070f3',
+  viewDetailText: {    color: '#0070f3',
   },
 
   // Modal styles
@@ -1325,13 +1281,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
+  modalTitle: {  },
+  modalSubtitle: {    marginTop: 2,
   },
   closeBtn: {
     padding: 6,
@@ -1360,16 +1311,9 @@ const styles = StyleSheet.create({
   modalEmpCol: {
     flex: 1,
   },
-  modalEmpLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+  modalEmpLabel: {    marginBottom: 2,
   },
-  modalEmpValue: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
+  modalEmpValue: {  },
   detailSummaryRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1382,14 +1326,8 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  detailStatNum: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  detailStatLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    marginTop: 2,
+  detailStatNum: {  },
+  detailStatLabel: {    marginTop: 2,
   },
   hoursSummaryCard: {
     flexDirection: 'row',
@@ -1402,21 +1340,11 @@ const styles = StyleSheet.create({
   hoursCol: {
     alignItems: 'center',
   },
-  hoursSub: {
-    fontSize: 12.5,
-    marginBottom: 4,
+  hoursSub: {    marginBottom: 4,
   },
-  hoursMain: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  sectionHeading: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  hoursMain: {  },
+  sectionHeading: {    marginBottom: 12,
+    textTransform: 'uppercase',  },
   dayCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
@@ -1440,29 +1368,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayNumberText: {
-    fontSize: 16,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  dayMonthText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  dayNumberText: {  },
+  dayMonthText: {  },
   todayBadge: {
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
   },
-  todayBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  dayDowFullText: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 1,
+  todayBadgeText: {  },
+  dayDowFullText: {    marginTop: 1,
   },
   dayCardContent: {
     gap: 8,
@@ -1479,31 +1393,13 @@ const styles = StyleSheet.create({
   dayPunchesCol: {
     flex: 1,
   },
-  dayPunchesLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  dayPunchesTime: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  dayPunchesLabel: {  },
+  dayPunchesTime: {    marginTop: 2,  },
   dayWorkedCol: {
     alignItems: 'flex-end',
   },
-  dayWorkedLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  dayWorkedHours: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  dayWorkedLabel: {  },
+  dayWorkedHours: {    marginTop: 2,  },
   dayOtPill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1511,12 +1407,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(217, 119, 6, 0.12)',
     marginTop: 2,
   },
-  dayOtPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#d97706',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  dayOtPillText: {    color: '#d97706',  },
   dayEntriesStack: {
     gap: 6,
   },
@@ -1531,39 +1422,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  entryMachineTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  entryMachineTitle: {  },
   shiftCodeBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
     borderWidth: 1,
   },
-  shiftCodeBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  shiftCodeBadgeText: {  },
   dayEntryMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  entryMetaText: {
-    fontSize: 11.5,
-  },
+  entryMetaText: {  },
   breakdownBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
     backgroundColor: 'rgba(220, 38, 38, 0.12)',
   },
-  breakdownBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#dc2626',
+  breakdownBadgeText: {    color: '#dc2626',
   },
   dayEmptyStateWell: {
     padding: 12,
@@ -1572,8 +1452,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayEmptyStateText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
+  dayEmptyStateText: {  },
 });

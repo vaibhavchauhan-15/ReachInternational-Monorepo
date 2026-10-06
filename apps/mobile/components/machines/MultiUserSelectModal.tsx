@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   TextInput,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text, useTypeStyle } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X, Search, UserCheck, Clock } from 'lucide-react-native';
 
@@ -46,6 +47,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
   roleLabel = 'personnel',
 }) => {
   const { theme } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
   const [search, setSearch] = useState('');
 
@@ -89,20 +91,16 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="multi-user-select-modal"
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
         <View
           style={[
             styles.sheet,
@@ -115,18 +113,18 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+              <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                 {selectedIds.length} {roleLabel} assigned
               </Text>
             </View>
-            <TouchableOpacity
+            <Touchable
+              preset="icon"
               onPress={onClose}
               style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {/* Search Bar */}
@@ -142,7 +140,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
             >
               <Search size={14} color={theme.colors.mute} />
               <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
+                style={[styles.searchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                 placeholder={`Search ${roleLabel} by name, phone...`}
                 placeholderTextColor={theme.colors.mute}
                 value={search}
@@ -150,9 +148,9 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                 autoCorrect={false}
               />
               {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')}>
+                <Touchable preset="icon" onPress={() => setSearch('')}>
                   <X size={14} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Touchable>
               )}
             </View>
           </View>
@@ -161,10 +159,10 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
           {selectedIds.length > 0 && (
             <View style={[styles.chipsContainer, { borderBottomColor: theme.colors.hairline }]}>
               <View style={styles.chipsHeader}>
-                <Text style={[styles.chipsLabel, { color: theme.colors.mute }]}>Selected:</Text>
-                <TouchableOpacity onPress={clearAll}>
-                  <Text style={[styles.clearBtnText, { color: theme.colors.error }]}>Clear All</Text>
-                </TouchableOpacity>
+                <Text variant="caption" style={[styles.chipsLabel, { color: theme.colors.mute }]}>Selected:</Text>
+                <Touchable preset="button" onPress={() => { haptics.select(); clearAll(); }}>
+                  <Text variant="caption" style={[styles.clearBtnText, { color: theme.colors.error }]}>Clear All</Text>
+                </Touchable>
               </View>
               <ScrollView
                 horizontal
@@ -185,7 +183,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                         },
                       ]}
                     >
-                      <Text style={[styles.chipText, { color: theme.colors.ink }]}>
+                      <Text variant="caption" style={[styles.chipText, { color: theme.colors.ink }]}>
                         {u.full_name}
                       </Text>
                       <TouchableOpacity
@@ -209,7 +207,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
           >
             {filteredUsers.length === 0 ? (
               <View style={styles.emptyWrap}>
-                <Text style={[styles.emptyText, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.emptyText, { color: theme.colors.mute }]}>
                   No {roleLabel} found matching &quot;{search}&quot;.
                 </Text>
               </View>
@@ -253,20 +251,20 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                       </View>
 
                       <View style={styles.userInfo}>
-                        <Text style={[styles.userName, { color: theme.colors.ink }]}>
+                        <Text variant="subheading" style={[styles.userName, { color: theme.colors.ink }]}>
                           {u.full_name}
                         </Text>
                         <View style={styles.userMeta}>
                           {u.shift_time && (
                             <View style={styles.shiftTag}>
                               <Clock size={10} color={theme.colors.success} />
-                              <Text style={[styles.shiftText, { color: theme.colors.success }]}>
+                              <Text variant="mono" style={[styles.shiftText, { color: theme.colors.success }]}>
                                 {u.shift_time}
                               </Text>
                             </View>
                           )}
                           {u.phone && (
-                            <Text style={[styles.phoneText, { color: theme.colors.mute }]}>
+                            <Text variant="caption" style={[styles.phoneText, { color: theme.colors.mute }]}>
                               {u.phone}
                             </Text>
                           )}
@@ -292,22 +290,25 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
               ]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>Cancel</Text>
+              <Text variant="label" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>Cancel</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleSave}
+            <Touchable
+              preset="button"
+              onPress={() => {
+                haptics.success();
+                handleSave();
+              }}
               style={[styles.confirmBtn, { backgroundColor: theme.colors.primary }]}
-              activeOpacity={0.8}
             >
-              <Text style={[styles.confirmBtnText, { color: theme.colors.onPrimary }]}>
+              <Text variant="label" style={[styles.confirmBtnText, { color: theme.colors.onPrimary }]}>
                 Done ({selectedIds.length})
               </Text>
-            </TouchableOpacity>
+            </Touchable>
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -341,14 +342,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacingNumeric.sm,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  title: {},
   subtitle: {
-    fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
   },
   closeBtn: {
     width: 30,
@@ -373,16 +369,12 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -398,14 +390,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chipsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
   },
-  clearBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+  clearBtnText: {},
   chipsScroll: {
     gap: spacingNumeric.xs,
     paddingVertical: 2,
@@ -419,10 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  chipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+  chipText: {},
   userList: {
     flex: 1,
     paddingHorizontal: spacingNumeric.md,
@@ -457,10 +441,7 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
-  userName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  userName: {},
   userMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,21 +453,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
   },
-  shiftText: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  phoneText: {
-    fontSize: 12.5,
-  },
+  shiftText: {},
+  phoneText: {},
   emptyWrap: {
     padding: spacingNumeric.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: 12,
     textAlign: 'center',
   },
   footer: {
@@ -508,10 +482,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  cancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  cancelBtnText: {},
   confirmBtn: {
     paddingHorizontal: spacingNumeric.lg,
     paddingVertical: 10,
@@ -521,8 +492,5 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  confirmBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  confirmBtnText: {},
 });

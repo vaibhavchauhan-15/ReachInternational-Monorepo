@@ -6,22 +6,20 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Linking,
   Platform,
   Image,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions} from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Card,
   useTheme,
   MobileHeader,
   ReachInternationalLogo,
-} from '../../components/ui';
+  Text } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
@@ -245,7 +243,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Credential Confidentiality: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Credential Confidentiality: </Text>
                 You are responsible for safeguarding your login credentials. Sharing session keys, PINs, or passwords with third parties is strictly prohibited.
               </Text>
             </View>
@@ -253,7 +251,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Statutory Certification: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Statutory Certification: </Text>
                 Equipment operators must maintain active, government-issued heavy equipment or crane operator licenses. Operators must immediately cease operation if their license expires or is suspended.
               </Text>
             </View>
@@ -308,7 +306,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>No Dual Custody: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>No Dual Custody: </Text>
                 An operator cannot be actively operating multiple machines simultaneously across overlapping shift hours.
               </Text>
             </View>
@@ -316,7 +314,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Overtime Shift Conflict Resolution: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Overtime Shift Conflict Resolution: </Text>
                 Whenever overtime hours overlap with subsequent machine assignments, the operator and site supervisor must resolve shift conflicts before finalizing duty logs.
               </Text>
             </View>
@@ -337,7 +335,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Pre-Shift Checklist: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Pre-Shift Checklist: </Text>
                 Inspect hydraulic systems, battery voltage, brakes, emergency stop mechanisms, and tire/track condition.
               </Text>
             </View>
@@ -345,7 +343,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Immediate Breakdown Logging: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Immediate Breakdown Logging: </Text>
                 If machinery exhibits mechanical or structural instability, immediately halt operation and flag the machine status as "Breakdown" in the mobile app.
               </Text>
             </View>
@@ -353,7 +351,7 @@ export default function TermsOfServiceScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Operating Capacity: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Operating Capacity: </Text>
                 Never exceed maximum working load limits (Safe Working Load / SWL) specified by the equipment manufacturer.
               </Text>
             </View>
@@ -434,8 +432,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     height: '100%',
-    width: '100%',
-  },
+    width: '100%' },
   // Desktop Left Showcase Panel
   desktopShowcasePanel: {
     height: '100%',
@@ -445,8 +442,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     position: 'relative',
     overflow: 'hidden',
-    zIndex: 1,
-  },
+    zIndex: 1 },
   showcaseGlow: {
     position: 'absolute',
     top: '25%',
@@ -457,25 +453,20 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     ...Platform.select({
       web: {
-        filter: 'blur(50px)',
-      },
-      default: {},
-    }),
-  },
+        filter: 'blur(50px)' },
+      default: {} }) },
   showcaseHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    zIndex: 2,
-  },
+    zIndex: 2 },
   showcaseBackBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   showcaseHeroContent: {
     marginVertical: 'auto',
     alignItems: 'flex-start',
@@ -484,32 +475,21 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     gap: 22,
     zIndex: 2,
-    paddingVertical: 12,
-  },
+    paddingVertical: 12 },
   showcaseHeadingBlock: {
     width: '100%',
     alignItems: 'flex-start',
-    gap: 2,
-  },
+    gap: 2 },
   showcaseTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   showcaseSubtitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   machineStageContainer: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingVertical: 10,
-  },
+    paddingVertical: 10 },
   machinePedestalShadow: {
     position: 'absolute',
     bottom: 6,
@@ -519,156 +499,103 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     ...Platform.select({
       web: {
-        filter: 'blur(4px)',
-      },
+        filter: 'blur(4px)' },
       default: {
-        opacity: 0.5,
-      },
-    }),
-  },
+        opacity: 0.5 } }) },
   machineImage: {
     width: '100%',
-    maxWidth: 340,
-  },
+    maxWidth: 340 },
   showcaseBottomInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    zIndex: 2,
-  },
+    zIndex: 2 },
   greenDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
+    backgroundColor: '#10b981' },
   showcaseBottomText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   mainWorkspace: {
     flex: 1,
     height: '100%',
-    position: 'relative',
-  },
+    position: 'relative' },
   desktopHeaderBar: {
     height: 52,
     borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-  },
+    paddingHorizontal: 24 },
   desktopBackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   desktopBackText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   desktopHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.3,
   },
   termsWrapper: {
     width: '100%',
     alignSelf: 'center',
-    gap: spacingNumeric.md,
-  },
+    gap: spacingNumeric.md },
   content: {
     padding: spacingNumeric.md,
-    paddingBottom: spacingNumeric['3xl'],
-  },
+    paddingBottom: spacingNumeric['3xl'] },
   card: {
     marginBottom: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
-    padding: spacingNumeric.lg,
-  },
+    padding: spacingNumeric.lg },
   heroHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   heroTitleCol: {
-    flex: 1,
-  },
+    flex: 1 },
   versionPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   versionText: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '600',
   },
   heroTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.4,
   },
   heroSubtitle: {
-    fontSize: 13.5,
-    marginTop: 3,
-  },
+    marginTop: 3 },
   divider: {
     height: 1,
-    marginVertical: spacingNumeric.md,
-  },
+    marginVertical: spacingNumeric.md },
   leadParagraph: {
-    fontSize: 13,
-    lineHeight: 20,
   },
   sectionHeaderRow: {
-    marginBottom: spacingNumeric.sm,
-  },
+    marginBottom: spacingNumeric.sm },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   bodyText: {
-    fontSize: 13,
-    lineHeight: 19,
   },
   bulletList: {
     gap: 10,
-    marginTop: spacingNumeric.sm,
-  },
+    marginTop: spacingNumeric.sm },
   bulletRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   bulletIcon: {
     marginTop: 2,
-    marginRight: 8,
-  },
+    marginRight: 8 },
   bulletText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-  },
+    flex: 1 },
   warningInset: {
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     padding: spacingNumeric.md,
-    marginTop: spacingNumeric.sm,
-  },
+    marginTop: spacingNumeric.sm },
   warningTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
+    marginBottom: 4 },
   warningText: {
-    fontSize: 12,
-    lineHeight: 18,
   },
   contactBox: {
     flexDirection: 'row',
@@ -676,29 +603,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     padding: spacingNumeric.md,
-    marginTop: spacingNumeric.md,
-  },
+    marginTop: spacingNumeric.md },
   contactLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
   },
   contactValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   brandFooter: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacingNumeric.xl,
-    gap: 4,
-  },
+    gap: 4 },
   brandFooterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 6,
-  },
+    marginTop: 6 },
   copyrightText: {
-    fontSize: 12,
-  },
-});
+  } });

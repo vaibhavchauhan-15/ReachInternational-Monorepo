@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -9,10 +8,9 @@ import {
   Alert,
   Platform,
   StatusBar,
-  LayoutAnimation,
-} from 'react-native';
+  LayoutAnimation} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -595,8 +593,6 @@ const styles = StyleSheet.create({
   },
   viewModeTabInactive: {},
   viewModeTabText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   contentScroll: {
     flex: 1,
@@ -613,8 +609,6 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.xs,
   },
   sectionTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
   },
   expandAllBtn: {
     paddingHorizontal: spacingNumeric.sm,
@@ -623,8 +617,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   expandAllText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   emptyContainer: {
     borderRadius: radiusNumeric.lg,
@@ -634,11 +626,8 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.xs,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
   },
   emptySub: {
-    fontSize: 13,
     textAlign: 'center',
   },
   dayGroupCard: {
@@ -656,8 +645,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dayGroupDate: {
-    fontSize: 15,
-    fontWeight: '700',
   },
   dayGroupBadges: {
     flexDirection: 'row',
@@ -669,8 +656,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
   },
   countBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   otBadge: {
     paddingHorizontal: 6,
@@ -678,8 +663,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
   },
   otBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#0070f3',
   },
   dayGroupHeaderRight: {
@@ -691,12 +674,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   dayHmrTotal: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   dayRunningTotal: {
-    fontSize: 14.5,
-    fontWeight: '800',
   },
   dayShiftsList: {
     borderTopWidth: 1,
@@ -719,19 +698,13 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
   },
   shiftCodeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
     color: '#0070f3',
   },
   shiftTimingText: {
-    fontSize: 12.5,
     flex: 1,
   },
   shiftHmrPill: {},
   shiftHmrText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   shiftItemBottom: {
     flexDirection: 'row',
@@ -739,14 +712,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   shiftOperatorText: {
-    fontSize: 12.5,
   },
   shiftOtText: {
-    fontSize: 12.5,
-    fontWeight: '700',
   },
   shiftRemarksText: {
-    fontSize: 12,
-    fontStyle: 'italic',
   },
 });

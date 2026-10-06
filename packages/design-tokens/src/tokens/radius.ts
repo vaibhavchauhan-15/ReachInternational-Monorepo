@@ -5,6 +5,7 @@
 
 export const radius = {
   none: '0px',
+  xs: '4px',
   sm: '6px',
   md: '12px',
   lg: '16px',
@@ -15,6 +16,7 @@ export const radius = {
 
 export const radiusNumeric = {
   none: 0,
+  xs: 4,
   sm: 6,
   md: 12,
   lg: 16,

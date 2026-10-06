@@ -8,20 +8,17 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
-} from 'react-native';
+  Linking} from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Card,
   Badge,
   useTheme,
   MobileHeader,
-  ReachInternationalLogo,
-} from '../../../components/ui';
+  ReachInternationalLogo, Text } from '../../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
@@ -294,13 +291,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   brandTitle: {
-    fontSize: 18,
-    fontWeight: '800',
     marginTop: 6,
-    letterSpacing: -0.3,
   },
   brandTagline: {
-    fontSize: 12,
     textAlign: 'center',
     paddingHorizontal: 16,
   },
@@ -315,12 +308,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   specLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
   },
   specValue: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -335,12 +324,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
   },
   sectionSubtitle: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   touchLinkRow: {
@@ -350,13 +335,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   linkTitle: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   linkSubtitle: {
-    fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
   },
   legalNavRow: {
     flexDirection: 'row',
@@ -372,11 +353,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   legalNavTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
   },
   legalNavDesc: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   complianceGrid: {
@@ -388,14 +366,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   complianceText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   brandFooter: {
     alignItems: 'center',
     paddingVertical: 12,
   },
   copyrightText: {
-    fontSize: 11.5,
   },
 });

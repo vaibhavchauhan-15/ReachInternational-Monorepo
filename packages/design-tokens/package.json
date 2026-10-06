@@ -12,6 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/typography.test.ts",
     "build": "echo \"@reachinternational/design-tokens built\""
   },
   "devDependencies": {

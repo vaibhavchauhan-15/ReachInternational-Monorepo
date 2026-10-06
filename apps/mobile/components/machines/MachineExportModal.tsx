@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text } from '../ui/Text';
 import { Button } from '../ui/Button';
+import { Touchable } from '../ui/Touchable';
+import { AppModal } from '../ui/AppModal';
+import { haptics } from '@/lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Printer, FileSpreadsheet, X, CheckCircle, Clock, ShieldAlert, SlidersHorizontal } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -255,6 +256,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
       });
 
       notifyMachineExported('pdf', filteredMachines.length);
+      haptics.success();
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           UTI: '.pdf',
@@ -265,6 +267,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         Alert.alert('PDF Generated', `Report saved to: ${uri}`);
       }
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Error', err?.message || 'Failed to export PDF.');
     } finally {
       setIsExportingPdf(false);
@@ -276,7 +279,9 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
     try {
       const html = generateReportHtml();
       await Print.printAsync({ html });
+      haptics.success();
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Print Error', err?.message || 'Failed to start print spooler.');
     } finally {
       setIsPrinting(false);
@@ -324,6 +329,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
       });
 
       notifyMachineExported('csv', filteredMachines.length);
+      haptics.success();
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           UTI: 'public.comma-separated-values-text',
@@ -334,6 +340,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         Alert.alert('Exported', `Spreadsheet saved: ${fileUri}`);
       }
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Error', err?.message || 'Failed to export CSV spreadsheet.');
     } finally {
       setIsExportingCsv(false);
@@ -341,33 +348,34 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.sheet, { backgroundColor: theme.colors.canvas }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-            <View>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>Export Fleet Directory</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-                {filteredMachines.length} of {machines.length} machines selected
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
+      <View style={[styles.sheet, { backgroundColor: theme.colors.canvas }]}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <View>
+            <Text variant="heading" style={{ color: theme.colors.ink }}>Export Fleet Directory</Text>
+            <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
+              {filteredMachines.length} of {machines.length} machines selected
+            </Text>
           </View>
+          <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+            <X size={20} color={theme.colors.mute} />
+          </Touchable>
+        </View>
 
           {/* Filter Pills Strip */}
           <View style={[styles.filterSection, { borderBottomColor: theme.colors.hairline }]}>
-            <Text style={[styles.filterSectionLabel, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.filterSectionLabel, { color: theme.colors.mute }]}>
               Scope Selection
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
               {FILTER_TABS.map((tab) => {
                 const isActive = activeFilter === tab.value;
                 return (
-                  <TouchableOpacity
+                  <Touchable
                     key={tab.value}
+                    preset="card"
+                    haptic="select"
                     style={[
                       styles.filterTab,
                       {
@@ -378,14 +386,12 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
                     onPress={() => setActiveFilter(tab.value)}
                   >
                     <Text
-                      style={[
-                        styles.filterTabText,
-                        { color: isActive ? theme.colors.canvas : theme.colors.ink },
-                      ]}
+                      variant="label"
+                      style={{ color: isActive ? theme.colors.canvas : theme.colors.ink }}
                     >
                       {tab.label}
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
                 );
               })}
             </ScrollView>
@@ -394,22 +400,22 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
           {/* KPI Preview Strip */}
           <View style={styles.metricsStrip}>
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>MATCHING</Text>
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>
+              <Text variant="caption" style={[styles.metricLabel, { color: theme.colors.mute }]}>MATCHING</Text>
+              <Text variant="title" style={[styles.metricValue, { color: theme.colors.ink }]}>
                 {filteredMachines.length}
               </Text>
             </View>
 
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>ON RENT</Text>
-              <Text style={[styles.metricValue, { color: theme.colors.link }]}>
+              <Text variant="caption" style={[styles.metricLabel, { color: theme.colors.mute }]}>ON RENT</Text>
+              <Text variant="title" style={[styles.metricValue, { color: theme.colors.link }]}>
                 {metrics.rented}
               </Text>
             </View>
 
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>BREAKDOWNS</Text>
-              <Text style={[styles.metricValue, { color: '#dc2626' }]}>
+              <Text variant="caption" style={[styles.metricLabel, { color: theme.colors.mute }]}>BREAKDOWNS</Text>
+              <Text variant="title" style={[styles.metricValue, { color: '#dc2626' }]}>
                 {metrics.breakdown}
               </Text>
             </View>
@@ -450,15 +456,13 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
             />
           </View>
         </View>
-      </View>
-    </Modal>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  sheetWrapper: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -473,12 +477,7 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
   subtitle: {
-    fontSize: 13,
     marginTop: 1,
   },
   closeBtn: {
@@ -491,10 +490,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   filterSectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginBottom: 6,
   },
   filterScroll: {
@@ -506,10 +502,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     marginRight: 8,
-  },
-  filterTabText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   metricsStrip: {
     flexDirection: 'row',
@@ -524,14 +516,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    fontSize: 12,
-    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   metricValue: {
-    fontSize: 18,
-    fontWeight: '800',
     marginTop: 2,
   },
   actionsContainer: {

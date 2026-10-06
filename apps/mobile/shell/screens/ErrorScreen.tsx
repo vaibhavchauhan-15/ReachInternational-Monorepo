@@ -1,3 +1,4 @@
+import { Text } from "../../components/ui/Text";
 /**
  * ReachInternational Mobile — Error Screen
  * Displayed when WebView encounters HTTP errors or fatal page load failures.
@@ -6,10 +7,8 @@
 import React from "react";
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-} from "react-native";
+  TouchableOpacity} from "react-native";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react-native";
 import { colorsDark, spacingNumeric, radiusNumeric } from "@reachinternational/design-tokens";
 
@@ -31,9 +30,9 @@ export function ErrorScreen({
           <AlertTriangle size={40} color="#f59e0b" strokeWidth={1.75} />
         </View>
 
-        <Text style={styles.title}>Unable to Load Page</Text>
+        <Text variant="title" style={styles.title}>Unable to Load Page</Text>
 
-        <Text style={styles.description}>
+        <Text variant="body" style={styles.description}>
           {errorDescription ||
             "We experienced an issue connecting to ReachInternational. Please verify your server connectivity and try again."}
         </Text>
@@ -47,7 +46,7 @@ export function ErrorScreen({
             accessibilityLabel="Reload Page"
           >
             <RefreshCw size={16} color="#ffffff" strokeWidth={2} style={styles.buttonIcon} />
-            <Text style={styles.primaryButtonText}>Reload Page</Text>
+            <Text variant="label" style={styles.primaryButtonText}>Reload Page</Text>
           </TouchableOpacity>
 
           {onGoHome && (
@@ -59,7 +58,7 @@ export function ErrorScreen({
               accessibilityLabel="Return to Dashboard"
             >
               <Home size={16} color={colorsDark.ink} strokeWidth={2} style={styles.buttonIcon} />
-              <Text style={styles.secondaryButtonText}>Return to Home</Text>
+              <Text variant="label" style={styles.secondaryButtonText}>Return to Home</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -74,8 +73,7 @@ const styles = StyleSheet.create({
     backgroundColor: colorsDark.canvas,
     justifyContent: "center",
     alignItems: "center",
-    padding: spacingNumeric.lg,
-  },
+    padding: spacingNumeric.lg },
   card: {
     width: "100%",
     maxWidth: 380,
@@ -84,8 +82,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colorsDark.hairline,
     padding: spacingNumeric.xl,
-    alignItems: "center",
-  },
+    alignItems: "center" },
   iconContainer: {
     width: 72,
     height: 72,
@@ -95,27 +92,18 @@ const styles = StyleSheet.create({
     borderColor: "rgba(245, 158, 11, 0.2)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: spacingNumeric.lg,
-  },
+    marginBottom: spacingNumeric.lg },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
     color: colorsDark.ink,
     textAlign: "center",
-    marginBottom: spacingNumeric.sm,
-    letterSpacing: -0.4,
-  },
+    marginBottom: spacingNumeric.sm },
   description: {
-    fontSize: 14,
-    lineHeight: 20,
     color: colorsDark.mute,
     textAlign: "center",
-    marginBottom: spacingNumeric.xl,
-  },
+    marginBottom: spacingNumeric.xl },
   actions: {
     width: "100%",
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -125,14 +113,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: radiusNumeric.md,
     width: "100%",
-    minHeight: 48,
-  },
+    minHeight: 48 },
   primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: -0.2,
-  },
+    color: "#ffffff" },
   secondaryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -144,15 +127,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: radiusNumeric.md,
     width: "100%",
-    minHeight: 48,
-  },
+    minHeight: 48 },
   secondaryButtonText: {
-    color: colorsDark.ink,
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: -0.2,
-  },
+    color: colorsDark.ink },
   buttonIcon: {
-    marginRight: 8,
-  },
-});
+    marginRight: 8 } });

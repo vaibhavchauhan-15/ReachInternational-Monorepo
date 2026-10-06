@@ -1,21 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Modal,
   Alert,
   RefreshControl,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal } from '../../components/ui';
+import { PayrollSkeleton } from '../../components/payroll';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
@@ -23,6 +21,7 @@ import {
   Calendar,
   Search,
   Clock,
+  RefreshCw,
   Briefcase,
   Users,
   Edit2,
@@ -313,11 +312,23 @@ export default function PayrollScreen() {
     return list;
   }, []);
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    return [
+      {
+        id: 'refresh-payroll',
+        label: 'Refresh Statement',
+        icon: <RefreshCw size={15} color={theme.colors.ink} />,
+        onPress: onRefresh,
+      },
+    ];
+  }, [theme.colors.ink, onRefresh]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <MobileHeader
         title="Salary Statement"
         showBack={false}
+        actions={headerActions}
       />
 
       <ScrollView
@@ -330,8 +341,12 @@ export default function PayrollScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Month Selector Pills */}
-        <ScrollView
+        {loading && !payrollData ? (
+          <PayrollSkeleton />
+        ) : (
+          <>
+            {/* Month Selector Pills */}
+            <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.monthScroll}
@@ -361,8 +376,7 @@ export default function PayrollScreen() {
                     styles.monthPillText,
                     {
                       color: active ? theme.colors.canvas : theme.colors.ink,
-                      fontWeight: active ? '600' : '500',
-                    },
+                      },
                   ]}
                 >
                   {m.label}
@@ -640,7 +654,7 @@ export default function PayrollScreen() {
                       activeOpacity={0.7}
                     >
                       <Edit2 size={13} color={theme.colors.canvas} />
-                      <Text style={[styles.actionBtnText, { color: theme.colors.canvas, fontWeight: '600' }]}>Edit</Text>
+                      <Text style={[styles.actionBtnText, { color: theme.colors.canvas }]}>Edit</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -648,26 +662,26 @@ export default function PayrollScreen() {
             })
           )}
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Salary Slip Modal */}
-      <Modal
+      <AppModal
         visible={!!viewSlipOp}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewSlipOp(null)}
+        onClose={() => setViewSlipOp(null)}
+        variant="bottom"
       >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                maxHeight: '85%',
-              },
-            ]}
-          >
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+              maxHeight: '85%',
+            },
+          ]}
+        >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
@@ -687,60 +701,60 @@ export default function PayrollScreen() {
                 <View style={{ gap: 12, paddingVertical: 8 }}>
                   {/* Company Box */}
                   <View style={[styles.slipBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: theme.colors.ink, textTransform: 'uppercase' }}>
+                    <Text style={{ color: theme.colors.ink, textTransform: 'uppercase' }}>
                       REACH INTERNATIONAL
                     </Text>
-                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
                       Operator Salary Statement Slip
                     </Text>
                     <View style={{ marginTop: 6, gap: 4 }}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink }}>A/C: {viewSlipOp.bank_account_number || 'XXXXXXXX1234'}</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink }}>IFSC: {viewSlipOp.bank_ifsc_code || 'BANK0001234'}</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>DOJ: {viewSlipOp.doj || '—'}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>A/C: {viewSlipOp.bank_account_number || 'XXXXXXXX1234'}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>IFSC: {viewSlipOp.bank_ifsc_code || 'BANK0001234'}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>DOJ: {viewSlipOp.doj || '—'}</Text>
                     </View>
                   </View>
 
                   {/* Attendance Strip */}
                   <View style={[styles.slipBox, { backgroundColor: '#2563eb10', borderColor: '#2563eb25' }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb', textTransform: 'uppercase', marginBottom: 6 }}>
+                    <Text variant="caption" style={{ color: '#2563eb', textTransform: 'uppercase', marginBottom: 6 }}>
                       Attendance & Days
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Working: {viewSlipOp.working_days || 30}d</Text>
-                      <Text style={{ fontSize: 12.5, color: '#2563eb', fontWeight: '700' }}>Attended: {viewSlipOp.attended_days || viewSlipOp.work_days || 0}d</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>OT: {viewSlipOp.ot_days || 0}d</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '700' }}>Total: {viewSlipOp.total_days || 0}d</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Working: {viewSlipOp.working_days || 30}d</Text>
+                      <Text variant="caption" style={{ color: '#2563eb' }}>Attended: {viewSlipOp.attended_days || viewSlipOp.work_days || 0}d</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>OT: {viewSlipOp.ot_days || 0}d</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>Total: {viewSlipOp.total_days || 0}d</Text>
                     </View>
                   </View>
 
                   {/* Financial Breakdown */}
                   <View style={[styles.slipBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, gap: 6 }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink, textTransform: 'uppercase' }}>
+                    <Text variant="caption" style={{ color: theme.colors.ink, textTransform: 'uppercase' }}>
                       Earnings & Deductions
                     </Text>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Basic Salary:</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.basic_salary || 0).toLocaleString('en-IN')}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Basic Salary:</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>₹{(viewSlipOp.basic_salary || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Attended Amount:</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.attended_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Attended Amount:</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>₹{(viewSlipOp.attended_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Overtime Amount:</Text>
-                      <Text style={{ fontSize: 12.5, color: '#d97706', fontWeight: '600' }}>₹{(viewSlipOp.ot_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Overtime Amount:</Text>
+                      <Text variant="caption" style={{ color: '#d97706' }}>₹{(viewSlipOp.ot_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Paid Leave (PL) Pay:</Text>
-                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.pl_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Paid Leave (PL) Pay:</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>₹{(viewSlipOp.pl_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={[styles.detailRow, { paddingTop: 4, borderTopWidth: 1, borderTopColor: theme.colors.hairline }]}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.ink }}>Gross Pay:</Text>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.ink }}>₹{(viewSlipOp.gross_pay || viewSlipOp.total_pay || 0).toLocaleString('en-IN')}</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>Gross Pay:</Text>
+                      <Text variant="caption" style={{ color: theme.colors.ink }}>₹{(viewSlipOp.gross_pay || viewSlipOp.total_pay || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 12.5, color: '#dc2626' }}>Total Deductions (Loan/Adv):</Text>
-                      <Text style={{ fontSize: 12.5, color: '#dc2626', fontWeight: '600' }}>
+                      <Text variant="caption" style={{ color: '#dc2626' }}>Total Deductions (Loan/Adv):</Text>
+                      <Text variant="caption" style={{ color: '#dc2626' }}>
                         -₹{((viewSlipOp.loan_deduction || 0) + (viewSlipOp.advance_deduction || 0) + (viewSlipOp.other_deductions || 0)).toLocaleString('en-IN')}
                       </Text>
                     </View>
@@ -748,10 +762,10 @@ export default function PayrollScreen() {
 
                   {/* Net Pay Banner */}
                   <View style={[styles.slipBox, { backgroundColor: '#05966915', borderColor: '#05966930', alignItems: 'center' }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669', textTransform: 'uppercase' }}>
+                    <Text variant="caption" style={{ color: '#059669', textTransform: 'uppercase' }}>
                       Net Salary Payable
                     </Text>
-                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#059669', marginTop: 2 }}>
+                    <Text variant="title" style={{ color: '#059669', marginTop: 2 }}>
                       ₹{(viewSlipOp.net_pay || viewSlipOp.total_pay || 0).toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -763,32 +777,29 @@ export default function PayrollScreen() {
               onPress={() => setViewSlipOp(null)}
               style={[styles.modalSaveBtn, { backgroundColor: theme.colors.ink, marginTop: 8 }]}
             >
-              <Text style={{ color: theme.colors.canvas, fontWeight: '600', textAlign: 'center' }}>
+              <Text style={{ color: theme.colors.canvas, textAlign: 'center' }}>
                 Close Slip
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+      </AppModal>
 
       {/* Edit Statement Modal */}
-      <Modal
+      <AppModal
         visible={!!editingOperator}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditingOperator(null)}
+        onClose={() => setEditingOperator(null)}
+        variant="bottom"
       >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                maxHeight: '90%',
-              },
-            ]}
-          >
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+              maxHeight: '90%',
+            },
+          ]}
+        >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
@@ -883,12 +894,12 @@ export default function PayrollScreen() {
                 {/* Live Preview Strip */}
                 <View style={[styles.slipBox, { backgroundColor: '#05966910', borderColor: '#05966925', gap: 4 }]}>
                   <View style={styles.detailRow}>
-                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Gross Pay:</Text>
-                    <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '700' }}>₹{editComputed.gross.toLocaleString('en-IN')}</Text>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>Gross Pay:</Text>
+                    <Text style={{ color: theme.colors.ink }}>₹{editComputed.gross.toLocaleString('en-IN')}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={{ fontSize: 12.5, color: '#059669', fontWeight: '700' }}>Calculated Net Pay:</Text>
-                    <Text style={{ fontSize: 14, color: '#059669', fontWeight: '800' }}>₹{editComputed.net.toLocaleString('en-IN')}</Text>
+                    <Text variant="caption" style={{ color: '#059669' }}>Calculated Net Pay:</Text>
+                    <Text variant="heading" style={{ color: '#059669' }}>₹{editComputed.net.toLocaleString('en-IN')}</Text>
                   </View>
                 </View>
               </View>
@@ -899,7 +910,7 @@ export default function PayrollScreen() {
                 onPress={() => setEditingOperator(null)}
                 style={[styles.modalCancelBtn, { borderColor: theme.colors.hairline }]}
               >
-                <Text style={{ color: theme.colors.ink, fontWeight: '500' }}>
+                <Text style={{ color: theme.colors.ink }}>
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -909,32 +920,27 @@ export default function PayrollScreen() {
                 disabled={savingStatement}
                 style={[styles.modalSaveBtn, { backgroundColor: theme.colors.ink }]}
               >
-                <Text style={{ color: theme.colors.canvas, fontWeight: '600' }}>
+                <Text style={{ color: theme.colors.canvas }}>
                   {savingStatement ? 'Saving...' : 'Save Statement'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   content: {
     padding: spacingNumeric.md,
-    gap: spacingNumeric.md,
-  },
+    gap: spacingNumeric.md },
   monthScroll: {
-    maxHeight: 40,
-  },
+    maxHeight: 40 },
   monthScrollContent: {
-    gap: 8,
-  },
+    gap: 8 },
   monthPill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -942,11 +948,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 36,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   monthPillText: {
-    fontSize: 13,
-  },
+    },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -954,30 +958,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   searchInput: {
     flex: 1,
-    fontSize: 14,
     padding: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
-        outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
-      } as any,
-    }),
-  },
+        outlineStyle: 'none' } as any }) },
   filterStripContainer: {
-    marginVertical: 2,
-  },
+    marginVertical: 2 },
   filterStrip: {
     gap: 8,
-    paddingVertical: 2,
-  },
+    paddingVertical: 2 },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -985,107 +979,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 32,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   filterChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+    },
   listSection: {
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginLeft: 4,
-  },
+    marginLeft: 4 },
   operatorCard: {
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    gap: 10,
-  },
+    gap: 10 },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   headerLeft: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   headerRight: {
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   slBadge: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    fontWeight: '700',
     borderWidth: 1,
     paddingHorizontal: 5,
     paddingVertical: 1.5,
-    borderRadius: 4,
-  },
+    borderRadius: 4 },
   operatorName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+    },
   operatorLocation: {
-    fontSize: 12.5,
-  },
+    },
   totalPayAmount: {
-    fontSize: 17,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
+    },
   totalPayLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
+    textTransform: 'uppercase' },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 10,
     borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   breakdownCol: {
-    flex: 1,
-  },
+    flex: 1 },
   colSub: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   colMain: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   detailsDrawer: {
     paddingTop: 8,
     borderTopWidth: 1,
-    gap: 5,
-  },
+    gap: 5 },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   detailKey: {
-    fontSize: 12.5,
-  },
+    },
   detailVal: {
-    fontSize: 12.5,
-    fontWeight: '500',
-  },
+    },
   cardFooter: {
     flexDirection: 'row',
     gap: 8,
-    paddingTop: 4,
-  },
+    paddingTop: 4 },
   actionBtn: {
     flex: 1,
     minHeight: 40,
@@ -1094,71 +1049,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-  },
+    gap: 5 },
   actionBtnText: {
-    fontSize: 13,
-  },
+    },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    padding: spacingNumeric.md,
-  },
+    padding: spacingNumeric.md },
   modalCard: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.lg,
-    gap: 12,
-  },
+    gap: 12 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   modalTitle: {
-    fontSize: 16.5,
-    fontWeight: '700',
-  },
+    },
   modalSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   formGroup: {
-    gap: 4,
-  },
+    gap: 4 },
   inputLabel: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
+    },
   textInput: {
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-  },
+    paddingVertical: 8 },
   modalActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 8,
-  },
+    marginTop: 8 },
   modalCancelBtn: {
     flex: 1,
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     paddingVertical: 10,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   modalSaveBtn: {
     flex: 1,
     borderRadius: radiusNumeric.md,
     paddingVertical: 10,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   slipBox: {
     padding: 10,
     borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
-});
+    borderWidth: 1 } });

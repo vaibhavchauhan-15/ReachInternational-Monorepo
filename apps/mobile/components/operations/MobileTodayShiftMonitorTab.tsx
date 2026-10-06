@@ -11,7 +11,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -28,12 +27,14 @@ import {
   DropdownFilterSelector,
   type FilterOption,
   HighlightText,
+  Text,
+  useTypeStyle,
 } from '../ui';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useTodayShiftMonitor } from '../../lib/hooks/useOperationsData';
+import { ShiftRosterListSkeleton } from './OperationsSkeleton';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
-import * as Haptics from 'expo-haptics';
 import {
   Clock,
   UserCheck,
@@ -51,10 +52,12 @@ import {
   ChevronDown,
   Wrench,
   Edit2,
+  ChevronRight,
 } from 'lucide-react-native';
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { isManagerOrAbove } from '@reachinternational/permissions';
 import { useAuth } from '../../lib/auth/useAuth';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface MobileTodayShiftMonitorTabProps {
   actorId?: string;
@@ -92,6 +95,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   onCloseAssignModal,
 }) => {
   const { theme, isDark } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const { role: authRole, userProfile } = useAuth();
   const effectiveRole = (userRole || authRole || userProfile?.role || '').toLowerCase().replace(/[\s-]/g, '_');
   const canEnterLog = isManagerOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager'].includes(effectiveRole);
@@ -197,7 +201,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   }, [statusFilter, shiftFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    haptics.success();
     setStatusFilter('all');
     setShiftFilter('all');
     setSortBy('default');
@@ -299,7 +303,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       {/* Active Filter Chips Strip */}
       {(activeFilterCount > 0 || searchQuery.trim() !== '') && (
         <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-          <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+          <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
             Active Filters:
           </Text>
 
@@ -311,7 +315,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
               ]}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+              <Text variant="caption" style={[styles.badgeChipText, { color: theme.colors.ink }]}>
                 Search: "{searchQuery}"
               </Text>
               <X size={12} color={theme.colors.mute} />
@@ -334,6 +338,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               ]}
             >
               <Text
+                variant="caption"
                 style={[
                   styles.badgeChipText,
                   {
@@ -358,7 +363,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 },
               ]}
             >
-              <Text style={[styles.badgeChipText, { color: '#2563eb' }]}>
+              <Text variant="caption" style={[styles.badgeChipText, { color: '#2563eb' }]}>
                 Shift: {currentShiftLabel}
               </Text>
               <X size={12} color="#2563eb" />
@@ -373,7 +378,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
               ]}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+              <Text variant="caption" style={[styles.badgeChipText, { color: theme.colors.ink }]}>
                 Sort: {currentSortLabel}
               </Text>
               <X size={12} color={theme.colors.mute} />
@@ -382,7 +387,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
           <TouchableOpacity onPress={handleResetAllFilters} style={styles.resetAllLink}>
             <RotateCcw size={11} color={theme.colors.link} />
-            <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+            <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
               Reset all
             </Text>
           </TouchableOpacity>
@@ -393,11 +398,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
   if (isLoading && rows.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.link} />
-        <Text style={[styles.loadingText, { color: theme.colors.mute }]}>
-          Loading today's shift roster...
-        </Text>
+      <View style={styles.container}>
+        <ShiftRosterListSkeleton count={4} />
       </View>
     );
   }
@@ -484,6 +486,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               onBlur={() => setIsSearchFocused(false)}
               style={[
                 styles.searchInputText,
+                bodyTypeStyle,
                 { color: theme.colors.ink },
                 Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
               ]}
@@ -506,7 +509,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           {/* Filter Toggle Button */}
           <TouchableOpacity
             onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
+              haptics.select();
               setFilterPanelOpen((prev) => !prev);
             }}
             activeOpacity={0.8}
@@ -537,6 +540,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               }
             />
             <Text
+              variant="label"
               style={[
                 styles.filterToggleBtnText,
                 {
@@ -562,6 +566,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 ]}
               >
                 <Text
+                  variant="caption"
                   style={[
                     styles.activeCountBadgeText,
                     {
@@ -632,7 +637,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               accessibilityLabel="Reset all filters"
             >
               <RotateCcw size={13} color={theme.colors.mute} />
-              <Text style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                 Reset
               </Text>
             </TouchableOpacity>
@@ -688,10 +693,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           ]}
         >
           <AlertCircle size={28} color={theme.colors.mute} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+          <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>
             No Shifts Found
           </Text>
-          <Text style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
+          <Text variant="body" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
             {searchQuery
               ? `No matching shifts found for "${searchQuery}". Try changing search or filters.`
               : statusFilter === 'pending'
@@ -705,7 +710,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               style={[styles.emptyAssignButton, { backgroundColor: theme.colors.link }]}
             >
               <UserPlus size={14} color="#ffffff" />
-              <Text style={styles.emptyAssignButtonText}>Assign Operator</Text>
+              <Text variant="label" style={styles.emptyAssignButtonText}>Assign Operator</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -741,8 +746,17 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               : null;
 
             return (
-              <View
+              <TouchableOpacity
                 key={cardKey}
+                activeOpacity={0.84}
+                onPress={() => {
+                  haptics.select();
+                  if (isUnassigned) {
+                    handleOpenAssignModal(row.machine_id);
+                  } else if (canEnterLog) {
+                    onEnterLog(row);
+                  }
+                }}
                 style={[
                   styles.card,
                   {
@@ -751,9 +765,15 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     borderLeftColor: accentColor,
                     borderLeftWidth: 4,
                   },
+                  isWeb && ({
+                    cursor: isUnassigned || canEnterLog ? 'pointer' : 'default',
+                    transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
+                  } as any),
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={`${row.operator_name || 'Unassigned Machine'}, ${row.shift_name || row.shift_code}, Status: ${row.status}`}
               >
-                {/* LINE 1: Operator Name (Left)  +  Shift Log Status (Right) */}
+                {/* LINE 1: Operator Name (Left)  +  Shift Log Status & Touch Indicator (Right) */}
                 <View style={styles.cardHeader}>
                   <View style={styles.userAvatarRow}>
                     <View
@@ -769,13 +789,14 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                       {isUnassigned ? (
                         <UserX size={15} color={isDark ? '#fbbf24' : '#d97706'} />
                       ) : (
-                        <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                        <Text variant="heading" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
                           {row.operator_name ? row.operator_name[0].toUpperCase() : 'O'}
                         </Text>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text
+                        variant="subheading"
                         style={[
                           styles.operatorName,
                           {
@@ -790,6 +811,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           'Unassigned Machine'
                         ) : (
                           <HighlightText
+                            variant="subheading"
                             text={row.operator_name}
                             query={searchQuery}
                             style={[
@@ -800,38 +822,49 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           />
                         )}
                       </Text>
+                      {row.operator_phone && !isUnassigned ? (
+                        <Text variant="caption" style={[styles.operatorPhoneText, { color: theme.colors.mute }]} numberOfLines={1}>
+                          {row.operator_phone}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
 
-                  {/* Shift Log Status Badge */}
-                  <View
-                    style={[
-                      styles.cardStatusBadge,
-                      {
-                        backgroundColor: isEntered
-                          ? isDark ? '#064e3b26' : '#d1fae5'
-                          : isUnassigned
-                          ? isDark ? '#78350f26' : '#fef3c7'
-                          : isDark ? '#78350f26' : '#fffbeb',
-                        borderColor: isEntered ? '#10b98133' : '#f59e0b33',
-                      },
-                    ]}
-                  >
-                    <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
-                    <Text
+                  {/* Right Header: Shift Log Status Badge & Touch Chevron */}
+                  <View style={styles.cardHeaderRight}>
+                    <View
                       style={[
-                        styles.cardStatusText,
+                        styles.cardStatusBadge,
                         {
-                          color: isEntered
-                            ? '#047857'
+                          backgroundColor: isEntered
+                            ? isDark ? '#064e3b26' : '#d1fae5'
                             : isUnassigned
-                            ? isDark ? '#fbbf24' : '#b45309'
-                            : isDark ? '#fbbf24' : '#d97706',
+                            ? isDark ? '#78350f26' : '#fef3c7'
+                            : isDark ? '#78350f26' : '#fffbeb',
+                          borderColor: isEntered ? '#10b98133' : '#f59e0b33',
                         },
                       ]}
                     >
-                      {isEntered ? 'ENTERED' : isUnassigned ? 'UNASSIGNED' : 'PENDING'}
-                    </Text>
+                      <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
+                      <Text
+                        variant="caption"
+                        style={[
+                          styles.cardStatusText,
+                          {
+                            color: isEntered
+                              ? '#047857'
+                              : isUnassigned
+                              ? isDark ? '#fbbf24' : '#b45309'
+                              : isDark ? '#fbbf24' : '#d97706',
+                          },
+                        ]}
+                      >
+                        {isEntered ? 'ENTERED' : isUnassigned ? 'UNASSIGNED' : 'PENDING'}
+                      </Text>
+                    </View>
+                    {(canEnterLog || isUnassigned) && (
+                      <ChevronRight size={15} color={theme.colors.mute} />
+                    )}
                   </View>
                 </View>
 
@@ -849,11 +882,11 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Clock size={12} color={theme.colors.mute} />
-                      <Text style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
                         Shift:
                       </Text>
                     </View>
-                    <Text style={[styles.metaFieldValue, { color: theme.colors.ink, fontWeight: '600' }]} numberOfLines={1}>
+                    <Text variant="caption" style={[styles.metaFieldValue, { color: theme.colors.ink }]} numberOfLines={1}>
                       {row.shift_name || (row.shift_code ? `Shift ${row.shift_code}` : 'Shift A')}
                     </Text>
                   </View>
@@ -862,14 +895,15 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Wrench size={12} color={theme.colors.mute} />
-                      <Text style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
                         Model:
                       </Text>
                     </View>
                     <HighlightText
+                      variant="caption"
                       text={row.machine_model || '—'}
                       query={searchQuery}
-                      style={[styles.metaFieldValue, { color: theme.colors.ink, fontWeight: '600' }]}
+                      style={[styles.metaFieldValue, { color: theme.colors.ink }]}
                       numberOfLines={1}
                     />
                   </View>
@@ -878,13 +912,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Truck size={12} color={theme.colors.link} />
-                      <Text style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
                         Sr No:
                       </Text>
                     </View>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      onPress={() => handleOpenAssignModal(row.machine_id)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        handleOpenAssignModal(row.machine_id);
+                      }}
                       style={[
                         styles.monoBadge,
                         {
@@ -892,13 +929,15 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           borderColor: theme.colors.hairline,
                         },
                       ]}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       <HighlightText
+                        variant="mono"
                         text={row.machine_serial_number || row.machine_code || '—'}
                         query={searchQuery}
                         style={[
                           styles.metaFieldValueMono,
-                          { color: theme.colors.link, fontWeight: '700' },
+                          { color: theme.colors.link },
                         ]}
                         numberOfLines={1}
                       />
@@ -909,66 +948,63 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Building2 size={12} color={theme.colors.mute} />
-                      <Text style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
                         Client:
                       </Text>
                     </View>
                     <HighlightText
+                      variant="caption"
                       text={`${row.client_name || 'Direct / Internal Fleet'}${row.client_code ? ` (${row.client_code})` : ''}`}
                       query={searchQuery}
-                      style={[styles.metaFieldValue, { color: theme.colors.ink, fontWeight: '600' }]}
+                      style={[styles.metaFieldValue, { color: theme.colors.ink }]}
                       numberOfLines={1}
                     />
                   </View>
                 </View>
 
-                {/* Entered Details Summary Box */}
+                {/* Entered Details Clean Attribution Row */}
                 {isEntered && (
-                  <View
-                    style={[
-                      styles.enteredMetaBox,
-                      {
-                        backgroundColor: isDark ? '#064e3b18' : '#ecfdf5',
-                        borderColor: isDark ? '#064e3b40' : '#a7f3d0',
-                      },
-                    ]}
-                  >
-                    <View style={styles.attributionInline}>
-                      <UserCheck size={13} color={isDark ? '#34d399' : '#059669'} />
-                      <Text style={[styles.attributionText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
-                        {isAssistedLog ? (
-                          <>
-                            Assisted Log by <Text style={{ fontWeight: '700' }}>{enteredAuthorName}</Text>
-                            {authorRoleBadge ? (
-                              <Text style={{ fontStyle: 'italic', fontWeight: '500' }}>{` (${authorRoleBadge})`}</Text>
-                            ) : null}
-                          </>
-                        ) : (
-                          <>
-                            Logged by <Text style={{ fontWeight: '600' }}>{enteredAuthorName}</Text>
-                          </>
-                        )}
-                      </Text>
-                    </View>
+                  <View style={styles.attributionRow}>
+                    <UserCheck size={13} color={isDark ? '#34d399' : '#059669'} />
+                    <Text variant="caption" style={[styles.attributionText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
+                      {isAssistedLog ? (
+                        <>
+                          Assisted Log by <Text variant="caption">{enteredAuthorName}</Text>
+                          {authorRoleBadge ? (
+                            <Text variant="caption">{` (${authorRoleBadge})`}</Text>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          Logged by <Text variant="caption">{enteredAuthorName}</Text>
+                        </>
+                      )}
+                    </Text>
                   </View>
                 )}
 
                 {/* Action Buttons: Assign Operator (Unassigned) or Enter Shift Log (Pending) / Edit Shift Log (Entered) */}
                 {isUnassigned ? (
                   <TouchableOpacity
-                    onPress={() => handleOpenAssignModal(row.machine_id)}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      handleOpenAssignModal(row.machine_id);
+                    }}
                     activeOpacity={0.8}
                     style={[styles.assignRowBtn, { backgroundColor: theme.colors.ink }]}
                   >
                     <UserPlus size={14} color={theme.colors.canvas} />
-                    <Text style={[styles.assignRowBtnText, { color: theme.colors.canvas }]}>
+                    <Text variant="label" style={[styles.assignRowBtnText, { color: theme.colors.canvas }]}>
                       Assign Operator to {row.machine_code}
                     </Text>
                   </TouchableOpacity>
                 ) : !isEntered ? (
                   canEnterLog ? (
                     <TouchableOpacity
-                      onPress={() => onEnterLog(row)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        onEnterLog(row);
+                      }}
                       activeOpacity={0.8}
                       style={[
                         styles.enterLogBtn,
@@ -979,20 +1015,17 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                       ]}
                     >
                       <User size={14} color={theme.colors.link} />
-                      <Text style={[styles.enterLogBtnText, { color: theme.colors.link }]} numberOfLines={1}>
+                      <Text variant="label" style={[styles.enterLogBtnText, { color: theme.colors.link }]} numberOfLines={1}>
                         Enter Shift Log for {row.operator_name || 'Operator'}
                       </Text>
                     </TouchableOpacity>
-                  ) : (
-                    <View style={styles.pendingNoticeBox}>
-                      <Text style={[styles.pendingNoticeText, { color: theme.colors.mute }]}>
-                        Shift log submission pending
-                      </Text>
-                    </View>
-                  )
+                  ) : null
                 ) : canEnterLog ? (
                   <TouchableOpacity
-                    onPress={() => onEnterLog(row)}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      onEnterLog(row);
+                    }}
                     activeOpacity={0.8}
                     style={[
                       styles.enterLogBtn,
@@ -1003,12 +1036,12 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     ]}
                   >
                     <Edit2 size={13} color={isDark ? '#34d399' : '#059669'} />
-                    <Text style={[styles.enterLogBtnText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
+                    <Text variant="label" style={[styles.enterLogBtnText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
                       Edit Shift Log for {row.operator_name || 'Operator'}
                     </Text>
                   </TouchableOpacity>
                 ) : null}
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -1036,10 +1069,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  loadingText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  loadingText: {},
   toolbarContainer: {
     gap: spacingNumeric.sm,
   },
@@ -1062,7 +1092,6 @@ const styles = StyleSheet.create({
   },
   searchInputText: {
     flex: 1,
-    fontSize: 13.5,
     paddingVertical: 0,
     paddingHorizontal: 0,
     height: '100%',
@@ -1082,10 +1111,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  filterToggleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  filterToggleBtnText: {},
   activeCountBadge: {
     minWidth: 18,
     height: 18,
@@ -1094,10 +1120,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  activeCountBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+  activeCountBadgeText: {},
   quickResetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1107,10 +1130,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  quickResetBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+  quickResetBtnText: {},
   filterPanelWebContainer: {
     overflow: 'hidden',
   },
@@ -1141,8 +1161,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   activeBadgesHeader: {
-    fontSize: 12.5,
-    fontWeight: '600',
     marginRight: 2,
   },
   badgeChip: {
@@ -1154,10 +1172,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  badgeChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+  badgeChipText: {},
   resetAllLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1165,10 +1180,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
   },
-  resetAllLinkText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+  resetAllLinkText: {},
   emptyCard: {
     padding: 32,
     alignItems: 'center',
@@ -1177,14 +1189,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 8,
   },
-  emptyTitle: {
-    fontSize: 15.5,
-    fontWeight: '700',
-  },
+  emptyTitle: {},
   emptySubtitle: {
-    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 18,
     maxWidth: 280,
   },
   emptyAssignButton: {
@@ -1199,8 +1206,6 @@ const styles = StyleSheet.create({
   },
   emptyAssignButtonText: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
   },
   // Card Styles
   cardsList: {
@@ -1223,34 +1228,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   userAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flex: 1,
+    minWidth: 0,
   },
   avatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarLetter: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  operatorName: {
-    fontSize: 15.5,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+  avatarLetter: {},
+  operatorName: {},
+  operatorPhoneText: {
+    marginTop: 1,
   },
   cardStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 4.5,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
@@ -1259,11 +1266,7 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 2.5,
   },
-  cardStatusText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
+  cardStatusText: {},
   // Structured Metadata Box (Lines 2, 3, 4, 5)
   cardMetaBox: {
     borderRadius: radiusNumeric.md,
@@ -1280,42 +1283,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    width: 66,
+    width: 62,
   },
-  metaFieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  metaFieldLabel: {},
   metaFieldValue: {
-    fontSize: 13,
     flex: 1,
   },
   monoBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 1.5,
     borderRadius: 4,
     borderWidth: 1,
   },
-  metaFieldValueMono: {
-    fontSize: 12.5,
-    fontFamily: 'monospace',
-  },
+  metaFieldValueMono: {},
   // Summary & Actions
-  enteredMetaBox: {
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    justifyContent: 'center',
-  },
-  attributionInline: {
+  attributionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5.5,
+    paddingTop: 1,
+    paddingHorizontal: 2,
   },
-  attributionText: {
-    fontSize: 12.5,
-  },
+  attributionText: {},
   enterLogBtn: {
     height: 44, // Minimum 44px touch target
     borderRadius: radiusNumeric.md,
@@ -1326,10 +1315,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
   },
-  enterLogBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  enterLogBtnText: {},
   assignRowBtn: {
     height: 44, // Minimum 44px touch target
     borderRadius: radiusNumeric.md,
@@ -1341,16 +1327,5 @@ const styles = StyleSheet.create({
   },
   assignRowBtnText: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  pendingNoticeBox: {
-    paddingVertical: spacingNumeric.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pendingNoticeText: {
-    fontSize: 12.5,
-    fontStyle: 'italic',
   },
 });

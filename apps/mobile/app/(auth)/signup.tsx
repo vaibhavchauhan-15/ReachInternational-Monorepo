@@ -10,19 +10,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
-} from 'react-native';
+  TouchableOpacity} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, TimeInput, SearchableSelect, useTheme } from '../../components/ui';
+import { Input, Alert, TimeInput, SearchableSelect, useTheme , Text } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
@@ -54,6 +51,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react-native';
+import { haptics } from '../../lib/interaction/haptics';
 
 const SIGNUP_ROLES = [
   { value: 'operator', label: 'Operator' },
@@ -374,7 +372,7 @@ export default function SignupScreen() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please correct the highlighted fields before submitting.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      haptics.warning();
       return;
     }
 
@@ -423,9 +421,9 @@ export default function SignupScreen() {
         setErrorMessage(error.message);
         isSubmittingRef.current = false;
         setIsLoading(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        haptics.success();
         if (data?.user?.id) {
           const userId = data.user.id;
           if (bankDoc) {
@@ -477,7 +475,7 @@ export default function SignupScreen() {
       setErrorMessage(err?.message || 'An unexpected error occurred during signup.');
       isSubmittingRef.current = false;
       setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
     }
   };
 
@@ -892,7 +890,7 @@ export default function SignupScreen() {
                     { color: isDark ? '#7dd3fc' : '#0369a1' },
                   ]}
                 >
-                  <Text style={{ fontWeight: '700' }}>Note: </Text>
+                  <Text variant="label" style={{ }}>Note: </Text>
                   Account status will be “pending” until approved by an administrator.
                 </Text>
               </View>
@@ -902,7 +900,7 @@ export default function SignupScreen() {
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    haptics.select();
                     setAgreedToTerms((prev) => {
                       const next = !prev;
                       if (next) clearFieldError('terms');
@@ -921,22 +919,21 @@ export default function SignupScreen() {
                       backgroundColor: agreedToTerms ? '#0284c7' : 'transparent',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginTop: 1,
-                    }}
+                      marginTop: 1 }}
                   >
                     {agreedToTerms && <Check size={12} color="#ffffff" strokeWidth={3} />}
                   </View>
-                  <Text style={{ flex: 1, fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', lineHeight: 18 }}>
+                  <Text style={{ flex: 1, color: isDark ? '#9ca3af' : '#6b7280' }}>
                     I have read and agree to the{' '}
                     <Text
-                      style={{ color: '#0284c7', fontWeight: '600' }}
+                      style={{ color: '#0284c7' }}
                       onPress={() => router.push('/(app)/terms')}
                     >
                       Terms of Service
                     </Text>{' '}
                     and{' '}
                     <Text
-                      style={{ color: '#0284c7', fontWeight: '600' }}
+                      style={{ color: '#0284c7' }}
                       onPress={() => router.push('/(app)/privacy')}
                     >
                       Privacy Policy
@@ -945,7 +942,7 @@ export default function SignupScreen() {
                   </Text>
                 </TouchableOpacity>
                 {fieldErrors.terms && (
-                  <Text style={{ fontSize: 11.5, color: '#ef4444', marginTop: 4, marginLeft: 28 }}>
+                  <Text variant="caption" style={{ color: '#ef4444', marginTop: 4, marginLeft: 28 }}>
                     {fieldErrors.terms}
                   </Text>
                 )}
@@ -969,7 +966,7 @@ export default function SignupScreen() {
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    haptics.select();
                     router.push('/(auth)/login');
                   }}
                   activeOpacity={0.7}
@@ -1005,7 +1002,7 @@ export default function SignupScreen() {
                   },
                 ]}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  haptics.select();
                   setMode(isDark ? 'light' : 'dark');
                 }}
                 activeOpacity={0.7}
@@ -1073,19 +1070,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.5,
     marginBottom: 14,
   },
   bannerContainer: {
     marginBottom: 12,
   },
   durationSmallText: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    lineHeight: 14,
   },
   supervisorWrapper: {
     paddingTop: 8,
@@ -1105,8 +1095,6 @@ const styles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
-    fontSize: 11.5,
-    lineHeight: 16,
   },
   cardFooter: {
     marginTop: 14,
@@ -1118,11 +1106,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardFooterText: {
-    fontSize: 12.5,
   },
   signInLinkText: {
-    fontSize: 12.5,
-    fontWeight: '700',
   },
   screenFooter: {
     width: '100%',
@@ -1137,9 +1122,6 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     flex: 1,
-    fontSize: 10.5,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.3,
   },
   themeToggleBtn: {
     width: 32,

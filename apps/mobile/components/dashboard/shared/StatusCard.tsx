@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from '../../ui/AppLinearGradient';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
+import { Touchable } from '../../ui/Touchable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react-native';
 
@@ -18,58 +19,58 @@ export interface StatusCardProps {
 
 const statusConfig = {
   success: {
-    accentGradient: ['#10b981', '#34d399', '#059669'] as const,
-    cardGradientLight: ['#ffffff', '#f0fdf4', '#dcfce7'] as const,
-    cardGradientDark: ['#022c22', '#064e3b', '#047857'] as const,
-    borderLight: 'rgba(16, 185, 129, 0.28)',
-    borderDark: 'rgba(52, 211, 153, 0.35)',
+    accentGradient: ['#10b981', 'rgba(16, 185, 129, 0.6)', 'transparent'] as const,
+    cardGradientLight: ['rgba(16, 185, 129, 0.10)', 'rgba(16, 185, 129, 0.04)', 'transparent'] as const,
+    cardGradientDark: ['rgba(2, 44, 34, 0.35)', 'rgba(2, 44, 34, 0.15)', 'transparent'] as const,
+    borderLight: 'rgba(16, 185, 129, 0.25)',
+    borderDark: 'rgba(52, 211, 153, 0.30)',
     textLight: '#059669',
     textDark: '#34d399',
-    iconGradientLight: ['rgba(16, 185, 129, 0.22)', 'rgba(16, 185, 129, 0.08)'] as const,
-    iconGradientDark: ['rgba(52, 211, 153, 0.35)', 'rgba(16, 185, 129, 0.15)'] as const,
+    iconBgLight: 'rgba(16, 185, 129, 0.15)',
+    iconBgDark: 'rgba(52, 211, 153, 0.20)',
+    iconBorderLight: 'rgba(16, 185, 129, 0.25)',
+    iconBorderDark: 'rgba(52, 211, 153, 0.30)',
     iconColorLight: '#059669',
     iconColorDark: '#34d399',
-    orbColorLight: 'rgba(16, 185, 129, 0.10)',
-    orbColorDark: 'rgba(52, 211, 153, 0.18)',
     icon: CheckCircle2,
   },
   pending: {
-    accentGradient: ['#f59e0b', '#fbbf24', '#d97706'] as const,
-    cardGradientLight: ['#ffffff', '#fffbeb', '#fef3c7'] as const,
-    cardGradientDark: ['#451a03', '#78350f', '#92400e'] as const,
-    borderLight: 'rgba(245, 158, 11, 0.28)',
-    borderDark: 'rgba(251, 191, 36, 0.35)',
-    textLight: '#d97706',
+    accentGradient: ['#f59e0b', 'rgba(245, 158, 11, 0.6)', 'transparent'] as const,
+    cardGradientLight: ['rgba(245, 158, 11, 0.10)', 'rgba(245, 158, 11, 0.04)', 'transparent'] as const,
+    cardGradientDark: ['rgba(69, 26, 3, 0.35)', 'rgba(69, 26, 3, 0.15)', 'transparent'] as const,
+    borderLight: 'rgba(245, 158, 11, 0.25)',
+    borderDark: 'rgba(251, 191, 36, 0.30)',
+    textLight: '#b45309',
     textDark: '#fbbf24',
-    iconGradientLight: ['rgba(245, 158, 11, 0.22)', 'rgba(245, 158, 11, 0.08)'] as const,
-    iconGradientDark: ['rgba(251, 191, 36, 0.35)', 'rgba(245, 158, 11, 0.15)'] as const,
+    iconBgLight: 'rgba(245, 158, 11, 0.15)',
+    iconBgDark: 'rgba(251, 191, 36, 0.20)',
+    iconBorderLight: 'rgba(245, 158, 11, 0.25)',
+    iconBorderDark: 'rgba(251, 191, 36, 0.30)',
     iconColorLight: '#d97706',
     iconColorDark: '#fbbf24',
-    orbColorLight: 'rgba(245, 158, 11, 0.10)',
-    orbColorDark: 'rgba(251, 191, 36, 0.18)',
     icon: Clock,
   },
   warning: {
-    accentGradient: ['#f43f5e', '#fb7185', '#e11d48'] as const,
-    cardGradientLight: ['#ffffff', '#fff1f2', '#ffe4e6'] as const,
-    cardGradientDark: ['#4c0519', '#881337', '#9f1239'] as const,
-    borderLight: 'rgba(244, 63, 94, 0.28)',
-    borderDark: 'rgba(251, 113, 133, 0.35)',
+    accentGradient: ['#f43f5e', 'rgba(244, 63, 94, 0.6)', 'transparent'] as const,
+    cardGradientLight: ['rgba(244, 63, 94, 0.10)', 'rgba(244, 63, 94, 0.04)', 'transparent'] as const,
+    cardGradientDark: ['rgba(76, 5, 25, 0.40)', 'rgba(76, 5, 25, 0.15)', 'transparent'] as const,
+    borderLight: 'rgba(244, 63, 94, 0.25)',
+    borderDark: 'rgba(251, 113, 133, 0.30)',
     textLight: '#e11d48',
     textDark: '#fb7185',
-    iconGradientLight: ['rgba(244, 63, 94, 0.22)', 'rgba(244, 63, 94, 0.08)'] as const,
-    iconGradientDark: ['rgba(251, 113, 133, 0.35)', 'rgba(244, 63, 94, 0.15)'] as const,
+    iconBgLight: 'rgba(244, 63, 94, 0.15)',
+    iconBgDark: 'rgba(251, 113, 133, 0.20)',
+    iconBorderLight: 'rgba(244, 63, 94, 0.25)',
+    iconBorderDark: 'rgba(251, 113, 133, 0.30)',
     iconColorLight: '#e11d48',
     iconColorDark: '#fb7185',
-    orbColorLight: 'rgba(244, 63, 94, 0.10)',
-    orbColorDark: 'rgba(251, 113, 133, 0.18)',
     icon: AlertTriangle,
   },
 };
 
 const resolveRoute = (href?: string): string | null => {
   if (!href) return null;
-  if (href.startsWith('/operations')) return '/(app)/operations';
+  if (href.startsWith('/operations')) return href.startsWith('/(app)') ? href : `/(app)${href}`;
   if (href.startsWith('/machines')) return '/(app)/machines';
   if (href.startsWith('/users')) return '/(app)/users';
   return href.startsWith('/(app)') ? href : `/(app)${href}`;
@@ -89,13 +90,8 @@ export const StatusCard: React.FC<StatusCardProps> = ({
   const Icon = config.icon;
   const targetRoute = resolveRoute(href);
 
-  const handlePress = async () => {
+  const handlePress = () => {
     if (targetRoute) {
-      try {
-        await Haptics.selectionAsync();
-      } catch {
-        // ignore
-      }
       router.push(targetRoute as any);
     }
   };
@@ -113,19 +109,25 @@ export const StatusCard: React.FC<StatusCardProps> = ({
         style,
       ]}
     >
-      <Text style={[styles.titleEyebrow, { color: isDark ? '#94a3b8' : '#64748b' }]}>
+      {/* Top Hairline Gradient Accent Bar */}
+      <LinearGradient
+        colors={[config.accentGradient[0], config.accentGradient[1], 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.topAccentBar}
+      />
+
+      <Text variant="caption" style={[styles.titleEyebrow, { color: isDark ? '#94a3b8' : '#64748b' }]}>
         {title}
       </Text>
 
       <View style={styles.contentRow}>
-        <LinearGradient
-          colors={isDark ? config.iconGradientDark : config.iconGradientLight}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
           style={[
             styles.iconContainer,
             {
-              borderColor: isDark ? config.borderDark : config.borderLight,
+              backgroundColor: isDark ? config.iconBgDark : config.iconBgLight,
+              borderColor: isDark ? config.iconBorderDark : config.iconBorderLight,
             },
           ]}
         >
@@ -133,8 +135,9 @@ export const StatusCard: React.FC<StatusCardProps> = ({
             size={16}
             color={isDark ? config.iconColorDark : config.iconColorLight}
           />
-        </LinearGradient>
+        </View>
         <Text
+          variant="subheading"
           style={[
             styles.label,
             { color: isDark ? config.textDark : config.textLight },
@@ -147,6 +150,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
 
       {description ? (
         <Text
+          variant="caption"
           style={[styles.description, { color: isDark ? '#94a3b8' : '#64748b' }]}
           numberOfLines={2}
         >
@@ -158,15 +162,15 @@ export const StatusCard: React.FC<StatusCardProps> = ({
 
   if (targetRoute) {
     return (
-      <TouchableOpacity
+      <Touchable
+        preset="card"
         onPress={handlePress}
-        activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={`${title}: ${label}`}
         style={styles.touchWrapper}
       >
         {content}
-      </TouchableOpacity>
+      </Touchable>
     );
   }
 
@@ -202,9 +206,6 @@ const styles = StyleSheet.create({
     }),
   },
   titleEyebrow: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginBottom: spacingNumeric.xs,
     zIndex: 1,
@@ -226,14 +227,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   label: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    lineHeight: 18,
     flex: 1,
   },
   description: {
-    fontSize: 11.5,
-    lineHeight: 15,
     zIndex: 1,
+  },
+  topAccentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    zIndex: 2,
   },
 });

@@ -1,5 +1,6 @@
+import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../../ui/ThemeProvider';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { SupervisorDashboardDTO } from '@reachinternational/types';
@@ -7,14 +8,12 @@ import {
   KPIGrid,
   KPICard,
   StatusCard,
-  PrimaryAction,
 } from '../shared';
 import {
   Wrench,
   Users,
   CheckCircle2,
   Clock,
-  FileSpreadsheet,
 } from 'lucide-react-native';
 
 export interface SupervisorDashboardCardProps {
@@ -106,27 +105,6 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
           />
         </KPIGrid>
       </View>
-
-      {/* Supervisory Dispatch Actions */}
-      <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
-          SUPERVISORY DISPATCH
-        </Text>
-        <PrimaryAction
-          title="Verify & Approve Shift Logs"
-          description="Review submitted operator machine hours, meters, and fuel consumption"
-          href="/operations"
-          icon={FileSpreadsheet}
-          variant="primary"
-        />
-        <PrimaryAction
-          title="Supervised Equipment & Meters"
-          description="Inspect active machine locations, operational status, and assigned operators"
-          href="/machines"
-          icon={Wrench}
-          variant="secondary"
-        />
-      </View>
     </View>
   );
 };
@@ -139,9 +117,6 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.xs,
   },
   eyebrowHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: spacingNumeric.xs + 2,
   },

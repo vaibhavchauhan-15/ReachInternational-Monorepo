@@ -1,15 +1,15 @@
 import React from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  TouchableWithoutFeedback,
   Share,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { FileSpreadsheet, X, Download, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { getAppUrl } from '../../lib/env';
@@ -26,6 +26,7 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
   const { theme } = useTheme();
 
   const handleShareTemplateUrl = async () => {
+    haptics.select();
     try {
       await Share.share({
         title: 'Reach International Machines Excel Import Template',
@@ -47,24 +48,21 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="machine-import-modal"
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.headerTitleRow}>
@@ -72,22 +70,22 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
                     <FileSpreadsheet size={20} color="#10b981" />
                   </View>
                   <View>
-                    <Text style={[styles.title, { color: theme.colors.ink }]}>
+                    <Text variant="heading" style={{ color: theme.colors.ink }}>
                       Bulk Excel Import
                     </Text>
-                    <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                       Import fleet machinery via spreadsheets
                     </Text>
                   </View>
                 </View>
 
-                <TouchableOpacity
+                <Touchable
+                  preset="icon"
                   onPress={onClose}
                   style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Touchable>
               </View>
 
               <ScrollView
@@ -98,13 +96,13 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
                 {/* Notice Banner */}
                 <View style={[styles.banner, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                   <AlertCircle size={16} color={theme.colors.link} style={{ marginTop: 2 }} />
-                  <Text style={[styles.bannerText, { color: theme.colors.body }]}>
+                  <Text variant="caption" style={[styles.bannerText, { color: theme.colors.body }]}>
                     To import batches of 10+ machines simultaneously, use standard .xlsx or .csv files following the Reach International catalog schema.
                   </Text>
                 </View>
 
                 {/* Mandatory Fields Guide */}
-                <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                <Text variant="caption" style={[styles.sectionTitle, { color: theme.colors.ink }]}>
                   Required Spreadsheet Columns
                 </Text>
 
@@ -127,16 +125,16 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
                     >
                       <View style={styles.guideLeft}>
                         <CheckCircle2 size={14} color={col.req ? theme.colors.success : theme.colors.mute} />
-                        <Text style={[styles.colName, { color: theme.colors.ink }]}>
+                        <Text variant="label" style={{ color: theme.colors.ink }}>
                           {col.name}
                         </Text>
                         {col.req && (
                           <View style={styles.reqBadge}>
-                            <Text style={styles.reqText}>REQUIRED</Text>
+                            <Text variant="caption" style={styles.reqText}>REQUIRED</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={[styles.colDesc, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.colDesc, { color: theme.colors.mute }]}>
                         {col.desc}
                       </Text>
                     </View>
@@ -146,22 +144,19 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
 
               {/* Actions */}
               <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   onPress={handleShareTemplateUrl}
                   style={[styles.shareBtn, { backgroundColor: theme.colors.primary }]}
-                  activeOpacity={0.8}
                 >
                   <Download size={14} color={theme.colors.onPrimary} />
-                  <Text style={[styles.shareBtnText, { color: theme.colors.onPrimary }]}>
+                  <Text variant="label" style={{ color: theme.colors.onPrimary }}>
                     Share Schema & Instructions
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -203,14 +198,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
   subtitle: {
-    fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
   },
   closeBtn: {
     width: 30,
@@ -234,15 +223,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bannerText: {
-    fontSize: 12,
-    lineHeight: 18,
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   guideCard: {
     borderRadius: radiusNumeric.lg,
@@ -258,10 +242,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacingNumeric.xs,
   },
-  colName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
   reqBadge: {
     backgroundColor: '#ef444415',
     paddingHorizontal: 5,
@@ -271,12 +251,9 @@ const styles = StyleSheet.create({
     borderColor: '#ef444430',
   },
   reqText: {
-    fontSize: 12,
-    fontWeight: '800',
     color: '#ef4444',
   },
   colDesc: {
-    fontSize: 12.5,
     marginLeft: 20,
   },
   footer: {
@@ -292,9 +269,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: radiusNumeric.lg,
     minHeight: 44,
-  },
-  shareBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

@@ -8,16 +8,13 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
   Platform,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../../lib/auth/useAuth';
 import {
   Card,
@@ -25,8 +22,7 @@ import {
   Button,
   Input,
   useTheme,
-  MobileHeader,
-} from '../../../components/ui';
+  MobileHeader, Text } from '../../../components/ui';
 import { supabase } from '../../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -45,6 +41,7 @@ import {
   MapPin,
   Lock,
 } from 'lucide-react-native';
+import { haptics } from '../../../lib/interaction/haptics';
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
@@ -128,7 +125,7 @@ export default function AccountSettingsScreen() {
 
     setIsChangingPassword(true);
     try {
-      Haptics.selectionAsync().catch(() => {});
+      haptics.select();
       const email = user?.email || userProfile?.email;
       if (email) {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -146,7 +143,7 @@ export default function AccountSettingsScreen() {
       if (error) {
         setPasswordError(error.message || 'Failed to update password.');
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        haptics.success();
         setPasswordSuccess('Your password has been changed successfully.');
         setCurrentPassword('');
         setNewPassword('');
@@ -559,8 +556,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   avatarText: {
-    fontSize: 18,
-    fontWeight: '700',
   },
   nameBadgeRow: {
     flexDirection: 'row',
@@ -569,12 +564,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileName: {
-    fontSize: 16,
-    fontWeight: '700',
     flex: 1,
   },
   profileEmail: {
-    fontSize: 13,
     marginTop: 2,
   },
   divider: {
@@ -590,13 +582,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   infoLabel: {
-    fontSize: 12.5,
     width: 70,
-    fontWeight: '500',
   },
   infoValue: {
-    fontSize: 13,
-    fontWeight: '600',
     flex: 1,
   },
   profileEditAction: {
@@ -610,8 +598,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   profileEditText: {
-    fontSize: 13,
-    fontWeight: '600',
     flex: 1,
     marginLeft: 8,
   },
@@ -628,12 +614,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
   },
   sectionSubtitle: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   feedbackBanner: {
@@ -645,16 +627,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   feedbackText: {
-    fontSize: 12.5,
-    fontWeight: '600',
     flex: 1,
   },
   formGroup: {
     gap: 6,
   },
   fieldLabel: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   passwordInputContainer: {
     position: 'relative',
@@ -683,8 +661,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   strengthLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
     width: 50,
     textAlign: 'right',
   },
@@ -700,12 +676,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   checkText: {
-    fontSize: 11,
-    fontWeight: '500',
   },
   matchText: {
-    fontSize: 11.5,
-    fontWeight: '600',
     marginTop: 2,
   },
   securityRow: {
@@ -715,18 +687,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   securityLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
   },
   securityValue: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   dangerCard: {
     borderWidth: 1,
   },
   dangerDesc: {
-    fontSize: 12,
-    lineHeight: 18,
   },
 });

@@ -4,9 +4,10 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { getStatusBadgeConfig, radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { Text } from './Text';
 
 export interface BadgeProps {
   status: string;
@@ -61,14 +62,11 @@ export const Badge: React.FC<BadgeProps> = ({
         ]}
       />
       <Text
-        style={[
-          styles.text,
-          isSmall ? styles.textSm : styles.textMd,
-          {
-            color: colorValue,
-            textTransform: uppercase ? 'uppercase' : 'none',
-          },
-        ]}
+        variant="caption"
+        style={{
+          color: colorValue,
+          textTransform: uppercase ? 'uppercase' : 'none',
+        }}
         numberOfLines={1}
       >
         {customLabel || config.label}
@@ -111,17 +109,5 @@ const styles = StyleSheet.create({
     width: 5.5,
     height: 5.5,
     borderRadius: 3,
-  },
-  text: {
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  textSm: {
-    fontSize: 11.5,
-    lineHeight: 14,
-  },
-  textMd: {
-    fontSize: 12,
-    lineHeight: 15,
   },
 });

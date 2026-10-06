@@ -491,11 +491,11 @@
       - `operator`: Home, Log, Machines, Account.
       - `supervisor`: Home, Operations, Machines, Users, Account.
       - `hr`: Home, Users, Account.
-      - `manager`: Home, Operations, Machines, Clients, More (Behind More: Users, Audit).
-      - `admin`: Home, Operations, Machines, Users, More (Behind More: Clients, Audit).
-      - `super_admin`: Home, Operations, Machines, Users, More (Behind More: Clients, Audit).
+      - `manager`: Home, Operations, Machines, Clients, Menu (Drawer: Users, Audit, Settings).
+      - `admin`: Home, Operations, Machines, Users, Menu (Drawer: Clients, Audit, Settings).
+      - `super_admin`: Home, Operations, Machines, Users, Menu (Drawer: Clients, Audit, Settings).
   - **Zero Keyboard Collision**: The bar hides automatically while any text input is focused (`data-nav-hidden` attribute on Web, `Keyboard.addListener` on Native) to eliminate collisions with virtual keyboards and sticky submit buttons.
-  - **Dedicated `/more` Route**: Unified server-driven route on Web (`app/(app)/more/page.tsx`) and Native (`apps/mobile/app/(app)/more.tsx`) displaying profile header, dynamic `EditProfileModal`, 2-column overflow touch cards ($\ge 88$px tall), theme toggle, legal links (`/privacy`, `/terms`), account deletion, and sign-out.
+  - **Mobile Slide-in Menu Drawer**: Right-side slide-in drawer on Web (`MobileMenuDrawer.tsx`) and Native (`MobileMenuDrawer.tsx`) displaying all overflow destinations as touch cards ($\ge 56$px tall) with a pinned profile card (avatar, name, email, direct profile link) and sign-out confirmation. Completely eliminates the legacy `/more` route with zero traces.
   - **Automated Reachability Test**: Enforced by `packages/permissions/src/navigation.test.ts` via `node:test`, verifying 100% route reachability, home-first ordering, and bar length $\le 5$ across all roles.
 
 ### 12. 🔄 Global URL Query State Persistence & Anti-Caching Architecture

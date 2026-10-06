@@ -7,6 +7,7 @@ import {
   OPERATIONS_CACHE_TTLS,
 } from '@reachinternational/utils';
 import type { OperatorEntryContext, TodayShiftMonitorRow } from '@reachinternational/types';
+import type { QueuedMutation, MutationStatus } from '../offline/types';
 import { supabase } from '../supabase';
 
 export interface ActiveShiftAssignment {
@@ -60,6 +61,70 @@ export interface OperationsMasterData {
   machinesList: MachineWithAssignments[];
   activeOperators: OperatorRecord[];
   clientsList: ClientRecord[];
+}
+
+export interface HourLogRecord {
+  id: string;
+  machine_id?: string;
+  machine_code: string;
+  log_date: string;
+  shift?: string;
+  shift_code?: string;
+  shift_scheduled_minutes?: number;
+  start_meter: number;
+  end_meter: number;
+  running_hours: number;
+  start_time?: string;
+  end_time?: string;
+  overtime_hours?: number;
+  normal_working_hours?: number;
+  location?: string;
+  is_breakdown: boolean;
+  breakdown_start_time?: string;
+  breakdown_end_time?: string;
+  breakdown_duration?: string;
+  breakdown_hours?: number;
+  remarks?: string;
+  operator_id?: string;
+  client_id?: string;
+  created_at?: string;
+  conflict_flag?: boolean;
+  conflict_reason?: string;
+  conflict_status?: string;
+  conflict_resolved_by?: string;
+  conflict_resolved_at?: string;
+  conflict_resolution_notes?: string;
+  is_offline_draft?: boolean;
+  sync_status?: MutationStatus;
+  queued_item?: QueuedMutation;
+  machine?: {
+    id?: string;
+    machine_id: string;
+    model?: string;
+    serial_number?: string;
+    manufacturer?: string;
+    status?: string;
+    customer_name?: string;
+    customer_address?: string;
+    city?: string;
+    state?: string;
+  } | null;
+  operator?: { id?: string; full_name: string; phone?: string } | null;
+  client?: {
+    id?: string;
+    name?: string;
+    company_name?: string;
+    client_name?: string;
+    street?: string;
+    Street?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    pincode?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  } | null;
 }
 
 export function useOperationsMasterData(enabled: boolean = true) {
@@ -167,7 +232,7 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled
     ? OPERATIONS_QUERY_KEYS.normalized(normalized)
     : (['operations', 'logs'] as const);
 
-  return useQuery<any[]>({
+  return useQuery<HourLogRecord[]>({
     queryKey,
     enabled,
     queryFn: async () => {
@@ -346,4 +411,95 @@ export function useTodayShiftMonitor(actorId?: string, logDate?: string, enabled
     refetchInterval: 30_000,
   });
 }
+
+/**
+ * Direct PostgREST query to fetch historical machine hour logs for an operator.
+ * Performs relational join first, falling back to flat query on error.
+ */
+export async function fetchOperatorHistoryLogs(
+  operatorId: string,
+  fallbackMachine?: any
+): Promise<HourLogRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from('machine_hour_logs')
+      .select(`
+        id,
+        machine_id,
+        operator_id,
+        client_id,
+        log_date,
+        start_meter,
+        end_meter,
+        running_hours,
+        start_time,
+        end_time,
+        overtime_hours,
+        normal_working_hours,
+        location,
+        is_breakdown,
+        breakdown_start_time,
+        breakdown_end_time,
+        breakdown_duration,
+        breakdown_hours,
+        remarks,
+        created_at,
+        machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, manufacturer, status),
+        operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone),
+        client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, street, city, district, state, pincode)
+      `)
+      .eq('operator_id', operatorId)
+      .order('log_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (!error && data) {
+      return data.map((l: any) => {
+        const clientData = Array.isArray(l.client) ? l.client[0] : l.client;
+        return {
+          ...l,
+          machine_code: l.machine?.machine_id || l.machine_id || 'Equipment',
+          client: clientData ? { ...clientData, name: clientData.company_name || clientData.client_name } : null,
+        } as HourLogRecord;
+      });
+    }
+  } catch (err) {
+    console.warn('[fetchOperatorHistoryLogs] Relational query exception, using flat fallback:', err);
+  }
+
+  // Flat query fallback
+  const { data: flatData, error: flatError } = await supabase
+    .from('machine_hour_logs')
+    .select('*')
+    .eq('operator_id', operatorId)
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (flatError) {
+    console.error('[fetchOperatorHistoryLogs] Flat fallback error:', flatError);
+    throw flatError;
+  }
+
+  return (flatData || []).map((l: any) => ({
+    ...l,
+    machine_code: l.machine_id || 'Equipment',
+    machine: fallbackMachine || null,
+    client: null,
+  })) as HourLogRecord[];
+}
+
+/**
+ * Hook for Operator Log History.
+ * Queries historical logs for the operator, used for tab badge counts and the log history feed.
+ */
+export function useOperatorHistoryLogs(operatorId?: string, fallbackMachine?: any) {
+  return useQuery<HourLogRecord[]>({
+    queryKey: ['operator', 'history-logs', operatorId],
+    enabled: Boolean(operatorId),
+    queryFn: () => fetchOperatorHistoryLogs(operatorId!, fallbackMachine),
+    staleTime: 30_000,
+  });
+}
+
 

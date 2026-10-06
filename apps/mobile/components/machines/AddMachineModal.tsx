@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { Button, Input, Text, useTheme, AppModal, Touchable, SegmentedToggle } from '../ui';
+import { haptics } from '../../lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import { X, Plus, Wrench, Check } from 'lucide-react-native';
@@ -209,9 +208,11 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         }
       }
 
+      haptics.success();
       onSuccess();
       onClose();
     } catch (err: any) {
+      haptics.error();
       const msg = err?.message || '';
       if (msg.includes('serial_number') || msg.includes('idx_machines_serial_number') || err?.code === '23505') {
         setErrorMessage(`A machine with Serial Number "${cleanSerial}" already exists in the inventory.`);
@@ -230,10 +231,16 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant="bottom"
+      persistent={isLoading}
+      testID="add-machine-modal"
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
           {/* Header */}
@@ -242,18 +249,18 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
                 <Wrench size={18} color={theme.colors.link} />
               </View>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
+              <Text variant="heading" style={{ color: theme.colors.ink }}>
                 {machineToEdit ? (isSupervisor ? `Update Status (${machineToEdit.machine_id})` : 'Edit Machine') : 'Add New Machine'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {errorMessage ? (
             <View style={[styles.alertContainer, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
-              <Text style={[styles.alertText, { color: theme.colors.error }]}>{errorMessage}</Text>
+              <Text variant="caption" style={[styles.alertText, { color: theme.colors.error }]}>{errorMessage}</Text>
             </View>
           ) : null}
 
@@ -307,17 +314,17 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
             {/* Operator Selection (Multi-Shift Assignment) */}
             <View style={styles.sectionGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>
+                <Text variant="label" style={[styles.groupLabel, { color: theme.colors.ink }]}>
                   Assigned Operators ({operatorIds.length}) (24h Shifts)
                 </Text>
                 {operatorIds.length > 0 && (
                   <TouchableOpacity onPress={() => setOperatorIds([])}>
-                    <Text style={{ fontSize: 12.5, color: theme.colors.link, fontWeight: '600' }}>Clear</Text>
+                    <Text variant="caption" style={{ color: theme.colors.link }}>Clear</Text>
                   </TouchableOpacity>
                 )}
               </View>
               {operators.length === 0 ? (
-                <Text style={[styles.pillText, { color: theme.colors.mute, fontStyle: 'italic' }]}>
+                <Text variant="caption" style={[styles.pillText, { color: theme.colors.mute }]}>
                   No active operators available
                 </Text>
               ) : (
@@ -339,10 +346,10 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                         ]}
                       >
                         <Text
+                          variant="label"
                           style={[
                             styles.pillText,
                             { color: isSelected ? theme.colors.link : theme.colors.body },
-                            isSelected && { fontWeight: '700' },
                           ]}
                         >
                           {isSelected ? '✓ ' : ''}{o.full_name}
@@ -354,43 +361,29 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               )}
             </View>
 
-            {/* Status Pills */}
+            {/* Rental Status Segmented Toggle */}
             <View style={styles.sectionGroup}>
-              <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Rental Status</Text>
-              <View style={styles.pillRow}>
-                {(['available', 'rented'] as const).map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    onPress={() => {
-                      setStatus(s);
-                      if (s === 'available') setClientId(null);
-                    }}
-                    style={[
-                      styles.pillOption,
-                      { borderColor: status === s ? theme.colors.link : theme.colors.hairline },
-                      status === s && { backgroundColor: theme.colors.link + '15' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        { color: status === s ? theme.colors.link : theme.colors.body },
-                        status === s && { fontWeight: '700' },
-                      ]}
-                    >
-                      {s === 'available' ? 'Available' : 'Rented'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text variant="label" style={[styles.groupLabel, { color: theme.colors.ink }]}>Rental Status</Text>
+              <SegmentedToggle<'available' | 'rented'>
+                items={[
+                  { id: 'available', label: 'Available' },
+                  { id: 'rented', label: 'Rented' },
+                ]}
+                value={status}
+                onChange={(s) => {
+                  setStatus(s);
+                  if (s === 'available') setClientId(null);
+                }}
+                size="sm"
+              />
             </View>
 
             {/* Assigned Client Selection when Rented */}
             {status === 'rented' && (
               <View style={styles.sectionGroup}>
-                <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Assigned Client</Text>
+                <Text variant="label" style={[styles.groupLabel, { color: theme.colors.ink }]}>Assigned Client</Text>
                 {clients.length === 0 ? (
-                  <Text style={[styles.pillText, { color: theme.colors.mute, fontStyle: 'italic' }]}>
+                  <Text variant="caption" style={[styles.pillText, { color: theme.colors.mute }]}>
                     No clients available
                   </Text>
                 ) : (
@@ -412,10 +405,10 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                           ]}
                         >
                           <Text
+                            variant="label"
                             style={[
                               styles.pillText,
                               { color: isSelected ? theme.colors.link : theme.colors.body },
-                              isSelected && { fontWeight: '700' },
                             ]}
                           >
                             {c.company_name} {c.code ? `(${c.code})` : ''}
@@ -428,32 +421,19 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               </View>
             )}
 
-            {/* Health Status Pills */}
+            {/* Equipment Health Segmented Toggle */}
             <View style={styles.sectionGroup}>
-              <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Equipment Health</Text>
-              <View style={styles.pillRow}>
-                {(['active', 'under_maintenance', 'breakdown'] as const).map((h) => (
-                  <TouchableOpacity
-                    key={h}
-                    onPress={() => setHealthStatus(h)}
-                    style={[
-                      styles.pillOption,
-                      { borderColor: healthStatus === h ? theme.colors.link : theme.colors.hairline },
-                      healthStatus === h && { backgroundColor: theme.colors.link + '15' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        { color: healthStatus === h ? theme.colors.link : theme.colors.body },
-                        healthStatus === h && { fontWeight: '700' },
-                      ]}
-                    >
-                      {h === 'active' ? 'Active' : h === 'under_maintenance' ? 'Maintenance' : 'Breakdown'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text variant="label" style={[styles.groupLabel, { color: theme.colors.ink }]}>Equipment Health</Text>
+              <SegmentedToggle<'active' | 'under_maintenance' | 'breakdown'>
+                items={[
+                  { id: 'active', label: 'Active' },
+                  { id: 'under_maintenance', label: 'Maintenance' },
+                  { id: 'breakdown', label: 'Breakdown' },
+                ]}
+                value={healthStatus}
+                onChange={(h) => setHealthStatus(h)}
+                size="sm"
+              />
             </View>
           </ScrollView>
 
@@ -470,7 +450,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -505,10 +485,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
   closeBtn: {
     padding: 4,
   },
@@ -520,9 +496,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   alertText: {
-    fontSize: 12,
     textAlign: 'center',
-    fontWeight: '500',
   },
   body: {
     flexGrow: 0,
@@ -539,8 +513,6 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   groupLabel: {
-    fontSize: 13.5,
-    fontWeight: '600',
     marginBottom: 6,
   },
   pillRow: {
@@ -554,10 +526,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
   },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  pillText: {},
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

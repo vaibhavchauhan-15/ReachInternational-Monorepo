@@ -1,15 +1,16 @@
 import React from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  Pressable,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from './ThemeProvider';
+import { Text } from './Text';
+import { Icon } from './Icon';
+import { AppModal } from './AppModal';
+import { Touchable } from './Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
@@ -101,163 +102,166 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
   ];
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="main-menu-modal"
     >
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View
-          style={[
-            styles.sheetContainer,
-            {
-              backgroundColor: theme.colors.canvas,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-            <View style={styles.headerTitleRow}>
-              <View style={[styles.iconBadge, { backgroundColor: theme.colors.ink }]}>
-                <Menu size={16} color={theme.colors.canvas} />
-              </View>
-              <View>
-                <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
-                  Reach International
-                </Text>
-                <Text style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
-                  Active Operations & Management Modules
-                </Text>
-              </View>
+      <View
+        style={[
+          styles.sheetContainer,
+          {
+            backgroundColor: theme.colors.canvas,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={styles.headerTitleRow}>
+            <View style={[styles.iconBadge, { backgroundColor: theme.colors.ink }]}>
+              <Icon name={Menu} variant="subheading" color={theme.colors.canvas} />
             </View>
+            <View>
+              <Text variant="heading" style={[styles.headerTitle, { color: theme.colors.ink }]}>
+                Reach International
+              </Text>
+              <Text variant="caption" style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
+                Active Operations & Management Modules
+              </Text>
+            </View>
+          </View>
 
-            <TouchableOpacity
-              onPress={onClose}
+          <Touchable
+            preset="icon"
+            onPress={onClose}
+            style={[
+              styles.closeBtn,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Icon name={X} variant="subheading" color={theme.colors.ink} />
+          </Touchable>
+        </View>
+
+        {/* Menu Sections List */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.sectionContainer}>
+            <Text variant="caption" style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>
+              CORE FLEET MODULES
+            </Text>
+
+            <View
               style={[
-                styles.closeBtn,
+                styles.sectionBox,
                 {
                   backgroundColor: theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
                 },
               ]}
-              activeOpacity={0.7}
             >
-              <X size={18} color={theme.colors.ink} />
-            </TouchableOpacity>
-          </View>
+              {menuItems.map((item, index) => {
+                const IconComponent = item.icon;
+                const isActive = pathname.includes(item.id);
+                const isLast = index === menuItems.length - 1;
 
-          {/* Menu Sections List */}
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>
-                CORE FLEET MODULES
-              </Text>
-
-              <View
-                style={[
-                  styles.sectionBox,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                {menuItems.map((item, index) => {
-                  const IconComponent = item.icon;
-                  const isActive = pathname.includes(item.id);
-                  const isLast = index === menuItems.length - 1;
-
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      onPress={() => handleNavigate(item.route)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.menuItemRow,
-                        {
-                          borderBottomColor: theme.colors.hairline,
-                          borderBottomWidth: isLast ? 0 : 1,
-                          backgroundColor: isActive
-                            ? theme.colors.hairlineSoft
-                            : 'transparent',
-                        },
-                      ]}
-                    >
-                      <View style={styles.itemLeft}>
-                        <View
-                          style={[
-                            styles.itemIconContainer,
-                            {
-                              backgroundColor: isActive
-                                ? theme.colors.link
-                                : theme.colors.canvas,
-                              borderColor: theme.colors.hairline,
-                            },
-                          ]}
-                        >
-                          <IconComponent
-                            size={18}
-                            color={isActive ? theme.colors.onPrimary : theme.colors.ink}
-                          />
-                        </View>
-
-                        <View>
-                          <View style={styles.itemTitleRow}>
-                            <Text
-                              style={[
-                                styles.itemTitle,
-                                {
-                                  color: isActive
-                                    ? theme.colors.link
-                                    : theme.colors.ink,
-                                  fontWeight: isActive ? '800' : '600',
-                                },
-                              ]}
-                            >
-                              {item.title}
-                            </Text>
-                            {isActive && (
-                              <View
-                                style={[
-                                  styles.activePill,
-                                  { backgroundColor: theme.colors.link },
-                                ]}
-                              >
-                                <Text style={styles.activePillText}>ACTIVE</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          <Text
-                            style={[
-                              styles.itemSubtitle,
-                              { color: theme.colors.mute },
-                            ]}
-                          >
-                            {item.subtitle}
-                          </Text>
-                        </View>
+                return (
+                  <Touchable
+                    preset="row"
+                    key={item.id}
+                    onPress={() => {
+                      haptics.select();
+                      handleNavigate(item.route);
+                    }}
+                    style={[
+                      styles.menuItemRow,
+                      {
+                        borderBottomColor: theme.colors.hairline,
+                        borderBottomWidth: isLast ? 0 : 1,
+                        backgroundColor: isActive
+                          ? theme.colors.hairlineSoft
+                          : 'transparent',
+                      },
+                    ]}
+                  >
+                    <View style={styles.itemLeft}>
+                      <View
+                        style={[
+                          styles.itemIconContainer,
+                          {
+                            backgroundColor: isActive
+                              ? theme.colors.link
+                              : theme.colors.canvas,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <Icon
+                          name={IconComponent}
+                          variant="subheading"
+                          color={isActive ? theme.colors.onPrimary : theme.colors.ink}
+                        />
                       </View>
 
-                      <ChevronRight
-                        size={16}
-                        color={isActive ? theme.colors.link : theme.colors.mute}
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                      <View>
+                        <View style={styles.itemTitleRow}>
+                          <Text
+                            variant="subheading"
+                            style={[
+                              styles.itemTitle,
+                              {
+                                color: isActive
+                                  ? theme.colors.link
+                                  : theme.colors.ink,
+                              },
+                            ]}
+                          >
+                            {item.title}
+                          </Text>
+                          {isActive && (
+                            <View
+                              style={[
+                                styles.activePill,
+                                { backgroundColor: theme.colors.link },
+                              ]}
+                            >
+                              <Text variant="caption" style={styles.activePillText}>ACTIVE</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <Text
+                          variant="caption"
+                          style={[
+                            styles.itemSubtitle,
+                            { color: theme.colors.mute },
+                          ]}
+                        >
+                          {item.subtitle}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Icon
+                      name={ChevronRight}
+                      variant="caption"
+                      color={isActive ? theme.colors.link : theme.colors.mute}
+                    />
+                  </Touchable>
+                );
+              })}
             </View>
-          </ScrollView>
-        </View>
+          </View>
+        </ScrollView>
       </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -297,13 +301,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
+  headerTitle: {},
   headerSubtitle: {
-    fontSize: 12,
     marginTop: 1,
   },
   closeBtn: {
@@ -322,9 +321,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     marginLeft: 4,
   },
   sectionBox: {
@@ -358,23 +354,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  itemTitle: {
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
+  itemTitle: {},
   activePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   activePillText: {
-    fontSize: 12,
-    fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: 0.5,
   },
   itemSubtitle: {
-    fontSize: 13,
     marginTop: 2,
   },
 });

@@ -1,15 +1,16 @@
+import { Text } from '../ui/Text';
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Touchable } from '../ui/Touchable';
+import { AppModal } from '../ui/AppModal';
+import { haptics } from '@/lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate, formatAadhaar, formatLicenseNumber } from '@reachinternational/utils';
 import { FileSpreadsheet, X, FileText, Download, Check } from 'lucide-react-native';
@@ -329,9 +330,11 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
             UTI: 'public.comma-separated-values-text',
           });
           notifyUserExported('csv', targetUsers.length);
+          haptics.success();
           onClose();
         } else {
           notifyUserExported('csv', targetUsers.length);
+          haptics.success();
           Alert.alert('Sharing Unavailable', 'Native sharing is not available on this device.');
         }
       } else {
@@ -350,12 +353,15 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
             dialogTitle: `Export ${targetUsers.length} Users (PDF)`,
             UTI: 'com.adobe.pdf',
           });
+          haptics.success();
           onClose();
         } else {
+          haptics.success();
           Alert.alert('PDF Generated', `Report saved to: ${uri}`);
         }
       }
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Export Error', err?.message || 'Failed to export users directory.');
     } finally {
       setIsExporting(false);
@@ -365,24 +371,20 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
   const selectedCount = selectedUserIds.length;
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={isExporting ? undefined : onClose}
+      onClose={onClose}
+      variant="center"
     >
-      <TouchableWithoutFeedback onPress={isExporting ? undefined : onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.dialog,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
+      <View
+        style={[
+          styles.dialog,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.titleRow}>
@@ -412,13 +414,13 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity
+                <Touchable
                   onPress={onClose}
                   style={styles.closeBtn}
                   disabled={isExporting}
                 >
                   <X size={18} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Touchable>
               </View>
 
               {/* Format Selector Toggle (CSV / PDF) */}
@@ -432,7 +434,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                 ]}
               >
                 <View style={styles.formatToggleContainer}>
-                  <TouchableOpacity
+                  <Touchable
                     onPress={() => setExportFormat('csv')}
                     disabled={isExporting}
                     style={[
@@ -455,15 +457,14 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                             exportFormat === 'csv'
                               ? theme.colors.ink
                               : theme.colors.mute,
-                          fontWeight: exportFormat === 'csv' ? '700' : '500',
-                        },
+                          },
                       ]}
                     >
                       CSV (.csv)
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
 
-                  <TouchableOpacity
+                  <Touchable
                     onPress={() => setExportFormat('pdf')}
                     disabled={isExporting}
                     style={[
@@ -486,13 +487,12 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                             exportFormat === 'pdf'
                               ? theme.colors.ink
                               : theme.colors.mute,
-                          fontWeight: exportFormat === 'pdf' ? '700' : '500',
-                        },
+                          },
                       ]}
                     >
                       PDF (.pdf)
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
 
                 <Text style={[styles.metaText, { color: theme.colors.mute }]}>
@@ -503,7 +503,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
               {/* Options List */}
               <View style={styles.optionsList}>
                 {/* Option 1: Current Page */}
-                <TouchableOpacity
+                <Touchable
                   style={[
                     styles.optionCard,
                     {
@@ -556,10 +556,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       {currentPageUsers.length === 1 ? 'user' : 'users'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </Touchable>
 
                 {/* Option 2: All Matching Users */}
-                <TouchableOpacity
+                <Touchable
                   style={[
                     styles.optionCard,
                     {
@@ -606,11 +606,11 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       {totalMatchingCount === 1 ? 'user' : 'users'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </Touchable>
 
                 {/* Option 3: Selected Users */}
                 {selectedCount > 0 && (
-                  <TouchableOpacity
+                  <Touchable
                     style={[
                       styles.optionCard,
                       {
@@ -649,13 +649,13 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                         {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                  </Touchable>
                 )}
               </View>
 
               {/* Footer */}
               <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-                <TouchableOpacity
+                <Touchable
                   style={[styles.cancelBtn, { borderColor: theme.colors.hairline }]}
                   onPress={onClose}
                   disabled={isExporting}
@@ -663,13 +663,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                   <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
                     Close
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -714,12 +711,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -752,10 +745,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   formatToggleText: {
-    fontSize: 12.5,
   },
   metaText: {
-    fontSize: 12.5,
   },
   optionsList: {
     padding: spacingNumeric.md,
@@ -780,11 +771,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   optionDesc: {
-    fontSize: 12.5,
     marginTop: 1,
   },
   countBadge: {
@@ -794,8 +782,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   countBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
@@ -814,7 +800,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

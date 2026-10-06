@@ -12,7 +12,7 @@ export function Navbar({ user }: NavbarProps) {
   return (
     <>
       <PublicNavbar user={user} />
-      <BottomNav role={user.role} />
+      <BottomNav role={user.role} user={{ full_name: user.full_name || '', email: user.email || '' }} />
       <div className="hidden md:block h-16 w-full flex-shrink-0" />
     </>
   );

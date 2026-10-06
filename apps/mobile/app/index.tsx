@@ -1,6 +1,7 @@
+import { Text } from '../components/ui/Text';
 import '../lib/suppressWarnings';
 import React, { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Platform } from "react-native";
+import { View, StyleSheet, Animated, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth/useAuth";
 import { useTheme } from "../components/ui/ThemeProvider";
@@ -145,8 +146,5 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
   },
 });

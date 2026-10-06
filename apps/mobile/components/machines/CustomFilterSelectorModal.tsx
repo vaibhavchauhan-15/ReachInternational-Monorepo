@@ -1,15 +1,14 @@
 import React from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TouchableWithoutFeedback,
   TextInput,
 } from 'react-native';
+import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text, useTypeStyle } from '../ui/Text';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X } from 'lucide-react-native';
 
@@ -38,6 +37,7 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
   onSelect,
 }) => {
   const { theme } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [modalSearch, setModalSearch] = React.useState('');
 
   React.useEffect(() => {
@@ -53,27 +53,23 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
   }, [options, modalSearch]);
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+                <Text variant="subheading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
                 <TouchableOpacity
                   onPress={onClose}
                   style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
@@ -93,6 +89,7 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                     onChangeText={setModalSearch}
                     style={[
                       styles.searchInput,
+                      bodyTypeStyle,
                       {
                         backgroundColor: theme.colors.canvas,
                         borderColor: theme.colors.hairline,
@@ -119,7 +116,7 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
               >
                 {filteredOptions.length === 0 ? (
                   <View style={styles.noResults}>
-                    <Text style={[styles.noResultsText, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.noResultsText, { color: theme.colors.mute }]}>
                       No matching options found
                     </Text>
                   </View>
@@ -158,11 +155,11 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                             />
                           )}
                           <Text
+                            variant="body"
                             style={[
                               styles.optionLabel,
                               {
                                 color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                                fontWeight: isSelected ? '700' : '500',
                               },
                             ]}
                           >
@@ -178,11 +175,8 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                   })
                 )}
               </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      </View>
+    </AppModal>
   );
 };
 
@@ -216,10 +210,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   closeBtn: {
     width: 28,
@@ -253,9 +244,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  optionLabel: {
-    fontSize: 13,
-  },
+  optionLabel: {},
   searchWrapper: {
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
@@ -269,7 +258,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: spacingNumeric.sm,
     paddingRight: 32,
-    fontSize: 13,
   },
   searchClearBtn: {
     position: 'absolute',
@@ -281,8 +269,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noResultsText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
+  noResultsText: {},
 });

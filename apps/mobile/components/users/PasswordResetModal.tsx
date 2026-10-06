@@ -1,18 +1,19 @@
+import { Text } from '../ui/Text';
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   TextInput,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Button } from '../ui/Button';
+import { Touchable } from '../ui/Touchable';
+import { AppModal } from '../ui/AppModal';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, Copy, X, KeyRound } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
+
+import { haptics } from '@/lib/interaction/haptics';
 
 export interface PasswordResetModalProps {
   visible: boolean;
@@ -38,43 +39,40 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     } catch {
       // Fallback
     }
+    haptics.success();
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="center"
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.dialog,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-                <View style={styles.titleRow}>
-                  <View style={[styles.keyIconWrap, { backgroundColor: theme.colors.warning + '18' }]}>
-                    <KeyRound size={16} color={theme.colors.warning} />
-                  </View>
-                  <Text style={[styles.title, { color: theme.colors.ink }]}>
-                    Password Reset Successful
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                  <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
+      <View
+        style={[
+          styles.dialog,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={styles.titleRow}>
+            <View style={[styles.keyIconWrap, { backgroundColor: theme.colors.warning + '18' }]}>
+              <KeyRound size={16} color={theme.colors.warning} />
+            </View>
+            <Text style={[styles.title, { color: theme.colors.ink }]}>
+              Password Reset Successful
+            </Text>
+          </View>
+          <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+            <X size={16} color={theme.colors.mute} />
+          </Touchable>
+        </View>
 
               {/* Body */}
               <View style={styles.body}>
@@ -96,7 +94,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                       New Password Generated
                     </Text>
                     <Text style={[styles.noticeSub, { color: theme.colors.mute }]}>
-                      Password updated for <Text style={{ fontWeight: '700', color: theme.colors.ink }}>{userName}</Text>. Share these credentials securely with the user.
+                      Password updated for <Text style={{ color: theme.colors.ink }}>{userName}</Text>. Share these credentials securely with the user.
                     </Text>
                   </View>
                 </View>
@@ -128,9 +126,9 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                         },
                       ]}
                     />
-                    <TouchableOpacity
+                    <Touchable
+                      preset="button"
                       onPress={handleCopy}
-                      activeOpacity={0.8}
                       style={[
                         styles.copyBtn,
                         {
@@ -149,7 +147,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                           <Text style={styles.copyBtnText}>Copy</Text>
                         </>
                       )}
-                    </TouchableOpacity>
+                    </Touchable>
                   </View>
                 </View>
               </View>
@@ -165,10 +163,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                 />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -214,8 +209,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   closeBtn: {
     padding: 4,
@@ -241,13 +234,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   noticeTitle: {
-    fontSize: 12,
-    fontWeight: '700',
     marginBottom: 2,
   },
   noticeSub: {
-    fontSize: 12.5,
-    lineHeight: 16,
   },
   pwdWell: {
     padding: spacingNumeric.sm,
@@ -256,9 +245,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pwdLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
   },
   pwdRow: {
     flexDirection: 'row',
@@ -271,9 +257,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
     paddingHorizontal: 10,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    fontSize: 14,
   },
   copyBtn: {
     flexDirection: 'row',
@@ -286,8 +269,6 @@ const styles = StyleSheet.create({
   },
   copyBtnText: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
   },
   footer: {
     padding: spacingNumeric.md,

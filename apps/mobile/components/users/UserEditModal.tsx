@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-} from 'react-native';
-import { Button, Input, useTheme, SearchableSelect, type SelectOption } from '../ui';
+  Alert} from 'react-native';
+import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
+import { haptics } from '../../lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -268,11 +265,13 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         // ignore
       }
 
+      haptics.success();
       notifyUserUpdated(fullName.trim(), role);
       Alert.alert('Account Updated', `Account details for ${fullName} have been saved successfully.`);
       onSuccess();
       onClose();
     } catch (err: any) {
+      haptics.error();
       setError(err?.message || 'Failed to update user account details.');
     } finally {
       setIsLoading(false);
@@ -280,10 +279,16 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant="bottom"
+      persistent={isLoading}
+      testID="user-edit-modal"
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
           {/* Header */}
@@ -299,14 +304,14 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {error ? (
             <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '14', borderColor: theme.colors.error + '33' }]}>
-              <Text style={{ color: theme.colors.error, fontSize: 12, textAlign: 'center', fontWeight: '600' }}>
+              <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
                 {error}
               </Text>
             </View>
@@ -463,7 +468,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -501,11 +506,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
   },
   subtitle: {
-    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -529,8 +531,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',

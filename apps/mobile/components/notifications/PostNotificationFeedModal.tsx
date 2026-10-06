@@ -6,16 +6,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import {
   getRecentNotificationFeed,
   clearNotificationFeed,
@@ -102,44 +102,43 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
   if (!visible) return null;
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="post-notification-feed-modal"
     >
-      <View style={styles.overlay}>
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
           {/* Grab Handle */}
           <View style={[styles.handleBar, { backgroundColor: theme.colors.mute }]} />
 
           {/* Header */}
           <View style={[styles.headerRow, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.headerTitleCol}>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
+              <Text variant="heading" style={{ color: theme.colors.ink }}>
                 Operational Notifications Feed
               </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                 Recent fleet, personnel, shift, and profile events
               </Text>
             </View>
 
             <View style={styles.headerActions}>
               {feed.length > 0 && (
-                <TouchableOpacity
-                  onPress={handleClear}
+                <Touchable
+                  preset="button"
+                  onPress={() => {
+                    haptics.warning();
+                    handleClear();
+                  }}
                   style={[
                     styles.clearBtn,
                     {
@@ -147,15 +146,15 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
                       borderColor: isDark ? 'rgba(239, 68, 68, 0.25)' : '#fee2e2',
                     },
                   ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Clear notification feed"
                 >
                   <Trash2 size={13} color="#ef4444" />
-                  <Text style={styles.clearBtnText}>Clear</Text>
-                </TouchableOpacity>
+                  <Text variant="caption" style={{ color: '#ef4444' }}>Clear</Text>
+                </Touchable>
               )}
 
-              <TouchableOpacity
+              <Touchable
+                preset="icon"
                 onPress={onClose}
                 style={[
                   styles.closeBtn,
@@ -164,11 +163,10 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
                     borderColor: theme.colors.hairline,
                   },
                 ]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Close notification feed"
               >
                 <X size={15} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Touchable>
             </View>
           </View>
 
@@ -190,9 +188,13 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
               };
 
               return (
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   key={filter}
-                  onPress={() => setSelectedFilter(filter)}
+                  onPress={() => {
+                    haptics.select();
+                    setSelectedFilter(filter);
+                  }}
                   style={[
                     styles.filterChip,
                     {
@@ -200,20 +202,16 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
                       borderColor: isSelected ? theme.colors.ink : theme.colors.hairline,
                     },
                   ]}
-                  activeOpacity={0.7}
                 >
                   <Text
-                    style={[
-                      styles.filterChipText,
-                      {
-                        color: isSelected ? theme.colors.canvas : theme.colors.body,
-                        fontWeight: isSelected ? '700' : '500',
-                      },
-                    ]}
+                    variant="label"
+                    style={{
+                      color: isSelected ? theme.colors.canvas : theme.colors.body,
+                    }}
                   >
                     {labels[filter]}
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
               );
             })}
           </ScrollView>
@@ -236,10 +234,10 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
                 >
                   <Bell size={24} color={theme.colors.mute} />
                 </View>
-                <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>
                   No Notifications Yet
                 </Text>
-                <Text style={[styles.emptyDesc, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.emptyDesc, { color: theme.colors.mute }]}>
                   Operational events regarding machinery, shifts, and staff will appear here.
                 </Text>
               </View>
@@ -269,14 +267,14 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
 
                   <View style={styles.itemContent}>
                     <View style={styles.itemHeaderLine}>
-                      <Text style={[styles.itemTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                      <Text variant="label" style={{ color: theme.colors.ink, flex: 1, marginRight: 6 }} numberOfLines={1}>
                         {item.title}
                       </Text>
-                      <Text style={[styles.itemTime, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>
                         {formatRelativeTime(item.timestamp)}
                       </Text>
                     </View>
-                    <Text style={[styles.itemBody, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
                       {item.body}
                     </Text>
                   </View>
@@ -284,9 +282,8 @@ export const PostNotificationFeedModal: React.FC<PostNotificationFeedModalProps>
               ))
             )}
           </ScrollView>
-        </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -330,13 +327,7 @@ const styles = StyleSheet.create({
   headerTitleCol: {
     flex: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
   subtitle: {
-    fontSize: 13.5,
     marginTop: 2,
   },
   headerActions: {
@@ -352,11 +343,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-  },
-  clearBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#ef4444',
   },
   closeBtn: {
     width: 32,
@@ -376,9 +362,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: 12.5,
   },
   feedScroll: {
     paddingHorizontal: spacingNumeric.md,
@@ -411,20 +394,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 3,
   },
-  itemTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 6,
-  },
-  itemTime: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  itemBody: {
-    fontSize: 13,
-    lineHeight: 15,
-  },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -441,13 +410,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
     marginBottom: 4,
   },
   emptyDesc: {
-    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 16,
   },
 });

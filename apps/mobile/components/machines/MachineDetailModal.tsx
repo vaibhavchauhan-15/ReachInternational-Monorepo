@@ -1,7 +1,7 @@
 import React from 'react';
-import { Modal, View, StyleSheet, StatusBar, Platform } from 'react-native';
+import { View, StyleSheet, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../ui';
+import { useTheme, AppModal } from '../ui';
 import { MachineDetailView } from './MachineDetailView';
 
 export interface MachineDetailModalProps {
@@ -34,11 +34,11 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
   if (!machineData) return null;
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="fullscreen"
+      testID="machine-detail-modal"
     >
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.canvas }]}
@@ -53,7 +53,7 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
           userRole={userRole}
         />
       </SafeAreaView>
-    </Modal>
+    </AppModal>
   );
 };
 

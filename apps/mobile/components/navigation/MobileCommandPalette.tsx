@@ -6,19 +6,20 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text, useTypeStyle } from '../ui/Text';
+import { Icon as CanonicalIcon } from '../ui/Icon';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
@@ -68,6 +69,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
   const { signOut } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const bodyTypeStyle = useTypeStyle('body');
 
   const handleNavigate = (href: string) => {
     onClose();
@@ -279,20 +281,16 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
   if (!isOpen) return null;
 
   return (
-    <Modal
+    <AppModal
       visible={isOpen}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="mobile-command-palette-modal"
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
         <View
           style={[
             styles.paletteCard,
@@ -319,6 +317,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
             <TextInput
               style={[
                 styles.searchInput,
+                bodyTypeStyle,
                 { color: theme.colors.ink },
               ]}
               placeholder="Search all pages, modules, commands..."
@@ -329,13 +328,13 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
               clearButtonMode="while-editing"
             />
             {search.length > 0 && (
-              <TouchableOpacity
+              <Touchable
+                preset="icon"
                 onPress={() => setSearch('')}
                 style={styles.clearBtn}
-                activeOpacity={0.7}
               >
-                <X size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
+                <CanonicalIcon icon={X} variant="body" color={theme.colors.mute} />
+              </Touchable>
             )}
           </View>
 
@@ -347,10 +346,10 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
           >
             {filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>
                   No results found
                 </Text>
-                <Text style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
+                <Text variant="body" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
                   No pages or actions matched "{search}". Try another keyword.
                 </Text>
               </View>
@@ -361,6 +360,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                 return (
                   <View key={category} style={styles.categorySection}>
                     <Text
+                      variant="caption"
                       style={[
                         styles.categoryLabel,
                         { color: theme.colors.mute },
@@ -383,16 +383,17 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                         const isLast = idx === items.length - 1;
 
                         return (
-                          <TouchableOpacity
+                          <Touchable
+                            preset="row"
                             key={item.id}
                             onPress={() => {
+                              haptics.select();
                               if (item.action) {
                                 item.action();
                               } else if (item.href) {
                                 handleNavigate(item.href);
                               }
                             }}
-                            activeOpacity={0.7}
                             style={[
                               styles.itemRow,
                               !isLast && {
@@ -410,11 +411,12 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                                 },
                               ]}
                             >
-                              <Icon size={18} color={theme.colors.ink} />
+                              <CanonicalIcon icon={Icon as any} variant="subheading" color={theme.colors.ink} />
                             </View>
 
                             <View style={styles.itemTextCol}>
                               <Text
+                                variant="subheading"
                                 style={[
                                   styles.itemTitle,
                                   { color: theme.colors.ink },
@@ -425,6 +427,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                               </Text>
                               {item.subtitle && (
                                 <Text
+                                  variant="caption"
                                   style={[
                                     styles.itemSubtitle,
                                     { color: theme.colors.mute },
@@ -436,11 +439,12 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                               )}
                             </View>
 
-                            <ChevronRight
-                              size={16}
+                            <CanonicalIcon
+                              icon={ChevronRight}
+                              variant="caption"
                               color={theme.colors.mute}
                             />
-                          </TouchableOpacity>
+                          </Touchable>
                         );
                       })}
                     </View>
@@ -451,7 +455,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -499,17 +503,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: '100%',
-    fontSize: 14,
-    fontWeight: '500',
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingVertical: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -527,12 +526,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
     marginBottom: 4,
   },
   emptySubtitle: {
-    fontSize: 12,
     textAlign: 'center',
     paddingHorizontal: 24,
   },
@@ -540,9 +536,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   categoryLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     marginLeft: 4,
   },
   categoryCard: {
@@ -568,12 +561,8 @@ const styles = StyleSheet.create({
   itemTextCol: {
     flex: 1,
   },
-  itemTitle: {
-    fontSize: 14.5,
-    fontWeight: '600',
-  },
+  itemTitle: {},
   itemSubtitle: {
-    fontSize: 12.5,
     marginTop: 1,
   },
 });

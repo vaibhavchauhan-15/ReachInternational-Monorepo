@@ -5,9 +5,9 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { useTheme } from '../ui';
+import { useTheme, Text } from '../ui';
 import { mobileNavItems, type MobileSubItem } from '../../lib/nav/navItems';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 
@@ -81,10 +81,10 @@ export const DynamicBottomNav: React.FC<DynamicBottomNavProps> = ({
               ]}
             >
               <Text
+                variant="label"
                 style={[
                   styles.tabLabel,
                   { color: isSelected ? theme.colors.onPrimary : theme.colors.body },
-                  isSelected && { fontWeight: '700' },
                 ]}
               >
                 {sub.label}
@@ -131,8 +131,5 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  tabLabel: {},
 });

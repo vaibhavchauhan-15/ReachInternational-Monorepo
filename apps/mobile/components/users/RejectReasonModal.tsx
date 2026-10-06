@@ -1,15 +1,15 @@
+import { Text } from '../ui/Text';
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '@/lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { AlertTriangle, X } from 'lucide-react-native';
 
@@ -34,6 +34,7 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
   useEffect(() => {
     if (visible) {
       setReason('');
+      haptics.warning();
     }
   }, [visible]);
 
@@ -42,125 +43,123 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="center"
     >
-      <TouchableWithoutFeedback onPress={isSubmitting ? undefined : onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
+      <View
+        style={[
+          styles.dialog,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={styles.titleRow}>
+            <View style={[styles.iconWrap, { backgroundColor: theme.colors.error + '18' }]}>
+              <AlertTriangle size={16} color={theme.colors.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.title, { color: theme.colors.ink }]}>
+                Reject Change Request
+              </Text>
+              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                Decline profile changes for {userName}
+              </Text>
+            </View>
+          </View>
+          <Touchable
+            preset="icon"
+            onPress={onClose}
+            style={styles.closeBtn}
+            disabled={isSubmitting}
+            accessibilityLabel="Close"
+          >
+            <X size={16} color={theme.colors.mute} />
+          </Touchable>
+        </View>
+
+        {/* Body */}
+        <View style={styles.body}>
+          <View
+            style={[
+              styles.infoBanner,
+              {
+                backgroundColor: theme.colors.error + '10',
+                borderColor: theme.colors.error + '26',
+              },
+            ]}
+          >
+            <Text style={[styles.infoBannerText, { color: theme.colors.error }]}>
+              The user&apos;s active profile will remain unchanged. You may optionally enter a rejection reason below.
+            </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.ink }]}>
+              Rejection Reason (Optional)
+            </Text>
+            <TextInput
               style={[
-                styles.dialog,
+                styles.input,
                 {
-                  backgroundColor: theme.colors.canvasElevated,
+                  backgroundColor: theme.colors.canvas,
                   borderColor: theme.colors.hairline,
+                  color: theme.colors.ink,
                 },
               ]}
-            >
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-                <View style={styles.titleRow}>
-                  <View style={[styles.iconWrap, { backgroundColor: theme.colors.error + '18' }]}>
-                    <AlertTriangle size={16} color={theme.colors.error} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.title, { color: theme.colors.ink }]}>
-                      Reject Change Request
-                    </Text>
-                    <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-                      Decline profile changes for {userName}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={onClose}
-                  style={styles.closeBtn}
-                  disabled={isSubmitting}
-                >
-                  <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Body */}
-              <View style={styles.body}>
-                <View
-                  style={[
-                    styles.infoBanner,
-                    {
-                      backgroundColor: theme.colors.error + '10',
-                      borderColor: theme.colors.error + '26',
-                    },
-                  ]}
-                >
-                  <Text style={[styles.infoBannerText, { color: theme.colors.error }]}>
-                    The user&apos;s active profile will remain unchanged. You may optionally enter a rejection reason below.
-                  </Text>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: theme.colors.ink }]}>
-                    Rejection Reason (Optional)
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                        color: theme.colors.ink,
-                      },
-                    ]}
-                    value={reason}
-                    onChangeText={setReason}
-                    placeholder="e.g. Identity document not clear or timing mismatch"
-                    placeholderTextColor={theme.colors.mute}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                    editable={!isSubmitting}
-                  />
-                </View>
-              </View>
-
-              {/* Footer */}
-              <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-                <TouchableOpacity
-                  style={[
-                    styles.cancelBtn,
-                    { borderColor: theme.colors.hairline },
-                  ]}
-                  onPress={onClose}
-                  disabled={isSubmitting}
-                >
-                  <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.confirmBtn,
-                    { backgroundColor: theme.colors.error },
-                    isSubmitting && { opacity: 0.7 },
-                  ]}
-                  onPress={handleConfirm}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.confirmBtnText}>Confirm Rejection</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
+              value={reason}
+              onChangeText={setReason}
+              placeholder="e.g. Identity document not clear or timing mismatch"
+              placeholderTextColor={theme.colors.mute}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              editable={!isSubmitting}
+            />
+          </View>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+
+        {/* Footer */}
+        <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
+          <Touchable
+            preset="button"
+            style={[
+              styles.cancelBtn,
+              { borderColor: theme.colors.hairline },
+            ]}
+            onPress={onClose}
+            disabled={isSubmitting}
+          >
+            <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
+              Cancel
+            </Text>
+          </Touchable>
+
+          <Touchable
+            preset="button"
+            haptic="error"
+            style={[
+              styles.confirmBtn,
+              { backgroundColor: theme.colors.error },
+              isSubmitting && { opacity: 0.7 },
+            ]}
+            onPress={handleConfirm}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.confirmBtnText}>Confirm Rejection</Text>
+            )}
+          </Touchable>
+        </View>
+      </View>
+    </AppModal>
   );
 };
 
@@ -207,12 +206,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 12,
     marginTop: 1,
   },
   closeBtn: {
@@ -228,23 +223,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   infoBannerText: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
   },
   inputGroup: {
     gap: 6,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   input: {
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
-    fontSize: 13,
     minHeight: 70,
   },
   footer: {
@@ -266,8 +255,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   confirmBtn: {
     paddingHorizontal: spacingNumeric.lg,
@@ -279,7 +266,5 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

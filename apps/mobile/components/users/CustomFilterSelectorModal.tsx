@@ -1,15 +1,13 @@
+import { Text } from '../ui/Text';
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TouchableWithoutFeedback,
   TextInput,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { INDIAN_STATES } from '@reachinternational/utils';
@@ -140,24 +138,20 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
   }, [options, shouldEnableSearch, searchTerm]);
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                 <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
@@ -242,8 +236,7 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                             styles.optionLabel,
                             {
                               color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
+                              },
                           ]}
                         >
                           {opt.label}
@@ -264,11 +257,8 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                   </View>
                 )}
               </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      </View>
+    </AppModal>
   );
 };
 
@@ -302,10 +292,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   closeBtn: {
     width: 28,
@@ -327,16 +314,12 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -366,13 +349,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   optionLabel: {
-    fontSize: 13,
   },
   emptyWrap: {
     paddingVertical: 24,
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 13,
   },
 });

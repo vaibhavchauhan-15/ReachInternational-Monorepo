@@ -3,10 +3,11 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { Button } from './Button';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { Text } from './Text';
 
 export interface EmptyStateProps {
   title: string;
@@ -27,8 +28,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }, style]}>
-      <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
-      {description && <Text style={[styles.description, { color: theme.colors.mute }]}>{description}</Text>}
+      <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+      {description && <Text variant="body" style={[styles.description, { color: theme.colors.mute }]}>{description}</Text>}
       {actionLabel && onAction && (
         <Button label={actionLabel} onPress={onAction} variant="outline" size="sm" style={styles.actionBtn} />
       )}
@@ -51,8 +52,8 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.error + '44' }, style]}>
-      <Text style={[styles.title, { color: theme.colors.error }]}>Something Went Wrong</Text>
-      <Text style={[styles.description, { color: theme.colors.body }]}>{message}</Text>
+      <Text variant="heading" style={[styles.title, { color: theme.colors.error }]}>Something Went Wrong</Text>
+      <Text variant="body" style={[styles.description, { color: theme.colors.body }]}>{message}</Text>
       {onRetry && (
         <Button label="Retry" onPress={onRetry} variant="danger" size="sm" style={styles.actionBtn} />
       )}
@@ -71,14 +72,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 16.5,
-    fontWeight: '700',
     textAlign: 'center',
     marginBottom: spacingNumeric.xxs,
   },
   description: {
-    fontSize: 13.5,
-    lineHeight: 19,
     textAlign: 'center',
     marginBottom: spacingNumeric.sm,
   },

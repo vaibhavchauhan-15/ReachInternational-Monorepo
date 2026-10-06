@@ -23,9 +23,10 @@ import {
   type StyleProp,
 } from 'react-native';
 import { Search, X } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
+import { useTypeStyle } from './Text';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   value: string;
@@ -76,7 +77,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   };
 
   const handleClear = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     onChangeText('');
     if (onClear) onClear();
     inputRef.current?.focus();
@@ -137,6 +138,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         onBlur={handleBlur}
         style={[
           styles.input,
+          useTypeStyle('body'),
           {
             color: theme.colors.ink,
           },
@@ -179,7 +181,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 13,
     paddingVertical: 0,
     paddingHorizontal: 0,
     backgroundColor: 'transparent',
@@ -187,9 +188,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },

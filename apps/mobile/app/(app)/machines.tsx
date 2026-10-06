@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -12,10 +11,9 @@ import {
   StatusBar,
   TextInput,
   Animated,
-  Easing,
-} from 'react-native';
+  Easing} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid } from '../../components/ui';
+import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid , Text } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { MachineModal } from '../../components/machines/MachineModal';
@@ -26,6 +24,7 @@ import {
   MachineExportModal,
   DeleteMachineDialog,
   MobileMachineListSkeleton,
+  MachineListSkeleton,
   type FilterOption,
 } from '../../components/machines';
 
@@ -207,6 +206,7 @@ export default function MachinesScreen() {
 
   // Selection & Details view
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'running_hours' | 'audit_trail'>('overview');
 
   // Action Modals
   const [machineModalOpen, setMachineModalOpen] = useState(false);
@@ -751,21 +751,28 @@ export default function MachinesScreen() {
       {selectedMachine ? (
         <MachineDetailView
           machine={selectedMachine}
-          onBack={() => setSelectedMachine(null)}
+          initialTab={detailInitialTab}
+          onBack={() => {
+            setSelectedMachine(null);
+            setDetailInitialTab('overview');
+          }}
           onMachineUpdated={() => {
             fetchMachines();
           }}
           onMachineDeleted={() => {
             setSelectedMachine(null);
+            setDetailInitialTab('overview');
             fetchMachines();
           }}
           userRole={role}
         />
       ) : (
         <>
-          {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
+          {/* Top Standardized Mobile Header matching Screenshot 1 */}
           <MobileHeader
-            title={normalizedRole === 'operator' ? 'Assigned Machine' : 'Machine Directory'}
+            title="Machines"
+            showBack={true}
+            onPressBack={() => router.back()}
             actions={headerActions}
           />
 
@@ -782,89 +789,15 @@ export default function MachinesScreen() {
           />
         }
       >
-        {normalizedRole === 'operator' ? (
-          isLoading ? (
-            <MobileMachineListSkeleton count={1} />
-          ) : fetchError ? (
-            <View
-              style={[
-                styles.emptyContainer,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                  marginHorizontal: 4,
-                  marginTop: 8,
-                },
-              ]}
-            >
-              <AlertCircle size={36} color={theme.colors.error} />
-              <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-                Unable to load assigned machine
-              </Text>
-              <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-                {fetchError}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsLoading(true);
-                  fetchMachines();
-                }}
-                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
-              >
-                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
-                  Retry Fetch
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : machines.length === 0 ? (
-            <View
-              style={[
-                styles.emptyContainer,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                  padding: 32,
-                  marginHorizontal: 4,
-                  marginTop: 8,
-                },
-              ]}
-            >
-              <Wrench size={40} color={theme.colors.mute} />
-              <Text style={[styles.emptyTitle, { color: theme.colors.ink, marginTop: 8 }]}>
-                No Machine Assigned
-              </Text>
-              <Text style={[styles.emptySubtext, { color: theme.colors.mute, textAlign: 'center', lineHeight: 18 }]}>
-                You do not currently have an active machine assigned to your profile. Please contact your site supervisor to be assigned to equipment.
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(app)/operations')}
-                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink, minHeight: 44, marginTop: 12, justifyContent: 'center' }]}
-              >
-                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
-                  Go to Operations Hub
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={{ marginHorizontal: 2 }}>
-              <MobileMachineCard
-                machine={machines[0]}
-                isAdmin={false}
-                isSupervisor={false}
-                onEdit={() => {}}
-                onDelete={() => {}}
-                onViewDetails={(m) => setSelectedMachine(m)}
-              />
-            </View>
-          )
+        {isLoading ? (
+          <MachineListSkeleton count={3} />
         ) : (
           <>
-        {/* Interactive 4-Card KPI Metric Grid */}
-        <KPIGrid columns={4}>
+        {/* Interactive 4-Card KPI Metric Grid (2x2 on Mobile matching Screenshot 1) */}
+        <KPIGrid columns={2}>
           <KPICard
-            label="Total Machines"
+            label="ASSIGNED FLEET"
             value={statsSummary.totalCount}
-            icon={Wrench}
             variant="default"
             active={rentalFilter === 'all' && healthFilter === 'all'}
             onPress={() => {
@@ -874,9 +807,8 @@ export default function MachinesScreen() {
           />
 
           <KPICard
-            label="Available Fleet"
+            label="AVAILABLE"
             value={statsSummary.availableCount}
-            icon={CheckCircle2}
             variant="success"
             active={rentalFilter === 'available'}
             onPress={() => {
@@ -885,9 +817,8 @@ export default function MachinesScreen() {
           />
 
           <KPICard
-            label="On Rent"
+            label="ON RENT"
             value={statsSummary.rentedCount}
-            icon={Building2}
             variant="info"
             active={rentalFilter === 'rented'}
             onPress={() => {
@@ -896,9 +827,8 @@ export default function MachinesScreen() {
           />
 
           <KPICard
-            label="Breakdown Events"
+            label="BREAKDOWN EVENTS"
             value={statsSummary.breakdownCount}
-            icon={AlertTriangle}
             variant={statsSummary.breakdownCount > 0 ? 'error' : 'default'}
             active={healthFilter === 'breakdown'}
             onPress={() => {
@@ -1488,7 +1418,7 @@ export default function MachinesScreen() {
           ) : (
             <Text style={[styles.resultsCountText, { color: theme.colors.mute }]}>
               Showing{' '}
-              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+              <Text variant="label" style={{ color: theme.colors.ink }}>
                 {filteredAndSortedMachines.length}
               </Text>{' '}
               of {machines.length} machine assets
@@ -1579,7 +1509,14 @@ export default function MachinesScreen() {
                 isAdmin={isAdminOrManager}
                 isSupervisor={isSupervisor}
                 searchTerm={debouncedSearch}
-                onViewDetails={(m) => setSelectedMachine(m)}
+                onViewDetails={(m) => {
+                  setSelectedMachine(m);
+                  setDetailInitialTab('overview');
+                }}
+                onViewHistory={(m) => {
+                  setSelectedMachine(m);
+                  setDetailInitialTab('running_hours');
+                }}
                 onEdit={(m) => {
                   setMachineToEdit(m);
                   setMachineModalOpen(true);
@@ -1588,6 +1525,17 @@ export default function MachinesScreen() {
                 onLogMeter={(m) => setMeterMachine(m)}
               />
             ))}
+          </View>
+        )}
+
+        {/* Bottom "All machines have been displayed" divider matching Screenshot 1 */}
+        {filteredAndSortedMachines.length > 0 && (
+          <View style={styles.endOfListRow}>
+            <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
+            <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+              All machines have been displayed
+            </Text>
+            <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
           </View>
         )}
           </>
@@ -1678,8 +1626,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
   },
   addBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,
@@ -1710,7 +1656,6 @@ const styles = StyleSheet.create({
   },
   searchInputText: {
     flex: 1,
-    fontSize: 15,
     paddingVertical: 0,
     height: '100%',
     backgroundColor: 'transparent',
@@ -1718,9 +1663,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -1738,8 +1680,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   filterToggleBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   activeCountBadge: {
     minWidth: 18,
@@ -1750,8 +1690,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   activeCountBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
   },
   quickResetBtn: {
     flexDirection: 'row',
@@ -1763,8 +1701,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickResetBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   filterPanelWebContainer: {
     overflow: 'hidden',
@@ -1791,8 +1727,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   activeBadgesHeader: {
-    fontSize: 12.5,
-    fontWeight: '600',
     marginRight: 2,
   },
   badgeChip: {
@@ -1805,8 +1739,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   resetAllLink: {
     flexDirection: 'row',
@@ -1816,15 +1748,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   resetAllLinkText: {
-    fontSize: 12.5,
-    fontWeight: '700',
   },
   resultsCountRow: {
     paddingHorizontal: 2,
     marginTop: -4,
   },
   resultsCountText: {
-    fontSize: 12.5,
   },
   cardsContainer: {
     gap: spacingNumeric.md,
@@ -1835,7 +1764,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   loadingText: {
-    fontSize: 13,
   },
   emptyContainer: {
     padding: 32,
@@ -1846,11 +1774,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
   },
   emptySubtext: {
-    fontSize: 12,
     textAlign: 'center',
   },
   emptyResetBtn: {
@@ -1860,7 +1785,18 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
   },
   emptyResetBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
+  },
+  endOfListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+  },
+  endOfListLine: {
+    flex: 1,
+    height: 1,
+  },
+  endOfListText: {
   },
 });

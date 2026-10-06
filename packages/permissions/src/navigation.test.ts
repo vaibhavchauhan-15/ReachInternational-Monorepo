@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   NAV_ITEMS,
   getNavForRole,
+  getDrawerItems,
   ROLE_HOME_ROUTES,
   MOBILE_ROLE_HOME_ROUTES,
   getRoleHomeRoute,
@@ -97,5 +98,42 @@ test("route classification helpers classify accurately", () => {
   assert.equal(isRouteAllowedForRole("/attendance", "super_admin"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "supervisor"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "operator"), true);
+});
+
+test("getDrawerItems returns correct overflow items and no /more exists in any role", () => {
+  for (const role of ROLES) {
+    const drawerItems = getDrawerItems(role);
+    const { more } = getNavForRole(role);
+    assert.deepEqual(drawerItems, more);
+
+    // Settings and Profile must be present in drawer items for every role
+    assert.ok(
+      drawerItems.some((item) => item.key === "settings" && item.href === "/settings"),
+      `${role}: drawer items must include settings`
+    );
+    assert.ok(
+      drawerItems.some((item) => item.key === "profile" && item.href === "/profile"),
+      `${role}: drawer items must include profile`
+    );
+
+    // Zero /more references across all nav items and destinations
+    assert.ok(
+      !drawerItems.some((item) => item.href.includes("/more")),
+      `${role}: drawer items should not contain /more`
+    );
+  }
+
+  assert.ok(
+    !NAV_ITEMS.some((item) => item.href.includes("/more")),
+    "NAV_ITEMS should not contain /more"
+  );
+  assert.ok(
+    NAV_ITEMS.some((item) => item.key === "settings"),
+    "NAV_ITEMS must contain settings"
+  );
+  assert.ok(
+    NAV_ITEMS.some((item) => item.key === "profile"),
+    "NAV_ITEMS must contain profile"
+  );
 });
 

@@ -7,7 +7,6 @@
 import React, { useState, useRef } from 'react';
 import {
   View,
-  Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
@@ -19,10 +18,11 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { Search, X, RotateCcw, SlidersHorizontal, ChevronDown } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { SearchInput, type SearchInputProps } from './SearchInput';
+import { Text } from './Text';
+import { haptics } from '../../lib/interaction/haptics';
 
 // ============================================================================
 // CANONICAL FILTER TOOLBAR
@@ -81,12 +81,12 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
   const { theme, isDark } = useTheme();
 
   const handleToggle = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     onToggleFilter?.();
   };
 
   const handleReset = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    haptics.success();
     onResetFilters?.();
   };
 
@@ -146,15 +146,13 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               }
             />
             <Text
-              style={[
-                styles.filterToggleText,
-                {
-                  color:
-                    isFilterOpen || activeFilterCount > 0
-                      ? theme.colors.canvas
-                      : theme.colors.ink,
-                },
-              ]}
+              variant="label"
+              style={{
+                color:
+                  isFilterOpen || activeFilterCount > 0
+                    ? theme.colors.canvas
+                    : theme.colors.ink,
+              }}
             >
               Filter
             </Text>
@@ -171,15 +169,13 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
                 ]}
               >
                 <Text
-                  style={[
-                    styles.activeBadgeText,
-                    {
-                      color:
-                        isFilterOpen || activeFilterCount > 0
-                          ? theme.colors.ink
-                          : theme.colors.canvas,
-                    },
-                  ]}
+                  variant="caption"
+                  style={{
+                    color:
+                      isFilterOpen || activeFilterCount > 0
+                        ? theme.colors.ink
+                        : theme.colors.canvas,
+                  }}
                 >
                   {activeFilterCount}
                 </Text>
@@ -218,7 +214,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
             accessibilityLabel="Reset filters"
           >
             <RotateCcw size={13} color={theme.colors.mute} />
-            <Text style={[styles.resetBtnText, { color: theme.colors.mute }]}>Reset</Text>
+            <Text variant="label" style={{ color: theme.colors.mute }}>Reset</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -269,10 +265,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
   },
-  filterToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   activeBadge: {
     minWidth: 18,
     height: 18,
@@ -280,10 +272,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-  },
-  activeBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
   },
   resetBtn: {
     flexDirection: 'row',
@@ -293,10 +281,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-  },
-  resetBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   childrenContainer: {
     width: '100%',

@@ -12,15 +12,35 @@ export interface NetworkStatus {
   isInternetReachable: boolean | null;
   isOffline: boolean;
   connectionType: string;
+  checkConnectivity: () => Promise<boolean>;
 }
 
 export function useNetworkStatus(): NetworkStatus {
-  const [status, setStatus] = useState<NetworkStatus>({
+  const [status, setStatus] = useState<Omit<NetworkStatus, 'checkConnectivity'>>({
     isConnected: true,
     isInternetReachable: true,
     isOffline: false,
     connectionType: 'unknown',
   });
+
+  const checkConnectivity = async (): Promise<boolean> => {
+    try {
+      const state = await NetInfo.fetch();
+      const isConnected = state.isConnected ?? true;
+      const isInternetReachable = state.isInternetReachable ?? null;
+      const isOffline = isInternetReachable === false || isConnected === false;
+
+      setStatus({
+        isConnected,
+        isInternetReachable,
+        isOffline,
+        connectionType: state.type || 'unknown',
+      });
+      return !isOffline;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -62,5 +82,8 @@ export function useNetworkStatus(): NetworkStatus {
     };
   }, []);
 
-  return status;
+  return {
+    ...status,
+    checkConnectivity,
+  };
 }

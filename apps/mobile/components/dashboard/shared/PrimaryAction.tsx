@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from '../../ui/AppLinearGradient';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
+import { Icon as CanonicalIcon } from '../../ui/Icon';
+import { Touchable } from '../../ui/Touchable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { ArrowRight } from 'lucide-react-native';
 
@@ -25,7 +27,7 @@ const resolveRoute = (href?: string): string => {
   if (href.startsWith('/clients')) return '/(app)/clients';
   if (href.startsWith('/attendance')) return '/(app)/attendance';
   if (href.startsWith('/payroll')) return '/(app)/payroll';
-  if (href.startsWith('/audit')) return '/(app)/more';
+  if (href.startsWith('/audit')) return '/(app)/dashboard';
   return href.startsWith('/(app)') ? href : `/(app)${href}`;
 };
 
@@ -41,12 +43,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
   const { theme, isDark } = useTheme();
   const router = useRouter();
 
-  const handlePress = async () => {
-    try {
-      await Haptics.selectionAsync();
-    } catch {
-      // ignore
-    }
+  const handlePress = () => {
     router.push(resolveRoute(href) as any);
   };
 
@@ -94,9 +91,9 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
     : (isDark ? '#94a3b8' : '#64748b');
 
   return (
-    <TouchableOpacity
+    <Touchable
+      preset="button"
       onPress={handlePress}
-      activeOpacity={0.82}
       accessibilityRole="button"
       accessibilityLabel={`${title}: ${description}`}
     >
@@ -124,7 +121,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
 
           <View style={styles.textContainer}>
             <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
+              <Text variant="subheading" style={[styles.title, { color: titleColor }]} numberOfLines={1}>
                 {title}
               </Text>
               {badgeText ? (
@@ -143,6 +140,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
                   ]}
                 >
                   <Text
+                    variant="caption"
                     style={[
                       styles.badgeText,
                       {
@@ -161,17 +159,17 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
                 </View>
               ) : null}
             </View>
-            <Text style={[styles.description, { color: descColor }]} numberOfLines={2}>
+            <Text variant="caption" style={[styles.description, { color: descColor }]} numberOfLines={2}>
               {description}
             </Text>
           </View>
         </View>
 
         <View style={styles.arrowWrap}>
-          <ArrowRight size={17} color={arrowColor} />
+          <CanonicalIcon icon={ArrowRight} variant="body" color={arrowColor} />
         </View>
       </LinearGradient>
-    </TouchableOpacity>
+    </Touchable>
   );
 };
 
@@ -228,9 +226,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    lineHeight: 19,
     flexShrink: 1,
   },
   badge: {
@@ -239,14 +234,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeText: {
-    fontSize: 9.5,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   description: {
-    fontSize: 12,
-    lineHeight: 16,
     marginTop: 2,
   },
   arrowWrap: {

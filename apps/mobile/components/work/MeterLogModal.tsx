@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Switch,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector } from '../ui';
+import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector, Text, useTypeStyle, Touchable, AppModal } from '../ui';
+import { haptics } from '@/lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2, Building2 } from 'lucide-react-native';
@@ -74,6 +72,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { isOffline } = useNetworkStatus();
+  const monoTypeStyle = useTypeStyle('mono');
 
   const [logDate, setLogDate] = useState(() => getISTDateString());
   const [startMeter, setStartMeter] = useState('0');
@@ -403,6 +402,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const reportError = (msg: string) => {
+    if (msg) haptics.error();
+    setError(msg);
+  };
+
+  const reportSuccess = (msg: string) => {
+    if (msg) haptics.success();
+    setSuccess(msg);
+  };
+
   // Interval ticker for real-time validation against current clock
   const [currentTick, setCurrentTick] = useState(() => Date.now());
   useEffect(() => {
@@ -571,37 +580,37 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
   const handleSubmit = async () => {
     if (!startMeter.trim()) {
-      setError('Start meter reading is required.');
+      reportError('Start meter reading is required.');
       return;
     }
     const startVal = parseFloat(startMeter);
     if (isNaN(startVal) || startVal < 0) {
-      setError('Start meter reading must be a valid non-negative number.');
+      reportError('Start meter reading must be a valid non-negative number.');
       return;
     }
 
     if (!endMeter.trim()) {
-      setError('End meter reading is required.');
+      reportError('End meter reading is required.');
       return;
     }
     const endVal = parseFloat(endMeter);
     if (isNaN(endVal) || endVal < 0) {
-      setError('End meter reading must be a valid non-negative number.');
+      reportError('End meter reading must be a valid non-negative number.');
       return;
     }
 
     if (endVal < startVal) {
-      setError('End meter reading cannot be less than start meter.');
+      reportError('End meter reading cannot be less than start meter.');
       return;
     }
 
     if (endVal - startVal > 24) {
-      setError('Machine running hours cannot exceed 24 hours in a single log.');
+      reportError('Machine running hours cannot exceed 24 hours in a single log.');
       return;
     }
 
     if (shiftCodes.length > 0 && (!selectedShiftCode || !selectedShiftCode.trim())) {
-      setError('Please select an operational shift.');
+      reportError('Please select an operational shift.');
       return;
     }
 
@@ -616,28 +625,28 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
     const isUnassigned = assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode);
     if (isUnassigned && !isAssisted) {
-      setError(`Operator is assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`);
+      reportError(`Operator is assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`);
       return;
     }
 
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
-      setError(shiftStats.errorMessage || 'Cannot log before shift end.');
+      reportError(shiftStats.errorMessage || 'Cannot log before shift end.');
       return;
     }
 
     if (sequencingError?.isInvalid) {
-      setError(sequencingError.message);
+      reportError(sequencingError.message);
       return;
     }
 
     if (isBreakdown) {
       if (!breakdownStats?.isValid) {
-        setError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
+        reportError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
         return;
       }
       const maxAllowedDuration = shiftStats.durationHours > 0 ? shiftStats.durationHours : 24;
       if (shiftStats.isValid && breakdownStats.durationDecimalHours > maxAllowedDuration) {
-        setError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`);
+        reportError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`);
         return;
       }
     }
@@ -998,7 +1007,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         // Non-blocking broadcast
       }
 
-      setSuccess('Daily machine log recorded successfully!');
+      reportSuccess('Daily machine log recorded successfully!');
       setTimeout(() => {
         if (onSubmit) onSubmit();
         onClose();
@@ -1016,7 +1025,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (isNetworkErr && logPayload) {
         try {
           const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
-          setSuccess('Connection lost: Shift log saved to offline queue!');
+          reportSuccess('Connection lost: Shift log saved to offline queue!');
           setTimeout(() => {
             if (onSubmit) {
               onSubmit({
@@ -1068,7 +1077,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       } else if (errMsg.includes('Client ID does not match') || errMsg.includes('23503')) {
         errMsg = "Client does not match assigned machine deployment.";
       }
-      setError(errMsg);
+      reportError(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -1077,10 +1086,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const selectedClientObj = clients.find((c) => c.id === selectedClientId);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
+        style={styles.sheetWrapper}
       >
         <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           {/* Header */}
@@ -1090,23 +1099,23 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                 <Clock size={18} color={theme.colors.link} />
               </View>
               <View>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>
                   {targetOperatorName
                     ? 'Assisted Shift Entry'
                     : existingLog
                     ? 'Edit Machine Running Hours'
                     : 'Log Machine Running Hours'}
                 </Text>
-                <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                   {targetOperatorName ? `Operator: ${targetOperatorName} • ` : ''}
                   {model || machineCode} {serialNumber ? `• S/N: ${serialNumber}` : ''}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {targetOperatorName && (
@@ -1126,7 +1135,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               }}
             >
               <User size={14} color={theme.colors.link} />
-              <Text style={{ fontSize: 12.5, color: theme.colors.link, fontWeight: '600', flex: 1 }}>
+              <Text variant="caption" style={{ color: theme.colors.link, flex: 1 }}>
                 Logging shift on behalf of {targetOperatorName}
               </Text>
             </View>
@@ -1134,13 +1143,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
           {error ? (
             <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
-              <Text style={{ color: theme.colors.error, fontSize: 12, textAlign: 'center', fontWeight: '500' }}>{error}</Text>
+              <Text variant="caption" style={{ color: theme.colors.error, textAlign: 'center' }}>{error}</Text>
             </View>
           ) : null}
 
           {success ? (
             <View style={[styles.alertBox, { backgroundColor: theme.colors.success + '1a', borderColor: theme.colors.success }]}>
-              <Text style={{ color: theme.colors.success, fontSize: 12, textAlign: 'center', fontWeight: '600' }}>{success}</Text>
+              <Text variant="caption" style={{ color: theme.colors.success, textAlign: 'center' }}>{success}</Text>
             </View>
           ) : null}
 
@@ -1148,17 +1157,18 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             {/* Log Date Selector Strip (Today + Past 7 Days) */}
             <View style={styles.inputGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Select Date *</Text>
-                <Text style={{ fontSize: 12, color: theme.colors.link, fontWeight: '600' }}>Allowed: 7 days window</Text>
+                <Text variant="label" style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Select Date *</Text>
+                <Text variant="caption" style={{ color: theme.colors.link }}>Allowed: 7 days window</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
                 {pastDates.map((item) => {
                   const isSelected = item.str === logDate;
                   return (
-                    <TouchableOpacity
+                    <Touchable
                       key={item.str}
+                      preset="card"
+                      haptic="select"
                       onPress={() => setLogDate(item.str)}
-                      activeOpacity={0.8}
                       style={[
                         styles.dateChip,
                         {
@@ -1167,13 +1177,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                         },
                       ]}
                     >
-                      <Text style={[styles.dateChipLabel, { color: isSelected ? '#ffffff' : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                      <Text variant="label" style={{ color: isSelected ? '#ffffff' : theme.colors.ink }}>
                         {item.label}
                       </Text>
-                      <Text style={[styles.dateChipSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.dateChipSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : theme.colors.mute }]}>
                         {item.subLabel}
                       </Text>
-                    </TouchableOpacity>
+                    </Touchable>
                   );
                 })}
               </ScrollView>
@@ -1227,8 +1237,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
             {/* Calculated Running Hours Box */}
             <View style={[styles.calcBox, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.calcLabel, { color: theme.colors.mute }]}>Calculated Running Hours:</Text>
-              <Text style={[styles.calcValue, { color: theme.colors.link }]}>{runningHours.toFixed(1)} hrs</Text>
+              <Text variant="label" style={{ color: theme.colors.mute }}>Calculated Running Hours:</Text>
+              <Text variant="heading" style={{ color: theme.colors.link }}>{runningHours.toFixed(1)} hrs</Text>
             </View>
 
             {/* Shift Timing Section */}
@@ -1242,12 +1252,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     borderRadius: 12,
                     backgroundColor: shiftStats.isOvernight ? 'rgba(99, 102, 241, 0.12)' : theme.colors.hairlineSoft,
                   }}>
-                    <Text style={{
-                      fontSize: 12,
-                      fontWeight: '700',
-                      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                      color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
-                    }}>
+                    <Text
+                      variant="mono"
+                      style={{
+                        color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
+                      }}
+                    >
                       {shiftStats.isOvernight ? `🌙 Overnight · ${shiftStats.durationFormatted}` : shiftStats.durationFormatted}
                     </Text>
                   </View>
@@ -1258,17 +1268,19 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               {shiftCodes.length > 0 && (
                 <View style={{ marginVertical: 4 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
                       Select Shift *
                     </Text>
-                    <TouchableOpacity
+                    <Touchable
+                      preset="row"
+                      haptic="select"
                       onPress={() => setShowManualTimes(!showManualTimes)}
                       style={{ paddingVertical: 2, paddingHorizontal: 6 }}
                     >
-                      <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.link }}>
+                      <Text variant="caption" style={{ color: theme.colors.link }}>
                         {showManualTimes ? 'Hide Manual Times' : 'Manual Time Entry'}
                       </Text>
-                    </TouchableOpacity>
+                    </Touchable>
                   </View>
                   <ShiftCardSelector
                     shiftCodes={shiftCodes}
@@ -1291,7 +1303,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       }}
                     >
                       <CheckCircle2 size={15} color="#059669" />
-                      <Text style={{ fontSize: 12, color: '#047857', flex: 1, fontWeight: '500' }}>
+                      <Text variant="caption" style={{ color: '#047857', flex: 1 }}>
                         This shift has already been entered for today.
                       </Text>
                     </View>
@@ -1312,11 +1324,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     >
                       <AlertTriangle size={15} color={targetOperatorId ? '#d97706' : '#ef4444'} />
                       <Text
+                        variant="caption"
                         style={{
-                          fontSize: 12,
                           color: targetOperatorId ? '#b45309' : '#ef4444',
                           flex: 1,
-                          fontWeight: '500',
                         }}
                       >
                         {targetOperatorId
@@ -1341,9 +1352,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   gap: 6,
                 }}>
                   <Clock size={14} color="#0284c7" />
-                  <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
-                    <Text style={{ fontWeight: '700' }}>Handover from</Text>{' '}
-                    <Text style={{ fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                  <Text variant="caption" style={{ color: theme.colors.ink, flex: 1 }}>
+                    Handover from{' '}
+                    <Text variant="mono">
                       {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
                     </Text>
                   </Text>
@@ -1375,10 +1386,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               {/* Sequencing Error Alert */}
               {sequencingError?.isInvalid && (
                 <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
-                  <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600' }}>
+                  <Text variant="caption" style={{ color: theme.colors.error }}>
                     {sequencingError.message}
                   </Text>
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     onPress={() => {
                       if (sequencingError.recommendedTime) setStartTime(sequencingError.recommendedTime);
                       if (sequencingError.recommendedDate) setLogDate(sequencingError.recommendedDate);
@@ -1392,10 +1404,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       paddingHorizontal: 12,
                     }}
                   >
-                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
+                    <Text variant="label" style={{ color: '#ffffff' }}>
                       Align to {sequencingError.recommendedTime}
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
               )}
 
@@ -1413,7 +1425,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   gap: 8,
                 }]}>
                   <AlertTriangle size={14} color={theme.colors.error} />
-                  <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600', flex: 1 }}>
+                  <Text variant="caption" style={{ color: theme.colors.error, flex: 1 }}>
                     {shiftStats.errorMessage || 'Cannot log before shift end.'}
                   </Text>
                 </View>
@@ -1427,7 +1439,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               onChangeText={setOvertimeHours}
               keyboardType="numeric"
               containerStyle={{ maxWidth: 140 }}
-              style={{ textAlign: 'center', fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}
+              style={[monoTypeStyle, { textAlign: 'center' }]}
             />
 
             {/* Breakdown Toggle */}
@@ -1435,8 +1447,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               <View style={styles.breakdownLeft}>
                 <AlertTriangle size={16} color={isBreakdown ? theme.colors.error : theme.colors.mute} />
                 <View>
-                  <Text style={[styles.breakdownTitle, { color: theme.colors.ink }]}>Equipment Breakdown</Text>
-                  <Text style={[styles.breakdownDesc, { color: theme.colors.mute }]}>Did any machine stoppage occur?</Text>
+                  <Text variant="subheading" style={{ color: theme.colors.ink }}>Equipment Breakdown</Text>
+                  <Text variant="caption" style={[styles.breakdownDesc, { color: theme.colors.mute }]}>Did any machine stoppage occur?</Text>
                 </View>
               </View>
               <Switch
@@ -1471,7 +1483,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     borderColor: theme.colors.error + '35',
                   }}>
                     <Clock size={12} color={theme.colors.error} />
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.error, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                    <Text variant="mono" style={{ color: theme.colors.error }}>
                       Total: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : '0 min'}
                     </Text>
                   </View>
@@ -1503,7 +1515,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     padding: 8,
                     borderRadius: 8,
                   }]}>
-                    <Text style={{ color: theme.colors.warning, fontSize: 12, fontWeight: '700' }}>
+                    <Text variant="caption" style={{ color: theme.colors.warning }}>
                       {breakdownStats.errorMessage || 'Invalid breakdown timing.'}
                     </Text>
                   </View>
@@ -1534,16 +1546,14 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             />
           </View>
         </View>
-
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  sheetWrapper: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1572,12 +1582,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
   subtitle: {
-    fontSize: 12,
     marginTop: 1,
   },
   closeBtn: {
@@ -1598,24 +1603,18 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.xs,
   },
   fieldLabel: {
-    fontSize: 13.5,
-    fontWeight: '600',
     marginBottom: 6,
   },
   dateChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.sm,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 64,
   },
-  dateChipLabel: {
-    fontSize: 12.5,
-  },
   dateChipSub: {
-    fontSize: 12,
     marginTop: 1,
   },
   clientSelectTrigger: {
@@ -1625,10 +1624,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-  },
-  clientSelectText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
   rowInputs: {
     flexDirection: 'row',
@@ -1642,14 +1637,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginVertical: 4,
-  },
-  calcLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  calcValue: {
-    fontSize: 16,
-    fontWeight: '800',
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -1665,12 +1652,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  breakdownTitle: {
-    fontSize: 14.5,
-    fontWeight: '600',
-  },
   breakdownDesc: {
-    fontSize: 12.5,
     marginTop: 1,
   },
   footer: {
@@ -1699,10 +1681,6 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: 16.5,
-    fontWeight: '700',
-  },
   modalListScroll: {
     paddingHorizontal: spacingNumeric.md,
   },
@@ -1714,11 +1692,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingHorizontal: 6,
   },
-  clientItemName: {
-    fontSize: 14.5,
-  },
   clientItemLoc: {
-    fontSize: 12.5,
     marginTop: 2,
   },
 });

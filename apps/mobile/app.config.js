@@ -1,8 +1,32 @@
 module.exports = ({ config }) => {
   const isEASBuild = process.env.EAS_BUILD === 'true';
 
+  // Sentry source map auto-upload during native build:
+  // Must be disabled if SENTRY_AUTH_TOKEN is not provided or if SENTRY_DISABLE_AUTO_UPLOAD is true,
+  // preventing Gradle / Sentry CLI from failing release builds with:
+  // "error: Auth token is required for this request. Please run 'sentry-cli login' and try again!"
+  const hasSentryToken = Boolean(process.env.SENTRY_AUTH_TOKEN);
+  const shouldDisableAutoUpload =
+    process.env.SENTRY_DISABLE_AUTO_UPLOAD !== undefined
+      ? process.env.SENTRY_DISABLE_AUTO_UPLOAD === 'true'
+      : !hasSentryToken;
+
+  const plugins = (config.plugins || []).map((plugin) => {
+    if (Array.isArray(plugin) && plugin[0] === '@sentry/react-native/expo') {
+      return [
+        '@sentry/react-native/expo',
+        {
+          ...(plugin[1] || {}),
+          disableAutoUpload: shouldDisableAutoUpload,
+        },
+      ];
+    }
+    return plugin;
+  });
+
   return {
     ...config,
+    plugins,
     updates: isEASBuild
       ? {
           url: 'https://u.expo.dev/40432ac1-55a2-4bfa-985e-a51562398743',

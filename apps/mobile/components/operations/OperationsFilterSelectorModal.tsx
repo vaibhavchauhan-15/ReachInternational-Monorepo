@@ -1,16 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   TextInput,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { AppModal } from '../ui/AppModal';
+import { Text, useTypeStyle } from '../ui';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X, Search } from 'lucide-react-native';
@@ -46,6 +45,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
   showSearch = true,
 }) => {
   const { theme, isDark } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredOptions = useMemo(() => {
@@ -72,31 +72,27 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      variant="bottom"
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <View style={styles.overlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardWrap}
-          >
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.sheet,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardWrap}
+      >
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-                  <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+                  <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
                   <TouchableOpacity
                     onPress={handleClose}
                     style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
@@ -113,6 +109,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                     <TextInput
                       style={[
                         styles.searchInput,
+                        bodyTypeStyle,
                         {
                           color: theme.colors.ink,
                           backgroundColor: theme.colors.canvas,
@@ -146,7 +143,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                 >
                   {filteredOptions.length === 0 ? (
                     <View style={styles.emptyWrap}>
-                      <Text style={[styles.emptyText, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.emptyText, { color: theme.colors.mute }]}>
                         No matches found
                       </Text>
                     </View>
@@ -163,8 +160,8 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                             {
                               backgroundColor: isSelected
                                 ? isDark
-                                  ? 'rgba(59, 130, 246, 0.15)'
-                                  : 'rgba(0, 112, 243, 0.08)'
+                                ? 'rgba(59, 130, 246, 0.15)'
+                                : 'rgba(0, 112, 243, 0.08)'
                                 : 'transparent',
                               borderBottomColor: theme.colors.hairline,
                             },
@@ -173,11 +170,11 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                           <View style={styles.optionContent}>
                             <View style={styles.optionTitleRow}>
                               <Text
+                                variant="subheading"
                                 style={[
                                   styles.optionLabel,
                                   {
                                     color: isSelected ? theme.colors.link : theme.colors.ink,
-                                    fontWeight: isSelected ? '700' : '600',
                                   },
                                 ]}
                                 numberOfLines={1}
@@ -196,6 +193,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                                   ]}
                                 >
                                   <Text
+                                    variant="mono"
                                     style={[
                                       styles.codeText,
                                       { color: theme.colors.link },
@@ -222,6 +220,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                                   ]}
                                 >
                                   <Text
+                                    variant="caption"
                                     style={[
                                       styles.badgeText,
                                       {
@@ -241,6 +240,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                             </View>
                             {opt.subLabel ? (
                               <Text
+                                variant="caption"
                                 style={[styles.optionSubLabel, { color: theme.colors.mute }]}
                                 numberOfLines={1}
                               >
@@ -259,12 +259,9 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                     })
                   )}
                 </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      </KeyboardAvoidingView>
+    </AppModal>
   );
 };
 
@@ -298,11 +295,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacingNumeric.md,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
+  title: {},
   closeBtn: {
     width: 28,
     height: 28,
@@ -330,7 +323,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingLeft: 34,
     paddingRight: 32,
-    fontSize: 13,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
@@ -366,31 +358,22 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
   },
-  optionLabel: {
-    fontSize: 14,
-  },
+  optionLabel: {},
   codePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  codeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  codeText: {},
   badgePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
   optionSubLabel: {
-    fontSize: 12.5,
     marginTop: 2,
   },
   checkWrap: {
@@ -400,8 +383,5 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
+  emptyText: {},
 });

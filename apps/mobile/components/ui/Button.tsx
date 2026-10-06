@@ -6,16 +6,16 @@
 import React, { useState, useRef } from 'react';
 import {
   TouchableOpacity,
-  Text,
   ActivityIndicator,
   StyleSheet,
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { radiusNumeric, spacingNumeric, type TypeVariant } from '@reachinternational/design-tokens';
 import { InteractiveIcon } from './InteractiveIcon';
+import { Text } from './Text';
+import { haptics } from '../../lib/interaction/haptics';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -58,7 +58,7 @@ export const Button: React.FC<ButtonProps> = ({
     if (disabled || effectiveLoading || isExecutingRef.current) return;
     if (!onPress) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.light();
 
     try {
       const result: unknown = (onPress as () => unknown)();
@@ -125,7 +125,7 @@ export const Button: React.FC<ButtonProps> = ({
     };
   };
 
-  const getTextStyle = (): TextStyle => {
+  const getTextStyle = (): { color: string } => {
     let color = theme.colors.ink;
     if (variant === 'primary') {
       color = theme.colors.onPrimary;
@@ -135,16 +135,10 @@ export const Button: React.FC<ButtonProps> = ({
       color = theme.colors.link;
     }
 
-    let fontSize = 15;
-    if (size === 'sm') fontSize = 13.5;
-    if (size === 'lg') fontSize = 16.5;
-
-    return {
-      color,
-      fontSize,
-      fontWeight: '600',
-    };
+    return { color };
   };
+
+  const textVariant: TypeVariant = size === 'sm' ? 'caption' : size === 'lg' ? 'subheading' : 'label';
 
   return (
     <TouchableOpacity
@@ -173,7 +167,7 @@ export const Button: React.FC<ButtonProps> = ({
               variant="bounce"
             />
           ) : null}
-          <Text style={getTextStyle()}>{label}</Text>
+          <Text variant={textVariant} style={getTextStyle()}>{label}</Text>
         </>
       )}
     </TouchableOpacity>

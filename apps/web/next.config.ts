@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -199,4 +200,20 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Sentry project org and project (set via SENTRY_ORG / SENTRY_PROJECT env vars in CI)
+  silent: !process.env.CI, // Only print upload logs in CI
+  // Upload source maps automatically so Sentry shows readable stack traces
+  sourcemaps: {
+    // Do NOT include source maps in the final production bundle
+    deleteSourcemapsAfterUpload: true,
+  },
+  // Tunnel Sentry requests through the app to avoid adblockers
+  tunnelRoute: "/api/sentry-tunnel",
+  // Webpack instrumentation options
+  webpack: {
+    autoInstrumentServerFunctions: true,
+    autoInstrumentMiddleware: true,
+    autoInstrumentAppDirectory: true,
+  },
+});

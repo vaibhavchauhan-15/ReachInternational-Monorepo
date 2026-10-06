@@ -1,16 +1,18 @@
 import React, { useState, memo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  Modal,
   Platform,
   type ViewStyle,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from './ThemeProvider';
+import { Text } from './Text';
+import { Icon } from './Icon';
+import { AppModal } from './AppModal';
+import { Touchable } from './Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { ReachBrandEmblem, ReachInternationalLogo } from '../branding';
 import { Share2, Copy, Check, ExternalLink, X } from 'lucide-react-native';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -94,12 +96,12 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
         <View style={styles.headerLeft}>
           <ReachBrandEmblem size={28} />
           <View style={styles.headerTextWrap}>
-            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>
+            <Text variant="label" style={[styles.brandTitle, { color: theme.colors.ink }]}>
               REACH INTERNATIONAL
             </Text>
             <View style={styles.domainRow}>
               <View style={[styles.liveDot, { backgroundColor: '#10b981' }]} />
-              <Text style={[styles.domainText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.domainText, { color: theme.colors.mute }]}>
                 {domain}
               </Text>
             </View>
@@ -107,7 +109,8 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
         </View>
 
         {onClose && (
-          <TouchableOpacity
+          <Touchable
+            preset="icon"
             onPress={onClose}
             style={[
               styles.closeBtn,
@@ -116,10 +119,9 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
                 borderColor: theme.colors.hairline,
               },
             ]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <X size={16} color={theme.colors.mute} />
-          </TouchableOpacity>
+            <Icon name={X} variant="body" color={theme.colors.mute} />
+          </Touchable>
         )}
       </View>
 
@@ -143,12 +145,14 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
       {/* Title & Description */}
       <View style={styles.bodyWrap}>
         <Text
+          variant="subheading"
           style={[styles.contentTitle, { color: theme.colors.ink }]}
           numberOfLines={2}
         >
           {title}
         </Text>
         <Text
+          variant="caption"
           style={[styles.contentDesc, { color: theme.colors.mute }]}
           numberOfLines={2}
         >
@@ -167,6 +171,7 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
         ]}
       >
         <Text
+          variant="mono"
           style={[styles.urlText, { color: theme.colors.link }]}
           numberOfLines={1}
         >
@@ -176,8 +181,12 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
 
       {/* Action Buttons Row */}
       <View style={styles.actionsRow}>
-        <TouchableOpacity
-          onPress={handleCopy}
+        <Touchable
+          preset="button"
+          onPress={() => {
+            haptics.select();
+            handleCopy();
+          }}
           style={[
             styles.actionBtn,
             styles.copyBtn,
@@ -190,62 +199,58 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
               borderColor: copied ? '#10b981' : theme.colors.hairline,
             },
           ]}
-          activeOpacity={0.7}
         >
           {copied ? (
             <>
-              <Check size={14} color="#10b981" />
-              <Text style={[styles.actionBtnText, { color: '#10b981' }]}>
+              <Icon name={Check} variant="caption" color="#10b981" />
+              <Text variant="label" style={[styles.actionBtnText, { color: '#10b981' }]}>
                 Copied Link
               </Text>
             </>
           ) : (
             <>
-              <Copy size={14} color={theme.colors.ink} />
+              <Icon name={Copy} variant="caption" color={theme.colors.ink} />
               <Text
+                variant="label"
                 style={[styles.actionBtnText, { color: theme.colors.ink }]}
               >
                 Copy Link
               </Text>
             </>
           )}
-        </TouchableOpacity>
+        </Touchable>
 
-        <TouchableOpacity
-          onPress={handleShare}
+        <Touchable
+          preset="button"
+          onPress={() => {
+            haptics.select();
+            handleShare();
+          }}
           style={[
             styles.actionBtn,
             styles.shareBtn,
             { backgroundColor: theme.colors.link },
           ]}
-          activeOpacity={0.8}
         >
-          <Share2 size={14} color="#ffffff" />
-          <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>
+          <Icon name={Share2} variant="caption" color="#ffffff" />
+          <Text variant="label" style={[styles.actionBtnText, { color: '#ffffff' }]}>
             Share Link
           </Text>
-        </TouchableOpacity>
+        </Touchable>
       </View>
     </View>
   );
 
   if (asModal) {
     return (
-      <Modal
+      <AppModal
         visible={visible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={onClose}
+        onClose={onClose || (() => {})}
+        variant="center"
+        testID="shared-link-preview-modal"
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={onClose}
-          />
-          <View style={styles.modalContainer}>{cardContent}</View>
-        </View>
-      </Modal>
+        <View style={styles.modalContainer}>{cardContent}</View>
+      </AppModal>
     );
   }
 
@@ -283,11 +288,7 @@ const styles = StyleSheet.create({
   headerTextWrap: {
     gap: 2,
   },
-  brandTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+  brandTitle: {},
   domainRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -298,10 +299,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  domainText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  domainText: {},
   closeBtn: {
     width: 28,
     height: 28,
@@ -321,25 +319,15 @@ const styles = StyleSheet.create({
   bodyWrap: {
     gap: 4,
   },
-  contentTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  contentDesc: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
+  contentTitle: {},
+  contentDesc: {},
   urlPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  urlText: {
-    fontSize: 12.5,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontWeight: '600',
-  },
+  urlText: {},
   actionsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -357,8 +345,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   shareBtn: {},
-  actionBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  actionBtnText: {},
 });

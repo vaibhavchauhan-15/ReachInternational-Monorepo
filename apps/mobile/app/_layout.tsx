@@ -1,3 +1,4 @@
+import { Text } from '../components/ui/Text';
 import '../lib/suppressWarnings';
 
 /**
@@ -16,10 +17,12 @@ import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
 import { PostNotificationBanner } from '../components/notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
+import { useFonts } from 'expo-font';
 import { postNotification } from '../lib/notifications/postNotification';
+import { TypeScaleProvider, useTypeScale } from '../lib/typography/TypeScaleProvider';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity} from 'react-native';
 
 // Keep native splash screen visible until root layout mounts
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -279,19 +282,62 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
   );
 }
 
-export default function RootLayout() {
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  // Only capture traces in production to save quota
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 0,
+  integrations: [
+    Sentry.reactNativeTracingIntegration(),
+  ],
+  _experiments: {
+    // Enable performance tracing for Expo Router
+    profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 0,
+  },
+});
+
+function TypographyGate({ children }: { children: React.ReactNode }) {
+  const [fontsLoaded, fontError] = useFonts({
+    'Geist-Regular': require('../assets/fonts/Geist-Regular.ttf'),
+    'Geist-Medium': require('../assets/fonts/Geist-Medium.ttf'),
+    'Geist-SemiBold': require('../assets/fonts/Geist-SemiBold.ttf'),
+    'Geist-Bold': require('../assets/fonts/Geist-Bold.ttf'),
+    'GeistMono-Medium': require('../assets/fonts/GeistMono-Medium.ttf'),
+  });
+  const { ready } = useTypeScale();
+  const done = (fontsLoaded || !!fontError) && ready;
+
+  React.useEffect(() => {
+    if (done) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [done]);
+
+  if (!done) return null;
+
+  return <>{children}</>;
+}
+
+function RootLayout() {
   return (
     <SafeAreaProvider style={styles.safeArea}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ThemeProvider>
-            <ThemedAppContainer />
-          </ThemeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <TypeScaleProvider>
+        <TypographyGate>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <ThemeProvider>
+                <ThemedAppContainer />
+              </ThemeProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </TypographyGate>
+      </TypeScaleProvider>
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -308,18 +354,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#09090b',
   },
   errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
     color: '#ffffff',
     marginBottom: 8,
     textAlign: 'center',
   },
   errorMessage: {
-    fontSize: 13,
     color: '#a1a1aa',
     marginBottom: 24,
     textAlign: 'center',
-    lineHeight: 18,
   },
   retryButton: {
     backgroundColor: '#0070f3',
@@ -329,8 +371,6 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 14,
   },
 });
 

@@ -5,4 +5,6 @@ export * from './OperationsSkeleton';
 export * from './SiteMovementModal';
 export * from './MobileTodayShiftMonitorTab';
 export * from './MobileAssignPersonnelModal';
+export * from './MobileOperatorEntryCard';
+export * from './MobileOperatorHistoryTab';
 

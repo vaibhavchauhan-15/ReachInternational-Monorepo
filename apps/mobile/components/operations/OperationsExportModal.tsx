@@ -1,23 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
-  TouchableWithoutFeedback,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
+import { Touchable } from '../ui/Touchable';
+import { AppModal } from '../ui/AppModal';
+import { haptics } from '@/lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Printer, FileSpreadsheet, X, CheckCircle, ShieldAlert, Clock, Sparkles } from 'lucide-react-native';
+import { Printer, FileSpreadsheet, X, Loader2 } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { formatDate, formatExactTimestamp, formatTo12Hour, parseBreakdownString, getISTDateString } from '@reachinternational/utils';
+import {
+  formatDate,
+  formatTo12Hour,
+  parseBreakdownString,
+  getISTDateString,
+} from '@reachinternational/utils';
 import { notifyLogsPdfExported, notifyLogsCsvExported } from '../../lib/notifications';
 import {
   buildPdfHtmlHeader,
@@ -26,27 +30,27 @@ import {
   buildPdfHtmlWrapper,
 } from '../../lib/pdf-html-templates';
 import type { HourLogRecord } from '../../app/(app)/operations';
+import {
+  fetchOperationsExportLogs,
+  type MobileExportLogsParams,
+} from '../../lib/queries/operationsExport';
+import { downloadFileOnWeb, sanitizeExportFilename } from '../../lib/utils/fileExport';
 
 export interface OperationsExportModalProps {
   visible: boolean;
   onClose: () => void;
-  logs: HourLogRecord[];
+  logs?: HourLogRecord[];
+  fetchParams?: MobileExportLogsParams;
   viewMode: 'machine' | 'client' | 'operator';
   selectedEntityName: string;
   selectedMonthLabel: string;
   selectedLocationLabel?: string;
   selectedMachineLabel?: string;
-  totalRunningHours: number;
-  totalOtHours: number;
-  totalBreakdowns: number;
+  totalRunningHours?: number;
+  totalOtHours?: number;
+  totalBreakdowns?: number;
   supervisorName?: string;
 }
-
-const formatCompactTiming = (startStr?: string | null, endStr?: string | null): string => {
-  const formattedStart = formatTo12Hour(startStr) || '06:00 AM';
-  const formattedEnd = formatTo12Hour(endStr) || '02:00 PM';
-  return `${formattedStart.replace(/\s+/g, '')}-${formattedEnd.replace(/\s+/g, '')}`;
-};
 
 const formatExcelDate = (dateStr: string): string => {
   try {
@@ -123,23 +127,113 @@ const getShiftOrderWeight = (log: HourLogRecord): number => {
 export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
   visible,
   onClose,
-  logs,
+  logs: initialLogs = [],
+  fetchParams,
   viewMode,
   selectedEntityName,
   selectedMonthLabel,
   selectedLocationLabel,
   selectedMachineLabel,
-  totalRunningHours,
-  totalOtHours,
-  totalBreakdowns,
+  totalRunningHours: initialRunHours,
+  totalOtHours: initialOtHours,
+  totalBreakdowns: initialBreakdowns,
   supervisorName = 'Operations Supervisor',
 }) => {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
 
-  // Generate Base HTML matching PrintableSupervisorLogsModal.tsx
+  // Dynamic logs state (if fetchParams provided, fetches complete unpaginated dataset)
+  const [fetchedLogs, setFetchedLogs] = useState<HourLogRecord[]>(initialLogs);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(Boolean(fetchParams));
+  const [fetchedMetrics, setFetchedMetrics] = useState<{
+    totalRunningHours: number;
+    totalOtHours: number;
+    totalBreakdowns: number;
+    totalWorkingHours: number;
+  }>({
+    totalRunningHours: initialRunHours || 0,
+    totalOtHours: initialOtHours || 0,
+    totalBreakdowns: initialBreakdowns || 0,
+    totalWorkingHours: 0,
+  });
+
+  useEffect(() => {
+    if (!visible) return;
+
+    if (fetchParams) {
+      let isCancelled = false;
+      setIsLoadingLogs(true);
+
+      fetchOperationsExportLogs(fetchParams)
+        .then((res) => {
+          if (!isCancelled) {
+            if (res.success && res.logs) {
+              setFetchedLogs(res.logs);
+              setFetchedMetrics({
+                totalRunningHours: res.summary.totalRunningHours,
+                totalOtHours: res.summary.totalOtHours,
+                totalBreakdowns: res.summary.totalBreakdowns,
+                totalWorkingHours: res.summary.totalWorkingHours,
+              });
+            } else {
+              setFetchedLogs(initialLogs);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('[OperationsExportModal] Fetch export logs error:', err);
+          if (!isCancelled) {
+            setFetchedLogs(initialLogs);
+          }
+        })
+        .finally(() => {
+          if (!isCancelled) {
+            setIsLoadingLogs(false);
+          }
+        });
+
+      return () => {
+        isCancelled = true;
+      };
+    } else {
+      setFetchedLogs(initialLogs);
+      setIsLoadingLogs(false);
+    }
+  }, [visible, fetchParams, initialLogs]);
+
+  const activeLogs = fetchedLogs;
+
+  // Aggregate Metrics
+  const activeMetrics = useMemo(() => {
+    if (fetchParams && !isLoadingLogs) {
+      return fetchedMetrics;
+    }
+
+    let runHours = 0;
+    let otHours = 0;
+    let breakdowns = 0;
+    let workHours = 0;
+
+    activeLogs.forEach((l) => {
+      const sMtr = l.start_meter ?? 0;
+      const eMtr = l.end_meter ?? sMtr;
+      runHours += l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
+      otHours += l.overtime_hours ?? 0;
+      workHours += calculateShiftWorkHours(l);
+      if (l.is_breakdown) breakdowns += 1;
+    });
+
+    return {
+      totalRunningHours: Math.round(runHours * 10) / 10,
+      totalOtHours: Math.round(otHours * 10) / 10,
+      totalBreakdowns: breakdowns,
+      totalWorkingHours: Math.round(workHours * 10) / 10,
+    };
+  }, [activeLogs, fetchParams, isLoadingLogs, fetchedMetrics]);
+
+  // Generate Base HTML matching PrintableSupervisorLogsModal.tsx & pdf-html-templates.ts
   const generateReportHtml = (): string => {
     const reportTitle =
       viewMode === 'operator'
@@ -156,10 +250,10 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     const isUuid = (val?: string | null): boolean =>
       Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
 
-    // Resolve client name cleanly (never a UUID)
+    // Resolve client name cleanly
     let cleanClientName = !isUuid(selectedEntityName) ? selectedEntityName : '';
     if (!cleanClientName) {
-      const logWithClient = logs.find(
+      const logWithClient = activeLogs.find(
         (l) =>
           (l.client?.company_name && !isUuid(l.client.company_name)) ||
           (l.client?.client_name && !isUuid(l.client.client_name)) ||
@@ -173,171 +267,213 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     }
 
     cleanClientName = cleanClientName.trim().replace(/^['":\s]+|['":\s]+$/g, '');
-    const cleanLocationLabel = (selectedLocationLabel || '')
-      .trim()
-      .replace(/[,:\s]+$/, '');
+    const cleanLocationLabel = (selectedLocationLabel || '').trim().replace(/[,:\s]+$/, '');
 
     // Sort logs chronologically by date and shift
-    const sortedLogs = [...logs].sort((a, b) => {
+    const sortedLogs = [...activeLogs].sort((a, b) => {
       const dateA = a.log_date ? new Date(a.log_date).getTime() : 0;
       const dateB = b.log_date ? new Date(b.log_date).getTime() : 0;
       if (dateA !== dateB) return dateA - dateB;
       return getShiftOrderWeight(a) - getShiftOrderWeight(b);
     });
 
-        // Group logs by date
-    const dateGroupsMap = new Map<string, HourLogRecord[]>();
-    sortedLogs.forEach((log) => {
-      const key = log.log_date ? log.log_date.split('T')[0] : 'unknown';
-      if (!dateGroupsMap.has(key)) {
-        dateGroupsMap.set(key, []);
-      }
-      dateGroupsMap.get(key)!.push(log);
-    });
+    let tbodyRowsHtml = '';
+    let sumTotalRT = 0;
+    let sumTotalWork = 0;
+    let sumTotalBkd = 0;
 
-    let sumDayRT = 0;
-    let sumWorkingHours = 0;
-    let sumBreakdownHours = 0;
+    if (viewMode === 'operator') {
+      // Operator Mode: Full individual shift log rows for precise meter & timing transparency
+      tbodyRowsHtml = sortedLogs
+        .map((log, idx) => {
+          const formattedDate = formatExcelDate(log.log_date || '');
+          const sMtr = Number(log.start_meter ?? 0);
+          const eMtr = Number(log.end_meter ?? sMtr);
+          const rt = Number(log.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10));
+          const wh = calculateShiftWorkHours(log);
+          const bkd = calculateShiftBreakdownHours(log);
 
-    const tbodyRowsHtml = Array.from(dateGroupsMap.entries()).map(([dateKey, groupLogs]) => {
-      const formattedDate = formatExcelDate(dateKey);
+          sumTotalRT += rt;
+          sumTotalWork += wh;
+          sumTotalBkd += bkd;
 
-      let dayRT = 0;
-      let dayWork = 0;
-      let dayBkd = 0;
+          const machInfo = log.machine?.model
+            ? `${log.machine.model}${log.machine.serial_number ? ` (SN: ${log.machine.serial_number})` : ''}`
+            : log.machine_code || 'Machine';
 
-      groupLogs.forEach((l) => {
-        const sMtr = l.start_meter ?? 0;
-        const eMtr = l.end_meter ?? sMtr;
-        const rt = l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
-        dayRT += rt;
-        dayWork += calculateShiftWorkHours(l);
-        dayBkd += calculateShiftBreakdownHours(l);
-      });
+          const clientInfo = log.client?.company_name || log.client?.client_name || log.client?.name || 'Base Yard';
+          const shiftStr = log.shift_code || log.shift || 'Shift';
+          const timingStr = log.start_time && log.end_time
+            ? `${formatTo12Hour(log.start_time)} – ${formatTo12Hour(log.end_time)}`
+            : '—';
 
-      dayRT = Math.round(dayRT * 10) / 10;
-      dayWork = Math.abs(dayWork - Math.round(dayWork)) < 0.05 ? Math.round(dayWork) : Math.round(dayWork * 10) / 10;
-      dayBkd = Math.abs(dayBkd - Math.round(dayBkd)) < 0.05 ? Math.round(dayBkd) : Math.round(dayBkd * 10) / 10;
+          const bkdMin = Math.round(bkd * 60);
+          const bdCell = bkdMin > 0
+            ? `<span style="color:#be123c; font-weight:bold;">${Math.floor(bkdMin / 60)}h ${bkdMin % 60}m</span>`
+            : `<span style="color:#737373;">0h</span>`;
 
-      sumDayRT += dayRT;
-      sumWorkingHours += dayWork;
-      sumBreakdownHours += dayBkd;
-
-      const firstLog = groupLogs[0];
-      const clientOrMachine =
-        viewMode === 'client' || viewMode === 'operator'
-          ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number || firstLog.machine_code ? ` (${firstLog.machine.serial_number || firstLog.machine_code})` : ''}` : firstLog?.machine_code || 'Machine')
-          : (firstLog?.client?.company_name || firstLog?.client?.client_name || firstLog?.client?.name || cleanClientName || 'Unassigned');
-
-      const shiftsStr = groupLogs
-        .map((l) => {
-          const c = l.shift_code || (l.shift?.toLowerCase().includes('night') ? 'S4' : l.shift?.toLowerCase().includes('morning') ? 'S1' : l.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3');
-          return c.toUpperCase().startsWith('S') ? c : `S${c}`;
+          return `
+            <tr style="border-bottom: 1px solid #ebebeb; font-size: 8px; line-height: 1.25;">
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold;">${formattedDate}</td>
+              <td style="padding: 4px 2px; text-align: left; vertical-align: middle; font-weight: 600;">${machInfo}</td>
+              <td style="padding: 4px 2px; text-align: left; vertical-align: middle; color: #525252;">${clientInfo}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0369a1;">${shiftStr}</td>
+              <td style="padding: 4px 2px; text-align: right; vertical-align: middle; font-family: monospace;">${sMtr.toFixed(1)}</td>
+              <td style="padding: 4px 2px; text-align: right; vertical-align: middle; font-family: monospace; font-weight: bold;">${eMtr.toFixed(1)}</td>
+              <td style="padding: 4px 2px; text-align: right; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0284c7;">+${rt.toFixed(1)}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace;">${timingStr}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace;">${bdCell}</td>
+            </tr>
+          `;
         })
-        .join('/');
-
-      const operatorsStr = groupLogs
-        .map((l) => l.operator?.full_name || 'Unassigned')
-        .join('/');
-
-      const cleanRemarksList = groupLogs
-        .map((l) => (l.remarks || '').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim())
-        .filter((r) => r.length > 0 && r.toLowerCase() !== 'breakdown' && r !== '—');
-      const cleanRemarks = Array.from(new Set(cleanRemarksList)).join('; ') || '—';
-
-      let dayMaintMin = 0;
-      groupLogs.forEach((l) => {
-        dayMaintMin += Number((l as any).maintenance_minutes || 0);
+        .join('');
+    } else {
+      // Machine & Client Mode: Date-grouped rows with aggregated RT / WH / BD
+      const dateGroupsMap = new Map<string, HourLogRecord[]>();
+      sortedLogs.forEach((log) => {
+        const key = log.log_date ? log.log_date.split('T')[0] : 'unknown';
+        if (!dateGroupsMap.has(key)) {
+          dateGroupsMap.set(key, []);
+        }
+        dateGroupsMap.get(key)!.push(log);
       });
 
-      const totalBdMin = Math.round(dayBkd * 60);
-      const netBdMin = Math.max(0, totalBdMin - dayMaintMin);
-      const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
-      let bdCellHtml: string;
-      if (totalBdMin === 0) bdCellHtml = `<span style="color:#737373">0h</span>`;
-      else if (dayMaintMin >= totalBdMin && dayMaintMin > 0) bdCellHtml = `<span style="color:#b45309;font-weight:bold">MT ${fmtMin(dayMaintMin)}</span>`;
-      else if (dayMaintMin > 0 && netBdMin > 0) bdCellHtml = `<span style="color:#b45309">MT ${fmtMin(dayMaintMin)}</span> / <span style="color:#be123c">${fmtMin(netBdMin)}</span>`;
-      else bdCellHtml = `<span style="color:#be123c">${fmtMin(totalBdMin)}</span>`;
+      tbodyRowsHtml = Array.from(dateGroupsMap.entries())
+        .map(([dateKey, groupLogs]) => {
+          const formattedDate = formatExcelDate(dateKey);
+          let dayRT = 0;
+          let dayWork = 0;
+          let dayBkd = 0;
 
-      return `
-        <tr style="border-bottom: 1px solid #ebebeb; font-size: 8px; line-height: 1.2;">
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold; word-break: break-word;">${formattedDate}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 600; word-break: break-word;">${clientOrMachine}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0369a1; word-break: break-word;">${shiftsStr}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 500; word-break: break-word;">${operatorsStr}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0284c7; white-space: nowrap;">${formatHoursWithUnit(dayRT)}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; white-space: nowrap;">${formatHoursWithUnit(dayWork)}</td>
-          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; white-space: nowrap;">${bdCellHtml}</td>
-        </tr>
-      `;
-    }).join('');
+          groupLogs.forEach((l) => {
+            const sMtr = l.start_meter ?? 0;
+            const eMtr = l.end_meter ?? sMtr;
+            dayRT += l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
+            dayWork += calculateShiftWorkHours(l);
+            dayBkd += calculateShiftBreakdownHours(l);
+          });
+
+          dayRT = Math.round(dayRT * 10) / 10;
+          dayWork = Math.round(dayWork * 10) / 10;
+          dayBkd = Math.round(dayBkd * 10) / 10;
+
+          sumTotalRT += dayRT;
+          sumTotalWork += dayWork;
+          sumTotalBkd += dayBkd;
+
+          const firstLog = groupLogs[0];
+          const clientOrMachine =
+            viewMode === 'client'
+              ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number ? ` (${firstLog.machine.serial_number})` : ''}` : firstLog?.machine_code || 'Machine')
+              : (firstLog?.client?.company_name || cleanClientName || 'Client');
+
+          const shiftsStr = groupLogs
+            .map((l) => l.shift_code || l.shift || 'S1')
+            .join('/');
+
+          const operatorsStr = groupLogs
+            .map((l) => l.operator?.full_name || 'Unassigned')
+            .join('/');
+
+          const totalBdMin = Math.round(dayBkd * 60);
+          const bdCellHtml = totalBdMin > 0
+            ? `<span style="color:#be123c; font-weight:bold;">${Math.floor(totalBdMin / 60)}h ${totalBdMin % 60}m</span>`
+            : `<span style="color:#737373;">0h</span>`;
+
+          return `
+            <tr style="border-bottom: 1px solid #ebebeb; font-size: 8px; line-height: 1.25;">
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold;">${formattedDate}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 600;">${clientOrMachine}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0369a1;">${shiftsStr}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 500;">${operatorsStr}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0284c7;">${formatHoursWithUnit(dayRT)}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700;">${formatHoursWithUnit(dayWork)}</td>
+              <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700;">${bdCellHtml}</td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
 
     const headerHtml = buildPdfHtmlHeader({
       title: reportTitle,
       subtitle:
-        viewMode === 'client'
-          ? `<span style="display: inline-block;">CLIENT: <strong>${cleanClientName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`
-          : viewMode === 'machine'
-          ? `<span style="display: inline-block;">EQUIPMENT: <strong>${selectedEntityName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`
-          : `<span style="display: inline-block;">OPERATOR: <strong>${selectedEntityName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`,
+        viewMode === 'operator'
+          ? `<span style="display: inline-block;">OPERATOR: <strong>${selectedEntityName.toUpperCase()}</strong></span>${selectedMachineLabel ? ` <span style="color:#a3a3a3; margin: 0 4px;">|</span> <span>EQUIPMENT: <strong>${selectedMachineLabel.toUpperCase()}</strong></span>` : ''}`
+          : viewMode === 'client'
+          ? `<span style="display: inline-block;">CLIENT: <strong>${cleanClientName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; margin: 0 4px;">|</span> <span>LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`
+          : `<span style="display: inline-block;">EQUIPMENT: <strong>${selectedEntityName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; margin: 0 4px;">|</span> <span>LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`,
       metaItems: [
         { label: 'Period', value: selectedMonthLabel },
-        { label: 'Supervisor', value: supervisorName },
+        { label: viewMode === 'operator' ? 'Operator' : 'Supervisor', value: viewMode === 'operator' ? selectedEntityName : supervisorName },
         { label: 'Export Date', value: exportDateTime },
-        { label: 'Total Records', value: String(logs.length) },
+        { label: 'Total Records', value: `${activeLogs.length} Shifts` },
       ],
     });
 
-    const kpiStripHtml = viewMode === 'client'
-      ? buildPdfHtmlKpiStrip([
-          { label: 'Total Shifts', value: `${logs.length} ${logs.length === 1 ? 'Shift' : 'Shifts'}` },
-          { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
-          { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
-        ])
-      : buildPdfHtmlKpiStrip([
-          { label: 'Total Logs', value: String(logs.length) },
-          { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
-          { label: 'Overtime Hours', value: `${Math.round(totalOtHours * 10) / 10} hrs`, color: '#b45309' },
-          { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
-        ]);
+    const kpiStripHtml = buildPdfHtmlKpiStrip([
+      { label: 'Total Logs', value: `${activeLogs.length} Shifts` },
+      { label: 'Operating Run', value: `${activeMetrics.totalRunningHours} hrs`, color: '#0369a1' },
+      { label: 'Total Overtime', value: `${activeMetrics.totalOtHours} hrs`, color: '#b45309' },
+      { label: 'Breakdown Events', value: String(activeMetrics.totalBreakdowns), color: '#be123c' },
+    ]);
 
-    const entityHeader = viewMode === 'client' || viewMode === 'operator' ? 'Machine' : 'Client';
+    const tableHeaderHtml =
+      viewMode === 'operator'
+        ? `
+          <tr style="background-color: #f5f5f5; font-size: 8.5px; text-transform: uppercase; font-weight: 800; border-bottom: 2px solid #171717;">
+            <th style="width: 11%; text-align: center; padding: 4px 2px;">Date</th>
+            <th style="width: 18%; text-align: left; padding: 4px 2px;">Machine</th>
+            <th style="width: 17%; text-align: left; padding: 4px 2px;">Client / Site</th>
+            <th style="width: 8%; text-align: center; padding: 4px 2px;">Shift</th>
+            <th style="width: 8%; text-align: right; padding: 4px 2px;">Start</th>
+            <th style="width: 8%; text-align: right; padding: 4px 2px;">End</th>
+            <th style="width: 9%; text-align: right; padding: 4px 2px;">RT (hrs)</th>
+            <th style="width: 13%; text-align: center; padding: 4px 2px;">Timing</th>
+            <th style="width: 8%; text-align: center; padding: 4px 2px;">Fault</th>
+          </tr>
+        `
+        : `
+          <tr style="background-color: #f5f5f5; font-size: 8.5px; text-transform: uppercase; font-weight: 800; border-bottom: 2px solid #171717;">
+            <th style="width: 12%; text-align: center; padding: 4px 2px;">Date</th>
+            <th style="width: 18%; text-align: center; padding: 4px 2px;">${viewMode === 'client' ? 'Machine' : 'Client'}</th>
+            <th style="width: 9%; text-align: center; padding: 4px 2px;">Shift</th>
+            <th style="width: 35%; text-align: center; padding: 4px 2px;">OPERATOR NAME</th>
+            <th style="width: 9%; text-align: center; padding: 4px 2px;">M/C RT</th>
+            <th style="width: 9%; text-align: center; padding: 4px 2px;">WH</th>
+            <th style="width: 8%; text-align: center; padding: 4px 2px;">B/D</th>
+          </tr>
+        `;
+
+    const colspan = viewMode === 'operator' ? 9 : 7;
 
     const tableHtml = `
       <table>
         <thead>
-          <tr style="background-color: #f5f5f5; font-size: 8.5px; text-transform: uppercase; font-weight: 800; border-bottom: 2px solid #171717;">
-            <th style="width: 12%; text-align: center; vertical-align: middle; padding: 4px 2px;">Date</th>
-            <th style="width: 18%; text-align: center; vertical-align: middle; padding: 4px 2px;">${entityHeader}</th>
-            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">Shift</th>
-            <th style="width: 35%; text-align: center; vertical-align: middle; padding: 4px 2px;">OPERATOR NAME</th>
-            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">M/C RT</th>
-            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">WH</th>
-            <th style="width: 8%; text-align: center; vertical-align: middle; padding: 4px 2px;">B/D</th>
-          </tr>
+          ${tableHeaderHtml}
         </thead>
         <tbody>
-          ${tbodyRowsHtml || '<tr><td colspan="7" style="text-align:center; padding: 12px; color:#737373;">No daily running hour logs found.</td></tr>'}
+          ${tbodyRowsHtml || `<tr><td colspan="${colspan}" style="text-align:center; padding: 16px; color:#737373;">No machine shift logs found for active filters.</td></tr>`}
         </tbody>
-        ${dateGroupsMap.size > 0 ? `
+        ${activeLogs.length > 0 ? `
         <tfoot>
           <tr style="border-top: 2px solid #171717; font-weight: 800; font-size: 8px;">
-            <td colspan="7" style="padding: 4px 2px; text-align: center; vertical-align: middle;">Total</td>
+            <td colspan="${colspan}" style="padding: 4px 2px; text-align: center; vertical-align: middle;">Total Operational Summary</td>
           </tr>
           <tr style="border-bottom: 2px solid #171717; font-family: monospace; font-weight: 700; font-size: 8px;">
-            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${dateGroupsMap.size} ${dateGroupsMap.size === 1 ? 'day' : 'days'}</td>
+            <td style="padding: 4px 2px; text-align: center;">${activeLogs.length} shifts</td>
             <td></td>
             <td></td>
             <td></td>
-            <td style="padding: 4px 2px; text-align: center; vertical-align: middle; color: #0369a1;">${formatHoursWithUnit(sumDayRT)}</td>
-            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${formatHoursWithUnit(sumWorkingHours)}</td>
-            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${formatHoursWithUnit(sumBreakdownHours)}</td>
+            ${viewMode === 'operator' ? '<td></td><td></td>' : ''}
+            <td style="padding: 4px 2px; text-align: right; color: #0369a1;">${formatHoursWithUnit(sumTotalRT)}</td>
+            <td style="padding: 4px 2px; text-align: center;">${formatHoursWithUnit(sumTotalWork)}</td>
+            <td style="padding: 4px 2px; text-align: center;">${formatHoursWithUnit(sumTotalBkd)}</td>
           </tr>
         </tfoot>
         ` : ''}
       </table>
     `;
-
 
     const signaturesHtml = buildPdfHtmlSignatureBlock([
       {
@@ -364,38 +500,49 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
   };
 
   const getExportFilename = (extension: 'pdf' | 'csv'): string => {
-    const cleanEntity = selectedEntityName.replace(/[^a-zA-Z0-9]/g, '_') || 'Operations';
-    const cleanMonth = selectedMonthLabel.replace(/[^a-zA-Z0-9]/g, '_') || 'Logs';
-    const dateStamp = getISTDateString();
-    return `FleetOps_${viewMode}_${cleanEntity}_${cleanMonth}_${dateStamp}.${extension}`;
+    const rawName = `ReachInternational_${viewMode}_${selectedEntityName}_${selectedMonthLabel}_${getISTDateString()}`;
+    return sanitizeExportFilename(rawName, extension);
   };
 
-  // Handler 1: Export PDF & Share
+  // Handler 1: Export PDF & Share (Web & Native Resilient)
   const handleExportPdf = async () => {
     try {
       setIsExportingPdf(true);
+      haptics.select();
       const html = generateReportHtml();
-      const { uri } = await Print.printToFileAsync({ html });
-      const filename = getExportFilename('pdf');
-      const targetUri = `${FileSystem.cacheDirectory}${filename}`;
 
-      await FileSystem.copyAsync({ from: uri, to: targetUri });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(targetUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: filename,
-          UTI: 'com.adobe.pdf',
-        });
+      if (Platform.OS === 'web') {
+        // On Web: launch the print dialog directly with "Save as PDF" capability
+        await Print.printAsync({ html });
+        notifyLogsPdfExported(activeLogs.length, new Set(activeLogs.map((l) => l.machine_id || l.machine_code)).size);
+        await haptics.success();
+        onClose();
       } else {
-        Alert.alert('PDF Created', `Report saved to device cache:\n${targetUri}`);
+        // On Native (iOS / Android): compile PDF file, copy to cache, and open system Share sheet
+        const { uri } = await Print.printToFileAsync({ html });
+        const filename = getExportFilename('pdf');
+        const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+
+        await FileSystem.copyAsync({ from: uri, to: targetUri });
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(targetUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: filename,
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('PDF Ready', `Report file created:\n${targetUri}`);
+        }
+        notifyLogsPdfExported(activeLogs.length, new Set(activeLogs.map((l) => l.machine_id || l.machine_code)).size);
+        await haptics.success();
+        onClose();
       }
-      notifyLogsPdfExported(logs.length, new Set(logs.map((l) => l.machine_id || l.machine_code)).size);
-      onClose();
     } catch (err: any) {
-      console.error('Error generating PDF report:', err);
-      Alert.alert('Export Error', err?.message || 'Failed to generate PDF report.');
+      await haptics.error();
+      console.error('[OperationsExportModal] PDF export error:', err);
+      Alert.alert('Export Error', err?.message || 'Failed to generate PDF document.');
     } finally {
       setIsExportingPdf(false);
     }
@@ -405,149 +552,177 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
   const handlePrintDirect = async () => {
     try {
       setIsPrinting(true);
+      haptics.select();
       const html = generateReportHtml();
       await Print.printAsync({ html });
+      await haptics.success();
       onClose();
     } catch (err: any) {
-      console.error('Error printing report:', err);
-      Alert.alert('Print Error', err?.message || 'Failed to open system print dialog.');
+      await haptics.error();
+      console.error('[OperationsExportModal] Direct print error:', err);
+      Alert.alert('Print Error', err?.message || 'Failed to launch system print spooler.');
     } finally {
       setIsPrinting(false);
     }
   };
 
-    // Handler 3: Export CSV Spreadsheet
+  // Handler 3: Export CSV / Excel Spreadsheet (Web & Native Resilient)
   const handleExportCsv = async () => {
     try {
       setIsExportingCsv(true);
+      haptics.select();
 
-      const sortedLogsForCsv = [...logs].sort((a, b) => {
+      const sortedLogsForCsv = [...activeLogs].sort((a, b) => {
         const dateA = a.log_date ? new Date(a.log_date).getTime() : 0;
         const dateB = b.log_date ? new Date(b.log_date).getTime() : 0;
         if (dateA !== dateB) return dateA - dateB;
         return getShiftOrderWeight(a) - getShiftOrderWeight(b);
       });
 
-      const dateGroupsMap = new Map<string, HourLogRecord[]>();
-      sortedLogsForCsv.forEach((l) => {
-        const key = l.log_date ? l.log_date.split('T')[0] : 'unknown';
-        if (!dateGroupsMap.has(key)) {
-          dateGroupsMap.set(key, []);
-        }
-        dateGroupsMap.get(key)!.push(l);
-      });
+      let headers: string[];
+      let rows: string[];
 
-      const headers = [
-        'Date',
-        viewMode === 'client' || viewMode === 'operator' ? 'Machine' : 'Client',
-        'Shift',
-        'OPERATOR NAME',
-        'M/C RT',
-        'WH',
-        'B/D',
-      ];
+      if (viewMode === 'operator') {
+        headers = [
+          'Shift Date',
+          'Machine Code',
+          'Machine Model',
+          'Serial Number',
+          'Client',
+          'Site Location',
+          'Shift',
+          'Start Meter',
+          'End Meter',
+          'Running Hours',
+          'Start Time',
+          'End Time',
+          'Overtime (h)',
+          'Breakdown',
+          'Breakdown Duration',
+          'Remarks',
+          'Logged At',
+        ];
 
-      const rows: string[] = [];
-      let totalDayRT = 0;
-      let totalWorkHours = 0;
-      let totalBkdHours = 0;
-
-      dateGroupsMap.forEach((groupLogs, dateKey) => {
-        const formattedDate = formatExcelDate(dateKey);
-        let dayRT = 0;
-        let dayWork = 0;
-        let dayBkd = 0;
-
-        groupLogs.forEach((l) => {
-          const sMtr = l.start_meter ?? 0;
-          const eMtr = l.end_meter ?? sMtr;
-          const rt = l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
-          dayRT += rt;
-          dayWork += calculateShiftWorkHours(l);
-          dayBkd += calculateShiftBreakdownHours(l);
-        });
-
-        dayRT = Math.round(dayRT * 10) / 10;
-        dayWork = Math.abs(dayWork - Math.round(dayWork)) < 0.05 ? Math.round(dayWork) : Math.round(dayWork * 10) / 10;
-        dayBkd = Math.abs(dayBkd - Math.round(dayBkd)) < 0.05 ? Math.round(dayBkd) : Math.round(dayBkd * 10) / 10;
-
-        totalDayRT += dayRT;
-        totalWorkHours += dayWork;
-        totalBkdHours += dayBkd;
-
-        const firstLog = groupLogs[0];
-        const clientOrMachine =
-          viewMode === 'client' || viewMode === 'operator'
-            ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number || firstLog.machine_code ? ` (${firstLog.machine.serial_number || firstLog.machine_code})` : ''}` : firstLog?.machine_code || 'Machine')
-            : (firstLog?.client?.company_name || firstLog?.client?.client_name || firstLog?.client?.name || selectedEntityName || 'Unassigned');
-
-        const shiftsStr = groupLogs
-          .map((l) => {
-            const c = l.shift_code || (l.shift?.toLowerCase().includes('night') ? 'S4' : l.shift?.toLowerCase().includes('morning') ? 'S1' : l.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3');
-            return c.toUpperCase().startsWith('S') ? c : `S${c}`;
-          })
-          .join('/');
-
-        const operatorsStr = groupLogs
-          .map((l) => l.operator?.full_name || 'Unassigned')
-          .join('/');
-
-        let dayMaintMin2 = 0;
-        groupLogs.forEach((l) => { dayMaintMin2 += Number((l as any).maintenance_minutes || 0); });
-        const totalBdMin2 = Math.round(dayBkd * 60);
-        const netBdMin2 = Math.max(0, totalBdMin2 - dayMaintMin2);
-        const fmtMin2 = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
-        let bdCsv: string;
-        if (totalBdMin2 === 0) bdCsv = '0h';
-        else if (dayMaintMin2 >= totalBdMin2 && dayMaintMin2 > 0) bdCsv = `MT ${fmtMin2(dayMaintMin2)}`;
-        else if (dayMaintMin2 > 0 && netBdMin2 > 0) bdCsv = `MT ${fmtMin2(dayMaintMin2)} / ${fmtMin2(netBdMin2)}`;
-        else bdCsv = fmtMin2(totalBdMin2);
-
-        rows.push([
-          `"${formattedDate}"`,
-          `"${clientOrMachine}"`,
-          `"${shiftsStr}"`,
-          `"${operatorsStr}"`,
-          `"${formatHoursWithUnit(dayRT)}"`,
-          `"${formatHoursWithUnit(dayWork)}"`,
-          `"${bdCsv}"`,
+        rows = sortedLogsForCsv.map((log) => [
+          `"${formatDate(log.log_date)}"`,
+          `"${log.machine_code || log.machine?.machine_id || ''}"`,
+          `"${log.machine?.model || ''}"`,
+          `"${log.machine?.serial_number || ''}"`,
+          `"${log.client?.company_name || 'Base Yard'}"`,
+          `"${log.location || log.client?.city || ''}"`,
+          `"${log.shift_code || log.shift || ''}"`,
+          Number(log.start_meter || 0).toFixed(1),
+          Number(log.end_meter || 0).toFixed(1),
+          Number(log.running_hours || 0).toFixed(1),
+          `"${formatTo12Hour(log.start_time) || ''}"`,
+          `"${formatTo12Hour(log.end_time) || ''}"`,
+          log.overtime_hours ? String(log.overtime_hours) : '0',
+          log.is_breakdown ? 'YES' : 'NO',
+          `"${(log as any).breakdown_duration || ''}"`,
+          `"${(log.remarks || '').replace(/"/g, '""')}"`,
+          `"${log.created_at ? formatDate(log.created_at) : ''}"`,
         ].join(','));
-      });
-
-      const totalRow1 = ['"Total"', '""', '""', '""', '""', '""', '""'].join(',');
-      const totalRow2 = [
-        `"${dateGroupsMap.size} days"`,
-        '""',
-        '""',
-        '""',
-        `"${formatHoursWithUnit(totalDayRT)}"`,
-        `"${formatHoursWithUnit(totalWorkHours)}"`,
-        `"${formatHoursWithUnit(totalBkdHours)}"`,
-      ].join(',');
-
-      const titleRow = [`"selected machine summery"`, '""', '""', '""', '""', '""', '""'].join(',');
-      const csvContent = [titleRow, headers.join(','), ...rows, totalRow1, totalRow2].join('\r\n');
-      const filename = getExportFilename('csv');
-      const targetUri = `${FileSystem.cacheDirectory}${filename}`;
-
-
-      await FileSystem.writeAsStringAsync(targetUri, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(targetUri, {
-          mimeType: 'text/csv',
-          dialogTitle: filename,
-        });
       } else {
-        Alert.alert('CSV Created', `Spreadsheet saved to device cache:\n${targetUri}`);
+        headers = [
+          'Date',
+          viewMode === 'client' ? 'Machine' : 'Client',
+          'Shift',
+          'OPERATOR NAME',
+          'M/C RT',
+          'WH',
+          'B/D',
+        ];
+
+        const dateGroupsMap = new Map<string, HourLogRecord[]>();
+        sortedLogsForCsv.forEach((l) => {
+          const key = l.log_date ? l.log_date.split('T')[0] : 'unknown';
+          if (!dateGroupsMap.has(key)) {
+            dateGroupsMap.set(key, []);
+          }
+          dateGroupsMap.get(key)!.push(l);
+        });
+
+        rows = [];
+        dateGroupsMap.forEach((groupLogs, dateKey) => {
+          const formattedDate = formatExcelDate(dateKey);
+          let dayRT = 0;
+          let dayWork = 0;
+          let dayBkd = 0;
+
+          groupLogs.forEach((l) => {
+            const sMtr = l.start_meter ?? 0;
+            const eMtr = l.end_meter ?? sMtr;
+            dayRT += l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
+            dayWork += calculateShiftWorkHours(l);
+            dayBkd += calculateShiftBreakdownHours(l);
+          });
+
+          const firstLog = groupLogs[0];
+          const clientOrMachine =
+            viewMode === 'client'
+              ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number ? ` (${firstLog.machine.serial_number})` : ''}` : firstLog?.machine_code || 'Machine')
+              : (firstLog?.client?.company_name || selectedEntityName || 'Client');
+
+          const shiftsStr = groupLogs
+            .map((l) => l.shift_code || l.shift || 'S1')
+            .join('/');
+
+          const operatorsStr = groupLogs
+            .map((l) => l.operator?.full_name || 'Unassigned')
+            .join('/');
+
+          const totalBdMin = Math.round(dayBkd * 60);
+          const bdCsv = totalBdMin > 0 ? `${Math.floor(totalBdMin / 60)}h ${totalBdMin % 60}m` : '0h';
+
+          rows.push([
+            `"${formattedDate}"`,
+            `"${clientOrMachine}"`,
+            `"${shiftsStr}"`,
+            `"${operatorsStr}"`,
+            `"${formatHoursWithUnit(dayRT)}"`,
+            `"${formatHoursWithUnit(dayWork)}"`,
+            `"${bdCsv}"`,
+          ].join(','));
+        });
       }
-      notifyLogsCsvExported(logs.length);
-      onClose();
+
+      const filename = getExportFilename('csv');
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+
+      if (Platform.OS === 'web') {
+        // Universal web download
+        const downloaded = downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
+        if (!downloaded) {
+          Alert.alert('Export Failed', 'Unable to initiate file download in browser.');
+        } else {
+          notifyLogsCsvExported(activeLogs.length);
+          await haptics.success();
+          onClose();
+        }
+      } else {
+        // Native iOS / Android file share
+        const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(targetUri, csvContent, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(targetUri, {
+            mimeType: 'text/csv',
+            dialogTitle: filename,
+            UTI: 'public.comma-separated-values-text',
+          });
+        } else {
+          Alert.alert('CSV Created', `Spreadsheet saved to:\n${targetUri}`);
+        }
+        notifyLogsCsvExported(activeLogs.length);
+        await haptics.success();
+        onClose();
+      }
     } catch (err: any) {
-      console.error('Error generating CSV report:', err);
+      await haptics.error();
+      console.error('[OperationsExportModal] CSV export error:', err);
       Alert.alert('Export Error', err?.message || 'Failed to generate spreadsheet file.');
     } finally {
       setIsExportingCsv(false);
@@ -555,164 +730,183 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
+    <AppModal visible={visible} onClose={onClose} variant="center">
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={[styles.headerRow, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={styles.headerTitleWrap}>
+            <View style={[styles.iconWrap, { backgroundColor: theme.colors.link + '1a' }]}>
+              <Printer size={18} color={theme.colors.link} />
+            </View>
+            <View>
+              <Text variant="heading" style={{ color: theme.colors.ink }}>
+                Export & Print Logs
+              </Text>
+              <Text variant="caption" style={[styles.subTitle, { color: theme.colors.mute }]}>
+                {selectedEntityName} · {selectedMonthLabel}
+              </Text>
+            </View>
+          </View>
+          <Touchable
+            preset="icon"
+            onPress={onClose}
+            style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
+            accessibilityLabel="Close"
+          >
+            <X size={16} color={theme.colors.mute} />
+          </Touchable>
+        </View>
+
+        {/* Loading Indicator when fetching unpaginated full dataset */}
+        {isLoadingLogs ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color={theme.colors.link} />
+            <Text variant="caption" style={[styles.loadingText, { color: theme.colors.mute }]}>
+              Preparing complete operational export data...
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Summary Stats Box */}
             <View
               style={[
-                styles.card,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
+                styles.summaryBox,
+                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
               ]}
             >
-              {/* Header */}
-              <View style={[styles.headerRow, { borderBottomColor: theme.colors.hairline }]}>
-                <View style={styles.headerTitleWrap}>
-                  <View style={[styles.iconWrap, { backgroundColor: theme.colors.link + '1a' }]}>
-                    <Printer size={18} color={theme.colors.link} />
-                  </View>
-                  <View>
-                    <Text style={[styles.title, { color: theme.colors.ink }]}>Export & Print Logs</Text>
-                    <Text style={[styles.subTitle, { color: theme.colors.mute }]}>
-                      Scope: {viewMode.toUpperCase()} · {selectedMonthLabel}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={onClose}
-                  style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
+              <View style={styles.summaryItem}>
+                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
+                  SHIFTS
+                </Text>
+                <Text variant="mono" style={{ color: theme.colors.ink }}>
+                  {activeLogs.length}
+                </Text>
               </View>
-
-              {/* Summary Stats Box */}
-              <View style={[styles.summaryBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>
-                    {viewMode === 'client' ? 'TOTAL SHIFTS' : 'MATCHING LOGS'}
-                  </Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>
-                    {viewMode === 'client' ? `${logs.length} ${logs.length === 1 ? 'Shift' : 'Shifts'}` : logs.length}
-                  </Text>
-                </View>
-                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>OPERATING RUN</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.link }]}>
-                    {Math.round(totalRunningHours * 10) / 10} hrs
-                  </Text>
-                </View>
-                {viewMode !== 'client' && (
-                  <View style={styles.summaryItem}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                    <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
-                      {Math.round(totalOtHours * 10) / 10} hrs
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>BREAKDOWNS</Text>
-                  <Text style={[styles.summaryValue, { color: '#f43f5e' }]}>{totalBreakdowns}</Text>
-                </View>
+              <View style={styles.summaryItem}>
+                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
+                  RUN TIME
+                </Text>
+                <Text variant="mono" style={{ color: theme.colors.link }}>
+                  {activeMetrics.totalRunningHours}h
+                </Text>
               </View>
-
-              {/* Action Buttons */}
-              <View style={styles.actionsWrap}>
-                {/* 1. PDF Document Export */}
-                <TouchableOpacity
-                  onPress={handleExportPdf}
-                  disabled={isExportingPdf || isPrinting || isExportingCsv}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.actionBtn,
-                    {
-                      backgroundColor: theme.colors.primary,
-                      borderColor: theme.colors.primary,
-                    },
-                  ]}
-                >
-                  {isExportingPdf ? (
-                    <ActivityIndicator size="small" color={theme.colors.onPrimary} />
-                  ) : (
-                    <>
-                      <Printer size={16} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
-                      <Text style={[styles.actionBtnText, { color: theme.colors.onPrimary }]}>
-                        Share / Save PDF Document
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {/* 2. Direct AirPrint / Mopria Print */}
-                <TouchableOpacity
-                  onPress={handlePrintDirect}
-                  disabled={isExportingPdf || isPrinting || isExportingCsv}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.actionBtnSecondary,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  {isPrinting ? (
-                    <ActivityIndicator size="small" color={theme.colors.ink} />
-                  ) : (
-                    <>
-                      <Printer size={16} color={theme.colors.ink} style={{ marginRight: 8 }} />
-                      <Text style={[styles.actionBtnSecondaryText, { color: theme.colors.ink }]}>
-                        Send to Wireless Printer
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {/* 3. CSV Spreadsheet Export */}
-                <TouchableOpacity
-                  onPress={handleExportCsv}
-                  disabled={isExportingPdf || isPrinting || isExportingCsv}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.actionBtnSecondary,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  {isExportingCsv ? (
-                    <ActivityIndicator size="small" color={theme.colors.ink} />
-                  ) : (
-                    <>
-                      <FileSpreadsheet size={16} color="#10b981" style={{ marginRight: 8 }} />
-                      <Text style={[styles.actionBtnSecondaryText, { color: theme.colors.ink }]}>
-                        Export Excel / CSV File
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+              <View style={styles.summaryItem}>
+                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
+                  OVERTIME
+                </Text>
+                <Text variant="mono" style={{ color: '#f59e0b' }}>
+                  {activeMetrics.totalOtHours}h
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
+                  FAULTS
+                </Text>
+                <Text variant="mono" style={{ color: '#f43f5e' }}>
+                  {activeMetrics.totalBreakdowns}
+                </Text>
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+
+            {/* Action Buttons */}
+            <View style={styles.actionsWrap}>
+              {/* 1. PDF Document Export */}
+              <Touchable
+                preset="button"
+                onPress={handleExportPdf}
+                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: theme.colors.primary,
+                    borderColor: theme.colors.primary,
+                    opacity: activeLogs.length === 0 ? 0.5 : 1,
+                  },
+                ]}
+                accessibilityLabel="Share or Save PDF Document"
+              >
+                {isExportingPdf ? (
+                  <ActivityIndicator size="small" color={theme.colors.onPrimary} />
+                ) : (
+                  <>
+                    <Printer size={16} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
+                    <Text variant="label" style={{ color: theme.colors.onPrimary }}>
+                      {Platform.OS === 'web' ? 'Save as PDF Document' : 'Share / Save PDF Document'}
+                    </Text>
+                  </>
+                )}
+              </Touchable>
+
+              {/* 2. Direct AirPrint / Mopria / Browser Print */}
+              <Touchable
+                preset="button"
+                onPress={handlePrintDirect}
+                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
+                style={[
+                  styles.actionBtnSecondary,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                    opacity: activeLogs.length === 0 ? 0.5 : 1,
+                  },
+                ]}
+                accessibilityLabel="Send to Wireless Printer"
+              >
+                {isPrinting ? (
+                  <ActivityIndicator size="small" color={theme.colors.ink} />
+                ) : (
+                  <>
+                    <Printer size={16} color={theme.colors.ink} style={{ marginRight: 8 }} />
+                    <Text variant="label" style={{ color: theme.colors.ink }}>
+                      Send to Wireless Printer
+                    </Text>
+                  </>
+                )}
+              </Touchable>
+
+              {/* 3. CSV Spreadsheet Export */}
+              <Touchable
+                preset="button"
+                onPress={handleExportCsv}
+                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
+                style={[
+                  styles.actionBtnSecondary,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                    opacity: activeLogs.length === 0 ? 0.5 : 1,
+                  },
+                ]}
+                accessibilityLabel="Export Excel or CSV File"
+              >
+                {isExportingCsv ? (
+                  <ActivityIndicator size="small" color={theme.colors.ink} />
+                ) : (
+                  <>
+                    <FileSpreadsheet size={16} color="#10b981" style={{ marginRight: 8 }} />
+                    <Text variant="label" style={{ color: theme.colors.ink }}>
+                      Export Excel (.xlsx / CSV)
+                    </Text>
+                  </>
+                )}
+              </Touchable>
+            </View>
+          </>
+        )}
+      </View>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacingNumeric.lg,
-  },
   card: {
     width: '100%',
     maxWidth: 420,
@@ -744,14 +938,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
   subTitle: {
-    fontSize: 13,
-    fontWeight: '500',
     marginTop: 2,
   },
   closeBtn: {
@@ -760,6 +947,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingBox: {
+    paddingVertical: spacingNumeric.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    marginTop: 4,
   },
   summaryBox: {
     flexDirection: 'row',
@@ -774,14 +970,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    fontSize: 12,
-    fontWeight: '800',
     marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   actionsWrap: {
     gap: 10,
@@ -795,10 +984,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
   },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
   actionBtnSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -806,9 +991,5 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-  },
-  actionBtnSecondaryText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

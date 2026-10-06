@@ -1,5 +1,6 @@
+import { Text } from '../ui/Text';
 import React from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Check, Lock } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -190,13 +191,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumberText: {
-    fontSize: 11,
-    fontWeight: '800',
   },
   title: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   badgeRow: {
@@ -221,8 +217,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   optionalBadgeText: {
-    fontSize: 11,
-    fontWeight: '500',
   },
   readOnlyBadge: {
     flexDirection: 'row',
@@ -234,12 +228,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   readOnlyBadgeText: {
-    fontSize: 11,
-    fontWeight: '500',
   },
   description: {
-    fontSize: 12,
-    lineHeight: 16,
     marginBottom: spacingNumeric.sm,
   },
   content: {

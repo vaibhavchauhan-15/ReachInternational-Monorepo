@@ -15,6 +15,13 @@ import {
   AnimatedFileSpreadsheet,
   AnimatedFileText,
   AnimatedPrinter,
+  AnimatedWrench,
+  AnimatedMail,
+  AnimatedMessageSquare,
+  AnimatedPhone,
+  AnimatedKey,
+  AnimatedPower,
+  AnimatedTrash2,
 } from "@/components/ui/animated-icons";
 
 const CommandPalette = dynamic(
@@ -49,7 +56,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/account-deletion": "Account Deletion Guide",
   "/account-deletion-guide": "Account Deletion Guide",
   "/delete-account": "Delete Account",
-  "/more": "More",
   "/vendors": "Vendors",
   "/administration": "Administration",
 };
@@ -60,15 +66,15 @@ const DETAIL_TITLES: Record<string, string> = {
   "purchase-orders": "Purchase Order",
   audit: "Audit Details",
   attendance: "Attendance Details",
+  users: "User Details",
 };
 
 const ROOT_PAGES = new Set(["/dashboard"]);
 
-// Pages where the 3-dot More menu is excluded (e.g. Home, More, Profile, Settings, Legal/Deletion pages)
+// Pages where the 3-dot More menu is excluded (e.g. Home, Profile, Settings, Legal/Deletion pages)
 const HIDE_MORE_MENU_PAGES = new Set([
   "/",
   "/dashboard",
-  "/more",
   "/profile",
   "/settings",
   "/privacy",
@@ -108,6 +114,8 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const canAddClient = pathname === "/clients" && canCreateUser;
   const isMachineDetail = pathname.startsWith("/machines/") && pathname.split("/").filter(Boolean).length === 2;
   const canEditMachine = isMachineDetail && userRole !== "operator" && userRole !== "client";
+  const isUserDetail = pathname.startsWith("/users/") && pathname.split("/").filter(Boolean).length === 2;
+  const canManageUserDetail = isUserDetail && userRole !== "operator" && userRole !== "client";
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -323,6 +331,117 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                 >
                   <AnimatedCheck size={16} className="text-sky-500 shrink-0" />
                   <span>Edit Client Assignment</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* User Detail Dedicated Contextual Actions */}
+          {isUserDetail && (
+            <div className="py-0.5">
+              {canManageUserDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:user-edit-profile"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedEdit size={16} className="text-sky-500 shrink-0" />
+                  <span>Edit Profile</span>
+                </button>
+              )}
+
+              {canManageUserDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:user-assign-equipment"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedWrench size={16} className="text-amber-500 shrink-0" />
+                  <span>Assign Equipment</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  window.dispatchEvent(new CustomEvent("reach:user-email"));
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              >
+                <AnimatedMail size={16} className="text-sky-500 shrink-0" />
+                <span>Send Email</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  window.dispatchEvent(new CustomEvent("reach:user-whatsapp"));
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              >
+                <AnimatedMessageSquare size={16} className="text-emerald-500 shrink-0" />
+                <span>Chat on WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  window.dispatchEvent(new CustomEvent("reach:user-call"));
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              >
+                <AnimatedPhone size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Call Phone</span>
+              </button>
+
+              {canManageUserDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:user-reset-password"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedKey size={16} className="text-amber-500 shrink-0" />
+                  <span>Reset Password</span>
+                </button>
+              )}
+
+              {canManageUserDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:user-toggle-status"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedPower size={16} className="text-amber-600 shrink-0" />
+                  <span>Activate / Deactivate</span>
+                </button>
+              )}
+
+              {userRole === "super_admin" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:user-delete"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                >
+                  <AnimatedTrash2 size={16} className="text-red-600 shrink-0" />
+                  <span>Delete Account</span>
                 </button>
               )}
             </div>

@@ -274,7 +274,7 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
 /* ============================================
    Agentation Floating Toolbar Responsiveness & Visibility
    Positions the toolbar cleanly above the mobile bottom navigation bar (56px)
-   guaranteeing unobstructed visibility across /more, /profile, /settings, etc.
+   guaranteeing unobstructed visibility across /profile, /settings, etc.
    ============================================ */
 .reach-agentation-toolbar,
 [data-agentation-toolbar] {
@@ -1324,4 +1324,7 @@ html {
     overscroll-behavior-y: contain;
   }
 }
+
+body:has(dialog[open]) { overflow: hidden; }
+
 

@@ -16,20 +16,16 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  TextInput,
-  TouchableWithoutFeedback,
+  TouchableOpacity,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { useTheme, ShiftCardSelector, SearchInput } from '../ui';
+import { useTheme, ShiftCardSelector, SearchInput, Text, AppModal } from '../ui';
+import { haptics } from '@/lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { broadcastMobileAssignmentChanged } from '../../lib/realtime-roster';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -158,16 +154,12 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Haptic feedback trigger helper
-  const triggerHaptic = useCallback((type: 'selection' | 'impact' | 'success' = 'selection') => {
-    try {
-      if (type === 'selection') {
-        Haptics.selectionAsync().catch(() => {});
-      } else if (type === 'impact') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      } else if (type === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      }
-    } catch {}
+  const triggerHaptic = useCallback((type: 'selection' | 'impact' | 'success' | 'warning' | 'error' = 'selection') => {
+    if (type === 'selection') haptics.select();
+    else if (type === 'impact') haptics.light();
+    else if (type === 'success') haptics.success();
+    else if (type === 'warning') haptics.warning();
+    else if (type === 'error') haptics.error();
   }, []);
 
   // Web outside-click dismissal
@@ -584,6 +576,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
+      triggerHaptic('error');
       setSubmitError(err?.message || 'Failed to save assignments.');
     } finally {
       setIsSaving(false);
@@ -591,15 +584,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
+        style={styles.sheetWrapper}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
         <View
           style={[
             styles.modalCard,
@@ -1450,14 +1439,13 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  sheetWrapper: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   backdrop: {
@@ -1503,9 +1491,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   headerMachineCodePill: {
     paddingHorizontal: 6,
@@ -1514,12 +1499,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   headerMachineCodeText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '600',
   },
   headerSubtitle: {
-    fontSize: 12,
     marginTop: 2,
   },
   closeBtn: {
@@ -1547,7 +1528,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 13,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -1558,11 +1538,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 12,
     color: '#ef4444',
     flex: 1,
-    lineHeight: 17,
-    fontWeight: '500',
   },
 
   /* Section Card */
@@ -1584,9 +1561,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   countBadge: {
@@ -1596,9 +1570,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   countBadgeText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '500',
   },
 
   /* Triggers */
@@ -1625,14 +1596,9 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   machineTriggerCodeText: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#0284c7',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   triggerSerialText: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     flexShrink: 1,
   },
 
@@ -1655,7 +1621,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   placeholderText: {
-    fontSize: 13,
   },
   supervisorChip: {
     flexDirection: 'row',
@@ -1667,8 +1632,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   supervisorChipText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   chipRemoveBtn: {
     padding: 2,
@@ -1680,8 +1643,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   clearBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 
   /* Anchored Popover Menus */
@@ -1722,7 +1683,6 @@ const styles = StyleSheet.create({
   },
   dropdownSearchInput: {
     flex: 1,
-    fontSize: 12.5,
     paddingVertical: 0,
     ...Platform.select({
       web: {
@@ -1738,8 +1698,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dropdownEmptyText: {
-    fontSize: 12,
-    fontStyle: 'italic',
   },
 
   /* Machine Items inside Popover */
@@ -1760,8 +1718,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   machineItemModel: {
-    fontSize: 13,
-    fontWeight: '700',
     flexShrink: 1,
   },
   machineItemCodeBadge: {
@@ -1771,14 +1727,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   machineItemCodeText: {
-    fontSize: 10,
-    fontWeight: '700',
     color: '#0284c7',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   machineItemSerial: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginTop: 2,
   },
 
@@ -1793,11 +1744,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   selectionCountText: {
-    fontSize: 11.5,
   },
   deselectAllActionText: {
-    fontSize: 12,
-    fontWeight: '600',
     color: '#0284c7',
   },
   staffCardItem: {
@@ -1816,8 +1764,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   staffCardName: {
-    fontSize: 13,
-    fontWeight: '700',
     flexShrink: 1,
   },
   staffRoleBadge: {
@@ -1826,9 +1772,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   staffRoleBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   staffMetaRow: {
     flexDirection: 'row',
@@ -1837,14 +1780,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   staffShiftTimeText: {
-    fontSize: 11,
-    fontWeight: '600',
     color: '#10b981',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   staffContactText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   radioCircle: {
     width: 20,
@@ -1858,9 +1796,6 @@ const styles = StyleSheet.create({
 
   /* Section 3: Operator Roster */
   assignedShiftsCountText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '500',
   },
   operatorsListContainer: {
     gap: 10,
@@ -1874,12 +1809,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   emptyOperatorsTitle: {
-    fontSize: 13,
-    fontWeight: '700',
     marginTop: 4,
   },
   emptyOperatorsSubtitle: {
-    fontSize: 11.5,
     textAlign: 'center',
   },
 
@@ -1911,8 +1843,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   operatorIndexText: {
-    fontSize: 12,
-    fontWeight: '800',
     color: '#d97706',
   },
   operatorNameAndBadgeRow: {
@@ -1921,8 +1851,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   operatorNameText: {
-    fontSize: 13.5,
-    fontWeight: '700',
     flexShrink: 1,
   },
   shiftCodeBadge: {
@@ -1932,14 +1860,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   shiftCodeBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
     color: '#0284c7',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   operatorContactLine: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginTop: 2,
   },
   trashBtn: {
@@ -1960,9 +1883,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   shiftSelectorLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   shiftsGrid: {
     gap: 6,
@@ -1992,13 +1912,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   shiftCodeMiniText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   shiftButtonTitle: {
-    fontSize: 11.5,
-    fontWeight: '700',
     flexShrink: 1,
   },
   shiftButtonCardBottom: {
@@ -2008,14 +1923,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   shiftButtonTiming: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     flex: 1,
   },
   shiftDurationTag: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   /* Add Operator Accordion */
@@ -2040,8 +1950,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   addOperatorTriggerText: {
-    fontSize: 12,
-    fontWeight: '600',
     flexShrink: 1,
   },
   addOperatorExpandedPanel: {
@@ -2067,8 +1975,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   candidateNameText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   availablePill: {
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
@@ -2077,8 +1983,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   availableText: {
-    fontSize: 9,
-    fontWeight: '700',
     color: '#059669',
   },
   alreadyOnMachinePill: {
@@ -2088,8 +1992,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   alreadyOnMachineText: {
-    fontSize: 9,
-    fontWeight: '700',
     color: '#0284c7',
   },
   shiftsAssignedPill: {
@@ -2099,13 +2001,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   shiftsAssignedText: {
-    fontSize: 9,
-    fontWeight: '700',
     color: '#d97706',
   },
   candidatePhoneText: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginTop: 2,
   },
   addNextShiftBadge: {
@@ -2117,10 +2015,7 @@ const styles = StyleSheet.create({
     borderColor: '#0284c730',
   },
   addNextShiftBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
     color: '#0284c7',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   fullCoverageBanner: {
@@ -2133,8 +2028,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   fullCoverageText: {
-    fontSize: 11.5,
-    fontWeight: '600',
     color: '#10b981',
   },
 
@@ -2156,8 +2049,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   saveAssignmentsBtn: {
     flex: 1,
@@ -2179,8 +2070,6 @@ const styles = StyleSheet.create({
     }),
   },
   saveAssignmentsBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#ffffff',
   },
 });

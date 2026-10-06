@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   FileText,
   Image as ImageIcon,
@@ -51,77 +51,83 @@ interface DocState {
   error: string | null;
 }
 
-// ─── Document Format Icon Helper ────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────
+
+function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── Document Format Icon / Thumbnail Helper ────────────────────────
 
 function DocumentFormatIcon({
   mimeType,
   fileName,
+  previewUrl,
   className,
 }: {
   mimeType?: string;
   fileName?: string;
+  previewUrl?: string | null;
   className?: string;
 }) {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [previewUrl]);
+
   const normMime = (mimeType || "").toLowerCase();
   const ext = (fileName || "").split(".").pop()?.toLowerCase() || "";
 
-  if (normMime === "application/pdf" || ext === "pdf") {
+  const isPdf = normMime === "application/pdf" || ext === "pdf";
+  const isImage =
+    normMime.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"].includes(ext);
+
+  if (isPdf) {
     return (
       <div
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs font-semibold font-mono shrink-0 shadow-xs",
+          "inline-flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 shrink-0 shadow-2xs group-hover:border-rose-500/40 transition-colors",
           className
         )}
       >
-        <FileText className="h-3.5 w-3.5 shrink-0" />
-        <span>PDF</span>
+        <FileText className="h-5 w-5 shrink-0" />
       </div>
     );
   }
 
-  if (normMime.includes("png") || ext === "png") {
+  if (isImage && previewUrl && !imgError) {
     return (
       <div
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-semibold font-mono shrink-0 shadow-xs",
+          "relative h-11 w-11 sm:h-12 sm:w-12 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center group-hover:border-[var(--color-link)]/40 transition-colors shadow-2xs",
           className
         )}
       >
-        <ImageIcon className="h-3.5 w-3.5 shrink-0" />
-        <span>PNG</span>
+        <img
+          src={previewUrl}
+          alt={fileName || "Document preview"}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setImgError(true)}
+        />
       </div>
     );
   }
 
-  if (
-    normMime.includes("jpeg") ||
-    normMime.includes("jpg") ||
-    ext === "jpg" ||
-    ext === "jpeg"
-  ) {
+  if (isImage) {
     return (
       <div
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-600 dark:text-sky-400 text-xs font-semibold font-mono shrink-0 shadow-xs",
+          "inline-flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-600 dark:text-sky-400 shrink-0 shadow-2xs group-hover:border-sky-500/40 transition-colors",
           className
         )}
       >
-        <ImageIcon className="h-3.5 w-3.5 shrink-0" />
-        <span>JPG</span>
-      </div>
-    );
-  }
-
-  if (normMime.includes("webp") || ext === "webp") {
-    return (
-      <div
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs font-semibold font-mono shrink-0 shadow-xs",
-          className
-        )}
-      >
-        <ImageIcon className="h-3.5 w-3.5 shrink-0" />
-        <span>WEBP</span>
+        <ImageIcon className="h-5 w-5 shrink-0" />
       </div>
     );
   }
@@ -129,12 +135,11 @@ function DocumentFormatIcon({
   return (
     <div
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-neutral-500/10 border border-neutral-500/25 text-neutral-600 dark:text-neutral-400 text-xs font-semibold font-mono shrink-0 shadow-xs uppercase",
+        "inline-flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 rounded-lg bg-neutral-500/10 border border-neutral-500/25 text-neutral-600 dark:text-neutral-400 shrink-0 shadow-2xs uppercase group-hover:border-neutral-500/40 transition-colors",
         className
       )}
     >
-      <FileText className="h-3.5 w-3.5 shrink-0" />
-      <span>{ext || "DOC"}</span>
+      <FileText className="h-5 w-5 shrink-0" />
     </div>
   );
 }
@@ -372,14 +377,9 @@ export function DocumentUploadSection({
         className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-4 sm:p-5 shadow-xs select-none"
       >
         <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Identity & Banking Documents
-            </h2>
-            <p className="text-[11px] text-[var(--color-mute)] mt-0.5">
-              Upload Aadhaar, Driving Licence, and Bank Passbook / Cheque for verification.
-            </p>
-          </div>
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
+            Identity & Banking Documents
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -401,6 +401,12 @@ export function DocumentUploadSection({
                   <span className="text-xs font-semibold text-[var(--color-ink)]">
                     {docType.label}
                   </span>
+                  {((hasExisting && !isReplacing) || state.status === "success") && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <Check className="h-2.5 w-2.5" />
+                      Uploaded
+                    </span>
+                  )}
                 </div>
 
                 {/* 1. Existing Document Display (When uploaded and not replacing) */}
@@ -418,18 +424,29 @@ export function DocumentUploadSection({
                     title="Click card to view document"
                     className="flex items-center justify-between gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 hover:shadow-xs cursor-pointer transition-all group"
                   >
-                    {/* Left: Large Placeholder + Uploaded Status Label */}
-                    <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                    {/* Left: Document Thumbnail Preview + Info */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <DocumentFormatIcon
                         mimeType={existing.mime_type}
                         fileName={existing.storage_path}
+                        previewUrl={existing.signed_url}
                       />
 
-                      {/* Middle Label: Only Uploaded Status */}
-                      <div className="min-w-0 flex flex-col justify-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-fit">
-                          <Check className="h-3 w-3" /> Uploaded
-                        </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
+                          {existing.storage_path.split("/").pop() || docType.label}
+                        </p>
+                        {(() => {
+                          const normMime = (existing.mime_type || "").toLowerCase();
+                          const ext = (existing.storage_path.split(".").pop() || "").toUpperCase();
+                          const formatLabel = normMime === "application/pdf" || ext === "PDF" ? "PDF" : (ext || "IMAGE");
+                          return (
+                            <p className="text-[11px] text-[var(--color-mute)] font-mono truncate mt-0.5">
+                              <span>{formatLabel}</span>
+                              {existing.file_size_bytes > 0 && <span> • {formatBytes(existing.file_size_bytes)}</span>}
+                            </p>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -546,11 +563,21 @@ export function DocumentUploadSection({
                             <DocumentFormatIcon
                               mimeType={state.file?.type}
                               fileName={state.file?.name}
+                              previewUrl={state.previewUrl}
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
                                 {state.file?.name}
                               </p>
+                              {(() => {
+                                const ext = (state.file?.name.split(".").pop() || "FILE").toUpperCase();
+                                return (
+                                  <p className="text-[11px] text-[var(--color-mute)] font-mono truncate mt-0.5">
+                                    <span>{ext}</span>
+                                    {state.file?.size ? <span> • {formatBytes(state.file.size)}</span> : null}
+                                  </p>
+                                );
+                              })()}
                             </div>
 
                             {/* Clear Selection */}

@@ -1,10 +1,13 @@
 import React from "react";
-import { Text, type StyleProp, type TextStyle } from "react-native";
+import type { StyleProp, TextStyle } from "react-native";
 import { getSearchMatchSegments } from "@reachinternational/utils";
+import type { TypeVariant } from "@reachinternational/design-tokens";
+import { Text } from "./Text";
 
 export interface HighlightTextProps {
   text: string | null | undefined;
   query: string | undefined;
+  variant?: TypeVariant;
   style?: StyleProp<TextStyle>;
   matchStyle?: StyleProp<TextStyle>;
   numberOfLines?: number;
@@ -17,6 +20,7 @@ export interface HighlightTextProps {
 export function HighlightText({
   text,
   query,
+  variant = 'body',
   style,
   matchStyle,
   numberOfLines,
@@ -25,21 +29,22 @@ export function HighlightText({
 
   if (segments.length === 0) {
     return (
-      <Text style={style} numberOfLines={numberOfLines}>
+      <Text variant={variant} style={style as any} numberOfLines={numberOfLines}>
         {text ?? ""}
       </Text>
     );
   }
 
   return (
-    <Text style={style} numberOfLines={numberOfLines}>
+    <Text variant={variant} style={style as any} numberOfLines={numberOfLines}>
       {segments.map((seg, i) => (
         <Text
           key={i}
+          variant={variant}
           style={[
-            seg.isMatch ? { color: "#0070f3", fontWeight: "600" } : null,
+            seg.isMatch ? { color: "#0070f3" } : null,
             seg.isMatch ? matchStyle : null,
-          ]}
+          ] as any}
         >
           {seg.text}
         </Text>

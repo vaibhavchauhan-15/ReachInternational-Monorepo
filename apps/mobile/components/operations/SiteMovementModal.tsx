@@ -4,8 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { AppModal } from '../ui/AppModal';
+import { Button, Input, useTheme, Text } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Truck, MapPin } from 'lucide-react-native';
 
@@ -65,12 +66,11 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
+      <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.ink }]}>Machine Relocation & Site Movement</Text>
+            <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>Machine Relocation & Site Movement</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <X size={22} color={theme.colors.mute} />
             </TouchableOpacity>
@@ -78,7 +78,7 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
 
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: theme.colors.error + '22', borderColor: theme.colors.error }]}>
-              <Text style={{ color: theme.colors.error, fontSize: 12 }}>{error}</Text>
+              <Text variant="caption" style={{ color: theme.colors.error }}>{error}</Text>
             </View>
           ) : null}
 
@@ -132,9 +132,8 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
             <Button label="Cancel" onPress={onClose} variant="ghost" size="md" />
             <Button label="Submit Relocation" onPress={handleSubmit} isLoading={isSubmitting} variant="primary" size="md" />
           </View>
-        </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -157,10 +156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacingNumeric.sm,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  title: {},
   closeBtn: {
     padding: 4,
   },

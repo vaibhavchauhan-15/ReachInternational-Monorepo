@@ -3,9 +3,24 @@ import { View, StyleSheet } from 'react-native';
 import { Skeleton } from '../../ui/Skeleton';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 
-export const DashboardSkeleton: React.FC<{ kpiCount?: number }> = ({
+import type { DashboardRole } from '@reachinternational/types';
+import { OperatorDashboardSkeleton } from '../operator/OperatorDashboardSkeleton';
+
+export interface DashboardSkeletonProps {
+  role?: DashboardRole;
+  kpiCount?: number;
+  showActions?: boolean;
+}
+
+export const DashboardSkeleton: React.FC<DashboardSkeletonProps> = ({
+  role,
   kpiCount = 6,
+  showActions = false,
 }) => {
+  if (role === 'operator') {
+    return <OperatorDashboardSkeleton />;
+  }
+
   return (
     <View style={styles.container}>
       {/* Greeting Title */}
@@ -42,19 +57,23 @@ export const DashboardSkeleton: React.FC<{ kpiCount?: number }> = ({
         ))}
       </View>
 
-      {/* Eyebrow Label */}
-      <Skeleton
-        width={180}
-        height={13}
-        borderRadius={radiusNumeric.sm}
-        style={{ marginTop: spacingNumeric.sm, marginBottom: spacingNumeric.xs }}
-      />
+      {showActions ? (
+        <>
+          {/* Eyebrow Label */}
+          <Skeleton
+            width={180}
+            height={13}
+            borderRadius={radiusNumeric.sm}
+            style={{ marginTop: spacingNumeric.sm, marginBottom: spacingNumeric.xs }}
+          />
 
-      {/* Action Cards */}
-      <View style={styles.actions}>
-        <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
-        <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
-      </View>
+          {/* Action Cards */}
+          <View style={styles.actions}>
+            <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
+            <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
+          </View>
+        </>
+      ) : null}
     </View>
   );
 };

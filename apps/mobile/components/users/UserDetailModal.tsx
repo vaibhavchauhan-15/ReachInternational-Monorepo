@@ -1,16 +1,17 @@
+import { Text } from '../ui/Text';
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Alert,
   Linking,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator} from 'react-native';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
 import { useTheme } from '../ui/ThemeProvider';
+import { haptics } from '../../lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -395,9 +396,13 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
     : user.supervisor?.full_name;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant="fullscreen"
+      testID="user-detail-modal"
+    >
+      <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated, flex: 1, width: '100%' }]}>
           {/* Mobile Drag Notch Handle */}
           <View style={[styles.notchContainer, { backgroundColor: theme.colors.canvas }]}>
             <View style={[styles.notch, { backgroundColor: theme.colors.hairline }]} />
@@ -432,10 +437,9 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                         borderColor: theme.colors.hairline,
                         paddingHorizontal: 5,
                         paddingVertical: 1.5,
-                        borderRadius: 4,
-                      }}
+                        borderRadius: 4 }}
                     >
-                      <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                      <Text variant="mono" style={{ color: theme.colors.ink }}>
                         {user.employee_id}
                       </Text>
                       {copiedField === 'Employee ID' ? (
@@ -555,7 +559,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Employee ID</Text>
                   </View>
                   <View style={styles.detailValueWrap}>
-                    <Text style={[styles.detailValue, { color: theme.colors.ink, fontFamily: 'monospace', fontWeight: '600' }]}>
+                    <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink }]}>
                       {user.employee_id}
                     </Text>
                     <TouchableOpacity
@@ -605,7 +609,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Phone</Text>
                   </View>
                   <View style={styles.detailValueWrap}>
-                    <Text style={[styles.detailValue, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                    <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink,  }]}>
                       {user.phone}
                     </Text>
                     <TouchableOpacity
@@ -654,7 +658,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <CreditCard size={13} color="#10b981" />
                     <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Monthly Salary</Text>
                   </View>
-                  <Text style={[styles.detailValue, { color: '#10b981', fontWeight: '700' }]}>
+                  <Text style={[styles.detailValue, { color: '#10b981', }]}>
                     ₹{Number(user.monthly_salary).toLocaleString('en-IN')} / mo
                   </Text>
                 </View>
@@ -705,7 +709,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Aadhaar Number</Text>
                 </View>
                 <View style={styles.detailValueWrap}>
-                  <Text style={[styles.detailValue, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                  <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink,  }]}>
                     {user.aadhaar_number
                       ? showFullAadhaar
                         ? user.aadhaar_number
@@ -748,7 +752,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Licence Number</Text>
                 </View>
                 <View style={styles.detailValueWrap}>
-                  <Text style={[styles.detailValue, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                  <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink,  }]}>
                     {user.license_number ? formatLicenseNumber(user.license_number) : '—'}
                   </Text>
                   {user.license_number ? (
@@ -982,7 +986,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     disabled={isUpdating}
                   >
                     <Trash2 size={14} color="#ef4444" />
-                    <Text style={[styles.actionGridBtnText, { color: '#ef4444', fontWeight: '600' }]}>
+                    <Text style={[styles.actionGridBtnText, { color: '#ef4444', }]}>
                       Delete Account
                     </Text>
                   </TouchableOpacity>
@@ -1007,94 +1011,111 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         </View>
 
         {/* Role Picker Modal */}
-        <Modal visible={roleModalVisible} animationType="fade" transparent onRequestClose={() => setRoleModalVisible(false)}>
-          <View style={styles.pickerModalOverlay}>
-            <View style={[styles.pickerModalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.pickerModalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.pickerModalTitle, { color: theme.colors.ink }]}>Update User Role</Text>
-                <TouchableOpacity onPress={() => setRoleModalVisible(false)}>
-                  <X size={18} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={{ maxHeight: 300 }}>
-                {ALL_ROLES.map((r) => {
-                  const isCurrent = user.role === r.value;
-                  return (
-                    <TouchableOpacity
-                      key={r.value}
-                      style={[
-                        styles.pickerModalItem,
-                        { borderBottomColor: theme.colors.hairline },
-                        isCurrent && { backgroundColor: theme.colors.link + '14' },
-                      ]}
-                      onPress={() => handleUpdateRole(r.value)}
-                    >
-                      <Text style={[styles.pickerModalItemText, { color: isCurrent ? theme.colors.link : theme.colors.ink, fontWeight: isCurrent ? '700' : '500' }]}>
-                        {r.label}
-                      </Text>
-                      {isCurrent && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+        <AppModal
+          visible={roleModalVisible}
+          onClose={() => setRoleModalVisible(false)}
+          variant="bottom"
+          testID="role-picker-modal"
+        >
+          <View style={[styles.pickerModalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.pickerModalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.pickerModalTitle, { color: theme.colors.ink }]}>Update User Role</Text>
+              <Touchable preset="icon" onPress={() => setRoleModalVisible(false)}>
+                <X size={18} color={theme.colors.mute} />
+              </Touchable>
             </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {ALL_ROLES.map((r) => {
+                const isCurrent = user.role === r.value;
+                return (
+                  <Touchable
+                    preset="row"
+                    key={r.value}
+                    style={[
+                      styles.pickerModalItem,
+                      { borderBottomColor: theme.colors.hairline },
+                      isCurrent && { backgroundColor: theme.colors.link + '14' },
+                    ]}
+                    onPress={() => {
+                      haptics.select();
+                      handleUpdateRole(r.value);
+                    }}
+                  >
+                    <Text style={[styles.pickerModalItemText, { color: isCurrent ? theme.colors.link : theme.colors.ink, }]}>
+                      {r.label}
+                    </Text>
+                    {isCurrent && <Check size={16} color={theme.colors.link} />}
+                  </Touchable>
+                );
+              })}
+            </ScrollView>
           </View>
-        </Modal>
+        </AppModal>
 
         {/* Supervisor Picker Modal */}
-        <Modal visible={supervisorModalVisible} animationType="fade" transparent onRequestClose={() => setSupervisorModalVisible(false)}>
-          <View style={styles.pickerModalOverlay}>
-            <View style={[styles.pickerModalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.pickerModalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.pickerModalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
-                <TouchableOpacity onPress={() => setSupervisorModalVisible(false)}>
-                  <X size={18} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={{ maxHeight: 300 }}>
-                <TouchableOpacity
-                  style={[styles.pickerModalItem, { borderBottomColor: theme.colors.hairline }]}
-                  onPress={() => handleUpdateSupervisor(null)}
-                >
-                  <Text style={[styles.pickerModalItemText, { color: theme.colors.mute }]}>
-                    None (Unassigned)
-                  </Text>
-                  {!user.supervisor_id && <Check size={16} color={theme.colors.link} />}
-                </TouchableOpacity>
-                {activeSupervisors.map((s) => {
-                  const isCurrent = user.supervisor_id === s.id;
-                  return (
-                    <TouchableOpacity
-                      key={s.id}
-                      style={[
-                        styles.pickerModalItem,
-                        { borderBottomColor: theme.colors.hairline },
-                        isCurrent && { backgroundColor: theme.colors.link + '14' },
-                      ]}
-                      onPress={() => handleUpdateSupervisor(s.id)}
-                    >
-                      <View>
-                        <Text style={[styles.pickerModalItemText, { color: isCurrent ? theme.colors.link : theme.colors.ink, fontWeight: isCurrent ? '700' : '500' }]}>
-                          {s.full_name}
-                        </Text>
-                        {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>{s.email}</Text> : null}
-                      </View>
-                      {isCurrent && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+        <AppModal
+          visible={supervisorModalVisible}
+          onClose={() => setSupervisorModalVisible(false)}
+          variant="bottom"
+          testID="supervisor-picker-modal"
+        >
+          <View style={[styles.pickerModalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.pickerModalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.pickerModalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
+              <Touchable preset="icon" onPress={() => setSupervisorModalVisible(false)}>
+                <X size={18} color={theme.colors.mute} />
+              </Touchable>
             </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              <Touchable
+                preset="row"
+                style={[styles.pickerModalItem, { borderBottomColor: theme.colors.hairline }]}
+                onPress={() => {
+                  haptics.select();
+                  handleUpdateSupervisor(null);
+                }}
+              >
+                <Text style={[styles.pickerModalItemText, { color: theme.colors.mute }]}>
+                  None (Unassigned)
+                </Text>
+                {!user.supervisor_id && <Check size={16} color={theme.colors.link} />}
+              </Touchable>
+              {activeSupervisors.map((s) => {
+                const isCurrent = user.supervisor_id === s.id;
+                return (
+                  <Touchable
+                    preset="row"
+                    key={s.id}
+                    style={[
+                      styles.pickerModalItem,
+                      { borderBottomColor: theme.colors.hairline },
+                      isCurrent && { backgroundColor: theme.colors.link + '14' },
+                    ]}
+                    onPress={() => {
+                      haptics.select();
+                      handleUpdateSupervisor(s.id);
+                    }}
+                  >
+                    <View>
+                      <Text style={[styles.pickerModalItemText, { color: isCurrent ? theme.colors.link : theme.colors.ink, }]}>
+                        {s.full_name}
+                      </Text>
+                      {s.email ? <Text style={{ color: theme.colors.mute }}>{s.email}</Text> : null}
+                    </View>
+                    {isCurrent && <Check size={16} color={theme.colors.link} />}
+                  </Touchable>
+                );
+              })}
+            </ScrollView>
           </View>
-        </Modal>
+        </AppModal>
 
         {/* In-App Mobile Document Viewer Modal */}
         <MobileDocumentViewerModal
           document={viewerDoc}
           onClose={() => setViewerDoc(null)}
         />
-      </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -1148,9 +1169,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -1164,8 +1182,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -1182,8 +1198,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   closeBtn: {
     padding: 6,
@@ -1210,8 +1224,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickContactBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   detailsWell: {
     padding: spacingNumeric.md,
@@ -1227,10 +1239,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   detailsWellTitle: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    letterSpacing: 0.8,
   },
   idCopyBtn: {
     flexDirection: 'row',
@@ -1238,8 +1246,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   idCopyText: {
-    fontSize: 12,
-    fontFamily: 'monospace',
   },
   detailRow: {
     flexDirection: 'row',
@@ -1253,8 +1259,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailLabel: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   detailValueWrap: {
     flexDirection: 'row',
@@ -1262,15 +1266,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailValue: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   fieldCopyBtn: {
     padding: 2,
   },
   relativeTimeText: {
-    fontSize: 12,
-    fontFamily: 'monospace',
     marginTop: 1,
   },
   managementSection: {
@@ -1278,9 +1278,6 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   managementSectionTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    letterSpacing: 0.6,
   },
   selectorCard: {
     padding: spacingNumeric.sm,
@@ -1294,8 +1291,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   selectorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   selectorTrigger: {
     flexDirection: 'row',
@@ -1307,8 +1302,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.sm,
   },
   selectorTriggerText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -1327,8 +1320,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.sm,
   },
   actionGridBtnText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   deleteActionBtn: {
     backgroundColor: '#fef2f2',
@@ -1347,8 +1338,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeSheetBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   pickerModalOverlay: {
     flex: 1,
@@ -1373,8 +1362,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   pickerModalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   pickerModalItem: {
     flexDirection: 'row',
@@ -1385,12 +1372,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   pickerModalItemText: {
-    fontSize: 13,
   },
   sectionEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
   },
   documentItemRow: {
@@ -1404,13 +1387,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   docName: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   docMeta: {
-    fontSize: 12,
     marginTop: 1,
-    fontFamily: 'monospace',
   },
   viewDocBtn: {
     flexDirection: 'row',
@@ -1423,7 +1402,5 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   viewDocBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
 });

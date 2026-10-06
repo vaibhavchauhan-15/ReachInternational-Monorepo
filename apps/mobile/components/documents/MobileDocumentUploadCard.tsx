@@ -11,14 +11,13 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Image,
   type ViewStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
 import {
   FileText,
@@ -34,6 +33,7 @@ import {
   MobileDocumentViewerModal,
   type MobileViewerDoc,
 } from './MobileDocumentViewerModal';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface MobileDocumentUploadCardProps {
   title: string;
@@ -69,7 +69,7 @@ export function MobileDocumentUploadCard({
 
   const handlePick = async () => {
     try {
-      Haptics.selectionAsync().catch(() => {});
+      haptics.select();
       const doc = await pickIdentityDocument();
       if (doc) {
         onDocSelected(doc);
@@ -80,7 +80,7 @@ export function MobileDocumentUploadCard({
   };
 
   const handleRemove = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     onDocRemoved();
   };
 
@@ -117,10 +117,10 @@ export function MobileDocumentUploadCard({
     <View style={[styles.fieldContainer, style]}>
       {/* Label Row */}
       <View style={styles.labelRow}>
-        <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+        <Text variant="label" style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
           {cleanTitle}
         </Text>
-        {required && <Text style={styles.requiredStar}>*</Text>}
+        {required && <Text variant="label" style={styles.requiredStar}>*</Text>}
       </View>
 
       {/* Progress Bar (when uploading) */}
@@ -134,7 +134,7 @@ export function MobileDocumentUploadCard({
               ]}
             />
           </View>
-          <Text style={[styles.progressText, { color: theme.colors.mute }]}>
+          <Text variant="caption" style={[styles.progressText, { color: theme.colors.mute }]}>
             Uploading... {uploadProgress}%
           </Text>
         </View>
@@ -164,6 +164,7 @@ export function MobileDocumentUploadCard({
             <View style={styles.dashedInner}>
               <Upload size={15} color={isDark ? '#737373' : '#9ca3af'} />
               <Text
+                variant="caption"
                 style={[
                   styles.dashedText,
                   { color: isDark ? '#71717a' : '#9ca3af' },
@@ -208,6 +209,7 @@ export function MobileDocumentUploadCard({
             {/* Details */}
             <View style={styles.fileDetails}>
               <Text
+                variant="caption"
                 style={[
                   styles.fileName,
                   { color: isDark ? '#f8fafc' : '#0f172a' },
@@ -216,7 +218,7 @@ export function MobileDocumentUploadCard({
               >
                 {selectedDoc?.name || existingDoc?.storage_path.split('/').pop() || 'Document attached'}
               </Text>
-              <Text style={[styles.fileMeta, { color: isDark ? '#71717a' : '#9ca3af' }]}>
+              <Text variant="mono" style={[styles.fileMeta, { color: isDark ? '#71717a' : '#9ca3af' }]}>
                 {selectedDoc?.size
                   ? `${(selectedDoc.size / 1024).toFixed(0)} KB · Attached`
                   : existingDoc?.file_size_bytes
@@ -241,7 +243,7 @@ export function MobileDocumentUploadCard({
 
       {/* Error Message */}
       {errorMessage ? (
-        <Text style={styles.errorText}>{errorMessage}</Text>
+        <Text variant="caption" style={styles.errorText}>{errorMessage}</Text>
       ) : null}
 
       {/* In-App Mobile Document Viewer Modal */}
@@ -264,15 +266,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     gap: 3,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-  },
+  label: {},
   requiredStar: {
     color: '#ef4444',
-    fontSize: 13,
-    fontWeight: '700',
   },
   dashedBox: {
     borderWidth: 1.5,
@@ -290,10 +286,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  dashedText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  dashedText: {},
   attachedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,23 +312,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fileName: {
-    fontSize: 12,
-    fontWeight: '600',
     marginBottom: 2,
   },
-  fileMeta: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
+  fileMeta: {},
   removeBtn: {
     padding: 6,
     borderRadius: 6,
   },
   errorText: {
     color: '#ef4444',
-    fontSize: 11,
     marginTop: 4,
-    fontWeight: '500',
   },
   progressContainer: {
     marginBottom: 6,
@@ -350,7 +336,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   progressText: {
-    fontSize: 10,
     marginTop: 2,
   },
 });

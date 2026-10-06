@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   ScrollView,
-  Modal,
   Platform,
   Dimensions,
   TextInput,
 } from 'react-native';
+import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text, useTypeStyle } from '../ui/Text';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { ChevronDown, Check, X, Search } from 'lucide-react-native';
 import type { FilterOption } from './CustomFilterSelectorModal';
@@ -38,6 +37,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
   showSearch = false,
 }) => {
   const { theme, isDark } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({
@@ -151,18 +151,18 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
           accessibilityLabel={`${label} filter: ${selectedOption?.label}`}
         >
           <View style={styles.triggerLeft}>
-            <Text style={[styles.triggerLabel, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.triggerLabel, { color: theme.colors.mute }]}>
               {label}:
             </Text>
             {selectedOption?.dotColor && (
               <View style={[styles.statusDot, { backgroundColor: selectedOption.dotColor }]} />
             )}
             <Text
+              variant="caption"
               style={[
                 styles.triggerValue,
                 {
                   color: isFiltered ? theme.colors.ink : theme.colors.ink,
-                  fontWeight: isFiltered ? '700' : '600',
                 },
               ]}
               numberOfLines={1}
@@ -181,27 +181,24 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
       </View>
 
       {/* Floating Dropdown Menu */}
-      <Modal
+      <AppModal
         visible={open}
-        transparent
-        animationType="none"
-        onRequestClose={() => setOpen(false)}
+        onClose={() => setOpen(false)}
+        variant="fullscreen"
+        backdropColor="transparent"
       >
-        <TouchableWithoutFeedback onPress={() => setOpen(false)}>
-          <View style={styles.backdrop}>
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.dropdownMenu,
-                  {
-                    top: coords.top,
-                    left: coords.left,
-                    width: coords.width,
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
+        <View
+          style={[
+            styles.dropdownMenu,
+            {
+              top: coords.top,
+              left: coords.left,
+              width: coords.width,
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
                 {/* Search Bar if long list */}
                 {hasSearch && (
                   <View style={[styles.menuSearchBox, { borderBottomColor: theme.colors.hairline }]}>
@@ -212,7 +209,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                       autoFocus
-                      style={[styles.menuSearchInput, { color: theme.colors.ink }]}
+                      style={[styles.menuSearchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                     />
                     {searchQuery.length > 0 && (
                       <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -231,7 +228,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                 >
                   {filteredOptions.length === 0 ? (
                     <View style={styles.noOptions}>
-                      <Text style={[styles.noOptionsText, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.noOptionsText, { color: theme.colors.mute }]}>
                         No matching options
                       </Text>
                     </View>
@@ -267,11 +264,11 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                               />
                             )}
                             <Text
+                              variant="caption"
                               style={[
                                 styles.optionText,
                                 {
                                   color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                                  fontWeight: isSelected ? '700' : '500',
                                 },
                               ]}
                               numberOfLines={1}
@@ -287,11 +284,8 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                     })
                   )}
                 </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        </View>
+      </AppModal>
     </View>
   );
 };
@@ -317,12 +311,8 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 4,
   },
-  triggerLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  triggerLabel: {},
   triggerValue: {
-    fontSize: 12,
     flexShrink: 1,
   },
   statusDot: {
@@ -355,7 +345,6 @@ const styles = StyleSheet.create({
   },
   menuSearchInput: {
     flex: 1,
-    fontSize: 12,
     paddingVertical: 0,
     height: 26,
     backgroundColor: 'transparent',
@@ -363,9 +352,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -394,7 +380,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   optionText: {
-    fontSize: 12,
     flexShrink: 1,
   },
   noOptions: {
@@ -402,8 +387,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noOptionsText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
+  noOptionsText: {},
 });

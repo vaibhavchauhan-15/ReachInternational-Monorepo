@@ -6,16 +6,14 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme } from '../ui';
+import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable } from '../ui';
+import { haptics } from '../../lib/interaction/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, AlertTriangle, Clock, RefreshCw, Trash2, ShieldAlert } from 'lucide-react-native';
 import { QueuedMutation } from '../../lib/offline/types';
@@ -119,11 +117,13 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
       // Trigger queue drain in background
       offlineQueueManager.drainQueue().catch(() => {});
 
+      haptics.success();
       if (onResubmitSuccess) {
         onResubmitSuccess();
       }
       onClose();
     } catch (err: any) {
+      haptics.error();
       setError(err?.message || 'Failed to update queued draft.');
     } finally {
       setIsSubmitting(false);
@@ -131,6 +131,7 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
   };
 
   const handleDiscard = () => {
+    haptics.warning();
     Alert.alert(
       'Discard Offline Draft?',
       'Are you sure you want to discard this shift submission? This action cannot be undone.',
@@ -142,8 +143,10 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
           onPress: async () => {
             try {
               await offlineQueueManager.removeMutation(queuedMutation.id);
+              haptics.success();
               onClose();
             } catch (err) {
+              haptics.error();
               console.warn('[OfflineCollisionModal] Discard error:', err);
             }
           },
@@ -157,9 +160,14 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
   const alertText = isDark ? '#f87171' : '#dc2626';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.sheetContainer, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.hairline }]}>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant="bottom"
+      persistent={isSubmitting}
+      testID="offline-collision-modal"
+    >
+      <View style={[styles.sheetContainer, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.hairline }]}>
           {/* Top Notch Drag Indicator */}
           <View style={styles.notchWrap}>
             <View style={[styles.notch, { backgroundColor: theme.colors.hairline }]} />
@@ -172,17 +180,17 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
                 <AlertTriangle size={18} color={alertText} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>
                   Shift Overlap Detected
                 </Text>
-                <Text style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
                   Resolve schedule conflict and resubmit
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvasElevated }]}>
+            <Touchable preset="icon" onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvasElevated }]}>
               <X size={18} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.bodyContent}>
@@ -190,19 +198,19 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
             <View style={[styles.conflictBanner, { backgroundColor: alertBg, borderColor: alertBorder }]}>
               <ShieldAlert size={16} color={alertText} style={{ marginTop: 2 }} />
               <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[styles.conflictBannerTitle, { color: alertText }]}>
+                <Text variant="label" style={{ color: alertText }}>
                   Server Rejected Submission
                 </Text>
-                <Text style={[styles.conflictBannerBody, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
+                <Text variant="caption" style={{ color: isDark ? '#fca5a5' : '#991b1b' }}>
                   {conflict?.server_message || queuedMutation.last_error || 'A conflicting shift exists in this time range.'}
                 </Text>
                 {conflict?.conflicting_operator ? (
-                  <Text style={[styles.conflictMeta, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
-                    Conflicting Operator: <Text style={{ fontWeight: '700' }}>{conflict.conflicting_operator}</Text>
+                  <Text variant="caption" style={[styles.conflictMeta, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
+                    Conflicting Operator: <Text variant="label">{conflict.conflicting_operator}</Text>
                   </Text>
                 ) : null}
                 {conflict?.conflicting_start_time && conflict?.conflicting_end_time ? (
-                  <Text style={[styles.conflictMeta, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
+                  <Text variant="caption" style={[styles.conflictMeta, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
                     Occupied Window: {formatCompactTiming(conflict.conflicting_start_time, conflict.conflicting_end_time)}
                   </Text>
                 ) : null}
@@ -212,14 +220,14 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
             {/* Error Message if local validation fails */}
             {error ? (
               <View style={[styles.errorBox, { backgroundColor: alertBg, borderColor: alertBorder }]}>
-                <Text style={[styles.errorText, { color: alertText }]}>{error}</Text>
+                <Text variant="caption" style={{ color: alertText }}>{error}</Text>
               </View>
             ) : null}
 
             {/* Shift Timing Adjustment Section */}
             <View style={styles.sectionHeader}>
               <Clock size={14} color={theme.colors.mute} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+              <Text variant="label" style={{ color: theme.colors.ink }}>
                 Adjust Shift Timings
               </Text>
             </View>
@@ -243,7 +251,7 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
 
             {/* Meter Readings Adjustment Section */}
             <View style={[styles.sectionHeader, { marginTop: spacingNumeric.md }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+              <Text variant="label" style={{ color: theme.colors.ink }}>
                 Hour Meter Readings
               </Text>
             </View>
@@ -276,20 +284,19 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
                 style={{ flex: 1 }}
               />
 
-              <TouchableOpacity
+              <Touchable
+                preset="button"
                 onPress={handleDiscard}
                 style={[styles.discardBtn, { borderColor: alertBorder, backgroundColor: alertBg }]}
                 disabled={isSubmitting}
-                activeOpacity={0.7}
               >
                 <Trash2 size={16} color={alertText} />
-                <Text style={[styles.discardText, { color: alertText }]}>Discard</Text>
-              </TouchableOpacity>
+                <Text variant="label" style={{ color: alertText }}>Discard</Text>
+              </Touchable>
             </View>
           </ScrollView>
-        </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -331,14 +338,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-  },
   closeBtn: {
     width: 32,
     height: 32,
@@ -362,16 +361,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: spacingNumeric.sm,
   },
-  conflictBannerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  conflictBannerBody: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
   conflictMeta: {
-    fontSize: 12.5,
     marginTop: 2,
   },
   errorBox: {
@@ -380,20 +370,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 8,
   },
-  errorText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   twoColGrid: {
     flexDirection: 'row',
@@ -414,9 +395,5 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     justifyContent: 'center',
-  },
-  discardText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

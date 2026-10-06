@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Trash2 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -44,6 +44,7 @@ export const DeleteMachineDialog: React.FC<DeleteMachineDialogProps> = ({
   const isBusy = isLoading || deleting;
 
   const handleDelete = async () => {
+    haptics.warning();
     if (onConfirm) {
       await onConfirm();
       return;
@@ -59,13 +60,16 @@ export const DeleteMachineDialog: React.FC<DeleteMachineDialogProps> = ({
       setDeleting(true);
       const { error } = await supabase.from('machines').delete().eq('id', targetId);
       if (error) {
+        haptics.error();
         Alert.alert('Error', error.message || 'Failed to delete machine');
       } else {
+        haptics.success();
         notifyMachineDeleted(displayId);
         onDeleted?.();
         onClose();
       }
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Error', err?.message || 'Failed to delete machine');
     } finally {
       setDeleting(false);
@@ -73,79 +77,74 @@ export const DeleteMachineDialog: React.FC<DeleteMachineDialogProps> = ({
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={isBusy ? undefined : onClose}
+      onClose={onClose}
+      variant="center"
+      persistent={isBusy}
+      testID="delete-machine-dialog"
     >
-      <TouchableWithoutFeedback onPress={isBusy ? undefined : onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.dialog,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <View style={[styles.iconWrap, { backgroundColor: theme.colors.error + '18' }]}>
-                <Trash2 size={24} color={theme.colors.error} />
-              </View>
-
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
-                Delete Machine {displayId}?
-              </Text>
-
-              <Text style={[styles.description, { color: theme.colors.mute }]}>
-                Are you sure you want to permanently delete machine{' '}
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
-                  {displayId}
-                </Text>
-                {displayModel ? ` (${displayModel})` : ''}? This action cannot be undone and will permanently remove associated shift personnel records.
-              </Text>
-
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  onPress={onClose}
-                  disabled={isBusy}
-                  style={[
-                    styles.cancelBtn,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleDelete}
-                  disabled={isBusy}
-                  style={[
-                    styles.deleteBtn,
-                    { backgroundColor: theme.colors.error },
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  {isBusy ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.deleteBtnText}>Delete Machine</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
+      <View
+        style={[
+          styles.dialog,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View style={[styles.iconWrap, { backgroundColor: theme.colors.error + '18' }]}>
+          <Trash2 size={24} color={theme.colors.error} />
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+
+        <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>
+          Delete Machine {displayId}?
+        </Text>
+
+        <Text variant="caption" style={[styles.description, { color: theme.colors.mute }]}>
+          Are you sure you want to permanently delete machine{' '}
+          <Text variant="caption" style={{ color: theme.colors.ink }}>
+            {displayId}
+          </Text>
+          {displayModel ? ` (${displayModel})` : ''}? This action cannot be undone and will permanently remove associated shift personnel records.
+        </Text>
+
+        <View style={styles.buttonRow}>
+          <Touchable
+            preset="button"
+            onPress={onClose}
+            disabled={isBusy}
+            style={[
+              styles.cancelBtn,
+              {
+                backgroundColor: theme.colors.canvas,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text variant="label" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
+              Cancel
+            </Text>
+          </Touchable>
+
+          <Touchable
+            preset="button"
+            onPress={handleDelete}
+            disabled={isBusy}
+            style={[
+              styles.deleteBtn,
+              { backgroundColor: theme.colors.error },
+            ]}
+          >
+            {isBusy ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text variant="label" style={styles.deleteBtnText}>Delete Machine</Text>
+            )}
+          </Touchable>
+        </View>
+      </View>
+    </AppModal>
   );
 };
 
@@ -179,14 +178,10 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.md,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
     textAlign: 'center',
     marginBottom: spacingNumeric.xs,
   },
   description: {
-    fontSize: 12,
-    lineHeight: 18,
     textAlign: 'center',
     marginBottom: spacingNumeric.lg,
   },
@@ -205,10 +200,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  cancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  cancelBtnText: {},
   deleteBtn: {
     flex: 1,
     paddingVertical: 12,
@@ -218,8 +210,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   deleteBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#ffffff',
   },
 });

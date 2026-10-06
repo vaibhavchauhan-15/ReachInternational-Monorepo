@@ -8,24 +8,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Switch,
   Platform,
-  Animated,
-} from 'react-native';
+  Animated} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 import {
   Card,
   Badge,
   useTheme,
   MobileHeader,
 } from '../../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { Text, Text as TypographyText } from '../../../components/ui/Text';
+import { useTypeScale } from '../../../lib/typography/TypeScaleProvider';
+import { spacingNumeric, radiusNumeric, type FontScalePreset } from '@reachinternational/design-tokens';
 import {
   Palette,
   Sun,
@@ -37,23 +36,21 @@ import {
   CheckCircle2,
   Sparkles,
 } from 'lucide-react-native';
+import { haptics } from '../../../lib/interaction/haptics';
 
-const FONT_PREF_KEY = '@reach:font_size_preference';
 const HAPTICS_PREF_KEY = '@reach:haptics_enabled';
 
-type FontSizeOption = 'default' | 'medium' | 'large';
-
-const FONT_SIZES: { id: FontSizeOption; label: string; scale: number; desc: string }[] = [
-  { id: 'default', label: 'Default (100%)', scale: 1.0, desc: 'Standard platform density' },
-  { id: 'medium', label: 'Medium (105%)', scale: 1.05, desc: 'Enhanced field legibility' },
-  { id: 'large', label: 'Large (110%)', scale: 1.1, desc: 'High visibility outdoors' },
+const FONT_OPTIONS: { id: FontScalePreset; label: string; desc: string }[] = [
+  { id: 'small', label: 'Small (92%)', desc: 'Compact density, maximum screen fit' },
+  { id: 'medium', label: 'Medium (100%)', desc: 'Standard platform density' },
+  { id: 'large', label: 'Large (120%)', desc: 'High visibility outdoors' },
 ];
 
 export default function PreferenceSettingsScreen() {
   const router = useRouter();
   const { theme, isDark, mode, setMode } = useTheme();
+  const { preset, setPreset, scale } = useTypeScale();
 
-  const [fontSize, setFontSize] = useState<FontSizeOption>('default');
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
 
   // Live Toast Feedback State
@@ -88,11 +85,7 @@ export default function PreferenceSettingsScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [storedFont, storedHaptics] = await Promise.all([
-          AsyncStorage.getItem(FONT_PREF_KEY),
-          AsyncStorage.getItem(HAPTICS_PREF_KEY),
-        ]);
-        if (storedFont) setFontSize(storedFont as FontSizeOption);
+        const storedHaptics = await AsyncStorage.getItem(HAPTICS_PREF_KEY);
         if (storedHaptics !== null) setHapticsEnabled(storedHaptics === 'true');
       } catch (e) {
         console.warn('[PreferenceSettings] Failed to load preferences:', e);
@@ -101,26 +94,21 @@ export default function PreferenceSettingsScreen() {
   }, []);
 
   const handleSetTheme = (newMode: 'light' | 'dark' | 'system') => {
-    if (hapticsEnabled) Haptics.selectionAsync().catch(() => {});
+    if (hapticsEnabled) haptics.select();
     setMode(newMode);
     const label = newMode === 'system' ? 'System Default' : newMode === 'dark' ? 'Dark' : 'Light';
     showToast(`Color theme set to ${label}`);
   };
 
-  const handleSelectFontSize = async (option: FontSizeOption) => {
-    if (hapticsEnabled) Haptics.selectionAsync().catch(() => {});
-    setFontSize(option);
-    try {
-      await AsyncStorage.setItem(FONT_PREF_KEY, option);
-    } catch (e) {
-      console.warn('[PreferenceSettings] Failed to save font preference:', e);
-    }
-    const item = FONT_SIZES.find((f) => f.id === option);
+  const handleSelectFontSize = (option: FontScalePreset) => {
+    if (hapticsEnabled) haptics.select();
+    setPreset(option);
+    const item = FONT_OPTIONS.find((f) => f.id === option);
     showToast(`Display scale set to ${item?.label || option}`);
   };
 
   const handleToggleHaptics = async (value: boolean) => {
-    if (value) Haptics.selectionAsync().catch(() => {});
+    if (value) haptics.select();
     setHapticsEnabled(value);
     try {
       await AsyncStorage.setItem(HAPTICS_PREF_KEY, String(value));
@@ -129,8 +117,6 @@ export default function PreferenceSettingsScreen() {
     }
     showToast(`Tactile haptics ${value ? 'enabled' : 'disabled'}`);
   };
-
-  const activeScale = FONT_SIZES.find((f) => f.id === fontSize)?.scale || 1.0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -281,8 +267,8 @@ export default function PreferenceSettingsScreen() {
           </View>
 
           <View style={styles.fontOptionsList}>
-            {FONT_SIZES.map((item) => {
-              const isSelected = fontSize === item.id;
+            {FONT_OPTIONS.map((item) => {
+              const isSelected = preset === item.id;
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -333,32 +319,19 @@ export default function PreferenceSettingsScreen() {
           >
             <View style={styles.previewHeader}>
               <Sparkles size={13} color={theme.colors.link} />
-              <Text style={[styles.previewBadgeText, { color: theme.colors.link }]}>
-                LIVE PREVIEW ({Math.round(activeScale * 100)}%)
-              </Text>
+              <TypographyText variant="caption" style={{ color: theme.colors.link }}>
+                LIVE PREVIEW ({Math.round(scale * 100)}%)
+              </TypographyText>
             </View>
-            <Text
-              style={[
-                styles.previewTitle,
-                {
-                  color: theme.colors.ink,
-                  fontSize: Math.round(15 * activeScale),
-                },
-              ]}
-            >
-              CAT 320D2 Hydraulic Excavator (M/C-0001)
-            </Text>
-            <Text
-              style={[
-                styles.previewSubtitle,
-                {
-                  color: theme.colors.mute,
-                  fontSize: Math.round(12.5 * activeScale),
-                },
-              ]}
-            >
-              Operator Ramesh Kumar • Shift A: 06:00 AM – 02:00 PM • Roster Active
-            </Text>
+            <TypographyText variant="heading" style={{ color: theme.colors.ink }}>
+              Machine M/C-0001
+            </TypographyText>
+            <TypographyText variant="body" style={{ color: theme.colors.mute }}>
+              Shift A · 06:00 AM – 02:00 PM
+            </TypographyText>
+            <TypographyText variant="caption" style={{ color: theme.colors.mute }}>
+              Last HMR 1204.5
+            </TypographyText>
           </View>
         </Card>
 
@@ -422,8 +395,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   toastText: {
-    fontSize: 13,
-    fontWeight: '700',
     flex: 1,
   },
   card: {
@@ -444,12 +415,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
   },
   sectionSubtitle: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   themeOptionsGrid: {
@@ -474,11 +441,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   themeOptionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   themeOptionDesc: {
-    fontSize: 10.5,
     textAlign: 'center',
   },
   activeCheckPill: {
@@ -503,11 +467,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   fontOptionLabel: {
-    fontSize: 13.5,
-    fontWeight: '700',
   },
   fontOptionDesc: {
-    fontSize: 11.5,
     marginTop: 1,
   },
   radioCircle: {
@@ -536,28 +497,14 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 2,
   },
-  previewBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  previewTitle: {
-    fontWeight: '700',
-  },
-  previewSubtitle: {
-    lineHeight: 18,
-  },
   hapticRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
   hapticTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
   },
   hapticSubtitle: {
-    fontSize: 12,
     marginTop: 2,
   },
 });

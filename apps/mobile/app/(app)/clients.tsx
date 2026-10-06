@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar } from '../../components/ui';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -209,7 +209,7 @@ export default function ClientsScreen() {
   }, [filterPanelOpen, filterAnim]);
 
   const handleResetAllFilters = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    haptics.success();
     resetListFilters();
   }, [resetListFilters]);
 
@@ -1037,7 +1037,7 @@ export default function ClientsScreen() {
           showFilterToggle={true}
           isFilterOpen={filterPanelOpen}
           onToggleFilter={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             setFilterPanelOpen((prev) => !prev);
           }}
           activeFilterCount={activeFilterCount}
@@ -1051,8 +1051,7 @@ export default function ClientsScreen() {
                 display: 'grid',
                 gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
                 transition: 'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-                overflow: 'hidden',
-              }}
+                overflow: 'hidden' }}
             >
               <div style={{ minHeight: 0 }}>
                 <View style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}>
@@ -1289,9 +1288,8 @@ export default function ClientsScreen() {
       </ScrollView>
 
       {/* Add / Edit Client Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
+      <AppModal visible={modalVisible} onClose={() => setModalVisible(false)} variant="bottom">
+        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
                 {editingClient ? `Edit (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
@@ -1311,13 +1309,13 @@ export default function ClientsScreen() {
                       <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Client ID</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.canvas, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.colors.hairline }}>
                         <Lock size={10} color="#f59e0b" />
-                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>Permanent</Text>
+                        <Text variant="mono" style={{ color: theme.colors.mute }}>Permanent</Text>
                       </View>
                     </View>
                     <TextInput
                       value={editingClient.client_id || editingClient.code}
                       editable={false}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, fontFamily: 'monospace' }]}
+                      style={[styles.modalInput, useTypeStyle('mono'), { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas }]}
                     />
                   </View>
                 )}
@@ -1536,14 +1534,14 @@ export default function ClientsScreen() {
                   </View>
                   {(parseInt(allowanceHours, 10) > 0 || parseInt(allowanceMinutes, 10) > 0) && (
                     <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
+                      <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
                         {parseInt(allowanceHours, 10) > 0 ? `${allowanceHours}h ` : ''}{parseInt(allowanceMinutes, 10) > 0 ? `${allowanceMinutes}m` : ''} / mo
                       </Text>
                     </View>
                   )}
                 </View>
 
-                <Text style={{ fontSize: 11, color: theme.colors.mute, marginBottom: 8, lineHeight: 16 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute, marginBottom: 8 }}>
                   Breakdowns up to this monthly limit per machine are classified as Maintenance instead of B/D. Leave at 0 for no allowance.
                 </Text>
 
@@ -1582,13 +1580,13 @@ export default function ClientsScreen() {
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd' }}>
                       <Sparkles size={10} color={isDark ? '#38bdf8' : '#0284c7'} />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#38bdf8' : '#0284c7' }}>
+                      <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
                         Auto Provision
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={{ fontSize: 11, color: theme.colors.mute, marginBottom: 8, lineHeight: 16 }}>
+                  <Text variant="caption" style={{ color: theme.colors.mute, marginBottom: 8 }}>
                     Select an operational shift preset for this client. Shifts will be pre-configured upon creation.
                   </Text>
 
@@ -1605,11 +1603,10 @@ export default function ClientsScreen() {
                             backgroundColor: isSelected ? (isDark ? 'rgba(0, 112, 243, 0.1)' : 'rgba(0, 112, 243, 0.05)') : theme.colors.canvasElevated,
                             borderRadius: radiusNumeric.sm,
                             padding: 10,
-                            minHeight: 44,
-                          }}
+                            minHeight: 44 }}
                         >
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? theme.colors.primary : theme.colors.ink }}>
+                            <Text style={{ color: isSelected ? theme.colors.primary : theme.colors.ink }}>
                               {preset.name}
                             </Text>
                             {isSelected ? (
@@ -1618,7 +1615,7 @@ export default function ClientsScreen() {
                               <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: theme.colors.mute }} />
                             )}
                           </View>
-                          <Text style={{ fontSize: 10.5, fontWeight: '600', color: isSelected ? theme.colors.primary : theme.colors.mute, marginBottom: 4 }}>
+                          <Text variant="caption" style={{ color: isSelected ? theme.colors.primary : theme.colors.mute, marginBottom: 4 }}>
                             {preset.badge}
                           </Text>
                           {preset.shifts.length > 0 && (
@@ -1632,10 +1629,9 @@ export default function ClientsScreen() {
                                     borderColor: theme.colors.hairline,
                                     borderRadius: 4,
                                     paddingHorizontal: 5,
-                                    paddingVertical: 2,
-                                  }}
+                                    paddingVertical: 2 }}
                                 >
-                                  <Text style={{ fontSize: 9.5, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                                  <Text variant="mono" style={{ color: theme.colors.ink }}>
                                     {s.code}: {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
                                   </Text>
                                 </View>
@@ -1654,14 +1650,12 @@ export default function ClientsScreen() {
               <Button label="Cancel" variant="outline" onPress={() => setModalVisible(false)} />
               <Button label={editingClient ? 'Update Client' : 'Save Client'} variant="primary" onPress={handleSave} />
             </View>
-          </View>
         </View>
-      </Modal>
+      </AppModal>
 
       {/* C11 Client Detail Modal */}
-      <Modal visible={detailModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, maxHeight: '92%' }]}>
+      <AppModal visible={detailModalVisible} onClose={() => setDetailModalVisible(false)} variant="bottom">
+        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, maxHeight: '92%' }]}>
             {/* Header: Summary */}
             <View style={styles.modalHeader}>
               <View style={{ flex: 1, paddingRight: 8 }}>
@@ -1678,14 +1672,14 @@ export default function ClientsScreen() {
                   {typeof selectedDetailClient?.maintenance_allowance_minutes === 'number' && selectedDetailClient.maintenance_allowance_minutes > 0 ? (
                     <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Wrench size={10} color={isDark ? '#fbbf24' : '#d97706'} />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
+                      <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
                         MAINT: {Math.floor(selectedDetailClient.maintenance_allowance_minutes / 60)}h{selectedDetailClient.maintenance_allowance_minutes % 60 > 0 ? ` ${selectedDetailClient.maintenance_allowance_minutes % 60}m` : ''}/MO
                       </Text>
                     </View>
                   ) : (
                     <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <AlertCircle size={10} color="#dc2626" />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#dc2626' }}>
+                      <Text variant="caption" style={{ color: '#dc2626' }}>
                         MAINT: NOT ALLOWED
                       </Text>
                     </View>
@@ -1713,7 +1707,7 @@ export default function ClientsScreen() {
                   </Text>
                   <View style={{ gap: 4, marginTop: 4 }}>
                     <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>
-                      Person: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{selectedDetailClient?.contact_person || '—'}</Text>
+                      Person: <Text style={{ color: theme.colors.ink }}>{selectedDetailClient?.contact_person || '—'}</Text>
                     </Text>
                     {selectedDetailClient?.phone && (
                       <TouchableOpacity
@@ -1721,7 +1715,7 @@ export default function ClientsScreen() {
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 }}
                       >
                         <Phone size={12} color={theme.colors.primary} />
-                        <Text style={{ fontFamily: 'monospace', fontSize: 12, color: theme.colors.primary, fontWeight: '600' }}>
+                        <Text variant="mono" style={{ color: theme.colors.primary }}>
                           {selectedDetailClient.phone}
                         </Text>
                       </TouchableOpacity>
@@ -1737,13 +1731,13 @@ export default function ClientsScreen() {
                   <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>GSTIN</Text>
-                      <Text style={{ fontFamily: 'monospace', fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
+                      <Text variant="mono" style={{ color: theme.colors.ink }}>
                         {selectedDetailClient?.gstin || 'Not Registered'}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>PAN</Text>
-                      <Text style={{ fontFamily: 'monospace', fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
+                      <Text variant="mono" style={{ color: theme.colors.ink }}>
                         {selectedDetailClient?.pan_number || '—'}
                       </Text>
                     </View>
@@ -1760,7 +1754,7 @@ export default function ClientsScreen() {
                       onPress={handleToggleMobileLocation}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 6 }}
                     >
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.primary }}>
+                      <Text variant="caption" style={{ color: theme.colors.primary }}>
                         {mobileLocationExpanded ? 'Hide' : 'Load On Demand'}
                       </Text>
                       {mobileLocationExpanded ? <ChevronUp size={12} color={theme.colors.primary} /> : <ChevronDown size={12} color={theme.colors.primary} />}
@@ -1768,25 +1762,25 @@ export default function ClientsScreen() {
                   </View>
 
                   {!mobileLocationExpanded ? (
-                    <Text style={{ fontSize: 13, color: theme.colors.mute, marginTop: 2 }}>
+                    <Text style={{ color: theme.colors.mute, marginTop: 2 }}>
                       {[selectedDetailClient?.street, selectedDetailClient?.city, selectedDetailClient?.state].filter(Boolean).join(', ') || '—'}
                     </Text>
                   ) : mobileLocationLoading ? (
                     <View style={{ paddingVertical: 12, alignItems: 'center', gap: 4 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12, color: theme.colors.mute }}>Fetching location details...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Fetching location details...</Text>
                     </View>
                   ) : (
                     <View style={{ gap: 8, marginTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingTop: 6 }}>
                       <View>
                         <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Site Address:</Text>
-                        <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '500' }}>
+                        <Text style={{ color: theme.colors.ink }}>
                           {mobileLocationData?.site_address || '—'}
                         </Text>
                       </View>
                       <View>
                         <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Billing Address:</Text>
-                        <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '500' }}>
+                        <Text style={{ color: theme.colors.ink }}>
                           {mobileLocationData?.billing_address || 'Same as site location'}
                         </Text>
                       </View>
@@ -1843,10 +1837,10 @@ export default function ClientsScreen() {
                 {/* 5. Operational Tab Content Area */}
                 {mobileActiveTab === null && (
                   <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, alignItems: 'center', paddingVertical: 16 }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                    <Text variant="caption" style={{ color: theme.colors.ink }}>
                       Operational Records (On Demand)
                     </Text>
-                    <Text style={{ fontSize: 12.5, color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
+                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
                       Select a tab above to load machines, logs, assignments, history, or audit logs on demand.
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
@@ -1855,21 +1849,21 @@ export default function ClientsScreen() {
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Truck size={12} color={theme.colors.primary} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Machines</Text>
+                        <Text style={{ color: theme.colors.ink }}>Machines</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleMobileTabChange('logs')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Clock size={12} color="#059669" />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Running Logs</Text>
+                        <Text style={{ color: theme.colors.ink }}>Running Logs</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleMobileTabChange('assignments')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <UserCheck size={12} color="#7e22ce" />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Assignments</Text>
+                        <Text style={{ color: theme.colors.ink }}>Assignments</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1881,20 +1875,20 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'machines' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading deployed machines...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading deployed machines...</Text>
                     </View>
                   ) : mobileMachines.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       No equipment assigned to this client.
                     </Text>
                   ) : (
                     mobileMachines.map((m: any) => (
                       <View key={m.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 13 }}>
+                          <Text variant="mono" style={{ color: theme.colors.primary }}>
                             {m.machine_id}
                           </Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{m.model}</Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>{m.model}</Text>
                         </View>
                         <Badge status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'} customLabel={m.status.toUpperCase()} />
                       </View>
@@ -1907,7 +1901,7 @@ export default function ClientsScreen() {
               {mobileActiveTab === 'sites' && (
                 <View style={{ gap: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: theme.colors.mute, textTransform: 'uppercase' }}>
+                    <Text variant="caption" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
                       Registered Sites ({mobileSites.length})
                     </Text>
                     <TouchableOpacity
@@ -1915,31 +1909,31 @@ export default function ClientsScreen() {
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 32 }}
                     >
                       <Plus size={12} color="#ffffff" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#ffffff' }}>Add Site</Text>
+                      <Text variant="caption" style={{ color: '#ffffff' }}>Add Site</Text>
                     </TouchableOpacity>
                   </View>
                   {mobileTabLoading === 'sites' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading operational sites...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading operational sites...</Text>
                     </View>
                   ) : mobileSites.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       No sites registered for this client.
                     </Text>
                   ) : (
                     mobileSites.map((s: any) => (
                       <View key={s.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 12 }}>
+                          <Text variant="mono" style={{ color: theme.colors.primary }}>
                             {s.site_code}
                           </Text>
                           <Badge status={s.status === 'active' ? 'active' : 'inactive'} customLabel={s.status.toUpperCase()} />
                         </View>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>{s.site_name}</Text>
+                        <Text style={{ color: theme.colors.ink }}>{s.site_name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <MapPin size={12} color={theme.colors.mute} />
-                          <Text style={{ fontSize: 11.5, color: theme.colors.mute, flexShrink: 1 }}>
+                          <Text variant="caption" style={{ color: theme.colors.mute, flexShrink: 1 }}>
                             {[s.street, s.city, s.district, s.state_name, s.pincode].filter(Boolean).join(', ')}
                           </Text>
                         </View>
@@ -1955,22 +1949,22 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'logs' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading running logs...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading running logs...</Text>
                     </View>
                   ) : mobileLogs.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       No running logs recorded.
                     </Text>
                   ) : (
                     mobileLogs.map((l: any) => (
                       <View key={l.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 13, color: theme.colors.ink }}>
+                          <Text variant="mono" style={{ color: theme.colors.ink }}>
                             {l.machine_code} • {l.log_date}
                           </Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
                         </View>
-                        <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: '#059669', fontSize: 13 }}>
+                        <Text variant="mono" style={{ color: '#059669' }}>
                           {l.running_hours} hrs
                         </Text>
                       </View>
@@ -1985,18 +1979,18 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'assignments' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading assignments...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading assignments...</Text>
                     </View>
                   ) : mobileAssignments.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       No operator assignments found.
                     </Text>
                   ) : (
                     mobileAssignments.map((a: any) => (
                       <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontWeight: '700', fontSize: 13.5, color: theme.colors.ink }}>{a.operator_name}</Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>
+                          <Text style={{ color: theme.colors.ink }}>{a.operator_name}</Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>
                             {a.machine_code} • {a.shift_name || `Shift ${a.shift_code || '1'}`} ({a.shift})
                           </Text>
                         </View>
@@ -2013,20 +2007,20 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'history' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading history...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading history...</Text>
                     </View>
                   ) : mobileHistory.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       No timeline history events found.
                     </Text>
                   ) : (
                     mobileHistory.map((h: any) => (
                       <View key={h.id} style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontWeight: '700', fontSize: 13, color: theme.colors.ink }}>{h.title}</Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
+                          <Text style={{ color: theme.colors.ink }}>{h.title}</Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
                         </View>
-                        <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
+                        <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
                       </View>
                     ))
                   )}
@@ -2039,22 +2033,22 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'audit' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading audit trail...</Text>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading audit trail...</Text>
                     </View>
                   ) : mobileAudits.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
+                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
                       Zero audit entries logged.
                     </Text>
                   ) : (
                     mobileAudits.map((a: any) => (
                       <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 13, color: theme.colors.primary }}>
+                          <Text variant="mono" style={{ color: theme.colors.primary }}>
                             {a.action}
                           </Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>{formatDate(a.created_at)}</Text>
+                        <Text variant="caption" style={{ color: theme.colors.mute }}>{formatDate(a.created_at)}</Text>
                       </View>
                     ))
                   )}
@@ -2078,17 +2072,15 @@ export default function ClientsScreen() {
               )}
             </View>
           </View>
-        </View>
-      </Modal>
+        </AppModal>
 
       {/* Add Client Site Modal */}
-      <Modal visible={siteModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
+      <AppModal visible={siteModalVisible} onClose={() => setSiteModalVisible(false)} variant="bottom">
+        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Add Operating Site</Text>
-                <Text style={{ fontSize: 11.5, color: theme.colors.mute, marginTop: 2 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
                   {siteTargetClientId
                     ? (clients.find((c) => c.id === siteTargetClientId)?.company_name || 'Existing Client')
                     : 'Register an operational facility'}
@@ -2177,9 +2169,8 @@ export default function ClientsScreen() {
               <Button label="Cancel" variant="outline" onPress={() => setSiteModalVisible(false)} disabled={isSavingSite} />
               <Button label={isSavingSite ? 'Saving...' : 'Save Site'} variant="primary" onPress={handleSaveSite} disabled={isSavingSite} />
             </View>
-          </View>
         </View>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
@@ -2190,31 +2181,23 @@ const styles = StyleSheet.create({
   filterPanelContent: {
     paddingTop: 10,
     borderTopWidth: 1,
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   filterSelectorsGrid: {
     flexDirection: 'row',
-    gap: 8,
-  },
+    gap: 8 },
   selectorCol: {
-    flex: 1,
-  },
+    flex: 1 },
   filterPanelAnimatedContainer: {
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
     paddingTop: 10,
-    borderTopWidth: 1,
-  },
+    borderTopWidth: 1 },
   activeBadgesHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginRight: 2,
-  },
+    marginRight: 2 },
   badgeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2222,58 +2205,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   badgeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+    },
   resetAllLink: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
+    paddingVertical: 4 },
   resetAllLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   listContainer: { gap: spacingNumeric.sm },
   emptyCard: { padding: spacingNumeric.lg, alignItems: 'center' },
-  emptyText: { fontSize: 13.5, fontWeight: '600' },
+  emptyText: { },
   codeText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.2,
-  },
+    },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacingNumeric.md },
   modalContent: { borderRadius: radiusNumeric.lg, padding: spacingNumeric.md, gap: spacingNumeric.sm, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  modalTitle: { fontSize: 16, fontWeight: '800' },
+  modalTitle: { },
   formSection: { marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  sectionTitle: { textTransform: 'uppercase', marginBottom: 8 },
   formGroup: { marginBottom: 8 },
   rowInputs: { flexDirection: 'row', gap: 8 },
-  fieldLabel: { fontSize: 13.5, fontWeight: '600', marginBottom: 4 },
-  modalInput: { borderWidth: 1, borderRadius: radiusNumeric.sm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15 },
+  fieldLabel: { marginBottom: 4 },
+  modalInput: { borderWidth: 1, borderRadius: radiusNumeric.sm, paddingHorizontal: 10, paddingVertical: 8 },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  switchLabel: { fontSize: 13.5, fontWeight: '600' },
+  switchLabel: { },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
   paginationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
   pageBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1 },
-  pageBtnText: { fontSize: 13, fontWeight: '600' },
-  pageIndicator: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pageBtnText: { },
+  pageIndicator: { fontVariant: ['tabular-nums'] },
   pageSizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, marginBottom: 20 },
-  pageSizeLabel: { fontSize: 12.5, fontWeight: '600' },
+  pageSizeLabel: { },
   pageSizeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, minHeight: 32, justifyContent: 'center', alignItems: 'center' },
-  pageSizeChipText: { fontSize: 12.5, fontWeight: '700' },
+  pageSizeChipText: { },
   detailTabChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radiusNumeric.full, borderWidth: 1, minHeight: 44 },
-  detailTabChipText: { fontSize: 13, fontWeight: '700' },
+  detailTabChipText: { },
   detailSectionCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10 },
-  detailCardTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  detailTextSmall: { fontSize: 12, fontWeight: '500' },
-  detailItemCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },
-});
+  detailCardTitle: { textTransform: 'uppercase' },
+  detailTextSmall: { },
+  detailItemCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 } });

@@ -20,6 +20,7 @@
     "@reachinternational/types": "workspace:*",
     "@reachinternational/utils": "workspace:*",
     "@reachinternational/validation": "workspace:*",
+    "@sentry/nextjs": "^11.4.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "@upstash/qstash": "^2.11.3",

@@ -1,3 +1,4 @@
+import { Text } from '../ui/Text';
 /**
  * SyncStatusBadge — 4-State Tactical Status Pill for Machine Logs
  * Phase 14: Mobile Offline Sync & Network Resilience
@@ -5,7 +6,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Clock, Check, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
@@ -75,10 +76,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-    textTransform: 'uppercase',
+  label: {    textTransform: 'uppercase',
   },
 });

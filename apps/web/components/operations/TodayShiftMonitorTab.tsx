@@ -616,7 +616,16 @@ export function TodayShiftMonitorTab({
             return (
               <div
                 key={row.operator_id ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}` : `m-unassigned-${row.machine_id}-${idx}`}
-                className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-3 space-y-2 ${
+                onClick={() => {
+                  if (isUnassigned) {
+                    handleAssignOperator(row.machine_id);
+                  } else if (canEnterLog && row.status === "pending") {
+                    handleEnterLog(row);
+                  }
+                }}
+                className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-3 space-y-2 transition-all active:scale-[0.99] ${
+                  isUnassigned || (canEnterLog && row.status === "pending") ? "cursor-pointer hover:border-[var(--color-ink)]/30" : ""
+                } ${
                   isUnassigned
                     ? "border-amber-500/30 bg-amber-500/[0.02]"
                     : "border-[var(--color-hairline)]"
@@ -651,7 +660,10 @@ export function TodayShiftMonitorTab({
                 {/* Machine & Client Info — clickable to assign */}
                 <button
                   type="button"
-                  onClick={() => handleAssignOperator(row.machine_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAssignOperator(row.machine_id);
+                  }}
                   className="w-full text-left space-y-0.5 p-1.5 -m-1 rounded hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
                   <div className="text-xs text-[var(--color-ink)] font-mono font-semibold">
@@ -702,7 +714,10 @@ export function TodayShiftMonitorTab({
                 {isUnassigned ? (
                   <Button
                     variant="primary"
-                    onClick={() => handleAssignOperator(row.machine_id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAssignOperator(row.machine_id);
+                    }}
                     className="w-full h-11 text-sm font-semibold flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white cursor-pointer"
                   >
                     <UserPlus size={16} />
@@ -712,16 +727,15 @@ export function TodayShiftMonitorTab({
                   canEnterLog ? (
                     <Button
                       variant="ghost"
-                      onClick={() => handleEnterLog(row)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEnterLog(row);
+                      }}
                       className="w-full h-11 text-sm font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer"
                     >
                       Enter Log for {row.operator_name}
                     </Button>
-                  ) : (
-                    <div className="w-full py-1 text-center text-xs text-muted-foreground/60 font-medium">
-                      Shift log submission pending
-                    </div>
-                  )
+                  ) : null
                 ) : null}
               </div>
             );

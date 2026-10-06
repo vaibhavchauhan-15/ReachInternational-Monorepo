@@ -7,9 +7,11 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
-  ExternalLink,
   ZoomIn,
   ZoomOut,
+  Maximize2,
+  Check,
+  ArrowLeftRight,
 } from "lucide-react";
 
 export interface ViewerDocument {
@@ -33,14 +35,20 @@ export function DocumentViewerModal({
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // Zoom & Pan state
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
 
   const dragStartRef = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const pdfScrollContainerRef = useRef<HTMLDivElement>(null);
+  const pdfTouchStartDistRef = useRef<number>(0);
+  const pdfTouchStartScaleRef = useRef<number>(1);
+  const lastTapRef = useRef<number>(0);
   const touchDataRef = useRef<{
     dist: number;
     scale: number;
@@ -56,8 +64,10 @@ export function DocumentViewerModal({
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setIsDragging(false);
+    setIsPinching(false);
     setImageLoading(true);
     setImageError(false);
+    setDownloadSuccess(false);
   }, [doc?.id, doc?.url]);
 
   const isImage = Boolean(
@@ -204,11 +214,54 @@ export function DocumentViewerModal({
     }
   };
 
+  const handlePdfTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      setIsPinching(true);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pdfTouchStartDistRef.current = dist;
+      pdfTouchStartScaleRef.current = scale;
+    }
+  };
+
+  const handlePdfTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pdfTouchStartDistRef.current > 0) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / pdfTouchStartDistRef.current;
+      const nextScale = Math.min(
+        Math.max(Number((pdfTouchStartScaleRef.current * factor).toFixed(2)), 1),
+        4
+      );
+      setScale(nextScale);
+    }
+  };
+
+  const handlePdfTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      setIsPinching(false);
+      pdfTouchStartDistRef.current = 0;
+    }
+  };
+
+  const handlePdfDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      setScale((prev) => (prev > 1 ? 1 : 1.5));
+    }
+    lastTapRef.current = now;
+  };
+
   if (!doc) return null;
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!doc?.url || downloading) return;
     setDownloading(true);
+
     try {
       let filename = doc.fileName || doc.title || "document";
       const ext =
@@ -227,37 +280,25 @@ export function DocumentViewerModal({
         filename = `${filename}.${ext}`;
       }
 
-      // 1. If document is saved with an ID, use our high-reliability server download endpoint
+      // 1. If document has an ID, use our server download endpoint directly.
+      // /api/documents/${doc.id}/download delivers Content-Disposition: attachment; filename="..."
+      // Direct anchor click initiates native browser download immediately (0ms delay),
+      // completely bypassing memory-heavy JS blob buffering and mobile Safari async click restrictions.
       if (doc.id) {
-        try {
-          const res = await fetch(`/api/documents/${doc.id}/download`);
-          if (res.ok) {
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-            return;
-          }
-        } catch {
-          // If fetch fails, proceed to anchor download trigger below
-        }
-
-        // Direct anchor download via download API route (attachment header forces download)
+        const downloadUrl = `/api/documents/${doc.id}/download`;
         const a = document.createElement("a");
-        a.href = `/api/documents/${doc.id}/download`;
+        a.href = downloadUrl;
         a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 2000);
         return;
       }
 
-      // 2. For locally selected files (blob: URLs)
+      // 2. For local blob: URLs (e.g. newly selected local files)
       if (doc.url.startsWith("blob:")) {
         const a = document.createElement("a");
         a.href = doc.url;
@@ -265,32 +306,27 @@ export function DocumentViewerModal({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 2000);
         return;
       }
 
-      // 3. Fallback: direct blob fetch from signed URL
-      const response = await fetch(doc.url);
-      if (!response.ok) throw new Error("Failed to fetch file");
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-
+      // 3. For signed/external URLs
       const a = document.createElement("a");
-      a.href = blobUrl;
+      a.href = doc.url;
       a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-    } catch {
-      // 4. Final fallback: open/download in new window
-      const fallbackUrl = doc.id ? `/api/documents/${doc.id}/download` : doc.url;
-      const a = document.createElement("a");
-      a.href = fallbackUrl;
       a.target = "_blank";
-      a.download = doc.fileName || doc.title || "document";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2000);
+    } catch {
+      if (doc.url) {
+        window.open(doc.url, "_blank");
+      }
     } finally {
       setDownloading(false);
     }
@@ -307,8 +343,8 @@ export function DocumentViewerModal({
       headerClassName="pr-16 sm:pr-48"
       headerActions={
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Zoom In & Out Buttons (ONLY for desktop view) */}
-          {isImage && (
+          {/* Zoom In & Out Buttons (available for both images and PDFs on desktop) */}
+          {(isImage || isPdf) && (
             <div className="hidden sm:inline-flex items-center gap-0.5 bg-[var(--color-canvas)] border border-[var(--color-hairline)] rounded-lg p-0.5 shadow-xs">
               <button
                 type="button"
@@ -339,23 +375,47 @@ export function DocumentViewerModal({
             </div>
           )}
 
-          {/* Download Button */}
+          {/* Full View for Desktop */}
+          {doc.url && (
+            <a
+              href={doc.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 transition-colors cursor-pointer active:scale-95"
+              title="Open full size in new tab"
+            >
+              <Maximize2 className="h-3.5 w-3.5 text-[var(--color-mute)]" />
+              <span>Full View</span>
+            </a>
+          )}
+
+          {/* Download Button (Optimized for instant zero-lag download across mobile and desktop) */}
           {doc.url ? (
             <button
               type="button"
               onClick={handleDownload}
               disabled={downloading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 transition-colors cursor-pointer active:scale-95 disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-1.5 min-h-[36px] min-w-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 transition-all cursor-pointer active:scale-95 disabled:opacity-60"
               title="Download document"
             >
-              {downloading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-link)]" />
+              {downloadSuccess ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="hidden sm:inline text-emerald-600 dark:text-emerald-400 font-semibold">
+                    Downloaded
+                  </span>
+                </>
+              ) : downloading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-link)]" />
+                  <span className="hidden sm:inline">Downloading...</span>
+                </>
               ) : (
-                <Download className="h-3.5 w-3.5 text-[var(--color-link)]" />
+                <>
+                  <Download className="h-3.5 w-3.5 text-[var(--color-link)]" />
+                  <span className="hidden sm:inline">Download</span>
+                </>
               )}
-              <span className="hidden sm:inline">
-                {downloading ? "Downloading..." : "Download"}
-              </span>
             </button>
           ) : null}
         </div>
@@ -462,55 +522,110 @@ export function DocumentViewerModal({
 
       {/* 2. PDF PREVIEW */}
       {isPdf && (
-        <div className="w-full h-[62vh] sm:h-[70vh] rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] relative flex flex-col">
-          {/* Skeleton loader for PDF while loading */}
-          {doc.url ? (
-            <iframe
-              src={`${doc.url}#toolbar=1&navpanes=0`}
-              title={doc.title}
-              loading="lazy"
-              className="w-full flex-1 border-0 bg-white"
-            />
-          ) : (
-            <div className="w-full flex-1 flex flex-col items-center justify-center p-6 animate-pulse select-none bg-[var(--color-canvas-elevated)]">
-              <div className="h-16 w-16 rounded-2xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center shadow-xs mb-3">
-                <FileText className="h-8 w-8 text-[var(--color-mute)]" />
-              </div>
-              <div className="flex items-center gap-2 text-xs text-[var(--color-mute)] font-medium">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-link)]" />
-                <span>Loading PDF document...</span>
-              </div>
+        <div
+          ref={containerRef}
+          onTouchStart={handlePdfTouchStart}
+          onTouchMove={handlePdfTouchMove}
+          onTouchEnd={handlePdfTouchEnd}
+          onClick={handlePdfDoubleTap}
+          className="w-full h-[64vh] sm:h-[72vh] rounded-xl overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] relative flex flex-col shadow-xs"
+        >
+          {/* Zoom hint badge when zoomed */}
+          {scale > 1 && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none bg-black/65 dark:bg-black/85 backdrop-blur-xs text-white text-[11px] font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm transition-opacity duration-300">
+              <ArrowLeftRight className="h-3 w-3 text-sky-400" />
+              <span>Scroll left & right to view details</span>
             </div>
           )}
 
-          {/* Mobile helper strip */}
-          <div className="sm:hidden flex items-center justify-between px-3 py-2 bg-[var(--color-canvas-elevated)] border-t border-[var(--color-hairline)] text-[11px] text-[var(--color-mute)] shrink-0">
-            <span>PDF Document</span>
-            <div className="flex items-center gap-2.5">
+          {/* Touch-scrollable Viewport (momentum scrolling left/right and vertical page scrolling) */}
+          <div
+            ref={pdfScrollContainerRef}
+            className="w-full flex-1 overflow-x-auto overflow-y-auto overscroll-contain select-none"
+            style={{
+              WebkitOverflowScrolling: "touch",
+              touchAction: scale > 1 ? "pan-x pan-y" : "auto",
+            }}
+          >
+            {doc.url ? (
+              <div
+                style={{
+                  width: scale > 1 ? `${scale * 100}%` : "100%",
+                  minWidth: scale > 1 ? `${scale * 100}%` : "100%",
+                  height: scale > 1 ? `${scale * 100}%` : "100%",
+                  minHeight: "100%",
+                  transition: isPinching ? "none" : "width 0.15s ease-out, height 0.15s ease-out",
+                }}
+                className="relative flex flex-col"
+              >
+                <iframe
+                  src={`${doc.url}#toolbar=1&navpanes=0&view=FitH`}
+                  title={doc.title}
+                  loading="lazy"
+                  className="w-full flex-1 border-0 bg-white"
+                  style={{
+                    pointerEvents: isPinching ? "none" : "auto",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="w-full flex-1 flex flex-col items-center justify-center p-6 animate-pulse select-none bg-[var(--color-canvas-elevated)]">
+                <div className="h-16 w-16 rounded-2xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center shadow-xs mb-3">
+                  <FileText className="h-8 w-8 text-[var(--color-mute)]" />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[var(--color-mute)] font-medium">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-link)]" />
+                  <span>Loading PDF document...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile helper strip: Clean, thumb-friendly footer with zoom stepper and full size view */}
+          <div className="sm:hidden flex items-center justify-between px-3 py-2 bg-[var(--color-canvas-elevated)] border-t border-[var(--color-hairline)] text-[11px] text-[var(--color-mute)] shrink-0 gap-2">
+            <span className="font-medium shrink-0">PDF Document</span>
+
+            {/* Mobile Zoom Stepper */}
+            <div className="inline-flex items-center gap-0.5 bg-[var(--color-canvas)] border border-[var(--color-hairline)] rounded-lg p-0.5 shadow-xs">
               <button
                 type="button"
-                onClick={handleDownload}
-                disabled={downloading}
-                className="inline-flex items-center gap-1 font-semibold text-[var(--color-link)] hover:underline cursor-pointer disabled:opacity-60"
+                onClick={handleZoomOut}
+                disabled={scale <= 1}
+                className="p-1 rounded-md hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                title="Zoom out"
               >
-                {downloading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Download className="h-3 w-3" />
-                )}
-                <span>{downloading ? "Saving..." : "Download"}</span>
+                <ZoomOut className="h-3.5 w-3.5 text-[var(--color-mute)]" />
               </button>
-              <span className="text-[var(--color-hairline)]">|</span>
-              <a
-                href={doc.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:underline"
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="px-2 py-0.5 text-[11px] font-mono font-semibold text-[var(--color-ink)] transition-colors cursor-pointer"
+                title="Reset zoom (100%)"
               >
-                <span>Full View</span>
-                <ExternalLink className="h-3 w-3" />
-              </a>
+                {Math.round(scale * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={scale >= 4}
+                className="p-1 rounded-md hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                title="Zoom in"
+              >
+                <ZoomIn className="h-3.5 w-3.5 text-[var(--color-mute)]" />
+              </button>
             </div>
+
+            {/* Full View with Full Size Icon (Maximize2) */}
+            <a
+              href={doc.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-[var(--color-ink)] bg-[var(--color-canvas)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors active:scale-95"
+              title="Open full size view in new tab"
+            >
+              <Maximize2 className="h-3.5 w-3.5 text-[var(--color-mute)]" />
+              <span>Full View</span>
+            </a>
           </div>
         </div>
       )}

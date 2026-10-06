@@ -21,9 +21,13 @@ AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 │
 ├── apps/web/AGENTS.md             ← Next.js / Web-specific rules
 ├── apps/mobile/AGENTS.md          ← React Native / Expo-specific rules
-├── packages/ui/AGENTS.md          ← Shared UI package rules
-├── packages/eslint-config/AGENTS.md
-├── packages/typescript-config/AGENTS.md
+├── packages/design-tokens/AGENTS.md ← Shared design tokens & Geist theme rules
+├── packages/permissions/AGENTS.md   ← Canonical RBAC & permission matrices
+├── packages/types/AGENTS.md         ← Shared TypeScript data models & schemas
+├── packages/validation/AGENTS.md    ← Zod schemas & shared validation
+├── packages/api-client/AGENTS.md    ← API transport & query clients
+├── packages/utils/AGENTS.md         ← Common cross-platform utilities
+├── packages/config/AGENTS.md        ← Shared configuration constants
 └── supabase/AGENTS.md             ← Database / RLS / RPC / migration rules
 ```
 
@@ -75,13 +79,19 @@ Before planning, editing, analyzing, or executing anything, every AI agent MUST 
    - `AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`
    - `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`
    - `AI/RULES/MULTI-AGENT-ENGINEERING-TEAM.md`
+   - `AI/RULES/WEB-MOBILE-PARITY.md`
 6. **Cross-Platform UI & Agent Rules (`.agents/rules/`)**:
    - `.agents/rules/mandatory_rules_reading_and_enforcement.md`
    - `.agents/rules/multi_agent_engineering_team.md`
    - `.agents/rules/responsive_cross_platform_design.md`
    - `.agents/rules/global_responsive_design.md`
    - `.agents/rules/web_mobile_ui_consistency.md`
-7. **Module-specific `AGENTS.md`** for the affected module(s).
+   - `.agents/rules/web_mobile_parity.md`
+   - `.agents/rules/native_backend_architecture.md`
+7. **Cross-Platform & Native Agent Skills (`.agents/skills/`)**:
+   - `.agents/skills/web-mobile-parity/SKILL.md` (100% Web & Mobile parity workflow across all 8 dimensions)
+   - `.agents/skills/native-backend-architecture/SKILL.md` (Native mobile backend, TanStack Query, SecureStore, touch ergonomics)
+8. **Module-specific `AGENTS.md`** for the affected module(s).
 
 Never scan the entire repository unless these files explicitly instruct you to.
 
@@ -257,16 +267,30 @@ Business-critical logic MUST NOT exist only in the UI. Enforce at the appropriat
 Never rely only on frontend validation for critical business rules.
 
 ### UI/UX & Responsive
+- **PRIMARY AUTHORITIES**: Root `DESIGN.md` and `ARCHITECTURE.md` are the binding, single sources of truth for visual design, tokens, and architecture.
+- **100% WEB & NATIVE DESIGN PARITY**: Every page, component, and module across Web and Native Mobile MUST follow the **100% EXACT SAME color tokens, typography, font families, visual hierarchy, layout structure, status indicators, badges, icons, terminology, and interaction flows**.
+- **DESIGN TOKENS**: All styles MUST adhere to `DESIGN.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, Reach sky blue `#0284c7` / `#0ea5e9`, Geist Sans/Mono fonts) and `AI/RULES/DESIGN-SYSTEM.md`.
+- **3-TIER VIEWPORT RESPONSIVENESS**: Mobile (≤640px touch cards), Tablet (641–1023px 2-col grids), Desktop (≥1024px high-density tables) — see `AI/RULES/GLOBAL-RESPONSIVE-DESIGN.md`.
 
-- **STRICT UI/UX & RESPONSIVE RULE**: Every page, component, and module MUST strictly adhere to `AI/RULES/DESIGN-SYSTEM.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, `#0070f3` link blue, Geist Sans/Mono fonts) and `AI/RULES/UI-UX.md`.
-- **3-TIER VIEWPORT RESPONSIVENESS**: Mobile (≤640px), Tablet (641–1023px), Desktop (≥1024px) — see `AI/RULES/GLOBAL-RESPONSIVE-DESIGN.md`.
+### Native Backend & Architecture Rules (`apps/mobile`)
+- **Native Architecture**: Native app backend and data architecture MUST be tailored specifically for native mobile:
+  1. **TanStack Query (`@tanstack/react-query`)**: Powers all server state caching, stale times (30s default), background refetching, and mutation invalidation.
+  2. **Hardware-Backed SecureStore (`expo-secure-store`)**: All auth tokens and refresh tokens MUST be stored in hardware keystores (iOS Keychain / Android Keystore). Never store tokens in unencrypted AsyncStorage.
+  3. **Offline-First Queue**: Offline mutations MUST be queued persistently in AsyncStorage with NetInfo connectivity monitoring and ambient status banner (`OfflineBanner.tsx`).
+  4. **Touch & Motion Primitives**: Minimum 44px touch targets (`minHeight: 44`), bottom sheets instead of desktop popovers, scrollable horizontal filter strips, Reanimated spring physics, and tactile haptic feedback (`Haptics.selectionAsync()`).
+  5. **Type Safety**: Strictly use `<Text variant="...">` with zero raw typography properties in `StyleSheet.create`.
+
+### Web Backend & Architecture Rules (`apps/web`)
+- **Web Architecture**: Web app backend and data architecture MUST follow Next.js 16.2 App Router standards:
+  1. **React Server Components (RSC)**: Fetch data server-side by default; client components (`'use client'`) are strictly leaf nodes.
+  2. **Data Access Layer (DAL)**: All reads go through `lib/dal.ts` and `lib/queries/*` using per-request Supabase SSR clients. No `SELECT *`.
+  3. **Server Actions (`app/actions/*`)**: All mutations go through Server Actions with Zod validation, role authorization, audit logging, and cache revalidation (`revalidateTag`).
+  4. **SSR Auth**: Supabase Auth managed securely via HTTP-only cookies (`@supabase/ssr`).
 
 ### Web-to-Mobile Synchronization
-
-**MANDATORY**: Whenever ANY change is added or modified in `apps/web`, every AI agent MUST apply and synchronize the same change in `apps/mobile` with mobile-compatible adaptations (touch cards, bottom sheets, scrollable filter strips, min 44px touch targets) in the same task. Web and Mobile MUST NEVER drift out of sync.
+**MANDATORY ZERO-DRIFT RULE**: Whenever ANY change is added or modified in `apps/web`, every AI agent MUST apply and synchronize the same change in `apps/mobile` with mobile-compatible adaptations (touch cards, bottom sheets, scrollable filter strips, min 44px touch targets) in the same session. Web and Mobile MUST NEVER drift out of sync.
 
 ### Supabase Environment Isolation
-
 - **Organization**: `ljzofzlvjtfiqoffaaua`
 - **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
 - **Production Project (PROTECTED)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**
@@ -280,11 +304,9 @@ Never rely only on frontend validation for critical business rules.
 See also: `supabase/AGENTS.md` for detailed database-specific rules.
 
 ### MUST inspect first:
-
 Existing table, foreign keys, indexes, constraints, RLS policies, triggers, RPCs/functions, existing migrations, existing views/read models.
 
 ### MUST:
-
 - Create a migration for schema changes.
 - Keep migrations sequential and reproducible.
 - Avoid duplicate migrations.
@@ -294,7 +316,6 @@ Existing table, foreign keys, indexes, constraints, RLS policies, triggers, RPCs
 - Keep business-critical invariants database-enforced.
 
 ### NEVER:
-
 - Modify production database when a migration should be used.
 - Disable RLS to make a feature work.
 - Put service-role credentials in client code.
@@ -302,23 +323,25 @@ Existing table, foreign keys, indexes, constraints, RLS policies, triggers, RPCs
 
 ---
 
-## 9. WEB + MOBILE PARITY RULE
+## 9. WEB + MOBILE 100% PARITY CONTRACT
 
-When a feature exists on Web and Mobile:
+Web and Native Mobile are two views of **ONE SINGLE SYSTEM**. They must achieve **100% PARITY across all 8 dimensions**:
 
-### MUST:
+1. **UI/UX**: Identical components, empty states (`EmptyState`), confirmation dialogs (`ConfirmationDialog` / `ConfirmDialog`), segmented sliding toggles, badges, and status pills.
+2. **Behavior**: Identical loading skeleton loaders, toast feedback, error retry flows, and real-time form validation.
+3. **Responsiveness**: 3-tier viewport protocol (Mobile ≤640px touch cards, Tablet 641–1023px 2-col grids, Desktop ≥1024px high-density tables).
+4. **Design**: Vercel Geist design system (1px hairline borders `#ebebeb` light / `#262626` dark, bimodal radius 6px app / 64px pill / 100px CTA, whisper shadows).
+5. **Layout**: Identical visual hierarchy, card metadata order, and primary action placement.
+6. **Color**: 100% exact hex color tokens (Reach Sky Blue `#0284c7` / `#0ea5e9`, Success `#10b981`, Warning `#f5a623`, Error `#ee0000`, Info `#3b82f6`).
+7. **Theme**: 100% synchronized Light (`#fafafa` canvas / `#ffffff` cards / `#171717` ink) and Dark (`#0a0a0a` canvas / `#171717` cards / `#fafafa` ink) modes.
+8. **Typography**: Geist Sans and Geist Mono across both platforms. Zero raw typography properties in mobile `StyleSheet.create`; always use `<Text variant="...">`.
 
-1. Inspect Web implementation.
-2. Inspect Mobile implementation.
-3. Identify shared business logic.
-4. Keep behavior consistent.
-5. Apply platform-specific UI only where necessary.
-
-### Must remain consistent across platforms:
-
-Business rules, permissions, validation, database behavior, API/RPC behavior, error semantics, data models.
-
-UI may differ when required by the platform.
+### Execution Protocol When Editing Features:
+1. Inspect Web implementation (`apps/web`).
+2. Inspect Mobile implementation (`apps/mobile`).
+3. Standardize tokens from `@reachinternational/design-tokens`.
+4. Apply platform-appropriate architecture: Next.js 16.2 App Router (RSC, DAL, Server Actions) on Web; Expo SDK 57 (TanStack Query, hardware-backed SecureStore, offline queue, touch cards, min 44px touch targets, haptics) on Mobile.
+5. Mobile touch adaptations (touch cards, bottom sheets, scrollable horizontal filter strips) are responsive ergonomics, NEVER visual, color, or behavioral drift.
 
 ---
 

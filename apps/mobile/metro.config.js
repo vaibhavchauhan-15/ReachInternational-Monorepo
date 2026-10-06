@@ -44,10 +44,16 @@ config.resolver = {
       };
     }
 
-    // Explicitly resolve expo-linear-gradient across pnpm symlinks in monorepo
-    if (moduleName === 'expo-linear-gradient') {
+    // Explicitly resolve critical packages across pnpm symlinks in monorepo
+    if (
+      moduleName === 'expo-linear-gradient' ||
+      moduleName === '@sentry/react-native' ||
+      moduleName.startsWith('@sentry/react-native/') ||
+      moduleName === '@supabase/supabase-js' ||
+      moduleName.startsWith('@supabase/supabase-js/')
+    ) {
       try {
-        const resolved = require.resolve('expo-linear-gradient', {
+        const resolved = require.resolve(moduleName, {
           paths: [projectRoot, monorepoRoot],
         });
         return {
@@ -59,10 +65,26 @@ config.resolver = {
       }
     }
 
-    if (originalResolveRequest) {
-      return originalResolveRequest(context, moduleName, platform);
+    // Fallback across pnpm symlinks in monorepo
+    try {
+      if (originalResolveRequest) {
+        return originalResolveRequest(context, moduleName, platform);
+      }
+      return context.resolveRequest(context, moduleName, platform);
+    } catch (resolutionError) {
+      try {
+        const originDir = context.originModulePath ? path.dirname(context.originModulePath) : projectRoot;
+        const resolved = require.resolve(moduleName, {
+          paths: [originDir, projectRoot, monorepoRoot],
+        });
+        return {
+          filePath: resolved,
+          type: 'sourceFile',
+        };
+      } catch {
+        throw resolutionError;
+      }
     }
-    return context.resolveRequest(context, moduleName, platform);
   },
 };
 

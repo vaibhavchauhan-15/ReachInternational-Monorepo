@@ -134,6 +134,14 @@ import { LockIcon as RawLock } from "./lock";
 export const LockIcon = createAnimatedIconBridge(RawLock, "Lock");
 export const Lock = LockIcon;
 
+import { LogOutIcon as RawLogOut } from "./log-out";
+export const LogOutIcon = createAnimatedIconBridge(RawLogOut, "LogOut");
+export const LogOut = LogOutIcon;
+export const Logout = LogOutIcon;
+export const LogoutIcon = LogOutIcon;
+export const SignOut = LogOutIcon;
+export const SignOutIcon = LogOutIcon;
+
 import { MapPinIcon as RawMapPin } from "./map-pin";
 export const MapPinIcon = createAnimatedIconBridge(RawMapPin, "MapPin");
 export const MapPin = MapPinIcon;

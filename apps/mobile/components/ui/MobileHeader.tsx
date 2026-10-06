@@ -1,23 +1,24 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
-  Modal,
   Platform,
   Dimensions,
   ActivityIndicator,
-  TouchableWithoutFeedback,
+  ScrollView,
+  TouchableOpacity,
 } from 'react-native';
+import { haptics } from '../../lib/interaction/haptics';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme } from './ThemeProvider';
 import { Badge } from './Badge';
+import { Text, useTypeStyle } from './Text';
+import { Touchable } from './Touchable';
+import { AppModal } from './AppModal';
 import {
   ChevronLeft,
-  WifiOff,
   Search,
   MoreVertical,
   X,
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
-import { ReachBrandEmblem } from '../branding';
+import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileCommandPalette } from '../navigation/MobileCommandPalette';
 
@@ -82,10 +83,10 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   eyebrow,
   showBack = false,
   showRoleBadge = false,
-  showLogo = true,
+  showLogo = false,
   showQuickAccess = true,
-  showQuickAccessCapsule = true,
-  showMoreMenu,
+  showQuickAccessCapsule = false,
+  showMoreMenu = true,
   onQuickAccessPress,
   onPressBack,
   rightAction,
@@ -97,7 +98,12 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const { role } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const { isOffline } = useNetworkStatus();
+  const { pendingCount, syncingCount, failedCount, conflictCount, isSyncing } = useOfflineQueue();
   const router = useRouter();
+  const searchTypeStyle = useTypeStyle('body');
+
+  const totalQueued = pendingCount + syncingCount + failedCount + conflictCount;
+  const isBannerVisible = isOffline || totalQueued > 0 || isSyncing;
 
   // Responsive Screen Width Tracking
   const [screenWidth, setScreenWidth] = useState(() => {
@@ -179,10 +185,13 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const topPadding =
     Platform.OS === 'web'
       ? spacingNumeric.sm
+      : isBannerVisible
+      ? spacingNumeric.sm
       : Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24);
 
   // Measure and Open 3-Dot Menu
   const openActionMenu = () => {
+    haptics.select();
     if (menuOpen) {
       setMenuOpen(false);
       return;
@@ -288,12 +297,12 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       {/* If Mobile Search is expanded full-width on small screens */}
       {!isWide && isMobileSearchExpanded && search ? (
         <View style={styles.expandedSearchRow}>
-          <TouchableOpacity
+          <Touchable
+            preset="icon"
             onPress={() => {
               setIsMobileSearchExpanded(false);
               search.onClear?.();
             }}
-            activeOpacity={0.7}
             style={[
               styles.iconBtn,
               {
@@ -304,7 +313,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             accessibilityLabel="Close Search"
           >
             <ArrowLeft size={17} color={theme.colors.ink} />
-          </TouchableOpacity>
+          </Touchable>
 
           <View
             style={[
@@ -333,6 +342,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               placeholderTextColor={theme.colors.mute}
               style={[
                 styles.searchInput,
+                searchTypeStyle,
                 { color: theme.colors.ink },
                 Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined,
               ]}
@@ -342,23 +352,23 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             />
 
             {search.value.length > 0 && (
-              <TouchableOpacity
+              <Touchable
+                preset="icon"
                 onPress={() => {
                   search.onClear ? search.onClear() : search.onChangeText('');
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Clear Search"
               >
                 <X size={13} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Touchable>
             )}
           </View>
 
           {/* 3-Dot Menu Button during expanded search */}
           <View ref={menuTriggerRef} collapsable={false}>
-            <TouchableOpacity
+            <Touchable
+              preset="icon"
               onPress={openActionMenu}
-              activeOpacity={0.7}
               style={[
                 styles.iconBtn,
                 {
@@ -369,18 +379,18 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               accessibilityLabel="Other Actions"
             >
               <MoreVertical size={18} color={theme.colors.ink} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
         </View>
       ) : (
-        /* Standard Header Row: [Logo] + [Page Title] + [Search] + [3-Dot Menu] */
+        /* Standard Header Row: [Back Button] + [Clean Page Title] + [Search] + [3-Dot Menu] */
         <View style={styles.contentRow}>
-          {/* Left: Back Button + Logo + Title */}
+          {/* Left: Back Button + Clean Page Title */}
           <View style={styles.leftSection}>
             {showBack && (
-              <TouchableOpacity
+              <Touchable
+                preset="icon"
                 onPress={handleBackPress}
-                activeOpacity={0.7}
                 style={[
                   styles.backBtn,
                   {
@@ -391,59 +401,42 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 accessibilityLabel="Go Back"
               >
                 <ChevronLeft size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
+              </Touchable>
             )}
 
-            <View style={styles.titleWithLogoRow}>
-              {showLogo && (
-                <TouchableOpacity
-                  onPress={() => router.push('/(app)/machines')}
-                  activeOpacity={0.8}
-                  style={styles.brandLogoTouch}
-                  accessibilityLabel="Reach International"
+            <View style={styles.titleTextContainer}>
+              {eyebrow ? (
+                <Text
+                  variant="caption"
+                  style={[styles.eyebrowText, { color: theme.colors.mute }]}
+                  numberOfLines={1}
                 >
-                  <ReachBrandEmblem size={24} />
-                </TouchableOpacity>
+                  {eyebrow}
+                </Text>
+              ) : null}
+              {title && (
+                <Text
+                  variant="title"
+                  style={{ color: theme.colors.ink }}
+                  numberOfLines={1}
+                >
+                  {title}
+                </Text>
               )}
-
-              <View style={styles.titleTextContainer}>
-                {title && (
-                  <Text
-                    style={[styles.titleText, { color: theme.colors.ink }]}
-                    numberOfLines={1}
-                  >
-                    {title}
-                  </Text>
-                )}
-              </View>
+              {subtitle ? (
+                <Text
+                  variant="caption"
+                  style={[styles.subtitleText, { color: theme.colors.mute }]}
+                  numberOfLines={1}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
             </View>
           </View>
 
           {/* Center / Right: Search & Actions */}
           <View style={styles.rightSection}>
-            {/* Offline Indicator Pill */}
-            {isOffline && (
-              <View
-                style={[
-                  styles.offlinePill,
-                  {
-                    backgroundColor: isDark ? '#451a03' : '#fffbeb',
-                    borderColor: isDark ? '#78350f' : '#fef3c7',
-                  },
-                ]}
-              >
-                <WifiOff size={11} color={isDark ? '#fbbf24' : '#d97706'} />
-                <Text
-                  style={[
-                    styles.offlinePillText,
-                    { color: isDark ? '#fbbf24' : '#b45309' },
-                  ]}
-                >
-                  Offline
-                </Text>
-              </View>
-            )}
-
             {/* Role Badge (optional) */}
             {showRoleBadge && (
               <Badge status="active" customLabel={(role || 'Operator').replace('_', ' ')} />
@@ -482,6 +475,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                     placeholderTextColor={theme.colors.mute}
                     style={[
                       styles.searchInput,
+                      searchTypeStyle,
                       { color: theme.colors.ink },
                       Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined,
                     ]}
@@ -490,22 +484,22 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   />
 
                   {search.value.length > 0 && (
-                    <TouchableOpacity
+                    <Touchable
+                      preset="icon"
                       onPress={() => {
                         search.onClear ? search.onClear() : search.onChangeText('');
                       }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel="Clear Search"
                     >
                       <X size={13} color={theme.colors.mute} />
-                    </TouchableOpacity>
+                    </Touchable>
                   )}
                 </View>
               ) : (
                 /* Compact Phone Viewport: Sleek Search Icon Button */
-                <TouchableOpacity
+                <Touchable
+                  preset="icon"
                   onPress={handleSearchTriggerClick}
-                  activeOpacity={0.7}
                   style={[
                     styles.iconBtn,
                     {
@@ -516,14 +510,14 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   accessibilityLabel="Search"
                 >
                   <Search size={16} color={theme.colors.ink} />
-                </TouchableOpacity>
+                </Touchable>
               )
             ) : showQuickAccess ? (
               isWide && showQuickAccessCapsule ? (
                 /* Wide Viewport (Desktop / Tablet): Pill Capsule with Quick Access label & ⌘K / Ctrl K pill */
-                <TouchableOpacity
+                <Touchable
+                  preset="card"
                   onPress={handleQuickAccessPress}
-                  activeOpacity={0.75}
                   style={[
                     styles.quickAccessCapsule,
                     {
@@ -531,11 +525,10 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       borderColor: theme.colors.hairline,
                     },
                   ]}
-                  accessibilityRole="button"
                   accessibilityLabel="Quick Access (⌘K)"
                 >
                   <Search size={14} color={theme.colors.mute} />
-                  <Text style={[styles.quickAccessText, { color: theme.colors.mute }]}>
+                  <Text variant="label" style={{ color: theme.colors.mute }}>
                     Quick Access
                   </Text>
                   <View
@@ -547,16 +540,16 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       },
                     ]}
                   >
-                    <Text style={[styles.quickAccessKbdText, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
                       {isMac ? '⌘K' : 'Ctrl K'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </Touchable>
               ) : (
                 /* Compact Phone Viewport / Dedicated Sleek 36×36 Quick Access Icon Button */
-                <TouchableOpacity
+                <Touchable
+                  preset="icon"
                   onPress={handleQuickAccessPress}
-                  activeOpacity={0.7}
                   style={[
                     styles.iconBtn,
                     {
@@ -564,20 +557,19 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       borderColor: theme.colors.hairline,
                     },
                   ]}
-                  accessibilityRole="button"
                   accessibilityLabel="Quick Access"
                 >
                   <Search size={16} color={theme.colors.ink} />
-                </TouchableOpacity>
+                </Touchable>
               )
             ) : null}
 
             {/* 3-DOT MENU BUTTON FOR OTHER ACTIONS */}
-            {(showMoreMenu !== undefined ? showMoreMenu : Boolean(actions && actions.length > 0)) && (
+            {showMoreMenu !== false && (
               <View ref={menuTriggerRef} collapsable={false}>
-                <TouchableOpacity
+                <Touchable
+                  preset="icon"
                   onPress={openActionMenu}
-                  activeOpacity={0.7}
                   style={[
                     styles.iconBtn,
                     {
@@ -588,7 +580,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   accessibilityLabel="Other Actions"
                 >
                   <MoreVertical size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
+                </Touchable>
               </View>
             )}
           </View>
@@ -596,83 +588,79 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       )}
 
       {/* ANCHORED 3-DOT ACTION MENU MODAL */}
-      <Modal
+      <AppModal
         visible={menuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuOpen(false)}
+        onClose={() => setMenuOpen(false)}
+        variant="bottom"
       >
-        <TouchableWithoutFeedback onPress={() => setMenuOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View
+        <View
+          style={[
+            styles.menuSheet,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          <View style={styles.menuHeader}>
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              ACTIONS
+            </Text>
+          </View>
+
+          <ScrollView
+            style={styles.menuScrollView}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+          >
+            {menuActions.map((action, idx) => (
+              <Touchable
+                key={action.id || idx}
+                preset="row"
+                disabled={action.disabled}
+                onPress={() => {
+                  haptics.select();
+                  setMenuOpen(false);
+                  action.onPress();
+                }}
                 style={[
-                  styles.menuCard,
-                  {
-                    top: menuCoords.top,
-                    right: menuCoords.right,
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
+                  styles.menuItem,
+                  idx < menuActions.length - 1 && {
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.hairline,
                   },
+                  action.disabled && { opacity: 0.4 },
                 ]}
               >
-                <View style={styles.menuHeader}>
-                  <Text style={[styles.menuHeaderText, { color: theme.colors.mute }]}>
-                    ACTIONS
-                  </Text>
-                </View>
+                {action.icon && (
+                  <View style={styles.menuItemIcon}>
+                    {action.icon}
+                  </View>
+                )}
 
-                {menuActions.map((action, idx) => (
-                  <TouchableOpacity
-                    key={action.id || idx}
-                    disabled={action.disabled}
-                    onPress={() => {
-                      setMenuOpen(false);
-                      action.onPress();
-                    }}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.menuItem,
-                      idx < menuActions.length - 1 && {
-                        borderBottomWidth: 1,
-                        borderBottomColor: theme.colors.hairline,
-                      },
-                      action.disabled && { opacity: 0.4 },
-                    ]}
-                  >
-                    {action.icon && (
-                      <View style={styles.menuItemIcon}>
-                        {action.icon}
-                      </View>
-                    )}
+                <Text
+                  variant="label"
+                  style={{
+                    color: action.destructive ? '#ef4444' : theme.colors.ink,
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {action.label}
+                </Text>
 
-                    <Text
-                      style={[
-                        styles.menuItemLabel,
-                        {
-                          color: action.destructive ? '#ef4444' : theme.colors.ink,
-                          fontWeight: action.destructive ? '700' : '600',
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {action.label}
+                {action.badge !== undefined && (
+                  <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
+                    <Text variant="caption" style={{ color: theme.colors.body }}>
+                      {action.badge}
                     </Text>
-
-                    {action.badge !== undefined && (
-                      <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
-                        <Text style={[styles.menuItemBadgeText, { color: theme.colors.body }]}>
-                          {action.badge}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+                  </View>
+                )}
+              </Touchable>
+            ))}
+          </ScrollView>
+        </View>
+      </AppModal>
 
       {/* Integrated Global Command Palette (when search is clicked without direct query) */}
       <MobileCommandPalette
@@ -696,50 +684,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 38,
+    minHeight: 44,
     gap: 8,
   },
   expandedSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 38,
+    minHeight: 44,
     gap: 8,
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexShrink: 1,
+    gap: 10,
+    flex: 1,
     minWidth: 0,
   },
   backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: radiusNumeric.sm,
+    width: 36,
+    height: 36,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  titleWithLogoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  brandLogoTouch: {
-    flexShrink: 0,
-  },
   titleTextContainer: {
-    flexShrink: 1,
+    flex: 1,
     minWidth: 0,
     justifyContent: 'center',
   },
-  titleText: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.4,
+  subtitleText: {
+    marginTop: 1,
+  },
+  eyebrowText: {
+    textTransform: 'uppercase',
+    marginBottom: 1,
   },
   rightSection: {
     flexDirection: 'row',
@@ -765,7 +745,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: '100%',
-    fontSize: 14,
     padding: 0,
     margin: 0,
     backgroundColor: 'transparent',
@@ -773,15 +752,8 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
-  },
-  searchPlaceholderText: {
-    fontSize: 13.5,
-    flex: 1,
   },
   iconBtn: {
     width: 36,
@@ -801,65 +773,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
   },
-  quickAccessText: {
-    fontSize: 13.5,
-    fontWeight: '500',
-  },
   quickAccessKbd: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
   },
-  quickAccessKbdText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  offlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.full,
+  menuSheet: {
+    borderTopLeftRadius: radiusNumeric.lg,
+    borderTopRightRadius: radiusNumeric.lg,
     borderWidth: 1,
+    paddingBottom: 24,
+    overflow: 'hidden',
   },
-  offlinePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-  },
-  menuCard: {
-    position: 'absolute',
-    minWidth: 220,
-    maxWidth: 290,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 9999,
+  menuScrollView: {
+    maxHeight: 380,
   },
   menuHeader: {
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 4,
   },
-  menuHeaderText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: 14,
     gap: 10,
@@ -869,17 +807,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuItemLabel: {
-    fontSize: 14,
-    flex: 1,
-  },
   menuItemBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
-  },
-  menuItemBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   ExternalLink,
   RotateCcw,
+  MoreVertical,
 } from "lucide-react";
 import {
   AnimatedUser,
@@ -205,6 +206,116 @@ export function UserDetailClient({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setIsActionsMenuOpen(false);
+      }
+    };
+    if (isActionsMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isActionsMenuOpen]);
+
+  const cleanPhone = (user.phone || "").replace(/[^0-9+]/g, "");
+  const whatsappUrl = cleanPhone
+    ? `https://wa.me/${cleanPhone.replace("+", "")}?text=${encodeURIComponent(
+        `Hello ${user.full_name}, ReachInternational regarding your profile ${user.employee_id || ""}.`
+      )}`
+    : "";
+
+  // Listen for mobile top header 3-dot contextual actions
+  useEffect(() => {
+    const handleEditProfile = () => {
+      if (canManage) {
+        setIsEditModalOpen(true);
+      } else {
+        toast("error", "You do not have permission to edit this profile");
+      }
+    };
+
+    const handleAssignEquipment = () => {
+      if (user.role === "operator") {
+        setIsAssignModalOpen(true);
+      } else {
+        toast("info", "Equipment assignment is only applicable for operators");
+      }
+    };
+
+    const handleResetPassword = () => {
+      if (canManage) {
+        setConfirmResetOpen(true);
+      }
+    };
+
+    const handleToggleStatus = () => {
+      if (canManage) {
+        if (user.id === currentUser.id) {
+          toast("error", "You cannot change your own account status");
+          return;
+        }
+        setConfirmToggleOpen(true);
+      }
+    };
+
+    const handleDeleteUser = () => {
+      if (isSuperAdmin) {
+        if (user.id === currentUser.id) {
+          toast("error", "You cannot delete your own account");
+          return;
+        }
+        setConfirmDeleteOpen(true);
+      }
+    };
+
+    const handleEmail = () => {
+      if (user.email) {
+        window.location.href = `mailto:${user.email}`;
+      } else {
+        toast("error", "No email address found for this user");
+      }
+    };
+
+    const handleWhatsapp = () => {
+      if (whatsappUrl) {
+        window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      } else {
+        toast("error", "No phone number available for WhatsApp chat");
+      }
+    };
+
+    const handleCall = () => {
+      if (cleanPhone) {
+        window.location.href = `tel:${cleanPhone}`;
+      } else {
+        toast("error", "No phone number available for calls");
+      }
+    };
+
+    window.addEventListener("reach:user-edit-profile", handleEditProfile);
+    window.addEventListener("reach:user-assign-equipment", handleAssignEquipment);
+    window.addEventListener("reach:user-reset-password", handleResetPassword);
+    window.addEventListener("reach:user-toggle-status", handleToggleStatus);
+    window.addEventListener("reach:user-delete", handleDeleteUser);
+    window.addEventListener("reach:user-email", handleEmail);
+    window.addEventListener("reach:user-whatsapp", handleWhatsapp);
+    window.addEventListener("reach:user-call", handleCall);
+
+    return () => {
+      window.removeEventListener("reach:user-edit-profile", handleEditProfile);
+      window.removeEventListener("reach:user-assign-equipment", handleAssignEquipment);
+      window.removeEventListener("reach:user-reset-password", handleResetPassword);
+      window.removeEventListener("reach:user-toggle-status", handleToggleStatus);
+      window.removeEventListener("reach:user-delete", handleDeleteUser);
+      window.removeEventListener("reach:user-email", handleEmail);
+      window.removeEventListener("reach:user-whatsapp", handleWhatsapp);
+      window.removeEventListener("reach:user-call", handleCall);
+    };
+  }, [user.role, user.email, user.id, currentUser.id, canManage, isSuperAdmin, whatsappUrl, cleanPhone, toast]);
 
   const handleCopy = useCallback((text: string, key: string) => {
     if (!text) return;
@@ -391,13 +502,6 @@ export function UserDetailClient({
     }
   };
 
-  const cleanPhone = (user.phone || "").replace(/[^0-9+]/g, "");
-  const whatsappUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone.replace("+", "")}?text=${encodeURIComponent(
-        `Hello ${user.full_name}, ReachInternational regarding your profile ${user.employee_id || ""}.`
-      )}`
-    : "";
-
   const assignedSupervisors = useMemo(() => {
     if (user.supervisors && user.supervisors.length > 0) return user.supervisors;
     if (user.supervisor) return [user.supervisor];
@@ -415,7 +519,7 @@ export function UserDetailClient({
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full">
       {/* ─── 1. TOP BREADCRUMB & BACK NAVIGATION ─── */}
-      <div className="flex items-center justify-between">
+      <div className="hidden sm:flex items-center justify-between">
         <Link
           href="/users"
           className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors group py-1"
@@ -442,13 +546,13 @@ export function UserDetailClient({
       </div>
 
       {/* ─── 2. MASTER HERO BANNER CARD ─── */}
-      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 md:p-6 shadow-2xs relative overflow-hidden">
-        {/* Subtle top hairline gradient accent */}
-        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/50 to-transparent pointer-events-none" />
+      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 md:p-6 shadow-2xs relative">
+        {/* Subtle top hairline gradient accent with matching top border radius */}
+        <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-xl sm:rounded-t-2xl overflow-hidden bg-gradient-to-r from-transparent via-sky-500/50 to-transparent pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* Left: Avatar + Title & Identifiers */}
-          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
             <div
               className={`flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${getRoleAvatarStyle(
                 user.role
@@ -457,20 +561,24 @@ export function UserDetailClient({
               <span>{getInitials(user.full_name)}</span>
             </div>
 
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <h1 className="text-base sm:text-xl md:text-2xl font-bold tracking-tight text-[var(--color-ink)] truncate leading-tight">
+                {user.full_name}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 {/* Monospace EMP-xxxx Badge with 1-click copy */}
                 <button
                   type="button"
                   onClick={() => handleCopy(user.employee_id || user.id, "Employee ID")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-mono text-xs font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/60 hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-mono text-[11px] sm:text-xs font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/60 hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer shadow-2xs"
                   title="Click to copy Employee ID"
                 >
                   <span>{user.employee_id || `ID: ${user.id.slice(0, 8)}`}</span>
                   {copiedKey === "Employee ID" ? (
-                    <AnimatedCheck size={12} className="text-emerald-500 shrink-0" />
+                    <AnimatedCheck size={11} className="text-emerald-500 shrink-0" />
                   ) : (
-                    <AnimatedCopy size={12} className="text-[var(--color-mute)] shrink-0" />
+                    <AnimatedCopy size={11} className="text-[var(--color-mute)] shrink-0" />
                   )}
                 </button>
 
@@ -490,21 +598,28 @@ export function UserDetailClient({
                 )}
               </div>
 
-              <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-[var(--color-ink)] truncate leading-tight">
-                {user.full_name}
-              </h1>
-
-              {user.location && (
-                <div className="flex items-center gap-1 text-xs text-[var(--color-mute)]">
-                  <AnimatedMapPin size={12} className="text-sky-500" />
-                  <span>{user.location}</span>
+              {/* Secondary details (Location & Shift) */}
+              {(user.location || (shiftDisplay && shiftDisplay !== "—")) && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-mute)] pt-0.5">
+                  {user.location && (
+                    <div className="flex items-center gap-1 min-w-0">
+                      <AnimatedMapPin size={12} className="text-sky-500 shrink-0" />
+                      <span className="truncate">{user.location}</span>
+                    </div>
+                  )}
+                  {shiftDisplay && shiftDisplay !== "—" && (
+                    <div className="flex items-center gap-1 min-w-0">
+                      <AnimatedClock size={12} className="text-amber-500 shrink-0" />
+                      <span className="truncate">{shiftDisplay}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right: Primary Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+          {/* Desktop Right Action Bar (On mobile, actions are cleanly consolidated in the top header 3-dot menu) */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             {canManage && (
               <Button
                 variant="primary"
@@ -516,73 +631,136 @@ export function UserDetailClient({
               </Button>
             )}
 
-            {canManage && user.role === "operator" && (
-              <Button
-                variant="secondary"
-                onClick={() => setIsAssignModalOpen(true)}
-                className="h-9 px-3 text-xs font-semibold rounded-md shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            {/* Desktop Only 3-Dot Actions Menu */}
+            <div className="relative" ref={actionsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsActionsMenuOpen((prev) => !prev)}
+                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
+                title="More options"
+                aria-label="More options"
+                aria-expanded={isActionsMenuOpen}
               >
-                <AnimatedWrench size={14} className="shrink-0 text-amber-500" />
-                <span>Assign Equipment</span>
-              </Button>
-            )}
+                <MoreVertical size={16} />
+              </button>
 
-            {user.phone && (
-              <a
-                href={`tel:${cleanPhone}`}
-                className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
-                title="Call phone"
-              >
-                <AnimatedPhone size={14} className="text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">Call</span>
-              </a>
-            )}
+              <AnimatePresence>
+                {isActionsMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 top-full mt-1.5 min-w-[210px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-2xl space-y-0.5 z-50 backdrop-blur-md"
+                  >
+                    {/* Edit Profile */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsActionsMenuOpen(false);
+                          setIsEditModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
+                        <span>Edit Profile</span>
+                      </button>
+                    )}
+                    {/* Assign Equipment (Operators) */}
+                    {canManage && user.role === "operator" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsActionsMenuOpen(false);
+                          setIsAssignModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedWrench size={14} className="text-amber-500 shrink-0" />
+                        <span>Assign Equipment</span>
+                      </button>
+                    )}
 
-            {user.email && (
-              <a
-                href={`mailto:${user.email}`}
-                className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
-                title="Send email"
-              >
-                <AnimatedMail size={14} className="text-sky-600 dark:text-sky-400" />
-                <span className="hidden sm:inline">Email</span>
-              </a>
-            )}
+                    {/* Email Option */}
+                    {user.email && (
+                      <a
+                        href={`mailto:${user.email}`}
+                        onClick={() => setIsActionsMenuOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedMail size={14} className="text-sky-500 shrink-0" />
+                        <span>Send Email</span>
+                      </a>
+                    )}
 
-            {canManage && (
-              <Button
-                variant="outline"
-                onClick={() => setConfirmResetOpen(true)}
-                className="h-9 px-3 text-xs font-medium rounded-md border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
-                title="Reset password"
-              >
-                <AnimatedKey size={14} className="text-amber-500" />
-                <span className="hidden md:inline">Reset Pass</span>
-              </Button>
-            )}
+                    {/* WhatsApp Option */}
+                    {whatsappUrl && (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setIsActionsMenuOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <ExternalLink size={14} className="text-emerald-500 shrink-0" />
+                        <span>Chat on WhatsApp</span>
+                      </a>
+                    )}
 
-            {canManage && user.id !== currentUser.id && (
-              <Button
-                variant="outline"
-                onClick={() => setConfirmToggleOpen(true)}
-                className="h-9 px-3 text-xs font-medium rounded-md border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
-                title={user.status === "active" ? "Deactivate account" : "Activate account"}
-              >
-                <AnimatedPower size={14} className={user.status === "active" ? "text-amber-600" : "text-emerald-600"} />
-                <span className="hidden md:inline">{user.status === "active" ? "Deactivate" : "Activate"}</span>
-              </Button>
-            )}
+                    {/* Reset Password */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsActionsMenuOpen(false);
+                          setConfirmResetOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedKey size={14} className="text-amber-500 shrink-0" />
+                        <span>Reset Password</span>
+                      </button>
+                    )}
 
-            {isSuperAdmin && user.id !== currentUser.id && (
-              <Button
-                variant="outline"
-                onClick={() => setConfirmDeleteOpen(true)}
-                className="h-9 px-3 text-xs font-medium rounded-md border-red-200 dark:border-red-900/40 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
-                title="Delete user account"
-              >
-                <AnimatedTrash2 size={14} className="text-red-600" />
-              </Button>
-            )}
+                    {/* Deactivate / Activate Account */}
+                    {canManage && user.id !== currentUser.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsActionsMenuOpen(false);
+                          setConfirmToggleOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedPower
+                          size={14}
+                          className={user.status === "active" ? "text-amber-600 shrink-0" : "text-emerald-600 shrink-0"}
+                        />
+                        <span>{user.status === "active" ? "Deactivate Account" : "Activate Account"}</span>
+                      </button>
+                    )}
+
+                    {/* Delete Account */}
+                    {isSuperAdmin && user.id !== currentUser.id && (
+                      <div className="pt-1 mt-1 border-t border-[var(--color-hairline)]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            setConfirmDeleteOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer text-left"
+                        >
+                          <AnimatedTrash2 size={14} className="text-red-600 shrink-0" />
+                          <span>Delete Account</span>
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
@@ -592,7 +770,7 @@ export function UserDetailClient({
         {/* Card 1: Contact Information */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -601,17 +779,18 @@ export function UserDetailClient({
             </span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-[var(--color-mute)]">Email</span>
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="font-semibold text-[var(--color-ink)] truncate max-w-[160px]" title={user.email}>
+          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
+            {/* Email */}
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Email</span>
+              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
+                <span className="font-semibold text-[var(--color-ink)] break-all sm:text-right" title={user.email}>
                   {user.email}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleCopy(user.email, "Email")}
-                  className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                  className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
                   title="Copy email"
                 >
                   {copiedKey === "Email" ? (
@@ -623,17 +802,18 @@ export function UserDetailClient({
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-[var(--color-mute)]">Phone</span>
-              <div className="flex items-center gap-1">
-                <span className="font-semibold font-mono text-[var(--color-ink)]">
+            {/* Phone */}
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Phone</span>
+              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
+                <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
                   {user.phone || "—"}
                 </span>
                 {user.phone && (
                   <button
                     type="button"
                     onClick={() => handleCopy(user.phone!, "Phone")}
-                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
                     title="Copy phone"
                   >
                     {copiedKey === "Phone" ? (
@@ -646,29 +826,32 @@ export function UserDetailClient({
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-1.5 pt-0.5">
-              <span className="text-[var(--color-mute)]">WhatsApp</span>
-              {whatsappUrl ? (
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-                >
-                  <span>Chat Direct</span>
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : (
-                <span className="text-[var(--color-mute)]">—</span>
-              )}
+            {/* WhatsApp */}
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">WhatsApp</span>
+              <div className="sm:text-right">
+                {whatsappUrl ? (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                  >
+                    <span>Chat Direct</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="text-[var(--color-mute)] font-semibold">—</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Card 2: Employment & Designation */}
+        {/* Card 2: Employment Details */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -677,24 +860,24 @@ export function UserDetailClient({
             </span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">Employee ID</span>
-              <span className="font-semibold font-mono text-[var(--color-ink)]">
+          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Employee ID</span>
+              <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
                 {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">Joining Date</span>
-              <span className="font-semibold text-[var(--color-ink)]">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Joining Date</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {user.doj ? formatDate(user.doj) : formatDate(user.created_at)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[var(--color-mute)]">Supervisor</span>
-              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[160px]" title={assignedSupervisors.map((s) => s.full_name).join(", ")}>
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervisor</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {assignedSupervisors.length > 0
                   ? assignedSupervisors.map((s) => s.full_name).join(", ")
                   : "Unassigned"}
@@ -706,7 +889,7 @@ export function UserDetailClient({
         {/* Card 3: Shift & Compensation */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -715,26 +898,26 @@ export function UserDetailClient({
             </span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">Shift Hours</span>
-              <span className="font-semibold text-[var(--color-ink)] text-right">
+          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Shift Hours</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {shiftDisplay}
               </span>
             </div>
 
             {canManage && user.monthly_salary != null && Number(user.monthly_salary) > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)]">Monthly Salary</span>
-                <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Monthly Salary</span>
+                <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400 break-words sm:text-right">
                   ₹{Number(user.monthly_salary).toLocaleString("en-IN")} / mo
                 </span>
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">PL Leave Quota</span>
-              <span className="font-semibold text-[var(--color-ink)]">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">PL Leave Quota</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {user.total_pl_quota != null ? `${user.total_pl_quota - (user.pl_used_as_on_date || 0)} / ${user.total_pl_quota} days` : "12 days"}
               </span>
             </div>
@@ -744,7 +927,7 @@ export function UserDetailClient({
         {/* Card 4: Location & Address */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -753,24 +936,24 @@ export function UserDetailClient({
             </span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">City / District</span>
-              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[150px]">
+          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">City / District</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || "—"}
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">State</span>
-              <span className="font-semibold text-[var(--color-ink)]">
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">State</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {user.state || "—"}
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--color-mute)]">Street</span>
-              <span className="font-semibold text-[var(--color-ink)] truncate max-w-[150px]" title={user.street || user.address || undefined}>
+            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Street</span>
+              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
                 {user.street || user.address || "—"}
               </span>
             </div>
@@ -783,7 +966,7 @@ export function UserDetailClient({
         {/* Metric 1: Assigned Fleet Machinery */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
@@ -794,15 +977,12 @@ export function UserDetailClient({
           <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
             {kpis.assignedMachinesCount}
           </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            {kpis.assignedMachinesCount === 1 ? "1 active machine unit" : `${kpis.assignedMachinesCount} active machine units`}
-          </div>
         </div>
 
         {/* Metric 2: Total Shift Running Hours */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
@@ -813,15 +993,12 @@ export function UserDetailClient({
           <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
             {kpis.totalRunningHours.toFixed(1)} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">hrs</span>
           </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            Logged across active duty shifts
-          </div>
         </div>
 
         {/* Metric 3: Total Work Days Logged */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
@@ -832,15 +1009,12 @@ export function UserDetailClient({
           <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
             {kpis.totalDaysWorked} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">days</span>
           </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            Distinct operational shift logs
-          </div>
         </div>
 
         {/* Metric 4: Verified KYC Documents */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
@@ -851,87 +1025,48 @@ export function UserDetailClient({
           <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
             {kpis.documentsCount} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">files</span>
           </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            Aadhaar, Licence & records
-          </div>
         </div>
       </div>
 
       {/* ─── 5. TAB STRIP & SEARCH TOOLBAR ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">
         {/* Scrollable Tab Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-nowrap pb-1 sm:pb-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab("machines")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "machines"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Machines ({machines.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("logs")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "logs"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Running Logs ({runningLogs.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("assignments")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "assignments"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Assignments ({assignments.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("attendance")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "attendance"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Attendance
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("documents")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "documents"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            KYC & Documents ({documents.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("audit")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "audit"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Audit Trail ({auditLogs.length})
-          </button>
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap -mx-2 px-2 sm:mx-0 sm:px-0 py-0.5">
+          {[
+            { key: "machines", label: "Machines", count: machines.length },
+            { key: "logs", label: "Running Logs", count: runningLogs.length },
+            { key: "assignments", label: "Assignments", count: assignments.length },
+            { key: "attendance", label: "Attendance" },
+            { key: "documents", label: "KYC & Documents", count: documents.length },
+            { key: "audit", label: "Audit Trail", count: auditLogs.length },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key as UserDetailTabKey)}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
+                  isActive
+                    ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs ring-1 ring-[var(--color-ink)]"
+                    : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono ${
+                      isActive
+                        ? "bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                        : "bg-[var(--color-hairline)] text-[var(--color-mute)]"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* In-Tab Search Input */}
@@ -942,16 +1077,16 @@ export function UserDetailClient({
               value={tabSearch}
               onChange={(e) => setTabSearch(e.target.value)}
               placeholder={`Search in ${activeTab}...`}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-hidden focus:border-[var(--color-link)] transition-colors"
+              className="w-full h-9 pl-8.5 pr-8 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-hidden focus:border-[var(--color-link)] transition-colors"
             />
-            <div className="absolute left-2.5 top-2 text-[var(--color-mute)] pointer-events-none">
+            <div className="absolute left-2.5 top-2.5 text-[var(--color-mute)] pointer-events-none">
               <AnimatedSearch size={14} />
             </div>
             {tabSearch && (
               <button
                 type="button"
                 onClick={() => setTabSearch("")}
-                className="absolute right-2.5 top-2 text-[var(--color-mute)] hover:text-[var(--color-ink)] text-xs cursor-pointer"
+                className="absolute right-2.5 top-2.5 text-[var(--color-mute)] hover:text-[var(--color-ink)] text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -1459,11 +1594,20 @@ export function UserDetailClient({
                       className="flex items-center gap-3 p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-[var(--color-link)]/40 hover:bg-[var(--color-canvas-elevated)] transition-all cursor-pointer group shadow-2xs"
                       title="Click to view document preview"
                     >
-                      {/* Document Type Icon */}
+                      {/* Document Type Icon / Image Preview */}
                       {doc.mime_type === "application/pdf" ? (
                         <div className="h-10 w-10 rounded-lg bg-rose-500/10 border border-rose-500/25 flex flex-col items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
                           <FileText className="h-4 w-4" />
                           <span className="text-[8px] font-bold font-mono">PDF</span>
+                        </div>
+                      ) : doc.signed_url ? (
+                        <div className="relative h-10 w-10 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
+                          <img
+                            src={doc.signed_url}
+                            alt={docType?.label || "Document preview"}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
                         </div>
                       ) : (
                         <div className="h-10 w-10 rounded-lg bg-sky-500/10 border border-sky-500/25 flex flex-col items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">

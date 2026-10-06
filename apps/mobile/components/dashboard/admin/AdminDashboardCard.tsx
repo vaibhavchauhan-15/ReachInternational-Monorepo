@@ -1,5 +1,6 @@
+import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../../ui/ThemeProvider';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { AdminDashboardDTO } from '@reachinternational/types';
@@ -144,9 +145,6 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.xs,
   },
   eyebrowHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: spacingNumeric.xs + 2,
   },

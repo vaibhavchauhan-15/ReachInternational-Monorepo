@@ -5,9 +5,11 @@ packages:
 onlyBuiltDependencies:
   - "sharp"
   - "unrs-resolver"
+  - "@sentry/cli"
 
 minimumReleaseAge: 0
 
 allowBuilds:
+  '@sentry/cli': true
   sharp: true
   unrs-resolver: true

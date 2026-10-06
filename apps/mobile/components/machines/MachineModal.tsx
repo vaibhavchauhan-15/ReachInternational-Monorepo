@@ -1,20 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  TextInput,
+  TouchableOpacity,
 } from 'react-native';
-import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, type SelectOption } from '../ui';
+import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, Text, type SelectOption, AppModal } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/interaction/haptics';
 import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
 import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from 'lucide-react-native';
 import { type SelectableUser } from './MultiUserSelectModal';
@@ -428,14 +425,14 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   }, [operatorsList, operatorSearchQuery]);
 
   const handleToggleSupervisor = (id: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setSupervisorIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
   const handleRemoveSupervisor = (id: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setSupervisorIds((prev) => prev.filter((item) => item !== id));
   };
 
@@ -453,7 +450,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       return;
     }
     if (operatorIds.length >= maxMobileShifts) return;
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     const nextShift = getNextAvailableShift();
     setOperatorIds((prev) => [...prev, op.id]);
     setOperatorShifts((prev) => ({
@@ -466,7 +463,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   };
 
   const handleRemoveOperator = (id: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setOperatorIds((prev) => prev.filter((item) => item !== id));
     setOperatorShifts((prev) => {
       const next = { ...prev };
@@ -476,7 +473,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   };
 
   const handleSelectOperatorShift = (opId: string, shiftCode: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setOperatorShifts((prev) => ({
       ...prev,
       [opId]: shiftCode,
@@ -717,10 +714,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
+      haptics.success();
       invalidateMobileModalOptionsCache();
       onSuccess();
       onClose();
     } catch (err: any) {
+      haptics.error();
       const msg = err?.message || 'Failed to save machine details.';
       setFormError(msg);
     } finally {
@@ -749,10 +748,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     .filter(Boolean) as SelectableUser[];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={styles.sheetWrapper}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
           {/* Header */}
@@ -889,7 +888,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
                       <TouchableOpacity
                         onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
+                          haptics.select();
                           setIsSupervisorDropdownOpen((prev) => !prev);
                           setIsOperatorDropdownOpen(false);
                           setSupervisorSearchQuery('');
@@ -944,7 +943,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               onPress={(e) => {
                                 // @ts-ignore
                                 e?.stopPropagation?.();
-                                Haptics.selectionAsync().catch(() => {});
+                                haptics.select();
                                 setSupervisorIds([]);
                               }}
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -996,7 +995,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             </Text>
                             <TouchableOpacity
                               onPress={() => {
-                                Haptics.selectionAsync().catch(() => {});
+                                haptics.select();
                                 if (supervisorIds.length > 0) {
                                   setSupervisorIds([]);
                                 } else {
@@ -1171,7 +1170,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     {operatorIds.length < maxMobileShifts ? (
                       <TouchableOpacity
                         onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
+                          haptics.select();
                           setIsOperatorDropdownOpen((prev) => !prev);
                           setIsSupervisorDropdownOpen(false);
                           setOperatorSearchQuery('');
@@ -1300,7 +1299,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                     {conflict && (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                                         <AlertCircle size={10} color="#ef4444" />
-                                        <Text style={{ fontSize: 10, color: '#ef4444', fontWeight: '600' }} numberOfLines={1}>
+                                        <Text variant="caption" style={{ color: '#ef4444' }} numberOfLines={1}>
                                           Assigned to {conflict.machine_code} ({formatTo12Hour(conflict.shift_start_time) || conflict.shift_start_time} - {formatTo12Hour(conflict.shift_end_time) || conflict.shift_end_time})
                                         </Text>
                                       </View>
@@ -1494,7 +1493,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             },
                           ]}
                         />
-                        <Text style={[styles.selectValueText, { color: theme.colors.ink, fontWeight: '600' }]}>
+                        <Text variant="body" style={[styles.selectValueText, { color: theme.colors.ink }]}>
                           {selectedClient ? 'Rented' : 'Available'}
                         </Text>
                         {selectedClient && (
@@ -1553,14 +1552,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           {/* Sub-Modals */}
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  sheetWrapper: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -1589,10 +1587,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacingNumeric.sm,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  title: {},
   closeBtn: {
     width: 28,
     height: 28,
@@ -1612,10 +1607,7 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '500',
     flex: 1,
-    lineHeight: 16,
   },
   body: {
     flexGrow: 1,
@@ -1636,10 +1628,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   sectionHeaderTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   sectionFields: {
     padding: spacingNumeric.md,
@@ -1657,13 +1646,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  fieldLabel: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
+  fieldLabel: {},
   assignedCountText: {
-    fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
   },
   multiSelectTrigger: {
@@ -1692,22 +1676,14 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  userChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+  userChipText: {},
   triggerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  clearBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  placeholderText: {
-    fontSize: 13.5,
-  },
+  clearBtnText: {},
+  placeholderText: {},
   addOperatorTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1719,10 +1695,7 @@ const styles = StyleSheet.create({
     height: 44,
     marginBottom: spacingNumeric.xs,
   },
-  addOperatorText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
+  addOperatorText: {},
   emptyOperatorsBox: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
@@ -1752,10 +1725,7 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.xs,
     flex: 1,
   },
-  operatorCardName: {
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
+  operatorCardName: {},
   shiftBadge: {
     backgroundColor: '#0ea5e918',
     borderColor: '#0ea5e940',
@@ -1765,10 +1735,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   shiftBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#0ea5e9',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   removeOperatorBtn: {
     padding: 6,
@@ -1788,10 +1755,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  shiftChipText: {
-    fontSize: 12.5,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
+  shiftChipText: {},
   singleSelectTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1812,10 +1776,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  selectValueText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  selectValueText: {},
   bottomButtonsWrap: {
     gap: spacingNumeric.sm,
     marginTop: spacingNumeric.xs,
@@ -1828,10 +1789,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 48,
   },
-  primaryActionBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  primaryActionBtnText: {},
   cancelActionBtn: {
     width: '100%',
     paddingVertical: 12,
@@ -1841,10 +1799,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  cancelActionBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  cancelActionBtnText: {},
   operatorConflictBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1858,8 +1813,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
   },
   operatorConflictText: {
-    fontSize: 12.5,
-    fontWeight: '600',
     color: '#ef4444',
     flex: 1,
   },
@@ -1895,7 +1848,6 @@ const styles = StyleSheet.create({
   },
   dropdownSearchInput: {
     flex: 1,
-    fontSize: 13,
     paddingVertical: 0,
   },
   dropdownSubHeader: {
@@ -1907,13 +1859,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderBottomWidth: 1,
   },
-  selectionCountText: {
-    fontSize: 11.5,
-    fontWeight: '500',
-  },
+  selectionCountText: {},
   deselectAllActionText: {
-    fontSize: 12,
-    fontWeight: '600',
     color: '#0284c7',
   },
   dropdownScrollList: {
@@ -1924,10 +1871,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyDropdownText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
+  emptyDropdownText: {},
   dropdownStaffItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1944,20 +1888,13 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
   },
-  staffNameText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  staffNameText: {},
   staffRolePill: {
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: radiusNumeric.sm,
   },
-  staffRolePillText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+  staffRolePillText: {},
   staffMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1965,15 +1902,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   staffTimingText: {
-    fontSize: 11,
-    fontWeight: '600',
     color: '#10b981',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  staffPhoneText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  staffPhoneText: {},
   checkboxIndicator: {
     width: 20,
     height: 20,
@@ -1990,10 +1921,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginLeft: 8,
   },
-  assignShiftActionText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
+  assignShiftActionText: {},
   operatorIndexBadge: {
     width: 24,
     height: 24,
@@ -2004,12 +1932,8 @@ const styles = StyleSheet.create({
   },
   operatorIndexText: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
   },
   operatorContactSubtitle: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginTop: 1,
   },
   shiftSelectionSection: {
@@ -2024,9 +1948,5 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 6,
   },
-  shiftSelectionLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  shiftSelectionLabel: {},
 });

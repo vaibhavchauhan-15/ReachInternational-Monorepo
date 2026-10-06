@@ -12,24 +12,21 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
   Image,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions} from 'react-native';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Input, Alert, TimeInput, SearchableSelect, useTheme } from '../../components/ui';
+import { Input, Alert, TimeInput, SearchableSelect, useTheme , Text } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
@@ -67,6 +64,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react-native';
+import { haptics } from '../../lib/interaction/haptics';
 
 const ONBOARDING_ROLES = [
   { value: 'operator', label: 'Operator' },
@@ -512,7 +510,7 @@ export default function OnboardingScreen() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please complete all mandatory fields highlighted below.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      haptics.warning();
       return;
     }
 
@@ -595,14 +593,14 @@ export default function OnboardingScreen() {
         setErrorMessage(updateError.message || 'Failed to save profile details. Please try again.');
         isSubmittingRef.current = false;
         setIsLoading(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         return;
       }
 
       // Refresh session in auth state
       await refreshSession();
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
       setSuccessMessage('Profile completed successfully! Directing to dashboard...');
 
       setTimeout(() => {
@@ -612,7 +610,7 @@ export default function OnboardingScreen() {
       setErrorMessage(err?.message || 'An unexpected error occurred while saving profile.');
       isSubmittingRef.current = false;
       setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
     }
   };
 
@@ -1145,7 +1143,7 @@ export default function OnboardingScreen() {
                     { color: isDark ? '#7dd3fc' : '#0369a1' },
                   ]}
                 >
-                  <Text style={{ fontWeight: '700' }}>One-time setup: </Text>
+                  <Text variant="label" style={{ }}>One-time setup: </Text>
                   Your profile details will be permanently saved. Once submitted, your workspace will be fully unlocked.
                 </Text>
               </View>
@@ -1185,7 +1183,7 @@ export default function OnboardingScreen() {
                   },
                 ]}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  haptics.select();
                   setMode(isDark ? 'light' : 'dark');
                 }}
                 activeOpacity={0.7}
@@ -1259,16 +1257,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   showcaseTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   showcaseSubtitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   machineStageContainer: {
     width: '100%',
@@ -1310,8 +1300,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   showcaseBottomText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   mainWorkspace: {
     flex: 1,
@@ -1362,24 +1350,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.5,
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 12.5,
-    lineHeight: 17,
     marginBottom: 14,
   },
   bannerContainer: {
     marginBottom: 12,
   },
   durationSmallText: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    lineHeight: 14,
   },
   supervisorWrapper: {
     paddingTop: 8,
@@ -1399,8 +1378,6 @@ const styles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
-    fontSize: 11.5,
-    lineHeight: 16,
   },
   screenFooter: {
     width: '100%',
@@ -1415,9 +1392,6 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     flex: 1,
-    fontSize: 10.5,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.3,
   },
   themeToggleBtn: {
     width: 32,

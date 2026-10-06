@@ -13,7 +13,6 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Platform,
@@ -21,11 +20,12 @@ import {
   UIManager,
   type ViewStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { Moon } from 'lucide-react-native';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { formatTo12Hour } from '@reachinternational/utils';
+import { Text } from './Text';
+import { haptics } from '../../lib/interaction/haptics';
 
 // Enable layout animations on Android if available
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -35,11 +35,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 export interface ShiftCardItem {
   id?: string;
   code: string;
-  name?: string;
-  start_time?: string;
-  end_time?: string;
-  crosses_midnight?: boolean;
-  scheduled_minutes?: number;
+  name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  crosses_midnight?: boolean | null;
+  scheduled_minutes?: number | null;
+  [key: string]: any;
 }
 
 export interface ShiftCardSelectorProps {
@@ -77,7 +78,7 @@ export function formatCompactShiftRange(start?: string | null, end?: string | nu
 /**
  * Returns formatted shift title e.g. "Shift A"
  */
-export function getShiftDisplayTitle(sc: { code: string; name?: string }): string {
+export function getShiftDisplayTitle(sc?: { code: string; name?: string | null } | null): string {
   if (!sc) return '';
   const code = (sc.code || '').replace(/^shift\s+/i, '').trim();
   return `Shift ${code}`;
@@ -100,7 +101,7 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
 
   const handlePress = (sc: ShiftCardItem) => {
     if (disabled) return;
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     if (Platform.OS !== 'web') {
       try {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -186,8 +187,9 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
               <View style={styles.expandedContent}>
                 <View style={styles.titleRow}>
                   <Text
+                    variant="label"
                     numberOfLines={1}
-                    style={[styles.expandedTitleText, { color: textColor }]}
+                    style={{ color: textColor }}
                   >
                     {isLogged ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
                   </Text>
@@ -201,8 +203,9 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
                 </View>
                 {compactRange ? (
                   <Text
+                    variant="mono"
                     numberOfLines={1}
-                    style={[styles.timingText, { color: 'rgba(255, 255, 255, 0.95)' }]}
+                    style={{ color: 'rgba(255, 255, 255, 0.95)', marginTop: 1 }}
                   >
                     {compactRange}
                   </Text>
@@ -212,8 +215,9 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
               /* COLLAPSED (UNSELECTED) STATE: Exactly ONE line */
               <View style={styles.collapsedContent}>
                 <Text
+                  variant="label"
                   numberOfLines={1}
-                  style={[styles.collapsedTitleText, { color: textColor }]}
+                  style={{ color: textColor, textAlign: 'center' }}
                 >
                   {isLogged ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
                 </Text>
@@ -234,12 +238,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   card: {
-    minHeight: 44,
-    height: 44,
-    borderRadius: radiusNumeric.lg,
+    minHeight: 46,
+    borderRadius: 22,
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     justifyContent: 'center',
     ...Platform.select({
       web: {
@@ -258,26 +261,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     maxWidth: '100%',
   },
-  expandedTitleText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  timingText: {
-    fontSize: 9,
-    fontWeight: '600',
-    marginTop: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: -0.2,
-  },
   collapsedContent: {
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-  },
-  collapsedTitleText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });

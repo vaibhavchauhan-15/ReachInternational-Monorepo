@@ -4,14 +4,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Card,
   useTheme,
   MobileHeader,
   ReachInternationalLogo,
-} from '../../components/ui';
+  Text } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
@@ -122,7 +122,7 @@ export default function PrivacyPolicyScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Machinery Custody & Dispatch: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Machinery Custody & Dispatch: </Text>
                 Verifying qualified operator credentials before dispatching access to heavy industrial machinery.
               </Text>
             </View>
@@ -130,7 +130,7 @@ export default function PrivacyPolicyScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Shift & Overtime Transparency: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Shift & Overtime Transparency: </Text>
                 Accurately tracking machine running hours to prevent operator fatigue, schedule collisions, and billing discrepancies.
               </Text>
             </View>
@@ -138,7 +138,7 @@ export default function PrivacyPolicyScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Preventative Fleet Maintenance: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Preventative Fleet Maintenance: </Text>
                 Forecasting servicing cycles, hydraulic inspections, and component replacements based on actual running hours.
               </Text>
             </View>
@@ -146,7 +146,7 @@ export default function PrivacyPolicyScreen() {
             <View style={styles.bulletRow}>
               <CheckCircle2 size={15} color="#059669" style={styles.bulletIcon} />
               <Text style={[styles.bulletText, { color: theme.colors.body }]}>
-                <Text style={{ fontWeight: '700', color: theme.colors.ink }}>Industrial Safety Audits: </Text>
+                <Text variant="label" style={{ color: theme.colors.ink }}>Industrial Safety Audits: </Text>
                 Maintaining tamper-evident logs for site safety investigations, regulatory inspections, and insurance compliance.
               </Text>
             </View>
@@ -278,114 +278,69 @@ export default function PrivacyPolicyScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   content: {
     padding: spacingNumeric.md,
-    paddingBottom: spacingNumeric['3xl'],
-  },
+    paddingBottom: spacingNumeric['3xl'] },
   card: {
     marginBottom: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
-    padding: spacingNumeric.lg,
-  },
+    padding: spacingNumeric.lg },
   heroHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   heroTitleCol: {
-    flex: 1,
-  },
+    flex: 1 },
   versionPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   versionText: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '600',
   },
   heroTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.4,
   },
   heroSubtitle: {
-    fontSize: 13.5,
-    marginTop: 3,
-  },
+    marginTop: 3 },
   divider: {
     height: 1,
-    marginVertical: spacingNumeric.md,
-  },
+    marginVertical: spacingNumeric.md },
   leadParagraph: {
-    fontSize: 13,
-    lineHeight: 20,
   },
   sectionHeaderRow: {
-    marginBottom: spacingNumeric.sm,
-  },
+    marginBottom: spacingNumeric.sm },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   sectionDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: spacingNumeric.md,
-  },
+    marginBottom: spacingNumeric.md },
   insetSection: {
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
-    padding: spacingNumeric.md,
-  },
+    padding: spacingNumeric.md },
   insetTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
+    marginBottom: 6 },
   insetText: {
-    fontSize: 12,
-    lineHeight: 18,
   },
   bulletList: {
-    gap: 10,
-  },
+    gap: 10 },
   bulletRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   bulletIcon: {
     marginTop: 2,
-    marginRight: 8,
-  },
+    marginRight: 8 },
   bulletText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-  },
+    flex: 1 },
   securityPoint: {
-    marginTop: 10,
-  },
+    marginTop: 10 },
   securityTitle: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   securityBody: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   bodyText: {
-    fontSize: 13,
-    lineHeight: 19,
   },
   contactBox: {
     flexDirection: 'row',
@@ -393,29 +348,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     padding: spacingNumeric.md,
-    marginTop: spacingNumeric.md,
-  },
+    marginTop: spacingNumeric.md },
   contactLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
   },
   contactValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   brandFooter: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacingNumeric.xl,
-    gap: 4,
-  },
+    gap: 4 },
   brandFooterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 6,
-  },
+    marginTop: 6 },
   copyrightText: {
-    fontSize: 12,
-  },
-});
+  } });

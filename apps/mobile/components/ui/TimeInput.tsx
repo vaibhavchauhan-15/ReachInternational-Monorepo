@@ -7,16 +7,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   Platform,
   type ViewStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { Text, useTypeStyle } from './Text';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface TimeInputProps {
   label?: string;
@@ -295,7 +295,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   };
 
   const handlePeriodChange = (newPeriod: 'AM' | 'PM') => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setTouched(true);
     setPeriod(newPeriod);
     emitFormattedTime(hour, minute, newPeriod);
@@ -313,13 +313,15 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   const shellBg = isDark ? '#141414' : '#fafafa';
   const periodCapsuleBg = isDark ? '#18181b' : '#f3f4f6';
 
+  const monoStyle = useTypeStyle('mono');
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+          <Text variant="label" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
             {label}
-            {required && <Text style={{ color: '#ef4444', fontWeight: '700' }}> *</Text>}
+            {required && <Text variant="label" style={{ color: '#ef4444' }}> *</Text>}
           </Text>
         </View>
       )}
@@ -364,11 +366,12 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               selectTextOnFocus
               style={[
                 styles.digitInput,
+                monoStyle,
                 { color: isDark ? '#f8fafc' : '#0f172a' },
               ]}
             />
 
-            <Text style={[styles.colonText, { color: isDark ? '#71717a' : '#9ca3af' }]}>:</Text>
+            <Text variant="mono" style={{ color: isDark ? '#71717a' : '#9ca3af', paddingHorizontal: 2 }}>:</Text>
 
             <TextInput
               ref={minuteInputRef}
@@ -383,6 +386,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               selectTextOnFocus
               style={[
                 styles.digitInput,
+                monoStyle,
                 { color: isDark ? '#f8fafc' : '#0f172a' },
               ]}
             />
@@ -417,13 +421,10 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             ]}
           >
             <Text
-              style={[
-                styles.periodText,
-                {
-                  color: period === 'AM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
-                  fontWeight: period === 'AM' ? '800' : '700',
-                },
-              ]}
+              variant="label"
+              style={{
+                color: period === 'AM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
+              }}
             >
               AM
             </Text>
@@ -446,13 +447,10 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             ]}
           >
             <Text
-              style={[
-                styles.periodText,
-                {
-                  color: period === 'PM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
-                  fontWeight: period === 'PM' ? '800' : '700',
-                },
-              ]}
+              variant="label"
+              style={{
+                color: period === 'PM' ? '#ffffff' : isDark ? '#a1a1aa' : '#64748b',
+              }}
             >
               PM
             </Text>
@@ -462,11 +460,11 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
       {/* Inline Validation Error Message */}
       {validation.errorMessage ? (
-        <Text style={[styles.errorText, { color: '#ef4444' }]}>
+        <Text variant="caption" style={[styles.errorText, { color: '#ef4444' }]}>
           {validation.errorMessage}
         </Text>
       ) : helperText ? (
-        <Text style={[styles.helperText, { color: theme.colors.mute }]}>
+        <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>
           {helperText}
         </Text>
       ) : null}
@@ -483,11 +481,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 5,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.1,
   },
   stackedCol: {
     flexDirection: 'column',
@@ -506,7 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 44,
     paddingHorizontal: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
   digitalCluster: {
@@ -516,26 +509,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   digitInput: {
-    fontSize: 15,
-    fontWeight: '700',
     textAlign: 'center',
     width: 36,
     height: 38,
     padding: 0,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontVariant: ['tabular-nums'],
-  },
-  colonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    paddingHorizontal: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   periodContainer: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 2.5,
+    borderRadius: 9999,
+    padding: 3,
     gap: 2,
     alignItems: 'center',
   },
@@ -545,29 +529,22 @@ const styles = StyleSheet.create({
   },
   periodContainerSide: {
     height: 44,
-    minWidth: 92,
+    minWidth: 96,
   },
   periodBtn: {
     flex: 1,
     height: '100%',
     minHeight: 34,
-    minWidth: 42,
+    minWidth: 44,
     paddingHorizontal: 10,
-    borderRadius: 9,
+    borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  periodText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   errorText: {
-    fontSize: 11.5,
     marginTop: 4,
-    fontWeight: '500',
   },
   helperText: {
-    fontSize: 11.5,
     marginTop: 4,
   },
 });

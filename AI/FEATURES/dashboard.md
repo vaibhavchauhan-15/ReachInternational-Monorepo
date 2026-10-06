@@ -22,4 +22,5 @@ Provides dedicated, high-performance, role-based operational dashboards for all 
   - `supabase/migrations/091_dashboard_action_urls.sql`: Hardens action URLs across all roles
   - `supabase/migrations/092_fix_active_machines_dashboard_kpis.sql`: Fixes active machines fleet metric in `get_super_admin_dashboard` and `get_manager_dashboard` (checks `health_status = 'active' OR status = 'active'` while excluding inactive)
   - `supabase/migrations/093_operator_dashboard_submitted_alert.sql`: Emits `entry-submitted` success alert when operator has submitted their shift log for today. Single dynamic alert displays yellow/amber when pending and light green when submitted, eliminating duplicate action cards.
-- **Mobile Parity**: `apps/mobile/app/(app)/dashboard.tsx` with modular cards in `apps/mobile/components/dashboard/` (`SupervisorDashboardCard`, `OperatorDashboardCard`, etc.)
+- **Mobile Parity**: `apps/mobile/app/(app)/dashboard.tsx` with modular cards in `apps/mobile/components/dashboard/` (`SupervisorDashboardCard`, `OperatorDashboardCard`, etc.), streamlined clean telemetry cards, responsive centered container (`maxWidth: 960`), and comprehensive role-aware 3-dot header menu (`MobileHeader`).
+

@@ -457,8 +457,16 @@ export class OfflineQueueManager {
 
       // 2. Fallback direct table insert if RPC unavailable
       if (!rpcSucceeded) {
+        const {
+          machine_code: _mc,
+          model: _md,
+          serial_number: _sn,
+          machine: _m,
+          ...cleanPayload
+        } = (payload || {}) as Record<string, any>;
+
         const insertPayload = {
-          ...payload,
+          ...cleanPayload,
           idempotency_key,
         };
 

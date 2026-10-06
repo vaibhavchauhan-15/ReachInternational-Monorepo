@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from '../../ui/AppLinearGradient';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
+import { Touchable } from '../../ui/Touchable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export type KPIVariant =
@@ -141,7 +142,7 @@ const resolveRoute = (href?: string): string | null => {
   if (href.startsWith('/clients')) return '/(app)/clients';
   if (href.startsWith('/attendance')) return '/(app)/attendance';
   if (href.startsWith('/payroll')) return '/(app)/payroll';
-  if (href.startsWith('/audit')) return '/(app)/more';
+  if (href.startsWith('/audit')) return '/(app)/dashboard';
   return href.startsWith('/(app)') ? href : `/(app)${href}`;
 };
 
@@ -162,13 +163,8 @@ export const KPICard: React.FC<KPICardProps> = ({
   const targetRoute = resolveRoute(href);
   const isInteractive = Boolean(onPress || targetRoute);
 
-  const handlePress = async () => {
+  const handlePress = () => {
     if (isInteractive) {
-      try {
-        await Haptics.selectionAsync();
-      } catch {
-        // ignore
-      }
       if (onPress) {
         onPress();
       } else if (targetRoute) {
@@ -196,6 +192,7 @@ export const KPICard: React.FC<KPICardProps> = ({
       {/* Header Row: Label & Creative Icon Capsule */}
       <View style={styles.headerRow}>
         <Text
+          variant="label"
           style={[
             styles.label,
             { color: isDark ? theme.colors.mute : '#64748b' },
@@ -228,6 +225,7 @@ export const KPICard: React.FC<KPICardProps> = ({
       {/* Metric Value */}
       <View style={styles.valueRow}>
         <Text
+          variant="display"
           style={[
             styles.value,
             {
@@ -243,15 +241,15 @@ export const KPICard: React.FC<KPICardProps> = ({
 
   if (isInteractive) {
     return (
-      <TouchableOpacity
+      <Touchable
+        preset="card"
         onPress={handlePress}
-        activeOpacity={0.78}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value}`}
         style={[styles.touchWrapper, containerStyle]}
       >
         {cardContent}
-      </TouchableOpacity>
+      </Touchable>
     );
   }
 
@@ -296,11 +294,7 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.xs,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
     flex: 1,
-    lineHeight: 16,
   },
   iconCircle: {
     width: 32,
@@ -314,9 +308,5 @@ const styles = StyleSheet.create({
   valueRow: {
     marginTop: spacingNumeric.xs,
   },
-  value: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-  },
+  value: {},
 });

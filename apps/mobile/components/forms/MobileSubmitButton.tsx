@@ -1,15 +1,14 @@
+﻿import { Text } from '../ui/Text';
 import React, { useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  type ViewStyle,
-} from 'react-native';
-import * as Haptics from 'expo-haptics';
+  type ViewStyle} from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface MobileSubmitButtonProps {
   isReady: boolean;
@@ -39,7 +38,7 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
   const handlePress = async () => {
     if (!isReady || isLoading || isExecutingRef.current) return;
     isExecutingRef.current = true;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.light();
     try {
       await onPress();
     } finally {
@@ -173,14 +172,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bannerText: {
-    fontSize: 11,
-    fontWeight: '500',
     flex: 1,
   },
   tagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   button: {
@@ -198,8 +192,5 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.1,
   },
 });

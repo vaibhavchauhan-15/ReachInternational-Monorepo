@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Badge, useTheme, HighlightText } from '../ui';
+import { Badge, useTheme, HighlightText, Text, Touchable } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
   Copy,
   Check,
-  Edit2,
-  Trash2,
   ChevronRight,
-  Gauge,
+  History,
 } from 'lucide-react-native';
 
 export interface MobileMachineCardProps {
@@ -26,6 +22,7 @@ export interface MobileMachineCardProps {
   onEdit: (machine: any) => void;
   onDelete: (machine: any) => void;
   onLogMeter?: (machine: any) => void;
+  onViewHistory?: (machine: any) => void;
   onViewDetails: (machine: any) => void;
 }
 
@@ -37,6 +34,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   onEdit,
   onDelete,
   onLogMeter,
+  onViewHistory,
   onViewDetails,
 }) => {
   const { theme, isDark } = useTheme();
@@ -74,8 +72,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   const clientName = machine.client?.company_name || machine.customer_name || '—';
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.88}
+    <Touchable
+      preset="card"
       onPress={() => onViewDetails(machine)}
       style={[
         styles.card,
@@ -86,12 +84,12 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         },
       ]}
     >
-      {/* Top Header Row */}
+      {/* Top Header Row (Screenshot 1: M/C ID chip + Model name on left, Badges on right) */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
+          <Touchable
+            preset="icon"
             onPress={handleCopyId}
-            activeOpacity={0.7}
             style={[
               styles.codeBtn,
               {
@@ -103,28 +101,30 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
             <HighlightText
               text={machine.machine_id}
               query={searchTerm}
+              variant="mono"
               style={[styles.codeText, { color: theme.colors.ink }]}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
             />
             {copied ? (
               <Check size={12} color={theme.colors.success} strokeWidth={2.5} />
             ) : (
               <Copy size={12} color={theme.colors.mute} />
             )}
-          </TouchableOpacity>
+          </Touchable>
 
           {machine.model && (
             <HighlightText
               text={machine.model}
               query={searchTerm}
+              variant="heading"
               style={[styles.modelText, { color: theme.colors.ink }]}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
               numberOfLines={1}
             />
           )}
         </View>
 
-        {/* Badges Column */}
+        {/* Badges Column: Active / Health + Rented / Available */}
         <View style={styles.badgeWrap}>
           {machine.health_status === 'breakdown' && (
             <Badge status="breakdown" customLabel="Breakdown" size="sm" />
@@ -147,22 +147,23 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         </View>
       </View>
 
-      {/* Sub Metadata Row */}
+      {/* Sub Metadata Row: S/N */}
       {machine.serial_number && (
         <View style={styles.metaRow}>
-          <Text style={[styles.metaText, { color: theme.colors.body }]}>
+          <Text variant="caption" style={{ color: theme.colors.body }}>
             S/N:{' '}
             <HighlightText
               text={machine.serial_number}
               query={searchTerm}
-              style={[styles.metaText, { color: theme.colors.body }]}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+              variant="mono"
+              style={{ color: theme.colors.body }}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
             />
           </Text>
         </View>
       )}
 
-      {/* Inset Specs Well */}
+      {/* Inset Specs Well (Screenshot 1: Hour Meter & Client in Col 1 & 2; Supervisor & Operator in Row 2) */}
       <View
         style={[
           styles.specsWell,
@@ -174,19 +175,20 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
       >
         <View style={styles.twoColGrid}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Hour Meter (HMR):
             </Text>
-            <Text style={[styles.specValueHmr, { color: theme.colors.ink }]}>
+            <Text variant="mono" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
               {machine.hour_meter ?? 0} hrs
             </Text>
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Assigned Client:
             </Text>
             <Text
+              variant="subheading"
               style={[styles.specValueClient, { color: theme.colors.ink }]}
               numberOfLines={1}
             >
@@ -197,18 +199,18 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
 
         <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
 
-        {/* Personnel Rows */}
+        {/* Personnel Rows: Supervisor & Operator (24h) */}
         <View style={styles.twoColGrid}>
           {/* Supervisors */}
           <View style={{ flex: 1 }}>
             <View style={styles.personnelHeader}>
-              <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Supervisor:
               </Text>
             </View>
 
             {supervisors.length === 0 ? (
-              <Text style={[styles.unassignedText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
                 Unassigned
               </Text>
             ) : (
@@ -218,7 +220,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                 return (
                   <View key={s.id || idx} style={styles.personnelRow}>
                     <Text
-                      style={[styles.personnelName, { color: theme.colors.ink, flexShrink: 1 }]}
+                      variant="caption"
+                      style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
                       {s.full_name}
@@ -238,6 +241,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                         ]}
                       >
                         <Text
+                          variant="caption"
                           style={[
                             styles.inlineBadgeText,
                             { color: isDark ? '#2dd4bf' : '#0d9488' },
@@ -256,13 +260,13 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
           {/* Operators */}
           <View style={{ flex: 1 }}>
             <View style={styles.personnelHeader}>
-              <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Operator (24h):
               </Text>
             </View>
 
             {operators.length === 0 ? (
-              <Text style={[styles.unassignedText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
                 Unassigned
               </Text>
             ) : (
@@ -272,7 +276,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                 return (
                   <View key={o.id || idx} style={styles.personnelRow}>
                     <Text
-                      style={[styles.personnelName, { color: theme.colors.ink, flexShrink: 1 }]}
+                      variant="caption"
+                      style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
                       {o.full_name}
@@ -292,6 +297,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                         ]}
                       >
                         <Text
+                          variant="caption"
                           style={[
                             styles.inlineBadgeText,
                             { color: isDark ? '#fbbf24' : '#d97706' },
@@ -309,157 +315,74 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         </View>
       </View>
 
-      {/* Action Buttons Footer */}
+      {/* Action Buttons Footer (Screenshot 1: Left History Squircle & Right Details Squircle) */}
       <View style={[styles.cardFooter, { borderTopColor: theme.colors.hairline }]}>
         <View style={styles.footerLeftBtns}>
-          {isAdmin && (
-            <TouchableOpacity
-              onPress={(e) => {
-                e?.stopPropagation?.();
-                onEdit(machine);
-              }}
-              style={[
-                styles.iconActionBtn,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-              activeOpacity={0.7}
-              accessibilityLabel="Edit Machine"
-              accessibilityRole="button"
-            >
-              <Edit2 size={14} color="#f59e0b" />
-            </TouchableOpacity>
-          )}
-
-          {isSupervisor && !isAdmin && (
-            <TouchableOpacity
-              onPress={(e) => {
-                e?.stopPropagation?.();
-                onEdit(machine);
-              }}
-              style={[
-                styles.iconActionBtn,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: isDark ? 'rgba(14, 165, 233, 0.35)' : 'rgba(14, 165, 233, 0.25)',
-                },
-              ]}
-              activeOpacity={0.7}
-              accessibilityLabel="Update Machine Status"
-              accessibilityRole="button"
-            >
-              <Edit2 size={14} color="#0ea5e9" />
-            </TouchableOpacity>
-          )}
-
-          {isAdmin && (
-            <TouchableOpacity
-              onPress={(e) => {
-                e?.stopPropagation?.();
-                onDelete(machine);
-              }}
-              style={[
-                styles.iconActionBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.08)',
-                  borderColor: isDark ? 'rgba(239, 68, 68, 0.32)' : 'rgba(239, 68, 68, 0.22)',
-                },
-              ]}
-              activeOpacity={0.7}
-              accessibilityLabel="Delete Machine"
-              accessibilityRole="button"
-            >
-              <Trash2 size={14} color="#ef4444" />
-            </TouchableOpacity>
-          )}
-
-          {onLogMeter && (
-            <TouchableOpacity
-              onPress={(e) => {
-                e?.stopPropagation?.();
-                onLogMeter(machine);
-              }}
-              style={[
-                styles.iconActionBtn,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-              activeOpacity={0.7}
-              accessibilityLabel="Log Running Hours (HMR)"
-              accessibilityRole="button"
-            >
-              <Gauge size={14} color={theme.colors.mute} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {isMobile ? (
-          <TouchableOpacity
+          <Touchable
+            preset="icon"
             onPress={(e) => {
               e?.stopPropagation?.();
-              onViewDetails(machine);
+              if (onViewHistory) {
+                onViewHistory(machine);
+              } else if (onLogMeter) {
+                onLogMeter(machine);
+              } else {
+                onViewDetails(machine);
+              }
             }}
             style={[
               styles.iconActionBtn,
               {
-                backgroundColor: isDark ? 'rgba(0, 112, 243, 0.16)' : 'rgba(0, 112, 243, 0.09)',
-                borderColor: isDark ? 'rgba(0, 112, 243, 0.35)' : 'rgba(0, 112, 243, 0.22)',
+                backgroundColor: theme.colors.canvas,
+                borderColor: theme.colors.hairline,
               },
             ]}
-            activeOpacity={0.7}
-            accessibilityLabel="View Machine Details"
-            accessibilityRole="button"
+            accessibilityLabel="View Machine Running Logs"
           >
-            <ChevronRight size={16} color={theme.colors.link} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={(e) => {
-              e?.stopPropagation?.();
-              onViewDetails(machine);
-            }}
-            style={[
-              styles.viewDetailsBtn,
-              {
-                backgroundColor: isDark ? 'rgba(0, 112, 243, 0.15)' : 'rgba(0, 112, 243, 0.08)',
-              },
-            ]}
-            activeOpacity={0.8}
-            accessibilityLabel="View Machine Details"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.viewDetailsText, { color: theme.colors.link }]}>
-              View Details
-            </Text>
-            <ChevronRight size={13} color={theme.colors.link} />
-          </TouchableOpacity>
-        )}
+            <History size={16} color={theme.colors.link} />
+          </Touchable>
+        </View>
+
+        {/* View Details Right Squircle (Screenshot 1: Sky blue background with ChevronRight) */}
+        <Touchable
+          preset="icon"
+          onPress={(e) => {
+            e?.stopPropagation?.();
+            onViewDetails(machine);
+          }}
+          style={[
+            styles.iconActionBtn,
+            {
+              backgroundColor: isDark ? 'rgba(0, 112, 243, 0.16)' : 'rgba(0, 112, 243, 0.09)',
+              borderColor: isDark ? 'rgba(0, 112, 243, 0.35)' : 'rgba(0, 112, 243, 0.22)',
+            },
+          ]}
+          accessibilityLabel="View Machine Details"
+        >
+          <ChevronRight size={16} color={theme.colors.link} />
+        </Touchable>
       </View>
-    </TouchableOpacity>
+    </Touchable>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radiusNumeric.lg,
+    borderRadius: 18,
     borderWidth: 1,
     borderLeftWidth: 3.5,
     padding: spacingNumeric.md,
     gap: spacingNumeric.sm,
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
       },
       default: {
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
-        elevation: 3,
+        shadowOpacity: 0.08,
+        shadowRadius: 5,
+        elevation: 2,
       },
     }),
   },
@@ -471,27 +394,23 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   codeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     alignSelf: 'flex-start',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  codeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  modelText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  codeText: {},
+  modelText: {},
   badgeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,15 +424,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacingNumeric.xs,
-  },
-  metaText: {
-    fontSize: 12.5,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 2,
   },
   specsWell: {
-    borderRadius: radiusNumeric.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: spacingNumeric.sm,
+    padding: 12,
     gap: 8,
   },
   twoColGrid: {
@@ -525,20 +441,11 @@ const styles = StyleSheet.create({
     height: 1,
     width: '100%',
   },
-  specLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
+  specLabel: {},
   specValueHmr: {
-    fontSize: 13.5,
-    fontWeight: '700',
     marginTop: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   specValueClient: {
-    fontSize: 13.5,
-    fontWeight: '700',
     marginTop: 1,
   },
   personnelHeader: {
@@ -547,21 +454,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 2,
   },
-  moreCountBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#10b981',
-  },
   personnelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginBottom: 1,
-  },
-  personnelName: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    lineHeight: 16,
   },
   inlineBadge: {
     paddingHorizontal: 5,
@@ -569,20 +466,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
   },
-  inlineBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  unassignedText: {
-    fontSize: 12.5,
-    fontStyle: 'italic',
-  },
+  inlineBadgeText: {},
+  unassignedText: {},
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: spacingNumeric.xs,
+    paddingTop: 8,
     borderTopWidth: 1,
     gap: spacingNumeric.xs,
   },
@@ -593,9 +483,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   iconActionBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: radiusNumeric.md,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -603,21 +493,5 @@ const styles = StyleSheet.create({
       web: { cursor: 'pointer' },
       default: {},
     }),
-  },
-  viewDetailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    height: 34,
-    borderRadius: radiusNumeric.md,
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-      default: {},
-    }),
-  },
-  viewDetailsText: {
-    fontSize: 12.5,
-    fontWeight: '700',
   },
 });

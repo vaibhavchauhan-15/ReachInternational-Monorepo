@@ -14,19 +14,21 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  Modal,
   FlatList,
   ScrollView,
   TextInput,
+  TouchableOpacity,
   Platform,
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../lib/interaction/haptics';
 import { useTheme } from './ThemeProvider';
+import { Text, useTypeStyle } from './Text';
+import { Icon } from './Icon';
+import { Touchable } from './Touchable';
+import { AppModal } from './AppModal';
 import { ChevronDown, Search, X, Check } from 'lucide-react-native';
 
 export interface SelectOption {
@@ -84,6 +86,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<View>(null);
+  const bodyTypeStyle = useTypeStyle('body');
 
   const selectedOption = useMemo(() => {
     return options.find((opt) => opt.value === value) || null;
@@ -131,7 +134,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const handleToggle = () => {
     if (disabled) return;
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setSearchQuery('');
 
     if (presentation === 'modal') {
@@ -142,7 +145,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const handleSelect = (option: SelectOption) => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     onChange(option.value, option);
     setModalVisible(false);
     setIsOpen(false);
@@ -167,9 +170,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     >
       {label && (
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }, labelStyle]}>
+          <Text variant="label" style={[{ color: isDark ? '#ffffff' : '#0f172a' }, labelStyle]}>
             {label}
-            {required && <Text style={{ color: '#ef4444', fontWeight: '700' }}> *</Text>}
+            {required && <Text variant="label" style={{ color: '#ef4444' }}> *</Text>}
           </Text>
           {rightElement}
         </View>
@@ -178,9 +181,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       {/* Trigger Area with Anchor */}
       <View style={[styles.triggerWrapper, isDropdownActive && { zIndex: 1000 }]}>
         {/* Trigger Button */}
-        <TouchableOpacity
+        <Touchable
+          preset="card"
           onPress={handleToggle}
-          activeOpacity={0.7}
           disabled={disabled}
           style={[
             styles.trigger,
@@ -202,6 +205,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               <View style={[styles.statusDot, { backgroundColor: selectedOption.dotColor }]} />
             )}
             <Text
+              variant="body"
               style={[
                 styles.triggerText,
                 {
@@ -212,7 +216,6 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     : isDark
                     ? '#71717a'
                     : '#9ca3af',
-                  fontWeight: selectedOption ? '600' : 'normal',
                 },
               ]}
               numberOfLines={1}
@@ -220,12 +223,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               {selectedOption ? selectedOption.label : placeholder}
             </Text>
           </View>
-          <ChevronDown
-            size={15}
+          <Icon
+            name={ChevronDown}
+            variant="body"
             color={iconColor}
             style={isDropdownActive ? { transform: [{ rotate: '180deg' }] } : undefined}
           />
-        </TouchableOpacity>
+        </Touchable>
 
         {/* Anchored Dropdown Popover Menu (presentation="dropdown") */}
         {isDropdownActive && (
@@ -266,9 +270,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     },
                   ]}
                 >
-                  <Search size={14} color={iconColor} />
+                  <Icon name={Search} variant="body" color={iconColor} />
                   <TextInput
-                    style={[styles.dropdownSearchInput, { color: theme.colors.ink }]}
+                    style={[styles.dropdownSearchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                     placeholder={searchPlaceholder}
                     placeholderTextColor={iconColor}
                     value={searchQuery}
@@ -276,9 +280,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     autoFocus
                   />
                   {searchQuery ? (
-                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                      <X size={13} color={iconColor} />
-                    </TouchableOpacity>
+                    <Touchable preset="icon" onPress={() => setSearchQuery('')} accessibilityLabel="Clear Search">
+                      <Icon name={X} variant="caption" color={iconColor} />
+                    </Touchable>
                   ) : null}
                 </View>
               </View>
@@ -293,7 +297,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             >
               {filteredOptions.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: theme.colors.mute }]}>
+                  <Text variant="body" style={[styles.emptyText, { color: theme.colors.mute }]}>
                     No options found
                   </Text>
                 </View>
@@ -301,10 +305,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 filteredOptions.map((item) => {
                   const isSelected = item.value === value;
                   return (
-                    <TouchableOpacity
+                    <Touchable
                       key={item.value}
+                      preset="row"
                       onPress={() => handleSelect(item)}
-                      activeOpacity={0.7}
                       style={[
                         styles.dropdownItemRow,
                         { borderBottomColor: isDark ? '#222222' : '#f5f5f5' },
@@ -323,11 +327,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         <View style={{ flex: 1 }}>
                           <View style={styles.itemTitleRow}>
                             <Text
+                              variant={isSelected ? "subheading" : "body"}
                               style={[
                                 styles.itemTitle,
                                 {
                                   color: isSelected ? '#0284c7' : theme.colors.ink,
-                                  fontWeight: isSelected ? '700' : '500',
                                 },
                               ]}
                             >
@@ -345,6 +349,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                 ]}
                               >
                                 <Text
+                                  variant="mono"
                                   style={[
                                     styles.codeText,
                                     { color: theme.colors.mute },
@@ -373,6 +378,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                 ]}
                               >
                                 <Text
+                                  variant="caption"
                                   style={[
                                     styles.badgeText,
                                     {
@@ -394,6 +400,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           </View>
                           {item.description ? (
                             <Text
+                              variant="caption"
                               style={[
                                 styles.itemDesc,
                                 { color: isDark ? '#71717a' : '#888888' },
@@ -404,8 +411,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           ) : null}
                         </View>
                       </View>
-                      {isSelected && <Check size={16} color="#0284c7" strokeWidth={2.5} />}
-                    </TouchableOpacity>
+                      {isSelected && <Icon name={Check} variant="body" color="#0284c7" strokeWidth={2.5} />}
+                    </Touchable>
                   );
                 })
               )}
@@ -414,44 +421,43 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         )}
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text variant="caption" style={styles.errorText}>{error}</Text> : null}
 
       {/* Modal Bottom Sheet (only when presentation="modal") */}
       {presentation === 'modal' && (
-        <Modal
+        <AppModal
           visible={modalVisible}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setModalVisible(false)}
+          onClose={() => setModalVisible(false)}
+          variant="bottom"
         >
-          <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: isDark ? '#171717' : '#ffffff',
+                borderColor: cardBorder,
+              },
+            ]}
+          >
+            {/* Sheet Header */}
             <View
               style={[
-                styles.modalSheet,
-                {
-                  backgroundColor: isDark ? '#171717' : '#ffffff',
-                  borderColor: cardBorder,
-                },
+                styles.modalHeader,
+                { borderBottomColor: isDark ? '#262626' : '#f0f0f0' },
               ]}
             >
-              {/* Sheet Header */}
-              <View
-                style={[
-                  styles.modalHeader,
-                  { borderBottomColor: isDark ? '#262626' : '#f0f0f0' },
-                ]}
+              <Text variant="heading" style={[styles.modalTitle, { color: theme.colors.ink }]}>
+                {modalTitle || label || 'Select Option'}
+              </Text>
+              <Touchable
+                preset="icon"
+                onPress={() => setModalVisible(false)}
+                style={styles.closeBtn}
+                accessibilityLabel="Close"
               >
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
-                  {modalTitle || label || 'Select Option'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setModalVisible(false)}
-                  style={styles.closeBtn}
-                  hitSlop={10}
-                >
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
+                <Icon name={X} variant="subheading" color={theme.colors.ink} />
+              </Touchable>
+            </View>
 
               {/* Optional Search Bar */}
               {showSearch && (
@@ -465,18 +471,18 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       },
                     ]}
                   >
-                    <Search size={15} color={iconColor} />
+                    <Icon name={Search} variant="body" color={iconColor} />
                     <TextInput
-                      style={[styles.searchInput, { color: theme.colors.ink }]}
+                      style={[styles.searchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                       placeholder={searchPlaceholder}
                       placeholderTextColor={iconColor}
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                     />
                     {searchQuery ? (
-                      <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                        <X size={14} color={iconColor} />
-                      </TouchableOpacity>
+                      <Touchable preset="icon" onPress={() => setSearchQuery('')} accessibilityLabel="Clear Search">
+                        <Icon name={X} variant="caption" color={iconColor} />
+                      </Touchable>
                     ) : null}
                   </View>
                 </View>
@@ -491,9 +497,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 renderItem={({ item }) => {
                   const isSelected = item.value === value;
                   return (
-                    <TouchableOpacity
+                    <Touchable
+                      preset="row"
                       onPress={() => handleSelect(item)}
-                      activeOpacity={0.7}
                       style={[
                         styles.itemRow,
                         { borderBottomColor: isDark ? '#262626' : '#f0f0f0' },
@@ -512,11 +518,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         <View style={{ flex: 1 }}>
                           <View style={styles.itemTitleRow}>
                             <Text
+                              variant={isSelected ? "subheading" : "body"}
                               style={[
                                 styles.itemTitle,
                                 {
                                   color: isSelected ? '#0284c7' : theme.colors.ink,
-                                  fontWeight: isSelected ? '700' : '500',
                                 },
                               ]}
                             >
@@ -534,6 +540,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                 ]}
                               >
                                 <Text
+                                  variant="mono"
                                   style={[
                                     styles.codeText,
                                     { color: theme.colors.mute },
@@ -562,6 +569,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                 ]}
                               >
                                 <Text
+                                  variant="caption"
                                   style={[
                                     styles.badgeText,
                                     {
@@ -583,6 +591,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           </View>
                           {item.description ? (
                             <Text
+                              variant="caption"
                               style={[
                                 styles.itemDesc,
                                 { color: isDark ? '#71717a' : '#888888' },
@@ -593,21 +602,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           ) : null}
                         </View>
                       </View>
-                      {isSelected && <Check size={18} color="#0284c7" strokeWidth={2.5} />}
-                    </TouchableOpacity>
+                      {isSelected && <Icon name={Check} variant="body" color="#0284c7" strokeWidth={2.5} />}
+                    </Touchable>
                   );
                 }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
-                    <Text style={[styles.emptyText, { color: theme.colors.mute }]}>
+                    <Text variant="body" style={[styles.emptyText, { color: theme.colors.mute }]}>
                       No options found
                     </Text>
                   </View>
                 }
               />
             </View>
-          </View>
-        </Modal>
+        </AppModal>
       )}
     </View>
   );
@@ -628,11 +636,7 @@ const styles: any = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 5,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-  },
+  label: {},
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -653,14 +657,11 @@ const styles: any = StyleSheet.create({
     justifyContent: 'center',
   },
   triggerText: {
-    fontSize: 13.5,
     flex: 1,
   },
   errorText: {
     color: '#ef4444',
-    fontSize: 11.5,
     marginTop: 4,
-    fontWeight: '500',
   },
   dropdownMenu: {
     position: 'absolute',
@@ -690,7 +691,6 @@ const styles: any = StyleSheet.create({
   },
   dropdownSearchInput: {
     flex: 1,
-    fontSize: 13,
     height: '100%',
     padding: 0,
     backgroundColor: 'transparent',
@@ -698,9 +698,6 @@ const styles: any = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -736,10 +733,7 @@ const styles: any = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  modalTitle: {},
   closeBtn: {
     padding: 4,
   },
@@ -758,7 +752,6 @@ const styles: any = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13.5,
     height: '100%',
     padding: 0,
     backgroundColor: 'transparent',
@@ -766,9 +759,6 @@ const styles: any = StyleSheet.create({
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -793,11 +783,8 @@ const styles: any = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemTitle: {
-    fontSize: 13.5,
-  },
+  itemTitle: {},
   itemDesc: {
-    fontSize: 12,
     marginTop: 2,
   },
   statusDot: {
@@ -816,26 +803,18 @@ const styles: any = StyleSheet.create({
     paddingVertical: 1.5,
     borderRadius: 4,
   },
-  codeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
+  codeText: {},
   badgePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
   emptyContainer: {
     padding: 20,
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 13,
-  },
+  emptyText: {},
 });

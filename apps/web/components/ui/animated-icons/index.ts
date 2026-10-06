@@ -119,7 +119,7 @@ export { LoaderIcon as AnimatedLoader } from "../../icons";
 export { EllipsisVerticalIcon as AnimatedMoreVertical } from "../../icons";
 export { EllipsisIcon as AnimatedMoreHorizontal } from "../../icons";
 export { MenuIcon as AnimatedMenu } from "../../icons";
-export { ArrowRightIcon as AnimatedLogOut } from "../../icons";
+export { LogOutIcon as AnimatedLogOut } from "../../icons";
 export { PanelLeftCloseIcon as AnimatedPanelLeftClose } from "../../icons";
 export { PanelLeftOpenIcon as AnimatedPanelLeftOpen } from "../../icons";
 export { TrendingUpIcon as AnimatedTrendingUp } from "../../icons";

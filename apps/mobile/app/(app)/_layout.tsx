@@ -1,13 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme } from '../../components/ui';
+import { useTheme, Text } from '../../components/ui';
 import { MobileBottomNav } from '../../components/navigation/MobileBottomNav';
 import { OfflineBanner } from '../../components/offline/OfflineBanner';
 
 import { NotificationPermissionModal } from '../../components/permissions';
 import { shouldPromptNotificationPermission } from '../../lib/permissions';
+import { screenAnim } from '../../lib/interaction/screens';
 
 export default function AppLayout() {
   const { session, isLoading, isProfileComplete } = useAuth();
@@ -30,7 +31,7 @@ export default function AppLayout() {
   if (isLoading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.canvas }]}>
-        <Text style={{ color: theme.colors.mute }}>Loading session...</Text>
+        <Text variant="body" style={{ color: theme.colors.mute }}>Loading session...</Text>
       </View>
     );
   }
@@ -51,6 +52,7 @@ export default function AppLayout() {
         tabBar={() => <MobileBottomNav />}
         screenOptions={{
           headerShown: false,
+          ...screenAnim.tab,
         }}
       >
         {/* Primary Monorepo Modules Accessible via Bottom Nav */}
@@ -62,24 +64,24 @@ export default function AppLayout() {
         <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
         <Tabs.Screen name="payroll" options={{ title: 'Payroll' }} />
         <Tabs.Screen name="settings/index" options={{ title: 'Settings' }} />
-        <Tabs.Screen name="more" options={{ title: 'More' }} />
 
         {/* Settings Module Dedicated Sub-Pages */}
-        <Tabs.Screen name="settings/account" options={{ title: 'Account Settings', href: null }} />
-        <Tabs.Screen name="settings/notification" options={{ title: 'Notification Settings', href: null }} />
-        <Tabs.Screen name="settings/preference" options={{ title: 'Preferences', href: null }} />
+        <Tabs.Screen name="settings/account" options={{ ...screenAnim.tab, title: 'Account Settings', href: null }} />
+        <Tabs.Screen name="settings/notification" options={{ ...screenAnim.tab, title: 'Notification Settings', href: null }} />
+        <Tabs.Screen name="settings/preference" options={{ ...screenAnim.tab, title: 'Preferences', href: null }} />
         <Tabs.Screen name="settings/prefrence" options={{ href: null }} />
-        <Tabs.Screen name="settings/aboutapp" options={{ title: 'About App', href: null }} />
+        <Tabs.Screen name="settings/aboutapp" options={{ ...screenAnim.tab, title: 'About App', href: null }} />
         <Tabs.Screen name="setting/index" options={{ href: null }} />
         <Tabs.Screen name="setting/[...slug]" options={{ href: null }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
-        <Tabs.Screen name="running-logs" options={{ title: 'Running Logs', href: null }} />
-        <Tabs.Screen name="hr" options={{ title: 'HR', href: null }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile', href: null }} />
-        <Tabs.Screen name="privacy" options={{ title: 'Privacy Policy', href: null }} />
-        <Tabs.Screen name="terms" options={{ title: 'Terms of Service', href: null }} />
-        <Tabs.Screen name="account-deletion" options={{ title: 'Account Deletion', href: null }} />
+        <Tabs.Screen name="running-logs" options={{ ...screenAnim.tab, title: 'Running Logs', href: null }} />
+        <Tabs.Screen name="audit" options={{ title: 'Audit', href: null }} />
+        <Tabs.Screen name="hr" options={{ ...screenAnim.tab, title: 'HR', href: null }} />
+        <Tabs.Screen name="profile" options={{ ...screenAnim.tab, title: 'Profile', href: null }} />
+        <Tabs.Screen name="privacy" options={{ ...screenAnim.tab, title: 'Privacy Policy', href: null }} />
+        <Tabs.Screen name="terms" options={{ ...screenAnim.tab, title: 'Terms of Service', href: null }} />
+        <Tabs.Screen name="account-deletion" options={{ ...screenAnim.tab, title: 'Account Deletion', href: null }} />
       </Tabs>
 
       {/* Post-Install / First-Run Notification Permission Primer */}

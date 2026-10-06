@@ -49,15 +49,32 @@ apps/mobile/
 
 ## Mobile-Specific Rules
 
-### 1. Platform-Aware Components
+### 0. 100% Web & Native Parity Mandate
+- **PRIMARY AUTHORITY**: Root `DESIGN.md`, `ARCHITECTURE.md`, `AI/RULES/DESIGN-SYSTEM.md`, and `AI/RULES/WEB-MOBILE-PARITY.md`.
+- **AUTHORITATIVE PARITY RULES & SKILLS**: `.agents/rules/web_mobile_ui_consistency.md` and `.agents/skills/web-mobile-parity/SKILL.md`.
+- **100% WEB & MOBILE PARITY ACROSS ALL 8 DIMENSIONS**:
+  1. **UI/UX**: Identical components, empty states (`EmptyState`), confirmation dialogs (`ConfirmDialog`), segmented toggles, badges, status pills.
+  2. **Behavior**: Identical loading skeleton loaders, toast feedback, error retry, real-time form validation.
+  3. **Responsiveness**: 3-tier viewport protocol (Mobile ≤640px touch cards, Tablet 641–1023px 2-col grids, Desktop ≥1024px split layouts).
+  4. **Design**: Vercel Geist design system (1px hairline borders `#ebebeb` / `#262626`, bimodal radius 6px app / 64px pill).
+  5. **Layout**: Identical visual hierarchy, card metadata order, action placement.
+  6. **Color**: 100% exact hex tokens (Reach Sky Blue `#0284c7` / `#0ea5e9`, Success `#10b981`, Warning `#f5a623`, Error `#ee0000`).
+  7. **Theme**: 100% synchronized Light (`#fafafa` canvas / `#ffffff` cards) and Dark (`#0a0a0a` canvas / `#171717` cards) modes.
+  8. **Typography**: Geist Sans & Geist Mono, canonical `<Text variant="...">` and `useTypeStyle()` with **zero raw typography properties in `StyleSheet.create`**.
 
+### 1. Platform-Aware Components & Architecture
 - Use React Native primitives (`View`, `Text`, `Pressable`, `ScrollView`, `FlatList`).
-- **Minimum 44px touch targets** on all interactive elements.
-- Bottom sheets instead of modals for mobile-first interactions.
-- Scrollable horizontal filter strips (`ScrollView horizontal`) instead of dropdowns where applicable.
-- Haptic feedback on critical interactions (submission, deletion).
+- **Minimum 44px touch targets** on all interactive elements (`minHeight: 44` / `hitSlop`).
+- Bottom sheets instead of desktop modals for mobile-first ergonomics.
+- Scrollable horizontal filter strips (`ScrollView horizontal`) for status filters.
+- Tactile haptic feedback via `expo-haptics` (`Haptics.selectionAsync()`) on critical actions.
 
-### 2. Three-Tier Responsive Design (Web Export)
+### 2. Native Backend & Data Layer Architecture
+- **TanStack Query (`@tanstack/react-query`)**: Exclusively used for all server state, background caching (30s stale time), and query invalidation.
+- **Hardware-Backed Keystore**: Authentication tokens MUST be stored via `expo-secure-store` backed by Android KeyStore / iOS Keychain.
+- **Offline-First Synchronization**: Mutations must queue into persistent local storage in `AsyncStorage` when offline, with real-time NetInfo network detection and auto-sync on reconnect.
+
+### 3. Three-Tier Responsive Design (Web Export)
 
 - Mobile screens MUST also render correctly when exported to web via Expo:
   - **Mobile (≤640px)**: Single-column, touch-optimized cards.

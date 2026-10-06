@@ -1,5 +1,6 @@
+import { Text } from '../ui/Text';
 import React from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { Input } from '../ui/Input';
 import { useTheme } from '../ui/ThemeProvider';
 import { Lock } from 'lucide-react-native';
@@ -134,8 +135,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   lockBadge: {
     flexDirection: 'row',
@@ -147,8 +146,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   lockBadgeText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   readOnlyBox: {
     minHeight: 46,
@@ -158,17 +155,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   readOnlyText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   currencyPrefix: {
-    fontSize: 15,
-    fontWeight: '700',
     paddingLeft: 4,
   },
   helperText: {
-    fontSize: 12.5,
-    lineHeight: 15,
     marginTop: 2,
     paddingHorizontal: 2,
   },

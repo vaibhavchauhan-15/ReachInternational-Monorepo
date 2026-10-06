@@ -108,38 +108,13 @@ export function toProfileView(
     u.shift_time
   );
 
-  // Machinery fleet assignment display
-  let machinesDisplay: string | null = null;
-  let machineHref: string | undefined = undefined;
-  if (Array.isArray(u.assigned_machines) && u.assigned_machines.length > 0) {
-    machinesDisplay = u.assigned_machines
-      .map((m: any) => `${m.machine_id} (${m.model || m.machine_name})`)
-      .join(", ");
-    if (u.assigned_machines.length === 1) {
-      machineHref = `/machines/${u.assigned_machines[0].id}`;
-    }
-  } else if (u.role === "operator" || u.role === "supervisor") {
-    machinesDisplay = "None currently assigned";
-  } else if (["super_admin", "admin", "manager"].includes(u.role || "")) {
-    machinesDisplay = "Fleet-wide Management";
-  }
-
-  // Work & Operations rows
+  // Work & Operations rows (Assigned Machinery removed per page feedback as it is displayed on /machines; Date of Joining removed; Profile Status moved to Account & System)
   const workRows: ProfileRow[] = [
     {
       label: "Shift Timing",
       value: shiftDisplay,
       isMonospace: false,
     },
-    ...(machinesDisplay
-      ? [
-          {
-            label: "Assigned Machinery",
-            value: machinesDisplay,
-            href: machineHref,
-          },
-        ]
-      : []),
     {
       label: "Site Supervisor",
       value: supervisorName || "Not Assigned",
@@ -147,18 +122,6 @@ export function toProfileView(
     {
       label: "Working Location",
       value: locationName || "Main Facility",
-    },
-    {
-      label: "Date of Joining",
-      value: u.doj ? formatDate(u.doj) : u.created_at ? formatDate(u.created_at) : "Not Configured",
-    },
-    {
-      label: "Profile Status",
-      value: u.complete_profile ? "Complete (100%)" : "Incomplete (Update in Profile)",
-      badge: {
-        label: u.complete_profile ? "100% COMPLETE" : "INCOMPLETE",
-        variant: u.complete_profile ? "success" : "warning",
-      },
     },
   ];
 
@@ -241,26 +204,6 @@ export function toProfileView(
       : []),
   ];
 
-  // Residential Address rows
-  const addressRows: ProfileRow[] = [
-    {
-      label: "Street Address",
-      value: clean(u.street) || clean(u.address) || "Not Provided",
-    },
-    {
-      label: "City / Town",
-      value: clean(u.city) || "Not Provided",
-    },
-    {
-      label: "District",
-      value: clean(u.district) || "Not Provided",
-    },
-    {
-      label: "State",
-      value: clean(u.state) || "Not Provided",
-    },
-  ];
-
   // Contact Information rows
   const contactRows: ProfileRow[] = [
     {
@@ -278,7 +221,7 @@ export function toProfileView(
     },
   ];
 
-  // Account & System rows
+  // Account & System rows (Profile Status moved here from Work & Operations)
   const accountRows: ProfileRow[] = [
     {
       label: "Account Status",
@@ -286,6 +229,14 @@ export function toProfileView(
       badge: {
         label: (clean(u.status) || "active").toUpperCase(),
         variant: u.status === "inactive" ? "warning" : "success",
+      },
+    },
+    {
+      label: "Profile Status",
+      value: u.complete_profile ? "Complete (100%)" : "Incomplete (Update in Profile)",
+      badge: {
+        label: u.complete_profile ? "100% COMPLETE" : "INCOMPLETE",
+        variant: u.complete_profile ? "success" : "warning",
       },
     },
     {
@@ -302,6 +253,8 @@ export function toProfileView(
     },
   ];
 
+  // Note: "Residential Address" section removed completely per requirements:
+  // "we have only working location or site location, dont use same address in work and residential, remove recidential"
   const sections: ProfileSection[] = [
     {
       title: "Work & Operations",
@@ -322,11 +275,6 @@ export function toProfileView(
       title: "Identity & Statutory",
       iconName: "shield",
       rows: identityRows,
-    },
-    {
-      title: "Residential Address",
-      iconName: "map-pin",
-      rows: addressRows,
     },
     {
       title: "Contact Information",

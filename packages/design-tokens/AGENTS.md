@@ -16,7 +16,7 @@
 | Canvas (background) | `#fafafa` | Page background |
 | Elevated (card) | `#ffffff` | Card/modal background |
 | Border | `#ebebeb` | 1px hairline borders |
-| Link Blue | `#0070f3` | Links and primary actions |
+| Primary Blue | `#0284c7` / `#0ea5e9` | Reach Sky Blue primary actions & links |
 | Fonts | Geist Sans / Geist Mono | Typography |
 
 ## Rules

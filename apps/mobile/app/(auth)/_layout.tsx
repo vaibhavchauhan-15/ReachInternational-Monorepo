@@ -8,6 +8,8 @@ import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 
+import { screenAnim } from '../../lib/interaction/screens';
+
 export default function AuthLayout() {
   const { theme } = useTheme();
   const { session, isLoading, isProfileComplete, role } = useAuth();
@@ -26,6 +28,7 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.canvas },
+        ...screenAnim.detail,
       }}
     />
   );

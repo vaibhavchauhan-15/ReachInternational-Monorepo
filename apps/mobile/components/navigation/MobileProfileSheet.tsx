@@ -7,23 +7,22 @@
 
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   Alert,
   Platform,
   KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../ui/ThemeProvider';
+import { useTheme, Text, AppModal, Touchable } from '../ui';
+import { haptics } from '../../lib/interaction/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 import { ReachInternationalLogo } from '../branding';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -68,6 +67,8 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
   const router = useRouter();
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Password Change Form State
   const [newPassword, setNewPassword] = useState('');
@@ -109,22 +110,21 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
   };
 
   const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of Reach International?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            onClose();
-            await signOut();
-            router.replace('/(auth)/login');
-          },
-        },
-      ]
-    );
+    setShowSignOutConfirm(true);
+  };
+
+  const handleConfirmSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      setShowSignOutConfirm(false);
+      onClose();
+      await signOut();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('[MobileProfileSheet] Sign out error:', err);
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const fullName =
@@ -158,17 +158,12 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
   return (
     <>
-      <Modal
+      <AppModal
         visible={isOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
+        onClose={onClose}
+        variant="bottom"
+        testID="mobile-profile-sheet"
       >
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={onClose}>
-            <View style={styles.backdrop} />
-          </TouchableWithoutFeedback>
-
           <View
             style={[
               styles.sheetContainer,
@@ -199,6 +194,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                   ]}
                 >
                   <Text
+                    variant="title"
                     style={[
                       styles.avatarText,
                       { color: theme.colors.canvas },
@@ -210,6 +206,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
                 <View style={styles.headerTextCol}>
                   <Text
+                    variant="heading"
                     style={[
                       styles.userName,
                       { color: theme.colors.ink },
@@ -219,6 +216,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                     {fullName}
                   </Text>
                   <Text
+                    variant="caption"
                     style={[
                       styles.userEmail,
                       { color: theme.colors.mute },
@@ -279,7 +277,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
             >
               {/* SECTION 1: OPERATIONAL & SHIFT */}
               <View style={styles.sectionBlock}>
-                <Text style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
                   OPERATIONAL & SHIFT
                 </Text>
 
@@ -303,10 +301,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <Clock size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         SHIFT SCHEDULE
                       </Text>
                       <Text
+                        variant="body"
                         style={[styles.rowValue, { color: theme.colors.ink }]}
                         numberOfLines={1}
                       >
@@ -329,10 +328,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <Building size={16} color={isDark ? '#fbbf24' : '#d97706'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         BASE YARD / LOCATION
                       </Text>
                       <Text
+                        variant="body"
                         style={[styles.rowValue, { color: theme.colors.ink }]}
                         numberOfLines={1}
                       >
@@ -345,7 +345,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
               {/* SECTION 2: CONTACT & RESIDENCE */}
               <View style={styles.sectionBlock}>
-                <Text style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
                   CONTACT & RESIDENCE
                 </Text>
 
@@ -369,10 +369,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <Phone size={16} color={isDark ? '#34d399' : '#059669'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         MOBILE PHONE
                       </Text>
                       <Text
+                        variant="mono"
                         style={[
                           styles.rowValue,
                           styles.monoValue,
@@ -398,10 +399,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <Mail size={16} color={isDark ? '#60a5fa' : '#2563eb'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         OFFICIAL EMAIL
                       </Text>
                       <Text
+                        variant="body"
                         style={[styles.rowValue, { color: theme.colors.ink }]}
                         numberOfLines={1}
                       >
@@ -426,10 +428,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <MapPin size={16} color={isDark ? '#fbbf24' : '#d97706'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         REGISTERED ADDRESS
                       </Text>
                       <Text
+                        variant="body"
                         style={[
                           styles.rowValue,
                           styles.addressValue,
@@ -445,7 +448,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
               {/* SECTION 3: GOVERNMENT KYC & CREDENTIALS */}
               <View style={styles.sectionBlock}>
-                <Text style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.sectionHeaderLabel, { color: theme.colors.mute }]}>
                   GOVERNMENT KYC & CREDENTIALS
                 </Text>
 
@@ -469,10 +472,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <ShieldCheck size={16} color={isDark ? '#818cf8' : '#4f46e5'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         AADHAAR CARD (KYC)
                       </Text>
                       <Text
+                        variant="mono"
                         style={[
                           styles.rowValue,
                           styles.monoValue,
@@ -503,10 +507,11 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       <FileText size={16} color={isDark ? '#c084fc' : '#9333ea'} />
                     </View>
                     <View style={styles.rowTextCol}>
-                      <Text style={[styles.rowLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.rowLabel, { color: theme.colors.mute }]}>
                         DRIVING LICENCE
                       </Text>
                       <Text
+                        variant="mono"
                         style={[
                           styles.rowValue,
                           styles.monoValue,
@@ -567,27 +572,24 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
               {/* Brand Footer */}
               <View style={styles.brandFooter}>
                 <ReachInternationalLogo size={18} showTagline={false} />
-                <Text style={[styles.brandFooterText, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
                   Reach International v1.0.0 • www.reachinternational.co.in
                 </Text>
               </View>
             </ScrollView>
           </View>
-        </View>
-      </Modal>
-
-
+      </AppModal>
 
       {/* Change Password Modal Dialog */}
-      <Modal
+      <AppModal
         visible={passwordModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPasswordModalOpen(false)}
+        onClose={() => setPasswordModalOpen(false)}
+        variant="center"
+        testID="change-password-modal"
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+          style={{ width: '100%' }}
         >
           <View
             style={[
@@ -601,22 +603,25 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Lock size={18} color={theme.colors.link} />
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={[styles.modalTitle, { color: theme.colors.ink }]}>
                   Change Password
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setPasswordModalOpen(false)}>
+              <Touchable
+                preset="icon"
+                onPress={() => setPasswordModalOpen(false)}
+              >
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Touchable>
             </View>
 
-            <Text style={[styles.modalSubtitle, { color: theme.colors.mute }]}>
+            <Text variant="body" style={[styles.modalSubtitle, { color: theme.colors.mute }]}>
               Enter a new secure password (minimum 6 characters) for your account.
             </Text>
 
             {passwordError && (
               <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{passwordError}</Text>
+                <Text variant="caption" style={styles.errorText}>{passwordError}</Text>
               </View>
             )}
 
@@ -660,7 +665,23 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
+      </AppModal>
+
+      {/* Sign Out Confirmation Dialog */}
+      <ConfirmDialog
+        visible={showSignOutConfirm}
+        onClose={() => {
+          if (!isSigningOut) setShowSignOutConfirm(false);
+        }}
+        onConfirm={handleConfirmSignOut}
+        title="Sign Out"
+        message="Are you sure you want to sign out of Reach International on this mobile device?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSigningOut}
+        icon={<LogOut size={22} color={theme.colors.error} />}
+      />
     </>
   );
 };
@@ -716,20 +737,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
+  avatarText: {},
   headerTextCol: {
     flex: 1,
   },
-  userName: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
+  userName: {},
   userEmail: {
-    fontSize: 12.5,
     marginTop: 1,
   },
   roleBadgeWrapper: {
@@ -760,9 +773,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionHeaderLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
     marginLeft: 4,
   },
   groupedCard: {
@@ -787,26 +797,12 @@ const styles = StyleSheet.create({
   rowTextCol: {
     flex: 1,
   },
-  rowLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+  rowLabel: {},
   rowValue: {
-    fontSize: 13.5,
-    fontWeight: '600',
     marginTop: 1,
   },
-  monoValue: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontWeight: '700',
-  },
-  addressValue: {
-    lineHeight: 18,
-    fontWeight: '500',
-    fontSize: 13,
-  },
+  monoValue: {},
+  addressValue: {},
   cardDivider: {
     height: 1,
     marginLeft: 52,
@@ -821,11 +817,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 4,
   },
-  brandFooterText: {
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
+  brandFooterText: {},
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -846,13 +838,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  modalTitle: {},
   modalSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
     marginBottom: spacingNumeric.sm,
   },
   errorBanner: {
@@ -865,8 +852,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ef4444',
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   modalButtons: {
     flexDirection: 'row',

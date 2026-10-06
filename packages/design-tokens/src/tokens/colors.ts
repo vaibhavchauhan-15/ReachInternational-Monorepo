@@ -38,6 +38,7 @@ export interface ColorTokens {
   pendingSoft: string;
   overdue: string;
   overdueSoft: string;
+  ripple: string;
 }
 
 export const colorsLight: ColorTokens = {
@@ -86,6 +87,7 @@ export const colorsLight: ColorTokens = {
   pendingSoft: '#fffbeb',
   overdue: '#e11d48',
   overdueSoft: '#fff1f2',
+  ripple: 'rgba(0, 0, 0, 0.08)',
 };
 
 export const colorsDark: ColorTokens = {
@@ -134,4 +136,5 @@ export const colorsDark: ColorTokens = {
   pendingSoft: '#78350f',
   overdue: '#fb7185',
   overdueSoft: '#4c0519',
+  ripple: 'rgba(255, 255, 255, 0.12)',
 };

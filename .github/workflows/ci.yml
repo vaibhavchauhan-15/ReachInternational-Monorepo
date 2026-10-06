@@ -34,6 +34,12 @@ jobs:
       - name: Mobile Package Typecheck Validation
         run: pnpm --filter @reachinternational/mobile typecheck
 
+      - name: Typography Guard Validation
+        run: pnpm check:type
+
+      - name: Design Tokens Invariant Test Suite
+        run: pnpm --filter @reachinternational/design-tokens test
+
       - name: Run Mobile Test Suite
         run: node apps/mobile/run-tests.mjs
 
@@ -42,3 +48,22 @@ jobs:
 
       - name: Web Application Build Validation
         run: pnpm --filter @reachinternational/web build
+
+      # Guard: Catch Supabase RPC / schema type drift before it reaches production.
+      # Fails if the committed packages/types/src/database.ts diverges from what
+      # `supabase gen types` would produce against the dev project.
+      # Requires SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID secrets.
+      - name: Supabase Type Drift Check
+        if: ${{ env.SUPABASE_ACCESS_TOKEN != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: vlmxciuogczumumrwyot
+        run: |
+          npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > /tmp/generated_types.ts
+          if ! diff -q /tmp/generated_types.ts packages/types/src/database.ts > /dev/null 2>&1; then
+            echo "❌ Supabase type drift detected! Run: npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > packages/types/src/database.ts"
+            diff /tmp/generated_types.ts packages/types/src/database.ts
+            exit 1
+          fi
+          echo "✅ Supabase types are in sync with the database schema."
+

@@ -1,15 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { Button, Input, useTheme, SearchableSelect, type SelectOption } from '../ui';
+  Platform} from 'react-native';
+import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
+import { haptics } from '../../lib/interaction/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -267,10 +264,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
         }
       }
 
+      haptics.success();
       notifyUserCreated(fullName.trim(), role);
       onSuccess();
       onClose();
     } catch (err: any) {
+      haptics.error();
       setError(err?.message || 'Failed to create user account.');
     } finally {
       setIsLoading(false);
@@ -278,10 +277,16 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant="bottom"
+      persistent={isLoading}
+      testID="create-user-modal"
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
           {/* Header */}
@@ -297,9 +302,9 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {/* Direct Activation Notice */}
@@ -312,7 +317,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
           {error ? (
             <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '14', borderColor: theme.colors.error + '33' }]}>
-              <Text style={{ color: theme.colors.error, fontSize: 12, textAlign: 'center', fontWeight: '600' }}>
+              <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
                 {error}
               </Text>
             </View>
@@ -486,7 +491,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -524,11 +529,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
   },
   subtitle: {
-    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -545,10 +547,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   activationBannerText: {
-    fontSize: 12.5,
-    fontWeight: '600',
     flex: 1,
-    lineHeight: 15,
   },
   alertBox: {
     marginHorizontal: spacingNumeric.lg,
@@ -568,8 +567,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',

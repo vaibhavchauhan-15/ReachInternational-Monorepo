@@ -1,0 +1,27 @@
+{
+  "skill_name": "react-query-api",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Connect an API-backed paginated records table to a React screen. It has free-text search, a status filter, and page navigation. Add typed API functions, a complete query key, debounced search, loading/error/empty states, and reset to page one when filters change.",
+      "expected_output": "A domain API module using the shared connector, typed parameters and responses, a query key containing every response-affecting filter, debounced search, pagination reset, and distinct initial/loading/refetching/error/empty states.",
+      "files": [],
+      "expectations": [
+        "Transport is in a typed domain API module using the existing shared connector.",
+        "The query key includes search, status, and pagination inputs and search is debounced.",
+        "Filter changes reset pagination and the UI distinguishes loading, refetching, error, empty, and success states."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Add an update mutation for an editable record. After success, the record detail and affected list must not show stale data, duplicate updates must be prevented, and the query cache should be invalidated as narrowly as possible.",
+      "expected_output": "A typed mutation using the existing API boundary, pending/error handling, and focused invalidation of the relevant detail and list query keys without invalidating unrelated application data.",
+      "files": [],
+      "expectations": [
+        "The update uses a typed mutation and existing API boundary rather than inline HTTP logic.",
+        "Pending and error states prevent duplicate updates and communicate failure.",
+        "Success invalidates the relevant detail and affected list keys without broad unrelated invalidation."
+      ]
+    }
+  ]
+}

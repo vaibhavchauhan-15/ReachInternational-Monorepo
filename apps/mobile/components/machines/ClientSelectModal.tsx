@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   TextInput,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
+import { Text, useTypeStyle } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X, Search, Building2, MapPin, User, Phone } from 'lucide-react-native';
 
@@ -45,6 +46,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
   onSelect,
 }) => {
   const { theme } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [search, setSearch] = useState('');
 
   React.useEffect(() => {
@@ -71,20 +73,16 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
   };
 
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="bottom"
+      testID="client-select-modal"
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={{ width: '100%' }}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
-
         <View
           style={[
             styles.sheet,
@@ -97,18 +95,18 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>Assign Client</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>Assign Client</Text>
+              <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                 Select an active client account from CRM
               </Text>
             </View>
-            <TouchableOpacity
+            <Touchable
+              preset="icon"
               onPress={onClose}
               style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {/* Search Input */}
@@ -124,7 +122,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
             >
               <Search size={14} color={theme.colors.mute} />
               <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
+                style={[styles.searchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                 placeholder="Search client by name, city, address..."
                 placeholderTextColor={theme.colors.mute}
                 value={search}
@@ -132,9 +130,9 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                 autoCorrect={false}
               />
               {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')}>
+                <Touchable preset="icon" onPress={() => setSearch('')}>
                   <X size={14} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Touchable>
               )}
             </View>
           </View>
@@ -157,7 +155,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                 },
               ]}
             >
-              <Text style={[styles.unassignText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.unassignText, { color: theme.colors.mute }]}>
                 ✕ No Client (Unassigned / Available in Yard)
               </Text>
               {!selectedClientId && (
@@ -168,7 +166,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
             {filteredClients.length === 0 ? (
               <View style={styles.emptyWrap}>
                 <Building2 size={28} color={theme.colors.mute} />
-                <Text style={[styles.emptyText, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.emptyText, { color: theme.colors.mute }]}>
                   No clients found matching &quot;{search}&quot;.
                 </Text>
               </View>
@@ -197,6 +195,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                     <View style={styles.cardMain}>
                       <View style={styles.cardHeaderRow}>
                         <Text
+                          variant="subheading"
                           style={[
                             styles.companyName,
                             { color: isSelected ? theme.colors.primary : theme.colors.ink },
@@ -210,7 +209,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                       {location ? (
                         <View style={styles.metaRow}>
                           <MapPin size={11} color={theme.colors.mute} />
-                          <Text style={[styles.metaText, { color: theme.colors.mute }]} numberOfLines={1}>
+                          <Text variant="caption" style={[styles.metaText, { color: theme.colors.mute }]} numberOfLines={1}>
                             {location}
                           </Text>
                         </View>
@@ -219,7 +218,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                       {c.contact_person ? (
                         <View style={styles.metaRow}>
                           <User size={11} color={theme.colors.mute} />
-                          <Text style={[styles.metaText, { color: theme.colors.mute }]} numberOfLines={1}>
+                          <Text variant="caption" style={[styles.metaText, { color: theme.colors.mute }]} numberOfLines={1}>
                             {c.contact_person} {c.phone ? `• ${c.phone}` : ''}
                           </Text>
                         </View>
@@ -243,7 +242,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
@@ -277,14 +276,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacingNumeric.sm,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  title: {},
   subtitle: {
-    fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
   },
   closeBtn: {
     width: 30,
@@ -309,16 +303,12 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
@@ -341,11 +331,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.xs,
     minHeight: 44,
   },
-  unassignText: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontStyle: 'italic',
-  },
+  unassignText: {},
   clientCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,8 +352,6 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   companyName: {
-    fontSize: 13,
-    fontWeight: '700',
     flex: 1,
   },
   codeBadge: {
@@ -376,20 +360,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
   },
-  codeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
+  codeText: {},
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 2,
   },
-  metaText: {
-    fontSize: 12.5,
-  },
+  metaText: {},
   checkBadge: {
     width: 22,
     height: 22,
@@ -404,7 +382,6 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   emptyText: {
-    fontSize: 13,
     textAlign: 'center',
   },
 });

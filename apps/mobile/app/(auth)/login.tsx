@@ -10,7 +10,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -18,18 +17,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Mail, Lock, Check, Moon, Sun } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, useTheme } from '../../components/ui';
+import { Input, Alert, useTheme , Text } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
+import { haptics } from '../../lib/interaction/haptics';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 
@@ -105,29 +103,29 @@ export default function LoginScreen() {
   };
 
   const handleToggleRememberMe = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.light();
     setRememberMe((prev) => !prev);
   };
 
   const handleNavigateForgotPassword = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     router.push('/(auth)/forgot-password');
   };
 
   const handleNavigateSignup = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     router.push('/(auth)/signup');
   };
 
   const handleToggleTheme = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.light();
     setMode(isDark ? 'light' : 'dark');
   };
 
   const handleLogin = async () => {
     if (isSubmittingRef.current || isLoading) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.light();
     setErrorMessage('');
     setSuccessMessage('');
 
@@ -149,7 +147,7 @@ export default function LoginScreen() {
     }
 
     if (Object.keys(newFieldErrors).length > 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setFieldErrors(newFieldErrors);
       return;
     }
@@ -165,7 +163,7 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         const errorLower = error.message.toLowerCase();
         if (errorLower.includes('email not confirmed')) {
           setErrorMessage(
@@ -200,7 +198,7 @@ export default function LoginScreen() {
           .single();
 
         if (profileError || !profile) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          haptics.error();
           await supabase.auth.signOut();
           setErrorMessage('User profile not found. Contact your administrator.');
           isSubmittingRef.current = false;
@@ -209,7 +207,7 @@ export default function LoginScreen() {
         }
 
         if (profile.status === 'inactive') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          haptics.error();
           await supabase.auth.signOut();
           setErrorMessage('Your account has been deactivated. Contact your administrator.');
           isSubmittingRef.current = false;
@@ -218,7 +216,7 @@ export default function LoginScreen() {
         }
 
         if (profile.status === 'pending') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          haptics.error();
           await supabase.auth.signOut();
           setErrorMessage(
             'Your account is pending approval. Please wait for an administrator to approve your account.'
@@ -228,7 +226,7 @@ export default function LoginScreen() {
           return;
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        haptics.success();
 
         // Routing based on onboarding and role
         const isProfileComplete = profile.complete_profile === true || profile.complete_profile === 'yes';
@@ -240,7 +238,7 @@ export default function LoginScreen() {
       }
 
     } catch (err: unknown) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setErrorMessage('An unexpected error occurred during login. Please try again.');
       isSubmittingRef.current = false;
       setIsLoading(false);
@@ -417,7 +415,6 @@ export default function LoginScreen() {
                     styles.title,
                     {
                       color: isDark ? '#ffffff' : '#0f172a',
-                      fontSize: isDesktop || isTablet ? 24 : 22,
                       marginBottom: isShortScreen ? 12 : 18,
                     },
                   ]}
@@ -664,16 +661,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   showcaseTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   showcaseSubtitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    lineHeight: 38,
   },
   machineStageContainer: {
     width: '100%',
@@ -751,8 +740,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontWeight: '700',
-    letterSpacing: -0.6,
     textAlign: 'left',
   },
   bannerContainer: {
@@ -782,12 +769,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rememberMeText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
   forgotPasswordText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   signInButton: {
     height: 48,
@@ -807,9 +790,6 @@ const styles = StyleSheet.create({
   },
   signInButtonText: {
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   cardFooter: {
     borderTopWidth: 1,
@@ -819,11 +799,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardFooterText: {
-    fontSize: 13,
   },
   requestAccessText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   screenFooter: {
     width: '100%',
@@ -833,9 +810,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   copyrightText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.8,
     textAlign: 'center',
   },
   floatingThemeBtn: {

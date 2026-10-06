@@ -98,7 +98,7 @@ export function AppShellClient({
         />
 
         {/* Mobile Bottom Navigation Bar */}
-        <BottomNav role={user.role} />
+        <BottomNav role={user.role} user={{ full_name: user.full_name, email: user.email || '' }} />
 
         {/* Main Workspace Column */}
         <div

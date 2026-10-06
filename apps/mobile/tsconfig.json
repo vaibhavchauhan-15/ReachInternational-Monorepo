@@ -9,7 +9,9 @@
     "types": ["jest"]
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ],
   "extends": "expo/tsconfig.base"
 }

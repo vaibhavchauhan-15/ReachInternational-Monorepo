@@ -1,3 +1,4 @@
+import { Text } from "../../components/ui/Text";
 /**
  * ReachInternational Mobile — Offline Interception Screen
  * Premium, dark-mode screen displayed when network connectivity is lost.
@@ -6,11 +7,9 @@
 import React, { useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
+  ActivityIndicator} from "react-native";
 import { WifiOff, RefreshCw } from "lucide-react-native";
 import { colorsDark, spacingNumeric, radiusNumeric } from "@reachinternational/design-tokens";
 
@@ -39,9 +38,9 @@ export function OfflineScreen({ onRetry, isRetrying = false }: OfflineScreenProp
           <WifiOff size={40} color={colorsDark.link} strokeWidth={1.75} />
         </View>
 
-        <Text style={styles.title}>No Internet Connection</Text>
+        <Text variant="title" style={styles.title}>No Internet Connection</Text>
 
-        <Text style={styles.description}>
+        <Text variant="body" style={styles.description}>
           ReachInternational requires an active network connection to track
           heavy machinery telemetry, log operator shifts, and synchronize fleet operations.
         </Text>
@@ -78,8 +77,7 @@ const styles = StyleSheet.create({
     backgroundColor: colorsDark.canvas,
     justifyContent: "center",
     alignItems: "center",
-    padding: spacingNumeric.lg,
-  },
+    padding: spacingNumeric.lg },
   card: {
     width: "100%",
     maxWidth: 380,
@@ -88,8 +86,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colorsDark.hairline,
     padding: spacingNumeric.xl,
-    alignItems: "center",
-  },
+    alignItems: "center" },
   iconContainer: {
     width: 72,
     height: 72,
@@ -99,23 +96,15 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 112, 243, 0.2)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: spacingNumeric.lg,
-  },
+    marginBottom: spacingNumeric.lg },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
     color: colorsDark.ink,
     textAlign: "center",
-    marginBottom: spacingNumeric.sm,
-    letterSpacing: -0.4,
-  },
+    marginBottom: spacingNumeric.sm },
   description: {
-    fontSize: 14,
-    lineHeight: 20,
     color: colorsDark.mute,
     textAlign: "center",
-    marginBottom: spacingNumeric.xl,
-  },
+    marginBottom: spacingNumeric.xl },
   retryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -128,22 +117,12 @@ const styles = StyleSheet.create({
     minHeight: 48, // Touch target guideline: min 44px
   },
   retryButtonDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   buttonIcon: {
-    marginRight: 8,
-  },
+    marginRight: 8 },
   retryButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: -0.2,
-  },
+    color: "#ffffff" },
   footerText: {
     position: "absolute",
     bottom: 32,
-    fontSize: 12,
-    color: colorsDark.mute,
-    letterSpacing: -0.1,
-  },
-});
+    color: colorsDark.mute } });

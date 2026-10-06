@@ -1,17 +1,17 @@
 import React from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   Platform,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { AlertCircle, AlertTriangle, Info, LogOut } from 'lucide-react-native';
+import { Text } from './Text';
+import { AppModal } from './AppModal';
+import { Touchable } from './Touchable';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface ConfirmDialogProps {
   visible: boolean;
@@ -69,102 +69,107 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   const currentVariant = variantColors[variant] || variantColors.danger;
 
+  const handleConfirm = () => {
+    if (variant === 'danger' || variant === 'warning') {
+      haptics.warning();
+    } else {
+      haptics.light();
+    }
+    onConfirm();
+  };
+
   return (
-    <Modal
+    <AppModal
       visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={isLoading ? undefined : onClose}
+      onClose={onClose}
+      variant="center"
+      persistent={isLoading}
+      testID="confirm-dialog-modal"
     >
-      <TouchableWithoutFeedback onPress={isLoading ? undefined : onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.dialog,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-              accessibilityRole="alert"
-              accessibilityLabel={title}
-            >
-              {/* Icon Orb */}
-              <View
+      <View
+        style={[
+          styles.dialog,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+        accessibilityRole="alert"
+        accessibilityLabel={title}
+      >
+        {/* Icon Orb */}
+        <View
+          style={[
+            styles.iconWrap,
+            {
+              backgroundColor: currentVariant.bg,
+              borderColor: currentVariant.border,
+            },
+          ]}
+        >
+          {icon || currentVariant.defaultIcon}
+        </View>
+
+        {/* Title & Description */}
+        <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>
+          {title}
+        </Text>
+        <Text variant="body" style={[styles.message, { color: theme.colors.mute }]}>
+          {message}
+        </Text>
+
+        {/* Action Buttons */}
+        <View style={styles.buttonRow}>
+          <Touchable
+            preset="button"
+            onPress={onClose}
+            disabled={isLoading}
+            style={[
+              styles.cancelBtn,
+              {
+                backgroundColor: theme.colors.canvas,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={cancelText}
+          >
+            <Text variant="label" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
+              {cancelText}
+            </Text>
+          </Touchable>
+
+          <Touchable
+            preset="button"
+            onPress={handleConfirm}
+            disabled={isLoading}
+            style={[
+              styles.confirmBtn,
+              {
+                backgroundColor: currentVariant.confirmBtnBg,
+                opacity: isLoading ? 0.7 : 1,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={confirmText}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color={currentVariant.confirmTextColor} />
+            ) : (
+              <Text
+                variant="label"
                 style={[
-                  styles.iconWrap,
-                  {
-                    backgroundColor: currentVariant.bg,
-                    borderColor: currentVariant.border,
-                  },
+                  styles.confirmBtnText,
+                  { color: currentVariant.confirmTextColor },
                 ]}
               >
-                {icon || currentVariant.defaultIcon}
-              </View>
-
-              {/* Title & Description */}
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
-                {title}
+                {confirmText}
               </Text>
-              <Text style={[styles.message, { color: theme.colors.mute }]}>
-                {message}
-              </Text>
-
-              {/* Action Buttons */}
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  onPress={onClose}
-                  disabled={isLoading}
-                  style={[
-                    styles.cancelBtn,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={cancelText}
-                >
-                  <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
-                    {cancelText}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={onConfirm}
-                  disabled={isLoading}
-                  style={[
-                    styles.confirmBtn,
-                    {
-                      backgroundColor: currentVariant.confirmBtnBg,
-                      opacity: isLoading ? 0.7 : 1,
-                    },
-                  ]}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={confirmText}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color={currentVariant.confirmTextColor} />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.confirmBtnText,
-                        { color: currentVariant.confirmTextColor },
-                      ]}
-                    >
-                      {confirmText}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
+            )}
+          </Touchable>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      </View>
+    </AppModal>
   );
 };
 
@@ -206,14 +211,10 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.md,
   },
   title: {
-    fontSize: 16.5,
-    fontWeight: '700',
     textAlign: 'center',
     marginBottom: spacingNumeric.xs,
   },
   message: {
-    fontSize: 13,
-    lineHeight: 19,
     textAlign: 'center',
     marginBottom: spacingNumeric.lg,
     paddingHorizontal: 4,
@@ -234,8 +235,7 @@ const styles = StyleSheet.create({
     minHeight: 44, // 44px minimum touch target
   },
   cancelBtnText: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    textAlign: 'center',
   },
   confirmBtn: {
     flex: 1,
@@ -246,7 +246,6 @@ const styles = StyleSheet.create({
     minHeight: 44, // 44px minimum touch target
   },
   confirmBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
+    textAlign: 'center',
   },
 });

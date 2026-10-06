@@ -7,14 +7,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
-} from 'react-native';
+  TouchableOpacity} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import {
@@ -24,7 +22,7 @@ import {
   Input,
   useTheme,
   MobileHeader,
-} from '../../components/ui';
+  Text } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -385,10 +383,10 @@ export default function AccountDeletionScreen() {
               />
 
               <View style={[styles.confirmBox, { borderColor: 'rgba(220, 38, 38, 0.3)', backgroundColor: 'rgba(220, 38, 38, 0.05)' }]}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>
+                <Text variant="label" style={{ color: '#dc2626', marginBottom: 4 }}>
                   TYPE &quot;DELETE&quot; TO CONFIRM
                 </Text>
-                <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginBottom: 8, lineHeight: 16 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute, marginBottom: 8 }}>
                   This confirms you understand that login access will be terminated upon administrator approval.
                 </Text>
                 <Input
@@ -433,27 +431,26 @@ const styles = StyleSheet.create({
   card: { marginVertical: spacingNumeric.xs, padding: spacingNumeric.md },
   heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   heroIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
-  heroSub: { fontSize: 12.5, fontWeight: '500', marginTop: 1 },
-  heroBody: { fontSize: 13, lineHeight: 18, marginTop: 4 },
-  sectionEyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  heroTitle: { },
+  heroSub: { marginTop: 1 },
+  heroBody: { marginTop: 4 },
+  sectionEyebrow: { textTransform: 'uppercase', marginBottom: 8 },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
-  identityName: { fontSize: 15, fontWeight: '700' },
-  identityEmail: { fontSize: 12.5, marginTop: 1 },
+  avatarText: { color: '#ffffff' },
+  identityName: { },
+  identityEmail: { marginTop: 1 },
   pendingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  pendingTitle: { fontSize: 14.5, fontWeight: '700', color: '#d97706' },
-  pendingBody: { fontSize: 13, lineHeight: 18 },
+  pendingTitle: { color: '#d97706' },
+  pendingBody: { },
   infoBox: { padding: 10, borderRadius: radiusNumeric.md, borderWidth: 1 },
-  infoBoxTitle: { fontSize: 13, fontWeight: '700' },
-  infoBoxBody: { fontSize: 12.5, lineHeight: 17, marginTop: 2 },
-  label: { fontSize: 13.5, fontWeight: '600', marginBottom: 4 },
+  infoBoxTitle: { },
+  infoBoxBody: { marginTop: 2 },
+  label: { marginBottom: 4 },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: radiusNumeric.md, borderWidth: 1, marginVertical: 3 },
   radioCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 9, height: 9, borderRadius: 4.5 },
-  radioText: { fontSize: 13.5, fontWeight: '500', flex: 1 },
+  radioText: { flex: 1 },
   confirmBox: { padding: 12, borderRadius: radiusNumeric.md, borderWidth: 1, marginTop: 12 },
   timelineNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 12, justifyContent: 'center' },
-  timelineText: { fontSize: 12, textAlign: 'center', lineHeight: 16, flex: 1 },
-});
+  timelineText: { textAlign: 'center', flex: 1 } });

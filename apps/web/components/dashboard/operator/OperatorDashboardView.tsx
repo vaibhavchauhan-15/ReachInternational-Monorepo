@@ -1,7 +1,6 @@
 import React from "react";
 import Link from "next/link";
 import { getOperatorDashboard } from "@/lib/data/dashboard";
-import type { DashboardAlert } from "@reachinternational/types";
 import {
   DashboardHeader,
   StatusCard,

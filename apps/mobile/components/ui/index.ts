@@ -29,3 +29,7 @@ export * from './ConfirmDialog';
 export * from './SegmentedToggle';
 export * from './ShiftCardSelector';
 export * from './SearchInput';
+export * from './Text';
+export * from './Icon';
+export * from './Touchable';
+export * from './AppModal';

@@ -12,6 +12,7 @@ export type RNThemeType = ReturnType<typeof getRNTheme>;
 
 export interface ThemeContextType {
   theme: RNThemeType;
+  colors: RNThemeType['colors'];
   isDark: boolean;
   setMode: (mode: 'light' | 'dark' | 'system') => void;
   mode: 'light' | 'dark' | 'system';
@@ -19,8 +20,10 @@ export interface ThemeContextType {
 
 const STORAGE_KEY = '@reachinternational_theme';
 
+const defaultTheme = getRNTheme(false);
 const ThemeContext = createContext<ThemeContextType>({
-  theme: getRNTheme(false),
+  theme: defaultTheme,
+  colors: defaultTheme.colors,
   isDark: false,
   setMode: () => {},
   mode: 'light',
@@ -47,7 +50,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const theme = getRNTheme(isDark);
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, setMode, mode }}>
+    <ThemeContext.Provider value={{ theme, colors: theme.colors, isDark, setMode, mode }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -61,6 +61,7 @@
       "favicon": "./public/light-favicon-96x96.png"
     },
     "updates": {
+      "url": "https://u.expo.dev/40432ac1-55a2-4bfa-985e-a51562398743",
       "enabled": false,
       "checkAutomatically": "NEVER"
     },
@@ -75,6 +76,14 @@
           "image": "./assets/splash.png",
           "resizeMode": "contain",
           "backgroundColor": "#09090b"
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "reachinternational",
+          "project": "react-native",
+          "disableAutoUpload": true
         }
       ]
     ],

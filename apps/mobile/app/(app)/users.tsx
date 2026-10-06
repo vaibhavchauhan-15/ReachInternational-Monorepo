@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -14,20 +13,8 @@ import {
   Platform,
   StatusBar,
   FlatList,
-  ListRenderItem,
-} from 'react-native';
-import {
-  Card,
-  Badge,
-  useTheme,
-  MobileHeader,
-  HeaderActionItem,
-  DropdownFilterSelector,
-  type FilterOption,
-  KPICard,
-  KPIGrid,
-  HighlightText,
-} from '../../components/ui';
+  ListRenderItem} from 'react-native';
+import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { UserEditModal } from '../../components/users/UserEditModal';
@@ -337,7 +324,8 @@ const UserTouchCard = React.memo(function UserTouchCard({
                     <HighlightText
                       text={u.employee_id}
                       query={searchTerm}
-                      style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}
+                      variant="mono"
+                      style={{ color: theme.colors.ink }}
                     />
                   </View>
                 ) : null}
@@ -385,7 +373,8 @@ const UserTouchCard = React.memo(function UserTouchCard({
                 <HighlightText
                   text={u.phone}
                   query={searchTerm}
-                  style={[styles.metaChipText, { color: theme.colors.ink, fontFamily: 'monospace' }]}
+                  variant="mono"
+                  style={[styles.metaChipText, { color: theme.colors.ink }]}
                 />
               </View>
             ) : null}
@@ -2028,7 +2017,7 @@ export default function UsersScreen() {
                       <View style={[styles.diffsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                         {reqData.full_name && reqData.full_name !== currData.full_name && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Name: </Text>
+                            <Text style={{ color: theme.colors.mute }}>Name: </Text>
                             <Text style={styles.diffOld}>{currData.full_name || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.full_name}</Text>
@@ -2036,7 +2025,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.phone && reqData.phone !== currData.phone && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Phone: </Text>
+                            <Text style={{ color: theme.colors.mute }}>Phone: </Text>
                             <Text style={styles.diffOld}>{currData.phone || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.phone}</Text>
@@ -2044,7 +2033,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.city && reqData.city !== currData.city && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>City: </Text>
+                            <Text style={{ color: theme.colors.mute }}>City: </Text>
                             <Text style={styles.diffOld}>{currData.city || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.city}</Text>
@@ -2052,7 +2041,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.district && reqData.district !== currData.district && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>District: </Text>
+                            <Text style={{ color: theme.colors.mute }}>District: </Text>
                             <Text style={styles.diffOld}>{currData.district || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.district}</Text>
@@ -2060,7 +2049,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.state && reqData.state !== currData.state && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>State: </Text>
+                            <Text style={{ color: theme.colors.mute }}>State: </Text>
                             <Text style={styles.diffOld}>{currData.state || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.state}</Text>
@@ -2068,7 +2057,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.address && reqData.address !== currData.address && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Address: </Text>
+                            <Text style={{ color: theme.colors.mute }}>Address: </Text>
                             <Text style={styles.diffOld}>{currData.address || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.address}</Text>
@@ -2076,7 +2065,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Aadhaar: </Text>
+                            <Text style={{ color: theme.colors.mute }}>Aadhaar: </Text>
                             <Text style={styles.diffOld}>{currData.aadhaar_number || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.aadhaar_number}</Text>
@@ -2084,7 +2073,7 @@ export default function UsersScreen() {
                         )}
                         {reqData.license_number && reqData.license_number !== currData.license_number && (
                           <Text style={styles.diffItem}>
-                            <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Licence: </Text>
+                            <Text style={{ color: theme.colors.mute }}>Licence: </Text>
                             <Text style={styles.diffOld}>{currData.license_number || '—'}</Text>
                             <Text style={styles.diffArrow}> → </Text>
                             <Text style={styles.diffNew}>{reqData.license_number}</Text>
@@ -2364,79 +2353,59 @@ export default function UsersScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
     paddingBottom: 90,
-    gap: spacingNumeric.md,
-  },
+    gap: spacingNumeric.md },
   listHeaderWrapper: {
     gap: spacingNumeric.md,
-    paddingBottom: spacingNumeric.xs,
-  },
+    paddingBottom: spacingNumeric.xs },
   paginationFooterContainer: {
     paddingVertical: spacingNumeric.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   paginationFooterText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+    },
   paginationErrorCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: spacingNumeric.md,
-    marginVertical: spacingNumeric.xs,
-  },
+    marginVertical: spacingNumeric.xs },
   paginationErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-  },
+    gap: 12 },
   paginationErrorText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
-  },
+    flex: 1 },
   retryLoadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 12,
     height: 32,
-    borderRadius: radiusNumeric.sm,
-  },
+    borderRadius: radiusNumeric.sm },
   retryLoadMoreBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    },
   endOfListFooter: {
     paddingVertical: spacingNumeric.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-  },
+    gap: 12 },
   endOfListLine: {
     flex: 1,
-    height: 1,
-  },
+    height: 1 },
   endOfListContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   endOfListText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
+    },
   initialErrorContainer: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
@@ -2444,17 +2413,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    marginTop: spacingNumeric.md,
-  },
+    marginTop: spacingNumeric.md },
   initialErrorTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+    },
   initialErrorSubtext: {
-    fontSize: 13,
     textAlign: 'center',
-    maxWidth: 280,
-  },
+    maxWidth: 280 },
   retryInitialBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2462,12 +2426,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 36,
     borderRadius: radiusNumeric.md,
-    marginTop: 4,
-  },
+    marginTop: 4 },
   retryInitialBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    },
   filterToolbar: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
@@ -2477,13 +2438,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 2,
-    elevation: 1,
-  },
+    elevation: 1 },
   toolbarTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   searchBarBox: {
     flex: 1,
     flexDirection: 'row',
@@ -2491,31 +2450,21 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    paddingHorizontal: 14,
-  },
+    paddingHorizontal: 14 },
   searchIcon: {
-    marginRight: 8,
-  },
+    marginRight: 8 },
   searchInputText: {
     flex: 1,
-    fontSize: 13,
     paddingVertical: 0,
     height: '100%',
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
-        outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
-      } as any,
-    }),
-  },
+        outlineStyle: 'none' } as any }) },
   searchClearBtn: {
     padding: 3,
-    marginLeft: 4,
-  },
+    marginLeft: 4 },
   filterToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2523,24 +2472,18 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 12,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   filterToggleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   activeCountBadge: {
     minWidth: 18,
     height: 18,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
+    paddingHorizontal: 4 },
   activeCountBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+    },
   quickResetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2548,41 +2491,30 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 11,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   quickResetBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
   filterPanelWebContainer: {
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   filterPanelAnimatedContainer: {
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   filterPanelContent: {
     paddingTop: 10,
     borderTopWidth: 1,
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   filterSelectorsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-  },
+    gap: 8 },
   activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
     paddingTop: spacingNumeric.xs,
-    borderTopWidth: 1,
-  },
+    borderTopWidth: 1 },
   activeBadgesHeader: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    marginRight: 2,
-  },
+    marginRight: 2 },
   badgeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2590,168 +2522,119 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   badgeChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
   resetAllLink: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
+    paddingVertical: 4 },
   resetAllLinkText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+    },
   resultsCountRow: {
     paddingHorizontal: 2,
-    marginTop: -4,
-  },
+    marginTop: -4 },
   resultsCountText: {
-    fontSize: 12.5,
-  },
+    },
   changeReqsContainer: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.md,
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   changeReqsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBottom: 8,
-    borderBottomWidth: 1,
-  },
+    borderBottomWidth: 1 },
   alertDot: {
     width: 7,
     height: 7,
-    borderRadius: 3.5,
-  },
+    borderRadius: 3.5 },
   changeReqsTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
+    },
   miniActionBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   miniActionBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+    },
   miniActionBtnTextWhite: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
+    color: '#ffffff' },
   changeReqCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: spacingNumeric.sm,
-    gap: 6,
-  },
+    gap: 6 },
   changeReqCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   changeReqUserName: {
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
+    },
   changeReqUserSub: {
-    fontSize: 12.5,
-  },
+    },
   changeReqTime: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   diffsBox: {
     padding: 8,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-    gap: 2,
-  },
+    gap: 2 },
   diffItem: {
-    fontSize: 12.5,
-    lineHeight: 16,
-  },
+    },
   diffOld: {
     textDecorationLine: 'line-through',
-    color: '#94a3b8',
-  },
+    color: '#94a3b8' },
   diffArrow: {
-    color: '#64748b',
-    fontWeight: '700',
-  },
+    color: '#64748b' },
   diffNew: {
-    color: '#10b981',
-    fontWeight: '700',
-  },
+    color: '#10b981' },
   changeReqActions: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   reqApproveBtn: {
     flex: 1,
     height: 32,
     borderRadius: radiusNumeric.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   reqBtnTextWhite: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
+    color: '#ffffff' },
   reqRejectBtn: {
     flex: 1,
     height: 32,
     borderRadius: radiusNumeric.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   reqBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+    },
   deletionReqsContainer: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.md,
-    gap: spacingNumeric.sm,
-  },
+    gap: spacingNumeric.sm },
   deletionCountPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: radiusNumeric.full,
-  },
+    borderRadius: radiusNumeric.full },
   deletionCountPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   deletionSectionSubtext: {
-    fontSize: 12.5,
-    lineHeight: 16,
-  },
+    },
   deletionCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: spacingNumeric.sm,
-    gap: 6,
-  },
+    gap: 6 },
   sourceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2759,64 +2642,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   sourceBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   deletionReasonBox: {
     padding: 8,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-    gap: 2,
-  },
+    gap: 2 },
   deletionReasonLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   deletionReasonText: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontStyle: 'italic',
-  },
+    },
   userCard: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.md,
-    gap: 8,
-  },
+    gap: 8 },
   userCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   userAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
-  },
+    flex: 1 },
   avatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarLetter: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+    },
   userName: {
-    fontSize: 15.5,
-    fontWeight: '700',
-  },
+    },
   userEmail: {
-    fontSize: 13,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   cardStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2824,87 +2687,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   statusDot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
-  },
+    borderRadius: 2.5 },
   cardStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   cardMetaBox: {
     padding: 8,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    gap: 4,
-  },
+    gap: 4 },
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
-  },
+    gap: 6 },
   roleBadgePill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   roleBadgePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   metaChipText: {
-    fontSize: 12.5,
-  },
+    },
   metaChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
+    gap: 5 },
   loadingContainer: {
     paddingVertical: 40,
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   loadingText: {
-    fontSize: 13.5,
-  },
+    },
   emptyContainer: {
     padding: 24,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   emptyTitle: {
-    fontSize: 15.5,
-    fontWeight: '700',
-  },
+    },
   emptySubtext: {
-    fontSize: 13,
     textAlign: 'center',
-    maxWidth: 280,
-  },
+    maxWidth: 280 },
   resetEmptyBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: radiusNumeric.md,
-    marginTop: 6,
-  },
+    marginTop: 6 },
   resetEmptyBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    color: '#ffffff' },
   mobileBulkBar: {
     position: 'absolute',
     bottom: 16,
@@ -2919,13 +2759,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 8,
-  },
+    elevation: 8 },
   bulkCountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   bulkCloseBtn: {
     width: 24,
     height: 24,
@@ -2933,28 +2771,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 2,
-  },
+    marginRight: 2 },
   bulkBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: radiusNumeric.full,
-  },
+    borderRadius: radiusNumeric.full },
   bulkBadgeText: {
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+    color: '#ffffff' },
   bulkSelectedText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
+    color: '#ffffff' },
   bulkActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   bulkBtnSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2962,24 +2791,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   bulkBtnSecondaryText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+    color: '#ffffff' },
   bulkBtnDanger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.full,
-  },
+    borderRadius: radiusNumeric.full },
   bulkBtnDangerText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+    color: '#ffffff' } });

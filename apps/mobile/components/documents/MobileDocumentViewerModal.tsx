@@ -16,17 +16,15 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   ScrollView,
   Platform,
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
+  TouchableOpacity,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Linking from 'expo-linking';
@@ -41,7 +39,10 @@ import {
   Image as ImageIcon,
   Download,
 } from 'lucide-react-native';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
+import { Touchable } from '@/components/ui/Touchable';
+import { AppModal } from '@/components/ui/AppModal';
 
 export interface MobileViewerDoc {
   id?: string;
@@ -128,11 +129,10 @@ export function MobileDocumentViewerModal({
     : '';
 
   return (
-    <Modal
+    <AppModal
       visible={!!doc}
-      transparent={false}
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="fullscreen"
     >
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
@@ -153,6 +153,7 @@ export function MobileDocumentViewerModal({
         >
           <View style={styles.headerTitleContainer}>
             <Text
+              variant="heading"
               style={[styles.headerTitle, { color: theme.colors.ink }]}
               numberOfLines={1}
             >
@@ -162,7 +163,8 @@ export function MobileDocumentViewerModal({
 
           {/* Action Buttons: Only Share/Download and Close */}
           <View style={styles.headerActions}>
-            <TouchableOpacity
+            <Touchable
+              preset="icon"
               onPress={handleShare}
               disabled={sharing}
               style={[
@@ -173,16 +175,16 @@ export function MobileDocumentViewerModal({
                 },
               ]}
               accessibilityLabel="Share or download document"
-              hitSlop={8}
             >
               {sharing ? (
                 <ActivityIndicator size="small" color={theme.colors.ink} />
               ) : (
                 <Share2 size={18} color={theme.colors.ink} />
               )}
-            </TouchableOpacity>
+            </Touchable>
 
-            <TouchableOpacity
+            <Touchable
+              preset="icon"
               onPress={onClose}
               style={[
                 styles.actionBtn,
@@ -192,10 +194,9 @@ export function MobileDocumentViewerModal({
                 },
               ]}
               accessibilityLabel="Close viewer"
-              hitSlop={8}
             >
               <X size={18} color={theme.colors.ink} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
         </View>
 
@@ -240,6 +241,7 @@ export function MobileDocumentViewerModal({
                 >
                   <ActivityIndicator size="large" color={theme.colors.link} />
                   <Text
+                    variant="caption"
                     style={[styles.loadingText, { color: theme.colors.mute }]}
                   >
                     Loading image...
@@ -257,7 +259,8 @@ export function MobileDocumentViewerModal({
                   },
                 ]}
               >
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   onPress={handleRotate}
                   style={[
                     styles.floatingBtn,
@@ -270,6 +273,7 @@ export function MobileDocumentViewerModal({
                 >
                   <RotateCw size={16} color={theme.colors.ink} />
                   <Text
+                    variant="label"
                     style={[
                       styles.floatingBtnText,
                       { color: theme.colors.ink },
@@ -277,10 +281,11 @@ export function MobileDocumentViewerModal({
                   >
                     Rotate
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
 
                 {rotation !== 0 && (
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     onPress={handleResetRotation}
                     style={[
                       styles.floatingBtn,
@@ -293,6 +298,7 @@ export function MobileDocumentViewerModal({
                   >
                     <RotateCcw size={16} color={theme.colors.ink} />
                     <Text
+                      variant="label"
                       style={[
                         styles.floatingBtnText,
                         { color: theme.colors.ink },
@@ -300,10 +306,11 @@ export function MobileDocumentViewerModal({
                     >
                       Reset
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
                 )}
 
                 <Text
+                  variant="caption"
                   style={[styles.zoomNotice, { color: theme.colors.mute }]}
                 >
                   Pinch to zoom & pan
@@ -332,6 +339,7 @@ export function MobileDocumentViewerModal({
                   >
                     <ActivityIndicator size="large" color={theme.colors.link} />
                     <Text
+                      variant="caption"
                       style={[styles.loadingText, { color: theme.colors.mute }]}
                     >
                       Loading PDF...
@@ -359,22 +367,26 @@ export function MobileDocumentViewerModal({
                 <FileText size={40} color={theme.colors.link} />
               </View>
               <Text
+                variant="heading"
                 style={[styles.externalTitle, { color: theme.colors.ink }]}
               >
                 {doc.title}
               </Text>
               <Text
+                variant="caption"
                 style={[styles.externalSubtitle, { color: theme.colors.mute }]}
               >
                 {doc.fileName || 'Document'}
               </Text>
               <Text
+                variant="caption"
                 style={[styles.externalNotice, { color: theme.colors.mute }]}
               >
                 This file format can be opened or shared to a compatible app on
                 your device.
               </Text>
-              <TouchableOpacity
+              <Touchable
+                preset="button"
                 onPress={handleShare}
                 style={[
                   styles.primaryActionBtn,
@@ -386,13 +398,13 @@ export function MobileDocumentViewerModal({
                   color="#ffffff"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.primaryActionText}>Download & Open</Text>
-              </TouchableOpacity>
+                <Text variant="label" style={styles.primaryActionText}>Download & Open</Text>
+              </Touchable>
             </View>
           )}
         </View>
       </SafeAreaView>
-    </Modal>
+    </AppModal>
   );
 }
 
@@ -413,11 +425,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
+  headerTitle: {},
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -460,10 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  loadingText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  loadingText: {},
   floatingBar: {
     position: 'absolute',
     bottom: 24,
@@ -492,13 +497,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 36,
   },
-  floatingBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  zoomNotice: {
-    fontSize: 12.5,
-  },
+  floatingBtnText: {},
+  zoomNotice: {},
   webViewWrapper: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -519,20 +519,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   externalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
     marginBottom: 4,
     textAlign: 'center',
   },
   externalSubtitle: {
-    fontSize: 12,
     marginBottom: 12,
     textAlign: 'center',
   },
   externalNotice: {
-    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 18,
     marginBottom: 24,
     maxWidth: 280,
   },
@@ -547,7 +542,5 @@ const styles = StyleSheet.create({
   },
   primaryActionText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

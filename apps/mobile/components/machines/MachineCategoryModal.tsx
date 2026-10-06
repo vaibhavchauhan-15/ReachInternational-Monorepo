@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Modal,
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Alert,
   TextInput,
@@ -14,6 +11,10 @@ import {
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Button } from '../ui/Button';
+import { Text, useTypeStyle } from '../ui/Text';
+import { AppModal } from '../ui/AppModal';
+import { Touchable } from '../ui/Touchable';
+import { haptics } from '@/lib/interaction/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
@@ -45,6 +46,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
   onCategoriesChanged,
 }) => {
   const { theme } = useTheme();
+  const bodyTypeStyle = useTypeStyle('body');
   const [categories, setCategories] = useState<MachineCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -83,6 +85,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
 
   const handleAddCategory = async () => {
     if (!newName.trim()) {
+      haptics.error();
       Alert.alert('Required Field', 'Please enter a category name.');
       return;
     }
@@ -95,6 +98,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
       });
 
       if (error) {
+        haptics.error();
         if (error.code === '23505') {
           Alert.alert('Duplicate Category', `Category "${newName.trim()}" already exists.`);
           return;
@@ -102,6 +106,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
         throw error;
       }
 
+      haptics.success();
       setNewName('');
       setNewDesc('');
       setShowAddForm(false);
@@ -109,6 +114,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
       onCategoriesChanged?.();
       Alert.alert('Success', `Category "${newName.trim()}" added successfully.`);
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Error', err?.message || 'Failed to add category.');
     } finally {
       setIsAdding(false);
@@ -116,6 +122,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
   };
 
   const handleDeleteCategory = (cat: MachineCategory) => {
+    haptics.warning();
     Alert.alert(
       'Delete Category',
       `Are you sure you want to delete "${cat.name}"? Machines assigned to this category may lose their classification.`,
@@ -134,9 +141,11 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
 
               if (error) throw error;
 
+              haptics.success();
               await fetchCategories();
               onCategoriesChanged?.();
             } catch (err: any) {
+              haptics.error();
               Alert.alert('Error', err?.message || 'Failed to delete category.');
             } finally {
               setDeletingId(null);
@@ -148,10 +157,10 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={styles.sheetWrapper}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvas }]}>
           {/* Header */}
@@ -159,15 +168,15 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
             <View style={styles.headerLeft}>
               <FolderTree size={20} color={theme.colors.link} />
               <View>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>Machine Categories</Text>
-                <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>Machine Categories</Text>
+                <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                   {categories.length} {categories.length === 1 ? 'category' : 'categories'} configured
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           {/* Add Category Trigger / Form */}
@@ -182,11 +191,12 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
               />
             ) : (
               <View style={[styles.formCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.formTitle, { color: theme.colors.ink }]}>New Category Details</Text>
+                <Text variant="subheading" style={[styles.formTitle, { color: theme.colors.ink }]}>New Category Details</Text>
                 
                 <TextInput
                   style={[
                     styles.textInput,
+                    bodyTypeStyle,
                     {
                       color: theme.colors.ink,
                       borderColor: theme.colors.hairline,
@@ -204,6 +214,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
                   style={[
                     styles.textInput,
                     styles.textArea,
+                    bodyTypeStyle,
                     {
                       color: theme.colors.ink,
                       borderColor: theme.colors.hairline,
@@ -247,13 +258,13 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={theme.colors.link} />
-              <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading categories...</Text>
+              <Text variant="caption" style={{ color: theme.colors.mute }}>Loading categories...</Text>
             </View>
           ) : categories.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Tag size={32} color={theme.colors.mute} style={{ opacity: 0.5, marginBottom: 8 }} />
-              <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No Categories Found</Text>
-              <Text style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
+              <Text variant="heading" style={{ color: theme.colors.ink }}>No Categories Found</Text>
+              <Text variant="caption" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
                 Add machine classifications to organize your fleet.
               </Text>
             </View>
@@ -274,26 +285,28 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
                       <Tag size={16} color={theme.colors.link} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.catName, { color: theme.colors.ink }]}>{cat.name}</Text>
+                      <Text variant="subheading" style={{ color: theme.colors.ink }}>{cat.name}</Text>
                       {cat.description ? (
-                        <Text style={[styles.catDesc, { color: theme.colors.mute }]} numberOfLines={2}>
+                        <Text variant="caption" style={[styles.catDesc, { color: theme.colors.mute }]} numberOfLines={2}>
                           {cat.description}
                         </Text>
                       ) : null}
                     </View>
                   </View>
 
-                  <TouchableOpacity
+                  <Touchable
+                    preset="icon"
                     style={styles.deleteBtn}
                     onPress={() => handleDeleteCategory(cat)}
                     disabled={deletingId === cat.id}
+                    accessibilityLabel={`Delete category ${cat.name}`}
                   >
                     {deletingId === cat.id ? (
                       <ActivityIndicator size="small" color="#dc2626" />
                     ) : (
                       <Trash2 size={16} color="#dc2626" />
                     )}
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
               ))}
               <View style={{ height: 32 }} />
@@ -301,14 +314,13 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
           )}
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  sheetWrapper: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -329,12 +341,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
   subtitle: {
-    fontSize: 13,
     marginTop: 1,
   },
   closeBtn: {
@@ -351,8 +358,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   formTitle: {
-    fontSize: 14,
-    fontWeight: '700',
     marginBottom: 8,
   },
   textInput: {
@@ -360,7 +365,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     paddingHorizontal: 12,
-    fontSize: 15,
     marginBottom: 8,
   },
   textArea: {
@@ -377,19 +381,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  loadingText: {
-    fontSize: 13,
-  },
   emptyContainer: {
     padding: 32,
     alignItems: 'center',
   },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   emptySubtitle: {
-    fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -417,14 +413,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  catName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   catDesc: {
-    fontSize: 13,
     marginTop: 2,
-    lineHeight: 17,
   },
   deleteBtn: {
     padding: 8,

@@ -16,7 +16,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
         "EXPO_PUBLIC_SCHEME": "reachinternational",
         "EXPO_PUBLIC_APP_URL": "https://dashboard-reachinternational.vercel.app",
-        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app"
+        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "android": {
         "buildType": "apk"
@@ -34,7 +35,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
         "EXPO_PUBLIC_SCHEME": "reachinternational",
         "EXPO_PUBLIC_APP_URL": "https://dashboard-reachinternational.vercel.app",
-        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app"
+        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "false"
       },
       "android": {
         "buildType": "apk"
@@ -55,7 +57,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
         "EXPO_PUBLIC_SCHEME": "reachinternational",
         "EXPO_PUBLIC_APP_URL": "https://dashboard-reachinternational.vercel.app",
-        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app"
+        "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "false"
       },
       "android": {
         "buildType": "app-bundle"

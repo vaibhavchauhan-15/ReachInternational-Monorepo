@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -10,10 +9,9 @@ import {
   Linking,
   Platform,
   StatusBar,
-  LayoutAnimation,
-} from 'react-native';
+  LayoutAnimation} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -21,8 +19,16 @@ import {
   OperationLogListSkeleton,
 } from '../../components/operations/OperationsSkeleton';
 import { supabase } from '../../lib/supabase';
-import { useOperationsMasterData, useOperationsLogs, useOperatorEntryContext } from '../../lib/hooks/useOperationsData';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useOperationsMasterData,
+  useOperationsLogs,
+  useOperatorEntryContext,
+  useOperatorHistoryLogs,
+  type HourLogRecord,
+} from '../../lib/hooks/useOperationsData';
 import { MobileOperatorEntryCard } from '../../components/operations/MobileOperatorEntryCard';
+import { MobileOperatorHistoryTab } from '../../components/operations/MobileOperatorHistoryTab';
 import { MobileTodayShiftMonitorTab } from '../../components/operations/MobileTodayShiftMonitorTab';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -73,65 +79,7 @@ import { isManagerOrAbove } from '@reachinternational/permissions';
 export type OpsTab = 'logs' | 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
-export interface HourLogRecord {
-  id: string;
-  machine_id?: string;
-  machine_code: string;
-  log_date: string;
-  shift?: string;
-  shift_code?: string;
-  shift_scheduled_minutes?: number;
-  start_meter: number;
-  end_meter: number;
-  running_hours: number;
-  start_time?: string;
-  end_time?: string;
-  overtime_hours?: number;
-  normal_working_hours?: number;
-  location?: string;
-  is_breakdown: boolean;
-  remarks?: string;
-  operator_id?: string;
-  client_id?: string;
-  created_at?: string;
-  conflict_flag?: boolean;
-  conflict_reason?: string;
-  conflict_status?: string;
-  conflict_resolved_by?: string;
-  conflict_resolved_at?: string;
-  conflict_resolution_notes?: string;
-  is_offline_draft?: boolean;
-  sync_status?: MutationStatus;
-  queued_item?: QueuedMutation;
-  machine?: {
-    id?: string;
-    machine_id: string;
-    model?: string;
-    serial_number?: string;
-    manufacturer?: string;
-    status?: string;
-    customer_name?: string;
-    customer_address?: string;
-    city?: string;
-    state?: string;
-  } | null;
-  operator?: { id?: string; full_name: string; phone?: string } | null;
-  client?: {
-    id?: string;
-    name?: string;
-    company_name?: string;
-    client_name?: string;
-    street?: string;
-    Street?: string;
-    city?: string;
-    district?: string;
-    state?: string;
-    pincode?: string;
-    phone?: string;
-    email?: string;
-    address?: string;
-  } | null;
-}
+export type { HourLogRecord };
 
 export interface ActiveShiftAssignment {
   id: string;
@@ -196,11 +144,17 @@ export default function OperationsScreen() {
   const { theme, isDark } = useTheme();
   const { role, user, userProfile } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const isHr = (role || '').toLowerCase() === 'hr';
   const isOperator = (role || '').toLowerCase() === 'operator';
   const { data: entryContext, isLoading: isEntryLoading } = useOperatorEntryContext(isOperator ? user?.id : undefined);
-  const params = useLocalSearchParams<{ tab?: string }>();
+  // Operator logs count query for history tab badge (100% Web Parity)
+  const { data: operatorHistoryLogs } = useOperatorHistoryLogs(
+    isOperator ? user?.id : undefined,
+    entryContext?.machine
+  );
+  const params = useLocalSearchParams<{ tab?: string; shift?: string }>();
 
   const [activeTab, setActiveTab] = useState<OpsTab>(() => {
     if (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history' || params.tab === 'today') {
@@ -212,8 +166,10 @@ export default function OperationsScreen() {
   useEffect(() => {
     if (params.tab && (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history' || params.tab === 'today')) {
       setActiveTab(params.tab as OpsTab);
+    } else if (params.shift && isOperator) {
+      setActiveTab('entry');
     }
-  }, [params.tab]);
+  }, [params.tab, params.shift, isOperator]);
 
   // Assisted Shift Entry state for Supervisors/Managers/Admins
   const [assistedRow, setAssistedRow] = useState<TodayShiftMonitorRow | null>(null);
@@ -355,8 +311,14 @@ export default function OperationsScreen() {
   }, [logsData, clientsList, selectedClientId]);
 
   const handleDataRefresh = useCallback(async () => {
-    await Promise.all([refetchMaster(), refetchLogs()]);
-  }, [refetchMaster, refetchLogs]);
+    await Promise.all([
+      refetchMaster(),
+      refetchLogs(),
+      queryClient.invalidateQueries({ queryKey: ['operator', 'history-logs'] }),
+      queryClient.invalidateQueries({ queryKey: ['operator', 'entry-context'] }),
+      queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] }),
+    ]);
+  }, [refetchMaster, refetchLogs, queryClient]);
 
   const userRoleLower = (role || '').toLowerCase();
   const isSuperAdmin = userRoleLower === 'super_admin';
@@ -794,100 +756,35 @@ export default function OperationsScreen() {
 
       {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
-        title={isOperator ? "Fleet Operations" : "Today's Shift Logs"}
+        title="Operations"
+        showBack={true}
+        onPressBack={() => router.back()}
         actions={headerActions}
       />
 
-      {/* 2. TOP NAVBAR (ONLY FOR OPERATORS: LOG ENTRY VS LOG HISTORY) */}
-      {isOperator && (
-        <View
-          style={[
-            styles.aboveNavbar,
-            {
-              backgroundColor: theme.colors.canvas,
-              borderBottomColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.aboveNavbarContent}
-          >
-            {/* Operator Tab 1: Log Entry */}
-            <TouchableOpacity
-              onPress={() => setActiveTab('entry')}
-              activeOpacity={0.8}
-              style={[
-                styles.aboveNavbarTab,
-                activeTab === 'entry'
-                  ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                  : [
-                      styles.aboveNavbarTabInactive,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.aboveNavbarTabText,
-                  {
-                    color:
-                      activeTab === 'entry'
-                        ? theme.colors.canvas
-                        : theme.colors.body,
-                  },
-                  activeTab === 'entry' && styles.aboveNavbarTabTextActive,
-                ]}
-              >
-                Log Entry
-              </Text>
-            </TouchableOpacity>
-
-            {/* Operator Tab 2: Log History */}
-            <TouchableOpacity
-              onPress={() => setActiveTab('history')}
-              activeOpacity={0.8}
-              style={[
-                styles.aboveNavbarTab,
-                activeTab === 'history'
-                  ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                  : [
-                      styles.aboveNavbarTabInactive,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.aboveNavbarTabText,
-                  {
-                    color:
-                      activeTab === 'history'
-                        ? theme.colors.canvas
-                        : theme.colors.body,
-                  },
-                  activeTab === 'history' && styles.aboveNavbarTabTextActive,
-                ]}
-              >
-                Log History
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
+      {/* 2. TOP NAVBAR (SEGMENTED CONTROL: LOG ENTRY VS LOG HISTORY - 100% Webapp Parity) */}
+      {(isOperator || activeTab === 'entry' || activeTab === 'history') && (
+        <View style={styles.segmentedToggleWrapper}>
+          <SegmentedToggle<'entry' | 'history'>
+            items={[
+              { id: 'entry', label: 'Log Entry' },
+              { id: 'history', label: 'Log History' },
+            ]}
+            value={activeTab === 'history' ? 'history' : 'entry'}
+            onChange={(tab) => {
+              setActiveTab(tab);
+              router.setParams({ tab });
+            }}
+            size="md"
+          />
         </View>
       )}
 
       {/* 2. TAB: OPERATOR LOG ENTRY */}
-      {isOperator && activeTab === 'entry' && (
+      {(isOperator || activeTab === 'entry') && activeTab !== 'history' && activeTab !== 'today' && (
         <ScrollView
           style={styles.contentScroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingHorizontal: 0, paddingTop: 4 }]}
           showsVerticalScrollIndicator={true}
           scrollEventThrottle={16}
           indicatorStyle={isDark ? 'white' : 'black'}
@@ -897,12 +794,13 @@ export default function OperationsScreen() {
             entryContext={entryContext}
             isLoading={isEntryLoading}
             onSuccess={handleDataRefresh}
+            initialShift={typeof params.shift === 'string' ? params.shift : undefined}
           />
         </ScrollView>
       )}
 
       {/* 2.5. TODAY'S SHIFT MONITOR (SUPERVISORS / MANAGERS / ADMINS) */}
-      {!isOperator && (
+      {!isOperator && activeTab === 'today' && (
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
@@ -927,11 +825,11 @@ export default function OperationsScreen() {
         </ScrollView>
       )}
 
-      {/* 3. TAB: OPERATOR LOG HISTORY */}
-      {isOperator && activeTab === 'history' && (
+      {/* 3. TAB: OPERATOR LOG HISTORY (100% Visual and Behavioral Parity with Screenshot 4) */}
+      {(isOperator || activeTab === 'history') && activeTab === 'history' && (
         <ScrollView
           style={styles.contentScroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingHorizontal: 0, paddingTop: 4 }]}
           showsVerticalScrollIndicator={true}
           scrollEventThrottle={16}
           indicatorStyle={isDark ? 'white' : 'black'}
@@ -945,6 +843,8 @@ export default function OperationsScreen() {
                 {
                   backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#fffbeb',
                   borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
+                  marginHorizontal: 16,
+                  marginBottom: 12,
                 },
               ]}
             >
@@ -981,7 +881,7 @@ export default function OperationsScreen() {
                     onPress={() => setShowAllConflicts(!showAllConflicts)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                   >
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isDark ? '#fbbf24' : '#d97706' }}>
+                    <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#d97706' }}>
                       {showAllConflicts ? 'Show Fewer' : `View All (${pendingConflicts.length})`}
                     </Text>
                     {showAllConflicts ? (
@@ -1150,811 +1050,33 @@ export default function OperationsScreen() {
             </View>
           )}
 
-          {/* Sub-Tabs Toolbar Box */}
-          <Card variant="elevated" style={styles.filterCard}>
-            {/* Top Row: Sub-Tabs Switcher & Print Icon Button + Filters Toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: spacingNumeric.sm }}>
-              <View style={[styles.subTabPillsRow, { flex: 1, marginBottom: 0, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                {(['machine', 'clients', 'operator'] as const).map((mode) => {
-                  const isSelected = logsViewMode === (mode === 'clients' ? 'client' : mode);
-                  const label = mode === 'machine' ? 'Machine' : mode === 'clients' ? 'Clients' : 'Operator';
-                  return (
-                    <TouchableOpacity
-                      key={mode}
-                      onPress={() => {
-                        setLogsViewMode(mode === 'clients' ? 'client' : mode);
-                        setLogsPage(1);
-                      }}
-                      style={[
-                        styles.subTabPill,
-                        isSelected && [styles.subTabPillActive, { backgroundColor: theme.colors.ink }],
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subTabPillText,
-                          { color: isSelected ? theme.colors.canvas : theme.colors.mute },
-                          isSelected && { fontWeight: '700' },
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Top-Right Print Icon Button */}
-              <TouchableOpacity
-                onPress={() => setShowExportModal(true)}
-                activeOpacity={0.7}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radiusNumeric.lg,
-                  backgroundColor: '#0284c7',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                accessibilityLabel="Export / Print Report"
-              >
-                <Printer size={16} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Dropdowns depending on logsViewMode (Permanently Expanded) */}
-            <View style={styles.dropdownsContainer}>
-              {logsViewMode === 'machine' && (
-                <>
-                  <SearchableSelect
-                    label={`Select Machine (${machinesList.length} Total)`}
-                    options={machineSelectOptions}
-                    value={selectedMachineId}
-                    onChange={(val) => {
-                      setSelectedMachineId(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Machine..."
-                    modalTitle="Select Machine"
-                    leftIcon={<Truck size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-
-                  <SearchableSelect
-                    label="Select Month"
-                    options={monthSelectOptions}
-                    value={selectedMonth}
-                    onChange={(val) => {
-                      setSelectedMonth(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Month"
-                    modalTitle="Select Month"
-                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-                </>
-              )}
-
-              {logsViewMode === 'client' && (
-                <>
-                  <SearchableSelect
-                    label="Select Client"
-                    rightElement={
-                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientsList.length} Total</Text>
-                      </View>
-                    }
-                    options={clientSelectOptions}
-                    value={selectedClientId}
-                    onChange={(val) => {
-                      setSelectedClientId(val);
-                      setSelectedSiteLocation('');
-                      setSelectedClientMachineId('all');
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Client..."
-                    modalTitle="Select Client"
-                    containerStyle={styles.dropdownField}
-                  />
-
-                  <SearchableSelect
-                    label="Select Location"
-                    rightElement={
-                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientLocations.length} Total</Text>
-                      </View>
-                    }
-                    options={locationSelectOptions}
-                    value={effectiveSiteLocation}
-                    onChange={(val) => {
-                      setSelectedSiteLocation(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Location..."
-                    modalTitle="Select Location"
-                    containerStyle={styles.dropdownField}
-                  />
-
-                  <SearchableSelect
-                    label="Select Machine"
-                    rightElement={
-                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientMachines.length} Total</Text>
-                      </View>
-                    }
-                    options={clientMachineSelectOptions}
-                    value={selectedClientMachineId}
-                    onChange={(val) => {
-                      setSelectedClientMachineId(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Machine..."
-                    modalTitle="Select Machine"
-                    leftIcon={<Truck size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-
-                  <SearchableSelect
-                    label="Select Month"
-                    options={monthSelectOptions}
-                    value={selectedMonth}
-                    onChange={(val) => {
-                      setSelectedMonth(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Month"
-                    modalTitle="Select Month"
-                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-                </>
-              )}
-
-              {logsViewMode === 'operator' && (
-                <>
-                  <SearchableSelect
-                    label={`Select Operator (${activeOperators.length} Total)`}
-                    options={operatorSelectOptions}
-                    value={selectedOperatorId}
-                    onChange={(val) => {
-                      setSelectedOperatorId(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Operator..."
-                    modalTitle="Select Operator"
-                    leftIcon={<User size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-
-                  <SearchableSelect
-                    label="Select Month"
-                    options={monthSelectOptions}
-                    value={selectedMonth}
-                    onChange={(val) => {
-                      setSelectedMonth(val);
-                      setLogsPage(1);
-                    }}
-                    placeholder="Select Month"
-                    modalTitle="Select Month"
-                    leftIcon={<Calendar size={15} color={theme.colors.mute} />}
-                    containerStyle={styles.dropdownField}
-                  />
-                </>
-              )}
-            </View>
-          </Card>
-
-          {/* 3. DYNAMIC SUMMARY HEADER CARDS */}
-          {/* A. MACHINE VIEW SUMMARY CARD */}
-          {logsViewMode === 'machine' && selectedMachineObj && (
-            <Card variant="elevated" style={styles.summaryHeaderCard}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => toggleWithAnimation(setIsMachineSummaryExpanded)}
-                style={[
-                  styles.summaryHeaderTitleRow,
-                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isMachineSummaryExpanded ? 1 : 0 },
-                ]}
-              >
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                    {selectedMachineObj.model || ''}
-                    {selectedMachineObj.model && selectedMachineObj.serial_number ? ' ' : ''}
-                    {selectedMachineObj.serial_number ? `(${selectedMachineObj.serial_number})` : (!selectedMachineObj.model ? 'Machine' : '')}
-                  </Text>
-                  <View style={[styles.statusBadgePill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#e0f2fe' }]}>
-                    <Text style={[styles.statusBadgeText, { color: theme.colors.link }]}>
-                      {selectedMachineObj.status ? selectedMachineObj.status.toUpperCase() : 'RENTED'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
-                    {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                  </Text>
-                  {isMachineSummaryExpanded ? (
-                    <ChevronUp size={16} color={theme.colors.mute} />
-                  ) : (
-                    <ChevronDown size={16} color={theme.colors.mute} />
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {isMachineSummaryExpanded && (
-                <View style={[styles.machineSpecsGrid, { marginTop: 8 }]}>
-                  <View style={styles.specItem}>
-                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MANUFACTURER</Text>
-                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.manufacturer || 'â€”'}</Text>
-                  </View>
-                  <View style={styles.specItem}>
-                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MODEL</Text>
-                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.model || 'â€”'}</Text>
-                  </View>
-                  <View style={styles.specItem}>
-                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SERIAL NO / CODE</Text>
-                    <Text style={[styles.specValueMono, { color: theme.colors.ink }]}>{selectedMachineObj.serial_number || selectedMachineObj.machine_id}</Text>
-                  </View>
-                  <View style={styles.specItem}>
-                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>TOTAL RUN HOURS</Text>
-                    <Text style={[styles.specValueMono, { color: theme.colors.link }]}>
-                      {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                    </Text>
-                  </View>
-                  <View style={styles.specItem}>
-                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                    <Text style={[styles.specValueMono, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                      {activeMetrics.breakdowns} Events
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </Card>
-          )}
-
-          {/* B. CLIENT VIEW SUMMARY CARD */}
-          {logsViewMode === 'client' && selectedClientObj && (
-            <Card variant="elevated" style={styles.summaryHeaderCard}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => toggleWithAnimation(setIsClientSummaryExpanded)}
-                style={[
-                  styles.summaryHeaderTitleRow,
-                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isClientSummaryExpanded ? 1 : 0 },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                      {selectedClientObj.company_name}
-                    </Text>
-                    <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
-                      <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
-                        {clientMachines.length} {clientMachines.length === 1 ? 'Machine' : 'Machines'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 13.5, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
-                    {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                  </Text>
-                  {isClientSummaryExpanded ? (
-                    <ChevronUp size={16} color={theme.colors.mute} />
-                  ) : (
-                    <ChevronDown size={16} color={theme.colors.mute} />
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {isClientSummaryExpanded && (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }} numberOfLines={2}>
-                      ðŸ“  {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || 'â€”'}
-                    </Text>
-                    {selectedClientObj.phone ? (
-                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedClientObj.phone}`)}>
-                        <Text style={{ fontSize: 12.5, color: theme.colors.link, fontFamily: 'monospace' }}>
-                          ðŸ“ž {selectedClientObj.phone}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  {/* 3 Summary Metric Cards in Client Detail View (OT omitted for client) */}
-                  <KPIGrid columns={3} style={{ marginVertical: spacingNumeric.xs }}>
-                    <KPICard
-                      label="Run Hours"
-                      value={`${Math.round(activeMetrics.runHours * 10) / 10} hrs`}
-                      icon={Clock}
-                      variant="info"
-                    />
-                    <KPICard
-                      label="Breakdowns"
-                      value={`${activeMetrics.breakdowns} ${activeMetrics.breakdowns === 1 ? 'Event' : 'Events'}`}
-                      icon={AlertTriangle}
-                      variant={activeMetrics.breakdowns > 0 ? 'error' : 'default'}
-                    />
-                    <KPICard
-                      label="Shifts"
-                      value={`${activeMetrics.totalLogs} ${activeMetrics.totalLogs === 1 ? 'Shift' : 'Shifts'}`}
-                      icon={FileText}
-                      variant="default"
-                    />
-                  </KPIGrid>
-                </>
-              )}
-            </Card>
-          )}
-
-          {/* C. OPERATOR VIEW SUMMARY CARD */}
-          {logsViewMode === 'operator' && (
-            <Card variant="elevated" style={styles.summaryHeaderCard}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => toggleWithAnimation(setIsOperatorSummaryExpanded)}
-                style={[
-                  styles.summaryHeaderTitleRow,
-                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isOperatorSummaryExpanded ? 1 : 0 },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                      {selectedOperatorObj?.full_name || 'Operator'}
-                    </Text>
-                    <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
-                      <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
-                        OPERATOR
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 13.5, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
-                    {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                  </Text>
-                  {isOperatorSummaryExpanded ? (
-                    <ChevronUp size={16} color={theme.colors.mute} />
-                  ) : (
-                    <ChevronDown size={16} color={theme.colors.mute} />
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {isOperatorSummaryExpanded && (
-                <>
-                  {(selectedOperatorObj?.phone || selectedOperatorObj?.email) ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
-                      {selectedOperatorObj?.phone ? (
-                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedOperatorObj.phone}`)}>
-                          <Text style={{ fontSize: 12.5, color: theme.colors.link, fontFamily: 'monospace' }}>
-                            ðŸ“ž {selectedOperatorObj.phone}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
-                      {selectedOperatorObj?.email ? (
-                        <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
-                          âœ‰ï¸  {selectedOperatorObj.email}
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  <KPIGrid
-                    columns={4}
-                    style={{
-                      marginTop: (selectedOperatorObj?.phone || selectedOperatorObj?.email) ? 0 : 8,
-                      marginVertical: spacingNumeric.xs,
-                    }}
-                  >
-                    <KPICard
-                      label="Run Hours"
-                      value={`${Math.round(activeMetrics.runHours * 10) / 10} hrs`}
-                      icon={Clock}
-                      variant="info"
-                    />
-                    <KPICard
-                      label="Overtime"
-                      value={`${Math.round(activeMetrics.otHours * 10) / 10} hrs`}
-                      icon={Zap}
-                      variant={activeMetrics.otHours > 0 ? 'warning' : 'default'}
-                    />
-                    <KPICard
-                      label="Breakdowns"
-                      value={`${activeMetrics.breakdowns} Events`}
-                      icon={AlertTriangle}
-                      variant={activeMetrics.breakdowns > 0 ? 'error' : 'default'}
-                    />
-                    <KPICard
-                      label="Shift Records"
-                      value={`${activeMetrics.totalLogs} Records`}
-                      icon={FileText}
-                      variant="default"
-                    />
-                  </KPIGrid>
-                </>
-              )}
-            </Card>
-          )}
-
-          {/* 4. DAILY RUNNING LOG CARDS LIST: Render across all view modes */}
-          <View style={styles.logsListContainer}>
-            {isLoading ? (
-              <OperationLogListSkeleton count={4} />
-            ) : filteredLogs.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.emptyCardText, { color: theme.colors.mute }]}>
-                  No daily running hour logs found matching active filters.
-                </Text>
-              </View>
-            ) : (
-              paginatedLogs.map((log) => {
-                const startMtr = log.start_meter ?? 0;
-                const endMtr = log.end_meter ?? startMtr;
-                const runningHrs = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-                const otHrs = log.overtime_hours ?? 0;
-                const mModel = log.machine?.model || log.machine_code || '30D-7SA';
-                const mSerial = log.machine?.serial_number || '2103006590';
-                const clientName = log.client?.name || log.client?.company_name || 'Unassigned Client';
-                const clientCity = log.client?.city || (log.location ? log.location.split(',')[0]?.trim() : '') || '—';
-                const breakdownInfo = parseBreakdownDetails(log);
-                const opName = log.operator?.full_name || 'Operator';
-                const cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
-                const hasConflict = Boolean(log.conflict_flag);
-                const isPendingConflict = hasConflict && (!log.conflict_status || log.conflict_status === 'pending');
-                const isResolvedConflict = hasConflict && (log.conflict_status === 'resolved' || log.conflict_status === 'acknowledged' || log.conflict_status === 'adjusted');
-                const cardConflict = hasConflict
-                  ? parseConflictReason(log.conflict_reason, {
-                      machineCode: log.machine_code,
-                      machineModel: mModel,
-                      operatorName: opName,
-                      startTime: log.start_time,
-                      endTime: log.end_time,
-                      runningHours: runningHrs,
-                      overtimeHours: otHrs,
-                      logDate: log.log_date,
-                    })
-                  : null;
-
-                return (
-                  <Card
-                    key={log.id}
-                    variant="elevated"
-                    style={[
-                      styles.logCard,
-                      isPendingConflict && { borderLeftWidth: 3, borderLeftColor: '#d97706' },
-                      isResolvedConflict && { borderLeftWidth: 3, borderLeftColor: '#059669' },
-                    ]}
-                  >
-                      {/* Log Card Header — consistent card UI: blue date, Model (Serial) one row */}
-                      <View style={[styles.logCardHeader, { alignItems: 'flex-start' }]}>
-                        <View style={[styles.logCardHeaderLeft, { flex: 1 }]}>
-                          <Text style={[styles.logDateText, { color: theme.colors.link }]}>{formatDate(log.log_date)}</Text>
-                          <Text style={[styles.logMachineModel, { color: theme.colors.ink }]} numberOfLines={1}>{mSerial ? `${mModel} (${mSerial})` : mModel}</Text>
-                        </View>
-
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        {isPendingConflict && (
-                          <View
-                            style={[
-                              styles.conflictBadge,
-                              {
-                                backgroundColor: isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7',
-                                borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
-                              },
-                            ]}
-                          >
-                            <ShieldAlert size={11} color={isDark ? '#fbbf24' : '#d97706'} style={{ marginRight: 3 }} />
-                            <Text style={[styles.conflictBadgeText, { color: isDark ? '#fbbf24' : '#92400e' }]}>Shift Conflict</Text>
-                          </View>
-                        )}
-                        {isResolvedConflict && (
-                          <View
-                            style={[
-                              styles.conflictResolvedBadge,
-                              {
-                                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
-                                borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0',
-                              },
-                            ]}
-                          >
-                            <Check size={11} color={isDark ? '#34d399' : '#059669'} style={{ marginRight: 3 }} />
-                            <Text style={[styles.conflictResolvedBadgeText, { color: isDark ? '#34d399' : '#047857' }]}>
-                              {log.conflict_status === 'adjusted' ? 'Adjusted' : 'Acknowledged'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Middle Specs Box */}
-                    <View style={[styles.logDetailsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      {/* Operator tab: operator name lives in summary header — show Machine instead.
-                          Client tab: client lives in summary header — machine shown in card title. */}
-                      {logsViewMode === 'operator' ? (
-                      <View style={styles.logDetailRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Machine:</Text>
-                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                            {mSerial ? `${mModel} (${mSerial})` : mModel}
-                          </Text>
-                        </View>
-                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Client / City:</Text>
-                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                            {clientName}
-                          </Text>
-                        </View>
-                      </View>
-                      ) : logsViewMode === 'client' ? (
-                      <View style={styles.logDetailRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Operator:</Text>
-                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]}>{opName}</Text>
-                        </View>
-                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
-                          <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {`Shift ${log.shift_code || (log.shift?.toLowerCase().includes('night') ? 'S4' : log.shift?.toLowerCase().includes('morning') ? 'S1' : log.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3')} • ${formatCompactTiming(log.start_time, log.end_time)}`}
-                          </Text>
-                        </View>
-                      </View>
-                      ) : (
-                      <View style={styles.logDetailRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Client / City:</Text>
-                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                            {clientName}
-                          </Text>
-                          {clientCity !== '—' ? (
-                            <Text style={[styles.logDetailSub, { color: theme.colors.mute }]} numberOfLines={1}>
-                              {clientCity}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Operator:</Text>
-                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]}>{opName}</Text>
-                        </View>
-                      </View>
-                      )}
-                      <View style={[styles.logTimingRow, { borderTopColor: theme.colors.hairline }]}>
-                        {logsViewMode !== 'client' && (
-                        <View>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift & Timings:</Text>
-                          <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {`Shift ${log.shift_code || (log.shift?.toLowerCase().includes('night') ? 'S4' : log.shift?.toLowerCase().includes('morning') ? 'S1' : log.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3')} • ${formatCompactTiming(log.start_time, log.end_time)}`}
-                          </Text>
-                        </View>
-                        )}
-                        <View style={{ alignItems: 'center' }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Meter Reading:</Text>
-                          <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {startMtr} â†’ {endMtr}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Operating Hrs:</Text>
-                          <Text style={[styles.logHoursValue, { color: theme.colors.link }]}>
-                            {runningHrs} hrs
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Breakdown / Overtime / Remarks if present */}
-                      {((log||{}).is_breakdown || otHrs > 0 || cleanRemarks !== 'â€”') && (
-                        <View style={[styles.logRemarksRow, { borderTopColor: theme.colors.hairline }]}>
-                          {(log||{}).is_breakdown ? (
-                            <Text>BreakdownYes</Text>
-                          ) : null}
-                          {otHrs > 0 && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                              <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Overtime:</Text>
-                              <Text style={[styles.logOtValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>{otHrs} hrs</Text>
-                            </View>
-                          )}
-                          {cleanRemarks !== 'â€”' && (
-                            <Text style={[styles.logRemarksText, { color: theme.colors.mute }]} numberOfLines={1}>
-                              Note: {cleanRemarks}
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Inline Overtime Shift Conflict Detailed Warning Box */}
-                    {hasConflict && cardConflict && (
-                      <View
-                        style={[
-                          styles.logConflictAdvisoryWell,
-                          {
-                            backgroundColor: isPendingConflict
-                              ? isDark
-                                ? 'rgba(245, 158, 11, 0.08)'
-                                : '#fffbeb'
-                              : isDark
-                              ? 'rgba(16, 185, 129, 0.08)'
-                              : '#f0fdf4',
-                            borderColor: isPendingConflict
-                              ? isDark
-                                ? 'rgba(245, 158, 11, 0.3)'
-                                : '#fde68a'
-                              : isDark
-                              ? 'rgba(16, 185, 129, 0.3)'
-                              : '#bbf7d0',
-                          },
-                        ]}
-                      >
-                        <View style={styles.logConflictHeaderRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                            <ShieldAlert
-                              size={15}
-                              color={isPendingConflict ? (isDark ? '#fbbf24' : '#d97706') : (isDark ? '#34d399' : '#059669')}
-                            />
-                            <Text
-                              style={[
-                                styles.logConflictTitle,
-                                { color: isPendingConflict ? (isDark ? '#fbbf24' : '#92400e') : (isDark ? '#34d399' : '#047857') },
-                              ]}
-                            >
-                              {isPendingConflict
-                                ? cardConflict.title
-                                : `Overtime Conflict Resolved (${log.conflict_status || 'approved'})`}
-                            </Text>
-                          </View>
-                          {isPendingConflict && (
-                            <TouchableOpacity
-                              onPress={() => handleOpenConflictModal(log)}
-                              style={[
-                                styles.resolveInlineBtn,
-                                {
-                                  borderColor: isDark ? 'rgba(245, 158, 11, 0.4)' : '#fde68a',
-                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
-                                },
-                              ]}
-                            >
-                              <ShieldAlert size={12} color={isDark ? '#fbbf24' : '#b45309'} style={{ marginRight: 4 }} />
-                              <Text style={[styles.resolveInlineBtnText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
-                                Resolve Conflict
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-
-                        {/* Clean summary row */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                          {otHrs > 0 ? (
-                            <View
-                              style={[
-                                styles.cleanOtPill,
-                                {
-                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7',
-                                  borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
-                                },
-                              ]}
-                            >
-                              <Text style={[styles.cleanOtPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
-                                +{otHrs}h Overtime
-                              </Text>
-                            </View>
-                          ) : null}
-                          <Text style={{ fontSize: 12.5, color: isPendingConflict ? (isDark ? '#fde68a' : '#92400e') : (isDark ? '#a7f3d0' : '#065f46'), fontWeight: '600' }}>
-                            {isPendingConflict
-                              ? cardConflict.conflictingEntity
-                                ? `Collides with active shift on ${cardConflict.conflictingEntity}`
-                                : 'Overtime overlaps with subsequent shift'
-                              : 'Approved by supervisor'}
-                          </Text>
-                        </View>
-
-                        {log.conflict_resolution_notes && (
-                          <Text style={[styles.logConflictNotes, { color: theme.colors.mute }]}>
-                            Resolution Note: {log.conflict_resolution_notes}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Log Card Footer: Timestamp & Actions */}
-                    <View style={[styles.logCardFooterActions, { borderTopColor: theme.colors.hairline }]}>
-                      <Text style={[styles.logIdMono, { color: theme.colors.mute, fontSize: 12, fontFamily: 'monospace' }]}>
-                        {log.created_at ? formatCompactExactTimestamp(log.created_at) : ''}
-                      </Text>
-                      {(canEditLogRecord(log) || canDeleteLogRecord) && (
-                        <View style={styles.logCardActionButtons}>
-                          {canEditLogRecord(log) && (
-                            <TouchableOpacity
-                              onPress={() => handleEditLog(log)}
-                              style={{ padding: 6, borderRadius: 6 }}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              accessibilityLabel={`Edit log for ${log.machine_code}`}
-                            >
-                              <Edit2 size={15} color={isDark ? '#38bdf8' : '#0284c7'} />
-                            </TouchableOpacity>
-                          )}
-
-                          {canDeleteLogRecord && (
-                            <TouchableOpacity
-                              onPress={() => handleDeleteLog(log)}
-                              style={[
-                                styles.logActionTouchBtn,
-                                {
-                                  backgroundColor: isDark ? '#3f1d24' : '#fff1f2',
-                                  borderColor: isDark ? '#fb718540' : '#fecdd3',
-                                },
-                              ]}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              accessibilityLabel={`Delete log for ${log.machine_code}`}
-                            >
-                              <Trash2 size={13} color={isDark ? '#fb7185' : '#e11d48'} />
-                              <Text
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: '700',
-                                  color: isDark ? '#fb7185' : '#e11d48',
-                                }}
-                              >
-                                Delete
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  </Card>
-                );
-              })
-            )}
-
-            {/* Pagination Controls */}
-            {filteredLogs.length > logsPageSize && (
-              <View style={[styles.paginationRow, { borderTopColor: theme.colors.hairline }]}>
-                <TouchableOpacity
-                  onPress={() => setLogsPage((p) => Math.max(1, p - 1))}
-                  disabled={logsPage <= 1}
-                  style={[
-                    styles.paginationBtn,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                      opacity: logsPage <= 1 ? 0.4 : 1,
-                    },
-                  ]}
-                >
-                  <ChevronLeft size={16} color={theme.colors.ink} />
-                  <Text style={[styles.paginationBtnText, { color: theme.colors.ink }]}>Previous</Text>
-                </TouchableOpacity>
-
-                <Text style={[styles.paginationPageText, { color: theme.colors.mute }]}>
-                  Page {logsPage} of {totalPages}
-                </Text>
-
-                <TouchableOpacity
-                  onPress={() => setLogsPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={logsPage >= totalPages}
-                  style={[
-                    styles.paginationBtn,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                      opacity: logsPage >= totalPages ? 0.4 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.paginationBtnText, { color: theme.colors.ink }]}>Next</Text>
-                  <ChevronRight size={16} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          {/* Historical Machine Logs Tab Component (100% Visual and Behavioral Parity with Screenshot 4) */}
+          <MobileOperatorHistoryTab
+            user={user}
+            assignedMachine={entryContext?.machine}
+            onEditLog={handleEditLog}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
         </ScrollView>
       )}
 
+      {/* Edit Machine Hour Log Modal */}
+      {editingLogRecord && (
+        <MeterLogModal
+          visible={Boolean(editingLogRecord)}
+          onClose={() => setEditingLogRecord(null)}
+          existingLog={editingLogRecord}
+          machineId={editingLogRecord.machine_id}
+          machineCode={editingLogRecord.machine?.machine_id || editingLogRecord.machine_code}
+          model={editingLogRecord.machine?.model}
+          serialNumber={editingLogRecord.machine?.serial_number}
+          onSubmit={async () => {
+            setEditingLogRecord(null);
+            await handleDataRefresh();
+          }}
+        />
+      )}
 
       {/* Review Overtime Conflict Modal */}
       <MobileConflictResolutionModal
@@ -2078,321 +1200,234 @@ export default function OperationsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: 1 },
+  segmentedToggleWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
   },
   aboveNavbar: {
     borderBottomWidth: 1,
     paddingVertical: spacingNumeric.xs,
-    paddingHorizontal: spacingNumeric.md,
-  },
+    paddingHorizontal: spacingNumeric.md },
   aboveNavbarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   aboveNavbarTab: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
     height: 36,
-    borderRadius: radiusNumeric.lg,
-  },
+    borderRadius: 9999 },
   aboveNavbarTabActive: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12,
     shadowRadius: 2,
-    elevation: 2,
-  },
+    elevation: 2 },
   aboveNavbarTabInactive: {
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   aboveNavbarTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+    },
   aboveNavbarTabTextActive: {
-    fontWeight: '700',
-  },
+    },
   contentScroll: {
-    flex: 1,
-  },
+    flex: 1 },
   contentContainer: {
     padding: spacingNumeric.md,
-    paddingBottom: 110,
-  },
+    paddingBottom: 110 },
   conflictBanner: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.md,
     marginBottom: spacingNumeric.md,
-    gap: 8,
-  },
+    gap: 8 },
   conflictBannerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   conflictBannerTitleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   conflictBannerTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
+    },
   conflictActionBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 999,
-  },
+    borderRadius: 999 },
   conflictActionBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+    },
   conflictBannerDesc: {
-    fontSize: 12.5,
-    lineHeight: 16,
-  },
+    },
   cleanConflictCard: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     borderLeftWidth: 3,
     padding: spacingNumeric.sm + 2,
-    gap: 8,
-  },
+    gap: 8 },
   cleanConflictCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 8,
-  },
+    gap: 8 },
   cleanMachineIconBox: {
     width: 24,
     height: 24,
     borderRadius: radiusNumeric.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   cleanConflictMachineCode: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.2,
-  },
+    },
   cleanConflictMachineModel: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
   cleanSeverityPill: {
     paddingHorizontal: 7,
     paddingVertical: 2.5,
     borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   cleanSeverityPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
+    },
   cleanReviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   cleanReviewBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    },
   cleanInfoStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     paddingTop: 8,
     borderTopWidth: 1,
-    gap: 12,
-  },
+    gap: 12 },
   cleanInfoItem: {
     gap: 2,
     minWidth: 120,
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
   cleanInfoItemConflict: {
     gap: 2,
     minWidth: 140,
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
   cleanInfoLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
+    },
   cleanConflictTargetLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
+    },
   cleanInfoValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
+    gap: 5 },
   cleanInfoValueText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
+    },
   cleanInfoValueMono: {
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   cleanOtPill: {
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   cleanOtPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   cleanConflictEntityBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   cleanConflictEntityBadgeText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   conflictBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   conflictBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+    },
   conflictResolvedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 999,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   conflictResolvedBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+    },
   logConflictAdvisoryWell: {
     padding: spacingNumeric.sm,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     marginTop: spacingNumeric.xs,
-    gap: 4,
-  },
+    gap: 4 },
   logConflictHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   logConflictTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
+    },
   logConflictDesc: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    fontWeight: '500',
-  },
+    },
   logConflictNotes: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   resolveInlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   resolveInlineBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+    },
   filterCard: {
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
     marginBottom: spacingNumeric.md,
-    gap: 10,
-  },
+    gap: 10 },
   subTabPillsRow: {
     flexDirection: 'row',
     padding: 3,
     borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   subTabPill: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    borderRadius: radiusNumeric.sm,
-  },
+    borderRadius: radiusNumeric.sm },
   subTabPillActive: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
-    elevation: 1,
-  },
+    elevation: 1 },
   subTabPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+    },
   exportBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
+    justifyContent: 'flex-start' },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     height: 36,
     borderRadius: radiusNumeric.sm,
-    gap: 6,
-  },
+    gap: 6 },
   exportBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+    },
   dropdownsContainer: {
     gap: 8,
-    paddingTop: 4,
-  },
+    paddingTop: 4 },
   dropdownField: {
-    gap: 4,
-  },
+    gap: 4 },
   fieldLabel: {
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
+    },
   selectorTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2400,233 +1435,153 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    paddingHorizontal: 12,
-  },
+    paddingHorizontal: 12 },
   selectorTriggerText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    flex: 1,
-  },
+    flex: 1 },
   summaryHeaderCard: {
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
     marginBottom: spacingNumeric.md,
-    gap: 10,
-  },
+    gap: 10 },
   summaryHeaderTitleRow: {
     paddingBottom: spacingNumeric.sm,
     borderBottomWidth: 1,
-    gap: 6,
-  },
+    gap: 6 },
   summaryHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
+    },
   statusBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   statusPrefix: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
   statusBadgePill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
-  },
+    borderRadius: 4 },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+    },
   machineSpecsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-  },
+    gap: 12 },
   specItem: {
     minWidth: '45%',
-    flex: 1,
-  },
+    flex: 1 },
   specLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   specValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
+    },
   specValueMono: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   clientBadgesWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
-  },
+    marginTop: 4 },
   infoPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
-  },
+    borderRadius: 6 },
   infoPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   clientContactGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    paddingTop: 4,
-  },
+    paddingTop: 4 },
   logsListContainer: {
     gap: spacingNumeric.sm,
-    marginTop: spacingNumeric.xs,
-  },
+    marginTop: spacingNumeric.xs },
   logCard: {
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
-    gap: 8,
-  },
+    gap: 8 },
   logCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   logCardHeaderLeft: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   logDateText: {
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   timestampBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 4,
-  },
+    borderRadius: 4 },
   timestampText: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logMachineModel: {
-    fontSize: 15.5,
-    fontWeight: '800',
-    marginTop: 1,
-  },
+    marginTop: 1 },
   logMachineSerial: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   breakdownBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-  },
+    borderRadius: 4 },
   breakdownBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+    },
   normalBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    borderWidth: 1,
-  },
+    borderWidth: 1 },
   normalBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logDetailsBox: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: spacingNumeric.sm,
-    gap: 6,
-  },
+    gap: 6 },
   logDetailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
-  },
+    gap: 8 },
   logDetailLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    },
   logDetailValue: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    },
   logDetailSub: {
-    fontSize: 12,
-  },
+    },
   logDetailPhone: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logTimingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   logDetailValueMono: {
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logHoursValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logRemarksRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
-  },
+    gap: 6 },
   logOtValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logRemarksText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    flex: 1,
-  },
+    flex: 1 },
   paginationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: spacingNumeric.md,
-    borderTopWidth: 1,
-  },
+    borderTopWidth: 1 },
   paginationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2634,44 +1589,31 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    gap: 4,
-  },
+    gap: 4 },
   paginationBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    },
   paginationPageText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
+    },
   emptyCard: {
     padding: spacingNumeric.xl,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptyCardText: {
-    fontSize: 13,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
+    textAlign: 'center' },
   logCardFooterActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 10,
     marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   logIdMono: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+    },
   logCardActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   logActionTouchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2680,6 +1622,4 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-    minHeight: 32,
-  },
-});
+    minHeight: 32 } });

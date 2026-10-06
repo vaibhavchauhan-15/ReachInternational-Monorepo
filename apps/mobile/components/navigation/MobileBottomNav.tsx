@@ -8,7 +8,6 @@
 import React, { useState, useEffect, memo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Keyboard,
@@ -17,7 +16,9 @@ import {
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
-import { InteractiveIcon } from '../ui/InteractiveIcon';
+import { Text } from '../ui/Text';
+import { Touchable } from '../ui/Touchable';
+import { Icon as CanonicalIcon } from '../ui/Icon';
 import { useAuth } from '../../lib/auth/useAuth';
 import {
   getNavForRole,
@@ -33,9 +34,12 @@ import {
   Shield,
   Menu,
   User,
+  Settings,
   Banknote,
   CalendarCheck,
+  Activity,
 } from 'lucide-react-native';
+import { MobileMenuDrawer } from './MobileMenuDrawer';
 
 // Icon string key → Lucide RN component
 const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -47,8 +51,10 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string 
   shield: Shield,
   menu: Menu,
   user: User,
+  settings: Settings,
   banknote: Banknote,
   'calendar-check': CalendarCheck,
+  activity: Activity,
 };
 interface BottomNavTabItemProps {
   item: {
@@ -69,34 +75,32 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
   onPress,
   theme,
 }) => {
-  const [isPressed, setIsPressed] = useState(false);
   const Icon = ICONS[item.icon] || Menu;
   const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
 
   return (
-    <TouchableOpacity
+    <Touchable
+      preset="nav"
       onPress={onPress}
-      onPressIn={() => setIsPressed(true)}
-      onPressOut={() => setIsPressed(false)}
       style={styles.navItemBtn}
-      activeOpacity={0.7}
       accessibilityRole="tab"
       accessibilityState={{ selected: isActive }}
       accessibilityLabel={item.label}
     >
       <View style={styles.itemContent}>
-        <InteractiveIcon
-          icon={<Icon size={18} color={itemColor} />}
-          pressed={isPressed}
-          variant="bounce"
+        <CanonicalIcon
+          as={Icon}
+          level="body"
+          color={itemColor}
+          anim="pop"
         />
         <Text
+          variant="caption"
           numberOfLines={1}
           style={[
             styles.itemLabel,
             {
               color: itemColor,
-              fontWeight: isActive ? '600' : '500',
             },
           ]}
         >
@@ -111,7 +115,7 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
           ]}
         />
       </View>
-    </TouchableOpacity>
+    </Touchable>
   );
 };
 
@@ -120,12 +124,13 @@ export interface MobileBottomNavProps {}
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
   function MobileBottomNav() {
     const { theme, isDark } = useTheme();
-    const { role } = useAuth();
+    const { user, role, signOut, userProfile } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const insets = useSafeAreaInsets();
 
     const [keyboardVisible, setKeyboardVisible] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
 
     // Hide bar while keyboard is open
     useEffect(() => {
@@ -146,6 +151,29 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
     const normalizedRole = ((role || 'operator') as string).toLowerCase() as UserRole;
     const { primary, more, hasMore } = getNavForRole(normalizedRole);
 
+    const primaryKeySet = new Set(primary.map((p) => p.key));
+    const drawerItems = more
+      .filter((i) => !primaryKeySet.has(i.key))
+      .map((i) => ({
+        key: i.key,
+        label: labelFor(i, normalizedRole),
+        href: i.href.startsWith('/(app)') ? i.href : `/(app)${i.href}`,
+        icon: i.icon,
+        match: i.match,
+      }));
+
+    const primaryItems = primary.map(i => ({
+      key: i.key,
+      label: labelFor(i, normalizedRole),
+      href: i.href.startsWith('/(app)') ? i.href : `/(app)${i.href}`,
+      icon: i.icon,
+      match: i.match,
+    }));
+
+    const userName = userProfile?.full_name || user?.user_metadata?.full_name || 'User';
+    const userEmail = user?.email || '';
+    const initials = userName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+
     // Build tab list from manifest
     const tabs = [
       ...primary.map((i) => ({
@@ -157,18 +185,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
       })),
       {
         key: 'more' as const,
-        label: hasMore ? 'More' : 'Account',
-        href: '/(app)/more',
+        label: hasMore ? 'Menu' : 'Account',
+        href: hasMore ? '' : '/(app)/profile',
         icon: hasMore ? 'menu' : 'user',
-        match: [
-          '/more',
-          '/profile',
-          '/settings',
-          '/privacy',
-          '/terms',
-          '/account-deletion',
-          ...more.flatMap((i) => i.match),
-        ],
+        match: hasMore
+          ? more.flatMap((i) => i.match)
+          : ['/profile'],
       },
     ];
 
@@ -194,9 +216,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
         >
           {tabs.map((item) => {
             // Compute active state
-            const isActive = item.match.some(
+            let isActive = item.match.some(
               (p) => pathname.includes(p.replace('/', '')),
             );
+            if (item.key === 'more' && menuOpen) {
+              isActive = true;
+            }
 
             return (
               <BottomNavTabItem
@@ -204,6 +229,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
                 item={item}
                 isActive={isActive}
                 onPress={() => {
+                  if (item.key === 'more' && hasMore) {
+                    setMenuOpen(true);
+                    return;
+                  }
                   if (isActive) return;
                   router.push(item.href as any);
                 }}
@@ -212,6 +241,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
             );
           })}
         </View>
+        {menuOpen && (
+          <MobileMenuDrawer
+            items={drawerItems}
+            primaryItems={primaryItems}
+            user={{ name: userName, email: userEmail, initials }}
+            onClosed={() => setMenuOpen(false)}
+            onLogout={async () => { await signOut(); router.replace('/(auth)/login' as any); }}
+          />
+        )}
       </View>
     );
   },
@@ -265,9 +303,6 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   itemLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: -0.2,
     marginTop: 2,
   },
   activeDot: {

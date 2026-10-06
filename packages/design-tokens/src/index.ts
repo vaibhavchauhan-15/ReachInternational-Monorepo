@@ -6,10 +6,12 @@
 // Canonical Token Exports
 export * from './tokens/colors';
 export * from './tokens/typography';
+export * from './typography';
 export * from './tokens/spacing';
 export * from './tokens/radius';
 export * from './tokens/elevation';
 export * from './tokens/motion';
+export * from './motion';
 export * from './tokens/breakpoints';
 
 // Component Visual Contracts

@@ -14,27 +14,41 @@ const IGNORED_WARNING_PATTERNS = [
   'pointerEvents',
   'setLayoutAnimationEnabledExperimental',
   'TouchableWithoutFeedback',
+  'Invalid style property of "outline"',
+  'validateDOMNesting',
+  'style props are deprecated',
 ];
+
+const shouldSuppress = (args: any[]): boolean => {
+  if (!args || args.length === 0) return false;
+  const fullMsg = args
+    .map((arg) => {
+      if (typeof arg === 'string') return arg;
+      if (arg && typeof arg.message === 'string') return arg.message;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(' ');
+
+  return IGNORED_WARNING_PATTERNS.some((pattern) => fullMsg.includes(pattern));
+};
 
 if (typeof console !== 'undefined') {
   const originalWarn = console.warn;
   console.warn = (...args: any[]) => {
-    if (args.length > 0) {
-      const msg = typeof args[0] === 'string' ? args[0] : (args[0] && typeof args[0].message === 'string' ? args[0].message : '');
-      if (IGNORED_WARNING_PATTERNS.some((pattern) => msg.includes(pattern))) {
-        return;
-      }
+    if (shouldSuppress(args)) {
+      return;
     }
     originalWarn(...args);
   };
 
   const originalError = console.error;
   console.error = (...args: any[]) => {
-    if (args.length > 0) {
-      const msg = typeof args[0] === 'string' ? args[0] : (args[0] && typeof args[0].message === 'string' ? args[0].message : '');
-      if (IGNORED_WARNING_PATTERNS.some((pattern) => msg.includes(pattern))) {
-        return;
-      }
+    if (shouldSuppress(args)) {
+      return;
     }
     originalError(...args);
   };

@@ -1,11 +1,9 @@
+import { Text } from '../ui/Text';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  Modal,
   ScrollView,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +12,8 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { TimeInput } from '../ui/TimeInput';
 import { useTheme } from '../ui/ThemeProvider';
+import { Touchable } from '../ui/Touchable';
+import { AppModal } from '../ui/AppModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -686,10 +686,9 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppModal visible={visible} onClose={onClose} variant="bottom">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
       >
         <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvas }]}>
           {/* Header */}
@@ -700,9 +699,9 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
                 {isSuperAdmin ? 'Direct database updates' : `Approval routed to ${approverLabel}`}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
@@ -963,7 +962,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 }
 
@@ -986,12 +985,8 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
+  modalTitle: {  },
   modalSubtitle: {
-    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -1009,15 +1004,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: spacingNumeric.md,
   },
-  noticeTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  noticeTitle: {  },
   noticeText: {
-    fontSize: 12.5,
-    marginTop: 2,
-    lineHeight: 15,
-  },
+    marginTop: 2,  },
   inputSpacing: {
     marginBottom: 10,
   },

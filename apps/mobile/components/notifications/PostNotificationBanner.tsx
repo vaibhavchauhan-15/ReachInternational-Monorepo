@@ -1,3 +1,4 @@
+import { Text } from '../ui/Text';
 /**
  * ReachInternational Mobile — Ambient Post Notification Banner
  * Floating in-app toast banner displaying real-time operational notifications
@@ -7,12 +8,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Animated,
   TouchableOpacity,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import {
@@ -276,24 +275,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   categoryBadge: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   timeText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   title: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
     marginBottom: 2,
   },
   body: {
-    fontSize: 13,
-    lineHeight: 15,
   },
   closeBtn: {
     padding: 4,

@@ -1,752 +1,174 @@
-# Global Rule: Web & Mobile UI/UX Consistency & Mandatory Change Synchronization
+# Authoritative Rule: Web & Mobile 100% Parity Across UI/UX, Behavior, Responsiveness, Design, Layout, Color, Theme & Native Backend Architecture
 
-> **MANDATORY RULE FOR ALL AI AGENTS**:
-> Whenever ANY change, feature, component, style, theme, color, modal, drawer, page, module, form field, status badge, navigation item, database/API hook, or workflow is added, modified, refactored, or fixed in the **Web App (`apps/web`)**, the AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`)** with full mobile compatibility in the same session/task.
-
-## Objective
-
-The **Web App and Mobile App must be designed and maintained as ONE UNIFIED PRODUCT**.
-
-Both platforms must have the exact same visual identity, design language, navigation logic, terminology, interaction patterns, feature capabilities, and overall user experience.
-
-The UI should feel like:
-
-> **One single application adapted to two screen sizes — NOT two separately designed or updated applications.**
-
-The mobile app may adapt layouts and interactions for smaller touch screens (e.g. touch cards instead of data tables, bottom sheets instead of popover modals, scrollable filter strips, minimum 44px touch targets), but it must **NEVER introduce a different visual/UX language OR lag behind web app feature updates**.
-
----
-
-## 0. MANDATORY WEB-TO-MOBILE CHANGE SYNCHRONIZATION RULE
-
-### The Zero-Drift Mandate
-Web (`apps/web`) and Mobile (`apps/mobile`) MUST NEVER drift out of sync.
-
-Whenever an AI agent modifies `apps/web`:
-1. **Automatic Mirroring**: The agent MUST immediately inspect `apps/mobile` and implement the corresponding feature, component, style, theme, color token, modal, or module change.
-2. **Mobile Compatibility**: The mirrored implementation in `apps/mobile` MUST be fully optimized for mobile devices (touch card lists, bottom sheet modals, horizontal scroll filter strips, min 44px touch targets, zero horizontal page overflow).
-3. **Identical UX & Business Logic**: Button labels, validation rules, status badges, API hooks, and user steps MUST match word-for-word between Web and Mobile.
-4. **Prohibited Shortcut**: An AI agent is **STRICTLY FORBIDDEN** from completing a Web app feature change while leaving the Mobile app outdated, incomplete, or out of sync.
+> **MANDATORY ENFORCEMENT RULE FOR ALL AI CODING AGENTS**:
+> 
+> 1. **100% VISUAL & BEHAVIORAL PARITY**: The Web App (`apps/web`) and Native App (`apps/mobile`) MUST follow the **100% EXACT SAME color tokens, theme adaptations, typography hierarchy, font families, visual layout, UI/UX components, interaction behaviors, and operational terminology**.
+> 2. **NATIVE-APPROPRIATE BACKEND & ARCHITECTURE**: The Native App architecture MUST be implemented using native-appropriate patterns (Expo SDK 57, React Native 0.86, Expo Router, TanStack Query, SecureStore hardware keystore, offline queue, touch cards, bottom sheets, haptics, and min 44px touch targets) while Web uses Next.js 16.2 App Router, RSC, DAL, Server Actions, and SSR Auth.
+> 3. **ZERO-DRIFT CHANGE SYNCHRONIZATION**: Whenever ANY change, feature, style, theme, color, modal, form field, status badge, or workflow is added or modified on Web, the AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Native App in the same session**.
+> 4. **STRICT ENFORCEMENT**: No code change is complete until both Web and Mobile have been synchronized and verified.
 
 ---
 
 ## 1. Single Source of Truth for Design
 
-Before creating or modifying any UI, the AI agent must identify and follow the existing application's design system.
+Every AI agent must strictly follow:
+1. `DESIGN.md` in workspace root.
+2. `ARCHITECTURE.md` in workspace root.
+3. `AI/RULES/DESIGN-SYSTEM.md`.
+4. Shared design tokens in `@reachinternational/design-tokens`.
+5. The `web-mobile-parity` skill (`.agents/skills/web-mobile-parity/SKILL.md`).
 
-Create and maintain a shared design system containing:
-
-* Brand colors
-* Background colors
-* Surface/card colors
-* Text colors
-* Border colors
-* Primary/secondary colors
-* Success/warning/error colors
-* Typography
-* Font sizes
-* Font weights
-* Border radius
-* Shadows
-* Spacing
-* Icons
-* Component styles
-* Interaction states
-* Animation principles
-
-**Do not independently choose colors, spacing, typography, icons, or component styles for Web and Mobile.**
-
-If a design token already exists, reuse it.
+**NEVER independently invent colors, font sizes, margins, paddings, or icons for Web or Mobile.**
 
 ---
 
-## 2. Color System — MUST BE IDENTICAL
+## 2. 100% Color & Theme Parity
 
-Web and Mobile must use the **exact same color tokens**.
+Web and Native Mobile must use the **exact same color tokens** in both Light and Dark themes:
 
-For example:
+### 2.1 Foundation Colors
+- **Ink Tone (Headings & Primary Text)**:
+  - Light: `#171717` (`var(--color-ink)`, `theme.colors.ink`)
+  - Dark: `#fafafa` (`var(--color-ink)`, `theme.colors.ink`)
+- **Canvas (Page Background)**:
+  - Light: `#fafafa` (`var(--color-canvas)`, `theme.colors.canvas`)
+  - Dark: `#0a0a0a` (`var(--color-canvas)`, `theme.colors.canvas`)
+- **Canvas Elevated (Cards, Modals, Inputs)**:
+  - Light: `#ffffff` (`var(--color-canvas-elevated)`, `theme.colors.canvasElevated`)
+  - Dark: `#171717` (`var(--color-canvas-elevated)`, `theme.colors.canvasElevated`)
+- **Hairline Border (1px crisp structural border)**:
+  - Light: `#ebebeb` (`var(--color-hairline)`, `theme.colors.hairline`)
+  - Dark: `#262626` (`var(--color-hairline)`, `theme.colors.hairline`)
+- **Hairline Soft (Subtle panels, alternating rows)**:
+  - Light: `#f2f2f2` (`var(--color-hairline-soft)`, `theme.colors.hairlineSoft`)
+  - Dark: `#1a1a1a` (`var(--color-hairline-soft)`, `theme.colors.hairlineSoft`)
 
-```ts
-const colors = {
-  primary: "...",
-  secondary: "...",
+### 2.2 Text Ladder
+- **Body**: `#4d4d4d` (light) / `#a3a3a3` (dark)
+- **Mute**: `#8f8f8f` (light) / `#737373` (dark)
+- **Faint**: `#a1a1a1` (light) / `#525252` (dark)
 
-  background: "...",
-  surface: "...",
-  surfaceMuted: "...",
+### 2.3 Brand & Interactive Accents
+- **Primary / Reach Sky Blue**: `#0284c7` (light) / `#0ea5e9` (dark) — primary CTA buttons, active state highlights.
+- **Link / Vercel Blue**: `#0070f3` (light) / `#3b82f6` (dark) — inline links, focus rings, active indicator pills.
+- **Link Deep**: `#0761d1` (light) / `#2563eb` (dark) — pressed / active link states.
+- **Link Soft**: `#d3e5ff` (light) / `#1e3a8a` (dark) — active category pill background wash.
 
-  textPrimary: "...",
-  textSecondary: "...",
-  textMuted: "...",
+### 2.4 Semantic Operational Status Colors
+- **Success / Operational**: `#10b981` (soft `#ecfdf5`, deep `#059669`) / Dark `#34d399` (soft `#064e3b`).
+- **Warning / Caution**: `#f5a623` (soft `#ffefcf`, deep `#ab570a`) / Dark `#fbbf24` (soft `#78350f`).
+- **Error / Breakdown**: `#ee0000` (soft `#fef2f2`, deep `#c50000`) / Dark `#f87171` (soft `#450a0a`).
+- **Info**: `#3b82f6` (soft `#eff6ff`, deep `#2563eb`) / Dark `#60a5fa` (soft `#1e3a8a`).
+- **Pending**: `#f59e0b` (soft `#fffbeb`, deep `#d97706`) / Dark `#fbbf24` (soft `#78350f`).
+- **Overdue**: `#e11d48` (soft `#fff1f2`, deep `#be123c`) / Dark `#fb7185` (soft `#4c0519`).
 
-  border: "...",
-
-  success: "...",
-  warning: "...",
-  error: "...",
-  info: "...",
-};
-```
-
-The values must come from a shared design specification (e.g. `@reachinternational/design-tokens`).
-
-### Rules
-
-* Never invent a new primary color for Mobile.
-* Never use a different shade of the brand color on Mobile.
-* Never change semantic colors between platforms.
-* Success must look like Success everywhere.
-* Warning must look like Warning everywhere.
-* Error must look like Error everywhere.
-* Primary actions must use the same brand color everywhere.
-
-Mobile can adjust **contrast or size when required for accessibility**, but the underlying design token must remain the same.
-
----
-
-## 3. Typography Must Be Consistent
-
-Use the same typography hierarchy across Web and Mobile.
-
-Maintain consistent:
-
-* Font family
-* Font weight
-* Heading hierarchy
-* Body text hierarchy
-* Label styles
-* Caption styles
-* Button typography
-* Navigation typography
-
-Example:
-
-```text
-H1
-H2
-H3
-Body
-Body Small
-Label
-Caption
-Button
-```
-
-The actual font size may be slightly responsive when necessary, but the **hierarchy and visual weight must remain consistent**.
-
-For example:
-
-```text
-Web H1 → 32px
-Mobile H1 → 28px
-```
-
-is acceptable.
-
-But:
-
-```text
-Web H1 → bold dark text
-Mobile H1 → thin colored text
-```
-
-is not acceptable.
+**Rule**: An AI agent MUST NEVER use a different status color or brand color on Mobile than on Web.
 
 ---
 
-## 4. Components Must Look Identical
+## 3. 100% Typography & Font Parity
 
-Common components must maintain the same visual design across both platforms.
+Both Web and Native Mobile run on **Geist Sans** and **Geist Mono**:
 
-This includes:
-
-* Buttons
-* Cards
-* Inputs
-* Selects
-* Dropdowns
-* Tabs
-* Tables
-* Badges
-* Alerts
-* Modals
-* Bottom sheets
-* Navigation
-* Sidebar
-* Headers
-* Search
-* Filters
-* Empty states
-* Loading states
-* Error states
-* Confirmation dialogs
-* User profiles
-* Status indicators
-
-The implementation can be platform-specific, but the **visual design must remain consistent**.
-
-Example:
-
-### Web
-
-```text
-[ + Add Machine ]
-```
-
-### Mobile
-
-```text
-      [+]
-```
-
-The mobile version may use an icon-only button because of space constraints, but it must use the **same icon, color, typography principles, radius, elevation, and interaction behavior**.
+- **Web**: Implemented via `@font-face` / next/font, Geist Sans & Geist Mono font variables.
+- **Native**: Bundled static `.ttf` font files in `apps/mobile/assets/fonts/`:
+  - `Geist-Regular.ttf`
+  - `Geist-Medium.ttf`
+  - `Geist-SemiBold.ttf`
+  - `Geist-Bold.ttf`
+  - `GeistMono-Medium.ttf`
+- **Mobile Typography Rule**: Native code MUST use `<Text variant="...">` from `components/ui/Text.tsx` or `useTypeStyle(variant)`. Setting raw typography properties (`fontSize`, `fontWeight`, `lineHeight`, etc.) in `StyleSheet.create` is strictly forbidden.
 
 ---
 
-## 5. Navigation Must Follow the Same Information Architecture
+## 4. 100% UI/UX & Behavior Parity
 
-Web and Mobile must use the same:
+Every component and user workflow must maintain identical interaction behaviors and visual aesthetics:
 
-* Navigation hierarchy
-* Menu names
-* Section names
-* Page names
-* Icons
-* Routes/concepts
-* Grouping
-* Active states
-* Permissions
-
-Do not rename a feature on Mobile simply because the UI is different.
-
-Example:
-
-```text
-Web:
-Machines
- ├─ Machine Directory
- ├─ Service Logs
- └─ Breakdown Complaints
-```
-
-Mobile must preserve the same information architecture:
-
-```text
-Machines
- ├─ Machine Directory
- ├─ Service Logs
- └─ Breakdown Complaints
-```
-
-Only the presentation may change.
+1. **Loading Skeletons**: Both platforms MUST display matching pulse skeleton loaders (`DashboardSkeleton`, `MetricCardSkeleton`) during data loading, preventing layout shift.
+2. **Empty States**: If a table or list is empty, both platforms MUST render the canonical `EmptyState` component with identical icon, title, and descriptive subtitle.
+3. **Error Handling**: Network and API errors MUST be presented consistently using the same error message wording and retry CTA.
+4. **Toast Feedback**: Successful mutations, log submissions, and profile updates MUST show identical toast notifications (e.g. "Shift log submitted successfully").
+5. **Confirmation Dialogs**: Destructive actions (sign out, delete machine, cancel shift) MUST use the canonical `ConfirmationDialog` (Web) / `ConfirmDialog` (Mobile) with identical red orb warning icon, title, and cancel/confirm buttons.
+6. **SegmentedToggle**: Same sliding pill design, same Geist typography, same active blue highlight, same container background (`#f4f4f5` light / `rgba(255,255,255,0.06)` dark), and count badges.
+7. **Form Validation Feedback**: Real-time validation errors MUST highlight the invalid input border in red (`#ee0000`) and display identical error text below the field.
+8. **Icons**: Exact same Lucide icon glyphs (`lucide-react` on Web, `lucide-react-native` on Mobile).
+9. **Bottom Navigation**: Same 5-slot manifest-driven navigation (`getNavForRole()` from `@reachinternational/permissions`), same icons, and same "Menu" drawer trigger.
 
 ---
 
-## 6. Responsive Adaptation ≠ Different Design
+## 5. 100% Responsiveness & 3-Tier Viewport Parity
 
-The AI agent must distinguish between:
-
-### Allowed
-
-Adapting the layout to the device:
+Both Web and Native Mobile MUST support the 3-tier viewport protocol:
 
 ```text
-Desktop:
-Sidebar + Content
-
-Mobile:
-Bottom Navigation + Content
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        VIEWPORT RESPONSIVENESS                          │
+├────────────────────────┬────────────────────────┬───────────────────────┤
+│    MOBILE (≤ 640px)    │   TABLET (641-1023px)   │   DESKTOP (≥ 1024px)  │
+├────────────────────────┼────────────────────────┼───────────────────────┤
+│ • Touch Card View      │ • 2-Column Grid Reflow │ • High-Density Table  │
+│ • Scroll Filter Bar    │ • Adaptive Modals      │ • Fixed Sidebar Nav   │
+│ • Bottom Sheet Dialogs │ • Condensed Toolbars   │ • Hover Tooltips      │
+│ • Min 44px Touch Target│ • Collapsible Drawers  │ • Multi-Col Dashboards│
+└────────────────────────┴────────────────────────┴───────────────────────┘
 ```
 
-### Not Allowed
-
-Creating an unrelated design:
-
-```text
-Desktop:
-Professional dashboard
-
-Mobile:
-Completely different colors,
-different icons,
-different cards,
-different terminology,
-different navigation structure
-```
-
-The mobile experience should be considered a **responsive adaptation of the same design system**.
+1. **High-Density Table Reflow**: On mobile screens (≤640px), data tables MUST reflow into stacked touch cards with min 44px tap targets.
+2. **Horizontal Filter Strips**: Status filters, date pickers, and tab bars MUST support smooth horizontal touch scrolling without text wrapping or layout clipping.
+3. **Modal Height Clamping**: Dialogs and sheets MUST clamp to viewport height (`max-h-[calc(100vh-2rem)]` / bottom sheet) with internal scrolling.
 
 ---
 
-## 7. Use the Same Icons
+## 6. Native Backend & Architecture Specifications
 
-Use the same icon family across Web and Mobile wherever possible.
+While the visual design and behavior are 100% identical, the backend data layer and runtime architecture MUST follow native-platform best practices:
 
-For example:
+### 6.1 Native Data Layer (TanStack Query)
+- Native Mobile MUST use **TanStack Query (`@tanstack/react-query`)** for server state.
+- Custom query hooks (e.g. `useOperatorHistoryLogs`, `useMachineData`) must be centralized in `lib/hooks/` and `lib/queries/`.
+- Default stale time of 30 seconds to prevent unnecessary network polling.
+- Reactive cache invalidation on mutations (e.g. `queryClient.invalidateQueries({ queryKey: [...] })`).
+- Pull-to-refresh (`RefreshControl`) implemented on all scrollable list screens.
 
-```text
-Machines          → same icon
-Service Logs      → same icon
-Reports           → same icon
-Settings          → same icon
-Profile           → same icon
-Notifications     → same icon
-```
+### 6.2 Native Hardware-Backed Auth Storage
+- Native Mobile MUST use **`expo-secure-store`** backed by Android KeyStore and iOS Keychain for storing auth tokens and refresh tokens.
+- Never store raw access tokens in unencrypted AsyncStorage.
 
-Do not use:
+### 6.3 Offline-First Queue & Syncing
+- Native Mobile MUST monitor network connectivity via `@react-native-community/netinfo`.
+- Offline mutations (daily HMR logs, shift entries) must save into persistent local queue in `AsyncStorage`.
+- Ambient top banner (`OfflineBanner.tsx`) displays when offline, informing the user that changes save locally.
+- Automatic queue synchronization and cache invalidation when network connectivity resumes.
 
-* Lucide on Web
-* Material Icons on Mobile
-
-unless there is a deliberate design-system decision.
-
-If platform limitations require different icon implementations, choose visually equivalent icons and maintain the same meaning and visual weight (e.g. via `@reachinternational/design-tokens` icon contracts).
-
----
-
-## 8. Same Interaction States
-
-Every interactive component must have consistent states:
-
-```text
-Default
-Hover       → Web
-Pressed     → Web + Mobile
-Focus       → Web + Mobile
-Active
-Selected
-Disabled
-Loading
-Success
-Error
-```
-
-The visual language of these states must remain consistent.
-
-For example:
-
-```text
-Active → Primary brand color + subtle background
-Disabled → Reduced opacity
-Error → Error color + clear message
-Loading → Same loading indicator style
-```
+### 6.4 Native Touch & Mobile UX Optimization
+- **Minimum 44px Touch Targets**: Enforced on all buttons, touchable cards, and menu triggers (`minHeight: 44` / `hitSlop`).
+- **Tactile Haptic Feedback**: Critical actions (tab switches, log submissions, deletions) MUST trigger `Haptics.selectionAsync()` or `Haptics.notificationAsync()`.
+- **Bottom Sheets & Modals**: Use smooth bottom sheets on mobile viewports rather than desktop centered popovers.
+- **Scrollable Horizontal Filter Strips**: Use `ScrollView horizontal showsHorizontalScrollIndicator={false}` for category pills.
+- **Safe Area Insets**: Always incorporate `useSafeAreaInsets()` to prevent UI overlap with device notches and home indicator bars.
 
 ---
 
-## 9. Same UX Logic
+## 7. Web Backend & Architecture Specifications
 
-Business logic and user workflows must remain consistent.
-
-For example:
-
-If Web requires:
-
-```text
-Machines
-→ Machine Directory
-→ Select Machine
-→ View Details
-→ Service Logs
-```
-
-Mobile should follow the same logical flow.
-
-Do not introduce unnecessary additional steps on Mobile.
-
-Mobile may change the presentation:
-
-```text
-Web:
-Table
-
-Mobile:
-Machine cards
-```
-
-but the user should still be able to complete the **same task using the same logical workflow**.
+Web Application architecture leverages Next.js 16.2 App Router capabilities:
+1. **React Server Components (RSC)**: Fetch data server-side by default, eliminating client-side loading waterfalls.
+2. **Data Access Layer (DAL)**: All reads go through `lib/dal.ts` and `lib/queries/*` using per-request Supabase SSR clients.
+3. **Server Actions (`app/actions/*`)**: All mutations go through Server Actions with Zod validation, role authorization, audit logging, and cache revalidation (`revalidateTag`).
+4. **SSR Auth**: Supabase Auth managed securely via HTTP-only cookies (`@supabase/ssr`).
 
 ---
 
-## 10. Shared Design Tokens
-
-Create a central design-token system wherever the project architecture allows it.
-
-Example:
-
-```ts
-export const designTokens = {
-  colors: {},
-  typography: {},
-  spacing: {},
-  radius: {},
-  shadows: {},
-  animation: {},
-};
-```
-
-Web and Mobile should consume these tokens (`@reachinternational/design-tokens`) instead of hard-coding values independently.
-
-Avoid:
-
-```tsx
-// Web
-background: "#123456"
-```
-
-and:
-
-```tsx
-// Mobile
-backgroundColor: "#164A72"
-```
-
-when both represent the same design token.
-
-Instead:
-
-```text
-primary
-surface
-background
-textPrimary
-border
-success
-warning
-error
-```
-
-should be centrally defined.
-
----
-
-## 11. Spacing & Layout System
-
-Use the same spacing scale across platforms.
-
-Example:
-
-```text
-4
-8
-12
-16
-20
-24
-32
-40
-48
-```
-
-The exact layout may adapt to screen width, but spacing should follow the same system.
-
-Avoid arbitrary values such as:
-
-```text
-13px
-17px
-23px
-27px
-```
-
-unless there is a specific design reason.
-
----
-
-## 12. Border Radius & Elevation
-
-Maintain the same visual language for:
-
-* Cards
-* Buttons
-* Inputs
-* Modals
-* Sheets
-* Menus
-* Navigation containers
-
-Example:
-
-```text
-Small → 6px
-Medium → 10px
-Large → 14px
-Pill → 999px
-```
-
-The actual values must follow the project's established design tokens.
-
-Shadows/elevation must also follow the same hierarchy.
-
----
-
-## 13. Animation & Motion
-
-Web and Mobile should use the same **motion philosophy**.
-
-Maintain consistent:
-
-* Animation speed
-* Easing
-* Transition behavior
-* Feedback
-* Enter/exit behavior
-
-For example:
-
-```text
-Fast → 150ms
-Normal → 200ms
-Slow → 300ms
-```
-
-Do not add excessive animations to Mobile that don't exist on Web.
-
-Avoid:
-
-* Unnecessary bouncing
-* Excessive scaling
-* Long transitions
-* Decorative animations that reduce usability
-
-Animations should communicate state changes and improve usability.
-
----
-
-## 14. Platform-Specific Adaptation
-
-Platform-specific UI is allowed **only when necessary for usability**.
-
-Examples:
-
-### Web
-
-```text
-Sidebar
-Hover menus
-Data tables
-Multi-column layouts
-Desktop dropdowns
-```
-
-### Mobile
-
-```text
-Bottom navigation
-Bottom sheets
-Swipe gestures
-Touch-friendly controls
-Stacked cards
-Mobile filters
-```
-
-These are **layout adaptations**, not separate design systems.
-
-The same:
-
-* Colors
-* Typography
-* Icons
-* Terminology
-* Visual hierarchy
-* UX principles
-* Component identity
-
-must remain intact.
-
----
-
-## 15. Touch Targets
-
-Mobile controls must be optimized for touch.
-
-Interactive elements should have sufficiently large touch targets while preserving the same visual design.
-
-Do not simply shrink Web components onto Mobile.
-
-Instead:
-
-```text
-Same component
-+
-Mobile-friendly dimensions
-+
-Same design language
-```
-
----
-
-## 16. Content & Terminology Must Match
-
-Web and Mobile must use the same:
-
-* Feature names
-* Button labels
-* Status labels
-* Error messages
-* Empty-state messages
-* Confirmation messages
-* Navigation labels
-* Terminology
-
-Example:
-
-If Web says:
-
-> "Breakdown Complaints"
-
-Mobile should not say:
-
-> "Issues"
-
-unless there is a deliberate product-level terminology decision.
-
----
-
-## 17. Accessibility Must Be Consistent
-
-Accessibility standards must apply to both platforms.
-
-Maintain:
-
-* Sufficient contrast
-* Clear focus/selection states
-* Readable text
-* Meaningful labels
-* Accessible icons
-* Error messaging
-* Touch target sizes
-* Keyboard accessibility on Web
-* Screen-reader accessibility where applicable
-
-Do not sacrifice accessibility simply to make the platforms visually identical.
-
----
-
-## 18. Dark/Light Theme
-
-If the product supports themes, Web and Mobile must use the **same theme definitions**.
-
-For example:
-
-```text
-Light Theme
-Dark Theme
-```
-
-must use the same semantic tokens.
-
-Do not create separate colors for:
-
-```text
-Web Dark Mode
-Mobile Dark Mode
-```
-
-unless technically required.
-
----
-
-## 19. Before Creating Any New UI
-
-The AI agent MUST follow this process:
-
-### Step 1 — Inspect
-
-Check the existing:
-
-* Web UI
-* Mobile UI
-* Design tokens
-* Components
-* Navigation
-* Icons
-* Colors
-* Typography
-
-### Step 2 — Reuse
-
-Before creating a new component, check whether an equivalent component already exists.
-
-### Step 3 — Compare
-
-If Web and Mobile currently differ, identify the difference.
-
-### Step 4 — Standardize
-
-Use the existing approved design language as the source of truth.
-
-### Step 5 — Adapt
-
-Only change layout where the platform requires it.
-
-### Step 6 — Verify
-
-After implementation, compare Web and Mobile side-by-side.
-
----
-
-## 20. AI Agent Must NOT Do This
-
-The AI agent must never:
-
-* Invent a new color without justification.
-* Create a separate Mobile design system.
-* Change icons unnecessarily.
-* Rename existing features.
-* Create inconsistent button styles.
-* Create different card styles for the same feature.
-* Introduce different spacing systems.
-* Introduce different border-radius systems.
-* Change the navigation hierarchy.
-* Create unnecessary platform-specific UI.
-* Copy desktop UI directly onto a small screen without adaptation.
-* Make visual changes simply because they "look better" without checking the existing design system.
-
----
-
-## 21. Priority Order
-
-When making UI decisions, follow this priority:
-
-```text
-1. Existing Design System
-        ↓
-2. Product UX / Information Architecture
-        ↓
-3. Web ↔ Mobile Consistency
-        ↓
-4. Accessibility
-        ↓
-5. Platform-specific usability
-        ↓
-6. Visual refinement
-```
-
-Never sacrifice the product's overall consistency for a minor visual improvement.
-
----
-
-## 22. Final Quality Rule
-
-Before completing any UI task, the AI agent must ask internally:
-
-> **"If I place the Web and Mobile screens side-by-side, will a user immediately recognize that they belong to the same product?"**
-
-The answer must be **YES**.
-
-The final product should feel:
-
-* Consistent
-* Professional
-* Predictable
-* Clean
-* Modern
-* Easy to navigate
-* Visually unified
-
-### Golden Rule
-
-> **Same product → Same design system → Same visual language → Same UX logic → Platform-specific layout only when necessary.**
-
-Web and Mobile are two interfaces for **one product**, not two independently designed products.
+## 8. Mandatory AI Agent Pre-Completion Verification Checklist
+
+Before completing any task, every AI agent MUST verify:
+
+- [ ] Does the visual design, color tokens, and font hierarchy match `DESIGN.md` 100%?
+- [ ] Were any changes in `apps/web` mirrored and synchronized into `apps/mobile`?
+- [ ] Are all touch targets in `apps/mobile` ≥ 44px?
+- [ ] Does Native Mobile use TanStack Query for data fetching and SecureStore for auth?
+- [ ] Does Native Mobile use `<Text variant="...">` with zero raw typography properties?
+- [ ] Do both platforms enforce the canonical 6 roles from `@reachinternational/permissions`?
+- [ ] Does `pnpm typecheck` pass with 0 errors monorepo-wide?
+- [ ] If an agent places Web and Mobile screens side-by-side, do they look like ONE unified product?

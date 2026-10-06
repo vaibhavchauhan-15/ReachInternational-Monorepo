@@ -11,16 +11,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
-} from 'react-native';
+  Alert} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../../lib/auth/useAuth';
 import {
   Card,
@@ -29,8 +26,7 @@ import {
   useTheme,
   MobileHeader,
   ReachInternationalLogo,
-  ConfirmDialog,
-} from '../../../components/ui';
+  ConfirmDialog, Text } from '../../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
@@ -46,6 +42,7 @@ import {
   Shield,
   Sparkles,
 } from 'lucide-react-native';
+import { haptics } from '../../../lib/interaction/haptics';
 
 const NOTIF_PREFS_KEY = '@reach:notification_preferences';
 
@@ -92,7 +89,7 @@ export default function SettingsHubScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setShowSignOutDialog(true);
   };
 
@@ -123,7 +120,6 @@ export default function SettingsHubScreen() {
         showBack={false}
         showQuickAccess={true}
         showQuickAccessCapsule={false}
-        showMoreMenu={false}
       />
 
       <ScrollView
@@ -143,7 +139,7 @@ export default function SettingsHubScreen() {
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             router.push('/(app)/settings/account' as any);
           }}
           style={[
@@ -206,7 +202,7 @@ export default function SettingsHubScreen() {
         <Card
           variant="interactive"
           onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             router.push('/(app)/settings/account' as any);
           }}
           style={styles.navTouchCard}
@@ -235,7 +231,7 @@ export default function SettingsHubScreen() {
         <Card
           variant="interactive"
           onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             router.push('/(app)/settings/notification' as any);
           }}
           style={styles.navTouchCard}
@@ -271,7 +267,7 @@ export default function SettingsHubScreen() {
         <Card
           variant="interactive"
           onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             router.push('/(app)/settings/preference' as any);
           }}
           style={styles.navTouchCard}
@@ -303,7 +299,7 @@ export default function SettingsHubScreen() {
         <Card
           variant="interactive"
           onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
+            haptics.select();
             router.push('/(app)/settings/aboutapp' as any);
           }}
           style={styles.navTouchCard}
@@ -400,8 +396,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   avatarText: {
-    fontSize: 18,
-    fontWeight: '700',
   },
   nameBadgeRow: {
     flexDirection: 'row',
@@ -410,12 +404,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileName: {
-    fontSize: 15.5,
-    fontWeight: '700',
     flex: 1,
   },
   profileEmail: {
-    fontSize: 12.5,
     marginTop: 2,
   },
   chevronCircle: {
@@ -427,9 +418,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   sectionGroupTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
     marginTop: 6,
     marginBottom: 2,
     paddingHorizontal: 4,
@@ -457,13 +445,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   navTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
   },
   navSubtitle: {
-    fontSize: 12,
     marginTop: 2,
-    lineHeight: 16,
   },
   signOutContainer: {
     marginTop: spacingNumeric.md,
@@ -474,10 +458,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   brandFooterText: {
-    fontSize: 11.5,
     marginTop: 4,
   },
   brandVersionText: {
-    fontSize: 10.5,
   },
 });

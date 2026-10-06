@@ -8,23 +8,21 @@
 import React, { useState, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Mail, ArrowLeft, ArrowRight, KeyRound, Moon, Sun } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { getAppUrl } from '../../lib/env';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, useTheme } from '../../components/ui';
+import { Input, Alert, useTheme , Text } from '../../components/ui';
+import { haptics } from '../../lib/interaction/haptics';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -52,33 +50,33 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleNavigateBack = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     router.replace('/(auth)/login');
   };
 
   const handleToggleTheme = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.light();
     setMode(isDark ? 'light' : 'dark');
   };
 
   const handleReset = async () => {
     if (isSubmittingRef.current || isLoading) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.light();
     setErrorMessage('');
     setSuccessMessage('');
     setFieldError('');
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setFieldError('Email address is required.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail.toLowerCase())) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setFieldError('Please enter a valid email address.');
       return;
     }
@@ -103,22 +101,22 @@ export default function ForgotPasswordScreen() {
         if (!response.ok && response.status >= 500) {
           const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
           if (sbError) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+            haptics.error();
             setErrorMessage(sbError.message || 'No account found with this email address.');
             return;
           }
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          haptics.success();
           setSuccessMessage('Password reset instructions have been sent to your email.');
           return;
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         setErrorMessage(data.error || 'No account found with this email address.');
         if (data.fieldErrors?.email) {
           setFieldError(data.fieldErrors.email);
         }
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        haptics.success();
         setSuccessMessage(data.message || 'Password reset instructions have been sent to your email.');
       }
     } catch (err: unknown) {
@@ -126,14 +124,14 @@ export default function ForgotPasswordScreen() {
       try {
         const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
         if (sbError) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          haptics.error();
           setErrorMessage('Failed to send reset email. Please check your internet connection.');
         } else {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          haptics.success();
           setSuccessMessage('Password reset instructions have been sent to your email.');
         }
       } catch {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         setErrorMessage('Failed to send reset email. Please check your connection and try again.');
       }
     } finally {
@@ -395,8 +393,6 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   backText: {
-    fontSize: 12.5,
-    fontWeight: '600',
   },
   iconBadge: {
     width: 42,
@@ -408,15 +404,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.6,
     marginBottom: 6,
     textAlign: 'left',
   },
   subtitle: {
-    fontSize: 13,
-    lineHeight: 19,
     marginBottom: 20,
     textAlign: 'left',
   },
@@ -450,9 +441,6 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
   },
   cardFooter: {
     marginTop: 22,
@@ -464,11 +452,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardFooterText: {
-    fontSize: 13,
   },
   loginLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   screenFooter: {
     width: '100%',
@@ -478,9 +463,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   copyrightText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    letterSpacing: 0.8,
     textAlign: 'center',
   },
   floatingThemeBtn: {

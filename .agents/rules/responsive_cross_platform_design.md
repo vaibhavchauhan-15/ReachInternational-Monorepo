@@ -18,8 +18,9 @@ Before creating or modifying any UI component or page layout, the AI agent MUST 
 - **Hairline Border**: `#ebebeb` (`var(--color-hairline)`, `colors.hairline`) — 1px crisp structural borders on all cards, inputs, dividers, and tables.
 - **Body Text**: `#4d4d4d` (`var(--color-body)`, `colors.body`) — Standard paragraph and secondary text.
 - **Mute Text**: `#8f8f8f` (`var(--color-mute)`, `colors.mute`) — Subtitle labels, captions, metadata.
-- **Primary Brand Link**: `#0070f3` (`var(--color-link)`, `colors.link`) — Primary active links, brand accents, focus rings.
-- **Semantics**: Error (`#ee0000`), Warning (`#f5a623`), Success (`#0070f3`).
+- **Primary Brand**: `#0284c7` (`var(--color-primary)`, `colors.primary`) / dark `#0ea5e9` — Reach Sky Blue primary buttons, active highlights, key CTAs.
+- **Link / Focus Ring**: `#0070f3` (`var(--color-link)`, `colors.link`) / dark `#3b82f6` — Vercel Blue text links, focus rings, selected pills.
+- **Semantics**: Error (`#ee0000` / `#f87171`), Warning (`#f5a623` / `#fbbf24`), Success (`#10b981` / `#34d399`), Info (`#3b82f6` / `#60a5fa`), Pending (`#f59e0b`), Overdue (`#e11d48`).
 
 ### Typography Hierarchy (Geist Sans & Geist Mono)
 - **Display XL**: 48px / weight 600 / tracking -2.4px (Hero headlines).

@@ -53,6 +53,20 @@ apps/web/
 
 ## Web-Specific Rules
 
+### 0. Primary Authorities & 100% Parity Mandate
+- **PRIMARY AUTHORITIES**: Root `DESIGN.md` and `ARCHITECTURE.md` are the single sources of truth for design tokens, components, and architecture.
+- **AUTHORITATIVE PARITY RULES**: `AI/RULES/WEB-MOBILE-PARITY.md`, `.agents/rules/web_mobile_ui_consistency.md`, and the agent skill `.agents/skills/web-mobile-parity/SKILL.md`.
+- **100% WEB & MOBILE PARITY ACROSS ALL 8 DIMENSIONS**:
+  1. **UI/UX**: Identical components, empty states (`EmptyState`), confirmation dialogs (`ConfirmationDialog`), segmented toggles, badges, status pills.
+  2. **Behavior**: Identical loading skeleton loaders, toast feedback, error retry, real-time form validation.
+  3. **Responsiveness**: 3-tier viewport protocol (Mobile ≤640px touch cards, Tablet 641–1023px 2-col grids, Desktop ≥1024px tables).
+  4. **Design**: Vercel Geist design system (1px hairline borders `#ebebeb` / `#262626`, bimodal radius 6px app / 64px pill).
+  5. **Layout**: Identical visual hierarchy, card metadata order, action placement.
+  6. **Color**: 100% exact hex tokens (Reach Sky Blue `#0284c7` / `#0ea5e9`, Success `#10b981`, Warning `#f5a623`, Error `#ee0000`).
+  7. **Theme**: 100% synchronized Light (`#fafafa` canvas / `#ffffff` cards) and Dark (`#0a0a0a` canvas / `#171717` cards) modes.
+  8. **Typography**: Geist Sans & Geist Mono across all views.
+- **MANDATORY MOBILE MIRRORING**: Whenever ANY feature, page, modal, form field, status badge, style, or workflow is added or modified in `apps/web`, the AI agent MUST MANDATORILY apply and synchronize the exact same change in `apps/mobile` with full mobile compatibility in the same session. Web and Mobile MUST NEVER drift out of sync.
+
 ### 1. Server Components First
 
 - **Default to RSC**. Only add `'use client'` when the component genuinely needs browser APIs, event handlers, or hooks.

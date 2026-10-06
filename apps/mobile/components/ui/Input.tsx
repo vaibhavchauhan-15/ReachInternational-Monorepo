@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
@@ -10,8 +9,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from './ThemeProvider';
+import { Text, useTypeStyle } from './Text';
+import { Icon } from './Icon';
+import { haptics } from '../../lib/interaction/haptics';
 
 export interface InputProps extends TextInputProps {
   label?: string;
@@ -56,7 +57,7 @@ export const Input: React.FC<InputProps> = ({
   };
 
   const handleTogglePassword = () => {
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     setIsPasswordVisible((prev) => !prev);
   };
 
@@ -74,13 +75,15 @@ export const Input: React.FC<InputProps> = ({
     ? (isDark ? '#38bdf8' : '#0284c7')
     : (isDark ? '#262626' : '#ebebeb');
 
+  const inputTypeStyle = useTypeStyle('body');
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+          <Text variant="label" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
             {label}
-            {required && <Text style={{ color: '#ef4444', fontWeight: '700' }}> *</Text>}
+            {required && <Text variant="label" style={{ color: '#ef4444' }}> *</Text>}
           </Text>
         </View>
       ) : null}
@@ -104,6 +107,7 @@ export const Input: React.FC<InputProps> = ({
           secureTextEntry={effectiveSecureTextEntry}
           style={[
             styles.input,
+            inputTypeStyle,
             {
               color: isDark ? '#f8fafc' : '#0f172a',
             },
@@ -122,11 +126,11 @@ export const Input: React.FC<InputProps> = ({
             activeOpacity={0.7}
             accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
           >
-            {isPasswordVisible ? (
-              <EyeOff size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-            ) : (
-              <Eye size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-            )}
+            <Icon
+              icon={isPasswordVisible ? EyeOff : Eye}
+              variant="body"
+              color={isDark ? '#9ca3af' : '#6b7280'}
+            />
           </TouchableOpacity>
         ) : rightIcon ? (
           <TouchableOpacity
@@ -142,9 +146,9 @@ export const Input: React.FC<InputProps> = ({
       </View>
 
       {error ? (
-        <Text style={[styles.errorText, { color: '#ef4444' }]}>{error}</Text>
+        <Text variant="caption" style={[styles.errorText, { color: '#ef4444' }]}>{error}</Text>
       ) : helperText ? (
-        <Text style={[styles.helperText, { color: theme.colors.mute }]}>{helperText}</Text>
+        <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>{helperText}</Text>
       ) : null}
     </View>
   );
@@ -159,11 +163,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 5,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.1,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -186,27 +185,19 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 13.5,
-    fontWeight: '500',
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
-        outline: 'none',
-        border: 'none',
-        boxShadow: 'none',
       } as any,
     }),
   },
   errorText: {
-    fontSize: 11.5,
     marginTop: 4,
-    fontWeight: '500',
   },
   helperText: {
-    fontSize: 11.5,
     marginTop: 4,
   },
 });
