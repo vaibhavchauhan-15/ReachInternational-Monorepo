@@ -4,18 +4,20 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   BackHandler,
   Platform,
   StatusBar,
   TextInput,
   Animated,
-  Easing} from 'react-native';
+  Easing,
+  Alert,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid , Text } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { MachineModal } from '../../components/machines/MachineModal';
 import { MachineDetailView } from '../../components/machines/MachineDetailView';
 import {
@@ -31,6 +33,10 @@ import {
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
+import { useScreenSync } from '../../lib/offline';
+import { haptics } from '../../lib/haptics';
+import { notifyMachineDeleted } from '../../lib/notifications';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   Search,
@@ -47,7 +53,7 @@ import {
   CheckCircle2,
   Building2,
   AlertTriangle,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 
 export type RentalFilterType = 'all' | 'available' | 'rented';
 export type HealthFilterType = 'all' | 'active' | 'spare' | 'under_maintenance' | 'breakdown';
@@ -121,6 +127,7 @@ const MACHINE_SELECT_COLUMNS = `
 
 export default function MachinesScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
@@ -571,6 +578,11 @@ export default function MachinesScreen() {
     fetchMachines();
   }, [fetchMachines]);
 
+  useScreenSync({
+    screen: 'machines',
+    onRefresh: fetchMachines,
+  });
+
   // Dynamic Supervisor Options for DropdownFilterSelector
   const supervisorFilterOptions = useMemo<FilterOption[]>(() => {
     const map = new Map<string, string>();
@@ -842,8 +854,8 @@ export default function MachinesScreen() {
           {/* Top Search & Filter Action Row */}
           <View style={styles.toolbarTopRow}>
             {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
-            <TouchableOpacity
-              activeOpacity={1}
+            <Pressable
+              variant="plain"
               onPress={() => searchInputRef.current?.focus()}
               style={[
                 styles.searchBarBox,
@@ -890,22 +902,23 @@ export default function MachinesScreen() {
                 autoCorrect={false}
               />
               {search.length > 0 && (
-                <TouchableOpacity
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
                   onPress={handleClearSearch}
                   style={styles.searchClearBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Clear search"
                 >
                   <X size={14} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
 
             {/* Filter Toggle Button */}
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
               onPress={() => setFilterPanelOpen((prev) => !prev)}
-              activeOpacity={0.8}
               style={[
                 styles.filterToggleBtn,
                 {
@@ -1011,13 +1024,14 @@ export default function MachinesScreen() {
                   />
                 </Animated.View>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Quick Reset Filters Button */}
             {activeFilterCount > 0 && (
-              <TouchableOpacity
+              <Pressable
+                variant="buttonSecondary"
+                hitSlopToMin48
                 onPress={handleResetAllFilters}
-                activeOpacity={0.8}
                 style={[
                   styles.quickResetBtn,
                   {
@@ -1031,7 +1045,7 @@ export default function MachinesScreen() {
                 <Text style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                   Reset
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
 
@@ -1105,7 +1119,9 @@ export default function MachinesScreen() {
                         Active Filters:
                       </Text>
                       {debouncedSearch.trim() !== '' && (
-                        <TouchableOpacity
+                        <Pressable
+                          variant="chip"
+                          haptic="select"
                           onPress={handleClearSearch}
                           style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                         >
@@ -1113,12 +1129,14 @@ export default function MachinesScreen() {
                             Search: "{debouncedSearch}"
                           </Text>
                           <X size={12} color={theme.colors.mute} />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
 
 
                       {rentalFilter !== 'all' && (
-                        <TouchableOpacity
+                        <Pressable
+                          variant="chip"
+                          haptic="select"
                           onPress={() => setRentalFilter('all')}
                           style={[
                             styles.badgeChip,
@@ -1132,11 +1150,13 @@ export default function MachinesScreen() {
                             Rental: {currentRentalLabel}
                           </Text>
                           <X size={12} color="#0284c7" />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
 
                       {healthFilter !== 'all' && (
-                        <TouchableOpacity
+                        <Pressable
+                          variant="chip"
+                          haptic="select"
                           onPress={() => setHealthFilter('all')}
                           style={[
                             styles.badgeChip,
@@ -1181,11 +1201,13 @@ export default function MachinesScreen() {
                                 : '#d97706'
                             }
                           />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
 
                       {supervisorFilter !== 'all' && (
-                        <TouchableOpacity
+                        <Pressable
+                          variant="chip"
+                          haptic="select"
                           onPress={() => setSupervisorFilter('all')}
                           style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                         >
@@ -1193,11 +1215,13 @@ export default function MachinesScreen() {
                             Supervisor: {currentSupervisorLabel}
                           </Text>
                           <X size={12} color={theme.colors.mute} />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
 
                       {sortBy !== 'machine_id_asc' && (
-                        <TouchableOpacity
+                        <Pressable
+                          variant="chip"
+                          haptic="select"
                           onPress={() => setSortBy('machine_id_asc')}
                           style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                         >
@@ -1205,10 +1229,12 @@ export default function MachinesScreen() {
                             Sort: {currentSortLabel}
                           </Text>
                           <X size={12} color={theme.colors.mute} />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
 
-                      <TouchableOpacity
+                      <Pressable
+                        variant="buttonGhost"
+                        hitSlopToMin48
                         onPress={handleResetAllFilters}
                         style={styles.resetAllLink}
                       >
@@ -1216,7 +1242,7 @@ export default function MachinesScreen() {
                         <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
                           Reset all
                         </Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   )}
                 </View>
@@ -1292,7 +1318,9 @@ export default function MachinesScreen() {
                       Active Filters:
                     </Text>
                     {debouncedSearch.trim() !== '' && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={handleClearSearch}
                         style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                       >
@@ -1300,12 +1328,14 @@ export default function MachinesScreen() {
                           Search: "{debouncedSearch}"
                         </Text>
                         <X size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
 
                     {rentalFilter !== 'all' && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => setRentalFilter('all')}
                         style={[
                           styles.badgeChip,
@@ -1319,11 +1349,13 @@ export default function MachinesScreen() {
                           Rental: {currentRentalLabel}
                         </Text>
                         <X size={12} color="#0284c7" />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
                     {healthFilter !== 'all' && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => setHealthFilter('all')}
                         style={[
                           styles.badgeChip,
@@ -1368,11 +1400,13 @@ export default function MachinesScreen() {
                               : '#d97706'
                           }
                         />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
                     {supervisorFilter !== 'all' && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => setSupervisorFilter('all')}
                         style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                       >
@@ -1380,11 +1414,13 @@ export default function MachinesScreen() {
                           Supervisor: {currentSupervisorLabel}
                         </Text>
                         <X size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
                     {sortBy !== 'machine_id_asc' && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => setSortBy('machine_id_asc')}
                         style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                       >
@@ -1392,10 +1428,12 @@ export default function MachinesScreen() {
                           Sort: {currentSortLabel}
                         </Text>
                         <X size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonGhost"
+                      hitSlopToMin48
                       onPress={handleResetAllFilters}
                       style={styles.resetAllLink}
                     >
@@ -1403,7 +1441,7 @@ export default function MachinesScreen() {
                       <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
                         Reset all
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 )}
               </View>
@@ -1449,7 +1487,8 @@ export default function MachinesScreen() {
             <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
               {fetchError}
             </Text>
-            <TouchableOpacity
+            <Pressable
+              variant="buttonPrimary"
               onPress={() => {
                 setIsLoading(true);
                 fetchMachines();
@@ -1459,7 +1498,7 @@ export default function MachinesScreen() {
               <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
                 Retry Fetch
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : filteredAndSortedMachines.length === 0 ? (
           <View
@@ -1481,23 +1520,25 @@ export default function MachinesScreen() {
                 : 'Try adjusting your search query or clear your active filter selections.'}
             </Text>
             {debouncedSearch.trim() ? (
-              <TouchableOpacity
+              <Pressable
+                variant="buttonPrimary"
                 onPress={handleClearSearch}
                 style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
               >
                 <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
                   Clear Search
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : activeFilterCount > 0 ? (
-              <TouchableOpacity
+              <Pressable
+                variant="buttonPrimary"
                 onPress={handleResetAllFilters}
                 style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
               >
                 <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
                   Reset All Filters
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
           </View>
         ) : (
@@ -1549,8 +1590,29 @@ export default function MachinesScreen() {
       <MachineModal
         visible={machineModalOpen}
         onClose={() => setMachineModalOpen(false)}
-        onSuccess={() => {
+        onSuccess={(savedMachine?: any) => {
           setMachineModalOpen(false);
+          if (savedMachine) {
+            setMachines((prev) => {
+              const existingIdx = prev.findIndex((m) => m.id === savedMachine.id);
+              if (existingIdx >= 0) {
+                const next = [...prev];
+                next[existingIdx] = { ...next[existingIdx], ...savedMachine };
+                return next;
+              }
+              return [savedMachine, ...prev];
+            });
+            queryClient.setQueriesData<any[]>({ queryKey: ['machines'] }, (old) => {
+              if (!old) return [savedMachine];
+              const existingIdx = old.findIndex((m) => m.id === savedMachine.id);
+              if (existingIdx >= 0) {
+                const next = [...old];
+                next[existingIdx] = { ...next[existingIdx], ...savedMachine };
+                return next;
+              }
+              return [savedMachine, ...old];
+            });
+          }
           fetchMachines();
         }}
         machineToEdit={machineToEdit}
@@ -1562,9 +1624,36 @@ export default function MachinesScreen() {
         visible={Boolean(deleteMachine)}
         machine={deleteMachine}
         onClose={() => setDeleteMachine(null)}
-        onDeleted={() => {
+        onConfirm={async () => {
+          if (!deleteMachine?.id) return;
+          const target = deleteMachine;
+          const prevMachines = machines;
+          // Optimistically remove immediately from local state and query cache
+          setMachines((prev) => prev.filter((m) => m.id !== target.id));
+          queryClient.setQueriesData<any[]>({ queryKey: ['machines'] }, (old) => {
+            if (!old) return old;
+            return old.filter((m) => m.id !== target.id);
+          });
           setDeleteMachine(null);
-          fetchMachines();
+          try {
+            const { error } = await supabase.from('machines').delete().eq('id', target.id);
+            if (error) {
+              // Rollback
+              setMachines(prevMachines);
+              queryClient.setQueriesData({ queryKey: ['machines'] }, prevMachines);
+              haptics.reject();
+              Alert.alert('Error', error.message || 'Failed to delete machine');
+              return;
+            }
+            haptics.confirm();
+            notifyMachineDeleted(target.machine_id || 'Machine');
+            fetchMachines();
+          } catch (err: any) {
+            setMachines(prevMachines);
+            queryClient.setQueriesData({ queryKey: ['machines'] }, prevMachines);
+            haptics.reject();
+            Alert.alert('Error', err?.message || 'Failed to delete machine');
+          }
         }}
       />
 

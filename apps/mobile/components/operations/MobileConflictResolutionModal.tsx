@@ -9,14 +9,15 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Platform,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { Button, Input, useTheme, Text } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, ShieldAlert, Check, Clock, AlertTriangle, Info, ArrowRight } from 'lucide-react-native';
+import { X, ShieldAlert, Check, Clock, AlertTriangle, Info, ArrowRight } from '../ui/icon';
 import { supabase } from '../../lib/supabase';
 import { notifyConflictResolved } from '../../lib/notifications';
 import {
@@ -98,11 +99,13 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
     let adj24: string | null = null;
     if (action === 'adjust') {
       if (!adjustedEndTime.trim()) {
+        haptics.reject();
         setError('Please specify the adjusted shift end time.');
         return;
       }
       const min = parseTimeToMinutes(adjustedEndTime);
       if (min === null) {
+        haptics.reject();
         setError('Invalid adjusted end time format. Use hh:mm AM/PM (e.g. 04:00 PM).');
         return;
       }
@@ -123,15 +126,18 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
       });
 
       if (rpcError) {
+        haptics.reject();
         setError(rpcError.message || 'Failed to resolve conflict.');
         return;
       }
 
       if (data && !(data as any).success && (data as any).error) {
+        haptics.reject();
         setError((data as any).error || 'Failed to resolve conflict.');
         return;
       }
 
+      haptics.confirm();
       notifyConflictResolved(
         log.machine?.machine_id || log.machine_code || 'Equipment',
         action === 'adjust' && adjustedCalculation ? adjustedCalculation.runningHours : (log.running_hours || 0)
@@ -140,6 +146,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
       onSuccess();
       onClose();
     } catch (err: any) {
+      haptics.reject();
       setError(err?.message || 'Unexpected error while resolving conflict.');
     } finally {
       setIsSubmitting(false);
@@ -165,9 +172,16 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 {log.machine_code} {log.machine?.model ? `• ${log.machine.model}` : ''} • {log.operator?.full_name || 'Operator'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Pressable
+              variant="iconButton"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityLabel="Close resolution modal"
+            >
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
@@ -316,7 +330,9 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
             {/* Resolution Action Toggle */}
             <Text variant="label" style={[styles.label, { color: theme.colors.mute, marginTop: 8 }]}>Supervisor Action *</Text>
             <View style={styles.actionToggleRow}>
-              <TouchableOpacity
+              <Pressable
+                variant="card"
+                haptic="select"
                 onPress={() => setAction('acknowledge')}
                 style={[
                   styles.actionBtn,
@@ -325,6 +341,8 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                     borderColor: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.hairline,
                   },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Acknowledge overtime conflict"
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Check size={14} color={action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute} />
@@ -335,9 +353,11 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.acknowledgeAdvice}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
+                variant="card"
+                haptic="select"
                 onPress={() => setAction('adjust')}
                 style={[
                   styles.actionBtn,
@@ -346,6 +366,8 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                     borderColor: action === 'adjust' ? (isDark ? '#fbbf24' : '#d97706') : theme.colors.hairline,
                   },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Adjust shift end time"
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Clock size={14} color={action === 'adjust' ? (isDark ? '#fbbf24' : '#d97706') : theme.colors.mute} />
@@ -356,7 +378,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.adjustAdvice}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {action === 'adjust' && (

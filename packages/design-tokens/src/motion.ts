@@ -6,7 +6,10 @@ export const motion = {
     standard:   [0.2, 0, 0, 1],
   },
   spring: {
-    press: { damping: 18, stiffness: 300, mass: 0.6 },
+    press:   { damping: 18, stiffness: 300, mass: 0.6 },
+    default: { damping: 20, stiffness: 250, mass: 1 },
+    bouncy:  { damping: 12, stiffness: 200, mass: 0.8 },
+    gentle:  { damping: 24, stiffness: 180, mass: 1 },
   },
   press: { card: 0.98, button: 0.96, icon: 0.88, nav: 0.92 }, // scale on press-in
   stagger: 30,        // ms between list items

@@ -9,53 +9,30 @@ import React, { useState, useEffect, memo } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   Keyboard,
   Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  ReduceMotion,
+} from 'react-native-reanimated';
+import { EFFECTS } from '../../lib/motion/tokens';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
 import { Touchable } from '../ui/Touchable';
-import { Icon as CanonicalIcon } from '../ui/Icon';
+import { Icon as CanonicalIcon } from '../ui/icon';
 import { useAuth } from '../../lib/auth/useAuth';
 import {
   getNavForRole,
   labelFor,
 } from '@reachinternational/permissions';
 import type { UserRole } from '@reachinternational/types';
-import {
-  Home,
-  Wrench,
-  Gauge,
-  Users,
-  Building2,
-  Shield,
-  Menu,
-  User,
-  Settings,
-  Banknote,
-  CalendarCheck,
-  Activity,
-} from 'lucide-react-native';
 import { MobileMenuDrawer } from './MobileMenuDrawer';
 
-// Icon string key → Lucide RN component
-const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
-  home: Home,
-  gauge: Gauge,
-  wrench: Wrench,
-  building: Building2,
-  users: Users,
-  shield: Shield,
-  menu: Menu,
-  user: User,
-  settings: Settings,
-  banknote: Banknote,
-  'calendar-check': CalendarCheck,
-  activity: Activity,
-};
 interface BottomNavTabItemProps {
   item: {
     key: string;
@@ -65,6 +42,7 @@ interface BottomNavTabItemProps {
     match: readonly string[] | string[];
   };
   isActive: boolean;
+  state?: 'open' | 'closed';
   onPress: () => void;
   theme: any;
 }
@@ -72,10 +50,10 @@ interface BottomNavTabItemProps {
 const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
   item,
   isActive,
+  state,
   onPress,
   theme,
 }) => {
-  const Icon = ICONS[item.icon] || Menu;
   const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
 
   return (
@@ -89,10 +67,12 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
     >
       <View style={styles.itemContent}>
         <CanonicalIcon
-          as={Icon}
+          name={item.icon}
           level="body"
           color={itemColor}
-          anim="pop"
+          pulseKey={isActive}
+          animate={isActive ? 'pulse' : 'auto'}
+          state={state}
         />
         <Text
           variant="caption"
@@ -131,22 +111,33 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
 
     const [keyboardVisible, setKeyboardVisible] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const navTranslateY = useSharedValue(0);
 
-    // Hide bar while keyboard is open
+    // Smoothly animate bar down when keyboard opens and back up when it closes
     useEffect(() => {
-      const showSub = Keyboard.addListener('keyboardDidShow', () =>
-        setKeyboardVisible(true),
-      );
-      const hideSub = Keyboard.addListener('keyboardDidHide', () =>
-        setKeyboardVisible(false),
-      );
+      const showSub = Keyboard.addListener('keyboardDidShow', () => {
+        setKeyboardVisible(true);
+        navTranslateY.value = withSpring(140, {
+          ...EFFECTS.fast,
+          reduceMotion: ReduceMotion.System,
+        });
+      });
+      const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardVisible(false);
+        navTranslateY.value = withSpring(0, {
+          ...EFFECTS.fast,
+          reduceMotion: ReduceMotion.System,
+        });
+      });
       return () => {
         showSub.remove();
         hideSub.remove();
       };
-    }, []);
+    }, [navTranslateY]);
 
-    if (keyboardVisible) return null;
+    const navAnimatedStyle = useAnimatedStyle(() => ({
+      transform: [{ translateY: navTranslateY.value }],
+    }));
 
     const normalizedRole = ((role || 'operator') as string).toLowerCase() as UserRole;
     const { primary, more, hasMore } = getNavForRole(normalizedRole);
@@ -195,62 +186,72 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
     ];
 
     return (
-      <View
-        style={[
-          styles.outerContainer,
-          {
-            paddingBottom: Math.max(insets.bottom, 10),
-          },
-        ]}
-      >
-        <View
+      <>
+        <Animated.View
+          pointerEvents={keyboardVisible ? 'none' : 'auto'}
           style={[
-            styles.pillBar,
+            styles.outerContainer,
             {
-              backgroundColor: isDark
-                ? 'rgba(23, 23, 23, 0.94)'
-                : 'rgba(255, 255, 255, 0.94)',
-              borderColor: theme.colors.hairline,
+              paddingBottom: Math.max(insets.bottom, 10),
             },
+            navAnimatedStyle,
           ]}
         >
-          {tabs.map((item) => {
-            // Compute active state
-            let isActive = item.match.some(
-              (p) => pathname.includes(p.replace('/', '')),
-            );
-            if (item.key === 'more' && menuOpen) {
-              isActive = true;
-            }
+          <View
+            style={[
+              styles.pillBar,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(23, 23, 23, 0.94)'
+                  : 'rgba(255, 255, 255, 0.94)',
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {tabs.map((item) => {
+              // Compute active state
+              let isActive = item.match.some(
+                (p) => pathname.includes(p.replace('/', '')),
+              );
+              if (item.key === 'more' && menuOpen) {
+                isActive = true;
+              }
 
-            return (
-              <BottomNavTabItem
-                key={item.key}
-                item={item}
-                isActive={isActive}
-                onPress={() => {
-                  if (item.key === 'more' && hasMore) {
-                    setMenuOpen(true);
-                    return;
-                  }
-                  if (isActive) return;
-                  router.push(item.href as any);
-                }}
-                theme={theme}
-              />
-            );
-          })}
-        </View>
+              return (
+                <BottomNavTabItem
+                  key={item.key}
+                  item={item}
+                  isActive={isActive}
+                  state={item.key === 'more' ? (menuOpen ? 'open' : 'closed') : undefined}
+                  onPress={() => {
+                    if (item.key === 'more' && hasMore) {
+                      setMenuOpen(true);
+                      return;
+                    }
+                    if (isActive) return;
+                    router.push(item.href as any);
+                  }}
+                  theme={theme}
+                />
+              );
+            })}
+          </View>
+        </Animated.View>
+
         {menuOpen && (
           <MobileMenuDrawer
             items={drawerItems}
             primaryItems={primaryItems}
             user={{ name: userName, email: userEmail, initials }}
+            role={normalizedRole}
             onClosed={() => setMenuOpen(false)}
-            onLogout={async () => { await signOut(); router.replace('/(auth)/login' as any); }}
+            onLogout={async () => {
+              await signOut();
+              router.replace('/(auth)/login' as any);
+            }}
           />
         )}
-      </View>
+      </>
     );
   },
 );

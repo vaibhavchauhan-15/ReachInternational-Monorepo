@@ -6,21 +6,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  TouchableOpacity,
-} from 'react-native';
+  } from 'react-native';
 import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, Text, type SelectOption, AppModal } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from '../ui/touch/Pressable';
 import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
-import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from 'lucide-react-native';
+import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from '../ui/icon';
 import { type SelectableUser } from './MultiUserSelectModal';
 import { type SelectableClient } from './ClientSelectModal';
 
 export interface MachineModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (savedMachine?: any) => void;
   machineToEdit?: any | null;
   userRole?: string | null;
   initialSection?: 'all' | 'info' | 'personnel' | 'client';
@@ -480,6 +480,38 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     }));
   };
 
+  const handleSerialBlur = async () => {
+    const cleanSerial = serialNumber.trim();
+    if (!cleanSerial) return;
+    try {
+      let duplicateQuery = supabase
+        .from('machines')
+        .select('id, machine_id, serial_number')
+        .ilike('serial_number', cleanSerial);
+
+      if (machineToEdit?.id) {
+        duplicateQuery = duplicateQuery.neq('id', machineToEdit.id);
+      }
+
+      const { data: existingSerial } = await duplicateQuery.limit(1);
+      if (existingSerial && existingSerial.length > 0) {
+        const matchCode = existingSerial[0].machine_id || 'existing machine';
+        setFieldErrors((prev) => ({
+          ...prev,
+          serial_number: `Serial number already registered to machine ${matchCode}.`,
+        }));
+      } else {
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.serial_number;
+          return next;
+        });
+      }
+    } catch {
+      // non-blocking pre-check
+    }
+  };
+
   const handleSave = async () => {
     setFieldErrors({});
     setFormError('');
@@ -714,13 +746,39 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
-      haptics.success();
+      const savedResult = {
+        ...(machineToEdit || {}),
+        id: machineToEdit?.id || `tmp_mach_${Date.now()}`,
+        model: cleanModel,
+        serial_number: cleanSerial,
+        manufacturer: cleanMfr || null,
+        year_of_mfg: cleanYum || null,
+        hour_meter: numericHmr,
+        status: effectiveStatus,
+        health_status: healthStatus,
+        supervisor_ids: supervisorIds,
+        current_supervisor_id: supervisorIds[0] || null,
+        operator_ids: operatorIds,
+        current_operator_id: operatorIds[0] || null,
+        client_id: effectiveClientId,
+        client: selectedClient,
+        updated_at: new Date().toISOString(),
+      };
+
+      haptics.confirm();
       invalidateMobileModalOptionsCache();
-      onSuccess();
+      onSuccess(savedResult);
       onClose();
     } catch (err: any) {
-      haptics.error();
-      const msg = err?.message || 'Failed to save machine details.';
+      haptics.reject();
+      let msg = err?.message || 'Failed to save machine details.';
+      if (err?.code === '23505' || msg.includes('23505') || msg.includes('serial_number')) {
+        msg = `A machine with Serial Number "${cleanSerial}" is already registered.`;
+        setFieldErrors((prev) => ({
+          ...prev,
+          serial_number: msg,
+        }));
+      }
       setFormError(msg);
     } finally {
       setIsSaving(false);
@@ -757,13 +815,9 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <Text style={[styles.title, { color: theme.colors.ink }]}>{modalTitle}</Text>
-            <TouchableOpacity
-              onPress={onClose}
-              style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
+            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]} accessibilityLabel="Close dialog">
               <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Form Error Banner */}
@@ -802,7 +856,17 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     label="Serial Number *"
                     placeholder="e.g. HHKHB303EF00000877"
                     value={serialNumber}
-                    onChangeText={setSerialNumber}
+                    onChangeText={(val) => {
+                      setSerialNumber(val);
+                      if (fieldErrors.serial_number) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.serial_number;
+                          return next;
+                        });
+                      }
+                    }}
+                    onBlur={handleSerialBlur}
                     error={fieldErrors.serial_number}
                     editable={!isSaving}
                   />
@@ -886,16 +950,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         </Text>
                       </View>
 
-                      <TouchableOpacity
-                        onPress={() => {
-                          haptics.select();
-                          setIsSupervisorDropdownOpen((prev) => !prev);
-                          setIsOperatorDropdownOpen(false);
-                          setSupervisorSearchQuery('');
-                        }}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.multiSelectTrigger,
+                      <Pressable variant="card" haptic="select" onPress={() => { setIsSupervisorDropdownOpen((prev) => !prev); setIsOperatorDropdownOpen(false); setSupervisorSearchQuery(''); }} style={[styles.multiSelectTrigger,
                           {
                             backgroundColor: theme.colors.canvasElevated,
                             borderColor: isSupervisorDropdownOpen ? theme.colors.ink : theme.colors.hairline,
@@ -922,16 +977,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                 <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
                                   {s.full_name}
                                 </Text>
-                                <TouchableOpacity
-                                  onPress={(e) => {
-                                    // @ts-ignore
-                                    e?.stopPropagation?.();
-                                    handleRemoveSupervisor(s.id);
-                                  }}
-                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
+                                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
+                                    e?.stopPropagation?.(); handleRemoveSupervisor(s.id); }} accessibilityLabel={`Remove ${s.full_name}`}>
                                   <X size={11} color={theme.colors.mute} />
-                                </TouchableOpacity>
+                                </Pressable>
                               </View>
                             ))
                           )}
@@ -939,19 +988,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
                         <View style={styles.triggerRightActions}>
                           {supervisorIds.length > 0 && (
-                            <TouchableOpacity
-                              onPress={(e) => {
-                                // @ts-ignore
-                                e?.stopPropagation?.();
-                                haptics.select();
-                                setSupervisorIds([]);
-                              }}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
+                            <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
+                                e?.stopPropagation?.(); setSupervisorIds([]); }}>
                               <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
                                 Clear
                               </Text>
-                            </TouchableOpacity>
+                            </Pressable>
                           )}
                           <ChevronDown
                             size={14}
@@ -961,7 +1003,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             }}
                           />
                         </View>
-                      </TouchableOpacity>
+                      </Pressable>
 
                       {/* Supervisor Dropdown Popover */}
                       {isSupervisorDropdownOpen && (
@@ -993,21 +1035,22 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             <Text style={[styles.selectionCountText, { color: theme.colors.mute }]}>
                               {supervisorIds.length} of {supervisorsList.length} selected
                             </Text>
-                            <TouchableOpacity
+                            <Pressable
+                              variant="ghost"
+                              haptic="tap"
+                              hitSlopToMin48
                               onPress={() => {
-                                haptics.select();
                                 if (supervisorIds.length > 0) {
                                   setSupervisorIds([]);
                                 } else {
                                   setSupervisorIds(supervisorsList.map((s) => s.id));
                                 }
                               }}
-                              hitSlop={6}
                             >
                               <Text style={styles.deselectAllActionText}>
                                 {supervisorIds.length > 0 ? 'Clear All' : 'Select All'}
                               </Text>
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
 
                           {/* Supervisors List */}
@@ -1028,12 +1071,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                 const isSelected = supervisorIds.includes(s.id);
                                 const roleUpper = (s.role || 'SUPERVISOR').toUpperCase();
                                 return (
-                                  <TouchableOpacity
-                                    key={s.id}
-                                    onPress={() => handleToggleSupervisor(s.id)}
-                                    activeOpacity={0.7}
-                                    style={[
-                                      styles.dropdownStaffItem,
+                                  <Pressable key={s.id} variant="listRow" haptic="select" onPress={() => handleToggleSupervisor(s.id)} style={[styles.dropdownStaffItem,
                                       {
                                         backgroundColor: isSelected
                                           ? (isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff')
@@ -1097,7 +1135,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                     >
                                       {isSelected && <Check size={12} color="#ffffff" />}
                                     </View>
-                                  </TouchableOpacity>
+                                  </Pressable>
                                 );
                               })
                             )}
@@ -1168,16 +1206,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     </View>
 
                     {operatorIds.length < maxMobileShifts ? (
-                      <TouchableOpacity
-                        onPress={() => {
-                          haptics.select();
-                          setIsOperatorDropdownOpen((prev) => !prev);
-                          setIsSupervisorDropdownOpen(false);
-                          setOperatorSearchQuery('');
-                        }}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.addOperatorTrigger,
+                      <Pressable variant="card" haptic="select" onPress={() => { setIsOperatorDropdownOpen((prev) => !prev); setIsSupervisorDropdownOpen(false); setOperatorSearchQuery(''); }} style={[styles.addOperatorTrigger,
                           {
                             backgroundColor: theme.colors.canvasElevated,
                             borderColor: isOperatorDropdownOpen ? theme.colors.ink : theme.colors.hairline,
@@ -1194,7 +1223,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             transform: [{ rotate: isOperatorDropdownOpen ? '180deg' : '0deg' }],
                           }}
                         />
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : null}
 
                     {/* Operator Dropdown Popover */}
@@ -1237,12 +1266,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               const conflict = getOperatorConflict(op.id, nextShift.code);
 
                               return (
-                                <TouchableOpacity
-                                  key={op.id}
-                                  onPress={() => handleAddOperator(op)}
-                                  activeOpacity={0.7}
-                                  style={[
-                                    styles.dropdownStaffItem,
+                                <Pressable key={op.id} variant="listRow" haptic="select" onPress={() => handleAddOperator(op)} style={[styles.dropdownStaffItem,
                                     {
                                       backgroundColor: isAlreadyAssigned
                                         ? (isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff')
@@ -1334,7 +1358,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                       </Text>
                                     </View>
                                   )}
-                                </TouchableOpacity>
+                                </Pressable>
                               );
                             })
                           )}
@@ -1398,14 +1422,9 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                     )}
                                   </View>
                                 </View>
-                                <TouchableOpacity
-                                  onPress={() => handleRemoveOperator(o.id)}
-                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                  style={styles.removeOperatorBtn}
-                                  accessibilityLabel={`Remove ${o.full_name}`}
-                                >
+                                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleRemoveOperator(o.id)} style={styles.removeOperatorBtn} accessibilityLabel={`Remove ${o.full_name}`}>
                                   <X size={15} color={theme.colors.mute} />
-                                </TouchableOpacity>
+                                </Pressable>
                               </View>
 
                               {/* Overlap Conflict Pill */}
@@ -1515,12 +1534,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
             {/* Bottom Actions (Screenshot 1 Match) */}
             <View style={styles.bottomButtonsWrap}>
-              <TouchableOpacity
-                onPress={handleSave}
-                disabled={isSaving}
-                style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}
-                activeOpacity={0.8}
-              >
+              <Pressable variant="primary" haptic="none" onPress={handleSave} disabled={isSaving} style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}>
                 {isSaving ? (
                   <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                 ) : (
@@ -1528,24 +1542,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     {isSupervisor || initialSection === 'personnel' ? 'Save Assignments' : isEdit ? 'Update Machine' : 'Register Machine'}
                   </Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
-                onPress={onClose}
-                disabled={isSaving}
-                style={[
-                  styles.cancelActionBtn,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
+              <Pressable variant="outline" haptic="tap" onPress={onClose} disabled={isSaving} style={[styles.cancelActionBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <Text style={[styles.cancelActionBtnText, { color: theme.colors.ink }]}>
                   Cancel
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </ScrollView>
 

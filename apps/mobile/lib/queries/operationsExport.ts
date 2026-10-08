@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { HourLogRecord } from '../../app/(app)/operations';
+import type { HourLogRecord } from '../hooks/useOperationsData';
 import {
   resolveOperationsDateRange,
   getISTDateString,

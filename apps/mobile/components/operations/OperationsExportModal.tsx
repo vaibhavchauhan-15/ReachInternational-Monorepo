@@ -10,9 +10,9 @@ import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Printer, FileSpreadsheet, X, Loader2 } from 'lucide-react-native';
+import { Printer, FileSpreadsheet, X, Loader2 } from '../ui/icon';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -29,7 +29,7 @@ import {
   buildPdfHtmlSignatureBlock,
   buildPdfHtmlWrapper,
 } from '../../lib/pdf-html-templates';
-import type { HourLogRecord } from '../../app/(app)/operations';
+import type { HourLogRecord } from '../../lib/hooks/useOperationsData';
 import {
   fetchOperationsExportLogs,
   type MobileExportLogsParams,

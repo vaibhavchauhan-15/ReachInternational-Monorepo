@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform} from 'react-native';
 import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -36,7 +36,7 @@ import {
   CreditCard,
   Clock,
   CheckCircle2,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 const USER_ROLES: Array<{ value: string; label: string }> = [
   { value: 'operator', label: 'Operator' },

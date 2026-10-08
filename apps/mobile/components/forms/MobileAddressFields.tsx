@@ -4,7 +4,7 @@ import { Input } from '../ui/Input';
 import { SearchableSelect, type SelectOption } from '../ui/SearchableSelect';
 import { useTheme } from '../ui/ThemeProvider';
 import { INDIAN_STATES } from '@reachinternational/utils';
-import { MapPin } from 'lucide-react-native';
+import { MapPin } from '../ui/icon';
 
 export interface MobileAddressFieldsProps {
   street: string;

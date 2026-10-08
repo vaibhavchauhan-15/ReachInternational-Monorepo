@@ -1,3 +1,5 @@
+/**
+ * Backward compatibility re-export for lib/interaction -> lib/haptics
+ */
+
 export * from './haptics';
-export * from './motion';
-export * from './screens';

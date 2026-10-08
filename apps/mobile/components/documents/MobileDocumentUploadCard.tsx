@@ -12,18 +12,18 @@ import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   Image,
   type ViewStyle,
 } from 'react-native';
 import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
+import { Pressable } from '../ui/touch/Pressable';
 import {
   FileText,
   Upload,
   X,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import {
   MobilePickedDocument,
   UserDocumentInfo,
@@ -33,7 +33,7 @@ import {
   MobileDocumentViewerModal,
   type MobileViewerDoc,
 } from './MobileDocumentViewerModal';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 
 export interface MobileDocumentUploadCardProps {
   title: string;
@@ -142,9 +142,10 @@ export function MobileDocumentUploadCard({
 
       {/* Empty State: Dashed Upload Box */}
       {!hasFile ? (
-        <TouchableOpacity
+        <Pressable
+          variant="outline"
+          haptic="tap"
           onPress={handlePick}
-          activeOpacity={0.7}
           disabled={uploading}
           style={[
             styles.dashedBox,
@@ -175,7 +176,7 @@ export function MobileDocumentUploadCard({
               </Text>
             </View>
           )}
-        </TouchableOpacity>
+        </Pressable>
       ) : (
         /* Attached Document Banner */
         <View
@@ -188,7 +189,7 @@ export function MobileDocumentUploadCard({
           ]}
         >
           {/* Thumbnail / Icon clickable for viewer */}
-          <TouchableOpacity onPress={openViewer} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+          <Pressable variant="ghost" haptic="tap" onPress={openViewer} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
             {isImage && selectedDoc?.uri ? (
               <Image
                 source={{ uri: selectedDoc.uri }}
@@ -226,18 +227,20 @@ export function MobileDocumentUploadCard({
                   : 'Attached'}
               </Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Remove Button */}
-          <TouchableOpacity
+          <Pressable
+            variant="iconButton"
+            haptic="tap"
+            hitSlopToMin48
             onPress={handleRemove}
             disabled={uploading}
-            hitSlop={10}
             style={styles.removeBtn}
             accessibilityLabel="Remove attached document"
           >
             <X size={15} color={isDark ? '#a1a1aa' : '#6b7280'} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 

@@ -6,15 +6,15 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X, Search, Building2, MapPin, User, Phone } from 'lucide-react-native';
+import { Check, X, Search, Building2, MapPin, User, Phone } from '../ui/icon';
 
 export interface SelectableClient {
   id: string;
@@ -144,9 +144,10 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
             showsVerticalScrollIndicator={false}
           >
             {/* Clear / Unassign Option */}
-            <TouchableOpacity
+            <Pressable
+              variant="listRow"
+              haptic="select"
               onPress={() => handleChoose(null)}
-              activeOpacity={0.7}
               style={[
                 styles.unassignRow,
                 {
@@ -161,7 +162,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
               {!selectedClientId && (
                 <Check size={16} color={theme.colors.primary} strokeWidth={2.5} />
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             {filteredClients.length === 0 ? (
               <View style={styles.emptyWrap}>
@@ -176,10 +177,11 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                 const parts = [c.street, c.city, c.district, c.state, c.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean);
                 const location = parts.length > 0 ? parts.join(', ') : (c.address ? String(c.address).trim() : '');
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={c.id}
+                    variant="listRow"
+                    haptic="select"
                     onPress={() => handleChoose(c)}
-                    activeOpacity={0.7}
                     style={[
                       styles.clientCard,
                       {
@@ -235,7 +237,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                         <Check size={13} color={theme.colors.onPrimary} strokeWidth={3} />
                       </View>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })
             )}

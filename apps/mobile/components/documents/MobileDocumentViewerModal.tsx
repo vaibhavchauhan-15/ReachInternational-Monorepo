@@ -24,7 +24,6 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  TouchableOpacity,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Linking from 'expo-linking';
@@ -36,9 +35,9 @@ import {
   RotateCw,
   RotateCcw,
   FileText,
-  Image as ImageIcon,
+  ImageIcon,
   Download,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { Touchable } from '@/components/ui/Touchable';

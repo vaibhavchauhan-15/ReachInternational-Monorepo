@@ -1,3 +1,17 @@
+const { withAndroidStyles, AndroidConfig } = require('expo/config-plugins');
+
+const withTransparentAutofillHighlight = (config) => {
+  return withAndroidStyles(config, (cfg) => {
+    cfg.modResults = AndroidConfig.Styles.assignStylesValue(cfg.modResults, {
+      add: true,
+      parent: AndroidConfig.Styles.getAppThemeGroup(),
+      name: 'android:autofilledHighlight',
+      value: '@android:color/transparent',
+    });
+    return cfg;
+  });
+};
+
 module.exports = ({ config }) => {
   const isEASBuild = process.env.EAS_BUILD === 'true';
 
@@ -24,7 +38,7 @@ module.exports = ({ config }) => {
     return plugin;
   });
 
-  return {
+  const finalConfig = {
     ...config,
     plugins,
     updates: isEASBuild
@@ -39,4 +53,7 @@ module.exports = ({ config }) => {
           checkAutomatically: 'NEVER',
         },
   };
+
+  return withTransparentAutofillHighlight(finalConfig);
 };
+

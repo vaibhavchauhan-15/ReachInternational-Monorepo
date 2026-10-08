@@ -7,9 +7,9 @@ import {
   Dimensions,
   ActivityIndicator,
   ScrollView,
-  TouchableOpacity,
+  StatusBar as RNStatusBar,
 } from 'react-native';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme } from './ThemeProvider';
@@ -26,7 +26,7 @@ import {
   Sun,
   Moon,
   ArrowLeft,
-} from 'lucide-react-native';
+} from './icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
@@ -182,12 +182,15 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       }
     });
 
+  const androidStatusBar = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) : 0;
+  const safeTop = Math.max(insets.top, androidStatusBar, Platform.OS === 'ios' ? 44 : 0);
+
   const topPadding =
     Platform.OS === 'web'
-      ? spacingNumeric.sm
+      ? spacingNumeric.xs
       : isBannerVisible
-      ? spacingNumeric.sm
-      : Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24);
+      ? 6
+      : safeTop + 5;
 
   // Measure and Open 3-Dot Menu
   const openActionMenu = () => {
@@ -303,6 +306,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               setIsMobileSearchExpanded(false);
               search.onClear?.();
             }}
+            hitSlopToMin48={true}
             style={[
               styles.iconBtn,
               {
@@ -312,7 +316,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             ]}
             accessibilityLabel="Close Search"
           >
-            <ArrowLeft size={17} color={theme.colors.ink} />
+            <ArrowLeft size={16} color={theme.colors.ink} />
           </Touchable>
 
           <View
@@ -331,7 +335,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             {search.isSearching ? (
               <ActivityIndicator size="small" color={theme.colors.link} style={{ width: 14, height: 14 }} />
             ) : (
-              <Search size={14} color={isSearchFocused ? theme.colors.ink : theme.colors.mute} />
+              <Search size={13} color={isSearchFocused ? theme.colors.ink : theme.colors.mute} />
             )}
 
             <TextInput
@@ -357,9 +361,10 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 onPress={() => {
                   search.onClear ? search.onClear() : search.onChangeText('');
                 }}
+                hitSlopToMin48={true}
                 accessibilityLabel="Clear Search"
               >
-                <X size={13} color={theme.colors.mute} />
+                <X size={12} color={theme.colors.mute} />
               </Touchable>
             )}
           </View>
@@ -369,6 +374,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             <Touchable
               preset="icon"
               onPress={openActionMenu}
+              hitSlopToMin48={true}
               style={[
                 styles.iconBtn,
                 {
@@ -378,7 +384,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               ]}
               accessibilityLabel="Other Actions"
             >
-              <MoreVertical size={18} color={theme.colors.ink} />
+              <MoreVertical size={16} color={theme.colors.ink} />
             </Touchable>
           </View>
         </View>
@@ -391,6 +397,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               <Touchable
                 preset="icon"
                 onPress={handleBackPress}
+                hitSlopToMin48={true}
                 style={[
                   styles.backBtn,
                   {
@@ -400,14 +407,14 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 ]}
                 accessibilityLabel="Go Back"
               >
-                <ChevronLeft size={18} color={theme.colors.ink} />
+                <ChevronLeft size={16} color={theme.colors.ink} />
               </Touchable>
             )}
 
             <View style={styles.titleTextContainer}>
               {eyebrow ? (
                 <Text
-                  variant="caption"
+                  variant="micro"
                   style={[styles.eyebrowText, { color: theme.colors.mute }]}
                   numberOfLines={1}
                 >
@@ -416,7 +423,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               ) : null}
               {title && (
                 <Text
-                  variant="title"
+                  variant="heading"
                   style={{ color: theme.colors.ink }}
                   numberOfLines={1}
                 >
@@ -425,7 +432,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               )}
               {subtitle ? (
                 <Text
-                  variant="caption"
+                  variant="micro"
                   style={[styles.subtitleText, { color: theme.colors.mute }]}
                   numberOfLines={1}
                 >
@@ -489,9 +496,10 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       onPress={() => {
                         search.onClear ? search.onClear() : search.onChangeText('');
                       }}
+                      hitSlopToMin48={true}
                       accessibilityLabel="Clear Search"
                     >
-                      <X size={13} color={theme.colors.mute} />
+                      <X size={12} color={theme.colors.mute} />
                     </Touchable>
                   )}
                 </View>
@@ -500,6 +508,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 <Touchable
                   preset="icon"
                   onPress={handleSearchTriggerClick}
+                  hitSlopToMin48={true}
                   style={[
                     styles.iconBtn,
                     {
@@ -509,7 +518,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   ]}
                   accessibilityLabel="Search"
                 >
-                  <Search size={16} color={theme.colors.ink} />
+                  <Search size={15} color={theme.colors.ink} />
                 </Touchable>
               )
             ) : showQuickAccess ? (
@@ -518,6 +527,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 <Touchable
                   preset="card"
                   onPress={handleQuickAccessPress}
+                  hitSlopToMin48={true}
                   style={[
                     styles.quickAccessCapsule,
                     {
@@ -527,7 +537,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   ]}
                   accessibilityLabel="Quick Access (⌘K)"
                 >
-                  <Search size={14} color={theme.colors.mute} />
+                  <Search size={13} color={theme.colors.mute} />
                   <Text variant="label" style={{ color: theme.colors.mute }}>
                     Quick Access
                   </Text>
@@ -540,16 +550,17 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       },
                     ]}
                   >
-                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                    <Text variant="micro" style={{ color: theme.colors.mute }}>
                       {isMac ? '⌘K' : 'Ctrl K'}
                     </Text>
                   </View>
                 </Touchable>
               ) : (
-                /* Compact Phone Viewport / Dedicated Sleek 36×36 Quick Access Icon Button */
+                /* Compact Phone Viewport / Dedicated Sleek 32×32 Quick Access Icon Button */
                 <Touchable
                   preset="icon"
                   onPress={handleQuickAccessPress}
+                  hitSlopToMin48={true}
                   style={[
                     styles.iconBtn,
                     {
@@ -559,7 +570,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   ]}
                   accessibilityLabel="Quick Access"
                 >
-                  <Search size={16} color={theme.colors.ink} />
+                  <Search size={15} color={theme.colors.ink} />
                 </Touchable>
               )
             ) : null}
@@ -570,6 +581,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 <Touchable
                   preset="icon"
                   onPress={openActionMenu}
+                  hitSlopToMin48={true}
                   style={[
                     styles.iconBtn,
                     {
@@ -579,7 +591,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   ]}
                   accessibilityLabel="Other Actions"
                 >
-                  <MoreVertical size={18} color={theme.colors.ink} />
+                  <MoreVertical size={16} color={theme.colors.ink} />
                 </Touchable>
               </View>
             )}
@@ -675,7 +687,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 const styles = StyleSheet.create({
   headerContainer: {
     paddingHorizontal: spacingNumeric.md,
-    paddingBottom: spacingNumeric.sm,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     position: 'relative',
     zIndex: 40,
@@ -684,25 +696,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 44,
+    minHeight: 38,
     gap: 8,
   },
   expandedSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
+    minHeight: 38,
     gap: 8,
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     flex: 1,
     minWidth: 0,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
     alignItems: 'center',
@@ -715,28 +727,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   subtitleText: {
-    marginTop: 1,
+    marginTop: 0,
   },
   eyebrowText: {
     textTransform: 'uppercase',
-    marginBottom: 1,
+    marginBottom: 0,
   },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexShrink: 0,
   },
   searchCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 36,
+    height: 32,
     width: 200,
     maxWidth: 280,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   expandedSearchCapsule: {
     flex: 1,
@@ -756,8 +768,8 @@ const styles = StyleSheet.create({
     }),
   },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
     alignItems: 'center',
@@ -767,15 +779,15 @@ const styles = StyleSheet.create({
   quickAccessCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 36,
+    height: 32,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   quickAccessKbd: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: 4,
     borderWidth: 1,
   },

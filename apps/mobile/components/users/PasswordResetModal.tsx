@@ -10,10 +10,10 @@ import { Button } from '../ui/Button';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, Copy, X, KeyRound } from 'lucide-react-native';
+import { Check, Copy, X, KeyRound } from '../ui/icon';
 import * as Clipboard from 'expo-clipboard';
 
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '@/lib/haptics';
 
 export interface PasswordResetModalProps {
   visible: boolean;
@@ -87,7 +87,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                   ]}
                 >
                   <View style={[styles.checkCircle, { backgroundColor: theme.colors.success + '26' }]}>
-                    <Check size={14} color={theme.colors.success} strokeWidth={2.5} />
+                    <Check size={14} color={theme.colors.success} strokeWidth={2.5} animate="mount" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.noticeTitle, { color: theme.colors.success }]}>
@@ -138,7 +138,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                     >
                       {copied ? (
                         <>
-                          <Check size={14} color="#ffffff" strokeWidth={2.5} />
+                          <Check size={14} color="#ffffff" strokeWidth={2.5} animate="mount" />
                           <Text style={styles.copyBtnText}>Copied!</Text>
                         </>
                       ) : (

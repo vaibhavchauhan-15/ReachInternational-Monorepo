@@ -14,7 +14,7 @@ import {
   Users,
   CheckCircle2,
   Clock,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 
 export interface SupervisorDashboardCardProps {
   data: SupervisorDashboardDTO | null;

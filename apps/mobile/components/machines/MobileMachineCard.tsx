@@ -12,7 +12,7 @@ import {
   Check,
   ChevronRight,
   History,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 export interface MobileMachineCardProps {
   machine: any;

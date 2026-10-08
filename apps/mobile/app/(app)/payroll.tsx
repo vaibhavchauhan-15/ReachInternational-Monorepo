@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   RefreshControl,
@@ -14,6 +13,8 @@ import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal } from '../../components/ui';
 import { PayrollSkeleton } from '../../components/payroll';
+import { Pressable } from '../../components/ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
@@ -34,7 +35,7 @@ import {
   ChevronUp,
   CreditCard,
   Shield,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import type { HRPayrollSummary, HRPayrollOperator } from '@reachinternational/types';
 
@@ -122,7 +123,15 @@ export default function PayrollScreen() {
         console.error('[HRPayrollScreen] Fetch error:', error);
         Alert.alert('Error', error.message || 'Failed to fetch payroll data');
       } else if (data) {
-        setPayrollData(data as unknown as HRPayrollSummary);
+        const rawOperators: HRPayrollOperator[] = Array.isArray(data)
+          ? (data as unknown as HRPayrollOperator[])
+          : (data && Array.isArray((data as any).operators) ? (data as any).operators : []);
+        setPayrollData({
+          payrollMonth: (data && !Array.isArray(data) && (data as any).payrollMonth) || monthStr,
+          regularPeriod: (data && !Array.isArray(data) && (data as any).regularPeriod) || '',
+          otPeriod: (data && !Array.isArray(data) && (data as any).otPeriod) || '',
+          operators: rawOperators,
+        });
       }
     } catch (err: any) {
       console.error('[HRPayrollScreen] Unexpected error:', err);
@@ -282,8 +291,10 @@ export default function PayrollScreen() {
       });
 
       if (error) {
+        haptics.reject();
         Alert.alert('Update Failed', error.message);
       } else {
+        haptics.confirm();
         // Refresh payroll list
         fetchPayroll(selectedMonth);
         setEditingOperator(null);
@@ -317,11 +328,11 @@ export default function PayrollScreen() {
       {
         id: 'refresh-payroll',
         label: 'Refresh Statement',
-        icon: <RefreshCw size={15} color={theme.colors.ink} />,
+        icon: <RefreshCw size={15} color={theme.colors.ink} loading={refreshing} />,
         onPress: onRefresh,
       },
     ];
-  }, [theme.colors.ink, onRefresh]);
+  }, [theme.colors.ink, onRefresh, refreshing]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -355,8 +366,10 @@ export default function PayrollScreen() {
           {monthList.map((m) => {
             const active = selectedMonth === m.value;
             return (
-              <TouchableOpacity
+              <Pressable
                 key={m.value}
+                variant="chip"
+                haptic="select"
                 onPress={() => setSelectedMonth(m.value)}
                 style={[
                   styles.monthPill,
@@ -369,7 +382,6 @@ export default function PayrollScreen() {
                       : theme.colors.hairline,
                   },
                 ]}
-                activeOpacity={0.7}
               >
                 <Text
                   style={[
@@ -381,7 +393,7 @@ export default function PayrollScreen() {
                 >
                   {m.label}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -422,9 +434,9 @@ export default function PayrollScreen() {
             style={[styles.searchInput, { color: theme.colors.ink }]}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('', true)}>
+            <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setSearchQuery('', true)} accessibilityLabel="Clear search">
               <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
 
@@ -444,8 +456,10 @@ export default function PayrollScreen() {
           ] as const).map((filter) => {
             const active = payoutFilter === filter.id;
             return (
-              <TouchableOpacity
+              <Pressable
                 key={filter.id}
+                variant="chip"
+                haptic="select"
                 onPress={() => setPayoutFilter(filter.id)}
                 style={[
                   styles.filterChip,
@@ -458,7 +472,6 @@ export default function PayrollScreen() {
                       : theme.colors.hairline,
                   },
                 ]}
-                activeOpacity={0.7}
               >
                 <Text
                   style={[
@@ -468,7 +481,7 @@ export default function PayrollScreen() {
                 >
                   {filter.label}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -501,9 +514,9 @@ export default function PayrollScreen() {
                 >
                   {/* Card Header Row */}
                   <View style={styles.cardHeader}>
-                    <TouchableOpacity
+                    <Pressable
+                      variant="listRow"
                       style={styles.headerLeft}
-                      activeOpacity={0.7}
                       onPress={() =>
                         router.push({
                           pathname: '/(app)/users',
@@ -527,7 +540,7 @@ export default function PayrollScreen() {
                         query={searchQuery}
                         style={[styles.operatorLocation, { color: theme.colors.mute }]}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
 
                     <View style={styles.headerRight}>
                       <Text style={[styles.totalPayAmount, { color: '#059669' }]}>
@@ -621,10 +634,11 @@ export default function PayrollScreen() {
 
                   {/* Card Actions Row */}
                   <View style={styles.cardFooter}>
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonSecondary"
+                      hitSlopToMin48
                       onPress={() => setExpandedId(isExpanded ? null : op.operator_id)}
                       style={[styles.actionBtn, { borderColor: theme.colors.hairline }]}
-                      activeOpacity={0.7}
                     >
                       {isExpanded ? (
                         <>
@@ -637,25 +651,27 @@ export default function PayrollScreen() {
                           <Text style={[styles.actionBtnText, { color: theme.colors.mute }]}>Details</Text>
                         </>
                       )}
-                    </TouchableOpacity>
+                    </Pressable>
 
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonSecondary"
+                      hitSlopToMin48
                       onPress={() => setViewSlipOp(op)}
                       style={[styles.actionBtn, { borderColor: theme.colors.hairline }]}
-                      activeOpacity={0.7}
                     >
                       <FileText size={13} color="#2563eb" />
                       <Text style={[styles.actionBtnText, { color: '#2563eb' }]}>Slip</Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonPrimary"
+                      hitSlopToMin48
                       onPress={() => handleOpenEdit(op)}
                       style={[styles.actionBtn, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
-                      activeOpacity={0.7}
                     >
                       <Edit2 size={13} color={theme.colors.canvas} />
                       <Text style={[styles.actionBtnText, { color: theme.colors.canvas }]}>Edit</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 </View>
               );
@@ -691,9 +707,9 @@ export default function PayrollScreen() {
                   {viewSlipOp?.full_name} ({selectedMonth})
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setViewSlipOp(null)}>
+              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setViewSlipOp(null)} accessibilityLabel="Close slip">
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -773,14 +789,15 @@ export default function PayrollScreen() {
               )}
             </ScrollView>
 
-            <TouchableOpacity
+            <Pressable
+              variant="buttonPrimary"
               onPress={() => setViewSlipOp(null)}
               style={[styles.modalSaveBtn, { backgroundColor: theme.colors.ink, marginTop: 8 }]}
             >
               <Text style={{ color: theme.colors.canvas, textAlign: 'center' }}>
                 Close Slip
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
       </AppModal>
 
@@ -809,9 +826,9 @@ export default function PayrollScreen() {
                   {editingOperator?.full_name}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setEditingOperator(null)}>
+              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setEditingOperator(null)} accessibilityLabel="Close edit modal">
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -906,24 +923,26 @@ export default function PayrollScreen() {
             </ScrollView>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity
+              <Pressable
+                variant="buttonSecondary"
                 onPress={() => setEditingOperator(null)}
                 style={[styles.modalCancelBtn, { borderColor: theme.colors.hairline }]}
               >
                 <Text style={{ color: theme.colors.ink }}>
                   Cancel
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
+                variant="buttonPrimary"
+                haptic="none"
                 onPress={handleSaveStatement}
                 disabled={savingStatement}
-                style={[styles.modalSaveBtn, { backgroundColor: theme.colors.ink }]}
-              >
+                style={[styles.modalSaveBtn, { backgroundColor: theme.colors.ink }]}>
                 <Text style={{ color: theme.colors.canvas }}>
                   {savingStatement ? 'Saving...' : 'Save Statement'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
       </AppModal>

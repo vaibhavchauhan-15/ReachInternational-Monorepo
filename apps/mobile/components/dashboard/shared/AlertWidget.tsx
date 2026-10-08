@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from '../../ui/AppLinearGradient';
 import { useTheme } from '../../ui/ThemeProvider';
@@ -12,8 +12,8 @@ import {
   Info,
   CheckCircle2,
   ArrowUpRight,
-} from 'lucide-react-native';
-import { haptics } from '../../../lib/interaction/haptics';
+} from '../../ui/icon';
+import { haptics } from '../../../lib/haptics';
 
 import { Touchable } from '../../ui/Touchable';
 
@@ -143,7 +143,11 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
             },
           ]}
         >
-          <Icon size={16} color={isDark ? config.iconColorDark : config.iconColorLight} />
+          <Icon
+            size={16}
+            color={isDark ? config.iconColorDark : config.iconColorLight}
+            animate="mount"
+          />
         </View>
 
         <View style={styles.textContainer}>

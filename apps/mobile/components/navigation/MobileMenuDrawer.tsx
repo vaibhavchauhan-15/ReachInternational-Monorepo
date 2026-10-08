@@ -4,16 +4,15 @@ import {
   StyleSheet,
   ScrollView,
   useWindowDimensions,
-  type GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
-import { Icon as CanonicalIcon } from '../ui/Icon';
+import { Icon as CanonicalIcon } from '../ui/icon';
 import { Touchable } from '../ui/Touchable';
-import { AppModal } from '../ui/AppModal';
+import { Drawer } from '../ui/overlay/Drawer';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import {
   Home,
@@ -35,7 +34,7 @@ import {
   FileText,
   Menu,
   type LucideIcon,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
@@ -67,6 +66,7 @@ type Props = {
   items: MenuItem[];
   primaryItems?: MenuItem[];
   user: { name: string; email: string; initials: string };
+  role?: string;
   onClosed: () => void;
   onLogout: () => void;
 };
@@ -75,6 +75,7 @@ export const MobileMenuDrawer: React.FC<Props> = ({
   items,
   primaryItems = [],
   user,
+  role,
   onClosed,
   onLogout,
 }) => {
@@ -88,10 +89,11 @@ export const MobileMenuDrawer: React.FC<Props> = ({
 
   const [isVisible, setIsVisible] = useState(true);
   const isClosingRef = useRef(false);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const roleLabel = role ? role.toUpperCase().replace(/_/g, ' ') : '';
 
   useEffect(() => {
     haptics.select();
@@ -101,11 +103,7 @@ export const MobileMenuDrawer: React.FC<Props> = ({
     if (isClosingRef.current) return;
     isClosingRef.current = true;
     setIsVisible(false);
-    // Matches the fast exit timing for AppModal before unmounting
-    setTimeout(() => {
-      onClosed();
-    }, 200);
-  }, [onClosed]);
+  }, []);
 
   // Close on route change (but not on initial mount)
   const initialPath = useRef(pathname);
@@ -125,19 +123,22 @@ export const MobileMenuDrawer: React.FC<Props> = ({
       setIsLoggingOut(true);
       await onLogout();
       setShowLogoutConfirm(false);
+      closeDrawer();
     } catch (err) {
       console.error('[MobileMenuDrawer] Logout error:', err);
-    } finally {
       setIsLoggingOut(false);
     }
   };
 
   const handleNavigate = (rawHref: string) => {
     const targetHref = rawHref.startsWith('/(app)') ? rawHref : `/(app)${rawHref}`;
+    const normalize = (p: string) => p.replace(/^\/\(app\)/, '').replace(/\/$/, '') || '/';
     closeDrawer();
-    setTimeout(() => {
-      router.push(targetHref as any);
-    }, 60);
+    if (normalize(pathname) !== normalize(rawHref)) {
+      setTimeout(() => {
+        router.push(targetHref as any);
+      }, 50);
+    }
   };
 
   // Strictly filter out any items that are already in the bottom navbar
@@ -165,45 +166,38 @@ export const MobileMenuDrawer: React.FC<Props> = ({
     return current.startsWith(target);
   };
 
-  // Horizontal swipe-right-to-dismiss gesture matching web mobile drawer
-  const handleTouchStart = (e: GestureResponderEvent) => {
-    touchStartRef.current = {
-      x: e.nativeEvent.pageX,
-      y: e.nativeEvent.pageY,
-    };
-  };
-
-  const handleTouchEnd = (e: GestureResponderEvent) => {
-    if (!touchStartRef.current) return;
-    const deltaX = e.nativeEvent.pageX - touchStartRef.current.x;
-    const deltaY = e.nativeEvent.pageY - touchStartRef.current.y;
-    // Direction locked: must be predominantly horizontal swipe to the right, >= 45px
-    if (Math.abs(deltaX) > Math.abs(deltaY) * 1.2 && deltaX > 45) {
-      closeDrawer();
-    }
-    touchStartRef.current = null;
-  };
-
   return (
-    <>
-      <AppModal
-        visible={isVisible}
-        onClose={closeDrawer}
-        variant="right"
-      >
-        <View
-          style={[
-            styles.panel,
-            {
-              width: panelWidth,
-              backgroundColor: theme.colors.canvasElevated,
-              paddingTop: insets.top + 8,
-              paddingBottom: Math.max(insets.bottom, 12),
-            },
-          ]}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
+    <Drawer
+      visible={isVisible}
+      onClose={closeDrawer}
+      onDismissComplete={onClosed}
+      maxPixelWidth={panelWidth}
+      contentStyle={[
+        styles.panel,
+        {
+          width: panelWidth,
+          backgroundColor: theme.colors.canvasElevated,
+          paddingTop: insets.top,
+        },
+      ]}
+      overlay={
+        <ConfirmDialog
+          visible={showLogoutConfirm}
+          onClose={() => {
+            if (!isLoggingOut) setShowLogoutConfirm(false);
+          }}
+          onConfirm={handleConfirmLogout}
+          title="Sign Out"
+          message="Are you sure you want to sign out of Reach International on this mobile device?"
+          confirmText="Sign Out"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={isLoggingOut}
+          icon={<CanonicalIcon icon={LogOut} size={22} color={theme.colors.error} />}
+        />
+      }
+    >
+        <View style={styles.flexOne}>
           {/* Header matching web drawer: Clean "Menu" + X close button */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <Text variant="heading" style={[styles.headerTitle, { color: theme.colors.ink }]}>
@@ -292,93 +286,133 @@ export const MobileMenuDrawer: React.FC<Props> = ({
           </ScrollView>
 
           {/* Pinned Footer with Profile Link & Sign Out */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <Touchable
-              preset="card"
-              haptic="light"
-              style={styles.profileArea}
-              onPress={() => handleNavigate('/(app)/profile')}
-              accessibilityRole="button"
-              accessibilityLabel="Open user profile"
-            >
-              <View
+          <View
+            style={[
+              styles.footer,
+              {
+                borderTopColor: theme.colors.hairline,
+                backgroundColor: theme.colors.canvasElevated,
+                paddingBottom: Math.max(insets.bottom, 16),
+              },
+            ]}
+          >
+            <View style={styles.footerRow}>
+              <Touchable
+                preset="card"
+                haptic="light"
                 style={[
-                  styles.avatar,
+                  styles.profileCard,
                   {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.22)' : '#dbeafe',
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.04)'
+                      : 'rgba(0, 0, 0, 0.025)',
+                    borderColor: theme.colors.hairline,
                   },
                 ]}
+                onPress={() => handleNavigate('/(app)/profile')}
+                accessibilityRole="button"
+                accessibilityLabel="Open user profile"
               >
-                <Text
-                  variant="label"
+                <View
                   style={[
-                    styles.avatarText,
+                    styles.avatar,
                     {
-                      color: isDark ? '#38bdf8' : '#0369a1',
+                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.22)' : '#dbeafe',
+                      borderColor: isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd',
                     },
                   ]}
                 >
-                  {user.initials}
-                </Text>
-              </View>
-              <View style={styles.userInfo}>
-                <Text
-                  variant="subheading"
-                  style={[styles.userName, { color: theme.colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {user.name}
-                </Text>
-                <Text
-                  variant="caption"
-                  style={[styles.userEmail, { color: theme.colors.mute }]}
-                  numberOfLines={1}
-                >
-                  {user.email || 'View Profile'}
-                </Text>
-              </View>
-            </Touchable>
+                  <Text
+                    variant="label"
+                    style={[
+                      styles.avatarText,
+                      {
+                        color: isDark ? '#38bdf8' : '#0369a1',
+                      },
+                    ]}
+                  >
+                    {user.initials}
+                  </Text>
+                </View>
 
-            <Touchable
-              preset="icon"
-              haptic="warning"
-              style={[
-                styles.logoutBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
-                },
-              ]}
-              onPress={handleLogout}
-              accessibilityRole="button"
-              accessibilityLabel="Sign out of account"
-            >
-              <CanonicalIcon icon={LogOut} size={20} color={isDark ? '#f87171' : '#dc2626'} />
-            </Touchable>
+                <View style={styles.userInfo}>
+                  <View style={styles.userNameRow}>
+                    <Text
+                      variant="subheading"
+                      style={[styles.userName, { color: theme.colors.ink }]}
+                      numberOfLines={1}
+                    >
+                      {user.name}
+                    </Text>
+                    {roleLabel ? (
+                      <View
+                        style={[
+                          styles.roleBadge,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(2, 132, 199, 0.16)'
+                              : '#e0f2fe',
+                            borderColor: isDark
+                              ? 'rgba(56, 189, 248, 0.35)'
+                              : '#bae6fd',
+                          },
+                        ]}
+                      >
+                        <Text
+                          variant="micro"
+                          style={[
+                            styles.roleBadgeText,
+                            { color: isDark ? '#38bdf8' : '#0284c7' },
+                          ]}
+                        >
+                          {roleLabel}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text
+                    variant="caption"
+                    style={[styles.userEmail, { color: theme.colors.mute }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {user.email || 'View Profile'}
+                  </Text>
+                </View>
+              </Touchable>
+
+              <Touchable
+                preset="icon"
+                haptic="warning"
+                style={[
+                  styles.logoutBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                    borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca',
+                  },
+                ]}
+                onPress={handleLogout}
+                accessibilityRole="button"
+                accessibilityLabel="Sign out of account"
+              >
+                <CanonicalIcon icon={LogOut} size={20} color={isDark ? '#f87171' : '#dc2626'} />
+              </Touchable>
+            </View>
           </View>
         </View>
-      </AppModal>
-
-      <ConfirmDialog
-        visible={showLogoutConfirm}
-        onClose={() => {
-          if (!isLoggingOut) setShowLogoutConfirm(false);
-        }}
-        onConfirm={handleConfirmLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out of Reach International on this mobile device?"
-        confirmText="Sign Out"
-        cancelText="Cancel"
-        variant="danger"
-        isLoading={isLoggingOut}
-        icon={<CanonicalIcon icon={LogOut} size={22} color={theme.colors.error} />}
-      />
-    </>
+      </Drawer>
   );
 };
 
 const styles = StyleSheet.create({
+  flexOne: {
+    flex: 1,
+  },
   panel: {
     height: '100%',
+    borderTopLeftRadius: 24,
+    borderBottomLeftRadius: 24,
+    overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.16,
@@ -393,6 +427,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
+    borderTopLeftRadius: 24,
   },
   headerTitle: {},
   closeBtn: {
@@ -425,29 +460,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    gap: 12,
+    borderBottomLeftRadius: 24,
   },
-  profileArea: {
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  profileCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
-    gap: 12,
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 10,
+    minWidth: 0,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   avatarText: {},
   userInfo: {
@@ -455,7 +497,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
   },
-  userName: {},
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 0,
+  },
+  userName: {
+    flexShrink: 1,
+  },
+  roleBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  roleBadgeText: {},
   userEmail: {
     marginTop: 2,
   },
@@ -464,7 +521,8 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 22,
+    borderRadius: 14,
+    borderWidth: 1,
   },
 });
 

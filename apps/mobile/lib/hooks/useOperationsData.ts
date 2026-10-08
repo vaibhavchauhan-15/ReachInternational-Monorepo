@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   normalizeOperationsFilter,
   RawOperationsFilterInput,
@@ -204,6 +204,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
       };
     },
     staleTime: OPERATIONS_CACHE_TTLS.filterOperators * 1000, // 10 minutes cache stale time (600s)
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -346,6 +347,7 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled
         };
       });
     },
+    placeholderData: keepPreviousData,
     staleTime: OPERATIONS_CACHE_TTLS.machineLogs * 1000, // 45 seconds cache stale time (45s)
   });
 }
@@ -407,6 +409,7 @@ export function useTodayShiftMonitor(actorId?: string, logDate?: string, enabled
 
       return (data as TodayShiftMonitorRow[]) || [];
     },
+    placeholderData: keepPreviousData,
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
@@ -498,6 +501,7 @@ export function useOperatorHistoryLogs(operatorId?: string, fallbackMachine?: an
     queryKey: ['operator', 'history-logs', operatorId],
     enabled: Boolean(operatorId),
     queryFn: () => fetchOperatorHistoryLogs(operatorId!, fallbackMachine),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 }

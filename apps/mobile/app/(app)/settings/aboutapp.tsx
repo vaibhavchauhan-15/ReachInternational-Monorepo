@@ -10,9 +10,9 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Linking} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../../components/ui/touch/Pressable';
 import {
   Card,
   Badge,
@@ -38,7 +38,7 @@ import {
   Trash2,
   Cpu,
   CheckCircle2,
-} from 'lucide-react-native';
+} from '../../../components/ui/icon';
 
 export default function AboutAppScreen() {
   const router = useRouter();
@@ -114,32 +114,32 @@ export default function AboutAppScreen() {
           </View>
 
           {/* Website Link */}
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={styles.touchLinkRow}
             onPress={() => Linking.openURL(BRAND_WEBSITE)}
-            activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
               <Text style={[styles.linkTitle, { color: theme.colors.ink }]}>Official Website</Text>
               <Text style={[styles.linkSubtitle, { color: theme.colors.link }]}>{BRAND_WEBSITE_DISPLAY}</Text>
             </View>
             <ExternalLink size={16} color={theme.colors.link} />
-          </TouchableOpacity>
+          </Pressable>
 
           <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
 
           {/* Support Email */}
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={styles.touchLinkRow}
             onPress={() => Linking.openURL(`mailto:${BRAND_EMAIL}`)}
-            activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
               <Text style={[styles.linkTitle, { color: theme.colors.ink }]}>Support & Compliance Email</Text>
               <Text style={[styles.linkSubtitle, { color: theme.colors.link }]}>{BRAND_EMAIL}</Text>
             </View>
             <Mail size={16} color={theme.colors.link} />
-          </TouchableOpacity>
+          </Pressable>
         </Card>
 
         {/* ========================================================================= */}
@@ -159,10 +159,10 @@ export default function AboutAppScreen() {
           </View>
 
           {/* Privacy Policy */}
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={styles.legalNavRow}
             onPress={() => router.push('/(app)/privacy' as any)}
-            activeOpacity={0.7}
           >
             <View style={[styles.policyIconCircle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
               <ShieldCheck size={16} color={theme.colors.ink} />
@@ -174,15 +174,15 @@ export default function AboutAppScreen() {
               </Text>
             </View>
             <ChevronRight size={18} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
 
           <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
 
           {/* Terms of Service */}
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={styles.legalNavRow}
             onPress={() => router.push('/(app)/terms' as any)}
-            activeOpacity={0.7}
           >
             <View style={[styles.policyIconCircle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
               <FileText size={16} color={theme.colors.ink} />
@@ -194,15 +194,15 @@ export default function AboutAppScreen() {
               </Text>
             </View>
             <ChevronRight size={18} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
 
           <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
 
           {/* Account Deletion */}
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={styles.legalNavRow}
             onPress={() => router.push('/(app)/account-deletion' as any)}
-            activeOpacity={0.7}
           >
             <View style={[styles.policyIconCircle, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2' }]}>
               <Trash2 size={16} color="#e11d48" />
@@ -214,7 +214,7 @@ export default function AboutAppScreen() {
               </Text>
             </View>
             <ChevronRight size={18} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
         </Card>
 
         {/* ========================================================================= */}
@@ -259,6 +259,28 @@ export default function AboutAppScreen() {
               </Text>
             </View>
           </View>
+        </Card>
+
+        {/* ========================================================================= */}
+        {/* CARD 5: MOTION LAB & DIAGNOSTICS */}
+        {/* ========================================================================= */}
+        <Card variant="elevated" style={styles.card}>
+          <Pressable
+            variant="listRow"
+            style={styles.legalNavRow}
+            onPress={() => router.push('/(app)/motion-lab' as any)}
+          >
+            <View style={[styles.policyIconCircle, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe' }]}>
+              <Cpu size={16} color="#0284c7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.legalNavTitle, { color: theme.colors.ink }]}>Motion & Transitions Lab</Text>
+              <Text style={[styles.legalNavDesc, { color: theme.colors.mute }]}>
+                Android 16 Material 3 Expressive motion physics tuning
+              </Text>
+            </View>
+            <ChevronRight size={18} color={theme.colors.mute} />
+          </Pressable>
         </Card>
 
         <View style={styles.brandFooter}>

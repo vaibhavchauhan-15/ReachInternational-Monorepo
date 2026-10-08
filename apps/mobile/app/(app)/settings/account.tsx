@@ -10,11 +10,11 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   Platform,
   ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../../components/ui/touch/Pressable';
 import { useAuth } from '../../../lib/auth/useAuth';
 import {
   Card,
@@ -40,8 +40,8 @@ import {
   Mail,
   MapPin,
   Lock,
-} from 'lucide-react-native';
-import { haptics } from '../../../lib/interaction/haptics';
+} from '../../../components/ui/icon';
+import { haptics } from '../../../lib/haptics';
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
@@ -219,7 +219,8 @@ export default function AccountSettingsScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
+          <Pressable
+            variant="listRow"
             style={[
               styles.profileEditAction,
               {
@@ -228,14 +229,13 @@ export default function AccountSettingsScreen() {
               },
             ]}
             onPress={() => router.push('/(app)/profile' as any)}
-            activeOpacity={0.8}
           >
             <User size={14} color={theme.colors.link} />
             <Text style={[styles.profileEditText, { color: theme.colors.link }]}>
               View & Edit Full Personnel Profile
             </Text>
             <ChevronRight size={14} color={theme.colors.link} />
-          </TouchableOpacity>
+          </Pressable>
         </Card>
 
         {/* ========================================================================= */}
@@ -287,17 +287,19 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="none"
                 style={{ flex: 1 }}
               />
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
                 style={styles.eyeBtn}
                 onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Toggle current password visibility"
               >
                 {showCurrentPassword ? (
                   <EyeOff size={18} color={theme.colors.mute} />
                 ) : (
                   <Eye size={18} color={theme.colors.mute} />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
 
@@ -315,17 +317,19 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="none"
                 style={{ flex: 1 }}
               />
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
                 style={styles.eyeBtn}
                 onPress={() => setShowNewPassword(!showNewPassword)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Toggle new password visibility"
               >
                 {showNewPassword ? (
                   <EyeOff size={18} color={theme.colors.mute} />
                 ) : (
                   <Eye size={18} color={theme.colors.mute} />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* Password Strength Indicator */}
@@ -414,17 +418,19 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="none"
                 style={{ flex: 1 }}
               />
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
                 style={styles.eyeBtn}
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Toggle confirm password visibility"
               >
                 {showConfirmPassword ? (
                   <EyeOff size={18} color={theme.colors.mute} />
                 ) : (
                   <Eye size={18} color={theme.colors.mute} />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {confirmPassword.length > 0 && (

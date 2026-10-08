@@ -6,15 +6,15 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X, Search, UserCheck, Clock } from 'lucide-react-native';
+import { Check, X, Search, UserCheck, Clock } from '../ui/icon';
 
 export interface SelectableUser {
   id: string;
@@ -186,12 +186,15 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                       <Text variant="caption" style={[styles.chipText, { color: theme.colors.ink }]}>
                         {u.full_name}
                       </Text>
-                      <TouchableOpacity
+                      <Pressable
+                        variant="iconButton"
+                        haptic="tap"
+                        hitSlopToMin48
                         onPress={() => removeUser(id)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        accessibilityLabel={`Remove ${u.full_name}`}
                       >
                         <X size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   );
                 })}
@@ -215,10 +218,11 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
               filteredUsers.map((u) => {
                 const isSelected = selectedIds.includes(u.id);
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={u.id}
+                    variant="listRow"
+                    haptic="select"
                     onPress={() => toggleUser(u.id)}
-                    activeOpacity={0.7}
                     style={[
                       styles.userRow,
                       {
@@ -271,7 +275,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                         </View>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })
             )}
@@ -279,7 +283,9 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
 
           {/* Footer Action Buttons */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <TouchableOpacity
+            <Pressable
+              variant="outline"
+              haptic="tap"
               onPress={onClose}
               style={[
                 styles.cancelBtn,
@@ -288,15 +294,14 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                   backgroundColor: theme.colors.canvas,
                 },
               ]}
-              activeOpacity={0.7}
             >
               <Text variant="label" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             <Touchable
               preset="button"
               onPress={() => {
-                haptics.success();
+                haptics.confirm();
                 handleSave();
               }}
               style={[styles.confirmBtn, { backgroundColor: theme.colors.primary }]}

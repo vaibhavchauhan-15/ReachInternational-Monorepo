@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, type ViewStyle } from 'react-native';
-import { AlertCircle, CheckCircle2, AlertTriangle, Info, X } from 'lucide-react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { AlertCircle, CheckCircle2, AlertTriangle, Info, X } from './icon';
 import { useTheme } from './ThemeProvider';
 import { Text } from './Text';
-import { Icon } from './Icon';
+import { Icon } from './icon';
+import { Pressable } from './touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export type AlertVariant = 'info' | 'success' | 'warning' | 'error';
@@ -34,7 +35,7 @@ export function Alert({
       text: isDark ? '#bae6fd' : '#0369a1',
       title: isDark ? '#e0f2fe' : '#075985',
       iconColor: '#0ea5e9',
-      defaultIcon: <Icon name={Info} variant="subheading" color="#0ea5e9" />,
+      defaultIcon: <Icon name={Info} animate="mount" variant="subheading" color="#0ea5e9" />,
     },
     success: {
       bg: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)',
@@ -42,7 +43,7 @@ export function Alert({
       text: isDark ? '#a7f3d0' : '#047857',
       title: isDark ? '#d1fae5' : '#065f46',
       iconColor: '#10b981',
-      defaultIcon: <Icon name={CheckCircle2} variant="subheading" color="#10b981" />,
+      defaultIcon: <Icon name={CheckCircle2} animate="mount" variant="subheading" color="#10b981" />,
     },
     warning: {
       bg: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
@@ -50,7 +51,7 @@ export function Alert({
       text: isDark ? '#fde68a' : '#b45309',
       title: isDark ? '#fef3c7' : '#92400e',
       iconColor: '#f59e0b',
-      defaultIcon: <Icon name={AlertTriangle} variant="subheading" color="#f59e0b" />,
+      defaultIcon: <Icon name={AlertTriangle} animate="mount" variant="subheading" color="#f59e0b" />,
     },
     error: {
       bg: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
@@ -58,7 +59,7 @@ export function Alert({
       text: isDark ? '#fecaca' : '#b91c1c',
       title: isDark ? '#fee2e2' : '#991b1b',
       iconColor: '#ef4444',
-      defaultIcon: <Icon name={AlertCircle} variant="subheading" color="#ef4444" />,
+      defaultIcon: <Icon name={AlertCircle} animate="mount" variant="subheading" color="#ef4444" />,
     },
   };
 
@@ -91,9 +92,9 @@ export function Alert({
       </View>
 
       {onDismiss ? (
-        <TouchableOpacity onPress={onDismiss} style={styles.dismissBtn} hitSlop={8}>
+        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48={true} onPress={onDismiss} style={styles.dismissBtn}>
           <Icon name={X} variant="caption" color={current.text} />
-        </TouchableOpacity>
+        </Pressable>
       ) : null}
     </View>
   );

@@ -9,9 +9,9 @@ import {
 import { useTheme } from '../ui/ThemeProvider';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { AlertTriangle, X } from 'lucide-react-native';
+import { AlertTriangle, X } from '../ui/icon';
 
 export interface RejectReasonModalProps {
   visible: boolean;

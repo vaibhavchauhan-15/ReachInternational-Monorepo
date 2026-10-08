@@ -16,7 +16,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -24,7 +23,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from '../ui/touch/Pressable';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
@@ -44,7 +44,7 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import {
   formatDate,
   formatTo12Hour,
@@ -406,45 +406,17 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
           {/* Action CTAs: Export to Excel and Print/PDF Buttons (Screenshot 4) */}
           <View style={styles.headerActionsWrap}>
-            <TouchableOpacity
-              onPress={handleExportExcel}
-              disabled={isExportingExcel}
-              activeOpacity={0.7}
-              style={[
-                styles.iconCtaBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
-                  borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0',
-                },
-              ]}
-              accessibilityLabel="Export Shift Logs to Excel"
-              accessibilityRole="button"
-            >
+            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={handleExportExcel} disabled={isExportingExcel} style={[styles.iconCtaBtn, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5", borderColor: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0" }]} accessibilityLabel="Export Shift Logs to Excel">
               {isExportingExcel ? (
                 <ActivityIndicator size="small" color={isDark ? '#34d399' : '#059669'} />
               ) : (
                 <FileSpreadsheet size={16} color={isDark ? '#34d399' : '#059669'} />
               )}
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
-              onPress={() => {
-                haptics.select();
-                setShowExportModal(true);
-              }}
-              activeOpacity={0.7}
-              style={[
-                styles.iconCtaBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
-                  borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
-                },
-              ]}
-              accessibilityLabel="Print or Export Shift Logs to PDF"
-              accessibilityRole="button"
-            >
+            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setShowExportModal(true)} style={[styles.iconCtaBtn, { backgroundColor: isDark ? "rgba(2, 132, 199, 0.15)" : "#e0f2fe", borderColor: isDark ? "rgba(2, 132, 199, 0.3)" : "#bae6fd" }]} accessibilityLabel="Print or Export Shift Logs to PDF">
               <Printer size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -472,28 +444,14 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
               ]}
             />
             {search.trim() !== '' && (
-              <TouchableOpacity
-                onPress={() => setSearch('')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.clearSearchBtn}
-              >
+              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')} style={styles.clearSearchBtn} accessibilityLabel="Clear search">
                 <X size={13} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
 
           {/* Filter Dropdown Toggle Button */}
-          <TouchableOpacity
-            onPress={() => setIsFilterModalOpen(true)}
-            activeOpacity={0.8}
-            style={[
-              styles.filterBtn,
-              {
-                backgroundColor: activeFilterCount > 0 ? (isDark ? 'rgba(0, 112, 243, 0.15)' : '#eff6ff') : (isDark ? 'rgba(255,255,255,0.04)' : '#ffffff'),
-                borderColor: activeFilterCount > 0 ? (isDark ? 'rgba(0, 112, 243, 0.3)' : '#bfdbfe') : theme.colors.hairline,
-              },
-            ]}
-          >
+          <Pressable variant="outline" haptic="select" hitSlopToMin48 onPress={() => setIsFilterModalOpen(true)} style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? (isDark ? "rgba(0, 112, 243, 0.15)" : "#eff6ff") : (isDark ? "rgba(255,255,255,0.04)" : "#ffffff"), borderColor: activeFilterCount > 0 ? (isDark ? "rgba(0, 112, 243, 0.3)" : "#bfdbfe") : theme.colors.hairline }]} accessibilityRole="button" accessibilityLabel="Filter shift logs">
             <SlidersHorizontal size={13} color={activeFilterCount > 0 ? theme.colors.link : theme.colors.mute} />
             <Text
               variant="label"
@@ -505,7 +463,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
               Filter
             </Text>
             <ChevronDown size={13} color={activeFilterCount > 0 ? theme.colors.link : theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* 3. Active Filter Chips Row (Screenshot 4) */}
@@ -521,9 +479,9 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                   Date: "{search}"
                 </Text>
-                <TouchableOpacity onPress={() => setSearch('')}>
+                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')}>
                   <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
@@ -533,9 +491,9 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                   {DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
                 </Text>
-                <TouchableOpacity onPress={() => setDateFilter('all')}>
+                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setDateFilter('all')}>
                   <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
@@ -545,9 +503,9 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                   {CONDITION_FILTER_OPTIONS.find((o) => o.value === conditionFilter)?.label}
                 </Text>
-                <TouchableOpacity onPress={() => setConditionFilter('all')}>
+                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setConditionFilter('all')}>
                   <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
@@ -557,19 +515,19 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                   Sort: {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
                 </Text>
-                <TouchableOpacity onPress={() => setSortBy('date_desc')}>
+                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSortBy('date_desc')}>
                   <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {/* Reset All */}
-            <TouchableOpacity onPress={handleResetFilters} style={styles.resetAllBtn}>
+            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={handleResetFilters} style={styles.resetAllBtn} accessibilityRole="button">
               <RotateCcw size={11} color={theme.colors.link} />
               <Text variant="caption" style={{ color: theme.colors.link }}>
                 Reset
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
       </View>
@@ -759,15 +717,9 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   {/* Edit Pencil Icon (Only within 7 days, else locked) */}
                   <View style={styles.editActionWrap}>
                     {canEdit ? (
-                      <TouchableOpacity
-                        onPress={() => onEditLog?.(log)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                        style={styles.editBtn}
-                        accessibilityLabel="Edit machine log within 7 days"
-                      >
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => onEditLog?.(log)} style={styles.editBtn} accessibilityLabel="Edit machine log within 7 days">
                         <Pencil size={15} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : (
                       <View style={styles.lockBtn}>
                         <Lock size={13} color={theme.colors.mute} />
@@ -804,9 +756,9 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   Filter Shift Logs
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setIsFilterModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setIsFilterModalOpen(false)} accessibilityLabel="Close filter dialog">
                 <X size={18} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
@@ -817,11 +769,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 </Text>
                 <View style={styles.filterOptionsGrid}>
                   {DATE_FILTER_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setDateFilter(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
+                    <Pressable key={opt.value} variant="chip" haptic="select" hitSlopToMin48 onPress={() => setDateFilter(opt.value)} style={[styles.filterOptionPill,
                         {
                           backgroundColor: dateFilter === opt.value ? theme.colors.ink : theme.colors.canvas,
                           borderColor: theme.colors.hairline,
@@ -835,7 +783,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                       >
                         {opt.label}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -847,11 +795,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 </Text>
                 <View style={styles.filterOptionsGrid}>
                   {CONDITION_FILTER_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setConditionFilter(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
+                    <Pressable key={opt.value} variant="chip" haptic="select" hitSlopToMin48 onPress={() => setConditionFilter(opt.value)} style={[styles.filterOptionPill,
                         {
                           backgroundColor: conditionFilter === opt.value ? theme.colors.ink : theme.colors.canvas,
                           borderColor: theme.colors.hairline,
@@ -865,7 +809,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                       >
                         {opt.label}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -877,11 +821,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 </Text>
                 <View style={styles.filterOptionsGrid}>
                   {SORT_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setSortBy(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
+                    <Pressable key={opt.value} variant="chip" haptic="select" hitSlopToMin48 onPress={() => setSortBy(opt.value)} style={[styles.filterOptionPill,
                         {
                           backgroundColor: sortBy === opt.value ? theme.colors.ink : theme.colors.canvas,
                           borderColor: theme.colors.hairline,
@@ -895,7 +835,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                       >
                         {opt.label}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -903,22 +843,16 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
             {/* Modal Footer Actions */}
             <View style={[styles.modalFooter, { borderTopColor: theme.colors.hairline }]}>
-              <TouchableOpacity
-                onPress={handleResetFilters}
-                style={[styles.modalSecondaryBtn, { borderColor: theme.colors.hairline }]}
-              >
+              <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={handleResetFilters} style={[styles.modalSecondaryBtn, { borderColor: theme.colors.hairline }]}>
                 <Text variant="label" style={{ color: theme.colors.ink }}>
                   Reset Filters
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setIsFilterModalOpen(false)}
-                style={[styles.modalPrimaryBtn, { backgroundColor: '#0070f3' }]}
-              >
+              </Pressable>
+              <Pressable variant="primary" haptic="tap" hitSlopToMin48 onPress={() => setIsFilterModalOpen(false)} style={[styles.modalPrimaryBtn, { backgroundColor: "#0070f3" }]}>
                 <Text variant="label" style={{ color: '#ffffff' }}>
                   Apply Filters
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
         </View>
       </AppModal>

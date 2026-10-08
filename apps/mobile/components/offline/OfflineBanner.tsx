@@ -1,37 +1,34 @@
-﻿import { Text } from '../ui/Text';
+import { Text } from '../ui/Text';
 /**
  * OfflineBanner — Persistent Ambient Offline Telemetry Banner
  * Phase 14: Mobile Offline Sync & Network Resilience
  * Conforms to decisions D-03, D-07, and Vercel Geist design tokens.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
-  Platform} from 'react-native';
+  Platform,
+  StatusBar as RNStatusBar,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { useTheme } from '../ui/ThemeProvider';
-import { WifiOff, RefreshCw, AlertCircle } from 'lucide-react-native';
+import { Pressable } from '../ui/touch/Pressable';
+import { WifiOff, RefreshCw, AlertCircle } from '../ui/icon';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { haptics } from '../../lib/interaction/haptics';
-
-const systemFontFamily = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  web: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  default: 'System',
-});
+import { haptics } from '../../lib/haptics';
+import { OfflineCollisionModal } from './OfflineCollisionModal';
 
 export const OfflineBanner: React.FC = () => {
   const { isOffline, checkConnectivity } = useNetworkStatus();
-  const { pendingCount, syncingCount, failedCount, conflictCount, isSyncing, syncNow } = useOfflineQueue();
+  const { pendingCount, syncingCount, failedCount, conflictCount, isSyncing, syncNow, queue } = useOfflineQueue();
   const { theme, isDark } = useTheme();
   const [isChecking, setIsChecking] = useState(false);
+  const [showCollisionModal, setShowCollisionModal] = useState(false);
 
   let insets = { top: 0, bottom: 0, left: 0, right: 0 };
   try {
@@ -42,6 +39,16 @@ export const OfflineBanner: React.FC = () => {
   }
 
   const totalQueued = pendingCount + syncingCount + failedCount + conflictCount;
+  const conflictingMutation = queue.find((item) => item.status === 'conflict') || null;
+
+  // Auto-sync when online: If offline shift entries exist in local storage, sync automatically to cloud DB
+  useEffect(() => {
+    if (!isOffline && (pendingCount > 0 || failedCount > 0) && !isSyncing && !isChecking) {
+      syncNow().catch((err) => {
+        console.warn('[OfflineBanner] Auto-sync on online error:', err);
+      });
+    }
+  }, [isOffline, pendingCount, failedCount, isSyncing, isChecking, syncNow]);
 
   // Only render if device is offline or if items are currently queued/syncing
   if (!isOffline && totalQueued === 0 && !isSyncing) {
@@ -53,6 +60,12 @@ export const OfflineBanner: React.FC = () => {
       haptics.light();
     } catch {
       // ignore
+    }
+
+    // If there are server conflicts, open the collision resolution modal
+    if (conflictCount > 0) {
+      setShowCollisionModal(true);
+      return;
     }
 
     if (isOffline) {
@@ -86,22 +99,29 @@ export const OfflineBanner: React.FC = () => {
     }
   };
 
-  // Vercel Geist amber token palette
-  const bannerBg = isDark ? '#261703' : '#fffbeb';
-  const bannerBorder = isDark ? '#4a2800' : '#fde68a';
-  const bannerText = isDark ? '#fbbf24' : '#92400e';
-  const bannerAccent = isDark ? '#f59e0b' : '#b45309';
-  const actionBg = isDark ? 'rgba(251, 191, 36, 0.14)' : 'rgba(217, 119, 6, 0.1)';
-  const actionBorder = isDark ? 'rgba(251, 191, 36, 0.25)' : 'rgba(217, 119, 6, 0.2)';
+  // Vercel Geist subtle amber token palette
+  const bannerBg = isDark ? '#1a1306' : '#fffbeb';
+  const bannerBorder = isDark ? '#3d2605' : '#fef08a';
+  const bannerText = isDark ? '#fde047' : '#92400e';
+  const bannerAccent = isDark ? '#eab308' : '#b45309';
+  const actionBg = isDark ? 'rgba(250, 204, 21, 0.12)' : 'rgba(180, 83, 9, 0.08)';
+  const actionBorder = isDark ? 'rgba(250, 204, 21, 0.25)' : 'rgba(180, 83, 9, 0.18)';
 
-  const paddingTop = Platform.OS === 'web' ? 7 : Math.max(insets.top, 7);
+  // Absolute clearance for Android notification bar and iOS notch
+  const androidStatusBar = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) : 0;
+  const safeTop = Math.max(insets.top, androidStatusBar, Platform.OS === 'ios' ? 44 : 0);
+  const paddingTop = Platform.OS === 'web' ? spacingNumeric.xxs : safeTop + 4;
 
-  // Status Title & Subtitle Context
+  // Status Title & Subtitle Context (minimal, compact)
   const statusTitle = isOffline
-    ? 'Offline Mode'
+    ? 'Offline'
     : isSyncing
-    ? 'Synchronizing...'
-    : 'Local Queue';
+    ? 'Syncing...'
+    : conflictCount > 0
+    ? 'Conflict'
+    : failedCount > 0 && pendingCount === 0
+    ? 'Sync Retry'
+    : 'Queued';
 
   const statusSubtitle = isOffline
     ? conflictCount > 0
@@ -111,82 +131,107 @@ export const OfflineBanner: React.FC = () => {
       : 'Changes save locally'
     : isSyncing
     ? `${totalQueued} ${totalQueued === 1 ? 'log' : 'logs'}`
+    : conflictCount > 0
+    ? `${conflictCount} conflict • Tap Review`
+    : failedCount > 0 && pendingCount === 0
+    ? `${failedCount} failed • Tap retry`
     : `${totalQueued} ${totalQueued === 1 ? 'log' : 'logs'} pending`;
 
-  const buttonLabel = isOffline
+  const buttonLabel = conflictCount > 0
+    ? 'Review'
+    : isOffline
     ? isChecking
       ? 'Checking...'
       : 'Check'
     : isSyncing
     ? 'Syncing...'
+    : failedCount > 0 && pendingCount === 0
+    ? 'Retry'
     : 'Sync Now';
 
   const isButtonDisabled = isSyncing || isChecking;
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: bannerBg,
-          borderBottomColor: bannerBorder,
-          paddingTop,
-        },
-      ]}
-    >
-      <View style={styles.contentRow}>
-        {/* Left Status: Ambient Icon + Status Title + Context Bullet */}
-        <View style={styles.leftCol}>
-          {isOffline ? (
-            <WifiOff size={13} color={bannerAccent} style={styles.icon} />
-          ) : conflictCount > 0 ? (
-            <AlertCircle size={13} color={theme.colors.error} style={styles.icon} />
-          ) : (
-            <RefreshCw size={13} color={bannerAccent} style={styles.icon} />
-          )}
+    <>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: bannerBg,
+            borderBottomColor: bannerBorder,
+            paddingTop,
+          },
+        ]}
+      >
+        <View style={styles.contentRow}>
+          {/* Left Status: Ambient Icon + Status Title + Context Bullet */}
+          <View style={styles.leftCol}>
+            {isOffline ? (
+              <WifiOff size={12} color={bannerAccent} animate="mount" style={styles.icon} />
+            ) : conflictCount > 0 ? (
+              <AlertCircle size={12} color={theme.colors.error} animate="mount" style={styles.icon} />
+            ) : (
+              <RefreshCw size={12} color={bannerAccent} loading={isSyncing} style={styles.icon} />
+            )}
 
-          <Text style={[styles.title, { color: bannerText }]} numberOfLines={1}>
-            {statusTitle}
-          </Text>
+            <Text variant="micro" style={[styles.title, { color: bannerText }]} numberOfLines={1}>
+              {statusTitle}
+            </Text>
 
-          <Text style={[styles.bullet, { color: bannerAccent }]}>•</Text>
+            <Text variant="micro" style={[styles.bullet, { color: bannerAccent }]}>•</Text>
 
-          <Text
-            style={[styles.countText, { color: bannerText }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
+            <Text
+              variant="micro"
+              style={[styles.countText, { color: bannerText }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {statusSubtitle}
+            </Text>
+          </View>
+
+          {/* Right CTA: Action Pill (Min 44px touch target via hitSlopToMin48) */}
+          <Pressable
+            variant="chip"
+            haptic="tap"
+            onPress={handleActionPress}
+            disabled={isButtonDisabled}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: actionBg,
+                borderColor: actionBorder,
+              },
+            ]}
+            hitSlopToMin48={true}
+            accessibilityRole="button"
+            accessibilityLabel={buttonLabel}
           >
-            {statusSubtitle}
-          </Text>
+            {isSyncing || isChecking ? (
+              <ActivityIndicator size="small" color={bannerAccent} style={styles.spinner} />
+            ) : (
+              <RefreshCw size={10} color={bannerAccent} style={styles.buttonIcon} />
+            )}
+            <Text variant="micro" style={[styles.buttonText, { color: bannerText }]}>
+              {buttonLabel}
+            </Text>
+          </Pressable>
         </View>
-
-        {/* Right CTA: Action Pill (Min 44px touch target via hitSlop) */}
-        <TouchableOpacity
-          onPress={handleActionPress}
-          disabled={isButtonDisabled}
-          activeOpacity={0.7}
-          style={[
-            styles.actionButton,
-            {
-              backgroundColor: actionBg,
-              borderColor: actionBorder,
-            },
-          ]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel={buttonLabel}
-        >
-          {isSyncing || isChecking ? (
-            <ActivityIndicator size="small" color={bannerAccent} style={styles.spinner} />
-          ) : (
-            <RefreshCw size={11} color={bannerAccent} style={styles.buttonIcon} />
-          )}
-          <Text style={[styles.buttonText, { color: bannerText }]}>
-            {buttonLabel}
-          </Text>
-        </TouchableOpacity>
       </View>
-    </View>
+
+      {/* Conflict Resolution Modal */}
+      {conflictingMutation && (
+        <OfflineCollisionModal
+          visible={showCollisionModal}
+          onClose={() => setShowCollisionModal(false)}
+          queuedMutation={conflictingMutation}
+          onResubmitSuccess={() => {
+            setShowCollisionModal(false);
+            syncNow().catch(() => {});
+          }}
+        />
+      )}
+    </>
   );
 };
 
@@ -194,7 +239,7 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     paddingHorizontal: spacingNumeric.md,
-    paddingBottom: 7,
+    paddingBottom: 5,
     borderBottomWidth: 1,
     zIndex: 999,
   },
@@ -202,7 +247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 30,
+    minHeight: 26,
     gap: 8,
   },
   leftCol: {
@@ -210,7 +255,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     minWidth: 0,
-    gap: 6,
+    gap: 5,
   },
   icon: {
     flexShrink: 0,
@@ -223,29 +268,29 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   countText: {
-    opacity: 0.9,
+    opacity: 0.85,
     flexShrink: 1,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    minHeight: 30,
+    minHeight: 24,
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
     flexShrink: 0,
   },
   buttonIcon: {
     marginRight: 1,
   },
   spinner: {
-    width: 11,
-    height: 11,
+    width: 10,
+    height: 10,
     marginRight: 2,
-    transform: [{ scale: 0.7 }],
+    transform: [{ scale: 0.65 }],
   },
   buttonText: {
   },

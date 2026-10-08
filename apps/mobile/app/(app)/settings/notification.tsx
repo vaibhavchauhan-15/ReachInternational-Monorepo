@@ -35,8 +35,8 @@ import {
   CheckCircle2,
   Volume2,
   VolumeX,
-} from 'lucide-react-native';
-import { haptics } from '../../../lib/interaction/haptics';
+} from '../../../components/ui/icon';
+import { haptics } from '../../../lib/haptics';
 
 const NOTIF_PREFS_KEY = '@reach:notification_preferences';
 
@@ -240,7 +240,7 @@ export default function NotificationSettingsScreen() {
         <Card variant="elevated" style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe' }]}>
-              <Bell size={18} color={isDark ? '#a78bfa' : '#7c3aed'} />
+              <Bell size={18} color={isDark ? '#a78bfa' : '#7c3aed'} pulseKey={prefs.push} />
             </View>
 
             <View style={{ flex: 1 }}>

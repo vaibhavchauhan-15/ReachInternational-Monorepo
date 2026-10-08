@@ -4,11 +4,13 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { Button, Input, useTheme, Text } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Truck, MapPin } from 'lucide-react-native';
+import { X, Truck, MapPin } from '../ui/icon';
 
 export interface SiteMovementModalProps {
   visible: boolean;
@@ -41,6 +43,7 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
 
   const handleSubmit = async () => {
     if (!fromLocation || !toLocation) {
+      haptics.reject();
       setError('Please provide origin and destination site locations.');
       return;
     }
@@ -57,8 +60,10 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
         driverPhone,
         notes,
       }));
+      haptics.confirm();
       onClose();
     } catch (err: any) {
+      haptics.reject();
       setError(err?.message || 'Failed to submit site movement.');
     } finally {
       setIsSubmitting(false);
@@ -71,9 +76,9 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>Machine Relocation & Site Movement</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Pressable variant="iconButton" haptic="select" hitSlopToMin48={true} onPress={onClose} style={styles.closeBtn}>
               <X size={22} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {error ? (

@@ -17,7 +17,7 @@ import {
   AlertTriangle,
   Layers,
   FileSpreadsheet,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 
 export interface ManagerDashboardCardProps {
   data: ManagerDashboardDTO | null;

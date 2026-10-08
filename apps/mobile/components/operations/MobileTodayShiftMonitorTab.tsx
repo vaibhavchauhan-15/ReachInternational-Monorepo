@@ -12,7 +12,6 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   TextInput,
@@ -53,11 +52,13 @@ import {
   Wrench,
   Edit2,
   ChevronRight,
-} from 'lucide-react-native';
+  Icon,
+} from '../ui/icon';
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { isManagerOrAbove } from '@reachinternational/permissions';
 import { useAuth } from '../../lib/auth/useAuth';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from '../ui/touch/Pressable';
 
 export interface MobileTodayShiftMonitorTabProps {
   actorId?: string;
@@ -201,7 +202,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   }, [statusFilter, shiftFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
-    haptics.success();
+    haptics.confirm();
     setStatusFilter('all');
     setShiftFilter('all');
     setSortBy('default');
@@ -308,25 +309,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           </Text>
 
           {searchQuery.trim() !== '' && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={[
-                styles.badgeChip,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-              ]}
-            >
+            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={() => setSearchQuery('')} style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <Text variant="caption" style={[styles.badgeChipText, { color: theme.colors.ink }]}>
                 Search: "{searchQuery}"
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {statusFilter !== 'all' && (
-            <TouchableOpacity
-              onPress={() => setStatusFilter('all')}
-              style={[
-                styles.badgeChip,
+            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={() => setStatusFilter('all')} style={[styles.badgeChip,
                 {
                   backgroundColor:
                     statusFilter === 'entered'
@@ -349,14 +341,11 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 Status: {currentStatusLabel}
               </Text>
               <X size={12} color={statusFilter === 'entered' ? '#059669' : '#d97706'} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {shiftFilter !== 'all' && (
-            <TouchableOpacity
-              onPress={() => setShiftFilter('all')}
-              style={[
-                styles.badgeChip,
+            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={() => setShiftFilter('all')} style={[styles.badgeChip,
                 {
                   backgroundColor: isDark ? '#1e3a8a26' : '#eff6ff',
                   borderColor: '#3b82f633',
@@ -367,14 +356,11 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 Shift: {currentShiftLabel}
               </Text>
               <X size={12} color="#2563eb" />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {sortBy !== 'default' && (
-            <TouchableOpacity
-              onPress={() => setSortBy('default')}
-              style={[
-                styles.badgeChip,
+            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={() => setSortBy('default')} style={[styles.badgeChip,
                 { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
               ]}
             >
@@ -382,15 +368,15 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 Sort: {currentSortLabel}
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
-          <TouchableOpacity onPress={handleResetAllFilters} style={styles.resetAllLink}>
+          <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={handleResetAllFilters} style={styles.resetAllLink}>
             <RotateCcw size={11} color={theme.colors.link} />
             <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
               Reset all
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
     </View>
@@ -447,8 +433,9 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {/* Top Search & Filter Action Row */}
         <View style={styles.toolbarTopRow}>
           {/* Search Input Bar (Capsule Pill with Web Outline Suppression & Focus Ring) */}
-          <TouchableOpacity
-            activeOpacity={1}
+          <Pressable
+            variant="plain"
+            haptic="none"
             onPress={() => searchInputRef.current?.focus()}
             style={[
               styles.searchBarBox,
@@ -495,26 +482,14 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               autoCorrect={false}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.searchClearBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Clear search"
-              >
+              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearchQuery('')} style={styles.searchClearBtn} accessibilityLabel="Clear search">
                 <X size={14} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Filter Toggle Button */}
-          <TouchableOpacity
-            onPress={() => {
-              haptics.select();
-              setFilterPanelOpen((prev) => !prev);
-            }}
-            activeOpacity={0.8}
-            style={[
-              styles.filterToggleBtn,
+          <Pressable variant="outline" haptic="select" hitSlopToMin48 onPress={() => setFilterPanelOpen((prev) => !prev)} style={[styles.filterToggleBtn,
               {
                 backgroundColor:
                   filterPanelOpen || activeFilterCount > 0
@@ -581,54 +556,21 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 </Text>
               </View>
             )}
-            {isWeb ? (
-              <View
-                style={{
-                  transform: [{ rotate: filterPanelOpen ? '180deg' : '0deg' }],
-                  transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-                } as any}
-              >
-                <ChevronDown
-                  size={13}
-                  color={
-                    filterPanelOpen || activeFilterCount > 0
-                      ? theme.colors.canvas
-                      : theme.colors.mute
-                  }
-                />
-              </View>
-            ) : (
-              <Animated.View
-                style={{
-                  transform: [
-                    {
-                      rotate: filterAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0deg', '180deg'],
-                      }),
-                    },
-                  ],
-                }}
-              >
-                <ChevronDown
-                  size={13}
-                  color={
-                    filterPanelOpen || activeFilterCount > 0
-                      ? theme.colors.canvas
-                      : theme.colors.mute
-                  }
-                />
-              </Animated.View>
-            )}
-          </TouchableOpacity>
+            <Icon
+              name="chevron-down"
+              size={13}
+              color={
+                filterPanelOpen || activeFilterCount > 0
+                  ? theme.colors.canvas
+                  : theme.colors.mute
+              }
+              state={filterPanelOpen ? 'open' : 'closed'}
+            />
+          </Pressable>
 
           {/* Quick Reset Filters Button */}
           {(activeFilterCount > 0 || searchQuery.length > 0) && (
-            <TouchableOpacity
-              onPress={handleResetAllFilters}
-              activeOpacity={0.8}
-              style={[
-                styles.quickResetBtn,
+            <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={handleResetAllFilters} style={[styles.quickResetBtn,
                 {
                   backgroundColor: theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
@@ -640,7 +582,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                 Reset
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
 
@@ -704,14 +646,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               : 'No active shift assignments found for today.'}
           </Text>
           {!searchQuery && (
-            <TouchableOpacity
-              onPress={() => handleOpenAssignModal(undefined)}
-              activeOpacity={0.8}
-              style={[styles.emptyAssignButton, { backgroundColor: theme.colors.link }]}
-            >
+            <Pressable variant="primary" haptic="tap" hitSlopToMin48 onPress={() => handleOpenAssignModal(undefined)} style={[styles.emptyAssignButton, { backgroundColor: theme.colors.link }]}>
               <UserPlus size={14} color="#ffffff" />
               <Text variant="label" style={styles.emptyAssignButtonText}>Assign Operator</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       ) : (
@@ -746,18 +684,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               : null;
 
             return (
-              <TouchableOpacity
-                key={cardKey}
-                activeOpacity={0.84}
-                onPress={() => {
-                  haptics.select();
-                  if (isUnassigned) {
-                    handleOpenAssignModal(row.machine_id);
-                  } else if (canEnterLog) {
-                    onEnterLog(row);
-                  }
-                }}
-                style={[
+              <Pressable key={cardKey} variant="card" haptic="select" onPress={() => { if (isUnassigned) { handleOpenAssignModal(row.machine_id); } else if (canEnterLog) { onEnterLog(row); } }} style={[
                   styles.card,
                   {
                     backgroundColor: theme.colors.canvasElevated,
@@ -770,7 +697,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
                   } as any),
                 ]}
-                accessibilityRole="button"
                 accessibilityLabel={`${row.operator_name || 'Unassigned Machine'}, ${row.shift_name || row.shift_code}, Status: ${row.status}`}
               >
                 {/* LINE 1: Operator Name (Left)  +  Shift Log Status & Touch Indicator (Right) */}
@@ -916,14 +842,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         Sr No:
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        handleOpenAssignModal(row.machine_id);
-                      }}
-                      style={[
-                        styles.monoBadge,
+                    <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
+                        e?.stopPropagation?.(); handleOpenAssignModal(row.machine_id); }} style={[styles.monoBadge,
                         {
                           backgroundColor: theme.colors.canvasElevated,
                           borderColor: theme.colors.hairline,
@@ -941,7 +861,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         ]}
                         numberOfLines={1}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {/* LINE 5: Client Name */}
@@ -985,63 +905,33 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
                 {/* Action Buttons: Assign Operator (Unassigned) or Enter Shift Log (Pending) / Edit Shift Log (Entered) */}
                 {isUnassigned ? (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation?.();
-                      handleOpenAssignModal(row.machine_id);
-                    }}
-                    activeOpacity={0.8}
-                    style={[styles.assignRowBtn, { backgroundColor: theme.colors.ink }]}
-                  >
+                  <Pressable variant="primary" haptic="tap" onPress={(e) => { // @ts-ignore
+                      e?.stopPropagation?.(); handleOpenAssignModal(row.machine_id); }} style={[styles.assignRowBtn, { backgroundColor: theme.colors.ink }]}>
                     <UserPlus size={14} color={theme.colors.canvas} />
                     <Text variant="label" style={[styles.assignRowBtnText, { color: theme.colors.canvas }]}>
                       Assign Operator to {row.machine_code}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ) : !isEntered ? (
                   canEnterLog ? (
-                    <TouchableOpacity
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        onEnterLog(row);
-                      }}
-                      activeOpacity={0.8}
-                      style={[
-                        styles.enterLogBtn,
-                        {
-                          backgroundColor: theme.colors.link + '15',
-                          borderColor: theme.colors.link + '35',
-                        },
-                      ]}
-                    >
+                    <Pressable variant="secondary" haptic="tap" onPress={(e) => { // @ts-ignore
+                        e?.stopPropagation?.(); onEnterLog(row); }} style={[styles.enterLogBtn, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '35' }]}>
                       <User size={14} color={theme.colors.link} />
                       <Text variant="label" style={[styles.enterLogBtnText, { color: theme.colors.link }]} numberOfLines={1}>
                         Enter Shift Log for {row.operator_name || 'Operator'}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : null
                 ) : canEnterLog ? (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation?.();
-                      onEnterLog(row);
-                    }}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.enterLogBtn,
-                      {
-                        backgroundColor: isDark ? '#064e3b18' : '#ecfdf5',
-                        borderColor: isDark ? '#064e3b40' : '#a7f3d0',
-                      },
-                    ]}
-                  >
+                  <Pressable variant="secondary" haptic="tap" onPress={(e) => { // @ts-ignore
+                      e?.stopPropagation?.(); onEnterLog(row); }} style={[styles.enterLogBtn, { backgroundColor: isDark ? '#064e3b18' : '#ecfdf5', borderColor: isDark ? '#064e3b40' : '#a7f3d0' }]}>
                     <Edit2 size={13} color={isDark ? '#34d399' : '#059669'} />
                     <Text variant="label" style={[styles.enterLogBtnText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
                       Edit Shift Log for {row.operator_name || 'Operator'}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ) : null}
-              </TouchableOpacity>
+              </Pressable>
             );
           })}
         </View>

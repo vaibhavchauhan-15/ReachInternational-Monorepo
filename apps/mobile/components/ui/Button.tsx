@@ -1,21 +1,21 @@
 /**
- * ServiceCentric Mobile — Native Button Primitive
- * Standardized button system with variants (primary, secondary, outline, ghost, danger) & loading spinner.
+ * ReachInternational Mobile — Native Button Primitive
+ * Standardized button system with variants (primary, secondary, outline, ghost, danger, success),
+ * Android RenderThread native ripple, 0.98 spring scale, and 48dp minimum touch target.
  */
 
 import React, { useState, useRef } from 'react';
 import {
-  TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
   type ViewStyle,
-  type TextStyle,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric, type TypeVariant } from '@reachinternational/design-tokens';
 import { InteractiveIcon } from './InteractiveIcon';
 import { Text } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from './touch/Pressable';
+import type { TouchVariant } from './touch/feedback';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -49,7 +49,6 @@ export const Button: React.FC<ButtonProps> = ({
   const { theme } = useTheme();
 
   const [internalLoading, setInternalLoading] = useState(false);
-  const [isPressed, setIsPressed] = useState(false);
   const isExecutingRef = useRef(false);
 
   const effectiveLoading = Boolean(isLoading || internalLoading);
@@ -57,8 +56,6 @@ export const Button: React.FC<ButtonProps> = ({
   const handlePress = async () => {
     if (disabled || effectiveLoading || isExecutingRef.current) return;
     if (!onPress) return;
-
-    haptics.light();
 
     try {
       const result: unknown = (onPress as () => unknown)();
@@ -93,19 +90,20 @@ export const Button: React.FC<ButtonProps> = ({
 
     let paddingVertical: number = 10;
     let paddingHorizontal: number = spacingNumeric.md;
-    let minHeight: number = 44;
+    // Android 48dp minimum target (M3 standard)
+    let minHeight: number = 48;
 
     if (size === 'sm') {
       paddingVertical = 6;
       paddingHorizontal = 12;
-      minHeight = 34;
+      minHeight = 36;
     } else if (size === 'lg') {
       paddingVertical = 14;
       paddingHorizontal = spacingNumeric.lg;
-      minHeight = 48;
+      minHeight = 52;
     }
 
-    const borderRadius = shape === 'pill' ? radiusNumeric.pill : radiusNumeric.sm;
+    const borderRadius = shape === 'pill' ? radiusNumeric.pill : radiusNumeric.md;
 
     return {
       backgroundColor: bg,
@@ -118,10 +116,10 @@ export const Button: React.FC<ButtonProps> = ({
       justifyContent: 'center',
       flexDirection: 'row',
       gap: 6,
-      opacity: disabled || effectiveLoading ? 0.5 : 1,
       minHeight,
-      minWidth: 44,
+      minWidth: 48,
       width: fullWidth ? '100%' : 'auto',
+      overflow: 'hidden',
     };
   };
 
@@ -140,36 +138,53 @@ export const Button: React.FC<ButtonProps> = ({
 
   const textVariant: TypeVariant = size === 'sm' ? 'caption' : size === 'lg' ? 'subheading' : 'label';
 
+  const touchVariant: TouchVariant =
+    variant === 'primary'
+      ? 'buttonPrimary'
+      : variant === 'danger'
+      ? 'buttonDanger'
+      : variant === 'outline'
+      ? 'buttonOutline'
+      : variant === 'ghost'
+      ? 'buttonGhost'
+      : 'buttonSecondary';
+
+  const borderRadius = shape === 'pill' ? radiusNumeric.pill : radiusNumeric.md;
+
   return (
-    <TouchableOpacity
+    <Pressable
+      variant={touchVariant}
+      haptic={false} // Buttons don't buzz on raw touch; confirm/reject come from result
+      rippleRadius={borderRadius}
+      hitSlopToMin48={true}
       onPress={handlePress}
-      onPressIn={() => setIsPressed(true)}
-      onPressOut={() => setIsPressed(false)}
-      disabled={disabled || effectiveLoading}
-      activeOpacity={0.7}
-      accessible={true}
+      disabled={disabled}
+      loading={effectiveLoading}
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || effectiveLoading, busy: effectiveLoading }}
       style={[getContainerStyle(), style]}
     >
-      {effectiveLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? theme.colors.onPrimary : theme.colors.link}
-        />
-      ) : (
-        <>
-          {icon ? (
-            <InteractiveIcon
-              icon={icon}
-              pressed={isPressed && !disabled && !effectiveLoading}
-              variant="bounce"
-            />
-          ) : null}
-          <Text variant={textVariant} style={getTextStyle()}>{label}</Text>
-        </>
-      )}
-    </TouchableOpacity>
+      {({ pressed }) =>
+        effectiveLoading ? (
+          <ActivityIndicator
+            size="small"
+            color={variant === 'primary' ? theme.colors.onPrimary : theme.colors.link}
+          />
+        ) : (
+          <>
+            {icon ? (
+              <InteractiveIcon
+                icon={icon}
+                pressed={pressed && !disabled && !effectiveLoading}
+                variant="bounce"
+              />
+            ) : null}
+            <Text variant={textVariant} style={getTextStyle()}>
+              {label}
+            </Text>
+          </>
+        )
+      }
+    </Pressable>
   );
 };

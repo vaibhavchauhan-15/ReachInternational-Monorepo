@@ -49,12 +49,12 @@ import {
   Clock,
   MapPin,
   CreditCard,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (req?: any) => void;
   currentUser?: any;
 }
 
@@ -572,6 +572,13 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         license_number: formattedLicense,
       };
 
+      const targetApprover =
+        role === 'admin'
+          ? 'super_admin'
+          : ['manager', 'hr'].includes(role || '')
+          ? 'admin'
+          : 'manager';
+
       if (isSuperAdmin) {
         // Direct update for Super Admin
         const userTablePayload: Record<string, unknown> = {
@@ -610,13 +617,6 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         Alert.alert('Success', 'Your profile details have been updated directly.');
       } else {
         // Submit profile change request
-        const targetApprover =
-          role === 'admin'
-            ? 'super_admin'
-            : ['manager', 'hr'].includes(role || '')
-            ? 'admin'
-            : 'manager';
-
         // Check if existing pending request exists
         const { data: existing } = await supabase
           .from('profile_change_requests')
@@ -675,7 +675,11 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         );
       }
 
-      onSuccess?.();
+      onSuccess?.(isSuperAdmin ? null : {
+        target_approver_role: targetApprover,
+        requested_data: payload,
+        created_at: new Date().toISOString(),
+      });
       onClose();
     } catch (err: any) {
       console.error('Error submitting profile changes:', err);

@@ -8,12 +8,12 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Linking,
   Platform,
   Image,
   useWindowDimensions} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import {
   Card,
   useTheme,
@@ -33,7 +33,7 @@ import {
   Mail,
   ExternalLink,
   ArrowLeft,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 
@@ -92,7 +92,9 @@ export default function TermsOfServiceScreen() {
 
           {/* Top Header Row with Back Button & Logo */}
           <View style={styles.showcaseHeaderRow}>
-            <TouchableOpacity
+            <Pressable
+              variant="iconButton"
+              hitSlopToMin48
               onPress={() => router.back()}
               style={[
                 styles.showcaseBackBtn,
@@ -101,11 +103,10 @@ export default function TermsOfServiceScreen() {
                   backgroundColor: theme.colors.canvas,
                 },
               ]}
-              activeOpacity={0.7}
-              hitSlop={8}
+              accessibilityLabel="Back"
             >
               <ArrowLeft size={16} color={theme.colors.ink} />
-            </TouchableOpacity>
+            </Pressable>
             <ReachInternationalLogo variant="full" size={28} iconType="scissor" />
           </View>
 
@@ -184,15 +185,16 @@ export default function TermsOfServiceScreen() {
               },
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+              variant="buttonGhost"
+              hitSlopToMin48
               onPress={() => router.back()}
               style={styles.desktopBackRow}
-              activeOpacity={0.7}
-              hitSlop={8}
+              accessibilityLabel="Back"
             >
               <ArrowLeft size={16} color={theme.colors.ink} />
               <Text style={[styles.desktopBackText, { color: theme.colors.ink }]}>Back</Text>
-            </TouchableOpacity>
+            </Pressable>
             <Text style={[styles.desktopHeaderTitle, { color: theme.colors.ink }]}>
               Terms of Service
             </Text>
@@ -394,7 +396,8 @@ export default function TermsOfServiceScreen() {
             For inquiries regarding our Terms of Service or enterprise contracts, reach out to our legal and fleet administration team:
           </Text>
 
-          <TouchableOpacity
+          <Pressable
+            variant="card"
             style={[styles.contactBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
             onPress={handleContactEmail}
           >
@@ -405,7 +408,7 @@ export default function TermsOfServiceScreen() {
               <Text style={[styles.contactLabel, { color: theme.colors.mute, marginTop: 2 }]}>Web: {BRAND_WEBSITE_DISPLAY}</Text>
             </View>
             <ExternalLink size={14} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
         </Card>
 
         {/* Brand Footprint Footer */}

@@ -52,6 +52,7 @@ export interface UserAssignmentItem {
   machine_code: string;
   machine_name: string;
   model: string;
+  shift_code?: string | null;
   shift_start_time: string | null;
   shift_end_time: string | null;
   is_active: boolean;
@@ -124,22 +125,57 @@ export async function getUserAssignedMachines(userId: string): Promise<UserMachi
   if (!userId) return [];
   try {
     const adminClient = createSupabaseAdminClient();
-    const { data } = await adminClient
+    
+    // 1. Direct machine fields (current_operator_id, operator_ids, supervisor)
+    const { data: directMachines } = await adminClient
       .from("machines")
       .select("id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter")
       .or(`current_operator_id.eq.${userId},operator_ids.cs.{${userId}},current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`)
       .order("machine_id");
-    return (data || []).map((m: any) => ({
-      id: m.id,
-      machine_id: m.machine_id,
-      machine_name: m.machine_name,
-      model: m.model,
-      status: m.status,
-      serial_number: m.serial_number,
-      manufacturer: m.manufacturer,
-      year_of_mfg: m.year_of_mfg,
-      hour_meter: m.hour_meter,
-    }));
+
+    // 2. Active assignments from operator_machine_assignments
+    const { data: activeAssignments } = await adminClient
+      .from("operator_machine_assignments")
+      .select(`
+        machine_id,
+        machines (id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter)
+      `)
+      .eq("operator_id", userId)
+      .eq("is_active", true);
+
+    const machineMap = new Map<string, UserMachineItem>();
+    (directMachines || []).forEach((m: any) => {
+      machineMap.set(m.id, {
+        id: m.id,
+        machine_id: m.machine_id,
+        machine_name: m.machine_name,
+        model: m.model,
+        status: m.status,
+        serial_number: m.serial_number,
+        manufacturer: m.manufacturer,
+        year_of_mfg: m.year_of_mfg,
+        hour_meter: m.hour_meter,
+      });
+    });
+
+    (activeAssignments || []).forEach((item: any) => {
+      const m = Array.isArray(item.machines) ? item.machines[0] : item.machines;
+      if (m && !machineMap.has(m.id)) {
+        machineMap.set(m.id, {
+          id: m.id,
+          machine_id: m.machine_id,
+          machine_name: m.machine_name,
+          model: m.model,
+          status: m.status,
+          serial_number: m.serial_number,
+          manufacturer: m.manufacturer,
+          year_of_mfg: m.year_of_mfg,
+          hour_meter: m.hour_meter,
+        });
+      }
+    });
+
+    return Array.from(machineMap.values());
   } catch {
     return [];
   }
@@ -201,7 +237,7 @@ export async function getUserAssignments(userId: string): Promise<UserAssignment
     const { data } = await adminClient
       .from("operator_machine_assignments")
       .select(`
-        id, machine_id, shift_start_time, shift_end_time, is_active, assigned_at, ended_at,
+        id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, assigned_at, ended_at,
         machines (id, machine_id, machine_name, model)
       `)
       .eq("operator_id", userId)
@@ -217,6 +253,7 @@ export async function getUserAssignments(userId: string): Promise<UserAssignment
         machine_code: machine?.machine_id || "—",
         machine_name: machine?.machine_name || "Machine",
         model: machine?.model || "",
+        shift_code: item.shift_code || null,
         shift_start_time: item.shift_start_time,
         shift_end_time: item.shift_end_time,
         is_active: Boolean(item.is_active),

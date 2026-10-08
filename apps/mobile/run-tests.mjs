@@ -30,7 +30,7 @@ try {
   const appJsonRaw = fs.readFileSync(appJsonPath, 'utf8');
   const appJson = JSON.parse(appJsonRaw);
 
-  assert(appJson.expo?.name === 'ReachInternational', 'app.json expo.name is ReachInternational');
+  assert(appJson.expo?.name === 'Reach Ops', 'app.json expo.name is Reach Ops');
   assert(appJson.expo?.android?.package === 'com.reachinternational.app', 'Android package is com.reachinternational.app');
   assert(appJson.expo?.updates?.url?.startsWith('https://u.expo.dev/'), 'EAS Update URL is configured');
   assert(appJson.expo?.runtimeVersion?.policy === 'appVersion', 'Runtime version policy is set to appVersion');
@@ -70,6 +70,86 @@ try {
 
   const pkgContent = fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8');
   assert(pkgContent.includes('expo-system-ui'), 'package.json includes expo-system-ui for Android 15 system UI theme');
+
+  // Test 5: Validate Optimistic UI Foundation (Phase 0)
+  const syncStateContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'syncState.ts'), 'utf8');
+  assert(syncStateContent.includes("export type SyncState = 'synced' | 'pending' | 'queued' | 'failed'"), 'syncState.ts exports canonical 4-state SyncState');
+  assert(syncStateContent.includes('isPendingSync'), 'syncState.ts exports isPendingSync predicate');
+
+  const tempIdContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'tempId.ts'), 'utf8');
+  assert(tempIdContent.includes('createTempId'), 'tempId.ts exports createTempId generator');
+  assert(tempIdContent.includes('isTempId'), 'tempId.ts exports isTempId predicate');
+  assert(tempIdContent.includes('generateUUID'), 'tempId.ts exports RFC4122 generateUUID');
+
+  const reconcileContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'reconcile.ts'), 'utf8');
+  assert(reconcileContent.includes('reconcileRow'), 'reconcile.ts exports reconcileRow');
+  assert(reconcileContent.includes('removeTempRow'), 'reconcile.ts exports removeTempRow');
+  assert(reconcileContent.includes('isRealtimeEcho'), 'reconcile.ts exports isRealtimeEcho deduplication');
+
+  const persistContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'persist.ts'), 'utf8');
+  assert(persistContent.includes('asyncStoragePersister'), 'persist.ts exports asyncStoragePersister');
+  assert(persistContent.includes('isSensitiveQuery'), 'persist.ts exports sensitive query deny-list');
+  assert(persistContent.includes('sanitizeDataForPersistence'), 'persist.ts strips tmp_ rows on dehydrate');
+  assert(persistContent.includes('clearPersistedCache'), 'persist.ts exports clearPersistedCache');
+
+  const optMutationContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'useOptimisticMutation.ts'), 'utf8');
+  assert(optMutationContent.includes('useOptimisticMutation'), 'useOptimisticMutation.ts exports Tier 2 optimistic mutation hook');
+  assert(optMutationContent.includes('defaultFormatErrorMessage'), 'useOptimisticMutation.ts maps PG error codes to human-readable explanations');
+
+  const pendingMutationContent = fs.readFileSync(path.join(__dirname, 'lib', 'optimistic', 'usePendingMutation.ts'), 'utf8');
+  assert(pendingMutationContent.includes('usePendingMutation'), 'usePendingMutation.ts exports Tier 3 pending mutation hook');
+
+  assert(layoutContent.includes('PersistQueryClientProvider'), '_layout.tsx configures PersistQueryClientProvider for cold-start instant UI');
+  assert(layoutContent.includes('asyncStoragePersister'), '_layout.tsx binds asyncStoragePersister');
+
+  const authContent = fs.readFileSync(path.join(__dirname, 'lib', 'auth', 'useAuth.tsx'), 'utf8');
+  assert(authContent.includes('clearPersistedCache'), 'useAuth.tsx purges persisted query cache on sign-out');
+
+  const hapticsContent = fs.readFileSync(path.join(__dirname, 'lib', 'haptics', 'index.ts'), 'utf8');
+  assert(hapticsContent.includes('confirm:'), 'lib/haptics exports confirm() haptic trigger');
+  assert(hapticsContent.includes('reject:'), 'lib/haptics exports reject() haptic trigger');
+
+  // Test 6: Validate Mobile Offline Resilience & Auto-Sync Engine
+  const queueManagerContent = fs.readFileSync(path.join(__dirname, 'lib', 'offline', 'OfflineQueueManager.ts'), 'utf8');
+  assert(queueManagerContent.includes('checkAndAutoDrain'), 'OfflineQueueManager implements proactive checkAndAutoDrain');
+  assert(queueManagerContent.includes('onSyncComplete'), 'OfflineQueueManager exports onSyncComplete callback listener');
+  assert(queueManagerContent.includes('registerAppStateListener'), 'OfflineQueueManager listens to AppState transitions for background-to-foreground auto-drain');
+
+  const offlineBannerContent = fs.readFileSync(path.join(__dirname, 'components', 'offline', 'OfflineBanner.tsx'), 'utf8');
+  assert(offlineBannerContent.includes('OfflineCollisionModal'), 'OfflineBanner integrates OfflineCollisionModal for resolving sync conflicts');
+  assert(offlineBannerContent.includes('syncNow().catch'), 'OfflineBanner triggers auto-sync when online transition occurs');
+
+  assert(layoutContent.includes('MobileOfflineSyncListener'), '_layout.tsx binds MobileOfflineSyncListener for TanStack Query cache invalidation');
+
+  // Test 7: Validate Screen-Scoped Offline -> Online Reconnection & Sync Coordinator
+  const netManagerContent = fs.readFileSync(path.join(__dirname, 'lib', 'offline', 'NetworkConnectivityManager.ts'), 'utf8');
+  assert(netManagerContent.includes('export class NetworkConnectivityManager'), 'NetworkConnectivityManager exports authoritative connectivity manager');
+  assert(netManagerContent.includes('RECONNECT_STABILIZATION_MS'), 'NetworkConnectivityManager defines debounce stabilization window');
+  assert(netManagerContent.includes('onlineManager.setEventListener'), 'NetworkConnectivityManager binds TanStack Query onlineManager');
+  assert(netManagerContent.includes('onReconnect'), 'NetworkConnectivityManager dispatches verified reconnect events');
+
+  const syncCoordinatorContent = fs.readFileSync(path.join(__dirname, 'lib', 'offline', 'SyncCoordinator.ts'), 'utf8');
+  assert(syncCoordinatorContent.includes('export class SyncCoordinator'), 'SyncCoordinator exports screen-scoped sync coordinator');
+  assert(syncCoordinatorContent.includes('shouldRevalidateQuery'), 'SyncCoordinator implements 5-criteria targeted query validation');
+  assert(syncCoordinatorContent.includes('doesQueryBelongToScreen'), 'SyncCoordinator isolates query keys by active screen domain');
+  assert(syncCoordinatorContent.includes('handleReconnection'), 'SyncCoordinator orchestrates reconnection workflow');
+  assert(syncCoordinatorContent.includes('registerScreenRefresher'), 'SyncCoordinator supports registered custom screen refreshers');
+
+  const useScreenSyncContent = fs.readFileSync(path.join(__dirname, 'lib', 'offline', 'useScreenSync.ts'), 'utf8');
+  assert(useScreenSyncContent.includes('export function useScreenSync'), 'useScreenSync exports screen sync integration hook');
+
+  assert(layoutContent.includes('refetchOnReconnect: false'), '_layout.tsx configures refetchOnReconnect: false to prevent global tab refetch storms');
+  assert(layoutContent.includes('syncCoordinator.setQueryClient'), '_layout.tsx binds QueryClient with syncCoordinator');
+  assert(layoutContent.includes('MobileScreenSyncWatcher'), '_layout.tsx mounts MobileScreenSyncWatcher for route tracking');
+
+  const opsContent = fs.readFileSync(path.join(__dirname, 'app', '(app)', 'operations.tsx'), 'utf8');
+  assert(opsContent.includes("screen: 'operations'"), 'operations.tsx integrates screen-scoped revalidation via useScreenSync');
+
+  const machinesContent = fs.readFileSync(path.join(__dirname, 'app', '(app)', 'machines.tsx'), 'utf8');
+  assert(machinesContent.includes("screen: 'machines'"), 'machines.tsx integrates screen-scoped revalidation via useScreenSync');
+
+  const dashContent = fs.readFileSync(path.join(__dirname, 'app', '(app)', 'dashboard.tsx'), 'utf8');
+  assert(dashContent.includes("screen: 'dashboard'"), 'dashboard.tsx integrates screen-scoped revalidation via useScreenSync');
 
   console.log(`\n✅ Verification Suite Passed: All ${passed}/${passed + failed} test scenarios verified!`);
   process.exit(failed > 0 ? 1 : 0);

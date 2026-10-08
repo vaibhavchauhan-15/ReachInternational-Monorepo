@@ -42,6 +42,7 @@ import {
 import { Button, TooltipWrapper, EmptyState, useToast, ConfirmationDialog } from "@/components/ui";
 import { DocumentViewerModal, type ViewerDocument } from "@/components/documents/DocumentViewerModal";
 import { UserEditModal } from "../UserEditModal";
+import { PasswordResetModal } from "../PasswordResetModal";
 import { AssignPersonnelModal } from "@/components/machines/AssignPersonnelModal";
 import {
   formatDate,
@@ -55,6 +56,8 @@ import {
   deleteUser,
   editUser,
   getUserDetailAction,
+  getUserAssignedMachinesAction,
+  getUserAssignmentsAction,
 } from "@/app/actions/users";
 import { getDocumentViewUrlAction, type UserDocument, type DocumentType } from "@/app/actions/documents";
 import type { User, UserRole } from "@/lib/types/database";
@@ -178,9 +181,9 @@ export function UserDetailClient({
   isSuperAdmin,
   canManage,
   kpis,
-  machines,
+  machines: initialMachines,
   runningLogs,
-  assignments,
+  assignments: initialAssignments,
   auditLogs,
   documents,
   documentTypes,
@@ -190,10 +193,48 @@ export function UserDetailClient({
   const { toast } = useToast();
 
   const [user, setUser] = useState<User>(initialUser);
+  const [machines, setMachines] = useState<UserMachineItem[]>(initialMachines);
+  const [assignments, setAssignments] = useState<UserAssignmentItem[]>(initialAssignments);
   const [activeTab, setActiveTab] = useState<UserDetailTabKey>("machines");
   const [tabSearch, setTabSearch] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+
+  useEffect(() => {
+    setUser(initialUser);
+  }, [initialUser]);
+
+  useEffect(() => {
+    setMachines(initialMachines);
+  }, [initialMachines]);
+
+  useEffect(() => {
+    setAssignments(initialAssignments);
+  }, [initialAssignments]);
+
+  const handleRefreshUserData = useCallback(async () => {
+    try {
+      const [detailRes, machinesRes, assignmentsRes] = await Promise.all([
+        getUserDetailAction(user.id),
+        getUserAssignedMachinesAction(user.id),
+        getUserAssignmentsAction(user.id),
+      ]);
+
+      if (detailRes.user) {
+        setUser(detailRes.user);
+      }
+      if (machinesRes.machines) {
+        setMachines(machinesRes.machines);
+      }
+      if (assignmentsRes.assignments) {
+        setAssignments(assignmentsRes.assignments);
+      }
+    } catch (err) {
+      console.error("Failed to refresh user data", err);
+    } finally {
+      router.refresh();
+    }
+  }, [user.id, router]);
 
   // Modals & Action States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -205,6 +246,7 @@ export function UserDetailClient({
   const [confirmToggleOpen, setConfirmToggleOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ userName: string; temporaryPassword: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
@@ -317,6 +359,22 @@ export function UserDetailClient({
     };
   }, [user.role, user.email, user.id, currentUser.id, canManage, isSuperAdmin, whatsappUrl, cleanPhone, toast]);
 
+  // Synchronize and refetch user data when assignments or personnel change across the platform
+  useEffect(() => {
+    const handleAssignmentRefresh = (e: Event) => {
+      const customEvent = e as CustomEvent<{ userId?: string }>;
+      if (!customEvent.detail?.userId || customEvent.detail.userId === user.id) {
+        handleRefreshUserData();
+      }
+    };
+    window.addEventListener("reach:refresh-user-assignments", handleAssignmentRefresh);
+    window.addEventListener("reach:refresh-machine-personnel", handleRefreshUserData);
+    return () => {
+      window.removeEventListener("reach:refresh-user-assignments", handleAssignmentRefresh);
+      window.removeEventListener("reach:refresh-machine-personnel", handleRefreshUserData);
+    };
+  }, [user.id, handleRefreshUserData]);
+
   const handleCopy = useCallback((text: string, key: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -424,16 +482,23 @@ export function UserDetailClient({
     setActionLoading(true);
     try {
       const res = await resetUserPassword(user.id);
-      if (!res.formState.error) {
-        toast("success", `Password reset successfully. New password: ${res.newPassword || "Sent via notification"}`);
-      } else {
+      setConfirmResetOpen(false);
+      if (res.formState?.error) {
         toast("error", res.formState.error || "Failed to reset password");
+      } else if (res.newPassword) {
+        setResetPasswordResult({
+          userName: user.full_name,
+          temporaryPassword: res.newPassword,
+        });
+        toast("success", "Password reset successfully");
+      } else {
+        toast("success", res.formState?.message || "Password reset instructions sent");
       }
     } catch (err: any) {
+      setConfirmResetOpen(false);
       toast("error", err?.message || "Error resetting password");
     } finally {
       setActionLoading(false);
-      setConfirmResetOpen(false);
     }
   };
 
@@ -1414,10 +1479,17 @@ export function UserDetailClient({
                   <div className="pt-2 border-t border-[var(--color-hairline)] space-y-1 text-[11px] text-[var(--color-mute)]">
                     <div className="flex items-center justify-between">
                       <span>Shift</span>
-                      <span className="font-medium text-[var(--color-ink)]">
-                        {a.shift_start_time && a.shift_end_time
-                          ? `${formatShiftTime(a.shift_start_time)} – ${formatShiftTime(a.shift_end_time)}`
-                          : "Standard Day Shift"}
+                      <span className="font-medium text-[var(--color-ink)] flex items-center gap-1.5">
+                        {a.shift_code && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase bg-sky-500/10 text-sky-600 border border-sky-500/25">
+                            {a.shift_code}
+                          </span>
+                        )}
+                        <span>
+                          {a.shift_start_time && a.shift_end_time
+                            ? `${formatShiftTime(a.shift_start_time)} – ${formatShiftTime(a.shift_end_time)}`
+                            : "Standard Day Shift"}
+                        </span>
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1719,6 +1791,16 @@ export function UserDetailClient({
         loading={actionLoading}
       />
 
+      {/* Password Reset Result Modal */}
+      {resetPasswordResult && (
+        <PasswordResetModal
+          open={!!resetPasswordResult}
+          onClose={() => setResetPasswordResult(null)}
+          userName={resetPasswordResult.userName}
+          temporaryPassword={resetPasswordResult.temporaryPassword}
+        />
+      )}
+
       {/* Toggle Status Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={confirmToggleOpen}
@@ -1753,9 +1835,7 @@ export function UserDetailClient({
           operator={user as any}
           operatorId={user.id}
           userRole={currentUser.role}
-          onSuccess={() => {
-            router.refresh();
-          }}
+          onSuccess={handleRefreshUserData}
         />
       )}
     </div>

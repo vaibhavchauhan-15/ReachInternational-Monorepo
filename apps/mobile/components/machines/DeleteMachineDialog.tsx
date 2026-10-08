@@ -9,9 +9,9 @@ import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Trash2 } from 'lucide-react-native';
+import { Trash2 } from '../ui/icon';
 import { supabase } from '../../lib/supabase';
 import { notifyMachineDeleted } from '../../lib/notifications';
 

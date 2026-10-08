@@ -4,13 +4,13 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   Alert,
   Linking,
   Platform,
   StatusBar,
   LayoutAnimation} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
@@ -50,6 +50,7 @@ import {
 } from '@reachinternational/utils';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
+import { useScreenSync } from '../../lib/offline';
 import { SyncStatusBadge } from '../../components/offline/SyncStatusBadge';
 import { OfflineCollisionModal } from '../../components/offline/OfflineCollisionModal';
 import { QueuedMutation, MutationStatus } from '../../lib/offline/types';
@@ -73,7 +74,7 @@ import {
   Edit2,
   Trash2,
   UserPlus,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 import { isManagerOrAbove } from '@reachinternational/permissions';
 
 export type OpsTab = 'logs' | 'entry' | 'history' | 'today';
@@ -320,6 +321,11 @@ export default function OperationsScreen() {
     ]);
   }, [refetchMaster, refetchLogs, queryClient]);
 
+  useScreenSync({
+    screen: 'operations',
+    onRefresh: handleDataRefresh,
+  });
+
   const userRoleLower = (role || '').toLowerCase();
   const isSuperAdmin = userRoleLower === 'super_admin';
   const isManagerTier = isManagerOrAbove(userRoleLower);
@@ -366,16 +372,31 @@ export default function OperationsScreen() {
           text: 'Yes, Delete',
           style: 'destructive',
           onPress: async () => {
+            const previousLogs = logs;
+            // 1. Optimistic Cache Patch
+            setLogs((prev) => prev.filter((l) => l.id !== log.id));
+            queryClient.setQueriesData<HourLogRecord[]>(
+              { queryKey: ['operations', 'logs'] },
+              (old) => (old ? old.filter((l) => l.id !== log.id) : [])
+            );
+            if (log.operator_id) {
+              queryClient.setQueriesData<HourLogRecord[]>(
+                { queryKey: ['operator', 'history-logs', log.operator_id] },
+                (old) => (old ? old.filter((l) => l.id !== log.id) : [])
+              );
+            }
             try {
               const { error } = await supabase
                 .from('machine_hour_logs')
                 .delete()
                 .eq('id', log.id);
               if (error) {
+                // Rollback
+                setLogs(previousLogs);
+                queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
                 Alert.alert('Error', error.message || 'Failed to delete log');
                 return;
               }
-              setLogs((prev) => prev.filter((l) => l.id !== log.id));
               if (log.machine_id) {
                 const { data: latest } = await supabase
                   .from('machine_hour_logs')
@@ -394,13 +415,15 @@ export default function OperationsScreen() {
               }
               refetchLogs();
             } catch (err: any) {
+              setLogs(previousLogs);
+              queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
               Alert.alert('Error', err?.message || 'Failed to delete log');
             }
           },
         },
       ]
     );
-  }, [refetchLogs]);
+  }, [refetchLogs, isSuperAdmin, logs, queryClient]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -768,7 +791,11 @@ export default function OperationsScreen() {
           <SegmentedToggle<'entry' | 'history'>
             items={[
               { id: 'entry', label: 'Log Entry' },
-              { id: 'history', label: 'Log History' },
+              {
+                id: 'history',
+                label: 'Log History',
+                count: isOperator && operatorHistoryLogs && operatorHistoryLogs.length > 0 ? operatorHistoryLogs.length : undefined,
+              },
             ]}
             value={activeTab === 'history' ? 'history' : 'entry'}
             onChange={(tab) => {
@@ -877,7 +904,9 @@ export default function OperationsScreen() {
                 </View>
 
                 {pendingConflicts.length > 2 && (
-                  <TouchableOpacity
+                  <Pressable
+                    variant="buttonGhost"
+                    hitSlopToMin48
                     onPress={() => setShowAllConflicts(!showAllConflicts)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                   >
@@ -889,7 +918,7 @@ export default function OperationsScreen() {
                     ) : (
                       <ChevronDown size={13} color={isDark ? '#fbbf24' : '#d97706'} />
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 )}
               </View>
 
@@ -948,7 +977,9 @@ export default function OperationsScreen() {
                             {parsed.badgeText || 'DUAL MACHINE CONFLICT'}
                           </Text>
                         </View>
-                        <TouchableOpacity
+                        <Pressable
+                          variant="buttonSecondary"
+                          hitSlopToMin48
                           onPress={() => handleOpenConflictModal(cLog)}
                           style={[
                             styles.cleanReviewBtn,
@@ -962,7 +993,7 @@ export default function OperationsScreen() {
                           <Text style={[styles.cleanReviewBtnText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
                             Review
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                     </View>
 
@@ -1071,8 +1102,18 @@ export default function OperationsScreen() {
           machineCode={editingLogRecord.machine?.machine_id || editingLogRecord.machine_code}
           model={editingLogRecord.machine?.model}
           serialNumber={editingLogRecord.machine?.serial_number}
-          onSubmit={async () => {
+          onSubmit={async (updatedLog?: any) => {
+            const targetLog = editingLogRecord;
             setEditingLogRecord(null);
+            if (updatedLog && targetLog) {
+              setLogs((prev) =>
+                prev.map((l) => (l.id === targetLog.id ? { ...l, ...updatedLog, sync_status: 'synced' } : l))
+              );
+              queryClient.setQueriesData<any[]>({ queryKey: ['operations', 'logs'] }, (old) => {
+                if (!old) return old;
+                return old.map((l) => (l.id === targetLog.id ? { ...l, ...updatedLog, sync_status: 'synced' } : l));
+              });
+            }
             await handleDataRefresh();
           }}
         />
@@ -1130,8 +1171,21 @@ export default function OperationsScreen() {
           currentUserName={userProfile?.full_name}
           initialShiftCode={(entryContext?.assigned_shift_code || entryContext?.operator?.shift_code) ?? undefined}
           initialAssignedShiftCodes={entryContext?.assigned_shift_codes}
-          onSubmit={() => {
+          onSubmit={(newLog?: any) => {
             setMeterModalVisible(false);
+            if (newLog) {
+              setLogs((prev) => [newLog, ...prev]);
+              queryClient.setQueriesData<any[]>({ queryKey: ['operations', 'logs'] }, (old) => {
+                if (!old) return [newLog];
+                return [newLog, ...old];
+              });
+              if (user?.id) {
+                queryClient.setQueriesData<any[]>({ queryKey: ['operator', 'history-logs', user.id] }, (old) => {
+                  if (!old) return [newLog];
+                  return [newLog, ...old];
+                });
+              }
+            }
             handleDataRefresh();
           }}
         />
@@ -1150,8 +1204,18 @@ export default function OperationsScreen() {
           currentUserRole={role || userProfile?.role}
           currentUserName={userProfile?.full_name}
           existingLog={editingLogRecord}
-          onSubmit={() => {
+          onSubmit={(updatedLog?: any) => {
+            const targetLog = editingLogRecord;
             setEditingLogRecord(null);
+            if (updatedLog && targetLog) {
+              setLogs((prev) =>
+                prev.map((l) => (l.id === targetLog.id ? { ...l, ...updatedLog, sync_status: 'synced' } : l))
+              );
+              queryClient.setQueriesData<any[]>({ queryKey: ['operations', 'logs'] }, (old) => {
+                if (!old) return old;
+                return old.map((l) => (l.id === targetLog.id ? { ...l, ...updatedLog, sync_status: 'synced' } : l));
+              });
+            }
             handleDataRefresh();
           }}
         />
@@ -1188,8 +1252,31 @@ export default function OperationsScreen() {
             operator_id: assistedRow.operator_id,
             client_id: assistedRow.client_id,
           } : undefined}
-          onSubmit={() => {
+          onSubmit={(submittedLog?: any) => {
+            const targetAssisted = assistedRow;
             setAssistedRow(null);
+            if (targetAssisted) {
+              queryClient.setQueriesData<TodayShiftMonitorRow[]>(
+                { queryKey: ['operations', 'today-shift-monitor'] },
+                (oldRows) => {
+                  if (!oldRows) return oldRows;
+                  return oldRows.map((r) => {
+                    const isMatch =
+                      (r.machine_id === targetAssisted.machine_id && r.operator_id === targetAssisted.operator_id) ||
+                      (r.machine_id === targetAssisted.machine_id && r.shift_code === targetAssisted.shift_code);
+                    if (isMatch) {
+                      return {
+                        ...r,
+                        status: 'entered' as const,
+                        end_meter: submittedLog?.end_meter ?? r.end_meter,
+                        running_hours: submittedLog?.running_hours ?? r.running_hours,
+                      };
+                    }
+                    return r;
+                  });
+                }
+              );
+            }
             handleDataRefresh();
           }}
         />

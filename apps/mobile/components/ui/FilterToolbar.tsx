@@ -9,7 +9,6 @@ import {
   View,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   Platform,
   type StyleProp,
@@ -17,12 +16,13 @@ import {
   type TextStyle,
   type TextInputProps,
 } from 'react-native';
-import { Search, X, RotateCcw, SlidersHorizontal, ChevronDown } from 'lucide-react-native';
+import { Search, X, RotateCcw, SlidersHorizontal, ChevronDown } from './icon';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { SearchInput, type SearchInputProps } from './SearchInput';
 import { Text } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
 
 // ============================================================================
 // CANONICAL FILTER TOOLBAR
@@ -119,9 +119,10 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
 
         {/* Optional Filter Panel Toggle Button */}
         {showFilterToggle && onToggleFilter && (
-          <TouchableOpacity
+          <Pressable
+            variant="chip"
+            haptic="select"
             onPress={handleToggle}
-            activeOpacity={0.8}
             style={[
               styles.filterToggleBtn,
               {
@@ -183,16 +184,14 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
             )}
             <ChevronDown
               size={12}
+              state={isFilterOpen ? 'open' : 'closed'}
               color={
                 isFilterOpen || activeFilterCount > 0
                   ? theme.colors.canvas
                   : theme.colors.ink
               }
-              style={{
-                transform: [{ rotate: isFilterOpen ? '180deg' : '0deg' }],
-              }}
             />
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {/* Custom Actions (e.g. Refresh button) */}
@@ -200,9 +199,10 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
 
         {/* Quick Reset Button */}
         {activeFilterCount > 0 && onResetFilters && (
-          <TouchableOpacity
+          <Pressable
+            variant="chip"
+            haptic="select"
             onPress={handleReset}
-            activeOpacity={0.8}
             style={[
               styles.resetBtn,
               {
@@ -215,7 +215,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
           >
             <RotateCcw size={13} color={theme.colors.mute} />
             <Text variant="label" style={{ color: theme.colors.mute }}>Reset</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
 

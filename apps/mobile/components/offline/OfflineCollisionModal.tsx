@@ -13,9 +13,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable } from '../ui';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, AlertTriangle, Clock, RefreshCw, Trash2, ShieldAlert } from 'lucide-react-native';
+import { X, AlertTriangle, Clock, RefreshCw, Trash2, ShieldAlert } from '../ui/icon';
 import { QueuedMutation } from '../../lib/offline/types';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
 import { computeShiftTiming, formatCompactTiming } from '@reachinternational/utils';

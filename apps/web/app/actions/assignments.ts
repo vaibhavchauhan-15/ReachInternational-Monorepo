@@ -561,7 +561,17 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
     shiftCode: string;
     shiftStartTime: string | null;
     shiftEndTime: string | null;
-    notes: string | null;
+    notes?: string | null;
+    clientShifts?: Array<{
+      code: string;
+      name?: string;
+      start_time: string;
+      end_time: string;
+      raw_start_time?: string;
+      raw_end_time?: string;
+      crosses_midnight?: boolean;
+      scheduled_minutes?: number;
+    }>;
   }>;
 }> {
   if (!isValidUuid(operatorId)) {
@@ -575,7 +585,7 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
     // 1. Fetch Operator Info
     const { data: opUser, error: opErr } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role")
+      .select("id, full_name, phone, email, role, supervisor_id")
       .eq("id", operatorId)
       .maybeSingle();
 
@@ -583,23 +593,45 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
       return { success: false, error: opErr?.message || "Operator not found." };
     }
 
-    // 2. Fetch Supervisors from user_supervisors
+    // 2. Fetch Supervisors from all authoritative sources (junction table + direct users.supervisor_id)
+    const supervisorMap = new Map<string, { id: string; full_name: string; phone: string | null; email: string | null }>();
+
+    // A. user_supervisors junction table
     const { data: supsData } = await supabase
       .from("user_supervisors")
       .select("supervisor:users!user_supervisors_supervisor_id_fkey(id, full_name, phone, email)")
       .eq("user_id", operatorId);
 
-    const supervisors = (supsData || [])
-      .map((item: any) => item.supervisor)
-      .filter(Boolean)
-      .map((s: any) => ({
-        id: s.id,
-        full_name: s.full_name || "Supervisor",
-        phone: s.phone || null,
-        email: s.email || null,
-      }));
+    (supsData || []).forEach((item: any) => {
+      const s = item.supervisor;
+      if (s && s.id) {
+        supervisorMap.set(s.id, {
+          id: s.id,
+          full_name: s.full_name || "Supervisor",
+          phone: s.phone || null,
+          email: s.email || null,
+        });
+      }
+    });
 
-    // 3. Fetch active machine assignments for this operator
+    // B. Direct users.supervisor_id on operator profile
+    if (opUser.supervisor_id && !supervisorMap.has(opUser.supervisor_id)) {
+      const { data: directSup } = await supabase
+        .from("users")
+        .select("id, full_name, phone, email")
+        .eq("id", opUser.supervisor_id)
+        .maybeSingle();
+      if (directSup && directSup.id) {
+        supervisorMap.set(directSup.id, {
+          id: directSup.id,
+          full_name: directSup.full_name || "Supervisor",
+          phone: directSup.phone || null,
+          email: directSup.email || null,
+        });
+      }
+    }
+
+    // 3. Fetch active machine assignments for this operator (without non-existent notes column)
     const { data: rawAssignments, error: assErr } = await supabase
       .from("operator_machine_assignments")
       .select(`
@@ -608,9 +640,18 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
         shift_code,
         shift_start_time,
         shift_end_time,
-        notes,
         is_active,
-        machine:machines(id, machine_id, machine_name, model, serial_number, client_id, client:clients(id, company_name))
+        machine:machines(
+          id,
+          machine_id,
+          machine_name,
+          model,
+          serial_number,
+          client_id,
+          supervisor_ids,
+          current_supervisor_id,
+          client:clients(id, company_name)
+        )
       `)
       .eq("operator_id", operatorId)
       .eq("is_active", true)
@@ -620,9 +661,129 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
       return { success: false, error: assErr.message };
     }
 
-    const assignments = (rawAssignments || []).map((row: any) => {
+    // Fallback: Check if machines table points to this operator even if assignment record is missing
+    const assignedMachineIds = new Set((rawAssignments || []).map((r: any) => r.machine_id));
+    const { data: fallbackMachines } = await supabase
+      .from("machines")
+      .select(`
+        id,
+        machine_id,
+        machine_name,
+        model,
+        serial_number,
+        client_id,
+        supervisor_ids,
+        current_supervisor_id,
+        client:clients(id, company_name)
+      `)
+      .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`);
+
+    const allAssignmentMachines = [...(rawAssignments || []).map((r: any) => r.machine).filter(Boolean)];
+    const syntheticAssignments: any[] = [];
+    if (fallbackMachines) {
+      fallbackMachines.forEach((m: any) => {
+        if (!assignedMachineIds.has(m.id)) {
+          assignedMachineIds.add(m.id);
+          allAssignmentMachines.push(m);
+          syntheticAssignments.push({
+            id: `assigned-${m.id}`,
+            machine_id: m.id,
+            shift_code: "S1",
+            shift_start_time: "06:00:00",
+            shift_end_time: "14:00:00",
+            is_active: true,
+            machine: m,
+          });
+        }
+      });
+    }
+
+    // C. Also collect site supervisors assigned to the operator's machines
+    const missingSupIds = new Set<string>();
+    allAssignmentMachines.forEach((m: any) => {
+      if (!m) return;
+      if (m.current_supervisor_id && !supervisorMap.has(m.current_supervisor_id)) {
+        missingSupIds.add(m.current_supervisor_id);
+      }
+      if (Array.isArray(m.supervisor_ids)) {
+        m.supervisor_ids.forEach((sid: string) => {
+          if (sid && !supervisorMap.has(sid)) missingSupIds.add(sid);
+        });
+      }
+    });
+
+    if (missingSupIds.size > 0) {
+      const { data: mSups } = await supabase
+        .from("users")
+        .select("id, full_name, phone, email")
+        .in("id", Array.from(missingSupIds));
+      (mSups || []).forEach((s: any) => {
+        if (s && s.id) {
+          supervisorMap.set(s.id, {
+            id: s.id,
+            full_name: s.full_name || "Supervisor",
+            phone: s.phone || null,
+            email: s.email || null,
+          });
+        }
+      });
+    }
+
+    // 4. Fetch Respected Rented Client Shifts for all assigned machines
+    const clientIds = Array.from(
+      new Set(allAssignmentMachines.map((m: any) => m?.client_id).filter(Boolean))
+    );
+
+    const clientShiftsByClient = new Map<string, any[]>();
+    if (clientIds.length > 0) {
+      const { data: csData } = await supabase
+        .from("client_shift_codes")
+        .select("id, client_id, code, name, start_time, end_time, crosses_midnight, scheduled_minutes, display_order")
+        .in("client_id", clientIds)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+
+      (csData || []).forEach((cs: any) => {
+        const list = clientShiftsByClient.get(cs.client_id) || [];
+        const s12 = formatTo12Hour(cs.start_time) || cs.start_time;
+        const e12 = formatTo12Hour(cs.end_time) || cs.end_time;
+        list.push({
+          code: cs.code,
+          name: cs.name || `Shift ${cs.code}`,
+          start_time: s12,
+          end_time: e12,
+          raw_start_time: s12,
+          raw_end_time: e12,
+          crosses_midnight: Boolean(cs.crosses_midnight),
+          scheduled_minutes: cs.scheduled_minutes || undefined,
+        });
+        clientShiftsByClient.set(cs.client_id, list);
+      });
+    }
+
+    // 5. Build assignments with clientShifts attached and reconciled
+    const combinedRawAssignments = [...(rawAssignments || []), ...syntheticAssignments];
+    const assignments = combinedRawAssignments.map((row: any) => {
       const m = row.machine || {};
       const cl = m.client || {};
+      const cShifts = m.client_id ? clientShiftsByClient.get(m.client_id) || [] : [];
+
+      let assignedCode = row.shift_code || "S1";
+      let matchedShift = cShifts.find(
+        (cs: any) => cs.code.trim().toUpperCase() === (assignedCode || "").trim().toUpperCase()
+      );
+
+      if (!matchedShift && cShifts.length > 0) {
+        const rowStart12 = formatTo12Hour(row.shift_start_time);
+        matchedShift = cShifts.find((cs: any) => cs.start_time === rowStart12) || cShifts[0];
+        if (matchedShift) {
+          assignedCode = matchedShift.code;
+        }
+      }
+
+      const startTime12 = matchedShift?.start_time || formatTo12Hour(row.shift_start_time) || null;
+      const endTime12 = matchedShift?.end_time || formatTo12Hour(row.shift_end_time) || null;
+
       return {
         id: row.id,
         machineId: row.machine_id,
@@ -632,10 +793,11 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
         serialNumber: m.serial_number || null,
         clientId: m.client_id || null,
         clientName: cl.company_name || null,
-        shiftCode: row.shift_code || "S1",
-        shiftStartTime: row.shift_start_time || null,
-        shiftEndTime: row.shift_end_time || null,
-        notes: row.notes || null,
+        shiftCode: assignedCode,
+        shiftStartTime: startTime12,
+        shiftEndTime: endTime12,
+        notes: null,
+        clientShifts: cShifts.length > 0 ? cShifts : undefined,
       };
     });
 
@@ -648,7 +810,7 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
         email: opUser.email || null,
         role: opUser.role || "operator",
       },
-      supervisors,
+      supervisors: Array.from(supervisorMap.values()),
       assignments,
     };
   } catch (err: unknown) {
@@ -889,8 +1051,12 @@ export async function updateOperatorMachineAssignmentsAction(
     revalidateTag(TAGS.machines, { expire: 0 });
     revalidateTag(TAGS.machinesList, { expire: 0 });
     revalidateTag(TAGS.dashboardKpis, { expire: 0 });
+    revalidateTag(TAGS.users, { expire: 0 });
+    revalidateTag(TAGS.operatorAssignment(operatorId), { expire: 0 });
+    revalidateTag(TAGS.userDashboard(operatorId), { expire: 0 });
     for (const mId of targetMachineIds) {
       revalidateTag(TAGS.machineDetail(mId), { expire: 0 });
+      revalidateTag(TAGS.machineAssignment(mId), { expire: 0 });
     }
 
     return { success: true };

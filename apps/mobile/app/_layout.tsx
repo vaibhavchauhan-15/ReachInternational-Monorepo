@@ -8,9 +8,16 @@ import '../lib/suppressWarnings';
 
 import React from 'react';
 import { View, StyleSheet, Platform, AppState, type AppStateStatus } from 'react-native';
-import { Slot } from 'expo-router';
+import { Slot, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import {
+  asyncStoragePersister,
+  dehydrateOptions,
+  CACHE_MAX_AGE_MS,
+  appBuster,
+} from '../lib/optimistic/persist';
 import { AuthProvider, useAuth } from '../lib/auth/useAuth';
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
@@ -20,9 +27,12 @@ import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import { postNotification } from '../lib/notifications/postNotification';
 import { TypeScaleProvider, useTypeScale } from '../lib/typography/TypeScaleProvider';
+import { offlineQueueManager, syncCoordinator, networkConnectivityManager } from '../lib/offline';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { TouchableOpacity} from 'react-native';
+import { OverlayHostProvider } from '../components/ui/overlay';
+import { Pressable } from '../components/ui/touch/Pressable';
 
 // Keep native splash screen visible until root layout mounts
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -113,9 +123,12 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes cache stale time
       retry: 2,
+      refetchOnReconnect: false, // Managed by SyncCoordinator for screen-scoped revalidation (prevents tab refetch storms)
     },
   },
 });
+
+syncCoordinator.setQueryClient(queryClient);
 
 function MobileOperatorAlertsListener() {
   const { user } = useAuth();
@@ -221,6 +234,53 @@ function MobileOperatorAlertsListener() {
   return null;
 }
 
+function MobileOfflineSyncListener() {
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    // Invalidate TanStack query cache and alert operator upon sync complete
+    const unsubscribe = offlineQueueManager.onSyncComplete((syncedCount) => {
+      queryClient.invalidateQueries({ queryKey: ['operations', 'logs'] });
+      queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] });
+      queryClient.invalidateQueries({ queryKey: ['operator', 'history-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['operator', 'entry-context'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['today-shift-monitor'] });
+
+      postNotification({
+        category: 'log_entry',
+        title: 'Offline Sync Complete',
+        body: `Synchronized ${syncedCount} shift ${syncedCount === 1 ? 'log' : 'logs'} to cloud database.`,
+        severity: 'success',
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [queryClient]);
+
+  return null;
+}
+
+function MobileScreenSyncWatcher() {
+  const queryClient = useQueryClient();
+  const pathname = usePathname();
+
+  React.useEffect(() => {
+    syncCoordinator.setQueryClient(queryClient);
+  }, [queryClient]);
+
+  React.useEffect(() => {
+    if (pathname) {
+      syncCoordinator.setActiveScreen(pathname);
+    }
+  }, [pathname]);
+
+  return null;
+}
+
 function ThemedAppContainer() {
   const { theme, isDark } = useTheme();
 
@@ -257,6 +317,8 @@ function ThemedAppContainer() {
       <Slot />
       <PostNotificationBanner />
       <MobileOperatorAlertsListener />
+      <MobileOfflineSyncListener />
+      <MobileScreenSyncWatcher />
       <MobileAgentation />
       <MobileGoogleAnalytics />
       <MobileWebScrollbarStyles />
@@ -275,9 +337,9 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
       <Text style={styles.errorMessage}>
         {error?.message || 'An unexpected operational issue occurred.'}
       </Text>
-      <TouchableOpacity style={styles.retryButton} onPress={retry} activeOpacity={0.8}>
+      <Pressable variant="buttonPrimary" haptic="tap" style={styles.retryButton} onPress={retry}>
         <Text style={styles.retryButtonText}>Reload Application</Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 }
@@ -321,25 +383,40 @@ function TypographyGate({ children }: { children: React.ReactNode }) {
 
 function RootLayout() {
   return (
-    <SafeAreaProvider style={styles.safeArea}>
-      <TypeScaleProvider>
-        <TypographyGate>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <ThemeProvider>
-                <ThemedAppContainer />
-              </ThemeProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        </TypographyGate>
-      </TypeScaleProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider style={styles.safeArea}>
+        <TypeScaleProvider>
+          <TypographyGate>
+            <PersistQueryClientProvider
+              client={queryClient}
+              persistOptions={{
+                persister: asyncStoragePersister,
+                maxAge: CACHE_MAX_AGE_MS,
+                buster: appBuster,
+                dehydrateOptions: dehydrateOptions as any,
+              }}
+            >
+              <AuthProvider>
+                <ThemeProvider>
+                  <OverlayHostProvider>
+                    <ThemedAppContainer />
+                  </OverlayHostProvider>
+                </ThemeProvider>
+              </AuthProvider>
+            </PersistQueryClientProvider>
+          </TypographyGate>
+        </TypeScaleProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 export default Sentry.wrap(RootLayout);
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   safeArea: {
     flex: 1,
   },

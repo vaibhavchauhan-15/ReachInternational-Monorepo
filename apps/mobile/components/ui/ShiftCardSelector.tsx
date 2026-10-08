@@ -14,23 +14,17 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   Platform,
-  LayoutAnimation,
-  UIManager,
   type ViewStyle,
 } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { useTheme } from './ThemeProvider';
-import { Moon } from 'lucide-react-native';
+import { Moon } from './icon';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { formatTo12Hour } from '@reachinternational/utils';
 import { Text } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
-
-// Enable layout animations on Android if available
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
 
 export interface ShiftCardItem {
   id?: string;
@@ -102,11 +96,6 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
   const handlePress = (sc: ShiftCardItem) => {
     if (disabled) return;
     haptics.select();
-    if (Platform.OS !== 'web') {
-      try {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      } catch {}
-    }
     onSelect(sc);
   };
 
@@ -164,66 +153,73 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
         }
 
         return (
-          <TouchableOpacity
+          <Animated.View
             key={sc.id || sc.code}
-            onPress={() => handlePress(sc)}
-            activeOpacity={0.75}
-            disabled={disabled}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isSelected }}
-            accessibilityLabel={`${getShiftDisplayTitle(sc)}${compactRange ? `, ${compactRange}` : ''}`}
-            style={[
-              styles.card,
-              {
-                flex: isSelected ? 1.45 : 1,
-                backgroundColor: bg,
-                borderColor,
-                opacity: disabled ? 0.6 : 1,
-              },
-            ]}
+            layout={LinearTransition.springify().damping(22).stiffness(350)}
+            style={{ flex: isSelected ? 1.45 : 1 }}
           >
-            {isSelected ? (
-              /* EXPANDED (SELECTED) STATE: Exactly TWO lines */
-              <View style={styles.expandedContent}>
-                <View style={styles.titleRow}>
+            <Pressable
+              variant="segmentedOption"
+              haptic="select"
+              rippleRadius={22}
+              onPress={() => handlePress(sc)}
+              disabled={disabled}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`${getShiftDisplayTitle(sc)}${compactRange ? `, ${compactRange}` : ''}`}
+              style={[
+                styles.card,
+                {
+                  flex: 1,
+                  backgroundColor: bg,
+                  borderColor,
+                  opacity: disabled ? 0.6 : 1,
+                },
+              ]}
+            >
+              {isSelected ? (
+                /* EXPANDED (SELECTED) STATE: Exactly TWO lines */
+                <View style={styles.expandedContent}>
+                  <View style={styles.titleRow}>
+                    <Text
+                      variant="label"
+                      numberOfLines={1}
+                      style={{ color: textColor }}
+                    >
+                      {isLogged ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
+                    </Text>
+                    {sc.crosses_midnight && (
+                      <Moon
+                        size={10}
+                        color="rgba(255, 255, 255, 0.85)"
+                        style={{ marginLeft: 3 }}
+                      />
+                    )}
+                  </View>
+                  {compactRange ? (
+                    <Text
+                      variant="mono"
+                      numberOfLines={1}
+                      style={{ color: 'rgba(255, 255, 255, 0.95)', marginTop: 1 }}
+                    >
+                      {compactRange}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : (
+                /* COLLAPSED (UNSELECTED) STATE: Exactly ONE line */
+                <View style={styles.collapsedContent}>
                   <Text
                     variant="label"
                     numberOfLines={1}
-                    style={{ color: textColor }}
+                    style={{ color: textColor, textAlign: 'center' }}
                   >
                     {isLogged ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
                   </Text>
-                  {sc.crosses_midnight && (
-                    <Moon
-                      size={10}
-                      color="rgba(255, 255, 255, 0.85)"
-                      style={{ marginLeft: 3 }}
-                    />
-                  )}
                 </View>
-                {compactRange ? (
-                  <Text
-                    variant="mono"
-                    numberOfLines={1}
-                    style={{ color: 'rgba(255, 255, 255, 0.95)', marginTop: 1 }}
-                  >
-                    {compactRange}
-                  </Text>
-                ) : null}
-              </View>
-            ) : (
-              /* COLLAPSED (UNSELECTED) STATE: Exactly ONE line */
-              <View style={styles.collapsedContent}>
-                <Text
-                  variant="label"
-                  numberOfLines={1}
-                  style={{ color: textColor, textAlign: 'center' }}
-                >
-                  {isLogged ? `✓ ${getShiftDisplayTitle(sc)}` : getShiftDisplayTitle(sc)}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+              )}
+            </Pressable>
+          </Animated.View>
         );
       })}
     </View>

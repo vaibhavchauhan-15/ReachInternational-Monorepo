@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Platform,
   Dimensions,
@@ -11,8 +10,9 @@ import {
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
+import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { ChevronDown, Check, X, Search } from 'lucide-react-native';
+import { ChevronDown, Check, X, Search, Icon } from '../ui/icon';
 import type { FilterOption } from './CustomFilterSelectorModal';
 
 export type { FilterOption };
@@ -102,7 +102,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
     }
 
     // Native measureInWindow
-    buttonRef.current.measureInWindow((x, y, width, height) => {
+    buttonRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
       const menuWidth = Math.max(width, minMenuWidth);
       let left = align === 'right' ? x + width - menuWidth : x;
 
@@ -136,9 +136,11 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
     <View style={styles.container}>
       {/* Anchor Trigger Button */}
       <View ref={buttonRef} collapsable={false}>
-        <TouchableOpacity
+        <Pressable
+          variant="outline"
+          haptic="select"
+          hitSlopToMin48
           onPress={measureAndOpen}
-          activeOpacity={0.8}
           style={[
             styles.triggerBtn,
             {
@@ -170,14 +172,13 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
               {selectedOption?.label}
             </Text>
           </View>
-          <ChevronDown
+          <Icon
+            name="chevron-down"
             size={13}
             color={open ? theme.colors.ink : theme.colors.mute}
-            style={{
-              transform: [{ rotate: open ? '180deg' : '0deg' }],
-            }}
+            state={open ? 'open' : 'closed'}
           />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Floating Dropdown Menu */}
@@ -212,9 +213,15 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                       style={[styles.menuSearchInput, bodyTypeStyle, { color: theme.colors.ink }]}
                     />
                     {searchQuery.length > 0 && (
-                      <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Pressable
+                        variant="iconButton"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={() => setSearchQuery('')}
+                        accessibilityLabel="Clear search"
+                      >
                         <X size={13} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   </View>
                 )}
@@ -233,16 +240,17 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                       </Text>
                     </View>
                   ) : (
-                    filteredOptions.map((opt) => {
+                    filteredOptions.map((opt: FilterOption) => {
                       const isSelected = opt.id === value;
                       return (
-                        <TouchableOpacity
+                        <Pressable
                           key={opt.id}
+                          variant="listRow"
+                          haptic="select"
                           onPress={() => {
                             onChange(opt.id);
                             setOpen(false);
                           }}
-                          activeOpacity={0.7}
                           style={[
                             styles.optionItem,
                             {
@@ -277,9 +285,9 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                             </Text>
                           </View>
                           {isSelected && (
-                            <Check size={14} color={theme.colors.canvas} strokeWidth={2.5} />
+                            <Check size={14} color={theme.colors.canvas} strokeWidth={2.5} animate="mount" />
                           )}
-                        </TouchableOpacity>
+                        </Pressable>
                       );
                     })
                   )}

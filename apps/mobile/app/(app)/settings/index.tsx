@@ -14,8 +14,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
-  Alert} from 'react-native';
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../../lib/auth/useAuth';
@@ -26,7 +25,10 @@ import {
   useTheme,
   MobileHeader,
   ReachInternationalLogo,
-  ConfirmDialog, Text } from '../../../components/ui';
+  ConfirmDialog,
+  Text,
+  Pressable,
+} from '../../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
@@ -39,10 +41,8 @@ import {
   Info,
   LogOut,
   ChevronRight,
-  Shield,
-  Sparkles,
-} from 'lucide-react-native';
-import { haptics } from '../../../lib/interaction/haptics';
+} from '../../../components/ui/icon';
+import { haptics } from '../../../lib/haptics';
 
 const NOTIF_PREFS_KEY = '@reach:notification_preferences';
 
@@ -136,10 +136,10 @@ export default function SettingsHubScreen() {
         {/* ========================================================================= */}
         {/* HERO PROFILE ROW (TAP -> /settings/account) */}
         {/* ========================================================================= */}
-        <TouchableOpacity
-          activeOpacity={0.8}
+        <Pressable
+          variant="card"
+          haptic="select"
           onPress={() => {
-            haptics.select();
             router.push('/(app)/settings/account' as any);
           }}
           style={[
@@ -160,19 +160,19 @@ export default function SettingsHubScreen() {
                 },
               ]}
             >
-              <Text style={[styles.avatarText, { color: theme.colors.canvas }]}>
+              <Text variant="heading" style={[styles.avatarText, { color: theme.colors.canvas }]}>
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
 
             <View style={{ flex: 1 }}>
               <View style={styles.nameBadgeRow}>
-                <Text style={[styles.profileName, { color: theme.colors.ink }]} numberOfLines={1}>
+                <Text variant="heading" style={[styles.profileName, { color: theme.colors.ink }]} numberOfLines={1}>
                   {displayName}
                 </Text>
                 <Badge status="active" customLabel={roleLabel} />
               </View>
-              <Text style={[styles.profileEmail, { color: theme.colors.mute }]} numberOfLines={1}>
+              <Text variant="caption" style={[styles.profileEmail, { color: theme.colors.mute }]} numberOfLines={1}>
                 {displayEmail}
               </Text>
             </View>
@@ -189,10 +189,10 @@ export default function SettingsHubScreen() {
               <ChevronRight size={16} color={theme.colors.mute} />
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Section Heading */}
-        <Text style={[styles.sectionGroupTitle, { color: theme.colors.mute }]}>
+        <Text variant="label" style={[styles.sectionGroupTitle, { color: theme.colors.mute }]}>
           PREFERENCES & GOVERNANCE
         </Text>
 
@@ -213,10 +213,10 @@ export default function SettingsHubScreen() {
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.navTitle, { color: theme.colors.ink }]}>
+              <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
                 Account & Security
               </Text>
-              <Text style={[styles.navSubtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
                 Change password, personnel profile & data erasure
               </Text>
             </View>
@@ -243,7 +243,7 @@ export default function SettingsHubScreen() {
 
             <View style={{ flex: 1 }}>
               <View style={styles.navTitleRow}>
-                <Text style={[styles.navTitle, { color: theme.colors.ink }]}>
+                <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
                   Notifications
                 </Text>
                 {pushEnabled ? (
@@ -252,7 +252,7 @@ export default function SettingsHubScreen() {
                   <Badge status="error" customLabel="MUTED" />
                 )}
               </View>
-              <Text style={[styles.navSubtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
                 Push alerts, shift reminders & breakdown notices
               </Text>
             </View>
@@ -279,12 +279,12 @@ export default function SettingsHubScreen() {
 
             <View style={{ flex: 1 }}>
               <View style={styles.navTitleRow}>
-                <Text style={[styles.navTitle, { color: theme.colors.ink }]}>
+                <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
                   Preferences & Theme
                 </Text>
                 <Badge status="pending" customLabel={themeModeLabel} />
               </View>
-              <Text style={[styles.navSubtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
                 Appearance (Light / Dark / System), font scale & haptics
               </Text>
             </View>
@@ -310,10 +310,10 @@ export default function SettingsHubScreen() {
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.navTitle, { color: theme.colors.ink }]}>
+              <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
                 About Reach International
               </Text>
-              <Text style={[styles.navSubtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
                 v1.0.0 (Build 42) • Privacy Policy • Terms & Conditions
               </Text>
             </View>
@@ -339,10 +339,10 @@ export default function SettingsHubScreen() {
         {/* Brand Footer */}
         <View style={styles.brandFooter}>
           <ReachInternationalLogo size={18} showTagline={false} />
-          <Text style={[styles.brandFooterText, { color: theme.colors.mute }]}>
+          <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
             {BRAND_NAME} • {BRAND_TAGLINE}
           </Text>
-          <Text style={[styles.brandVersionText, { color: theme.colors.mute }]}>
+          <Text variant="micro" style={[styles.brandVersionText, { color: theme.colors.mute }]}>
             v1.0.0 (Build 42) • Production Fleet Release
           </Text>
         </View>

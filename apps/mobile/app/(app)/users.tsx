@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
   TextInput,
@@ -16,6 +15,7 @@ import {
   ListRenderItem} from 'react-native';
 import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { UserEditModal } from '../../components/users/UserEditModal';
 import { PasswordResetModal } from '../../components/users/PasswordResetModal';
@@ -60,7 +60,7 @@ import {
   Globe,
   Smartphone,
   Wrench,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 
 const ROLE_FILTER_OPTIONS: FilterOption[] = [
   { id: 'all', label: 'All Roles' },
@@ -271,10 +271,11 @@ const UserTouchCard = React.memo(function UserTouchCard({
   const accentColor = getRoleAccentColor(u.role);
 
   return (
-    <TouchableOpacity
+    <Pressable
+      variant="longPressRow"
+      haptic="longPress"
       onPress={() => onPress(u)}
       onLongPress={() => onLongPress(u)}
-      activeOpacity={0.85}
     >
       <View
         style={[
@@ -404,7 +405,7 @@ const UserTouchCard = React.memo(function UserTouchCard({
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 });
 
@@ -658,7 +659,9 @@ export default function UsersScreen() {
             Active Filters:
           </Text>
           {debouncedSearch.trim() !== '' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={handleClearSearch}
               style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
             >
@@ -666,11 +669,13 @@ export default function UsersScreen() {
                 Search: "{debouncedSearch}"
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {roleFilter !== 'all' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setRoleFilter('all')}
               style={[styles.badgeChip, { backgroundColor: isDark ? '#1e3a8a26' : '#eff6ff', borderColor: '#3b82f633' }]}
             >
@@ -678,11 +683,13 @@ export default function UsersScreen() {
                 Role: {currentRoleLabel}
               </Text>
               <X size={12} color="#2563eb" />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {statusFilter !== 'all' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setStatusFilter('all')}
               style={[
                 styles.badgeChip,
@@ -727,11 +734,13 @@ export default function UsersScreen() {
                     : '#64748b'
                 }
               />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {stateFilter !== 'all' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setStateFilter('all')}
               style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
             >
@@ -739,11 +748,13 @@ export default function UsersScreen() {
                 State: {currentStateLabel}
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {kycFilter !== 'all' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setKycFilter('all')}
               style={[
                 styles.badgeChip,
@@ -757,11 +768,13 @@ export default function UsersScreen() {
                 KYC: {currentKycLabel}
               </Text>
               <X size={12} color={kycFilter === 'verified' ? '#059669' : '#d97706'} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {dateRangeFilter !== 'all' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setDateRangeFilter('all')}
               style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
             >
@@ -769,11 +782,13 @@ export default function UsersScreen() {
                 Joined: {currentJoinedLabel}
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {sortBy !== 'newest' && (
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setSortBy('newest')}
               style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
             >
@@ -781,10 +796,12 @@ export default function UsersScreen() {
                 Sort: {currentSortLabel}
               </Text>
               <X size={12} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
-          <TouchableOpacity
+          <Pressable
+            variant="buttonGhost"
+            hitSlopToMin48
             onPress={handleResetAllFilters}
             style={styles.resetAllLink}
           >
@@ -792,7 +809,7 @@ export default function UsersScreen() {
             <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
               Reset all
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
     </View>
@@ -1554,14 +1571,14 @@ export default function UsersScreen() {
           <Text style={[styles.initialErrorSubtext, { color: theme.colors.mute }]}>
             {initialError}
           </Text>
-          <TouchableOpacity
+          <Pressable
+            variant="buttonPrimary"
             onPress={handleRetryInitial}
-            activeOpacity={0.8}
             style={[styles.retryInitialBtn, { backgroundColor: theme.colors.ink }]}
           >
             <RotateCcw size={13} color={theme.colors.canvas} />
             <Text style={[styles.retryInitialBtnText, { color: theme.colors.canvas }]}>Try Again</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       );
     }
@@ -1576,12 +1593,13 @@ export default function UsersScreen() {
             : 'No users in this directory scope.'}
         </Text>
         {(activeFilterCount > 0 || search.trim() !== '') && (
-          <TouchableOpacity
+          <Pressable
+            variant="buttonPrimary"
             onPress={handleResetAllFilters}
             style={[styles.resetEmptyBtn, { backgroundColor: theme.colors.ink }]}
           >
             <Text style={styles.resetEmptyBtnText}>Reset Search & Filters</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
     );
@@ -1606,16 +1624,17 @@ export default function UsersScreen() {
             <Text style={[styles.paginationErrorText, { color: theme.colors.error }]}>
               {loadMoreError}
             </Text>
-            <TouchableOpacity
+            <Pressable
+              variant="buttonPrimary"
+              hitSlopToMin48
               onPress={handleRetryLoadMore}
-              activeOpacity={0.8}
               style={[styles.retryLoadMoreBtn, { backgroundColor: theme.colors.ink }]}
             >
               <RotateCcw size={12} color={theme.colors.canvas} />
               <Text style={[styles.retryLoadMoreBtnText, { color: theme.colors.canvas }]}>
                 Retry
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       );
@@ -1715,8 +1734,8 @@ export default function UsersScreen() {
               {/* Top Search & Filter Action Row */}
               <View style={styles.toolbarTopRow}>
                 {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
-                <TouchableOpacity
-                  activeOpacity={1}
+                <Pressable
+                  variant="plain"
                   onPress={() => searchInputRef.current?.focus()}
                   style={[
                     styles.searchBarBox,
@@ -1763,21 +1782,22 @@ export default function UsersScreen() {
                     autoCorrect={false}
                   />
                   {search.length > 0 && (
-                    <TouchableOpacity
+                    <Pressable
+                      variant="iconButton"
+                      hitSlopToMin48
                       onPress={handleClearSearch}
                       style={styles.searchClearBtn}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel="Clear search"
                     >
                       <X size={14} color={theme.colors.mute} />
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Filter Toggle Button */}
-                <TouchableOpacity
+                <Pressable
+                  variant="buttonSecondary"
                   onPress={() => setFilterPanelOpen((prev) => !prev)}
-                  activeOpacity={0.8}
                   style={[
                     styles.filterToggleBtn,
                     {
@@ -1883,13 +1903,14 @@ export default function UsersScreen() {
                       />
                     </Animated.View>
                   )}
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Quick Reset Filters Button */}
                 {activeFilterCount > 0 && (
-                  <TouchableOpacity
+                  <Pressable
+                    variant="buttonSecondary"
+                    hitSlopToMin48
                     onPress={handleResetAllFilters}
-                    activeOpacity={0.8}
                     style={[
                       styles.quickResetBtn,
                       {
@@ -1903,7 +1924,7 @@ export default function UsersScreen() {
                     <Text style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                       Reset
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 )}
               </View>
 
@@ -1967,20 +1988,24 @@ export default function UsersScreen() {
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonPrimary"
+                      hitSlopToMin48
                       style={[styles.miniActionBtn, { backgroundColor: '#6366f1', borderColor: '#6366f1' }]}
                       onPress={handleApproveAllProfileReqs}
                       disabled={isBulkApprovingProfile}
                     >
                       <Text style={styles.miniActionBtnTextWhite}>Accept All</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </Pressable>
+                    <Pressable
+                      variant="buttonSecondary"
+                      hitSlopToMin48
                       style={[styles.miniActionBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
                       onPress={handleRejectAllProfileReqs}
                       disabled={isBulkRejectingProfile}
                     >
                       <Text style={[styles.miniActionBtnText, { color: theme.colors.ink }]}>Reject All</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 </View>
 
@@ -2083,7 +2108,9 @@ export default function UsersScreen() {
 
                       {/* Actions */}
                       <View style={styles.changeReqActions}>
-                        <TouchableOpacity
+                        <Pressable
+                          variant="buttonPrimary"
+                          hitSlopToMin48
                           style={[styles.reqApproveBtn, { backgroundColor: '#10b981' }]}
                           onPress={() => handleApproveProfileReq(pr.id, reqData, pr.user_id)}
                           disabled={isApproving}
@@ -2093,14 +2120,16 @@ export default function UsersScreen() {
                           ) : (
                             <Text style={styles.reqBtnTextWhite}>Approve</Text>
                           )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </Pressable>
+                        <Pressable
+                          variant="buttonSecondary"
+                          hitSlopToMin48
                           style={[styles.reqRejectBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                           onPress={() => setRejectModalReq(pr)}
                           disabled={isApproving}
                         >
                           <Text style={[styles.reqBtnText, { color: theme.colors.error }]}>Reject...</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                     </View>
                   );
@@ -2176,7 +2205,9 @@ export default function UsersScreen() {
 
                       {/* Actions */}
                       <View style={styles.changeReqActions}>
-                        <TouchableOpacity
+                        <Pressable
+                          variant="buttonDanger"
+                          hitSlopToMin48
                           style={[styles.reqApproveBtn, { backgroundColor: '#dc2626' }]}
                           onPress={() => handleApproveDeletionReq(dr)}
                           disabled={isApproving || isRejecting}
@@ -2186,8 +2217,10 @@ export default function UsersScreen() {
                           ) : (
                             <Text style={styles.reqBtnTextWhite}>Approve & Deactivate</Text>
                           )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </Pressable>
+                        <Pressable
+                          variant="buttonSecondary"
+                          hitSlopToMin48
                           style={[styles.reqRejectBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                           onPress={() => handleRejectDeletionReq(dr)}
                           disabled={isApproving || isRejecting}
@@ -2197,7 +2230,7 @@ export default function UsersScreen() {
                           ) : (
                             <Text style={[styles.reqBtnText, { color: theme.colors.ink }]}>Decline</Text>
                           )}
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                     </View>
                   );
@@ -2238,17 +2271,18 @@ export default function UsersScreen() {
           ]}
         >
           <View style={styles.bulkCountRow}>
-            <TouchableOpacity
+            <Pressable
+              variant="iconButton"
+              hitSlopToMin48
               onPress={() => {
                 setSelectedIds([]);
                 setIsSelectMode(false);
               }}
               style={styles.bulkCloseBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityLabel="Cancel selection mode"
             >
               <X size={15} color="#ffffff" />
-            </TouchableOpacity>
+            </Pressable>
             <View style={[styles.bulkBadge, { backgroundColor: theme.colors.link }]}>
               <Text style={styles.bulkBadgeText}>{selectedIds.length}</Text>
             </View>
@@ -2256,34 +2290,34 @@ export default function UsersScreen() {
           </View>
 
           <View style={styles.bulkActionsRow}>
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
               onPress={handleSelectAll}
               style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
-              activeOpacity={0.7}
             >
               <Text style={styles.bulkBtnSecondaryText}>
                 {selectedIds.length === users.length ? 'Deselect' : 'All'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
               onPress={() => setExportModalVisible(true)}
               style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
-              activeOpacity={0.7}
             >
               <FileSpreadsheet size={13} color="#10b981" />
               <Text style={styles.bulkBtnSecondaryText}>Export</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable
+              variant="buttonDanger"
               onPress={handleBulkDelete}
               disabled={isDeletingBulk}
               style={[styles.bulkBtnDanger, { backgroundColor: theme.colors.error }]}
-              activeOpacity={0.8}
             >
               <Trash2 size={13} color="#ffffff" />
               <Text style={styles.bulkBtnDangerText}>Delete</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       )}
@@ -2295,7 +2329,12 @@ export default function UsersScreen() {
         user={selectedUser}
         currentUserRole={currentUserRole || 'super_admin'}
         currentUserId={authUser?.id}
-        onSuccess={() => fetchUsers(false, 1)}
+        onSuccess={(updatedUser?: any) => {
+          if (updatedUser) {
+            setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? { ...u, ...updatedUser } : u)));
+          }
+          fetchUsers(false, 1);
+        }}
         onEdit={handleTriggerEdit}
         onResetPassword={handleTriggerResetPassword}
       />

@@ -1,14 +1,14 @@
-﻿import { Text } from '../ui/Text';
+import { Text } from '../ui/Text';
 import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   type ViewStyle} from 'react-native';
+import { Pressable } from '../ui/touch/Pressable';
 import { useTheme } from '../ui/ThemeProvider';
-import { AlertCircle, CheckCircle2 } from 'lucide-react-native';
-import { haptics } from '../../lib/interaction/haptics';
+import { AlertCircle, CheckCircle2 } from '../ui/icon';
+import { haptics } from '../../lib/haptics';
 
 export interface MobileSubmitButtonProps {
   isReady: boolean;
@@ -121,10 +121,11 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
       )}
 
       {/* 2. Submit Button */}
-      <TouchableOpacity
+      <Pressable
+        variant="primary"
+        haptic="none"
         onPress={handlePress}
         disabled={isLocked}
-        activeOpacity={0.8}
         style={[
           styles.button,
           {
@@ -144,7 +145,7 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
         ) : (
           <Text style={styles.buttonText}>{label}</Text>
         )}
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 };

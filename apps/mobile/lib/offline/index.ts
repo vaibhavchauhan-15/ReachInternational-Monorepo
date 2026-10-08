@@ -7,3 +7,6 @@ export * from './types';
 export * from './OfflineQueueManager';
 export * from './useNetworkStatus';
 export * from './useOfflineQueue';
+export * from './NetworkConnectivityManager';
+export * from './SyncCoordinator';
+export * from './useScreenSync';

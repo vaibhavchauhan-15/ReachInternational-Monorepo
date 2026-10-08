@@ -458,32 +458,45 @@ export function AttendanceMobileCardSkeleton({ count = 4 }: { count?: number }) 
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-xs space-y-3 animate-pulse"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-xs space-y-3 animate-pulse"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="space-y-1.5 flex-1">
-              <Skeleton className="h-4 w-36 rounded" />
-              <Skeleton className="h-3 w-48 rounded" />
-            </div>
-            <Skeleton className="h-4 w-4 rounded" />
-          </div>
-          <div className="grid grid-cols-3 gap-2 bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-            <div className="text-center space-y-1">
-              <Skeleton className="h-2.5 w-12 mx-auto rounded" />
-              <Skeleton className="h-4 w-6 mx-auto rounded" />
-            </div>
-            <div className="text-center space-y-1">
-              <Skeleton className="h-2.5 w-12 mx-auto rounded" />
-              <Skeleton className="h-4 w-6 mx-auto rounded" />
-            </div>
-            <div className="text-center space-y-1">
-              <Skeleton className="h-2.5 w-12 mx-auto rounded" />
-              <Skeleton className="h-4 w-6 mx-auto rounded" />
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-4 w-32 rounded" />
+                <Skeleton className="h-4 w-16 rounded" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-20 rounded" />
+                <Skeleton className="h-3 w-24 rounded" />
+              </div>
             </div>
           </div>
+          {/* 4-Stat Metric Box */}
+          <div className="grid grid-cols-4 gap-1.5 p-2.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+            <div className="text-center space-y-1">
+              <Skeleton className="h-2.5 w-10 mx-auto rounded" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+            </div>
+            <div className="text-center space-y-1">
+              <Skeleton className="h-2.5 w-10 mx-auto rounded" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+            </div>
+            <div className="text-center space-y-1">
+              <Skeleton className="h-2.5 w-10 mx-auto rounded" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+            </div>
+            <div className="text-center space-y-1">
+              <Skeleton className="h-2.5 w-10 mx-auto rounded" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+            </div>
+          </div>
+          {/* Footer */}
           <div className="flex items-center justify-between pt-1">
-            <Skeleton className="h-3 w-20 rounded" />
-            <Skeleton className="h-3 w-16 rounded" />
+            <Skeleton className="h-3.5 w-28 rounded" />
+            <Skeleton className="h-3.5 w-20 rounded" />
           </div>
         </div>
       ))}

@@ -4,8 +4,9 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import {
   Card,
   useTheme,
@@ -24,7 +25,7 @@ import {
   CheckCircle2,
   Mail,
   ExternalLink,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
@@ -244,7 +245,8 @@ export default function PrivacyPolicyScreen() {
             For privacy inquiries, statutory compliance requests, or data correction submissions, contact our Data Protection and Compliance Desk:
           </Text>
 
-          <TouchableOpacity
+          <Pressable
+            variant="card"
             style={[styles.contactBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
             onPress={handleContactEmail}
           >
@@ -255,7 +257,7 @@ export default function PrivacyPolicyScreen() {
               <Text style={[styles.contactLabel, { color: theme.colors.mute, marginTop: 2 }]}>Web: {BRAND_WEBSITE_DISPLAY}</Text>
             </View>
             <ExternalLink size={14} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
         </Card>
 
         {/* Brand Footprint Footer */}

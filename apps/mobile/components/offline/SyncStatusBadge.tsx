@@ -1,19 +1,20 @@
 import { Text } from '../ui/Text';
 /**
- * SyncStatusBadge — 4-State Tactical Status Pill for Machine Logs
+ * SyncStatusBadge — 4-State Tactical Status Pill for Machine Logs & Optimistic Rows
  * Phase 14: Mobile Offline Sync & Network Resilience
  * Conforms to decisions D-02, D-08, and Vercel Geist design tokens.
  */
 
 import React from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { Clock, Check, AlertTriangle } from 'lucide-react-native';
+import { Clock, Check, AlertTriangle } from '../ui/icon';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { MutationStatus } from '../../lib/offline/types';
+import { SyncState } from '../../lib/optimistic/syncState';
 
 export interface SyncStatusBadgeProps {
-  status: MutationStatus;
+  status: SyncState | MutationStatus;
   customLabel?: string;
 }
 
@@ -26,7 +27,13 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ status, custom
   let label = customLabel || 'Pending Sync';
   let icon = <Clock size={11} color={text} />;
 
-  if (status === 'syncing') {
+  if (status === 'queued') {
+    bg = isDark ? '#261b0d' : '#fefce8';
+    border = isDark ? '#713f12' : '#fef08a';
+    text = isDark ? '#facc15' : '#ca8a04';
+    label = customLabel || 'Queued Offline';
+    icon = <Clock size={11} color={text} />;
+  } else if (status === 'syncing') {
     bg = isDark ? '#172554' : '#eff6ff';
     border = isDark ? '#1e40af' : '#dbeafe';
     text = isDark ? '#60a5fa' : '#2563eb';
@@ -76,6 +83,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  label: {    textTransform: 'uppercase',
+  label: {
+    textTransform: 'uppercase',
   },
 });

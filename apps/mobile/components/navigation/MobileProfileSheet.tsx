@@ -13,11 +13,11 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
-  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, Text, AppModal, Touchable } from '../ui';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -42,7 +42,7 @@ import {
   Building,
   KeyRound,
   Lock,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 export interface MobileProfileSheetProps {
   isOpen: boolean;
@@ -233,7 +233,9 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
               <View style={styles.headerRight}>
                 {/* Theme Toggle Button */}
-                <TouchableOpacity
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
                   onPress={toggleTheme}
                   style={[
                     styles.iconActionBtn,
@@ -242,7 +244,6 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       borderColor: theme.colors.hairline,
                     },
                   ]}
-                  activeOpacity={0.7}
                   accessibilityLabel="Toggle Theme"
                 >
                   {isDark ? (
@@ -250,10 +251,12 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                   ) : (
                     <Moon size={16} color={theme.colors.ink} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Close Button */}
-                <TouchableOpacity
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
                   onPress={onClose}
                   style={[
                     styles.iconActionBtn,
@@ -262,11 +265,10 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                       borderColor: theme.colors.hairline,
                     },
                   ]}
-                  activeOpacity={0.7}
                   accessibilityLabel="Close Drawer"
                 >
                   <X size={16} color={theme.colors.ink} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 

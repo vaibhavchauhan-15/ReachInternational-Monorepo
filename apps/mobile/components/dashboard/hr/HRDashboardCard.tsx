@@ -15,7 +15,7 @@ import {
   FileEdit,
   Clock,
   UserPlus,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 
 export interface HRDashboardCardProps {
   data: HRDashboardDTO | null;

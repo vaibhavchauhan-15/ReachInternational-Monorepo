@@ -7,7 +7,7 @@ import {
   Platform,
   Alert} from 'react-native';
 import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -35,7 +35,7 @@ import {
   Clock,
   ChevronDown,
   Check,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import type { UserRecord } from './UserDetailModal';
 
 export interface UserEditModalProps {

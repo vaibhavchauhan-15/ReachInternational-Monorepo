@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   Shield,
   SlidersHorizontal,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 
 export interface SuperAdminDashboardCardProps {
   data: SuperAdminDashboardDTO | null;

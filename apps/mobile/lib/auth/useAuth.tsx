@@ -135,6 +135,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async (): Promise<void> => {
+    try {
+      const { clearPersistedCache } = await import('../optimistic/persist');
+      await clearPersistedCache();
+    } catch (err) {
+      console.warn('[useAuth] Error purging persisted cache on signout:', err);
+    }
     await supabase.auth.signOut();
   };
 

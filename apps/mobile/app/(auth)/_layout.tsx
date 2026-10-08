@@ -8,7 +8,7 @@ import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 
-import { screenAnim } from '../../lib/interaction/screens';
+import { navigationPresets } from '../../lib/motion';
 
 export default function AuthLayout() {
   const { theme } = useTheme();
@@ -28,7 +28,7 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.canvas },
-        ...screenAnim.detail,
+        ...navigationPresets.stackDetailScreen,
       }}
     />
   );

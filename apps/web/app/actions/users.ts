@@ -10,6 +10,12 @@ import { CACHE_TAGS } from "@/lib/cache";
 import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import type { User, UserRole } from "@/lib/types/database";
+import {
+  getUserAssignedMachines,
+  getUserAssignments,
+  type UserMachineItem,
+  type UserAssignmentItem,
+} from "@/lib/data/users";
 
 export interface UserFormState {
   error?: string;
@@ -1725,4 +1731,32 @@ export async function getMyProfileCardDetailsAction(): Promise<{
   }
 }
 
+/**
+ * Fetches fresh active assigned machines for a specific user.
+ * Used for dynamic refetching upon assignment modifications.
+ */
+export async function getUserAssignedMachinesAction(
+  userId: string
+): Promise<{ machines: UserMachineItem[]; error?: string }> {
+  try {
+    const machines = await getUserAssignedMachines(userId);
+    return { machines };
+  } catch (err: any) {
+    return { machines: [], error: err?.message || "Failed to fetch user machines" };
+  }
+}
 
+/**
+ * Fetches fresh assignment history for a specific operator.
+ * Used for dynamic refetching upon assignment modifications.
+ */
+export async function getUserAssignmentsAction(
+  userId: string
+): Promise<{ assignments: UserAssignmentItem[]; error?: string }> {
+  try {
+    const assignments = await getUserAssignments(userId);
+    return { assignments };
+  } catch (err: any) {
+    return { assignments: [], error: err?.message || "Failed to fetch user assignments" };
+  }
+}

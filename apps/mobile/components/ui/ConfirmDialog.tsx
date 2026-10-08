@@ -7,11 +7,11 @@ import {
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { AlertCircle, AlertTriangle, Info, LogOut } from 'lucide-react-native';
+import { AlertCircle, AlertTriangle, Info, LogOut } from './icon';
 import { Text } from './Text';
-import { AppModal } from './AppModal';
+import { Dialog } from './overlay/Dialog';
 import { Touchable } from './Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 
 export interface ConfirmDialogProps {
   visible: boolean;
@@ -45,7 +45,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       accent: theme.colors.error,
       bg: isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.1)',
       border: isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)',
-      defaultIcon: <LogOut size={22} color={theme.colors.error} />,
+      defaultIcon: <LogOut size={22} color={theme.colors.error} animate="mount" />,
       confirmBtnBg: theme.colors.error,
       confirmTextColor: '#ffffff',
     },
@@ -53,7 +53,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       accent: '#f59e0b',
       bg: isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)',
       border: isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.25)',
-      defaultIcon: <AlertTriangle size={22} color="#f59e0b" />,
+      defaultIcon: <AlertTriangle size={22} color="#f59e0b" animate="mount" />,
       confirmBtnBg: '#f59e0b',
       confirmTextColor: '#ffffff',
     },
@@ -61,7 +61,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       accent: theme.colors.link,
       bg: isDark ? 'rgba(0, 112, 243, 0.16)' : 'rgba(0, 112, 243, 0.1)',
       border: isDark ? 'rgba(0, 112, 243, 0.35)' : 'rgba(0, 112, 243, 0.25)',
-      defaultIcon: <Info size={22} color={theme.colors.link} />,
+      defaultIcon: <Info size={22} color={theme.colors.link} animate="mount" />,
       confirmBtnBg: theme.colors.link,
       confirmTextColor: '#ffffff',
     },
@@ -79,21 +79,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   return (
-    <AppModal
+    <Dialog
       visible={visible}
       onClose={onClose}
-      variant="center"
       persistent={isLoading}
+      contentStyle={styles.dialogCardOverride}
       testID="confirm-dialog-modal"
     >
       <View
-        style={[
-          styles.dialog,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-          },
-        ]}
+        style={styles.innerContent}
         accessibilityRole="alert"
         accessibilityLabel={title}
       >
@@ -147,14 +141,27 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               styles.confirmBtn,
               {
                 backgroundColor: currentVariant.confirmBtnBg,
-                opacity: isLoading ? 0.7 : 1,
+                opacity: isLoading ? 0.8 : 1,
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel={confirmText}
           >
             {isLoading ? (
-              <ActivityIndicator size="small" color={currentVariant.confirmTextColor} />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={currentVariant.confirmTextColor} />
+                <Text
+                  variant="label"
+                  style={[
+                    styles.confirmBtnText,
+                    { color: currentVariant.confirmTextColor },
+                  ]}
+                >
+                  {title.toLowerCase().includes('sign out') || confirmText.toLowerCase().includes('sign out')
+                    ? 'Signing out...'
+                    : 'Please wait...'}
+                </Text>
+              </View>
             ) : (
               <Text
                 variant="label"
@@ -169,42 +176,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </Touchable>
         </View>
       </View>
-    </AppModal>
+    </Dialog>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  dialogCardOverride: {
+    maxWidth: 360,
+    borderRadius: 20,
     padding: spacingNumeric.lg,
+    alignItems: 'center',
   },
-  dialog: {
+  innerContent: {
     width: '100%',
-    maxWidth: 380,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.lg,
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 8px 10px -6px rgba(0, 0, 0, 0.35)',
-      },
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-        elevation: 14,
-      },
-    }),
   },
   iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -217,7 +207,7 @@ const styles = StyleSheet.create({
   message: {
     textAlign: 'center',
     marginBottom: spacingNumeric.lg,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -232,7 +222,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44, // 44px minimum touch target
+    minHeight: 46, // 46px comfortable touch target
   },
   cancelBtnText: {
     textAlign: 'center',
@@ -243,9 +233,15 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44, // 44px minimum touch target
+    minHeight: 46, // 46px comfortable touch target
   },
   confirmBtnText: {
     textAlign: 'center',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
 });

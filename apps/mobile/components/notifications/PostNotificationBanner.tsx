@@ -3,22 +3,32 @@ import { Text } from '../ui/Text';
  * ReachInternational Mobile — Ambient Post Notification Banner
  * Floating in-app toast banner displaying real-time operational notifications
  * for Machines, Users, Logs Entry, Logs Export/Manage, and Profile updates.
+ * Powered by Reanimated 4 & Gesture Handler with Material 3 Expressive motion.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  Animated,
-  TouchableOpacity,
-  Platform} from 'react-native';
+  Platform,
+} from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  ReduceMotion,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
+import { Pressable } from '../ui/touch/Pressable';
 import {
   subscribeToPostNotifications,
   PostNotificationPayload,
 } from '../../lib/notifications';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 import {
   Truck,
   Users,
@@ -28,20 +38,26 @@ import {
   Bell,
   X,
   AlertTriangle,
-  CheckCircle2,
-  Info,
-} from 'lucide-react-native';
+} from '../ui/icon';
+import { EFFECTS, SPATIAL, DUR } from '../../lib/motion/tokens';
+import { useMotion } from '../../lib/motion/useMotion';
 
 const AUTO_DISMISS_DURATION_MS = 4500;
 
 export const PostNotificationBanner: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { isReduced } = useMotion();
   const [currentNotif, setCurrentNotif] = useState<PostNotificationPayload | null>(null);
 
-  const translateY = useRef(new Animated.Value(-120)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(-120);
+  const opacity = useSharedValue(0);
+  const dragY = useSharedValue(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCurrent = useCallback(() => {
+    setCurrentNotif(null);
+  }, []);
 
   const dismiss = useCallback(() => {
     if (timerRef.current) {
@@ -49,21 +65,29 @@ export const PostNotificationBanner: React.FC = () => {
       timerRef.current = null;
     }
 
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -120,
-        duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start(() => {
-      setCurrentNotif(null);
-    });
-  }, [translateY, opacity]);
+    if (isReduced) {
+      opacity.value = 0;
+      translateY.value = -120;
+      clearCurrent();
+    } else {
+      opacity.value = withTiming(0, {
+        duration: DUR.xs,
+        reduceMotion: ReduceMotion.System,
+      });
+      translateY.value = withTiming(
+        -120,
+        {
+          duration: DUR.sm,
+          reduceMotion: ReduceMotion.System,
+        },
+        (finished) => {
+          if (finished) {
+            runOnJS(clearCurrent)();
+          }
+        },
+      );
+    }
+  }, [clearCurrent, isReduced, opacity, translateY]);
 
   useEffect(() => {
     const unsubscribe = subscribeToPostNotifications((notification) => {
@@ -74,23 +98,24 @@ export const PostNotificationBanner: React.FC = () => {
       setCurrentNotif(notification);
 
       // Reset values
-      translateY.setValue(-100);
-      opacity.setValue(0);
+      translateY.value = -100;
+      opacity.value = 0;
+      dragY.value = 0;
 
-      // Animate In
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: Platform.OS !== 'web',
-          tension: 70,
-          friction: 9,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
+      // Animate In with Material 3 Expressive spring
+      if (isReduced) {
+        translateY.value = 0;
+        opacity.value = 1;
+      } else {
+        translateY.value = withSpring(0, {
+          ...SPATIAL.fast,
+          reduceMotion: ReduceMotion.System,
+        });
+        opacity.value = withSpring(1, {
+          ...EFFECTS.fast,
+          reduceMotion: ReduceMotion.System,
+        });
+      }
 
       // Set Auto Dismiss
       timerRef.current = setTimeout(() => {
@@ -102,7 +127,43 @@ export const PostNotificationBanner: React.FC = () => {
       unsubscribe();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [dismiss, translateY, opacity]);
+  }, [dismiss, isReduced, opacity, translateY, dragY]);
+
+  // Swipe up gesture to dismiss notification
+  const swipeGesture = useMemo(() => {
+    return Gesture.Pan()
+      .onUpdate((e) => {
+        'worklet';
+        // Only allow upward dragging
+        if (e.translationY < 0) {
+          dragY.value = e.translationY;
+        }
+      })
+      .onEnd((e) => {
+        'worklet';
+        if (e.translationY < -30 || e.velocityY < -300) {
+          translateY.value = withTiming(
+            -120,
+            { duration: 120 },
+            (finished) => {
+              if (finished) {
+                runOnJS(clearCurrent)();
+              }
+            },
+          );
+        } else {
+          dragY.value = withSpring(0, {
+            ...SPATIAL.fast,
+            reduceMotion: ReduceMotion.System,
+          });
+        }
+      });
+  }, [dragY, translateY, clearCurrent]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value + dragY.value }],
+    opacity: opacity.value,
+  }));
 
   if (!currentNotif) return null;
 
@@ -110,7 +171,7 @@ export const PostNotificationBanner: React.FC = () => {
   const renderIcon = () => {
     const size = 16;
     if (currentNotif.severity === 'error') {
-      return <AlertTriangle size={size} color="#ef4444" />;
+      return <AlertTriangle size={size} color="#ef4444" animate="mount" />;
     }
     switch (currentNotif.category) {
       case 'machine':
@@ -124,7 +185,7 @@ export const PostNotificationBanner: React.FC = () => {
       case 'profile':
         return <UserCheck size={size} color={theme.colors.link} />;
       default:
-        return <Bell size={size} color={theme.colors.link} />;
+        return <Bell size={size} color={theme.colors.link} pulseKey={currentNotif.id} />;
     }
   };
 
@@ -166,62 +227,66 @@ export const PostNotificationBanner: React.FC = () => {
         styles.container,
         {
           top: topOffset,
-          transform: [{ translateY }],
-          opacity,
           pointerEvents: 'box-none',
         },
+        animatedStyle,
       ]}
     >
-      <TouchableOpacity
-        activeOpacity={0.92}
-        onPress={dismiss}
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: getSeverityBorder(),
-          },
-        ]}
-      >
-        {/* Left Icon Pill */}
-        <View
+      <GestureDetector gesture={swipeGesture}>
+        <Pressable
+          variant="card"
+          haptic={false}
+          onPress={dismiss}
           style={[
-            styles.iconWrap,
+            styles.card,
             {
-              backgroundColor: isDark ? '#262626' : '#f4f4f5',
-              borderColor: theme.colors.hairline,
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: getSeverityBorder(),
             },
           ]}
         >
-          {renderIcon()}
-        </View>
-
-        {/* Content Body */}
-        <View style={styles.textCol}>
-          <View style={styles.metaRow}>
-            <Text style={[styles.categoryBadge, { color: theme.colors.mute }]}>
-              {getCategoryLabel()}
-            </Text>
-            <Text style={[styles.timeText, { color: theme.colors.mute }]}>Just now</Text>
+          {/* Left Icon Pill */}
+          <View
+            style={[
+              styles.iconWrap,
+              {
+                backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {renderIcon()}
           </View>
-          <Text style={[styles.title, { color: theme.colors.ink }]} numberOfLines={1}>
-            {currentNotif.title}
-          </Text>
-          <Text style={[styles.body, { color: theme.colors.body }]} numberOfLines={2}>
-            {currentNotif.body}
-          </Text>
-        </View>
 
-        {/* Dismiss Button (min touch target) */}
-        <TouchableOpacity
-          onPress={dismiss}
-          style={styles.closeBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Dismiss notification"
-        >
-          <X size={14} color={theme.colors.mute} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+          {/* Content Body */}
+          <View style={styles.textCol}>
+            <View style={styles.metaRow}>
+              <Text style={[styles.categoryBadge, { color: theme.colors.mute }]}>
+                {getCategoryLabel()}
+              </Text>
+              <Text style={[styles.timeText, { color: theme.colors.mute }]}>Just now</Text>
+            </View>
+            <Text style={[styles.title, { color: theme.colors.ink }]} numberOfLines={1}>
+              {currentNotif.title}
+            </Text>
+            <Text style={[styles.body, { color: theme.colors.body }]} numberOfLines={2}>
+              {currentNotif.body}
+            </Text>
+          </View>
+
+          {/* Dismiss Button (min touch target) */}
+          <Pressable
+            variant="iconButton"
+            haptic="tap"
+            onPress={dismiss}
+            style={styles.closeBtn}
+            hitSlopToMin48={true}
+            accessibilityLabel="Dismiss notification"
+          >
+            <X size={14} color={theme.colors.mute} />
+          </Pressable>
+        </Pressable>
+      </GestureDetector>
     </Animated.View>
   );
 };

@@ -1,22 +1,22 @@
 /**
  * ReachInternational Mobile — Native Time Input Primitive
  * Separate Hours (1-12) & Minutes (0-60, auto-0) fields with AM/PM toggle and inline validation.
- * 95% identical to web mobile viewport with 5% native optimizations (haptics, smooth focus).
+ * Connected to canonical Material 3 TimePickerDialog with dial and input modes.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  Platform,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Text, useTypeStyle } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
+import { Clock } from './icon';
+import { TimePickerDialog } from './TimePickerDialog';
 
 export interface TimeInputProps {
   label?: string;
@@ -33,6 +33,8 @@ export interface TimeInputProps {
   helperText?: string;
   /** Layout arrangement of the AM/PM toggle relative to time picker box. Defaults to "side-by-side" matching web viewport. */
   toggleLayout?: 'stacked' | 'side-by-side';
+  /** Whether to show the interactive clock picker icon on the right side. Defaults to true. */
+  showClockPicker?: boolean;
 }
 
 /**
@@ -109,6 +111,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   hideErrorMessage = false,
   helperText,
   toggleLayout = 'side-by-side',
+  showClockPicker = true,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -117,6 +120,9 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   const [minute, setMinute] = useState<string>(parsed.minute);
   const [period, setPeriod] = useState<'AM' | 'PM'>(parsed.period);
   const [touched, setTouched] = useState<boolean>(false);
+
+  // Material 3 Time Picker Dialog State
+  const [isClockModalOpen, setIsClockModalOpen] = useState<boolean>(false);
 
   // Sync internal state if external value changes
   useEffect(() => {
@@ -301,8 +307,30 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     emitFormattedTime(hour, minute, newPeriod);
   };
 
-  const hourInputRef = React.useRef<TextInput>(null);
-  const minuteInputRef = React.useRef<TextInput>(null);
+  // Clock Dialog Handlers
+  const handleOpenClockModal = () => {
+    haptics.select();
+    setIsClockModalOpen(true);
+  };
+
+  const handleConfirmClockDialog = (selected: {
+    hour: number;
+    minute: number;
+    period: 'AM' | 'PM';
+    formatted: string;
+  }) => {
+    const finalH = String(selected.hour).padStart(2, '0');
+    const finalM = String(selected.minute).padStart(2, '0');
+    setHour(finalH);
+    setMinute(finalM);
+    setPeriod(selected.period);
+    setTouched(true);
+    emitFormattedTime(finalH, finalM, selected.period);
+    setIsClockModalOpen(false);
+  };
+
+  const hourInputRef = useRef<TextInput>(null);
+  const minuteInputRef = useRef<TextInput>(null);
 
   const containerBorderColor = validation.hasError
     ? '#ef4444'
@@ -332,7 +360,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
           toggleLayout === 'side-by-side' ? styles.sideBySideRow : styles.stackedCol,
         ]}
       >
-        {/* 1. Time Picker Shell: Digits Only */}
+        {/* 1. Time Picker Shell: Digits and Interactive Clock Button */}
         <View
           style={[
             styles.timeBoxShell,
@@ -391,6 +419,22 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               ]}
             />
           </View>
+
+          {/* Interactive Clock Icon on the Right */}
+          {showClockPicker && (
+            <Pressable
+              variant="iconButton"
+              haptic="select"
+              hitSlopToMin48
+              disabled={disabled}
+              onPress={handleOpenClockModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${label || 'time'} from clock`}
+              style={styles.clockIconBtn}
+            >
+              <Clock size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
+            </Pressable>
+          )}
         </View>
 
         {/* 2. Separate AM/PM Segmented Switcher Layout */}
@@ -404,10 +448,13 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             },
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+            variant="segmentedOption"
+            haptic="select"
             disabled={disabled}
             onPress={() => handlePeriodChange('AM')}
-            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Select AM"
             style={[
               styles.periodBtn,
               period === 'AM' && {
@@ -428,12 +475,15 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             >
               AM
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
+            variant="segmentedOption"
+            haptic="select"
             disabled={disabled}
             onPress={() => handlePeriodChange('PM')}
-            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Select PM"
             style={[
               styles.periodBtn,
               period === 'PM' && {
@@ -454,20 +504,35 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             >
               PM
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
-      {/* Inline Validation Error Message */}
+      {/* Inline Validation Error Message (Micro size) */}
       {validation.errorMessage ? (
-        <Text variant="caption" style={[styles.errorText, { color: '#ef4444' }]}>
+        <Text variant="micro" style={[styles.errorText, { color: '#ef4444' }]}>
           {validation.errorMessage}
         </Text>
       ) : helperText ? (
-        <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>
+        <Text variant="micro" style={[styles.helperText, { color: theme.colors.mute }]}>
           {helperText}
         </Text>
       ) : null}
+
+      {/* Canonical Material 3 Time Picker Dialog */}
+      {showClockPicker && (
+        <TimePickerDialog
+          visible={isClockModalOpen}
+          initialTime={{
+            hour: parseInt(hour, 10) || 8,
+            minute: parseInt(minute, 10) || 0,
+            period,
+          }}
+          helpText={label ? `Select ${label}` : undefined}
+          onConfirm={handleConfirmClockDialog}
+          onClose={() => setIsClockModalOpen(false)}
+        />
+      )}
     </View>
   );
 };
@@ -496,9 +561,10 @@ const styles = StyleSheet.create({
   timeBoxShell: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     height: 44,
-    paddingHorizontal: 8,
+    paddingLeft: 12,
+    paddingRight: 6,
     borderRadius: 14,
     borderWidth: 1,
   },
@@ -510,10 +576,17 @@ const styles = StyleSheet.create({
   },
   digitInput: {
     textAlign: 'center',
-    width: 36,
+    width: 34,
     height: 38,
     padding: 0,
     fontVariant: ['tabular-nums'],
+  },
+  clockIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   periodContainer: {
     flexDirection: 'row',
@@ -542,9 +615,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    marginTop: 4,
+    marginTop: 3,
   },
   helperText: {
-    marginTop: 4,
+    marginTop: 3,
   },
 });

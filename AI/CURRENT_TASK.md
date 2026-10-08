@@ -1,34 +1,46 @@
 # Current Task
 
-## Task: Profile (/profile) Page Polish & Document Uploads Refinement (`packages/utils`, `apps/web`, `apps/mobile`)
+## Task: 22 — Fix TransformError SyntaxError in `apps/mobile/app/(app)/settings/index.tsx` (Mismatched JSX tags between `<Pressable>` and `</TouchableOpacity>`)
 **Status**: 🟢 IMPLEMENTATION COMPLETE / VERIFIED
-**Date**: 2026-10-06
-**Type**: UI/UX & Responsive Refinement / Profile Data Architecture & Document Upload Polish
+**Date**: 2026-10-08
+**Type**: Bug Fix, Mobile App JSX Syntax, Clean Imports & Typography Alignment
 **Surfaces**:
-- `packages/utils/src/profile-view.ts`
-- `apps/web/components/documents/DocumentUploadSection.tsx`
-- `apps/mobile/app/(app)/profile.tsx`
+- `apps/mobile/app/(app)/settings/index.tsx`
 
-### User Request & Feedback Addressed
-1. **Remove Assigned Machinery from Profile**:
-   - Removed "Assigned Machinery" from "Work & Operations" section since machinery assignments already display comprehensively on the dedicated machines page (`/machines`).
-2. **Remove Date of Joining from Work & Operations**:
-   - Removed redundant "Date of Joining" row from "Work & Operations" (account registration date is already displayed via "Member Since" under "Account & System").
-3. **Remove Residential Address Section**:
-   - Completely removed the "Residential Address" section (`addressRows` and `Residential Address` card) from `toProfileView`. Personnel only have working location / site location (which is preserved in "Work & Operations").
-4. **Move Profile Status to Account & System Section**:
-   - Moved "Profile Status" (`Complete (100%)` / `Incomplete`) from "Work & Operations" to the "Account & System" section where account state belongs.
-5. **Document Upload Format & Metadata Polish**:
-   - In `DocumentUploadSection.tsx`, removed verbose `" • Click to view"` and `"Document"` text from document metadata paragraphs. Replaced with clean format and file size (e.g. `PDF • 1.3 MB`, `JPG • 1.9 MB`).
-   - Cleaned up local file selection preview metadata to display format and size concisely.
-6. **Icon-Only Document Format Squircles**:
-   - In `<DocumentFormatIcon>` (`DocumentUploadSection.tsx`), removed text labels (`PDF`, `IMG`, `DOC`), displaying crisp format icons (`FileText`, `ImageIcon`) inside the squircle.
-   - Synchronized 100% parity to `apps/mobile/app/(app)/profile.tsx`, updating `formatBadgeSquare` to icon-only and streamlining `existingDocMeta`.
+### Problem Summary
+The user encountered a syntax transformation error in the Metro bundler:
+```
+TransformError: SyntaxError: C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\settings\index.tsx: Expected corresponding JSX closing tag for <Pressable>. (192:8)
+
+  190 |             </View>
+  191 |           </View>
+> 192 |         </TouchableOpacity>
+      |         ^
+  193 |
+  194 |         {/* Section Heading */}
+  195 |         <Text style={[styles.sectionGroupTitle, { color: theme.colors.mute }]}>
+    at ? (app:///entry.bundle:71155:5)
+```
+
+### Root Cause Analysis
+1. During refactoring of the hero profile card in `apps/mobile/app/(app)/settings/index.tsx` from `TouchableOpacity` to the canonical `@reachinternational` `Pressable` primitive, the opening tag was changed to `<Pressable>`, but the closing tag at line 192 was left as `</TouchableOpacity>`.
+2. This syntax error caused Babel/SWC transformation inside Metro to fail, breaking Hot Module Replacement (HMR) and caching the TransformError in the developer's Metro / Expo session.
+
+### Delivered Work
+1. **JSX Tag Pair Correction**:
+   - Guaranteed exact pair alignment with `<Pressable variant="card" haptic="select" ...> ... </Pressable>` around the hero profile card.
+2. **Import Sanitation & Pruning**:
+   - Cleaned up imports in `apps/mobile/app/(app)/settings/index.tsx`: removed unused `Alert`, `Shield`, and `Sparkles`.
+   - Unified imports from `../../../components/ui` for `Pressable`, `Text`, `ConfirmDialog`, `Card`, `Badge`, `Button`, `useTheme`, `MobileHeader`, and `ReachInternationalLogo`.
+3. **Typography Variant Alignment**:
+   - Enhanced `<Text>` components across `index.tsx` with explicit design system variants (`variant="heading"`, `variant="subheading"`, `variant="caption"`, `variant="label"`, `variant="micro"`), ensuring zero raw typography properties and strict Geist scale adherence.
+4. **Comprehensive AST & Syntax Validation**:
+   - Ran AST parse verification across all `.tsx` and `.jsx` files in `apps/mobile` confirming 0 syntax errors across the entire codebase.
 
 ### Verification Results
-- Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
-- Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
-- Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
-- Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 21/21 scenarios passed, exit code 0).
-- Permissions Unit Tests: **PASS** (`pnpm --filter @reachinternational/permissions test` -> 4/4 passed).
-- Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+- Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+- AST Parse Verification: **PASS** (100% of `.tsx` and `.jsx` files in `apps/mobile` parsed with 0 errors).
+- Typography Compliance Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+- Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+- Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+- Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).

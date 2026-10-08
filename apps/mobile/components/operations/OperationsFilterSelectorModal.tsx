@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
@@ -10,9 +9,10 @@ import {
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { Text, useTypeStyle } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X, Search } from 'lucide-react-native';
+import { Check, X, Search } from '../ui/icon';
 
 export interface FilterSelectOption {
   id: string;
@@ -93,13 +93,15 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                   <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
-                  <TouchableOpacity
+                  <Pressable
+                    variant="iconButton"
+                    haptic="select"
                     onPress={handleClose}
                     style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlopToMin48={true}
                   >
                     <X size={16} color={theme.colors.mute} />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* Search Input */}
@@ -124,12 +126,15 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                       autoCorrect={false}
                     />
                     {searchTerm.length > 0 && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="iconButton"
+                        haptic="tap"
+                        hitSlopToMin48={true}
                         onPress={() => setSearchTerm('')}
                         style={styles.clearSearchBtn}
                       >
                         <X size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   </View>
                 )}
@@ -151,10 +156,11 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                     filteredOptions.map((opt) => {
                       const isSelected = opt.id === selectedValue;
                       return (
-                        <TouchableOpacity
+                        <Pressable
                           key={opt.id}
+                          variant="listRow"
+                          haptic="select"
                           onPress={() => handleSelect(opt.id)}
-                          activeOpacity={0.7}
                           style={[
                             styles.optionRow,
                             {
@@ -254,7 +260,7 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                               <Check size={16} color={theme.colors.link} strokeWidth={2.5} />
                             </View>
                           )}
-                        </TouchableOpacity>
+                        </Pressable>
                       );
                     })
                   )}

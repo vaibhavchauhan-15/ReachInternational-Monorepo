@@ -19,7 +19,7 @@ import {
   Timer,
   Layers,
   FileSpreadsheet,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 
 export interface AdminDashboardCardProps {
   data: AdminDashboardDTO | null;

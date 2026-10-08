@@ -14,7 +14,7 @@ import { Button } from '../ui/Button';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '@/lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
@@ -25,7 +25,7 @@ import {
   FolderTree,
   AlertCircle,
   CheckCircle,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 export interface MachineCategory {
   id: string;

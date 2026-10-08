@@ -13,7 +13,6 @@ import React, { useState, useRef } from 'react';
 import {
   View,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Platform,
@@ -22,11 +21,12 @@ import {
   type TextStyle,
   type StyleProp,
 } from 'react-native';
-import { Search, X } from 'lucide-react-native';
+import { Search, X } from './icon';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { useTypeStyle } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
 
 export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   value: string;
@@ -149,15 +149,16 @@ export const SearchInput: React.FC<SearchInputProps> = ({
 
       {/* Clear Button or Custom Right Icon */}
       {value.length > 0 ? (
-        <TouchableOpacity
+        <Pressable
+          variant="iconButton"
+          haptic="select"
           onPress={handleClear}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          activeOpacity={0.7}
+          hitSlopToMin48={true}
           accessibilityLabel="Clear search input"
           style={styles.clearBtn}
         >
           <X size={13} color={theme.colors.mute} />
-        </TouchableOpacity>
+        </Pressable>
       ) : rightIcon ? (
         rightIcon
       ) : null}

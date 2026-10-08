@@ -1,11 +1,13 @@
 /**
  * useNetworkStatus — Reactive Network Reachability Telemetry Hook
  * Phase 14: Mobile Offline Sync & Network Resilience
- * Conforms to decisions D-03, D-07, and avoids captive portal Pitfall 1.
+ *
+ * Consumes the centralized NetworkConnectivityManager to avoid redundant NetInfo subscriptions
+ * and guarantee synchronized telemetry across components.
  */
 
 import { useState, useEffect } from 'react';
-import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { networkConnectivityManager, NetworkTelemetry } from './NetworkConnectivityManager';
 
 export interface NetworkStatus {
   isConnected: boolean;
@@ -16,74 +18,30 @@ export interface NetworkStatus {
 }
 
 export function useNetworkStatus(): NetworkStatus {
-  const [status, setStatus] = useState<Omit<NetworkStatus, 'checkConnectivity'>>({
-    isConnected: true,
-    isInternetReachable: true,
-    isOffline: false,
-    connectionType: 'unknown',
-  });
-
-  const checkConnectivity = async (): Promise<boolean> => {
-    try {
-      const state = await NetInfo.fetch();
-      const isConnected = state.isConnected ?? true;
-      const isInternetReachable = state.isInternetReachable ?? null;
-      const isOffline = isInternetReachable === false || isConnected === false;
-
-      setStatus({
-        isConnected,
-        isInternetReachable,
-        isOffline,
-        connectionType: state.type || 'unknown',
-      });
-      return !isOffline;
-    } catch {
-      return false;
-    }
-  };
+  const [status, setStatus] = useState<NetworkTelemetry>(() =>
+    networkConnectivityManager.getStatus()
+  );
 
   useEffect(() => {
-    let isMounted = true;
-
-    // Read initial network state immediately
-    NetInfo.fetch().then((state: NetInfoState) => {
-      if (!isMounted) return;
-      const isConnected = state.isConnected ?? true;
-      const isInternetReachable = state.isInternetReachable ?? null;
-      // Evaluate captive portal / unreachable state: isInternetReachable === false or isConnected === false
-      const isOffline = isInternetReachable === false || isConnected === false;
-
-      setStatus({
-        isConnected,
-        isInternetReachable,
-        isOffline,
-        connectionType: state.type || 'unknown',
-      });
-    }).catch(() => {});
-
-    // Listen to real-time link transitions
-    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
-      if (!isMounted) return;
-      const isConnected = state.isConnected ?? true;
-      const isInternetReachable = state.isInternetReachable ?? null;
-      const isOffline = isInternetReachable === false || isConnected === false;
-
-      setStatus({
-        isConnected,
-        isInternetReachable,
-        isOffline,
-        connectionType: state.type || 'unknown',
-      });
+    // Subscribe to centralized NetworkConnectivityManager updates
+    const unsubscribe = networkConnectivityManager.subscribe((latest) => {
+      setStatus(latest);
     });
 
     return () => {
-      isMounted = false;
       unsubscribe();
     };
   }, []);
 
+  const checkConnectivity = async (): Promise<boolean> => {
+    return networkConnectivityManager.checkConnectivity();
+  };
+
   return {
-    ...status,
+    isConnected: status.isConnected,
+    isInternetReachable: status.isInternetReachable,
+    isOffline: status.isOffline,
+    connectionType: status.connectionType,
     checkConnectivity,
   };
 }

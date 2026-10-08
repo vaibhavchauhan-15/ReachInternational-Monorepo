@@ -14,27 +14,27 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Image,
   useWindowDimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Mail, Lock, Check, Moon, Sun } from 'lucide-react-native';
+import { Mail, Lock, Check } from '../../components/ui/icon';
 import { supabase } from '../../lib/supabase';
 import { Input, Alert, useTheme , Text } from '../../components/ui';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 
 export default function LoginScreen() {
   const router = useRouter();
   const localParams = useLocalSearchParams<{ message?: string }>();
-  const { theme, isDark, setMode } = useTheme();
+  const { theme, isDark } = useTheme();
   const { session, isLoading: authLoading, isProfileComplete, role } = useAuth();
   const { width, height } = useWindowDimensions();
 
@@ -117,10 +117,6 @@ export default function LoginScreen() {
     router.push('/(auth)/signup');
   };
 
-  const handleToggleTheme = () => {
-    haptics.light();
-    setMode(isDark ? 'light' : 'dark');
-  };
 
   const handleLogin = async () => {
     if (isSubmittingRef.current || isLoading) return;
@@ -147,7 +143,7 @@ export default function LoginScreen() {
     }
 
     if (Object.keys(newFieldErrors).length > 0) {
-      haptics.error();
+      haptics.reject();
       setFieldErrors(newFieldErrors);
       return;
     }
@@ -163,7 +159,7 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        haptics.error();
+        haptics.reject();
         const errorLower = error.message.toLowerCase();
         if (errorLower.includes('email not confirmed')) {
           setErrorMessage(
@@ -198,7 +194,7 @@ export default function LoginScreen() {
           .single();
 
         if (profileError || !profile) {
-          haptics.error();
+          haptics.reject();
           await supabase.auth.signOut();
           setErrorMessage('User profile not found. Contact your administrator.');
           isSubmittingRef.current = false;
@@ -207,7 +203,7 @@ export default function LoginScreen() {
         }
 
         if (profile.status === 'inactive') {
-          haptics.error();
+          haptics.reject();
           await supabase.auth.signOut();
           setErrorMessage('Your account has been deactivated. Contact your administrator.');
           isSubmittingRef.current = false;
@@ -216,7 +212,7 @@ export default function LoginScreen() {
         }
 
         if (profile.status === 'pending') {
-          haptics.error();
+          haptics.reject();
           await supabase.auth.signOut();
           setErrorMessage(
             'Your account is pending approval. Please wait for an administrator to approve your account.'
@@ -226,7 +222,7 @@ export default function LoginScreen() {
           return;
         }
 
-        haptics.success();
+        haptics.confirm();
 
         // Routing based on onboarding and role
         const isProfileComplete = profile.complete_profile === true || profile.complete_profile === 'yes';
@@ -238,7 +234,7 @@ export default function LoginScreen() {
       }
 
     } catch (err: unknown) {
-      haptics.error();
+      haptics.reject();
       setErrorMessage('An unexpected error occurred during login. Please try again.');
       isSubmittingRef.current = false;
       setIsLoading(false);
@@ -447,7 +443,8 @@ export default function LoginScreen() {
                     onChangeText={handleEmailChange}
                     autoCapitalize="none"
                     keyboardType="email-address"
-                    autoComplete="email"
+                    autoComplete="off"
+                    importantForAutofill="no"
                     error={fieldErrors.email}
                     leftIcon={<Mail size={16} color={isDark ? '#9ca3af' : '#626970'} />}
                   />
@@ -461,7 +458,8 @@ export default function LoginScreen() {
                     onChangeText={handlePasswordChange}
                     isPassword
                     autoCapitalize="none"
-                    autoComplete="current-password"
+                    autoComplete="off"
+                    importantForAutofill="no"
                     error={fieldErrors.password}
                     leftIcon={<Lock size={16} color={isDark ? '#9ca3af' : '#626970'} />}
                   />
@@ -473,11 +471,12 @@ export default function LoginScreen() {
                       { marginBottom: isShortScreen ? 12 : 18 },
                     ]}
                   >
-                    <TouchableOpacity
+                    <Pressable
+                      variant="toggle"
+                      haptic="toggle"
                       style={styles.rememberMeContainer}
                       onPress={handleToggleRememberMe}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      hitSlopToMin48={true}
                     >
                       <View
                         style={[
@@ -506,21 +505,24 @@ export default function LoginScreen() {
                       >
                         Remember me
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
-                    <TouchableOpacity
+                    <Pressable
+                      variant="plain"
+                      haptic="select"
+                      hitSlopToMin48={true}
                       onPress={handleNavigateForgotPassword}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Text style={[styles.forgotPasswordText, { color: primarySkyBlue }]}>
                         Forgot password?
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {/* Sign In CTA Button */}
-                  <TouchableOpacity
+                  <Pressable
+                    variant="buttonPrimary"
+                    haptic={false}
                     style={[
                       styles.signInButton,
                       { backgroundColor: primarySkyBlue },
@@ -528,14 +530,13 @@ export default function LoginScreen() {
                     ]}
                     onPress={handleLogin}
                     disabled={isLoading}
-                    activeOpacity={0.85}
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
                       <Text style={styles.signInButtonText}>Sign in</Text>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* Card Footer: Request Access */}
@@ -557,15 +558,16 @@ export default function LoginScreen() {
                   >
                     Don&apos;t have access?
                   </Text>
-                  <TouchableOpacity
+                  <Pressable
+                    variant="plain"
+                    haptic="select"
+                    hitSlopToMin48={true}
                     onPress={handleNavigateSignup}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Text style={[styles.requestAccessText, { color: primarySkyBlue }]}>
                       Request access
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -583,26 +585,6 @@ export default function LoginScreen() {
             </View>
           </ScrollView>
 
-          {/* Floating Theme Switcher Widget in Bottom-Right */}
-          <TouchableOpacity
-            style={[
-              styles.floatingThemeBtn,
-              {
-                backgroundColor: isDark ? '#27272a' : '#18181b',
-                borderColor: isDark ? '#3f3f46' : '#27272a',
-              },
-            ]}
-            onPress={handleToggleTheme}
-            activeOpacity={0.8}
-            accessibilityLabel="Toggle Theme"
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          >
-            {isDark ? (
-              <Sun size={17} color="#fbbf24" strokeWidth={2.2} />
-            ) : (
-              <Moon size={17} color="#f4f4f5" strokeWidth={2.2} />
-            )}
-          </TouchableOpacity>
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
@@ -812,26 +794,5 @@ const styles = StyleSheet.create({
   copyrightText: {
     textAlign: 'center',
   },
-  floatingThemeBtn: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
+
 });

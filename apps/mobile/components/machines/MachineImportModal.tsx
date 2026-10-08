@@ -9,9 +9,9 @@ import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { FileSpreadsheet, X, Download, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { FileSpreadsheet, X, Download, CheckCircle2, AlertCircle } from '../ui/icon';
 import { getAppUrl } from '../../lib/env';
 
 export interface MachineImportModalProps {

@@ -11,9 +11,9 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity} from 'react-native';
+  Platform} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { useAuth } from '../../lib/auth/useAuth';
 import {
   Card,
@@ -37,7 +37,7 @@ import {
   ChevronRight,
   ArrowLeft,
   XCircle,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 
 const REASON_OPTIONS = [
   'Leaving organization / Change of employment',
@@ -347,8 +347,10 @@ export default function AccountDeletionScreen() {
 
               <Text style={[styles.label, { color: theme.colors.ink, marginTop: 4 }]}>Select Reason</Text>
               {REASON_OPTIONS.map((opt) => (
-                <TouchableOpacity
+                <Pressable
                   key={opt}
+                  variant="cardSelect"
+                  haptic="select"
                   onPress={() => setSelectedReason(opt)}
                   style={[
                     styles.radioRow,
@@ -371,7 +373,7 @@ export default function AccountDeletionScreen() {
                     )}
                   </View>
                   <Text style={[styles.radioText, { color: theme.colors.ink }]}>{opt}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
 
               <Text style={[styles.label, { color: theme.colors.ink, marginTop: 10 }]}>Additional Notes (Optional)</Text>

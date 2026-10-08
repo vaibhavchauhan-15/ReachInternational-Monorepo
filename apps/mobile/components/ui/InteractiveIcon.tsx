@@ -1,18 +1,21 @@
 /**
  * ReachInternational Mobile — Interactive Icon Primitive
  * Provides responsive touch press micro-interactions synchronized with parent touch state.
+ * Powered by Reanimated 4 and SPATIAL.fast physics tokens.
  */
 
-import React, { useEffect, useRef, useContext } from 'react';
-import {
-  Animated,
-  AccessibilityInfo,
-  StyleSheet,
-  Platform,
-  type ViewStyle,
-  type StyleProp,
-} from 'react-native';
+import React, { useContext, useEffect } from 'react';
+import { StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  ReduceMotion,
+} from 'react-native-reanimated';
 import { CardPressContext } from './Card';
+import { usePressProgress } from './touch/Pressable';
+import { useReducedMotion } from '../../lib/preferences/useReducedMotion';
+import { SPATIAL } from '../../lib/motion/tokens';
 
 export type MobileIconInteractionVariant =
   | 'bounce'
@@ -41,116 +44,60 @@ export const InteractiveIcon: React.FC<InteractiveIconProps> = ({
   style,
 }) => {
   const cardContext = useContext(CardPressContext);
-  const effectivePressed = pressed !== undefined ? pressed : (cardContext?.isPressed ?? false);
-  const anim = useRef(new Animated.Value(0)).current;
-  const isReducedMotion = useRef(false);
+  const pressProgress = usePressProgress();
+  const isReducedMotion = useReducedMotion();
+
+  const effectivePressed =
+    pressed !== undefined
+      ? pressed
+      : (cardContext?.isPressed ?? (pressProgress ? pressProgress.value > 0.1 : false));
+
+  const anim = useSharedValue(0);
 
   useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      isReducedMotion.current = enabled;
-    });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      isReducedMotion.current = enabled;
-    });
-    return () => {
-      sub?.remove?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (disabled || isReducedMotion.current || variant === 'none') {
-      anim.setValue(0);
+    if (disabled || isReducedMotion || variant === 'none') {
+      anim.value = 0;
       return;
     }
+    anim.value = withSpring(effectivePressed ? 1 : 0, {
+      ...SPATIAL.fast,
+      reduceMotion: ReduceMotion.System,
+    });
+  }, [effectivePressed, disabled, isReducedMotion, variant, anim]);
 
-    Animated.spring(anim, {
-      toValue: effectivePressed ? 1 : 0,
-      useNativeDriver: Platform.OS !== 'web',
-      tension: 300,
-      friction: 22,
-    }).start();
-  }, [effectivePressed, disabled, variant, anim]);
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    if (variant === 'none' || isReducedMotion || disabled) {
+      return {};
+    }
 
-  if (variant === 'none' || !icon) {
-    return <>{icon}</>;
-  }
+    const p = anim.value;
 
-  // Compute interpolations based on variant (calibrated to Apple iOS 17 standard)
-  let transform: any[] = [];
+    switch (variant) {
+      case 'bounce':
+      case 'scale':
+        return { transform: [{ scale: 1 - p * 0.08 }] };
+      case 'lift':
+        return { transform: [{ translateY: -p * 2 }, { scale: 1 - p * 0.04 }] };
+      case 'arrow':
+        return { transform: [{ translateX: p * 3 }] };
+      case 'chevron':
+        return { transform: [{ translateX: p * 2 }] };
+      case 'rotate':
+        return { transform: [{ rotate: `${p * 30}deg` }] };
+      case 'refresh':
+        return { transform: [{ rotate: `${p * 180}deg` }] };
+      case 'tilt':
+        return { transform: [{ rotate: `${-p * 10}deg` }] };
+      default:
+        return {};
+    }
+  });
 
-  if (variant === 'bounce' || variant === 'scale') {
-    transform = [
-      {
-        scale: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 0.94],
-        }),
-      },
-    ];
-  } else if (variant === 'lift') {
-    transform = [
-      {
-        translateY: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -2],
-        }),
-      },
-      {
-        scale: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 0.96],
-        }),
-      },
-    ];
-  } else if (variant === 'arrow') {
-    transform = [
-      {
-        translateX: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 3],
-        }),
-      },
-    ];
-  } else if (variant === 'chevron') {
-    transform = [
-      {
-        translateX: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 2],
-        }),
-      },
-    ];
-  } else if (variant === 'rotate') {
-    transform = [
-      {
-        rotate: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0deg', '30deg'],
-        }),
-      },
-    ];
-  } else if (variant === 'refresh') {
-    transform = [
-      {
-        rotate: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0deg', '180deg'],
-        }),
-      },
-    ];
-  } else if (variant === 'tilt') {
-    transform = [
-      {
-        rotate: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0deg', '-10deg'],
-        }),
-      },
-    ];
-  }
+  if (!icon) return null;
 
   return (
-    <Animated.View style={[styles.container, { transform, pointerEvents: 'none' }, style]}>
+    <Animated.View style={[styles.container, animatedStyle, style]}>
       {icon}
     </Animated.View>
   );

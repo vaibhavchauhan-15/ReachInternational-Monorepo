@@ -16,9 +16,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
   Image,
   useWindowDimensions} from 'react-native';
+import { Pressable } from '../../components/ui/touch/Pressable';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,8 +63,8 @@ import {
   Info,
   Sun,
   Moon,
-} from 'lucide-react-native';
-import { haptics } from '../../lib/interaction/haptics';
+} from '../../components/ui/icon';
+import { haptics } from '../../lib/haptics';
 
 const ONBOARDING_ROLES = [
   { value: 'operator', label: 'Operator' },
@@ -510,12 +510,13 @@ export default function OnboardingScreen() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please complete all mandatory fields highlighted below.');
-      haptics.warning();
+      haptics.reject();
       return;
     }
 
     if (!user?.id) {
       setErrorMessage('Authentication session expired. Please log in again.');
+      haptics.reject();
       return;
     }
 
@@ -593,14 +594,14 @@ export default function OnboardingScreen() {
         setErrorMessage(updateError.message || 'Failed to save profile details. Please try again.');
         isSubmittingRef.current = false;
         setIsLoading(false);
-        haptics.error();
+        haptics.reject();
         return;
       }
 
       // Refresh session in auth state
       await refreshSession();
 
-      haptics.success();
+      haptics.confirm();
       setSuccessMessage('Profile completed successfully! Directing to dashboard...');
 
       setTimeout(() => {
@@ -610,7 +611,7 @@ export default function OnboardingScreen() {
       setErrorMessage(err?.message || 'An unexpected error occurred while saving profile.');
       isSubmittingRef.current = false;
       setIsLoading(false);
-      haptics.error();
+      haptics.reject();
     }
   };
 
@@ -1174,7 +1175,9 @@ export default function OnboardingScreen() {
               </Text>
 
               {/* Floating Theme Switcher */}
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                haptic="tap"
                 style={[
                   styles.themeToggleBtn,
                   {
@@ -1183,19 +1186,17 @@ export default function OnboardingScreen() {
                   },
                 ]}
                 onPress={() => {
-                  haptics.select();
                   setMode(isDark ? 'light' : 'dark');
                 }}
-                activeOpacity={0.7}
                 accessibilityLabel="Toggle Theme"
-                hitSlop={8}
+                hitSlopToMin48={true}
               >
                 {isDark ? (
                   <Sun size={15} color="#e0e0e0" />
                 ) : (
                   <Moon size={15} color="#333333" />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </ScrollView>

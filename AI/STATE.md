@@ -1,5 +1,677 @@
 # Project State — Reach International (reachinternational.co.in)
 
+- [x] **22 — Fix TransformError SyntaxError in `apps/mobile/app/(app)/settings/index.tsx` (2026-10-08)**:
+  - **Delivered**:
+    1. **JSX Tag Pair Correction (`apps/mobile/app/(app)/settings/index.tsx`)**:
+       - Fixed mismatched JSX tags in the hero profile card where an opening `<Pressable>` was paired with a closing `</TouchableOpacity>`, causing Metro TransformError / Babel SyntaxError.
+       - Closed cleanly with `</Pressable>` and ensured seamless nested markup.
+    2. **Imports Cleanup & Pruning**:
+       - Removed unused imports (`Alert`, `Shield`, `Sparkles`).
+       - Unified imports from `../../../components/ui` barrel for `Pressable`, `Text`, `ConfirmDialog`, `Card`, `Badge`, `Button`, `useTheme`, `MobileHeader`, and `ReachInternationalLogo`.
+    3. **Typography Variant Alignment**:
+       - Applied explicit design system variants (`variant="heading"`, `variant="subheading"`, `variant="caption"`, `variant="label"`, `variant="micro"`) across all text elements in the settings hub.
+    4. **AST Syntax Parse Sweep**:
+       - Validated all `.tsx` and `.jsx` files in `apps/mobile` with TypeScript compiler AST parser; verified 0 syntax errors across the entire codebase.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - AST Parse Verification: **PASS** (100% of `.tsx` and `.jsx` files in `apps/mobile` parsed with 0 errors).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **21 — Fix `<button> cannot contain a nested <button>` React DOM Nesting Error in Shift Monitor Card and Container Pressables (2026-10-08)**:
+  - **Delivered**:
+    1. **Shift Monitor Card Role Normalization (`apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`)**:
+       - Removed explicit `accessibilityRole="button"` from the card `<Pressable key={cardKey} variant="card" ...>` at line 700.
+       - Retained `accessibilityLabel` and `onPress` interaction.
+       - On Web, the card now cleanly renders as an accessible `<div>` with `tabindex="0"`, allowing child `<Pressable>` buttons (machine serial number badge, "Assign Operator" button, "Enter/Edit Shift Log" button) to render without HTML DOM nesting violations.
+    2. **Search Bar Container Neutralization (`apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`)**:
+       - Changed `variant="ghost"` to `variant="plain"` on the search bar box `<Pressable>`, consistent with `machines.tsx` and `users.tsx`.
+    3. **Touch Wrapper Architectural Safeguard (`apps/mobile/components/ui/touch/Pressable.tsx`)**:
+       - In `Pressable.tsx`, updated `resolvedRole` so that container touch variants (`card`, `listRow`, `plain`) never resolve to `'button'`.
+       - On Web, container variants render as `<div>`, permanently preventing `<button> cannot contain a nested <button>` errors if nested action buttons are placed inside cards or rows anywhere in the application.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+    - DOM Nesting Verification Test: **PASS** (`ReactDOMServer` verifies outer container renders as `<div>` and inner actions render as `<button>`).
+
+- [x] **20 — Metro Bundler Haptics Module Resolution Fix (2026-10-08)**:
+  - **Delivered**:
+    1. **Backward-Compatibility Shims for Mobile Haptics**:
+       - Created `apps/mobile/lib/interaction/haptics.ts` and `apps/mobile/lib/interaction/index.ts` re-exporting all exports from canonical `apps/mobile/lib/haptics`.
+       - Resolves Metro bundler's `UnableToResolveError` when resolving legacy or cached `../interaction/haptics` paths from `lib/optimistic/useOptimisticMutation.ts`.
+       - Touched and refreshed optimistic mutation hooks (`useOptimisticMutation.ts`, `usePendingMutation.ts`) to ensure immediate cache invalidation.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+
+- [x] **19 — Native Header Slimming, Android Notification Bar Overlap Fix, Minimalist Clean Polish & Robust Offline Handling (2026-10-08)**:
+  - **Delivered**:
+    1. **Android Status Bar Clearance & Zero Overlap Guarantee**:
+       - Computed `androidStatusBar = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) : 0;` and `safeTop = Math.max(insets.top, androidStatusBar, Platform.OS === 'ios' ? 44 : 0);` in both `MobileHeader.tsx` and `OfflineBanner.tsx`.
+       - Ensured `safeTop + 5` top padding in `MobileHeader` (or 6px when `OfflineBanner` is active) and `safeTop + 4` in `OfflineBanner`, permanently resolving system notification bar overlap across all Android punch-hole and notch hardware.
+    2. **Slightly Thinner & Minimalist Clean Header (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+       - Reduced row minimum height from 44px to 38px and bottom padding from 12px to 6px.
+       - Upgraded title typography to standard 16px `heading` (`Geist-SemiBold`) and auxiliary labels to 11px `micro`.
+       - Re-proportioned action buttons to 32x32px with `hitSlopToMin48={true}` (48dp touch accessibility) and crisp 15-16px icons.
+    3. **Minimalist, Low-Profile Offline Telemetry (`apps/mobile/components/offline/OfflineBanner.tsx`)**:
+       - Streamlined banner to low-profile 26px height ambient strip with 5px bottom padding.
+       - Concise status text (`Offline • Changes save locally` / `X logs queued`) with `<Text variant="micro">`.
+       - Compact 24px action button with 48dp hitSlop.
+       - Full offline synchronization and conflict resolution mechanisms preserved.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **18 — Clock-Only Optimization & Lightweight Streamlining for Material 3 TimePickerDialog (2026-10-08)**:
+  - **Delivered**:
+    1. **Clock-Only Dedicated UI (`apps/mobile/components/ui/TimePickerDialog.tsx`)**:
+       - Completely removed the secondary text input mode and all keyboard input elements, eliminating visual clutter.
+       - Removed the bottom-left mode toggle button; the dialog is now exclusively a fast, dedicated clock face dial.
+    2. **Precomputed Geometry & Zero-Allocation Render Loop**:
+       - Precomputed static coordinates `STATIC_HOURS` (1-12) and `STATIC_MINUTES` (00-55) outside component lifecycle, eliminating trigonometric recalculations per frame.
+       - Reduced tip coordinates to a single sine/cosine computation.
+    3. **Throttled 60fps Pan Responder**:
+       - State updates (`setSelectedHour`, `setSelectedMinute`) now diff against previous values, preventing wasted re-renders within the same tick sector.
+       - Haptic ticks fire smoothly on sector transition.
+       - Auto-advance on hour release preserved.
+       - Direct number tapping on dial supported.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **17 — Canonical Material Design 3 TimePickerDialog & Reusable Time Input Primitive Overhaul (2026-10-08)**:
+  - **Delivered**:
+    1. **Design Tokens `hero` Typography Variant (`packages/design-tokens/src/typography.ts`, `typography.test.ts`)**:
+       - Added canonical `hero: { size: 44, line: 54, font: 'Geist-Bold', icon: 32 }` to `TYPE_VARIANTS` and `iconSize`.
+       - Updated unit tests (`typography.test.ts`) asserting strict scale ordering (`T.hero.size > T.display.size`) and line height bounds ($54 \ge 44 \times 1.2$).
+    2. **Lucide Icons `Keyboard` Registration (`apps/mobile/components/ui/icon/registry.ts`, `icons.ts`)**:
+       - Registered `Keyboard` icon from `lucide-react-native` in `ICON_REGISTRY` with `pressNudge` behavior and exported pre-bound component in `icons.ts`.
+    3. **Reusable Material Design 3 `TimePickerDialog` Primitive (`apps/mobile/components/ui/TimePickerDialog.tsx`)**:
+       - Built canonical Material 3 centered popup dialog matching Google M3 specifications: 28dp corner radius (`borderRadius: 28`), dim backdrop scrim, level 3 elevation shadow, and light/dark theme synchronization.
+       - **Header**: Dynamic help text (`helpText`, defaults to "Select time" in dial mode and "Enter time" in input mode).
+       - **Display Cluster**: 86x76dp interactive Hour and Minute display boxes with Reach sky blue active highlight (`#0284c7` border, `#e0f2fe` fill), display colon separator, and vertically stacked AM/PM segmented toggle button with hairline divider.
+       - **Clock Face Dial (`dial` mode)**: 256dp diameter circular face with center pivot dot (8dp) and Reach sky blue accent; hand line and 40dp selector disc with active number in white text; 12 hour positions (1–12) with auto-advance to minutes on touch release; 12 primary minute ticks (00, 05, 10, ..., 55) with full minute-level precision for any minute 0..59; responsive touch responder with trigonometric angle calculations and soft tick haptic feedback (`haptics.select()`).
+       - **Text Input Mode (`input` mode)**: Two numeric text inputs with "Hour" and "Minute" sublabels, auto-focus transition, and inline validation (`errorInvalidText`).
+       - **Bottom Bar**: Mode toggle button (Keyboard icon in dial mode, Clock icon in input mode) on left, "Cancel" and "OK" text action buttons with 44px min touch targets on right.
+       - Exported `TimePickerDialog`, `TimePickerEntryMode`, `TimeOfDay`, and `formatTimeOfDay` from `apps/mobile/components/ui/index.ts`.
+    4. **TimeInput Primitive Clean Overhaul (`apps/mobile/components/ui/TimeInput.tsx`)**:
+       - Completely removed old bottom-sheet grid modal, 4x3 button arrays, +/- stepper, presets, and obsolete modal styles.
+       - Connected clock button to open `<TimePickerDialog />` with initial time sync and confirmation callback.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Forced Typecheck: **PASS** across all 7 workspace packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+    - Typography Compliance Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **16 — Native Mobile Auth Screens UI Polish: Autofill Highlight Fix & Theme Toggle Removal (2026-10-08)**:
+  - **Delivered**:
+    1. **Input Primitive Enhancement (`apps/mobile/components/ui/Input.tsx`)**:
+       - Added `underlineColorAndroid="transparent"`, Reach sky blue `cursorColor` and `selectionColor`.
+       - Defaulted `importantForAutofill` to `'no'` on Android to prevent system `android:autofilledHighlight` from coloring the input with yellow/olive boxes.
+       - Ensured inner text input seamlessly inherits outer wrapper background.
+    2. **Sign In Screen Refinement (`apps/mobile/app/(auth)/login.tsx`)**:
+       - Added `autoComplete="off"` and `importantForAutofill="no"` to email and password inputs, eliminating the Android autofill highlight so the field matches the dark card container.
+       - Removed floating theme switcher widget button, related handler `handleToggleTheme`, and `Sun`/`Moon` imports.
+    3. **Sign Up Screen Refinement (`apps/mobile/app/(auth)/signup.tsx`)**:
+       - Added `autoComplete="off"` and `importantForAutofill="no"` across all form fields.
+       - Removed floating theme toggle button, cleaned up imports, and centered footer copyright text.
+    4. **Native Android Theme Config Plugin (`apps/mobile/app.config.js`)**:
+       - Added `withTransparentAutofillHighlight` Expo config plugin to set `android:autofilledHighlight` to `@android:color/transparent` in `AppTheme` for all native builds.
+    5. **TimePickerDialog.tsx Bug Fix**:
+       - Fixed non-existent `StyleSheet.absoluteFillObject` to `StyleSheet.absoluteFill`.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Forced Typecheck: **PASS** (`npx turbo run typecheck --force` -> 7/7 packages successful, exit code 0).
+    - Expo Config Check: **PASS** (`npx expo config --type public` -> exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **15 — Mobile Menu Sidebar Profile Redesign, Overlay Layering Fix & Sign Out Dialogue Box Polish (2026-10-08)**:
+  - **Delivered**:
+    1. **Drawer Primitive Overlay & Rounded Left Edges (`apps/mobile/components/ui/overlay/Drawer.tsx`)**:
+       - Added `overlay?: React.ReactNode` to `DrawerProps` and rendered inside `portalLayer` directly above drawer panel.
+       - Added `borderTopLeftRadius: 24` and `borderBottomLeftRadius: 24` to `styles.drawerPanel`.
+    2. **Single Clean Card & Sign-Out Spinner (`apps/mobile/components/ui/ConfirmDialog.tsx`)**:
+       - Removed duplicate nested card container (`styles.dialog`) that caused double modal boxes.
+       - Enhanced single dialog card with 20px radius, 56x56 icon badge, and centered layout.
+       - Added spinner and "Signing out..." optimistic loading state to confirm button during in-flight sign-out.
+    3. **Mobile Menu Drawer Profile Card & Integration (`apps/mobile/components/navigation/MobileMenuDrawer.tsx`)**:
+       - Redesigned bottom footer into an elevated profile card (`styles.profileCard`) with avatar orb, role badge pill (`• OPERATOR`), bold name, and tail-truncated email.
+       - Added `borderTopLeftRadius: 24` and `borderBottomLeftRadius: 24` to panel, header, and footer.
+       - Passed `<ConfirmDialog>` via `<Drawer overlay={...}>`, ensuring it renders above the drawer with full-screen scrim.
+       - Managed smooth signout flow: sets loading state, calls `onLogout()`, dismisses dialog, closes drawer, and redirects to `/(auth)/login`.
+    4. **Bottom Nav Integration (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+       - Passed `role={normalizedRole}` to `MobileMenuDrawer`.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **14 — Mobile Operations Screen Refinement, Clean Typography & Native Interactive Clock UI (2026-10-08)**:
+  - **Delivered**:
+    1. **Design Tokens `micro` Typography Variant (`packages/design-tokens/src/typography.ts`)**:
+       - Added `micro: { size: 11, line: 15, font: 'Geist-Regular', icon: 11 }` to `TYPE_VARIANTS` and updated unit tests (`typography.test.ts`).
+    2. **Interactive Clock Picker Primitive (`apps/mobile/components/ui/TimeInput.tsx`)**:
+       - Added interactive `<Clock size={16} />` icon button inside the time input box.
+       - Built a physics-driven bottom sheet modal (`AppModal variant="bottom"`) supporting 1–12 hour grid, 00–55 minute grid with +/-1 min stepper, AM/PM toggle, and quick standard shift presets (`06:00 AM`, `02:00 PM`, `10:00 PM`, `Now`).
+       - Supported all 4 time inputs across operations (Shift Start, Shift End, Breakdown Start, Breakdown End).
+    3. **Mobile Operations Entry Card Polish (`apps/mobile/components/operations/MobileOperatorEntryCard.tsx`)**:
+       - Compact error messages with `<Text variant="micro">` for unassigned shift warning, meter regression, over-24h warning, and status banners.
+       - Shortened and styled breakdown textarea placeholder to `placeholder="e.g. Pipe leak, repair note..."` with `microTypeStyle`.
+       - Changed toggle button label from `'Shift Mode'` to `'Shift'`.
+       - Removed duplicate `activeShiftBadge` from the section header to de-clutter the card and eliminate overcrowding.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Forced Typecheck: **PASS** across all 7 packages (`npx turbo run typecheck --force` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+    - Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+
+- [x] **13 — Native Mobile Menu Sidebar Overlap Fix, 100% Web Parity & Ultra-Smooth Fluid Transitions (2026-10-08)**:
+  - **Delivered**:
+    1. **Elimination of Sidebar Overlap & Screen Clipping Bug**:
+       - Promoted `Drawer.tsx` to native `<Modal visible={mounted} transparent statusBarTranslucent hardwareAccelerated onRequestClose={onClose}>` with `<GestureHandlerRootView>`.
+       - Rendered `MobileMenuDrawer` outside of `<Animated.View style={styles.outerContainer}>` in `MobileBottomNav.tsx`, removing layout clipping and parent transform interference.
+       - Guarantees full-height coverage (`y=0` to bottom edge), rendering safely above status bars, navigation headers, and the floating bottom tab bar.
+    2. **100% Visual, Layout, and Design Parity with Web App**:
+       - Panel width: `Math.min(screenWidth * 0.86, 320)` matching `w-[min(86vw, 320px)]`.
+       - Vercel Geist design tokens: `#171717` ink, `#ffffff` elevated canvas, `#ebebeb` 1px hairline borders, and whisper shadows.
+       - Clean Header: "Menu" title, 40x40 circular close button (`X`), border bottom.
+       - Navigation Cards: `minHeight: 56`, `borderRadius: 14`, `borderWidth: 1`, `gap: 12`, with active states in Reach Sky Blue (`#0284c7` / dark `#38bdf8`) matching the screenshot: Running Logs, Clients, Audit, Payroll, Attendance, Settings, Profile.
+       - Pinned Footer: 1px hairline top border, user avatar circle (40x40, initials), user name, user email, 44x44 circular sign out button with red `LogOut` icon and `ConfirmDialog` confirmation.
+    3. **Ultra-Smooth Reanimated Transitions & Physics-Based Gestures**:
+       - Replaced arbitrary timers with an `onDismissComplete` lifecycle callback that unmounts `MobileMenuDrawer` only after the spring animation fully finishes.
+       - Tuned fluid spring configs: `OPEN_SPRING` (damping 30, stiffness 320, mass 0.85, overshootClamping) and `CLOSE_SPRING` (damping 32, stiffness 360, mass 0.8, overshootClamping) matching web 280ms cubic-bezier.
+       - Synchronized Scrim opacity via UI-thread `useDerivedValue` bound 1:1 to `translateX`, providing real-time backdrop fading during pan gestures.
+       - Handled swipe-to-dismiss via Reanimated `panGesture` with Apple exponential-decay velocity projection.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards passed).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+
+- [x] **13 — Operations Screen Segmented Toggle Switch UI/UX & Web Parity Polish (`/operations`) (2026-10-08)**:
+  - **Delivered**:
+    1. **`SegmentedToggle.tsx` UI/UX & Proportional Geometry Overhaul**:
+       - Replaced legacy 9999px capsule radii with modern Vercel Geist design tokens: 14px container radius / 10px pill radius (`md`), 10px container / 7px pill (`sm`).
+       - Fixed pill geometry calculation for `fullWidth`: computes `availWidth / items.length` directly, guaranteeing each tab gets equal 50% width on 2-item segmented controls.
+       - Removed initial 0-opacity blackout barrier on the sliding active indicator pill so the white elevated pill is visible from mount.
+       - Replaced web-incompatible `ReduceMotion.System` parameter with clean Reanimated spring physics (`stiffness: 450, damping: 32, mass: 1`), providing silky-smooth 60fps UI-thread gliding matching Framer Motion.
+       - Enforced `{ flex: 1, flexBasis: 0, width: '100%' }` on fullWidth items.
+    2. **`Pressable.tsx` Nested Style Flattening**:
+       - Fixed `Pressable.tsx` to flatten callback styles, preventing React Native Web from dropping flex and layout properties when style functions return arrays.
+    3. **`operations.tsx` Parity Enhancements**:
+       - Bound the "Log History" tab to `operatorHistoryLogs.length` badge matching web app's `EntryHeader.tsx`.
+    4. **Offline Sync TypeScript Hardening**:
+       - Safely typed query options in `SyncCoordinator.ts` (`(query.options as Record<string, unknown>)?.enabled === false`).
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Forced Typecheck: **PASS** across all 7 packages (`turbo run typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> All guards passed).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **12 — Production-Grade Native Mobile Screen-Scoped Offline → Online Reconnection & Data Revalidation (2026-10-08)**:
+  - **Delivered**:
+    1. **NetworkConnectivityManager.ts (Authoritative Network Singleton)**:
+       - Encapsulated `@react-native-community/netinfo` with a 750ms debounce window to eliminate reconnect storms and duplicate triggers.
+       - Synchronized `@tanstack/react-query` `onlineManager.setOnline(isOnline)` and dispatched verified offline → online reconnection events.
+    2. **SyncCoordinator.ts (Screen-Scoped Sync Coordinator)**:
+       - Implemented 5-criteria revalidation gate targeting only queries matching the active screen domain, active queries, stale or errored queries, not currently fetching, and enabled.
+       - Disabled global TanStack Query reconnect storms via `refetchOnReconnect: false` in `_layout.tsx`.
+       - Integrated with `OfflineQueueManager.drainQueue()` to sequence pending offline mutations before revalidating affected queries.
+       - Registered screen domain route tracking via Expo Router `usePathname()`.
+    3. **useScreenSync Hook & Screen Integrations**:
+       - Implemented `useScreenSync` hook and wired active screens (`operations.tsx`, `machines.tsx`, `dashboard.tsx`) with custom refreshers.
+       - Refactored `useNetworkStatus.ts` to delegate directly to `NetworkConnectivityManager`, removing duplicate NetInfo event listeners.
+    4. **Hardening**:
+       - Resolved `StyleSheet.absoluteFill` in `Drawer.tsx` and scoped variables in `MobileOperatorEntryCard.tsx`.
+  - **Verification**:
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios passed).
+    - Typography Compliance Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Monorepo Forced Typecheck: **PASS** across all 7 packages (`npx turbo run typecheck --force` -> 7/7 successful, 0 errors).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **11 — Native Mobile Offline Shift Entry Automatic Cloud Sync & Resilient Draining (2026-10-08)**:
+  - **Delivered**:
+    1. **OfflineQueueManager.ts Auto-Drain & Idempotency Upgrades**:
+       - Added proactive `checkAndAutoDrain()` invoked on cold start (`init()`), network reconnect (`NetInfo.addEventListener`), and app foreground transitions (`AppState.addEventListener('change')`).
+       - Retries both `pending` and `failed` entries upon connectivity restore.
+       - Handled PG duplicate key violation `23505` on `machine_hour_logs_idempotency_key_key` as successful sync completion.
+       - Provided `onSyncComplete` listener callback for global sync notifications.
+    2. **_layout.tsx Auto-Invalidation**:
+       - Implemented `MobileOfflineSyncListener` to automatically invalidate all affected TanStack Query caches (`operations`, `operator`, `machines`, `attendance`) upon background sync drain.
+    3. **OfflineBanner.tsx Reactive Auto-Sync**:
+       - Added reactive auto-trigger when internet connects (`!isOffline && pendingCount > 0`).
+       - Embedded `<OfflineCollisionModal>` directly for conflict resolution.
+    4. **MobileOperatorEntryCard.tsx Mid-Flight Drop Protection**:
+       - Added offline fallback enqueue when sudden network errors occur during online shift logging.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 47/47 scenarios passed).
+    - Touch Feedback & Soft Haptics Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> All guards passed).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **10 — Repository-Wide Removal of Older Unused Files and Obsolete Code (2026-10-08)**:
+  - **Delivered**:
+    1. **Mobile Dead Code & Deprecated Stubs Removal**:
+       - `AddMachineModal.tsx`: Removed old machine modal superseded by `MachineModal.tsx`.
+       - `MachineDetailModal.tsx`: Removed modal wrapper superseded by direct `<MachineDetailView>` rendering.
+       - `DynamicBottomNav.tsx`: Removed old dynamic bottom navbar superseded by `MobileBottomNav.tsx`.
+       - `MobileDrawer.tsx`: Removed decommissioned empty sidebar drawer stub (`return null;`).
+       - `DrawerContext.tsx`: Removed decommissioned empty drawer context pass-through.
+       - `navItems.ts`: Removed obsolete hard-coded nav list replaced by `@reachinternational/permissions getNavForRole()`.
+       - `Icon.tsx`, `Logo.tsx`, `MainMenuModal.tsx`: Confirmed removal of old icon/logo/menu stubs; cleaned `components/ui/index.ts` and `components/machines/index.ts` exports.
+       - `lib/interaction/*`: Confirmed removal of old interaction proxy files replaced by authoritative `lib/haptics/` and `lib/motion/`.
+    2. **Web Dead Components & Legacy Stubs Removal**:
+       - `AccountDeletionModal.tsx`: Removed redundant modal; account deletion is handled at the `/delete-account` route.
+       - `MachineCategoryModal.tsx` & `MobileFilterDrawer.tsx`: Removed unreferenced legacy machine components.
+       - `OperationsSearchInput.tsx`: Removed unreferenced search input; operations uses canonical search controls.
+       - `AppHeader.tsx`: Removed legacy desktop header superseded by `AppSidebar` & `MobilePageHeader`.
+       - `BranchSelector.tsx` & `BrowserLifecycleManager.tsx`: Removed empty stubs returning `null`.
+       - `LegalPageHeader.tsx`: Removed legacy header superseded by `LegalPageShell.tsx`.
+       - `AuditLogsClient.tsx` (`components/audit-logs/`): Removed legacy audit client superseded by `components/audit/AuditClient.tsx` in `/audit`.
+       - `BranchesClient.tsx` (`components/branches/`), `DocumentsClient.tsx`, `ReportsClient.tsx` (`components/reports/`): Removed orphaned client components with no corresponding routes.
+       - `components/landing/` (all 14 section files + `_shared/`): Removed obsolete marketing landing page components from before `/` was converted into an authenticated/direct redirect gateway.
+       - `useListQueryState.ts`: Removed unreferenced hook with 0 usages across the monorepo.
+    3. **Scripts Cleanup**:
+       - Removed obsolete one-off migration scripts: `find-modals.js`, `migrate-modals-batch.js`, `migrate-payroll.js`, and temporary audit scripts.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **09 — Monorepo-Wide Native Mobile Smooth Icon Animation & Legacy Code Elimination (2026-10-08)**:
+  - **Delivered**:
+    1. **Material 3 Expressive Icon Behaviors Applied Across Native App (Phases A–G)**:
+       - Phase A (Navigation & Chrome): `MobileBottomNav.tsx` (`morphPair` 3-bar transform for drawer action button, active tab indicator `pulse`), `MobileCommandPalette.tsx`, `MobileMenuDrawer.tsx`.
+       - Phase B (Modals, Pickers & Sheets): `DropdownFilterSelector.tsx` (180° `rotateToggle` spring, `drawStroke` on check), `SearchableSelect.tsx`.
+       - Phase C (Dashboard & Fleet): `AlertWidget.tsx` (`pulse` on conflict/alert banners), `AdminDashboardCard.tsx`, `ManagerDashboardCard.tsx`, `SupervisorDashboardCard.tsx` (`pressNudge`).
+       - Phase D (Operations & Logs): `MobileOperatorEntryCard.tsx` (`drawStroke` on `CheckCircle2`, `pulse` on `AlertCircle`), `MobileTodayShiftMonitorTab.tsx` (180° `rotateToggle` spring), `running-logs.tsx` (180° `rotateToggle` accordion chevron).
+       - Phase E (Workforce & Financials): `payroll.tsx` & `attendance.tsx` (`spin` continuous rotation bound to `loading={refreshing}` on header refresh actions).
+       - Phase F (Users, Security & Auth): `PasswordResetModal.tsx` (`drawStroke` on generated card checkmark and copy button feedback).
+       - Phase G (Settings & Diagnostics): `OfflineBanner.tsx` (`pulse` on offline alert), `settings/preference.tsx` (`drawStroke` on feedback toast), `settings/notification.tsx` (`ring` damped oscillation keyframes bound to `pulseKey={prefs.push}` on master bell), `motion-lab.tsx` (comprehensive live Material 3 Icon Animation Behaviors diagnostic test suite card).
+    2. **Elimination of Unused Legacy Files & Deprecated Code**:
+       - Deleted unused legacy navigation files (`DynamicBottomNav.tsx`, `MobileDrawer.tsx`, `DrawerContext.tsx`, `navItems.ts`, `lib/nav/` directory).
+       - Deleted unused modals and obsolete components (`AddMachineModal.tsx`, `MainMenuModal.tsx`, `lib/interaction/*`).
+       - Removed scratch scripts and obsolete temporary batch scripts.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Forced Typecheck: **PASS** across all 7 packages (`turbo run typecheck --force` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guard Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> All guards passed).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **08 — Cleanup of Obsolete Unused Files & Code Across `apps/mobile` (2026-10-08)**:
+  - **Delivered**:
+    1. **Consolidated Haptics & Motion APIs**:
+       - Replaced all imports of `lib/interaction/haptics` across 28 files with canonical `lib/haptics`.
+       - Exported `screenAnim` preset directly from `lib/motion/navigation.ts` and `lib/motion/index.ts`, updating `apps/mobile/app/(app)/_layout.tsx`.
+       - Completely deleted `apps/mobile/lib/interaction/` directory (`haptics.ts`, `haptics.test.ts`, `index.ts`, `motion.ts`, `screens.ts`).
+    2. **Decommissioned Deprecated Navigation & Drawer Code**:
+       - Removed `apps/mobile/components/navigation/MobileDrawer.tsx` (deprecated empty placeholder).
+       - Removed `apps/mobile/lib/nav/DrawerContext.tsx` (deprecated no-op context).
+       - Removed `apps/mobile/components/navigation/DynamicBottomNav.tsx` (obsolete navigation bar replaced by manifest-driven `MobileBottomNav.tsx`).
+       - Removed `apps/mobile/lib/nav/navItems.ts` (obsolete items list only used by `DynamicBottomNav.tsx`).
+       - Deleted the empty `apps/mobile/lib/nav/` directory.
+    3. **Removed Dead Modal & Component Artifacts**:
+       - Removed `apps/mobile/components/machines/AddMachineModal.tsx` (superseded by `MachineModal.tsx`).
+       - Removed `apps/mobile/components/ui/MainMenuModal.tsx` (superseded by `MobileMenuDrawer.tsx`).
+       - Recorded removal of obsolete `apps/mobile/components/ui/Icon.tsx` (superseded by `components/ui/icon/` directory).
+    4. **Cleaned Temporary Migration Scripts**:
+       - Removed one-off scripts from root `scripts/`: `find-modals.js`, `migrate-modals-batch.js`, `migrate-payroll.js`.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`npx turbo run typecheck --force` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Touch Feedback & Soft Haptics Guard Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> Rate limiting, burst dedupe, preference guards, semantic vocabulary verified).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+
+- [x] **07 — Attendance Skeleton Loading Shell Overhaul (`/attendance`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Operator Attendance Card Skeleton Overhaul (`AttendanceCardSkeleton`)**:
+       - Redesigned `AttendanceCardSkeleton` in `apps/mobile/components/attendance/AttendanceSkeleton.tsx` to match the exact 1:1 visual structure of the live employee cards.
+       - Built 36x36 circular avatar with hairline border, name row with 130x16 name skeleton and inline `OPERATOR` badge (56x11, radius xs), and meta row with Phone (11x11 + 78x11) and City (11x11 + 62x11) placeholders.
+       - Built 4-stat metric box (Scheduled, Present, Absent, Half-Day) featuring large value indicators (26x16) on top and uppercase labels (42-52x10) on bottom divided by hairline dividers.
+       - Built footer row featuring clock icon + worked hours + OT badge on the left, and "Daily Cards" action chevron skeleton on the right.
+    2. **KPI Strip, Search Box & Filter Strip Skeletons**:
+       - Built `AttendanceKpiStripSkeleton` (4 cards, width 140dp, elevated canvas), `AttendanceSearchSkeleton` (44dp search bar with icon placeholder), and `AttendanceFilterStripSkeleton` (6 pill chips with authentic widths).
+       - Combined them into `AttendanceListSkeleton`, providing a comprehensive page loading shell.
+    3. **Daily Attendance Detail Skeleton Overhaul (`AttendanceDetailSkeleton`)**:
+       - Replaced legacy 28-cell month calendar grid with the current UI/UX daily logs layout:
+         - Employee meta card shell (2x2 grid: Employee ID, Phone, Site Location, Shift).
+         - 4 summary cards: Present, Absent, Half Days, Week Offs.
+         - Total Hours card: Worked and Overtime.
+         - Daily record cards: Day number pill, date, day of week, status badge pill, and worked/punches well.
+    4. **Flash-of-Zero Elimination in `/attendance` Screen**:
+       - Fixed `apps/mobile/app/(app)/attendance.tsx` so that while `loading && !refreshing`, the complete `AttendanceListSkeleton` renders instead of real KPI cards flashing zero counts (`0, 0, 0, 0`) and filter chips flashing `(0)`.
+       - Wrapped modal `AttendanceDetailSkeleton` in a scroll container with matching padding and layout.
+    5. **Web-Mobile Parity**:
+       - Updated `AttendanceMobileCardSkeleton` in `apps/web/components/ui/Skeleton.tsx` to reflect the 4-stat metric box, avatar, and footer layout matching mobile.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 8 packages (`pnpm typecheck` -> 8/8 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed).
+    - Touch Feedback & Soft Haptics Guard Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> All guards passed).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed).
+
+- [x] **04 — Smooth Icon Animation Implementation Across Native Mobile App (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Icon Usage & Animation Audit (`apps/mobile/docs/icon-audit.md`)**:
+       - Audited all 101 Lucide icons across 92 mobile files, cataloging usage frequency, screen locations, web animated equivalents (from `lucide-animated.com`), and Material 3 Expressive spring physics behaviors.
+    2. **Canonical Icon System (`components/ui/icon/`)**:
+       - `Icon.tsx`: Universal single icon component supporting `name`, `size`, `tone`, `state`, `loading`, `pulseKey`, `animate`, `degrees`, `slideDistance`.
+       - `sizes.ts`: Bound sizes to design token typography levels (`xs: 12`, `sm: 14`, `md: 16`, `lg: 18`, `xl: 22`, `2xl: 28`) and semantic tone color mapping (`default`, `muted`, `primary`, `danger`, `success`, `warning`, `info`, `inherit`). Supports `ColorValue` (`string | OpaqueColorValue`).
+       - `registry.ts`: The ONLY file in `apps/mobile` permitted to import from `lucide-react-native`. Registers all 101 icons with kebab-case, PascalCase, and camelCase aliases, default behaviors, and morph pairs.
+       - `createIconComponent.tsx` & `icons.ts`: Pre-bound typed named icon components (`Search`, `ChevronDown`, `Check`, etc.) delegating to `<Icon>` on the UI thread.
+    3. **Physics Behaviors & Stateful Morphs (`components/ui/icon/behaviors/`)**:
+       - `pressNudge.ts`: Micro-scale 0.90 -> 1.0 spring on press using `SPATIAL.fast`.
+       - `rotateToggle.ts`: Chevrons 0 <-> 180° and Plus 0 <-> 45° with `SPATIAL.fast`.
+       - `spin.ts`: Continuous 360° rotation while `loading=true` or `anim='spin'`, canceling cleanly on unmount/idle.
+       - `pulse.ts`: Single 1.0 -> 1.12 -> 1.0 scale bounce on `pulseKey` update or mount.
+       - `slideNudge.ts`: Horizontal translateX 2-3dp on touch press for row chevrons and arrow links.
+       - `ring.ts`: Bell damped oscillation keyframes (±12° -> ±10° -> ±8° -> -4° -> 0°) on `pulseKey` update.
+       - `drawStroke.tsx`: SVG path checkmark drawing via `strokeDashoffset` 1 -> 0 + pulse pop.
+       - `morphPair.tsx`: Menu ↔ Close 3-bar transform and Eye ↔ EyeOff slash draw.
+       - `useIconBehavior.ts`: Coordinates UI-thread Reanimated shared values, press progress from `<Pressable>`, and reduced-motion instant snap.
+    4. **Touch & Primitive Integration (`Pressable.tsx`, `IconButton.tsx`, `InteractiveIcon.tsx`)**:
+       - Updated `Pressable.tsx` to unconditionally provide `progress` to `usePressProgress()` on interactive touch, driving child `pressNudge` and `slideNudge`.
+       - Updated `IconButton.tsx` to integrate `<Icon>` with automatic `pressNudge`.
+       - Modernized `InteractiveIcon.tsx` with Reanimated 4 and `SPATIAL.fast` tokens.
+    5. **100% Elimination of Direct Lucide Imports Across All 92 Surfaces**:
+       - Codemodded and migrated all 92 files across `app/(app)/*`, `app/(auth)/*`, `components/*`, `lib/nav/*`, `shell/*` to import from `components/ui/icon`.
+       - Verified grep gate: 0 direct `lucide-react-native` imports outside `registry.ts`.
+       - Integrated stateful behaviors across bottom nav, drawer, search selects, filter toolbars, password inputs, conflict banners, notification bells, copy cards, and alert dialogs.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+    - Touch Feedback & Soft Haptics Guard Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> All guards passed, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 passed, exit code 0).
+    - Lucide Grep Gate: **PASS** (`node scripts/list-lucide-files.js` -> 0 files importing from lucide-react-native outside registry.ts).
+
+- [x] **06 — Payroll Module Optimization & Full Responsive Parity (2026-10-08)**:
+  - **Delivered**:
+    1. **Data Normalization & Fetching Fix**: Resolved RPC return format mismatch (`get_hr_payroll_summary` returning raw array vs object) in `apps/web/app/actions/payroll.ts` and `apps/mobile/app/(app)/payroll.tsx`, fixing the 0 of 0 records / ₹0 KPIs bug.
+    2. **Visible Freeze Partition Line**: Added high-contrast partition border `border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)]` on the sticky boundary between identity columns and scrollable data columns.
+    3. **Frozen Column Hover Transparency Fix**: Replaced translucent `/60` hover backgrounds on sticky columns with 100% solid, fully opaque hex colors (`bg-white dark:bg-[#121212]`, hovered `group-hover:bg-[#f5f5f5] dark:group-hover:bg-[#1c1c1c]`, selected `bg-[#f0f9ff] dark:bg-[#0c2233]`, selected+hover `group-hover:bg-[#e0f2fe] dark:group-hover:bg-[#133047]`). Background values no longer bleed through.
+    4. **Cell Boundaries & Overlap Prevention**: Added explicit column min-widths across all 32 Excel columns with `border-r border-[var(--color-hairline)]/60` and `tabular-nums font-mono` to prevent wrapping and value collisions.
+    5. **Mobile Ergonomics & Optimistic UI**: Added dedicated mobile header with title, badge, and quick export; optimistic month transitions; optimistic statement edits; horizontally swipeable view tabs; and mobile touch cards with min 44px touch targets and dynamic viewMode-aware KPI strips.
+  - **Verification**:
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Mobile Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Parity Rules Audit: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passing).
+
+- [x] **05 — Password Reset Modal with Temporary Password Display & Copy Action on `/users/[id]` & `/users` (2026-10-08)**:
+  - **Delivered**:
+    1. **Reusable Web Password Reset Modal (`apps/web/app/(app)/users/PasswordResetModal.tsx`)**:
+       - Built a dedicated Radix `Modal` dialog (`size="sm"`) with Vercel Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ebebeb` 1px hairline border).
+       - Status badge with amber `KeyRound` icon header, emerald `Check` status alert ("New Password Generated"), and monospace font preview input box with select-all on focus.
+       - Interactive "Copy" / "Copied!" button with `navigator.clipboard.writeText` and fallback, toast notification, and primary "Done" dismissal button.
+    2. **Integration into User Profile (`/users/[id]`) (`apps/web/app/(app)/users/[id]/UserDetailClient.tsx`)**:
+       - Replaced toast-only temporary password presentation with dedicated `<PasswordResetModal>`.
+       - Updated `handleExecuteResetPassword` to capture `res.newPassword` and present the modal immediately upon successful reset.
+    3. **Standardization across Users Directory (`/users`) (`apps/web/app/(app)/users/users-client.tsx`)**:
+       - Refactored `/users` directory to use the shared `<PasswordResetModal>` component for 100% design and behavioral parity.
+    4. **Web & Mobile 100% Parity**:
+       - Matches `apps/mobile/components/users/PasswordResetModal.tsx` 1-to-1 in token hierarchy, amber/emerald indicators, monospace password box, and copy interactions.
+  - **Verification**:
+    - Monorepo Typecheck: **PASS** across all 7 packages (`turbo run typecheck` -> 7/7 successful, exit code 0).
+    - Web & Mobile dev servers running cleanly.
+
+- [x] **04 — Operator Shift & Machinery Roster DB Hydration & Dynamic Refetching on `/users/[id]` (2026-10-08)**:
+  - **Delivered**:
+    1. **Database Schema Alignment & Query Error Fix (`apps/web/app/actions/assignments.ts`)**:
+       - Fixed fatal SQL error (`column operator_machine_assignments.notes does not exist`, Postgres code 42703) in `getOperatorActiveAssignmentsAction` by removing reference to non-existent `notes` column.
+       - Enhanced supervisor resolution: fetches from `public.user_supervisors` junction table, fallback to `users.supervisor_id`, and machine-level supervisors (`machines.current_supervisor_id` & `machines.supervisor_ids`), deduplicating into `supervisors: Array<{ id, full_name, phone, email }>`.
+       - Dynamic client shift resolution: fetches active `client_shift_codes` for rented machines, formats times into 12-hour AM/PM format, and attaches full `clientShifts` metadata to returned assignments.
+       - Cache tag invalidations in `updateOperatorMachineAssignmentsAction`: invalidates `TAGS.users`, `TAGS.operatorAssignment(operatorId)`, and `TAGS.userDashboard(operatorId)`.
+    2. **User Data Access Layer & Actions (`apps/web/lib/data/users/user-detail.ts`, `apps/web/app/actions/users.ts`)**:
+       - Added `shift_code?: string | null;` to canonical `UserAssignmentItem` type.
+       - Enhanced `getUserAssignedMachines(userId)` to union machines assigned via direct columns with machines actively assigned in `operator_machine_assignments` (`is_active = true`), guaranteeing zero display latency.
+       - Enhanced `getUserAssignments(userId)` to project and return `shift_code`.
+       - Exported `getUserAssignedMachinesAction(userId)` and `getUserAssignmentsAction(userId)` for client-side dynamic refetching.
+    3. **Assign Personnel Modal Enhancements (`apps/web/components/machines/AssignPersonnelModal.tsx`)**:
+       - Hydrated operator mode with real DB assignments, client shift codes, and designated supervisors with contact phone numbers (`• {s.phone}`).
+       - Dispatched `reach:refresh-user-assignments` (with `detail: { userId }`) and `reach:refresh-machine-personnel` in both machine and operator save paths.
+    4. **User Detail Page Live Refetching (`apps/web/app/(app)/users/[id]/UserDetailClient.tsx`)**:
+       - Converted `machines` and `assignments` to reactive React states synchronized with incoming props.
+       - Implemented `handleRefreshUserData` calling `getUserDetailAction`, `getUserAssignedMachinesAction`, and `getUserAssignmentsAction` concurrently and triggering `router.refresh()`.
+       - Attached event listeners for `reach:refresh-user-assignments` and `reach:refresh-machine-personnel` to trigger instant UI refresh.
+       - Passed `handleRefreshUserData` to `<AssignPersonnelModal onSuccess={handleRefreshUserData} />`.
+       - Rendered `shift_code` badge on assignment history cards.
+  - **Verification**:
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+    - Scratch Test Scripts Cleaned: **PASS** (`scratch/test-assignments.cjs` deleted).
+
+- [x] **02 — Touch Feedback & Soft Haptics Implementation Across Native Mobile App (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Preferences Store (`lib/preferences/store.ts`, `useReducedMotion.ts`)**:
+       - AsyncStorage-backed preferences (`hapticsEnabled: true` by default, `reduceMotion: 'system'`).
+       - Synchronous hydration gate and module-level getter `isHapticsEnabled()` for non-React callers.
+       - Reduced motion detection via `AccessibilityInfo.isReduceMotionEnabled()` collapsing animations to instant.
+    2. **Central Soft Semantic Haptics Engine (`lib/haptics/`)**:
+       - `index.ts`: Central authority and the ONLY file importing `expo-haptics` or `ReachHaptics`.
+       - Guards: Settings preference toggle, 60ms rate-limiting window, 120ms burst deduplication, screen reader conflict prevention.
+       - Native Kotlin Expo module (`modules/reach-haptics/`): Android `HapticFeedbackConstants` (`CLOCK_TICK`, `SEGMENT_TICK`, `TOGGLE_ON/OFF`, `CONFIRM`, `REJECT`, `LONG_PRESS`, `DRAG_START`, `GESTURE_END`, `SEGMENT_FREQUENT_TICK`). Strictly respects system "Touch feedback" without override flags.
+       - iOS / fallback path: `expo-haptics` (`selectionAsync`, `impactAsync(Light/Soft)`, `notificationAsync`).
+       - Public semantic vocabulary: `tap()`, `select()`, `toggle(on)`, `longPress()`, `dragStart()`, `dragEnd()`, `threshold()`, `confirm()`, `reject()`, `none()`.
+    3. **Canonical Touch Primitives (`components/ui/touch/Pressable.tsx`, `feedback.ts`)**:
+       - Android RenderThread instant native ripple (`android_ripple` with token-derived foreground ripple, borderless for icon buttons, rounded radius).
+       - UI-thread Reanimated micro-scale (0.98 for buttons, 0.97 for FAB, 1.0 for cards and list rows) using `withSpring` physics.
+       - Minimum 48dp touch targets on Android via `HIT_SLOP_MIN_48`.
+       - Material 3 Expressive disabled opacity (38%) and loading states.
+       - Backward compatibility support for `activeOpacity` and variant aliases (`primary`, `secondary`, `danger`, `outline`, `ghost`, `icon`, `card`, `listRow`, `segmentedOption`).
+    4. **100% Elimination of Raw `TouchableOpacity` & `TouchableHighlight`**:
+       - 0 raw `TouchableOpacity` across the entire `apps/mobile` codebase.
+       - 0 raw `TouchableHighlight` across the entire `apps/mobile` codebase.
+       - Replaced across all interactive screens: `account-deletion.tsx`, `attendance.tsx`, `clients.tsx`, `machines.tsx`, `operations.tsx`, `payroll.tsx`, `privacy.tsx`, `profile.tsx`, `running-logs.tsx`, `terms.tsx`, `users.tsx`, `settings/*`, modals, drawers, and cards.
+    5. **Settings Integration (`settings/preference.tsx`)**:
+       - Dedicated "Haptic feedback" switch with `haptics.confirm()` preview on toggle ON.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`npx turbo run typecheck --force` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Touch Feedback & Soft Haptics Guard Suite: **PASS** (`node scripts/test-touch-haptics.mjs` -> Rate limiting, burst dedupe, preference guards, semantic vocabulary verified).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+    - Raw Touchable Elimination: **PASS** (`git grep TouchableOpacity apps/mobile` -> 0 occurrences; `git grep TouchableHighlight apps/mobile` -> 0 occurrences).
+
+- [x] **03 — Motion & Transitions Implementation Plan Across Native Mobile App (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Phase 0: Motion Tokens & Physics Engine (`apps/mobile/lib/motion/`)**:
+       - `springs.ts`: `spring(stiffness, ratio)` calculator, Apple exponential-decay momentum projection `project()`, and boundary `rubberband()`.
+       - `tokens.ts`: Material 3 Expressive spatial springs (`SPATIAL.fast / default / slow`), effects springs (`EFFECTS.fast / default / slow`), durations (`DUR`), easings (`EASE`), distances (`DIST`), and scales (`SCALE`).
+       - `useMotion.ts`: Reduced-motion aware hook integrating `ReduceMotion.System` and `useReducedMotion()`. Automatically collapses durations to 0 and disables spatial displacement under system reduce motion.
+       - `navigation.ts`: Centralized screenOptions presets (`tabsFade`, `stackDefault`, `stackDetailScreen`, `stackModalSheet`, `stackModalTransparent`).
+       - `app.json`: Enabled native Android 16 predictive back gesture (`android.predictiveBackGestureEnabled: true`).
+    2. **Phase 1: Navigation & Root Architecture**:
+       - `apps/mobile/app/_layout.tsx`: Wrapped root in `<GestureHandlerRootView style={{ flex: 1 }}>` and `<OverlayHostProvider>`.
+       - `apps/mobile/app/(app)/_layout.tsx`: Applied `navigationPresets.tabsFade` with `freezeOnBlur: true` and `lazy: true`.
+       - `apps/mobile/app/(auth)/_layout.tsx`: Applied `navigationPresets.stackDetailScreen`.
+       - `MobileBottomNav.tsx`: Replaced snap unmount on keyboard with smooth `EFFECTS.fast` translateY animation.
+    3. **Phase 2: Overlay Primitives (`components/ui/overlay/`)**:
+       - `OverlayHost.tsx`: Centralized overlay portal host with Android hardware `BackHandler` interception to dismiss the topmost overlay before popping the route.
+       - `Scrim.tsx`: Physics-driven backdrop bound to animation progress with tap-to-dismiss.
+       - `Sheet.tsx`: Bottom sheet with UI-thread GestureHandler pan, velocity handoff, rubber-band resistance, flick-to-dismiss, and haptic snap.
+       - `Dialog.tsx`: Centered modal with `SCALE.dialogFrom` (0.92) to 1.0 scale + `EFFECTS.default` scrim.
+       - `Popover.tsx`: Anchored dropdown menu with scaleY 0.8 to 1.0 and boundary auto-flip.
+       - `Drawer.tsx`: Right slide-in drawer with UI-thread swipe right dismiss and clamped exit.
+       - `Toast.tsx`: Snackbar with slide up 16dp, safe-area offsets, and pan swipe-to-dismiss.
+       - `AppModal.tsx`: Modernized backward-compatible bridge delegating directly to `Sheet`, `Dialog`, and `Drawer`.
+    4. **Phase 3: Screen-by-Screen & Surface Migrations**:
+       - `ConfirmDialog.tsx`: Upgraded to native `Dialog` primitive.
+       - `MobileMenuDrawer.tsx`: Upgraded to native `Drawer` primitive with UI-thread gesture panning.
+       - `PostNotificationBanner.tsx`: Migrated from legacy RN `Animated` to Reanimated 4 and GestureHandler.
+       - `SegmentedToggle.tsx`: Standardized on `SPATIAL.fast` physics spring tokens.
+       - `ShiftCardSelector.tsx`: Migrated from legacy `LayoutAnimation` to Reanimated `LinearTransition`.
+       - `SearchableSelect.tsx`: Integrated unified spring motion.
+    5. **Phase 4 & 5: Diagnostics & Verification**:
+       - `motion-lab.tsx`: Built interactive dev diagnostic screen for Sheet, Dialog, Popover, Drawer, and Toast tuning.
+       - `aboutapp.tsx`: Linked Motion Lab diagnostic screen in Settings.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+    - Permissions Unit Tests: **PASS** (`pnpm --filter @reachinternational/permissions test` -> 4/4 passed).
+    - Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+
+- [x] **01 — Optimistic UI Implementation Across Native Mobile App (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Phase 0: Optimistic Engine Foundation (`apps/mobile/lib/optimistic/`)**:
+       - `syncState.ts`: Canonical 4-state enum (`synced`, `pending`, `queued`, `failed`) with type guards.
+       - `tempId.ts`: RFC4122 `generateUUID()`, `createTempId(prefix)`, and `isTempId()`.
+       - `reconcile.ts`: `reconcileRow()`, `removeTempRow()`, and Realtime echo deduplication via `clientMutationId`.
+       - `persist.ts`: TanStack Query AsyncStorage persister (24h maxAge, buster = app version, stripping `tmp_*` entries on dehydrate, strict sensitive query deny-list: payroll, salary, Aadhaar/license, auth/session, tokens).
+       - `useOptimisticMutation.ts` & `usePendingMutation.ts`: Universal Tier 2 and Tier 3 mutation hooks with local conflict pre-validation, snapshot rollbacks, and targeted invalidation.
+       - Root layout wrapped with `PersistQueryClientProvider`.
+       - `clearPersistedCache()` hooked into `signOut()`.
+    2. **Phase 1 & 2: Operations, Shift Monitor & Operator Fast Entry**:
+       - `operations.tsx`: Fast log entry, edit, and deletion optimistically mutate `['operations', 'logs']` and `['operator', 'history-logs']`.
+       - Today's Shift Monitor flips status to `'entered'` immediately with end meter & running hours in `['operations', 'today-shift-monitor']`.
+       - `MobileOperatorEntryCard.tsx`: Optimistically updates operator entry context and history logs with rollback on failure.
+    3. **Phase 3: Machines Fleet Management (`machines.tsx`, `MachineModal.tsx`)**:
+       - Machine deletion removes item immediately from state and query cache with rollback on failure.
+       - Machine creation/edit updates list and query cache optimistically.
+       - Added `handleSerialBlur` for duplicate pre-check on blur with PostgreSQL `23505` unique violation error mapping.
+    4. **Phase 4: Assign Personnel (`MobileAssignPersonnelModal.tsx`)**:
+       - Added pre-checks for duplicate shifts on same equipment and 3-shift (24h) fleet cap / schedule overlap across equipment before saving.
+       - Error mapping for `P0002` / `MAX_OPERATOR_SHIFTS_REACHED`.
+    5. **Phase 5: Clients Directory & Sites (`clients.tsx`)**:
+       - Client creation generates `createTempId('cli')`, optimistically prepends to list, inserts into Supabase, and reconciles via `reconcileRow()` or rolls back via `removeTempRow()`.
+       - Edit updates optimistically with rollback. Soft-delete flips status optimistically with rollback.
+    6. **Phase 6: Users & Approvals (`users.tsx`, `UserDetailModal.tsx`)**:
+       - Account activate/deactivate (Tier 2) updates status optimistically, fires `haptics.confirm()`, and rolls back on failure.
+       - Tier 3 actions (approve/reject/role/reset/delete) show inline pending progress without fake success.
+    7. **Phase 7: Profile & Change Requests (`profile.tsx`, `EditProfileModal.tsx`)**:
+       - Submit immediately displays "Pending Profile Review" banner optimistically on submit.
+       - Cancelling request optimistically dismisses banner with rollback if delete fails.
+    8. **Phase 8 & 9: Settings, Preferences & Sensitive Data (`preference.tsx`, `notification.tsx`, `payroll.tsx`)**:
+       - Tier 1 instant local toggles with animated toast feedback.
+       - Tier 3 locked pending states for payroll; sensitive queries denied from storage persister.
+    9. **Phase 10: Read-Side Optimizations (`useOperationsData.ts`)**:
+       - Integrated `placeholderData: keepPreviousData` on `useOperationsLogs`, `useTodayShiftMonitor`, `useOperatorHistoryLogs`, and `useOperationsMasterData`.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 41/41 scenarios passed, exit code 0).
+
+- [x] **Eliminate Metro Require Cycles & Obsolete New Architecture LayoutAnimation Warning (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Eliminated `OperatorDashboardSkeleton` Require Cycle (`OperatorDashboardSkeleton.tsx`)**:
+       - Replaced barrel import `import { Skeleton, useTheme } from '../../ui'` with direct component imports `import { Skeleton } from '../../ui/Skeleton'` and `import { useTheme } from '../../ui/ThemeProvider'`.
+       - Completely broke the circular dependency chain: `components/ui/index.ts -> components/dashboard/shared/index.ts -> components/dashboard/shared/DashboardSkeleton.tsx -> components/dashboard/operator/OperatorDashboardSkeleton.tsx -> components/ui/index.ts`.
+    2. **Eliminated Deprecated New Architecture Warning (`ShiftCardSelector.tsx`)**:
+       - Removed deprecated `UIManager.setLayoutAnimationEnabledExperimental(true)` call and unused `UIManager` import in `ShiftCardSelector.tsx`.
+       - Native Fabric / New Architecture in React Native 0.86 and Expo SDK 57 supports layout animations out of the box; `setLayoutAnimationEnabledExperimental` was a no-op that triggered `WARN setLayoutAnimationEnabledExperimental is currently a no-op in the New Architecture.` on Android.
+    3. **Eliminated Operations Screen Circular Dependencies (`OperationsExportModal.tsx`, `operationsExport.ts`)**:
+       - Replaced `import type { HourLogRecord } from '../../app/(app)/operations'` with direct hook import `import type { HourLogRecord } from '../../lib/hooks/useOperationsData'`.
+       - Completely broke circular dependencies between route screen `app/(app)/operations.tsx` and child modals/queries.
+    4. **Verified Zero Require Cycles Project-Wide**:
+       - Automated cycle analysis across all 192 mobile files confirmed 0 circular require/import dependencies.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Expo Doctor: **PASS** (`npx expo-doctor` -> 21/21 checks passed, 0 issues detected, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 21/21 scenarios passed, exit code 0).
+
+- [x] **Mobile App Launcher Name, Adaptive Icon & Clean Splash Logo Polish (`apps/mobile`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Installed App Name Truncation Fix (`app.json`, `listing-details.json`)**:
+       - Changed `expo.name` from `"ReachInternational"` to `"Reach Ops"`.
+       - On Android launcher and home screen, the app title now displays cleanly as `"Reach Ops"` without getting truncated to `"ReachInternati..."`, matching the Google Play Store title `"Reach Ops (Beta)"`.
+    2. **Android Adaptive Icon Pixel-Perfect Generation (`assets/adaptive-icon.png`, `app.json`)**:
+       - Replaced dark/clipped adaptive icon with 1024×1024 transparent PNG centered within the Android 66% circular/squircle safe zone (radius 311px vs 338px safe circle).
+       - Changed `android.adaptiveIcon.backgroundColor` from `#09090b` (black) to `#ffffff` (white), matching the Play Store listing icon.
+       - Ensures that on Google Pixel (circular mask), Samsung (squircle mask), and other launchers, the scissor lift trellis, 3D blue chevron, bold 'R', and blue baseline bar are 100% visible with zero clipping.
+    3. **Universal App Icon & Splash Screen Standardization (`icon.png`, `splash.png`, `store-assets/`)**:
+       - Updated `assets/icon.png` (1024×1024) and `store-assets/app-icon-512x512.png` to clean white background icons matching Play Store.
+       - Updated `assets/splash.png` and configured `expo-splash-screen.backgroundColor` to `#ffffff` in `app.json`.
+    4. **Gateway / Splash Screen Text Removal (`app/index.tsx`, `ReachInternationalLogo.tsx`)**:
+       - Removed the `"REACH INTERNATIONAL"` wordmark, `"REACHING ALL HEIGHTS"` tagline, and `"INITIALIZING FLEET PLATFORM"` status pill from the mobile gateway screen.
+       - Rendered clean centered brand logo (`<ReachBrandEmblem size={88} />`) with smooth breathing animation while session initializes, immediately opening the app when ready.
+       - Fixed `ReachBrandEmblem` theme polarity so light theme uses clean white squircle and dark theme uses dark squircle.
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> 0 errors, exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> 0 errors, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 21/21 scenarios passed, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
+    - Permissions Unit Tests: **PASS** (`pnpm --filter @reachinternational/permissions test` -> 4/4 passed).
+    - Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+
+- [x] **Resolve All Dependency Warnings & Upgrade Dependencies to Latest Compatible Versions (`apps/mobile`, `apps/web`, `root`) (2026-10-08)**:
+  - **Delivered**:
+    1. **Eliminated 4 Deprecated Subdependencies**:
+       - Fixed `crypto-js@4.2.0` by upgrading `@upstash/qstash` from `^2.11.3` to `^2.12.0` (which replaced crypto-js with `jose` and `uncrypto`).
+       - Fixed `@xmldom/xmldom` (0.8.14 & 0.9.11) by adding `@xmldom/xmldom: ">=0.9.12"` to `overrides` in `pnpm-workspace.yaml`, resolving cleanly to non-deprecated 0.9.12.
+       - Fixed `uuid@7.0.3` (required by xcode) by adding `uuid: ">=11.1.1"` to `overrides` in `pnpm-workspace.yaml`, resolving to 14.0.2 with confirmed Xcode UUID generation compatibility.
+    2. **Configured Canonical pnpm v11 Workspace Overrides**:
+       - Migrated `overrides` from root `package.json`'s ignored `pnpm.overrides` to `pnpm-workspace.yaml` where pnpm v11 natively enforces workspace-wide overrides.
+       - Eliminated pnpm CLI settings warning (`The "pnpm" field in package.json is no longer read by pnpm`).
+    3. **Installed Latest Compatible Dependencies**:
+       - In `apps/mobile`: Upgraded to latest Expo SDK 57 patch packages (`expo@~57.0.27`, `expo-constants@~57.0.21`, `expo-linking@~57.0.12`, `expo-router@~57.0.25`, `expo-updates@~57.0.25`), `lucide-react-native@^1.52.0`, and `@supabase/supabase-js@^2.117.3`.
+       - In `apps/web`: Upgraded `@upstash/qstash@^2.12.0`, `@supabase/ssr@^0.12.7`, and `@supabase/supabase-js@^2.117.3`.
+       - At root: Upgraded `turbo@^2.11.7` and `@supabase/supabase-js@^2.117.3`.
+  - **Verification**:
+    - Monorepo Typecheck: **PASS** across all 7 packages (`pnpm typecheck` -> 7/7 successful, exit code 0).
+    - Expo Doctor: **PASS** (`npx expo-doctor` -> 21/21 checks passed, 0 issues detected, exit code 0).
+    - Expo Dependency Validation: **PASS** (`npx expo install --check` -> Dependencies are up to date, exit code 0).
+    - Pnpm Peers Check: **PASS** (`pnpm peers check` -> No peer dependency issues found, exit code 0).
+    - Pnpm Install Cleanliness: **PASS** (`pnpm install` -> 0 warnings, 0 deprecated subdependencies, exit code 0).
+    - Typography Audit: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties, exit code 0).
+    - Parity Rules & Skills Test Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, exit code 0).
+    - Mobile Automated Test Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 21/21 scenarios passed, exit code 0).
+    - Permissions Unit Tests: **PASS** (`pnpm --filter @reachinternational/permissions test` -> 4/4 passed).
+    - Design Tokens Unit Tests: **PASS** (`pnpm --filter @reachinternational/design-tokens test` -> 3/3 passed).
+
 - [x] **Profile (/profile) Page Polish & Document Uploads Refinement (`packages/utils`, `apps/web`, `apps/mobile`) (2026-10-06)**:
   - **Delivered**:
     1. **Removed Assigned Machinery from Profile (`profile-view.ts`)**:

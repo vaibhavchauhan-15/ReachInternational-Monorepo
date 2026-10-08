@@ -225,9 +225,9 @@ export const ReachBrandEmblem = memo(function ReachBrandEmblem({
 }: ReachBrandEmblemProps) {
   const { isDark } = useTheme();
 
-  // In dark theme use light logo/emblem, in light theme use dark logo/emblem
+  // Polarity: In dark theme use dark container/light marks, in light theme use light container/dark marks
   const useLightEmblem =
-    variant === 'light' ? true : variant === 'dark' ? false : isDark;
+    variant === 'light' ? true : variant === 'dark' ? false : !isDark;
 
   const containerBg = useLightEmblem ? '#ffffff' : '#09090b';
   const containerBorder = useLightEmblem ? '#e2e8f0' : '#27272a';

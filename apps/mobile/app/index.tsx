@@ -1,11 +1,10 @@
-import { Text } from '../components/ui/Text';
 import '../lib/suppressWarnings';
 import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth/useAuth";
 import { useTheme } from "../components/ui/ThemeProvider";
-import { ReachInternationalLogo } from "../components/branding";
+import { ReachBrandEmblem } from "../components/branding";
 import { AppWebView } from "../shell/AppWebView";
 import { getMobileRoleHomeRoute } from "@reachinternational/permissions";
 
@@ -82,29 +81,12 @@ function NativeGatewayScreen() {
           },
         ]}
       >
-        <ReachInternationalLogo
-          size={42}
-          showIcon={true}
-          showTagline={true}
-          variant={isDark ? 'light' : 'dark'}
+        <ReachBrandEmblem
+          size={88}
+          variant={isDark ? 'dark' : 'light'}
+          bordered={true}
         />
       </Animated.View>
-
-      {/* Micro Status Badge */}
-      <View
-        style={[
-          styles.statusPill,
-          {
-            backgroundColor: isDark ? '#18181b' : '#f1f5f9',
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        <View style={[styles.pulseDot, { backgroundColor: theme.colors.link }]} />
-        <Text style={[styles.statusText, { color: theme.colors.mute }]}>
-          INITIALIZING FLEET PLATFORM
-        </Text>
-      </View>
     </View>
   );
 }
@@ -129,22 +111,6 @@ const styles = StyleSheet.create({
   logoWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 36,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
   },
 });
+

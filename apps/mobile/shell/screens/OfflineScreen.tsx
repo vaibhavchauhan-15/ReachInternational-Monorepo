@@ -8,10 +8,10 @@ import React, { useState } from "react";
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator} from "react-native";
-import { WifiOff, RefreshCw } from "lucide-react-native";
+import { WifiOff, RefreshCw } from '../../components/ui/icon';
 import { colorsDark, spacingNumeric, radiusNumeric } from "@reachinternational/design-tokens";
+import { Pressable } from "../../components/ui/touch/Pressable";
 
 interface OfflineScreenProps {
   onRetry: () => void;
@@ -45,11 +45,12 @@ export function OfflineScreen({ onRetry, isRetrying = false }: OfflineScreenProp
           heavy machinery telemetry, log operator shifts, and synchronize fleet operations.
         </Text>
 
-        <TouchableOpacity
+        <Pressable
+          variant="buttonPrimary"
+          haptic="tap"
           style={[styles.retryButton, loading && styles.retryButtonDisabled]}
           onPress={handleRetry}
           disabled={loading}
-          activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Retry Connection"
         >
@@ -61,7 +62,7 @@ export function OfflineScreen({ onRetry, isRetrying = false }: OfflineScreenProp
               <Text style={styles.retryButtonText}>Retry Connection</Text>
             </>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <Text style={styles.footerText}>

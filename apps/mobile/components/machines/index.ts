@@ -5,7 +5,6 @@
 export * from './MobileMachineCard';
 export * from './MachineModal';
 export * from './MachineDetailView';
-export * from './MachineDetailModal';
 export * from './DeleteMachineDialog';
 export * from './MachineImportModal';
 export * from './ClientSelectModal';

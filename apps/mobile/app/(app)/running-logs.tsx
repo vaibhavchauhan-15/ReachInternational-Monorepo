@@ -4,12 +4,12 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   Alert,
   Platform,
   StatusBar,
   LayoutAnimation} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
@@ -36,7 +36,8 @@ import {
   FileText,
   Gauge,
   Zap,
-} from 'lucide-react-native';
+  Icon,
+} from '../../components/ui/icon';
 
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
@@ -288,9 +289,10 @@ export default function RunningLogsScreen() {
       {/* View Mode Strip: Machine | Client | Operator */}
       <View style={[styles.viewModeStrip, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.viewModeContent}>
-          <TouchableOpacity
+          <Pressable
+            variant="chip"
+            haptic="select"
             onPress={() => setLogsViewMode('machine')}
-            activeOpacity={0.8}
             style={[
               styles.viewModeTab,
               logsViewMode === 'machine'
@@ -301,11 +303,12 @@ export default function RunningLogsScreen() {
             <Text style={[styles.viewModeTabText, { color: logsViewMode === 'machine' ? theme.colors.canvas : theme.colors.body }]}>
               Machine View
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
+            variant="chip"
+            haptic="select"
             onPress={() => setLogsViewMode('client')}
-            activeOpacity={0.8}
             style={[
               styles.viewModeTab,
               logsViewMode === 'client'
@@ -316,11 +319,12 @@ export default function RunningLogsScreen() {
             <Text style={[styles.viewModeTabText, { color: logsViewMode === 'client' ? theme.colors.canvas : theme.colors.body }]}>
               Client View
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
+            variant="chip"
+            haptic="select"
             onPress={() => setLogsViewMode('operator')}
-            activeOpacity={0.8}
             style={[
               styles.viewModeTab,
               logsViewMode === 'operator'
@@ -331,7 +335,7 @@ export default function RunningLogsScreen() {
             <Text style={[styles.viewModeTabText, { color: logsViewMode === 'operator' ? theme.colors.canvas : theme.colors.body }]}>
               Operator View
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </ScrollView>
       </View>
 
@@ -375,14 +379,16 @@ export default function RunningLogsScreen() {
           <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
             Daily Logs ({groupedLogs.length} days)
           </Text>
-          <TouchableOpacity
+          <Pressable
+            variant="buttonSecondary"
+            hitSlopToMin48
             onPress={toggleAllExpanded}
             style={[styles.expandAllBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}
           >
             <Text style={[styles.expandAllText, { color: theme.colors.ink }]}>
               {allExpanded ? 'Collapse All' : 'Expand All'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Loading State */}
@@ -417,9 +423,10 @@ export default function RunningLogsScreen() {
                 ]}
               >
                 {/* Header (1-tap to expand/collapse) */}
-                <TouchableOpacity
+                <Pressable
+                  variant="listRow"
+                  haptic="select"
                   onPress={() => toggleDateExpanded(dateKey)}
-                  activeOpacity={0.7}
                   style={styles.dayGroupHeader}
                 >
                   <View style={styles.dayGroupHeaderLeft}>
@@ -449,13 +456,14 @@ export default function RunningLogsScreen() {
                         {dayRunningHours}h M/C RT
                       </Text>
                     </View>
-                    {isExpanded ? (
-                      <ChevronUp size={16} color={theme.colors.mute} />
-                    ) : (
-                      <ChevronDown size={16} color={theme.colors.mute} />
-                    )}
+                    <Icon
+                      name="chevron-down"
+                      size={16}
+                      color={theme.colors.mute}
+                      state={isExpanded ? 'open' : 'closed'}
+                    />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Expanded Shifts Mini Table */}
                 {isExpanded && (

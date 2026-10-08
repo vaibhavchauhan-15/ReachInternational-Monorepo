@@ -87,16 +87,28 @@ export function PayrollClient({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  // Local state for operators
-  const [prevInitialData, setPrevInitialData] = useState(initialData);
-  const [operators, setOperators] = useState<HRPayrollOperator[]>(
-    initialData.operators || []
-  );
+  // Local state for operators (defensively handles array or object shape)
+  const initialOps = useMemo(() => {
+    return Array.isArray(initialData)
+      ? (initialData as unknown as HRPayrollOperator[])
+      : (initialData?.operators || []);
+  }, [initialData]);
 
-  if (prevInitialData !== initialData) {
-    setPrevInitialData(initialData);
-    setOperators(initialData.operators || []);
-  }
+  const [operators, setOperators] = useState<HRPayrollOperator[]>(initialOps);
+
+  useEffect(() => {
+    const nextOps = Array.isArray(initialData)
+      ? (initialData as unknown as HRPayrollOperator[])
+      : (initialData?.operators || []);
+    setOperators(nextOps);
+  }, [initialData]);
+
+  // Optimistic Month state for instant UI update
+  const [optimisticMonth, setOptimisticMonth] = useState(currentMonth);
+
+  useEffect(() => {
+    setOptimisticMonth(currentMonth);
+  }, [currentMonth]);
 
   // Active View Mode (defaults to full statement, hydrated from URL)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -204,8 +216,9 @@ export function PayrollClient({
   const [editFormData, setEditFormData] = useState<Partial<HRPayrollOperator>>({});
   const [isSavingStatement, setIsSavingStatement] = useState(false);
 
-  // Month change
+  // Month change with optimistic UI
   const handleMonthChange = (newMonth: string) => {
+    setOptimisticMonth(newMonth);
     startTransition(() => {
       const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
       sp.set("month", newMonth);
@@ -525,49 +538,58 @@ export function PayrollClient({
     };
   }, [editFormData]);
 
-  // Save Statement Edit
+  // Save Statement Edit with Optimistic UI & Snapshot Rollback
   const handleSaveStatement = async () => {
     if (!editStatementOp) return;
-    setIsSavingStatement(true);
+    const previousOperators = [...operators];
+    const opToUpdate = editStatementOp;
+    const computed = editComputed;
+    const formData = { ...editFormData };
+
+    // 1. Optimistic Update immediately:
+    const updatedOp: HRPayrollOperator = {
+      ...opToUpdate,
+      ...formData,
+      total_days: computed.totalDays,
+      attended_amount: computed.attendedAmt,
+      pl_amount: computed.plAmt,
+      ot_amount: computed.otAmt,
+      total_earned: computed.totalEarned,
+      gross_pay: computed.grossPay,
+      net_pay: computed.netPay,
+      balance_pay: computed.balance,
+      pl_balance: computed.plBalance,
+      total_pay: computed.grossPay,
+      regular_pay: computed.attendedAmt + computed.plAmt,
+      ot_pay: computed.otAmt,
+    };
+
+    setOperators((prev) =>
+      prev.map((op) => (op.operator_id === opToUpdate.operator_id ? updatedOp : op))
+    );
+
+    // Instant modal dismiss and positive feedback for optimistic UI
+    setEditStatementOp(null);
+    toast("success", `Statement updated for ${opToUpdate.full_name}`);
+
+    // 2. Perform background server action
     try {
+      setIsSavingStatement(true);
       const res = await updateOperatorSalaryStatementAction(
-        editStatementOp.operator_id,
+        opToUpdate.operator_id,
         currentMonth,
-        editFormData
+        formData
       );
 
-      if (res.success) {
-        // Update local operator item
-        setOperators((prev) =>
-          prev.map((op) => {
-            if (op.operator_id === editStatementOp.operator_id) {
-              return {
-                ...op,
-                ...editFormData,
-                total_days: editComputed.totalDays,
-                attended_amount: editComputed.attendedAmt,
-                pl_amount: editComputed.plAmt,
-                ot_amount: editComputed.otAmt,
-                total_earned: editComputed.totalEarned,
-                gross_pay: editComputed.grossPay,
-                net_pay: editComputed.netPay,
-                balance_pay: editComputed.balance,
-                pl_balance: editComputed.plBalance,
-                total_pay: editComputed.grossPay,
-                regular_pay: editComputed.attendedAmt + editComputed.plAmt,
-                ot_pay: editComputed.otAmt,
-              };
-            }
-            return op;
-          })
-        );
-        toast("success", `Statement updated for ${editStatementOp.full_name}`);
-        setEditStatementOp(null);
-      } else {
-        toast("error", res.error || "Failed to update statement");
+      if (!res.success) {
+        // Rollback on server error
+        setOperators(previousOperators);
+        toast("error", res.error || "Failed to update statement. Changes rolled back.");
       }
     } catch {
-      toast("error", "Network error updating statement");
+      // Rollback on network error
+      setOperators(previousOperators);
+      toast("error", "Network error updating statement. Changes rolled back.");
     } finally {
       setIsSavingStatement(false);
     }
@@ -657,13 +679,26 @@ export function PayrollClient({
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `Salary_Statement_${initialData.payrollMonth}_${new Date().toISOString().slice(0, 10)}.csv`
+      `Salary_Statement_${optimisticMonth || currentMonth}_${new Date().toISOString().slice(0, 10)}.csv`
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast("success", `Exported ${listToExport.length} operator records to Excel CSV format.`);
-  }, [selectedIds, operators, initialData, toast]);
+  }, [selectedIds, operators, optimisticMonth, currentMonth, toast]);
+
+  // Mobile Top Header 3-dot integration for quick export
+  useEffect(() => {
+    const onQuickExport = () => {
+      handleExportCSV();
+    };
+    window.addEventListener("reach:quick-export-csv", onQuickExport);
+    window.addEventListener("reach:quick-export", onQuickExport);
+    return () => {
+      window.removeEventListener("reach:quick-export-csv", onQuickExport);
+      window.removeEventListener("reach:quick-export", onQuickExport);
+    };
+  }, [handleExportCSV]);
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6 pb-24 md:pb-6">
@@ -674,7 +709,7 @@ export function PayrollClient({
         actions={
           <div className="flex items-center gap-2">
             <MonthSelect
-              value={currentMonth}
+              value={optimisticMonth}
               onChange={handleMonthChange}
               disabled={isPending}
               showQuickNav
@@ -693,35 +728,52 @@ export function PayrollClient({
         }
       />
 
-      {/* Mobile Actions Toolbar */}
-      <div className="flex md:hidden items-center justify-between gap-2">
-        <MonthSelect
-          value={currentMonth}
-          onChange={handleMonthChange}
-          disabled={isPending}
-          showQuickNav
-          compact
-          className="flex-1"
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleExportCSV}
-          icon={<AnimatedFileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400" />}
-          className="h-11 px-3.5 text-xs font-semibold gap-1.5 shrink-0"
-          title="Export CSV"
-        >
-          <span>Export</span>
-        </Button>
+      {/* Mobile Dedicated Page Header (< md) */}
+      <div className="flex md:hidden flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--color-ink)] tracking-tight">
+              Payroll Statement
+            </h1>
+            <p className="text-xs text-[var(--color-mute)] font-mono">
+              {filteredOperators.length} operator{filteredOperators.length !== 1 ? "s" : ""} recorded
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleExportCSV}
+              icon={<AnimatedFileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400" />}
+              className="h-10 px-3 text-xs font-semibold gap-1.5"
+              title="Export Salary Statement Excel CSV"
+            >
+              <span>Export CSV</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile Month Select Strip with optimistic navigation */}
+        <div className="relative">
+          <MonthSelect
+            value={optimisticMonth}
+            onChange={handleMonthChange}
+            disabled={isPending}
+            showQuickNav
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* 2. Interactive KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 transition-opacity ${
+        isPending ? "opacity-75 pointer-events-none" : "opacity-100"
+      }`}>
         {/* Total Gross Payroll */}
         <motion.div
           data-hover-parent
           whileTap={{ scale: 0.98 }}
-          className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-[var(--color-ink)]/30"
+          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-[var(--color-ink)]/30 active:scale-[0.98]"
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
@@ -729,7 +781,7 @@ export function PayrollClient({
             </span>
             <AnimatedCreditCard size={16} className="w-4 h-4 shrink-0 text-sky-500" />
           </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] font-mono">
+          <div className="mt-2 text-base sm:text-xl lg:text-2xl font-extrabold text-[var(--color-ink)] font-mono tabular-nums truncate">
             ₹{kpis.totalGross.toLocaleString("en-IN")}
           </div>
         </motion.div>
@@ -738,7 +790,7 @@ export function PayrollClient({
         <motion.div
           data-hover-parent
           whileTap={{ scale: 0.98 }}
-          className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-emerald-500/40"
+          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-emerald-500/40 active:scale-[0.98]"
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
@@ -746,7 +798,7 @@ export function PayrollClient({
             </span>
             <AnimatedBriefcase size={16} className="w-4 h-4 shrink-0 text-emerald-500" />
           </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+          <div className="mt-2 text-base sm:text-xl lg:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums truncate">
             ₹{kpis.totalNet.toLocaleString("en-IN")}
           </div>
         </motion.div>
@@ -755,7 +807,7 @@ export function PayrollClient({
         <motion.div
           data-hover-parent
           whileTap={{ scale: 0.98 }}
-          className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-amber-500/40"
+          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-amber-500/40 active:scale-[0.98]"
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">
@@ -763,9 +815,9 @@ export function PayrollClient({
             </span>
             <AnimatedClock size={16} className="w-4 h-4 shrink-0 text-amber-500" />
           </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] font-mono flex items-baseline gap-1.5">
+          <div className="mt-2 flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 text-base sm:text-xl lg:text-2xl font-extrabold text-[var(--color-ink)] font-mono tabular-nums">
             <span className="text-emerald-600 dark:text-emerald-400">₹{kpis.totalPaid.toLocaleString("en-IN")}</span>
-            <span className="text-xs font-normal text-[var(--color-mute)]">/ bal ₹{kpis.totalBalance.toLocaleString("en-IN")}</span>
+            <span className="text-[10px] sm:text-xs font-normal text-[var(--color-mute)] truncate">/ bal ₹{kpis.totalBalance.toLocaleString("en-IN")}</span>
           </div>
         </motion.div>
 
@@ -773,30 +825,32 @@ export function PayrollClient({
         <motion.div
           data-hover-parent
           whileTap={{ scale: 0.98 }}
-          className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-indigo-500/40"
+          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-indigo-500/40 active:scale-[0.98]"
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 truncate">
-              Days & Leave Summary
+              Days &amp; Leave Summary
             </span>
             <AnimatedCalendar size={16} className="w-4 h-4 shrink-0 text-indigo-500" />
           </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono flex items-baseline gap-1.5">
+          <div className="mt-2 flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 text-base sm:text-xl lg:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums">
             <span>{kpis.totalAttendedDays} d</span>
-            <span className="text-xs font-normal text-[var(--color-mute)]">/ OT {kpis.totalOtDays} d</span>
+            <span className="text-[10px] sm:text-xs font-normal text-[var(--color-mute)] truncate">/ OT {kpis.totalOtDays} d</span>
           </div>
         </motion.div>
       </div>
 
       {/* 3. Reusable View Mode Switcher Strip */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-[var(--color-hairline)]">
-        <Tabs
-          tabs={viewTabs}
-          activeTab={viewMode}
-          onChange={handleViewModeChange}
-          variant="pill"
-          className="max-w-full"
-        />
+        <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+          <Tabs
+            tabs={viewTabs}
+            activeTab={viewMode}
+            onChange={handleViewModeChange}
+            variant="pill"
+            className="w-max min-w-full sm:w-auto"
+          />
+        </div>
 
         <div className="text-xs text-[var(--color-mute)] font-mono whitespace-nowrap pl-1 sm:pl-2 shrink-0">
           {filteredOperators.length} of {operators.length} records
@@ -854,13 +908,13 @@ export function PayrollClient({
             {/* Multi-tier Group Header Bar */}
             <thead className="sticky top-0 z-30 bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
               <tr className="border-b border-[var(--color-hairline)]/70 text-[10px] uppercase font-bold tracking-wider text-[var(--color-mute)]">
-                <th colSpan={3} className="py-1 px-3 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] sticky left-0 z-40">
+                <th colSpan={3} className="py-1 px-3 bg-white dark:bg-[#121212] border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.4)] sticky left-0 z-40 text-left">
                   Identity Details
                 </th>
 
                 {(viewMode === "statement" || viewMode === "attendance") && (
-                  <th colSpan={7} className="py-1 px-3 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-r border-[var(--color-hairline)] text-center">
-                    Attendance & Days
+                  <th colSpan={8} className="py-1 px-3 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-r border-[var(--color-hairline)] text-center">
+                    Attendance &amp; Days
                   </th>
                 )}
 
@@ -872,13 +926,13 @@ export function PayrollClient({
 
                 {(viewMode === "statement" || viewMode === "deductions") && (
                   <th colSpan={6} className="py-1 px-3 bg-rose-500/10 text-rose-700 dark:text-rose-300 border-r border-[var(--color-hairline)] text-center">
-                    Deductions & Recoveries
+                    Deductions &amp; Recoveries
                   </th>
                 )}
 
                 {(viewMode === "statement" || viewMode === "payouts") && (
                   <th colSpan={4} className="py-1 px-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-r border-[var(--color-hairline)] text-center">
-                    Agency Disbursements & Balance
+                    Agency Disbursements &amp; Balance
                   </th>
                 )}
 
@@ -900,7 +954,7 @@ export function PayrollClient({
               {/* Exact Excel Column Header Row */}
               <tr className="border-b border-[var(--color-hairline)] text-[11px] font-semibold text-[var(--color-body)] uppercase">
                 {/* Checkbox */}
-                <th className="py-2.5 px-2 w-9 text-center sticky left-0 z-40 bg-[var(--color-canvas)]">
+                <th className="py-2.5 px-2 w-[36px] min-w-[36px] max-w-[36px] text-center sticky left-0 z-40 bg-white dark:bg-[#121212] border-r border-[var(--color-hairline)]/60">
                   <button
                     type="button"
                     onClick={handleSelectAll}
@@ -914,26 +968,26 @@ export function PayrollClient({
                 </th>
 
                 {/* SL NO */}
-                <th className="py-2.5 px-2.5 text-center w-12 sticky left-9 z-40 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)]">
+                <th className="py-2.5 px-2.5 text-center w-[48px] min-w-[48px] max-w-[48px] sticky left-[36px] z-40 bg-white dark:bg-[#121212] border-r border-[var(--color-hairline)]/60 font-mono">
                   SL NO
                 </th>
 
-                {/* NAME */}
-                <th className="py-2.5 px-3.5 min-w-[180px] sticky left-[84px] z-40 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                {/* NAME - Partition Line */}
+                <th className="py-2.5 px-3.5 min-w-[200px] sticky left-[84px] z-40 bg-white dark:bg-[#121212] border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.4)]">
                   NAME
                 </th>
 
                 {/* ATTENDANCE COLUMNS */}
                 {(viewMode === "statement" || viewMode === "attendance") && (
                   <>
-                    <th className="py-2.5 px-3 text-center">DOJ</th>
-                    <th className="py-2.5 px-3 text-right">BASIC</th>
-                    <th className="py-2.5 px-3 text-right">EARNED</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono">W/D</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono text-blue-600 dark:text-blue-400">A/D</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono">OT days</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono">PL ADJ</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono font-bold text-blue-700 dark:text-blue-300 bg-blue-50/30 dark:bg-blue-950/20">
+                    <th className="py-2.5 px-3 min-w-[100px] text-center border-r border-[var(--color-hairline)]/60 font-mono">DOJ</th>
+                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">BASIC</th>
+                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">EARNED</th>
+                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono">W/D</th>
+                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono text-blue-600 dark:text-blue-400">A/D</th>
+                    <th className="py-2.5 px-2.5 min-w-[75px] text-center border-r border-[var(--color-hairline)]/60 font-mono">OT days</th>
+                    <th className="py-2.5 px-2.5 min-w-[75px] text-center border-r border-[var(--color-hairline)]/60 font-mono">PL ADJ</th>
+                    <th className="py-2.5 px-2.5 min-w-[90px] text-center border-r border-[var(--color-hairline)]/60 font-mono font-bold text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30">
                       Total Days
                     </th>
                   </>
@@ -942,13 +996,13 @@ export function PayrollClient({
                 {/* EARNINGS COLUMNS */}
                 {(viewMode === "statement" || viewMode === "earnings") && (
                   <>
-                    <th className="py-2.5 px-3 text-right font-mono">AMOUNT</th>
-                    <th className="py-2.5 px-3 text-right font-mono">PL AMT.</th>
-                    <th className="py-2.5 px-2.5 text-center font-mono">N/T</th>
-                    <th className="py-2.5 px-3 text-right font-mono">Amt</th>
-                    <th className="py-2.5 px-3 text-right font-mono font-semibold">TOTAL</th>
-                    <th className="py-2.5 px-3 text-right font-mono text-amber-600 dark:text-amber-400">OT AMT</th>
-                    <th className="py-2.5 px-3.5 text-right font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50/30 dark:bg-sky-950/20">
+                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">AMOUNT</th>
+                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">PL AMT.</th>
+                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono">N/T</th>
+                    <th className="py-2.5 px-3 min-w-[85px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Amt</th>
+                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-semibold">TOTAL</th>
+                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono text-amber-600 dark:text-amber-400">OT AMT</th>
+                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50/50 dark:bg-sky-950/30">
                       Gross/Pay
                     </th>
                   </>
@@ -957,12 +1011,12 @@ export function PayrollClient({
                 {/* DEDUCTIONS COLUMNS */}
                 {(viewMode === "statement" || viewMode === "deductions") && (
                   <>
-                    <th className="py-2.5 px-3 text-right font-mono">Loan</th>
-                    <th className="py-2.5 px-3 text-right font-mono">Add Bal Salary</th>
-                    <th className="py-2.5 px-3 text-right font-mono">ADV./Deduction</th>
-                    <th className="py-2.5 px-3 text-right font-mono">ADV. BAL.</th>
-                    <th className="py-2.5 px-3 text-right font-mono">Dedu</th>
-                    <th className="py-2.5 px-3.5 text-right font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/30 dark:bg-emerald-950/20">
+                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Loan</th>
+                    <th className="py-2.5 px-3 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Add Bal Salary</th>
+                    <th className="py-2.5 px-3 min-w-[120px] text-right border-r border-[var(--color-hairline)]/60 font-mono">ADV./Deduction</th>
+                    <th className="py-2.5 px-3 min-w-[100px] text-right border-r border-[var(--color-hairline)]/60 font-mono">ADV. BAL.</th>
+                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Dedu</th>
+                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30">
                       Net/Pay
                     </th>
                   </>
@@ -971,10 +1025,10 @@ export function PayrollClient({
                 {/* AGENCY DISBURSEMENTS COLUMNS */}
                 {(viewMode === "statement" || viewMode === "payouts") && (
                   <>
-                    <th className="py-2.5 px-3 text-right font-mono">PAID REACH</th>
-                    <th className="py-2.5 px-3 text-right font-mono">S&amp;S</th>
-                    <th className="py-2.5 px-3 text-right font-mono">QUESS</th>
-                    <th className="py-2.5 px-3.5 text-right font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-50/30 dark:bg-amber-950/20">
+                    <th className="py-2.5 px-3 min-w-[100px] text-right border-r border-[var(--color-hairline)]/60 font-mono">PAID REACH</th>
+                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">S&amp;S</th>
+                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">QUESS</th>
+                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/30">
                       BALANCE
                     </th>
                   </>
@@ -983,8 +1037,8 @@ export function PayrollClient({
                 {/* LEAVE LEDGER COLUMNS */}
                 {(viewMode === "statement" || viewMode === "leaves") && (
                   <>
-                    <th className="py-2.5 px-3 text-center font-mono">TOTAL PL</th>
-                    <th className="py-2.5 px-3 text-center font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                    <th className="py-2.5 px-3 min-w-[85px] text-center border-r border-[var(--color-hairline)]/60 font-mono">TOTAL PL</th>
+                    <th className="py-2.5 px-3 min-w-[95px] text-center border-r border-[var(--color-hairline)]/60 font-mono font-bold text-indigo-700 dark:text-indigo-300">
                       PL BALANCE
                     </th>
                   </>
@@ -993,18 +1047,18 @@ export function PayrollClient({
                 {/* BANK DETAILS */}
                 {(viewMode === "statement" || viewMode === "deductions") && (
                   <>
-                    <th className="py-2.5 px-3 font-mono">AC NO</th>
-                    <th className="py-2.5 px-3 font-mono">IFSC CODE</th>
+                    <th className="py-2.5 px-3 min-w-[150px] text-left border-r border-[var(--color-hairline)]/60 font-mono">AC NO</th>
+                    <th className="py-2.5 px-3 min-w-[130px] text-left border-r border-[var(--color-hairline)]/60 font-mono">IFSC CODE</th>
                   </>
                 )}
 
                 {/* ACTIONS */}
-                <th className="py-2.5 px-3 text-center">Action</th>
+                <th className="py-2.5 px-3 min-w-[85px] text-center">Action</th>
               </tr>
             </thead>
 
             {/* Table Body */}
-            <tbody className="divide-y divide-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+            <tbody className="divide-y divide-[var(--color-hairline)] bg-white dark:bg-[#121212]">
               {filteredOperators.length === 0 ? (
                 <tr>
                   <td colSpan={34} className="py-12 text-center">
@@ -1029,16 +1083,20 @@ export function PayrollClient({
               ) : (
                 filteredOperators.map((op, index) => {
                   const isSelected = selectedIds.has(op.operator_id);
+                  const stickyBg = isSelected
+                    ? "bg-[#f0f9ff] dark:bg-[#0c2233] group-hover:bg-[#e0f2fe] dark:group-hover:bg-[#133047]"
+                    : "bg-white dark:bg-[#121212] group-hover:bg-[#f5f5f5] dark:group-hover:bg-[#1c1c1c]";
+                  const rowBg = isSelected
+                    ? "bg-[#f0f9ff] dark:bg-[#0c2233] hover:bg-[#e0f2fe] dark:hover:bg-[#133047]"
+                    : "bg-white dark:bg-[#121212] hover:bg-[#f5f5f5] dark:hover:bg-[#1c1c1c]";
 
                   return (
                     <tr
                       key={op.operator_id}
-                      className={`hover:bg-[var(--color-canvas)]/50 transition-colors group ${
-                        isSelected ? "bg-sky-50/30 dark:bg-sky-950/20" : ""
-                      }`}
+                      className={`transition-colors group ${rowBg}`}
                     >
-                      {/* Checkbox */}
-                      <td className="py-2 px-2 text-center sticky left-0 z-20 bg-[var(--color-canvas-elevated)] group-hover:bg-[var(--color-canvas)]/60">
+                      {/* Checkbox - 100% Solid Opaque Background */}
+                      <td className={`py-2 px-2 w-[36px] min-w-[36px] max-w-[36px] text-center sticky left-0 z-20 ${stickyBg} border-r border-[var(--color-hairline)]/60`}>
                         <button
                           type="button"
                           onClick={() => handleToggleSelect(op.operator_id)}
@@ -1052,13 +1110,13 @@ export function PayrollClient({
                         </button>
                       </td>
 
-                      {/* SL NO */}
-                      <td className="py-2 px-2.5 text-center font-mono text-[var(--color-mute)] sticky left-9 z-20 bg-[var(--color-canvas-elevated)] group-hover:bg-[var(--color-canvas)]/60 border-r border-[var(--color-hairline)]">
+                      {/* SL NO - 100% Solid Opaque Background */}
+                      <td className={`py-2 px-2.5 w-[48px] min-w-[48px] max-w-[48px] text-center font-mono text-[var(--color-mute)] sticky left-[36px] z-20 ${stickyBg} border-r border-[var(--color-hairline)]/60 tabular-nums`}>
                         {op.sl_no || index + 1}
                       </td>
 
-                      {/* NAME */}
-                      <td className="py-2 px-3.5 sticky left-[84px] z-20 bg-[var(--color-canvas-elevated)] group-hover:bg-[var(--color-canvas)]/60 border-r border-[var(--color-hairline)] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                      {/* NAME - 100% Solid Opaque Background + Visible Partition Line */}
+                      <td className={`py-2 px-3.5 min-w-[200px] sticky left-[84px] z-20 ${stickyBg} border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.5)]`}>
                         <div className="flex items-center gap-1.5">
                           <Link
                             href={`/users?search=${encodeURIComponent(op.full_name)}`}
@@ -1077,28 +1135,28 @@ export function PayrollClient({
                       {/* ATTENDANCE & DAYS */}
                       {(viewMode === "statement" || viewMode === "attendance") && (
                         <>
-                          <td className="py-2 px-3 text-center text-[var(--color-mute)] font-mono">
+                          <td className="py-2 px-3 text-center text-[var(--color-mute)] font-mono border-r border-[var(--color-hairline)]/60">
                             {op.doj || "—"}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums border-r border-[var(--color-hairline)]/60">
                             ₹{(op.basic_salary || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums border-r border-[var(--color-hairline)]/60">
                             ₹{(op.earned_basic || op.basic_salary || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             {op.working_days || 30}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono font-semibold text-blue-600 dark:text-blue-400">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums font-semibold text-blue-600 dark:text-blue-400 border-r border-[var(--color-hairline)]/60">
                             {op.attended_days || op.work_days || 0}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             {op.ot_days || 0}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             {op.pl_adjusted || 0}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono font-bold text-blue-700 dark:text-blue-300 bg-blue-50/20 dark:bg-blue-950/10">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums font-bold text-blue-700 dark:text-blue-300 bg-blue-50/20 dark:bg-blue-950/10 border-r border-[var(--color-hairline)]/60">
                             {op.total_days || 0}
                           </td>
                         </>
@@ -1107,25 +1165,25 @@ export function PayrollClient({
                       {/* EARNINGS */}
                       {(viewMode === "statement" || viewMode === "earnings") && (
                         <>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-ink)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.attended_amount || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-ink)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.pl_amount || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-2.5 text-center font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             {op.night_travel_days || 0}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.night_travel_amount || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono font-semibold text-[var(--color-ink)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums font-semibold text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.total_earned || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-amber-600 dark:text-amber-400 font-medium">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-600 dark:text-amber-400 font-medium border-r border-[var(--color-hairline)]/60">
                             ₹{(op.ot_amount || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3.5 text-right font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50/20 dark:bg-sky-950/10">
+                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-sky-700 dark:text-sky-300 bg-sky-50/20 dark:bg-sky-950/10 border-r border-[var(--color-hairline)]/60">
                             ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
                           </td>
                         </>
@@ -1134,22 +1192,22 @@ export function PayrollClient({
                       {/* DEDUCTIONS */}
                       {(viewMode === "statement" || viewMode === "deductions") && (
                         <>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.loan_deduction || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.additional_balance_salary || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.advance_deduction || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.advance_balance || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-mute)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.other_deductions || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50/20 dark:bg-emerald-950/10">
+                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50/20 dark:bg-emerald-950/10 border-r border-[var(--color-hairline)]/60">
                             ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
                           </td>
                         </>
@@ -1158,16 +1216,16 @@ export function PayrollClient({
                       {/* AGENCY PAYOUTS & BALANCE */}
                       {(viewMode === "statement" || viewMode === "payouts") && (
                         <>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.paid_reach || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.paid_ss || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             ₹{(op.paid_quess || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="py-2 px-3.5 text-right font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50/20 dark:bg-amber-950/10">
+                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400 bg-amber-50/20 dark:bg-amber-950/10 border-r border-[var(--color-hairline)]/60">
                             ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
                           </td>
                         </>
@@ -1176,10 +1234,10 @@ export function PayrollClient({
                       {/* LEAVE LEDGER */}
                       {(viewMode === "statement" || viewMode === "leaves") && (
                         <>
-                          <td className="py-2 px-3 text-center font-mono text-[var(--color-body)]">
+                          <td className="py-2 px-3 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
                             {op.total_pl_quota || 12}
                           </td>
-                          <td className="py-2 px-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                          <td className="py-2 px-3 text-center font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400 border-r border-[var(--color-hairline)]/60">
                             {op.pl_balance || 0}
                           </td>
                         </>
@@ -1188,10 +1246,10 @@ export function PayrollClient({
                       {/* BANK INFO */}
                       {(viewMode === "statement" || viewMode === "deductions") && (
                         <>
-                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)]">
+                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             {op.bank_account_number || "XXXXXXXX1234"}
                           </td>
-                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)]">
+                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
                             {op.bank_ifsc_code || "BANK0001234"}
                           </td>
                         </>
@@ -1229,6 +1287,32 @@ export function PayrollClient({
 
       {/* 6. Mobile Touch Cards View (≤640px) */}
       <div className="block md:hidden space-y-3">
+        {/* Mobile Selection & Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between p-2.5 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-xl text-xs font-sans shadow-xs animate-in fade-in">
+            <span className="font-semibold text-sky-800 dark:text-sky-200">
+              {selectedIds.size} operator{selectedIds.size > 1 ? "s" : ""} selected
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExportCSV}
+                className="h-8 px-2.5 text-xs font-semibold"
+              >
+                Export Selected
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-sky-600 hover:text-sky-800 dark:text-sky-400 p-1 text-xs font-medium cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         {filteredOperators.length === 0 ? (
           <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-6">
             <EmptyState
@@ -1255,26 +1339,32 @@ export function PayrollClient({
             return (
               <div
                 key={op.operator_id}
-                className={`rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-xs space-y-3 transition-colors ${
-                  isSelected ? "ring-1 ring-sky-500 bg-sky-50/15" : ""
+                className={`rounded-xl border bg-white dark:bg-[#121212] p-3.5 sm:p-4 shadow-xs space-y-3 transition-colors ${
+                  isSelected
+                    ? "border-sky-500 bg-sky-50/20 dark:bg-sky-950/20 ring-1 ring-sky-500"
+                    : "border-[var(--color-hairline)]"
                 }`}
               >
                 {/* Header Row: Checkbox, Name, SL NO, Net Pay */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSelect(op.operator_id)}
-                      className={`mt-0.5 h-5 w-5 rounded border transition-all flex items-center justify-center shrink-0 cursor-pointer ${
-                        isSelected
-                          ? "bg-[var(--color-ink)] border-[var(--color-ink)] text-[var(--color-canvas)]"
-                          : "border-[var(--color-hairline)] hover:border-[var(--color-ink)]/50"
-                      }`}
-                    >
-                      {isSelected && <AnimatedCheck size={12} />}
-                    </button>
+                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                    {/* Minimum 44px Touch Target for Checkbox */}
+                    <div className="flex items-center justify-center min-h-[44px] min-w-[44px] -ml-2.5 -mt-2.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelect(op.operator_id)}
+                        className={`h-6 w-6 rounded border transition-all flex items-center justify-center cursor-pointer ${
+                          isSelected
+                            ? "bg-[var(--color-ink)] border-[var(--color-ink)] text-[var(--color-canvas)]"
+                            : "border-[var(--color-hairline)] hover:border-[var(--color-ink)]/50"
+                        }`}
+                        title={isSelected ? "Deselect" : "Select"}
+                      >
+                        {isSelected && <AnimatedCheck size={13} />}
+                      </button>
+                    </div>
 
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 pt-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-mono font-bold text-[var(--color-mute)] bg-[var(--color-canvas)] px-1.5 py-0.5 rounded border border-[var(--color-hairline)]">
                           #{op.sl_no || idx + 1}
@@ -1293,51 +1383,158 @@ export function PayrollClient({
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 pt-0.5">
                     <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] block">
                       Net Pay
                     </span>
-                    <span className="font-bold text-base text-emerald-600 dark:text-emerald-400 font-mono">
+                    <span className="font-bold text-base text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
                       ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
                     </span>
                   </div>
                 </div>
 
-                {/* Quick KPI Stat Strip */}
-                <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                  <div>
-                    <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Attended Days</span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">
-                      {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
-                    </span>
+                {/* ViewMode-Aware Dynamic Quick KPI Strip */}
+                {viewMode === "attendance" ? (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Attended Days</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono tabular-nums">
+                        {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">OT Days</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+                        {op.ot_days || 0} d
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Total Days</span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300 font-mono tabular-nums">
+                        {op.total_days || 0} d
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Gross Pay</span>
-                    <span className="font-semibold text-[var(--color-ink)] font-mono">
-                      ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                    </span>
+                ) : viewMode === "earnings" ? (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Basic / Earned</span>
+                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
+                        ₹{(op.earned_basic || op.basic_salary || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">OT Amt</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
+                        ₹{(op.ot_amount || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Gross Pay</span>
+                      <span className="font-semibold text-sky-600 dark:text-sky-400 font-mono tabular-nums truncate block">
+                        ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Unpaid Bal</span>
-                    <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono">
-                      ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
-                    </span>
+                ) : viewMode === "deductions" ? (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Loan Ded</span>
+                      <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums truncate block">
+                        ₹{(op.loan_deduction || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Adv Ded</span>
+                      <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums truncate block">
+                        ₹{(op.advance_deduction || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Net Pay</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums truncate block">
+                        ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : viewMode === "payouts" ? (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Paid Reach</span>
+                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
+                        ₹{(op.paid_reach || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">S&amp;S / Quess</span>
+                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
+                        ₹{((op.paid_ss || 0) + (op.paid_quess || 0)).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Unpaid Bal</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
+                        ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                ) : viewMode === "leaves" ? (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Quota</span>
+                      <span className="font-semibold text-[var(--color-body)] font-mono tabular-nums">
+                        {op.total_pl_quota || 12} d
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">PL Adj</span>
+                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums">
+                        {op.pl_adjusted || 0} d
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">PL Balance</span>
+                      <span className="font-semibold text-indigo-700 dark:text-indigo-300 font-mono tabular-nums">
+                        {op.pl_balance || 0} d
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Attended Days</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono tabular-nums">
+                        {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Gross Pay</span>
+                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
+                        ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Unpaid Bal</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
+                        ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Additional Detailed Breakdown Drawer on Mobile */}
                 <div className="space-y-1.5 text-xs text-[var(--color-body)] pt-1 border-t border-[var(--color-hairline)]">
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-mute)]">Basic Monthly Salary:</span>
-                    <span className="font-mono font-medium">₹{(op.basic_salary || 0).toLocaleString("en-IN")}</span>
+                    <span className="font-mono tabular-nums font-medium">₹{(op.basic_salary || 0).toLocaleString("en-IN")}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-mute)]">Overtime &amp; Leaves:</span>
-                    <span className="font-mono">OT: {op.ot_days || 0}d (₹{(op.ot_amount || 0).toLocaleString("en-IN")}) • PL: {op.pl_adjusted || 0}d</span>
+                    <span className="font-mono tabular-nums">OT: {op.ot_days || 0}d (₹{(op.ot_amount || 0).toLocaleString("en-IN")}) • PL: {op.pl_adjusted || 0}d</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-mute)]">Deductions (Loan/Adv):</span>
-                    <span className="font-mono text-rose-600 dark:text-rose-400">
+                    <span className="font-mono tabular-nums text-rose-600 dark:text-rose-400">
                       -₹{((op.loan_deduction || 0) + (op.advance_deduction || 0) + (op.other_deductions || 0)).toLocaleString("en-IN")}
                     </span>
                   </div>
@@ -1349,7 +1546,7 @@ export function PayrollClient({
                   </div>
                 </div>
 
-                {/* Action Buttons Row */}
+                {/* Action Buttons Row (min 44px touch targets) */}
                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-[var(--color-hairline)]">
                   <Button
                     variant="secondary"

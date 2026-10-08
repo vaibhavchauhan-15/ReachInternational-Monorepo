@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Alert,
   Linking,
@@ -11,7 +10,7 @@ import {
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
 import { useTheme } from '../ui/ThemeProvider';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -50,7 +49,7 @@ import {
   Edit2,
   ChevronDown,
   FileText,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import * as Clipboard from 'expo-clipboard';
 
 export interface UserRecord {
@@ -101,7 +100,7 @@ export interface UserDetailModalProps {
   user: UserRecord | null;
   currentUserRole?: string;
   currentUserId?: string;
-  onSuccess: () => void;
+  onSuccess: (updatedUser?: any) => void;
   onEdit?: (user: UserRecord) => void;
   onResetPassword?: (user: UserRecord) => void;
 }
@@ -292,20 +291,29 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
           text: newStatus === 'active' ? 'Activate' : 'Deactivate',
           style: newStatus === 'active' ? 'default' : 'destructive',
           onPress: async () => {
-            setIsUpdating(true);
+            const prevStatus = user.status;
+            // Optimistic update
+            const updatedUser = { ...user, status: newStatus };
+            onSuccess(updatedUser);
+            onClose();
+            haptics.confirm();
             try {
               const { error } = await supabase
                 .from('users')
                 .update({ status: newStatus, updated_at: new Date().toISOString() })
                 .eq('id', user.id);
-              if (error) throw error;
+              if (error) {
+                // Rollback
+                onSuccess({ ...user, status: prevStatus });
+                haptics.reject();
+                Alert.alert('Status Update Failed', error.message || 'Failed to update user status.');
+                return;
+              }
               notifyUserStatusChanged(user.full_name, newStatus);
-              onSuccess();
-              onClose();
             } catch (err: any) {
+              onSuccess({ ...user, status: prevStatus });
+              haptics.reject();
               Alert.alert('Status Update Failed', err?.message || 'Failed to update user status.');
-            } finally {
-              setIsUpdating(false);
             }
           },
         },
@@ -425,9 +433,9 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     {user.full_name}
                   </Text>
                   {user.employee_id ? (
-                    <TouchableOpacity
+                    <Touchable
+                      preset="icon"
                       onPress={() => copyToClipboard(user.employee_id!, 'Employee ID')}
-                      activeOpacity={0.7}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -447,7 +455,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       ) : (
                         <Copy size={9} color={theme.colors.mute} />
                       )}
-                    </TouchableOpacity>
+                    </Touchable>
                   ) : null}
                 </View>
                 <View style={styles.badgesRow}>
@@ -481,38 +489,38 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               </View>
             </View>
 
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Touchable>
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
             {/* Quick Contact Buttons Row */}
             <View style={styles.quickContactGrid}>
-              <TouchableOpacity
+              <Touchable
+                preset="button"
                 style={[
                   styles.quickContactBtn,
                   { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
                 ]}
                 onPress={handleEmailPress}
-                activeOpacity={0.75}
               >
                 <Mail size={15} color={theme.colors.link} />
                 <Text style={[styles.quickContactBtnText, { color: theme.colors.ink }]}>Email User</Text>
-              </TouchableOpacity>
+              </Touchable>
 
               {user.phone ? (
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   style={[
                     styles.quickContactBtn,
                     { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
                   ]}
                   onPress={handlePhonePress}
-                  activeOpacity={0.75}
                 >
                   <Phone size={15} color="#10b981" />
                   <Text style={[styles.quickContactBtnText, { color: theme.colors.ink }]}>Call Phone</Text>
-                </TouchableOpacity>
+                </Touchable>
               ) : (
                 <View
                   style={[
@@ -535,10 +543,10 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             >
               <View style={[styles.detailsWellHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <Text style={[styles.detailsWellTitle, { color: theme.colors.mute }]}>ACCOUNT DETAILS</Text>
-                <TouchableOpacity
+                <Touchable
+                  preset="icon"
                   style={styles.idCopyBtn}
                   onPress={() => copyToClipboard(user.id, 'User ID')}
-                  activeOpacity={0.7}
                 >
                   <Text style={[styles.idCopyText, { color: theme.colors.mute }]}>
                     ID: {user.id.slice(0, 8)}...
@@ -548,7 +556,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   ) : (
                     <Copy size={12} color={theme.colors.mute} />
                   )}
-                </TouchableOpacity>
+                </Touchable>
               </View>
 
               {/* Employee ID */}
@@ -562,17 +570,17 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink }]}>
                       {user.employee_id}
                     </Text>
-                    <TouchableOpacity
+                    <Touchable
+                      preset="icon"
                       style={styles.fieldCopyBtn}
                       onPress={() => copyToClipboard(user.employee_id!, 'Employee ID')}
-                      activeOpacity={0.7}
                     >
                       {copiedField === 'Employee ID' ? (
                         <Check size={13} color="#10b981" />
                       ) : (
                         <Copy size={13} color={theme.colors.mute} />
                       )}
-                    </TouchableOpacity>
+                    </Touchable>
                   </View>
                 </View>
               ) : null}
@@ -587,17 +595,17 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   <Text style={[styles.detailValue, { color: theme.colors.ink }]} numberOfLines={1}>
                     {user.email}
                   </Text>
-                  <TouchableOpacity
+                  <Touchable
+                    preset="icon"
                     style={styles.fieldCopyBtn}
                     onPress={() => copyToClipboard(user.email, 'Email')}
-                    activeOpacity={0.7}
                   >
                     {copiedField === 'Email' ? (
                       <Check size={13} color="#10b981" />
                     ) : (
                       <Copy size={13} color={theme.colors.mute} />
                     )}
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
               </View>
 
@@ -612,17 +620,17 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <Text variant="mono" style={[styles.detailValue, { color: theme.colors.ink,  }]}>
                       {user.phone}
                     </Text>
-                    <TouchableOpacity
+                    <Touchable
+                      preset="icon"
                       style={styles.fieldCopyBtn}
                       onPress={() => copyToClipboard(user.phone!, 'Phone')}
-                      activeOpacity={0.7}
                     >
                       {copiedField === 'Phone' ? (
                         <Check size={13} color="#10b981" />
                       ) : (
                         <Copy size={13} color={theme.colors.mute} />
                       )}
-                    </TouchableOpacity>
+                    </Touchable>
                   </View>
                 </View>
               ) : null}
@@ -718,28 +726,28 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   </Text>
                   {user.aadhaar_number ? (
                     <>
-                      <TouchableOpacity
+                      <Touchable
+                        preset="icon"
                         style={styles.fieldCopyBtn}
                         onPress={() => setShowFullAadhaar((prev) => !prev)}
-                        activeOpacity={0.7}
                       >
                         {showFullAadhaar ? (
                           <EyeOff size={13} color={theme.colors.mute} />
                         ) : (
                           <Eye size={13} color={theme.colors.mute} />
                         )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
+                      </Touchable>
+                      <Touchable
+                        preset="icon"
                         style={styles.fieldCopyBtn}
                         onPress={() => copyToClipboard(user.aadhaar_number!, 'Aadhaar')}
-                        activeOpacity={0.7}
                       >
                         {copiedField === 'Aadhaar' ? (
                           <Check size={13} color="#10b981" />
                         ) : (
                           <Copy size={13} color={theme.colors.mute} />
                         )}
-                      </TouchableOpacity>
+                      </Touchable>
                     </>
                   ) : null}
                 </View>
@@ -756,17 +764,17 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     {user.license_number ? formatLicenseNumber(user.license_number) : '—'}
                   </Text>
                   {user.license_number ? (
-                    <TouchableOpacity
+                    <Touchable
+                      preset="icon"
                       style={styles.fieldCopyBtn}
                       onPress={() => copyToClipboard(user.license_number!, 'Licence')}
-                      activeOpacity={0.7}
                     >
                       {copiedField === 'Licence' ? (
                         <Check size={13} color="#10b981" />
                       ) : (
                         <Copy size={13} color={theme.colors.mute} />
                       )}
-                    </TouchableOpacity>
+                    </Touchable>
                   ) : null}
                 </View>
               </View>
@@ -791,7 +799,8 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                           </View>
                         </View>
                         {doc.signed_url ? (
-                          <TouchableOpacity
+                          <Touchable
+                            preset="button"
                             style={[
                               styles.viewDocBtn,
                               {
@@ -810,11 +819,10 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                                 updatedAt: doc.updated_at || doc.created_at,
                               })
                             }
-                            activeOpacity={0.7}
                           >
                             <Text style={[styles.viewDocBtnText, { color: theme.colors.link }]}>View</Text>
                             <Eye size={12} color={theme.colors.link} />
-                          </TouchableOpacity>
+                          </Touchable>
                         ) : null}
                       </View>
                     );
@@ -861,19 +869,19 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       User Permission Role
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     style={[
                       styles.selectorTrigger,
                       { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
                     ]}
                     onPress={() => setRoleModalVisible(true)}
-                    activeOpacity={0.75}
                   >
                     <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]}>
                       {roleMeta.label}
                     </Text>
                     <ChevronDown size={15} color={theme.colors.mute} />
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
               )}
 
@@ -891,26 +899,27 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       Assign Supervisor
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     style={[
                       styles.selectorTrigger,
                       { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
                     ]}
                     onPress={() => setSupervisorModalVisible(true)}
-                    activeOpacity={0.75}
                   >
                     <Text style={[styles.selectorTriggerText, { color: assignedSupervisorName ? theme.colors.ink : theme.colors.mute }]}>
                       {assignedSupervisorName || 'No Supervisor (Unassigned)'}
                     </Text>
                     <ChevronDown size={15} color={theme.colors.mute} />
-                  </TouchableOpacity>
+                  </Touchable>
                 </View>
               )}
 
               {/* 2x2 Management Actions Grid */}
               <View style={styles.actionsGrid}>
                 {/* 1. Edit Account Info */}
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   style={[
                     styles.actionGridBtn,
                     { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
@@ -919,16 +928,16 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     onClose();
                     if (onEdit) onEdit(user);
                   }}
-                  activeOpacity={0.75}
                 >
                   <Edit2 size={14} color={theme.colors.link} />
                   <Text style={[styles.actionGridBtnText, { color: theme.colors.ink }]}>
                     Edit Account Info
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
 
                 {/* 2. Reset Password */}
-                <TouchableOpacity
+                <Touchable
+                  preset="button"
                   style={[
                     styles.actionGridBtn,
                     { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
@@ -937,23 +946,22 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     onClose();
                     if (onResetPassword) onResetPassword(user);
                   }}
-                  activeOpacity={0.75}
                 >
                   <KeyRound size={14} color="#d97706" />
                   <Text style={[styles.actionGridBtnText, { color: theme.colors.ink }]}>
                     Reset Password
                   </Text>
-                </TouchableOpacity>
+                </Touchable>
 
                 {/* 3. Activate / Deactivate Account */}
                 {!isSelf && (
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     style={[
                       styles.actionGridBtn,
                       { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
                     ]}
                     onPress={handleToggleStatus}
-                    activeOpacity={0.75}
                     disabled={isUpdating}
                   >
                     {user.status === 'active' ? (
@@ -971,25 +979,25 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                         </Text>
                       </>
                     )}
-                  </TouchableOpacity>
+                  </Touchable>
                 )}
 
                 {/* 4. Delete Account (Super Admin only) */}
                 {isSuperAdmin && !isSelf && (
-                  <TouchableOpacity
+                  <Touchable
+                    preset="button"
                     style={[
                       styles.actionGridBtn,
                       styles.deleteActionBtn,
                     ]}
                     onPress={handleDeleteUser}
-                    activeOpacity={0.75}
                     disabled={isUpdating}
                   >
                     <Trash2 size={14} color="#ef4444" />
                     <Text style={[styles.actionGridBtnText, { color: '#ef4444', }]}>
                       Delete Account
                     </Text>
-                  </TouchableOpacity>
+                  </Touchable>
                 )}
               </View>
             </View>
@@ -997,16 +1005,16 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
 
           {/* Footer Close Button */}
           <View style={[styles.footer, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.hairline }]}>
-            <TouchableOpacity
+            <Touchable
+              preset="button"
               style={[
                 styles.closeSheetBtn,
                 { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
               ]}
               onPress={onClose}
-              activeOpacity={0.75}
             >
               <Text style={[styles.closeSheetBtnText, { color: theme.colors.ink }]}>Close</Text>
-            </TouchableOpacity>
+            </Touchable>
           </View>
         </View>
 

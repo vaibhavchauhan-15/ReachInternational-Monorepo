@@ -3,7 +3,7 @@ import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../ui/ThemeProvider';
 import { Text } from '../../ui/Text';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Calendar } from 'lucide-react-native';
+import { Calendar } from '../../ui/icon';
 
 interface DashboardHeaderProps {
   userName: string;

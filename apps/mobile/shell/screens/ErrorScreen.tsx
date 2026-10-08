@@ -7,10 +7,10 @@ import { Text } from "../../components/ui/Text";
 import React from "react";
 import {
   View,
-  StyleSheet,
-  TouchableOpacity} from "react-native";
-import { AlertTriangle, RefreshCw, Home } from "lucide-react-native";
+  StyleSheet} from "react-native";
+import { AlertTriangle, RefreshCw, Home } from '../../components/ui/icon';
 import { colorsDark, spacingNumeric, radiusNumeric } from "@reachinternational/design-tokens";
+import { Pressable } from "../../components/ui/touch/Pressable";
 
 interface ErrorScreenProps {
   errorDescription?: string;
@@ -38,28 +38,30 @@ export function ErrorScreen({
         </Text>
 
         <View style={styles.actions}>
-          <TouchableOpacity
+          <Pressable
+            variant="buttonPrimary"
+            haptic="tap"
             style={styles.primaryButton}
             onPress={onReload}
-            activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Reload Page"
           >
             <RefreshCw size={16} color="#ffffff" strokeWidth={2} style={styles.buttonIcon} />
             <Text variant="label" style={styles.primaryButtonText}>Reload Page</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {onGoHome && (
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
+              haptic="tap"
               style={styles.secondaryButton}
               onPress={onGoHome}
-              activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Return to Dashboard"
             >
               <Home size={16} color={colorsDark.ink} strokeWidth={2} style={styles.buttonIcon} />
               <Text variant="label" style={styles.secondaryButtonText}>Return to Home</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       </View>

@@ -9,12 +9,12 @@ import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from './ThemeProvider';
 import { Text } from './Text';
-import { Icon } from './Icon';
+import { Icon } from './icon';
 import { AppModal } from './AppModal';
 import { Touchable } from './Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { ReachBrandEmblem, ReachInternationalLogo } from '../branding';
-import { Share2, Copy, Check, ExternalLink, X } from 'lucide-react-native';
+import { Share2, Copy, Check, ExternalLink, X } from './icon';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 
 export interface SharedLinkPreviewCardProps {
@@ -202,7 +202,7 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
         >
           {copied ? (
             <>
-              <Icon name={Check} variant="caption" color="#10b981" />
+              <Icon name={Check} animate="mount" variant="caption" color="#10b981" />
               <Text variant="label" style={[styles.actionBtnText, { color: '#10b981' }]}>
                 Copied Link
               </Text>

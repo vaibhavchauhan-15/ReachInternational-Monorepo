@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Modal,
@@ -583,49 +583,82 @@ export function AssignPersonnelModal({
     return lazyOperators.find((o) => o.id === currentOperatorId) || propOperator || null;
   }, [propOperator, currentOperatorId, lazyOperators]);
 
-  const [operatorSupervisors, setOperatorSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [operatorSupervisors, setOperatorSupervisors] = useState<Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }>>(() => {
+    if (propOperator?.supervisors && Array.isArray(propOperator.supervisors) && propOperator.supervisors.length > 0) {
+      return propOperator.supervisors;
+    }
+    if (propOperator?.supervisor) {
+      return [propOperator.supervisor];
+    }
+    return [];
+  });
   const [operatorMachineAssignments, setOperatorMachineAssignments] = useState<MachineAssignmentItem[]>([]);
   const [initialOperatorAssignments, setInitialOperatorAssignments] = useState<MachineAssignmentItem[]>([]);
   const [isLoadingOperatorAssignments, setIsLoadingOperatorAssignments] = useState(false);
 
-  // Load operator assignments when currentOperatorId changes
+  // Load operator assignments when currentOperatorId changes, modal opens, or live DB updates occur
+  const fetchOperatorActiveAssignments = useCallback(async (opId: string) => {
+    if (!opId) return;
+    setIsLoadingOperatorAssignments(true);
+    try {
+      const res = await getOperatorActiveAssignmentsAction(opId);
+      if (res.success && res.assignments) {
+        if (res.supervisors && res.supervisors.length > 0) {
+          setOperatorSupervisors(res.supervisors);
+        } else if (propOperator?.supervisors && propOperator.supervisors.length > 0) {
+          setOperatorSupervisors(propOperator.supervisors);
+        } else if (propOperator?.supervisor) {
+          setOperatorSupervisors([propOperator.supervisor]);
+        } else {
+          setOperatorSupervisors([]);
+        }
+
+        const mapped: MachineAssignmentItem[] = res.assignments.map((a) => ({
+          machineId: a.machineId,
+          machineCode: a.machineCode,
+          machineName: a.machineName,
+          model: a.model,
+          serialNumber: a.serialNumber,
+          clientId: a.clientId,
+          clientName: a.clientName,
+          shiftCode: a.shiftCode || "S1",
+          shiftStartTime: a.shiftStartTime,
+          shiftEndTime: a.shiftEndTime,
+          notes: a.notes,
+          clientShifts: a.clientShifts as any,
+        }));
+        setOperatorMachineAssignments(mapped);
+        setInitialOperatorAssignments(mapped);
+      } else if (res.error) {
+        console.error("Failed to load operator active assignments", res.error);
+        toast("error", "Failed to load assignments", res.error);
+      }
+    } catch (err) {
+      console.error("Failed to load operator active assignments", err);
+    } finally {
+      setIsLoadingOperatorAssignments(false);
+    }
+  }, [propOperator, toast]);
+
   useEffect(() => {
     if (!isOpen || activeTabMode !== "operator" || !currentOperatorId) return;
+    fetchOperatorActiveAssignments(currentOperatorId);
+  }, [isOpen, activeTabMode, currentOperatorId, fetchOperatorActiveAssignments]);
 
-    let active = true;
-    setIsLoadingOperatorAssignments(true);
-
-    getOperatorActiveAssignmentsAction(currentOperatorId)
-      .then((res) => {
-        if (!active) return;
-        if (res.success && res.assignments) {
-          setOperatorSupervisors(res.supervisors || []);
-          const mapped: MachineAssignmentItem[] = res.assignments.map((a) => ({
-            machineId: a.machineId,
-            machineCode: a.machineCode,
-            machineName: a.machineName,
-            model: a.model,
-            serialNumber: a.serialNumber,
-            clientId: a.clientId,
-            clientName: a.clientName,
-            shiftCode: a.shiftCode || "S1",
-            shiftStartTime: a.shiftStartTime,
-            shiftEndTime: a.shiftEndTime,
-            notes: a.notes,
-          }));
-          setOperatorMachineAssignments(mapped);
-          setInitialOperatorAssignments(mapped);
-        }
-      })
-      .catch((err) => console.error("Failed to load operator active assignments", err))
-      .finally(() => {
-        if (active) setIsLoadingOperatorAssignments(false);
-      });
-
-    return () => {
-      active = false;
+  // Live DB refetch listener when assignment events fire
+  useEffect(() => {
+    if (!isOpen || activeTabMode !== "operator" || !currentOperatorId) return;
+    const handleLiveDbRefresh = (e: Event) => {
+      const customEvent = e as CustomEvent<{ userId?: string }>;
+      if (!customEvent.detail?.userId || customEvent.detail.userId === currentOperatorId) {
+        fetchOperatorActiveAssignments(currentOperatorId);
+      }
     };
-  }, [isOpen, activeTabMode, currentOperatorId]);
+    window.addEventListener("reach:refresh-user-assignments", handleLiveDbRefresh);
+    return () => {
+      window.removeEventListener("reach:refresh-user-assignments", handleLiveDbRefresh);
+    };
+  }, [isOpen, activeTabMode, currentOperatorId, fetchOperatorActiveAssignments]);
 
   // ═══════════════════════════════════════════════════════════════════
   // 4. ADD OPERATOR / MACHINE ACCORDION DROPDOWN STATES
@@ -1048,6 +1081,7 @@ export function AssignPersonnelModal({
         router.refresh();
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("reach:refresh-machine-personnel"));
+          window.dispatchEvent(new CustomEvent("reach:refresh-user-assignments"));
         }
       } else {
         // Operator mode save
@@ -1080,6 +1114,9 @@ export function AssignPersonnelModal({
         router.refresh();
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("reach:refresh-machine-personnel"));
+          window.dispatchEvent(
+            new CustomEvent("reach:refresh-user-assignments", { detail: { userId: currentOperatorId } })
+          );
         }
       }
     } catch (err: unknown) {
@@ -1635,6 +1672,11 @@ export function AssignPersonnelModal({
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
                       <span>{s.full_name}</span>
+                      {s.phone && (
+                        <span className="text-[10px] font-mono text-[var(--color-mute)] font-normal">
+                          • {s.phone}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>

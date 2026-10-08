@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { Input } from '../ui/Input';
 import { useTheme } from '../ui/ThemeProvider';
-import { Lock } from 'lucide-react-native';
+import { Lock } from '../ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface MobileSalaryFieldProps {

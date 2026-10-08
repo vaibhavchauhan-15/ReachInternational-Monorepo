@@ -20,7 +20,7 @@ import {
   Settings,
   Sun,
   Moon,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 import { supabase } from '../../lib/supabase';
 import {
   DashboardHeader,
@@ -43,7 +43,8 @@ import type {
   OperatorDashboardDTO,
   DashboardAlert,
 } from '@reachinternational/types';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { useScreenSync } from '../../lib/offline';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -126,6 +127,11 @@ export default function DashboardScreen() {
     await fetchDashboardData();
     setRefreshing(false);
   }, [fetchDashboardData]);
+
+  useScreenSync({
+    screen: 'dashboard',
+    onRefresh: fetchDashboardData,
+  });
 
   // Extra functions for 3-dot more menu on Home screen
   const headerActions: HeaderActionItem[] = useMemo(() => {

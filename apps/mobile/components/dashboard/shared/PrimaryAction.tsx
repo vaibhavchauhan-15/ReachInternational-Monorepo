@@ -4,10 +4,10 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from '../../ui/AppLinearGradient';
 import { useTheme } from '../../ui/ThemeProvider';
 import { Text } from '../../ui/Text';
-import { Icon as CanonicalIcon } from '../../ui/Icon';
+import { Icon as CanonicalIcon } from '../../ui/icon';
 import { Touchable } from '../../ui/Touchable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { ArrowRight } from 'lucide-react-native';
+import { ArrowRight } from '../../ui/icon';
 
 export interface PrimaryActionProps {
   title: string;

@@ -18,7 +18,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -26,7 +25,8 @@ import {
   Platform,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -47,7 +47,7 @@ import {
   Check,
   X,
   AlertCircle,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import {
   computeShiftTiming,
   computeBreakdownDuration,
@@ -139,6 +139,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const monoTypeStyle = useTypeStyle('mono');
+  const microTypeStyle = useTypeStyle('micro');
 
   // 1. Initial State from context
   const initialHmrStr =
@@ -393,7 +394,6 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   // Manual Draft Save
   const handleSaveDraft = async () => {
     try {
-      haptics.success();
       await AsyncStorage.setItem(
         DRAFT_STORAGE_KEY,
         JSON.stringify({
@@ -410,11 +410,13 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           savedAt: new Date().toISOString(),
         })
       );
+      haptics.confirm();
       setStatusMessage({
         type: 'success',
         text: 'Draft saved locally on this device.',
       });
     } catch {
+      haptics.reject();
       setStatusMessage({
         type: 'error',
         text: 'Could not save draft.',
@@ -429,21 +431,25 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     if (isSubmitting) return;
 
     if (!entryContext?.operator?.id) {
+      haptics.reject();
       setStatusMessage({ type: 'error', text: 'Operator profile not found.' });
       return;
     }
 
     if (!entryContext?.machine?.id) {
+      haptics.reject();
       setStatusMessage({ type: 'error', text: 'No machine assigned to your account.' });
       return;
     }
 
     if (!selectedShiftCode || !selectedShiftCode.trim()) {
+      haptics.reject();
       setStatusMessage({ type: 'error', text: 'Please select an operational shift.' });
       return;
     }
 
     if (!endMeter.trim() || isNaN(endNum) || endNum < startNum) {
+      haptics.reject();
       setStatusMessage({
         type: 'error',
         text: `End meter must be ≥ start meter (${startNum.toFixed(1)}).`,
@@ -452,17 +458,20 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     }
 
     if (runningHours > 24) {
+      haptics.reject();
       setStatusMessage({ type: 'error', text: 'Running hours cannot exceed 24h per shift.' });
       return;
     }
 
     if (isBreakdown) {
       if (!breakdownStartTime || !breakdownEndTime) {
+        haptics.reject();
         setStatusMessage({ type: 'error', text: 'Enter breakdown start and end times.' });
         return;
       }
       const maxAllowed = shiftDurationHours > 0 ? shiftDurationHours : 24;
       if (breakdownStats && breakdownStats.durationDecimalHours > maxAllowed) {
+        haptics.reject();
         setStatusMessage({
           type: 'error',
           text: `Breakdown (${breakdownStats.durationDecimalHours}h) cannot exceed shift (${maxAllowed}h).`,
@@ -471,17 +480,26 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       }
     }
 
+    const effectiveOperatorId = entryContext.operator?.id || user?.id;
+    let prevHistory: any = null;
+    let prevContext: any = null;
+    let shiftTiming: any = null;
+    let logPayload: any = null;
+
     try {
       setIsSubmitting(true);
-      haptics.select();
 
-      const shiftTiming = computeShiftTiming({
+      if (effectiveOperatorId) {
+        prevHistory = queryClient.getQueryData(['operator', 'history-logs', effectiveOperatorId]);
+        prevContext = queryClient.getQueryData(['operator', 'entry-context', effectiveOperatorId]);
+      }
+
+      shiftTiming = computeShiftTiming({
         logDate,
         startTime,
         endTime,
       });
 
-      const effectiveOperatorId = entryContext.operator?.id || user?.id;
       const idempotencyKey = `ihl_op_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
       const rpcParams = {
@@ -512,7 +530,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         p_entered_by: user?.id || effectiveOperatorId,
       };
 
-      const logPayload: any = {
+      logPayload = {
         machine_id: entryContext.machine.id,
         shift_code: selectedShiftCode,
         client_id: entryContext.client?.id || null,
@@ -541,6 +559,36 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         idempotency_key: idempotencyKey,
       };
 
+      const optimisticHistoryRow = {
+        id: idempotencyKey,
+        client_mutation_id: idempotencyKey,
+        machine_id: entryContext.machine.id,
+        log_date: shiftTiming.resolvedStartDate || logDate,
+        start_meter: startNum,
+        end_meter: endNum,
+        running_hours: runningHours,
+        overtime_hours: shiftTiming.overtimeHours,
+        shift_code: selectedShiftCode,
+        is_breakdown: isBreakdown,
+        sync_status: isOffline ? 'queued' : 'pending',
+        syncState: isOffline ? 'queued' : 'pending',
+        machine: entryContext.machine,
+      };
+
+      if (effectiveOperatorId) {
+        queryClient.setQueriesData<any[]>({ queryKey: ['operator', 'history-logs', effectiveOperatorId] }, (old: any) => {
+          return [optimisticHistoryRow, ...(old || [])];
+        });
+        queryClient.setQueriesData<any>({ queryKey: ['operator', 'entry-context', effectiveOperatorId] }, (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            start_meter: endNum,
+            machine: old.machine ? { ...old.machine, hour_meter: endNum } : old.machine,
+          };
+        });
+      }
+
       if (isOffline) {
         await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
         notifyLogEntryCreated(entryContext.machine.machine_id || 'Machine', runningHours, shiftTiming.overtimeHours);
@@ -548,6 +596,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           notifyMachineStatusChanged(entryContext.machine.machine_id || 'Machine', 'breakdown');
         }
         await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+        haptics.confirm();
         setStatusMessage({
           type: 'success',
           text: 'Shift log saved locally! Will sync automatically when online.',
@@ -646,7 +695,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       });
 
       await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
-      haptics.success();
+      haptics.confirm();
 
       setStatusMessage({
         type: 'success',
@@ -663,8 +712,48 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         onSuccess();
       }
     } catch (err: any) {
+      const errMsg = (err?.message || '').toLowerCase();
+      const isNetworkDrop =
+        errMsg.includes('failed to fetch') ||
+        errMsg.includes('network request failed') ||
+        errMsg.includes('network error') ||
+        errMsg.includes('request dropped') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('aborted') ||
+        errMsg.includes('connection');
+
+      if (isNetworkDrop && logPayload) {
+        try {
+          await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
+          notifyLogEntryCreated(entryContext?.machine?.machine_id || 'Machine', runningHours, shiftTiming?.overtimeHours || 0);
+          if (isBreakdown) {
+            notifyMachineStatusChanged(entryContext?.machine?.machine_id || 'Machine', 'breakdown');
+          }
+          await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+          haptics.confirm();
+          setStatusMessage({
+            type: 'success',
+            text: 'Network lost: Shift log saved locally! Will sync automatically when back online.',
+          });
+          setStartMeter(String(endNum));
+          setEndMeter(String(endNum));
+          setIsBreakdown(false);
+          setBreakdownReason('');
+          if (onSuccess) onSuccess();
+          return;
+        } catch (enqueueErr) {
+          console.warn('[OperatorEntry] Failed to fallback enqueue:', enqueueErr);
+        }
+      }
+
       console.error('[SubmitLog] Error:', err);
-      haptics.error();
+      if (effectiveOperatorId && prevHistory) {
+        queryClient.setQueryData(['operator', 'history-logs', effectiveOperatorId], prevHistory);
+      }
+      if (effectiveOperatorId && prevContext) {
+        queryClient.setQueryData(['operator', 'entry-context', effectiveOperatorId], prevContext);
+      }
+      haptics.reject();
       setStatusMessage({
         type: 'error',
         text: err?.message || 'Failed to submit log. Please try again.',
@@ -873,9 +962,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink }]}>
               Start Meter (HMR) <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
-            <TouchableOpacity
+            <Pressable
+              variant="iconButton"
+              haptic="toggle"
               onPress={handleToggleLock}
-              activeOpacity={0.7}
               style={styles.lockToggleBtn}
               accessibilityLabel={isStartMeterLocked ? 'Start meter locked to last reading' : 'Start meter unlocked for manual edit'}
             >
@@ -894,7 +984,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                   </Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <TextInput
@@ -945,12 +1035,12 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             ]}
           />
           {isMeterRegressed && (
-            <Text variant="caption" style={{ color: '#ef4444', marginTop: 4 }}>
+            <Text variant="micro" style={{ color: '#ef4444', marginTop: 3 }}>
               End meter must be ≥ {startNum.toFixed(1)}.
             </Text>
           )}
           {isOver24Hours && (
-            <Text variant="caption" style={{ color: '#d97706', marginTop: 4 }}>
+            <Text variant="micro" style={{ color: '#d97706', marginTop: 3 }}>
               Running hours cannot exceed 24h.
             </Text>
           )}
@@ -1030,34 +1120,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       >
         {/* Shift Header Row */}
         <View style={styles.shiftHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text variant="mono" style={[styles.sectionLabel, { color: theme.colors.mute }]}>
-              SHIFT
-            </Text>
-            {!showManualTimes && activeShift && (
-              <View
-                style={[
-                  styles.activeShiftBadge,
-                  {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
-                    borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
-                  },
-                ]}
-              >
-                <Text
-                  variant="mono"
-                  style={{
-                    color: isDark ? '#38bdf8' : '#0369a1' }}
-                >
-                  {getShiftDisplayTitle(activeShift as any)}
-                </Text>
-              </View>
-            )}
-          </View>
+          <Text variant="mono" style={[styles.sectionLabel, { color: theme.colors.mute }]}>
+            SHIFT
+          </Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {/* Manual Toggle */}
-            <TouchableOpacity
+            <Pressable
+              variant="chip"
+              haptic="select"
               onPress={() => setShowManualTimes(!showManualTimes)}
               style={[
                 styles.manualToggleBtn,
@@ -1075,9 +1146,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 style={{
                   color: showManualTimes ? '#0284c7' : theme.colors.mute }}
               >
-                {showManualTimes ? 'Shift Mode' : 'Manual'}
+                {showManualTimes ? 'Shift' : 'Manual'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Duration Badge */}
             {shiftDurationHours > 0 && (
@@ -1094,9 +1165,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             Select Date <Text style={{ color: '#ef4444' }}>*</Text>
           </Text>
 
-          <TouchableOpacity
+          <Pressable
+            variant="card"
+            haptic="select"
             onPress={() => setIsDatePickerModalOpen(true)}
-            activeOpacity={0.8}
             style={[
               styles.datePickerBtn,
               {
@@ -1127,7 +1199,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               )}
             </View>
             <ChevronDown size={15} color={theme.colors.mute} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Shift Card Selector / Manual Pickers (Screenshot 2 & 3) */}
@@ -1157,9 +1229,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                   },
                 ]}
               >
-                <AlertTriangle size={13} color={isDark ? '#fbbf24' : '#d97706'} />
+                <AlertTriangle size={11} color={isDark ? '#fbbf24' : '#d97706'} />
                 <Text
-                  variant="caption"
+                  variant="micro"
                   style={{
                     color: isDark ? '#fbbf24' : '#92400e',
                     flex: 1 }}
@@ -1212,12 +1284,12 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             </Text>
           </View>
 
-          <TouchableOpacity
+          <Pressable
+            variant="buttonDanger"
+            haptic="toggle"
             onPress={() => {
-              haptics.select();
               setIsBreakdown(!isBreakdown);
             }}
-            activeOpacity={0.8}
             style={[
               styles.breakdownToggleBtn,
               {
@@ -1233,7 +1305,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             >
               {isBreakdown ? 'Remove' : '+ Add'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Expanded Breakdown Fields (Screenshot 3) */}
@@ -1290,10 +1362,11 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 numberOfLines={2}
                 value={breakdownReason}
                 onChangeText={setBreakdownReason}
-                placeholder="e.g. Hydraulic pipe leakage replaced by field engineer..."
+                placeholder="e.g. Pipe leak, repair note..."
                 placeholderTextColor={theme.colors.mute}
                 style={[
                   styles.reasonInput,
+                  microTypeStyle,
                   {
                     backgroundColor: theme.colors.canvasElevated,
                     borderColor: theme.colors.hairline,
@@ -1318,12 +1391,12 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           ]}
         >
           {statusMessage.type === 'error' ? (
-            <AlertCircle size={15} color="#dc2626" />
+            <AlertCircle size={13} color="#dc2626" animate="mount" />
           ) : (
-            <CheckCircle2 size={15} color="#15803d" />
+            <CheckCircle2 size={13} color="#15803d" animate="mount" />
           )}
           <Text
-            variant="caption"
+            variant="micro"
             style={{
               color: statusMessage.type === 'error' ? '#b91c1c' : '#14532d',
               flex: 1 }}
@@ -1340,9 +1413,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
       <View style={styles.actionButtonsRow}>
         {/* Save Draft Button */}
-        <TouchableOpacity
+        <Pressable
+          variant="buttonSecondary"
+          haptic={false}
           onPress={handleSaveDraft}
-          activeOpacity={0.8}
           style={[
             styles.saveDraftBtn,
             {
@@ -1354,13 +1428,14 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           <Text variant="label" style={[styles.saveDraftBtnText, { color: theme.colors.ink }]}>
             Save Draft
           </Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Submit Daily Log CTA */}
-        <TouchableOpacity
+        <Pressable
+          variant="fab"
+          haptic={false}
           onPress={handleSubmit}
           disabled={isSubmitting}
-          activeOpacity={0.85}
           style={styles.submitBtn}
         >
           {isSubmitting ? (
@@ -1373,7 +1448,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               </Text>
             </>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Date Picker Modal */}
@@ -1395,19 +1470,25 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               <Text variant="heading" style={{ color: theme.colors.ink }}>
                 Select Shift Date
               </Text>
-              <TouchableOpacity onPress={() => setIsDatePickerModalOpen(false)}>
+              <Pressable
+                variant="iconButton"
+                haptic="select"
+                hitSlopToMin48={true}
+                onPress={() => setIsDatePickerModalOpen(false)}
+              >
                 <X size={18} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView style={{ maxHeight: 340 }}>
               {selectableDates.map((item) => {
                 const isSelected = logDate === item.date;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={item.date}
+                    variant="listRow"
+                    haptic="select"
                     onPress={() => {
-                      haptics.select();
                       setLogDate(item.date);
                       setIsDatePickerModalOpen(false);
                     }}
@@ -1452,7 +1533,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                       )}
                     </View>
                     {isSelected && <Check size={16} color="#0070f3" />}
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </ScrollView>
@@ -1622,12 +1703,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  activeShiftBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
   manualToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1660,10 +1735,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    padding: 8,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
     borderWidth: 1,
-    marginTop: 8,
+    marginTop: 6,
   },
   breakdownCard: {
     borderRadius: 12,
@@ -1697,20 +1773,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   reasonInput: {
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    padding: 10,
-    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 46,
     textAlignVertical: 'top',
   },
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    marginTop: 12,
+    marginTop: 10,
   },
   draftNotice: {
     marginTop: 12,

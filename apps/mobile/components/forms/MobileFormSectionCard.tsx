@@ -2,7 +2,7 @@ import { Text } from '../ui/Text';
 import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
-import { Check, Lock } from 'lucide-react-native';
+import { Check, Lock } from '../ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface MobileFormSectionCardProps {

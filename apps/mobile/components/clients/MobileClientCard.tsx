@@ -13,7 +13,7 @@ import {
   Check,
   Wrench,
   MapPin,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import * as Clipboard from 'expo-clipboard';
 
 export interface MobileClientCardProps {

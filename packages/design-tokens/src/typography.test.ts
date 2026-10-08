@@ -4,12 +4,14 @@ import { TYPE_VARIANTS as T, FONT_SCALE_PRESETS as P, scaled } from './typograph
 
 test('hierarchy is strictly ordered', () => {
   assert.ok(
+    T.hero.size > T.display.size &&
     T.display.size > T.title.size &&
     T.title.size > T.heading.size &&
     T.heading.size > T.subheading.size &&
     T.subheading.size >= T.body.size &&
     T.body.size > T.label.size &&
-    T.label.size > T.caption.size
+    T.label.size > T.caption.size &&
+    T.caption.size > T.micro.size
   );
 });
 

@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   TextInput,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
+import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X } from 'lucide-react-native';
+import { Check, X } from '../ui/icon';
 
 export interface FilterOption {
   id: string;
@@ -70,13 +70,16 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                 <Text variant="subheading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
-                <TouchableOpacity
+                <Pressable
+                  variant="iconButton"
+                  haptic="tap"
+                  hitSlopToMin48
                   onPress={onClose}
                   style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Close filter dialog"
                 >
                   <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {/* Optional Search Bar for longer lists (e.g. Supervisors) */}
@@ -98,13 +101,16 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                     ]}
                   />
                   {modalSearch.length > 0 && (
-                    <TouchableOpacity
+                    <Pressable
+                      variant="iconButton"
+                      haptic="tap"
+                      hitSlopToMin48
                       onPress={() => setModalSearch('')}
                       style={styles.searchClearBtn}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Clear search"
                     >
                       <X size={14} color={theme.colors.mute} />
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
                 </View>
               )}
@@ -124,13 +130,14 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                   filteredOptions.map((opt) => {
                     const isSelected = opt.id === selectedValue;
                     return (
-                      <TouchableOpacity
+                      <Pressable
                         key={opt.id}
+                        variant="listRow"
+                        haptic="select"
                         onPress={() => {
                           onSelect(opt.id);
                           onClose();
                         }}
-                        activeOpacity={0.7}
                         style={[
                           styles.optionRow,
                           {
@@ -170,7 +177,7 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                         {isSelected && (
                           <Check size={16} color={theme.colors.canvas} strokeWidth={2.5} />
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     );
                   })
                 )}

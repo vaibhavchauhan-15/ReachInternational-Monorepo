@@ -8,10 +8,10 @@ import {
   Switch,
 } from 'react-native';
 import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector, Text, useTypeStyle, Touchable, AppModal } from '../ui';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '@/lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2, Building2 } from 'lucide-react-native';
+import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2, Building2 } from '../ui/icon';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
 import {
@@ -1007,9 +1007,47 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         // Non-blocking broadcast
       }
 
+      const submittedLogRecord = {
+        id: idempotencyKey,
+        machine_id: machineId || null,
+        machine_code: machineCode || null,
+        client_id: selectedClientId || null,
+        location: location.trim() || null,
+        start_meter: startVal,
+        end_meter: endVal,
+        running_hours: runningHours,
+        start_time: startTime.trim(),
+        end_time: endTime.trim(),
+        overtime_hours: shiftStats.overtimeHours,
+        normal_working_hours: shiftStats.normalWorkingHours,
+        is_breakdown: isBreakdown,
+        breakdown_start_time: bkdStart || null,
+        breakdown_end_time: bkdEnd || null,
+        breakdown_duration: bkdDurationFormatted || null,
+        breakdown_hours: bkdDecimalHours,
+        shift: selectedShiftCode ? `Shift ${selectedShiftCode}` : null,
+        shift_code: selectedShiftCode || null,
+        machine_condition: isBreakdown ? 'breakdown' : 'good',
+        remarks: remarksPayload || null,
+        operator_id: effectiveOperatorId || null,
+        entered_by: userId || null,
+        entry_source: effectiveEntrySource,
+        idempotency_key: idempotencyKey,
+        log_date: shiftStats.resolvedStartDate,
+        end_date: shiftStats.resolvedEndDate,
+        start_datetime: shiftStats.startDateTime?.toISOString(),
+        end_datetime: shiftStats.endDateTime?.toISOString(),
+        sync_status: 'synced',
+        machine: {
+          machine_id: machineCode || '',
+          model: model || '',
+          serial_number: serialNumber || '',
+        },
+      };
+
       reportSuccess('Daily machine log recorded successfully!');
       setTimeout(() => {
-        if (onSubmit) onSubmit();
+        if (onSubmit) onSubmit(submittedLogRecord);
         onClose();
       }, 1000);
     } catch (err: any) {

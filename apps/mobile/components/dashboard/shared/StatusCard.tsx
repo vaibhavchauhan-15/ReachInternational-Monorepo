@@ -6,7 +6,7 @@ import { useTheme } from '../../ui/ThemeProvider';
 import { Text } from '../../ui/Text';
 import { Touchable } from '../../ui/Touchable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react-native';
+import { CheckCircle2, Clock, AlertTriangle } from '../../ui/icon';
 
 export interface StatusCardProps {
   title: string;

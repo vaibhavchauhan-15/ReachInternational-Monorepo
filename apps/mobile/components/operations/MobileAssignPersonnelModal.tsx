@@ -22,10 +22,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  TouchableOpacity,
-} from 'react-native';
+  } from 'react-native';
 import { useTheme, ShiftCardSelector, SearchInput, Text, AppModal } from '../ui';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from '../ui/touch/Pressable';
 import { supabase } from '../../lib/supabase';
 import { broadcastMobileAssignmentChanged } from '../../lib/realtime-roster';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -43,7 +43,7 @@ import {
   Search,
   Phone,
   Mail,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import {
   formatTo12Hour,
   parseTimeToMinutes,
@@ -156,10 +156,10 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   // Haptic feedback trigger helper
   const triggerHaptic = useCallback((type: 'selection' | 'impact' | 'success' | 'warning' | 'error' = 'selection') => {
     if (type === 'selection') haptics.select();
-    else if (type === 'impact') haptics.light();
-    else if (type === 'success') haptics.success();
-    else if (type === 'warning') haptics.warning();
-    else if (type === 'error') haptics.error();
+    else if (type === 'impact') haptics.tap();
+    else if (type === 'success') haptics.confirm();
+    else if (type === 'warning') haptics.select();
+    else if (type === 'error') haptics.reject();
   }, []);
 
   // Web outside-click dismissal
@@ -495,8 +495,39 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const handleSaveAssignments = async () => {
     if (!activeMachine?.id) return;
     triggerHaptic('selection');
-    setIsSaving(true);
     setSubmitError(null);
+
+    // 1. Local validation: Duplicate shifts on the same machine
+    const shiftCodes = machineOperators.map((o) => o.shiftCode.toUpperCase());
+    const duplicateShifts = shiftCodes.filter((item, index) => shiftCodes.indexOf(item) !== index);
+    if (duplicateShifts.length > 0) {
+      triggerHaptic('error');
+      setSubmitError(`Shift ${duplicateShifts[0]} is assigned to multiple operators. Each operator must have a distinct shift.`);
+      return;
+    }
+
+    // 2. Local validation: Operator shift overlap & 3-shift (24h) cap across fleet
+    for (const op of machineOperators) {
+      const otherActive = fleetAssignments.filter(
+        (a) => a.operator_id === op.operatorId && a.machine_id !== activeMachine.id && a.is_active !== false
+      );
+      if (otherActive.length >= 3) {
+        triggerHaptic('error');
+        setSubmitError(`${op.operatorName} has already reached the maximum limit of 3 active shifts (24h) across the fleet.`);
+        return;
+      }
+      const opRanges = shiftToMinuteRanges(op.shiftStartTime, op.shiftEndTime);
+      for (const other of otherActive) {
+        const otherRanges = shiftToMinuteRanges(other.shift_start_time, other.shift_end_time);
+        if (doRangesOverlap(opRanges, otherRanges)) {
+          triggerHaptic('error');
+          setSubmitError(`${op.operatorName} is already assigned to another equipment during Shift ${op.shiftCode} (${formatTo12Hour(op.shiftStartTime) || op.shiftStartTime} – ${formatTo12Hour(op.shiftEndTime) || op.shiftEndTime}).`);
+          return;
+        }
+      }
+    }
+
+    setIsSaving(true);
 
     try {
       const { data: userAuth } = await supabase.auth.getUser();
@@ -556,7 +587,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
           if (rpcErr) {
             let msg = rpcErr.message;
-            if (rpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED')) {
+            if (rpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
               msg = `${opItem.operatorName} has reached the maximum of 3 active shifts (24h) across the fleet.`;
             }
             throw new Error(msg);
@@ -577,7 +608,13 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       onClose();
     } catch (err: any) {
       triggerHaptic('error');
-      setSubmitError(err?.message || 'Failed to save assignments.');
+      let msg = err?.message || 'Failed to save assignments.';
+      if (err?.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('3 active shifts')) {
+        msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+      } else if (msg.includes('overlap') || msg.includes('conflict')) {
+        msg = 'Shift schedule conflicts with another active assignment for this operator.';
+      }
+      setSubmitError(msg);
     } finally {
       setIsSaving(false);
     }
@@ -608,18 +645,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
               </Text>
             </View>
 
-            <TouchableOpacity
-              onPress={() => {
-                triggerHaptic('selection');
-                onClose();
-              }}
-              activeOpacity={0.7}
-              style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Close dialog"
-            >
+            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]} accessibilityLabel="Close dialog">
               <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {loadingData ? (
@@ -688,22 +716,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 </View>
 
                 {/* Trigger Button */}
-                <TouchableOpacity
-                  onPress={() => {
-                    triggerHaptic('selection');
-                    setIsMachineDropdownOpen((prev) => !prev);
-                    setIsSupervisorDropdownOpen(false);
-                    setMachineSearchQuery('');
-                  }}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.selectTriggerBtn,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: isMachineDropdownOpen ? '#0284c7' : theme.colors.hairline,
-                    },
-                  ]}
-                >
+                <Pressable variant="card" haptic="select" onPress={() => { setIsMachineDropdownOpen((prev) => !prev); setIsSupervisorDropdownOpen(false); setMachineSearchQuery(''); }} style={[styles.selectTriggerBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: isMachineDropdownOpen ? '#0284c7' : theme.colors.hairline }]} accessibilityRole="button" accessibilityLabel="Select machine">
                   <View style={styles.triggerValueRow}>
                     <View style={styles.machineTriggerCodePill}>
                       <Text style={styles.machineTriggerCodeText}>
@@ -724,7 +737,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                       transform: [{ rotate: isMachineDropdownOpen ? '180deg' : '0deg' }],
                     }}
                   />
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Machinery Dropdown Inline Panel */}
                 {isMachineDropdownOpen && (
@@ -763,17 +776,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                         filteredMachines.map((m) => {
                           const isSelected = m.id === activeMachine?.id;
                           return (
-                            <TouchableOpacity
-                              key={m.id}
-                              onPress={() => {
-                                triggerHaptic('selection');
-                                setSelectedMachineId(m.id);
-                                setIsMachineDropdownOpen(false);
-                                setMachineSearchQuery('');
-                              }}
-                              activeOpacity={0.7}
-                              style={[
-                                styles.machineDropdownItem,
+                            <Pressable key={m.id} variant="listRow" haptic="select" onPress={() => { setSelectedMachineId(m.id); setIsMachineDropdownOpen(false); setMachineSearchQuery(''); }} style={[styles.machineDropdownItem,
                                 {
                                   backgroundColor: isSelected
                                     ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff')
@@ -821,7 +824,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                   <Check size={13} color="#ffffff" />
                                 </View>
                               )}
-                            </TouchableOpacity>
+                            </Pressable>
                           );
                         })
                       )}
@@ -850,22 +853,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 </View>
 
                 {/* Supervisor Multi-Select Trigger */}
-                <TouchableOpacity
-                  onPress={() => {
-                    triggerHaptic('selection');
-                    setIsSupervisorDropdownOpen((prev) => !prev);
-                    setIsMachineDropdownOpen(false);
-                    setSupervisorSearchQuery('');
-                  }}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.supervisorTriggerBtn,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: isSupervisorDropdownOpen ? '#0284c7' : theme.colors.hairline,
-                    },
-                  ]}
-                >
+                <Pressable variant="card" haptic="select" onPress={() => { setIsSupervisorDropdownOpen((prev) => !prev); setIsMachineDropdownOpen(false); setSupervisorSearchQuery(''); }} style={[styles.supervisorTriggerBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: isSupervisorDropdownOpen ? '#0284c7' : theme.colors.hairline }]} accessibilityRole="button" accessibilityLabel="Select supervisors">
                   <View style={styles.supervisorChipsContainer}>
                     {selectedSupervisorIds.length === 0 ? (
                       <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
@@ -889,17 +877,10 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                             <Text style={[styles.supervisorChipText, { color: theme.colors.ink }]}>
                               {name}
                             </Text>
-                            <TouchableOpacity
-                              onPress={(e) => {
-                                // @ts-ignore
-                                e?.stopPropagation?.();
-                                removeSupervisor(sId);
-                              }}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              style={styles.chipRemoveBtn}
-                            >
+                            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
+                                e?.stopPropagation?.(); removeSupervisor(sId); }} style={styles.chipRemoveBtn} accessibilityLabel={`Remove ${name}`}>
                               <X size={11} color={theme.colors.mute} />
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
                         );
                       })
@@ -908,18 +889,12 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
                   <View style={styles.supervisorTriggerRightActions}>
                     {selectedSupervisorIds.length > 0 && (
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          // @ts-ignore
-                          e?.stopPropagation?.();
-                          clearAllSupervisors();
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
+                      <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
+                          e?.stopPropagation?.(); clearAllSupervisors(); }}>
                         <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
                           Clear
                         </Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                     <ChevronDown
                       size={15}
@@ -929,7 +904,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                       }}
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* Supervisor Inline Dropdown Panel */}
                 {isSupervisorDropdownOpen && (
@@ -961,14 +936,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                       <Text style={[styles.selectionCountText, { color: theme.colors.mute }]}>
                         {selectedSupervisorIds.length} of {allSupervisors.length} selected
                       </Text>
-                      <TouchableOpacity
-                        onPress={deselectAllSupervisors}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
+                      <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={deselectAllSupervisors}>
                         <Text style={styles.deselectAllActionText}>
                           {selectedSupervisorIds.length > 0 ? 'Deselect All' : 'Select'}
                         </Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
 
                     {/* Staff List */}
@@ -1001,12 +973,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                           }
 
                           return (
-                            <TouchableOpacity
-                              key={staff.id}
-                              onPress={() => toggleSupervisor(staff.id)}
-                              activeOpacity={0.7}
-                              style={[
-                                styles.staffCardItem,
+                            <Pressable key={staff.id} variant="listRow" haptic="select" onPress={() => toggleSupervisor(staff.id)} style={[styles.staffCardItem,
                                 {
                                   backgroundColor: theme.colors.canvas,
                                   borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
@@ -1085,7 +1052,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                               >
                                 {isSelected && <Check size={12} color="#ffffff" />}
                               </View>
-                            </TouchableOpacity>
+                            </Pressable>
                           );
                         })
                       )}
@@ -1184,15 +1151,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                             </View>
 
                             {/* Trash Relieve Button */}
-                            <TouchableOpacity
-                              onPress={() => handleRemoveOperator(idx)}
-                              activeOpacity={0.6}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              style={styles.trashBtn}
-                              accessibilityLabel={`Remove ${item.operatorName}`}
-                            >
+                            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleRemoveOperator(idx)} style={styles.trashBtn} accessibilityLabel={`Remove ${item.operatorName}`}>
                               <Trash2 size={15} color="#ef4444" />
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
 
                           {/* Shift Selection Section */}
@@ -1231,21 +1192,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 {/* + Assign Operator Accordion / Search (Screenshot 3 & 5 Match) */}
                 {machineOperators.length < 3 ? (
                   <View style={styles.addOperatorSection}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        triggerHaptic('selection');
-                        setIsAddOperatorOpen((prev) => !prev);
-                        setOperatorSearchQuery('');
-                      }}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.addOperatorAccordionTrigger,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
+                    <Pressable variant="card" haptic="select" onPress={() => { setIsAddOperatorOpen((prev) => !prev); setOperatorSearchQuery(''); }} style={[styles.addOperatorAccordionTrigger, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]} accessibilityRole="button">
                       <View style={styles.addOperatorTriggerLeft}>
                         <Plus size={14} color="#0284c7" />
                         <Text
@@ -1261,7 +1208,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                           transform: [{ rotate: isAddOperatorOpen ? '180deg' : '0deg' }],
                         }}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {/* Expandable Operator Search & List */}
                     {isAddOperatorOpen && (
@@ -1308,15 +1255,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                               ).length;
 
                               return (
-                                <TouchableOpacity
-                                  key={op.id}
-                                  onPress={() => handleAddOperator(op)}
-                                  activeOpacity={0.7}
-                                  style={[
-                                    styles.operatorCandidateItem,
-                                    { borderBottomColor: theme.colors.hairline },
-                                  ]}
-                                >
+                                <Pressable key={op.id} variant="listRow" haptic="select" onPress={() => handleAddOperator(op)} style={[styles.operatorCandidateItem, { borderBottomColor: theme.colors.hairline }]}>
                                   <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                                     <View style={styles.candidateNameRow}>
                                       <Text
@@ -1365,7 +1304,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                       + Shift {nextAvailableShift.code}
                                     </Text>
                                   </View>
-                                </TouchableOpacity>
+                                </Pressable>
                               );
                             })
                           )}
@@ -1401,41 +1340,17 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           {/* FOOTER ACTIONS (Screenshot 3 Match)                    */}
           {/* ═══════════════════════════════════════════════════════ */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <TouchableOpacity
-              onPress={() => {
-                triggerHaptic('selection');
-                onClose();
-              }}
-              disabled={isSaving}
-              activeOpacity={0.7}
-              style={[
-                styles.cancelBtn,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
+            <Pressable variant="outline" haptic="tap" onPress={onClose} disabled={isSaving} style={[styles.cancelBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
-              onPress={handleSaveAssignments}
-              disabled={isSaving || !activeMachine?.id}
-              activeOpacity={0.8}
-              style={[
-                styles.saveAssignmentsBtn,
-                {
-                  backgroundColor: isSaving || !activeMachine?.id ? '#94a3b8' : '#0284c7',
-                },
-              ]}
-            >
+            <Pressable variant="primary" haptic="none" onPress={handleSaveAssignments} disabled={isSaving || !activeMachine?.id} style={[styles.saveAssignmentsBtn, { backgroundColor: isSaving || !activeMachine?.id ? '#94a3b8' : '#0284c7' }]}>
               {isSaving ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <Text style={styles.saveAssignmentsBtnText}>Save Assignments</Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>

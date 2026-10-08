@@ -3,13 +3,14 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Linking,
   Platform,
   TextInput,
   useWindowDimensions} from 'react-native';
 import { AppModal } from '../ui/AppModal';
+import { Pressable } from '../ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader , Text } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
@@ -47,7 +48,7 @@ import {
   ArrowRightLeft,
   FileText,
   Info,
-} from 'lucide-react-native';
+} from '../ui/icon';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
 import { CustomFilterSelectorModal } from './CustomFilterSelectorModal';
@@ -1040,7 +1041,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {/* Right Action Buttons: Edit & Delete */}
               <View style={styles.heroActionBtns}>
                 {canManage ? (
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setHeroMenuVisible(true)}
                     style={[
                       styles.heroEditBtn,
@@ -1055,9 +1056,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <Edit2 size={13} color={theme.colors.ink} />
                     <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Edit</Text>
                     <ChevronDown size={11} color={theme.colors.mute} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ) : isSupervisor ? (
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => {
                       setEditSection('personnel');
                       setEditModalVisible(true);
@@ -1074,18 +1075,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   >
                     <UserCheck size={13} color="#0d9488" />
                     <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Assign</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ) : null}
 
                 {canDelete && (
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setDeleteDialogVisible(true)}
                     style={styles.circleDeleteBtn}
                     activeOpacity={0.7}
                     accessibilityLabel="Delete Machine"
                   >
                     <Trash2 size={14} color="#ffffff" />
-                  </TouchableOpacity>
+                  </Pressable>
                 )}
               </View>
             </View>
@@ -1156,7 +1157,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
                 {canManage && (
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => {
                       setEditSection('info');
                       setEditModalVisible(true);
@@ -1173,7 +1174,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   >
                     <Edit2 size={12} color={theme.colors.ink} />
                     <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 )}
               </View>
 
@@ -1202,13 +1203,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                       MACHINE ID
                     </Text>
-                    <TouchableOpacity onPress={() => handleCopy(setCopiedId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedId)} accessibilityLabel="Copy Machine Code">
                       {copiedId ? (
                         <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                       ) : (
                         <Copy size={11} color={theme.colors.mute} />
                       )}
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                     {machine.machine_id}
@@ -1229,13 +1230,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
                     {Boolean(machine.model) && (
-                      <TouchableOpacity onPress={() => handleCopy(setCopiedModel)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedModel)} accessibilityLabel="Copy Model Name">
                         {copiedModel ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
                           <Copy size={11} color={theme.colors.mute} />
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
@@ -1257,13 +1258,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
                     {Boolean(machine.serial_number) && (
-                      <TouchableOpacity onPress={() => handleCopy(setCopiedSerial)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedSerial)} accessibilityLabel="Copy Serial Number">
                         {copiedSerial ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
                           <Copy size={11} color={theme.colors.mute} />
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   </View>
                   <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
@@ -1397,7 +1398,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={handleRefresh}
                     style={[
                       styles.headerActionBtnSm,
@@ -1411,10 +1412,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   >
                     <RefreshCw size={12} color={theme.colors.mute} />
                     <Text style={[styles.headerActionBtnSmText, { color: theme.colors.mute }]}>Sync</Text>
-                  </TouchableOpacity>
+                  </Pressable>
 
                   {canAssignOperator && (
-                    <TouchableOpacity
+                    <Pressable variant="outline" haptic="tap"
                       onPress={() => {
                         setEditSection('personnel');
                         setEditModalVisible(true);
@@ -1433,7 +1434,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>
                         {isSupervisor ? 'Assign' : 'Edit'}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
                 </View>
               </View>
@@ -1487,25 +1488,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         {(s.phone || s.email) ? (
                           <View style={[styles.personnelActionGroup, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                             {s.phone ? (
-                              <TouchableOpacity
+                              <Pressable variant="outline" haptic="tap"
                                 onPress={() => handleCall(s.phone)}
                                 style={styles.personnelActionGroupBtn}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
                                 <Phone size={12} color={theme.colors.mute} />
-                              </TouchableOpacity>
+                              </Pressable>
                             ) : null}
                             {s.phone && s.email ? (
                               <View style={[styles.personnelActionDivider, { backgroundColor: theme.colors.hairline }]} />
                             ) : null}
                             {s.email ? (
-                              <TouchableOpacity
+                              <Pressable variant="outline" haptic="tap"
                                 onPress={() => handleEmail(s.email)}
                                 style={styles.personnelActionGroupBtn}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
                                 <Mail size={12} color={theme.colors.mute} />
-                              </TouchableOpacity>
+                              </Pressable>
                             ) : null}
                           </View>
                         ) : null}
@@ -1562,25 +1563,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         {(o.phone || o.email) ? (
                           <View style={[styles.personnelActionGroup, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                             {o.phone ? (
-                              <TouchableOpacity
+                              <Pressable variant="outline" haptic="tap"
                                 onPress={() => handleCall(o.phone)}
                                 style={styles.personnelActionGroupBtn}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
                                 <Phone size={12} color={theme.colors.mute} />
-                              </TouchableOpacity>
+                              </Pressable>
                             ) : null}
                             {o.phone && o.email ? (
                               <View style={[styles.personnelActionDivider, { backgroundColor: theme.colors.hairline }]} />
                             ) : null}
                             {o.email ? (
-                              <TouchableOpacity
+                              <Pressable variant="outline" haptic="tap"
                                 onPress={() => handleEmail(o.email)}
                                 style={styles.personnelActionGroupBtn}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
                                 <Mail size={12} color={theme.colors.mute} />
-                              </TouchableOpacity>
+                              </Pressable>
                             ) : null}
                           </View>
                         ) : null}
@@ -1615,7 +1616,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {fullSiteAddress ? (
-                    <TouchableOpacity
+                    <Pressable variant="outline" haptic="tap"
                       onPress={handleOpenMap}
                       style={[
                         styles.headerActionBtnSm,
@@ -1629,10 +1630,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       <MapPin size={12} color="#0284c7" />
                       <Text style={[styles.headerActionBtnSmText, { color: '#0284c7' }]}>Map</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : null}
                   {canManage && (
-                    <TouchableOpacity
+                    <Pressable variant="outline" haptic="tap"
                       onPress={() => {
                         setEditSection('client');
                         setEditModalVisible(true);
@@ -1649,7 +1650,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       <Edit2 size={12} color={theme.colors.ink} />
                       <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
                 </View>
               </View>
@@ -1683,11 +1684,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                       <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
                       {clientPhone ? (
-                        <TouchableOpacity onPress={() => handleCall(clientPhone)}>
+                        <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={() => handleCall(clientPhone)}>
                           <Text style={[styles.clickableLinkText, { color: theme.colors.link }]}>
                             {clientPhone}
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       ) : (
                         <Text style={[styles.specBoxValue, { color: theme.colors.mute }]}>—</Text>
                       )}
@@ -1704,9 +1705,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
-                          <TouchableOpacity onPress={() => handleCopy(setCopiedGstin)}>
+                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedGstin)} accessibilityLabel="Copy GSTIN">
                             {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                         <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                           {clientGstin}
@@ -1718,9 +1719,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
-                          <TouchableOpacity onPress={() => handleCopy(setCopiedPan)}>
+                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedPan)} accessibilityLabel="Copy PAN">
                             {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                         <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                           {clientPan}
@@ -1734,9 +1735,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
-                        <TouchableOpacity onPress={() => handleCopy(setCopiedSiteAddress)}>
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedSiteAddress)} accessibilityLabel="Copy Site Address">
                           {copiedSiteAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                       <Text style={[styles.addressText, { color: theme.colors.ink }]}>
                         {fullSiteAddress}
@@ -1749,9 +1750,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>BILLING ADDRESS</Text>
-                        <TouchableOpacity onPress={() => handleCopy(setCopiedBillingAddress)}>
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedBillingAddress)} accessibilityLabel="Copy Billing Address">
                           {copiedBillingAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                       <Text style={[styles.addressText, { color: theme.colors.ink }]}>
                         {fullBillingAddress}
@@ -1762,25 +1763,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   {/* Quick Action Touch Buttons (Call, WhatsApp) */}
                   <View style={styles.quickTouchRow}>
                     {clientPhone ? (
-                      <TouchableOpacity
+                      <Pressable variant="outline" haptic="tap"
                         onPress={() => handleCall(clientPhone)}
                         style={[styles.touchActionBtn, { backgroundColor: '#10b98118', borderColor: '#10b98135' }]}
                         activeOpacity={0.7}
                       >
                         <Phone size={14} color="#10b981" />
                         <Text style={[styles.touchActionText, { color: '#10b981' }]}>Call</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : null}
 
                     {clientPhone ? (
-                      <TouchableOpacity
+                      <Pressable variant="outline" haptic="tap"
                         onPress={() => handleWhatsApp(clientPhone)}
                         style={[styles.touchActionBtn, { backgroundColor: '#22c55e18', borderColor: '#22c55e35' }]}
                         activeOpacity={0.7}
                       >
                         <MessageSquare size={14} color="#22c55e" />
                         <Text style={[styles.touchActionText, { color: '#22c55e' }]}>WhatsApp</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : null}
                   </View>
                 </View>
@@ -1792,7 +1793,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     This machine is currently available in the fleet inventory and has not been leased to a client account.
                   </Text>
                   {canManage && (
-                    <TouchableOpacity
+                    <Pressable variant="outline" haptic="tap"
                       onPress={() => {
                         setEditSection('client');
                         setEditModalVisible(true);
@@ -1800,7 +1801,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       style={[styles.headerActionBtnSm, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink, marginTop: 8, height: 34, paddingHorizontal: 12 }]}
                     >
                       <Text style={[styles.headerActionBtnSmText, { color: theme.colors.canvas }]}>Assign Client</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
                 </View>
               )}
@@ -1842,9 +1843,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <View style={[styles.logsErrorBox, { backgroundColor: '#ef444415', borderColor: '#ef444430' }]}>
                   <AlertCircle size={15} color="#ef4444" />
                   <Text style={styles.logsErrorText}>{logsError}</Text>
-                  <TouchableOpacity onPress={fetchHourLogs} style={styles.retryBtn}>
+                  <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={fetchHourLogs} style={styles.retryBtn}>
                     <Text style={[styles.retryBtnText, { color: theme.colors.link }]}>Retry</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               )}
 
@@ -1878,12 +1879,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       }}
                     />
                     {logSearch.length > 0 && (
-                      <TouchableOpacity onPress={() => setLogSearch('')}>
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setLogSearch('')}>
                         <X size={14} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
 
-                    <TouchableOpacity
+                    <Pressable variant="outline" haptic="tap"
                       onPress={() => setShowFilterSort((prev) => !prev)}
                       style={[
                         styles.filterToggleBtn,
@@ -1891,14 +1892,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       ]}
                     >
                       <SlidersHorizontal size={14} color={showFilterSort ? theme.colors.link : theme.colors.mute} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {/* Expandable Filter / Sort Bar */}
                   {showFilterSort && (
                     <View style={[styles.expandableFilters, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       {/* Date Preset Selector */}
-                      <TouchableOpacity
+                      <Pressable variant="outline" haptic="tap"
                         onPress={() => setDateModalOpen(true)}
                         style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
                       >
@@ -1906,10 +1907,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           Date: {logDatePreset === 'all' ? 'All' : logDatePreset === '7d' ? '7 Days' : logDatePreset === '30d' ? '30 Days' : 'This Month'}
                         </Text>
                         <ChevronDown size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
 
                       {/* Sort Selector */}
-                      <TouchableOpacity
+                      <Pressable variant="outline" haptic="tap"
                         onPress={() => setSortModalOpen(true)}
                         style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
                       >
@@ -1917,11 +1918,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           Sort: {logSortBy === 'date_desc' ? 'Newest' : logSortBy === 'date_asc' ? 'Oldest' : logSortBy === 'hours_desc' ? 'High Hours' : 'Low Hours'}
                         </Text>
                         <ChevronDown size={12} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      </Pressable>
 
                       {/* Clear Filters */}
                       {(logSearch || logDatePreset !== 'all' || logSortBy !== 'date_desc') && (
-                        <TouchableOpacity
+                        <Pressable variant="outline" haptic="tap"
                           onPress={() => {
                             setLogSearch('');
                             setLogDatePreset('all');
@@ -1930,7 +1931,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           }}
                         >
                           <Text style={[styles.resetFilterText, { color: theme.colors.error }]}>Reset</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
                     </View>
                   )}
@@ -2012,25 +2013,19 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   {/* Pagination Controls */}
                   {totalLogPages > 1 && (
                     <View style={[styles.paginationRow, { borderTopColor: theme.colors.hairline }]}>
-                      <TouchableOpacity
-                        onPress={() => setLogPage((p) => Math.max(1, p - 1))}
-                        disabled={logPage === 1}
-                        style={[styles.pageBtn, { borderColor: theme.colors.hairline }, logPage === 1 && { opacity: 0.4 }]}
+                      <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={() => setLogPage((p) => Math.max(1, p - 1))} disabled={logPage === 1} style={[ { borderColor: theme.colors.hairline }, logPage === 1 && { opacity: 0.4 }]}
                       >
                         <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Prev</Text>
-                      </TouchableOpacity>
+                      </Pressable>
 
                       <Text style={[styles.pageIndicatorText, { color: theme.colors.mute }]}>
                         Page {logPage} of {totalLogPages}
                       </Text>
 
-                      <TouchableOpacity
-                        onPress={() => setLogPage((p) => Math.min(totalLogPages, p + 1))}
-                        disabled={logPage === totalLogPages}
-                        style={[styles.pageBtn, { borderColor: theme.colors.hairline }, logPage === totalLogPages && { opacity: 0.4 }]}
+                      <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={() => setLogPage((p) => Math.min(totalLogPages, p + 1))} disabled={logPage === totalLogPages} style={[ { borderColor: theme.colors.hairline }, logPage === totalLogPages && { opacity: 0.4 }]}
                       >
                         <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   )}
                 </View>
@@ -2072,14 +2067,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </Text>
                     </View>
                   )}
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={fetchAuditLogs}
                     disabled={isLoadingAudit}
                     activeOpacity={0.7}
                     style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
                   >
                     <RefreshCw size={13} color={theme.colors.ink} />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </View>
 
@@ -2087,7 +2082,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <View style={[styles.auditControlsCard, { borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }]}>
                 {/* Filter Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditFilterStrip}>
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('all')}
                     activeOpacity={0.7}
                     style={[
@@ -2106,9 +2101,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       All ({auditCategoryCounts.all})
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
 
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('hour_logs')}
                     activeOpacity={0.7}
                     style={[
@@ -2127,9 +2122,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       HMR Logs ({auditCategoryCounts.hour_logs})
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
 
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('breakdowns')}
                     activeOpacity={0.7}
                     style={[
@@ -2148,9 +2143,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       Breakdowns ({auditCategoryCounts.breakdowns})
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
 
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('assignments')}
                     activeOpacity={0.7}
                     style={[
@@ -2169,9 +2164,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       Assignments ({auditCategoryCounts.assignments})
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
 
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('updates')}
                     activeOpacity={0.7}
                     style={[
@@ -2190,7 +2185,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     >
                       Updates ({auditCategoryCounts.updates})
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </ScrollView>
               </View>
 
@@ -2207,13 +2202,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
                     {auditError}
                   </Text>
-                  <TouchableOpacity
+                  <Pressable variant="outline" haptic="tap"
                     onPress={fetchAuditLogs}
                     activeOpacity={0.7}
                     style={[styles.pageBtn, { borderColor: theme.colors.hairline, marginTop: 8 }]}
                   >
                     <Text style={[styles.pageBtnText, { color: theme.colors.link }]}>Retry</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               )}
 
@@ -2526,7 +2521,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                               </View>
 
                               {/* Mobile View Details Trigger Button (Min 44px hit target) */}
-                              <TouchableOpacity
+                              <Pressable variant="outline" haptic="tap"
                                 onPress={() => setSelectedMobileAuditLog(log)}
                                 activeOpacity={0.7}
                                 style={[
@@ -2540,7 +2535,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                 <Text style={[styles.viewDetailsBtnTextMobile, { color: '#FFFFFF' }]}>
                                   View Details
                                 </Text>
-                              </TouchableOpacity>
+                              </Pressable>
                             </View>
                           );
                         })}
@@ -2609,12 +2604,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   {selectedMobileAuditLog ? formatFullDateTimeMobile(selectedMobileAuditLog.created_at) : ''}
                 </Text>
               </View>
-              <TouchableOpacity
+              <Pressable variant="outline" haptic="tap"
                 onPress={() => setSelectedMobileAuditLog(null)}
                 style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
               >
                 <X size={14} color={theme.colors.ink} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* Scrollable Audit Details Body */}
@@ -2805,14 +2800,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
             {/* Modal Footer Button */}
             <View style={{ paddingHorizontal: 16, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
-              <TouchableOpacity
+              <Pressable variant="outline" haptic="tap"
                 onPress={() => setSelectedMobileAuditLog(null)}
                 style={[styles.pageBtn, { borderColor: theme.colors.hairline, width: '100%', minHeight: 44 }]}
               >
                 <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>
                   Close
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
       </AppModal>
@@ -2893,12 +2888,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <Text style={[styles.heroMenuHeaderTitle, { color: theme.colors.mute }]}>
                 EDIT MACHINE OPTIONS
               </Text>
-              <TouchableOpacity onPress={() => setHeroMenuVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setHeroMenuVisible(false)} accessibilityLabel="Close menu">
                 <X size={15} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
-            <TouchableOpacity
+            <Pressable variant="outline" haptic="tap"
               style={styles.heroMenuItem}
               onPress={() => {
                 setHeroMenuVisible(false);
@@ -2917,9 +2912,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   Specs, HMR & Health Status
                 </Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable variant="outline" haptic="tap"
               style={styles.heroMenuItem}
               onPress={() => {
                 setHeroMenuVisible(false);
@@ -2938,9 +2933,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   Supervisors & Operators
                 </Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable variant="outline" haptic="tap"
               style={styles.heroMenuItem}
               onPress={() => {
                 setHeroMenuVisible(false);
@@ -2959,7 +2954,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   Client & Rental Fleet Status
                 </Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
           </View>
       </AppModal>
 

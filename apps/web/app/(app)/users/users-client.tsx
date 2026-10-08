@@ -3,10 +3,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useTransition } from "react";
 import { highlightText } from "./user-search";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Copy, Check } from "lucide-react";
 import {
   Button,
-  Modal,
   useToast,
   ConfirmationDialog,
 } from "@/components/ui";
@@ -54,6 +52,7 @@ import { UsersHeader } from "./UsersHeader";
 import { UsersFilters } from "./UsersFilters";
 import { UsersTable } from "./UsersTable";
 import { PendingApprovalsSection } from "./PendingApprovalsSection";
+import { PasswordResetModal } from "./PasswordResetModal";
 
 // Re-export helper functions and types for backwards compatibility
 export {
@@ -190,7 +189,6 @@ export function UsersPageClient({
   const [showEditModal, setShowEditModal] = useState<User | null>(null);
   const [resetConfirmUser, setResetConfirmUser] = useState<{ id: string; name: string; email: string } | null>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [copiedPassword, setCopiedPassword] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState<{ userId: string; userName: string; password: string } | null>(null);
 
   // Supervisor state for assignment
@@ -1491,81 +1489,12 @@ export function UsersPageClient({
       )}
 
       {showPasswordModal && (
-        <Modal
+        <PasswordResetModal
           open={!!showPasswordModal}
-          onClose={() => {
-            setShowPasswordModal(null);
-            setCopiedPassword(false);
-          }}
-          title="Password Reset Successful"
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 p-3 rounded-[var(--radius-sm)] bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="font-semibold">New Password Generated</p>
-                <p className="text-[11px] text-[var(--color-mute)] mt-0.5">
-                  Password has been successfully updated for <strong className="text-[var(--color-ink)]">{showPasswordModal.userName}</strong>.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-[var(--color-hairline-soft-surface)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
-              <label className="block text-[11px] font-bold text-[var(--color-mute)] mb-1.5 uppercase tracking-wider">
-                Generated Temporary Password
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={showPasswordModal.password}
-                  aria-label="Generated Temporary Password"
-                  className="w-full text-xs font-mono font-bold bg-[var(--color-canvas-elevated)] px-3 py-2 rounded-sm border border-[var(--color-hairline)] text-[var(--color-ink)] select-all focus:outline-none focus:ring-1 focus:ring-[var(--color-link)]"
-                />
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    navigator.clipboard.writeText(showPasswordModal.password);
-                    setCopiedPassword(true);
-                    toast("success", "Password copied to clipboard");
-                    setTimeout(() => setCopiedPassword(false), 2500);
-                  }}
-                  className={`h-9 px-3.5 text-xs font-medium rounded-sm inline-flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-[0.98] transition-all shrink-0 ${
-                    copiedPassword
-                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                      : "bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 text-white"
-                  }`}
-                  title="Copy password to clipboard"
-                >
-                  {copiedPassword ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowPasswordModal(null);
-                setCopiedPassword(false);
-              }}
-              className="w-full h-9 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all justify-center"
-            >
-              Done
-            </Button>
-          </div>
-        </Modal>
+          onClose={() => setShowPasswordModal(null)}
+          userName={showPasswordModal.userName}
+          temporaryPassword={showPasswordModal.password}
+        />
       )}
 
       {/* Floating Bulk Actions Bar */}

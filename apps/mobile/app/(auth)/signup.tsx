@@ -13,13 +13,14 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
-  TouchableOpacity} from 'react-native';
+  ScrollView} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Input, Alert, TimeInput, SearchableSelect, useTheme , Text } from '../../components/ui';
+import { Pressable } from '../../components/ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
@@ -48,10 +49,7 @@ import {
   Building2,
   Check,
   Info,
-  Sun,
-  Moon,
-} from 'lucide-react-native';
-import { haptics } from '../../lib/interaction/haptics';
+} from '../../components/ui/icon';
 
 const SIGNUP_ROLES = [
   { value: 'operator', label: 'Operator' },
@@ -62,7 +60,7 @@ const SIGNUP_ROLES = [
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { theme, isDark, setMode } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -372,7 +370,7 @@ export default function SignupScreen() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please correct the highlighted fields before submitting.');
-      haptics.warning();
+      haptics.reject();
       return;
     }
 
@@ -421,9 +419,9 @@ export default function SignupScreen() {
         setErrorMessage(error.message);
         isSubmittingRef.current = false;
         setIsLoading(false);
-        haptics.error();
+        haptics.reject();
       } else {
-        haptics.success();
+        haptics.confirm();
         if (data?.user?.id) {
           const userId = data.user.id;
           if (bankDoc) {
@@ -558,7 +556,8 @@ export default function SignupScreen() {
                     clearFieldError('full_name');
                   }}
                   autoCapitalize="words"
-                  autoComplete="name"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   error={fieldErrors.full_name}
                   leftIcon={<User size={15} color={iconColor} />}
                 />
@@ -574,7 +573,8 @@ export default function SignupScreen() {
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  autoComplete="email"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   error={fieldErrors.email}
                   leftIcon={<Mail size={15} color={iconColor} />}
                 />
@@ -589,7 +589,8 @@ export default function SignupScreen() {
                     clearFieldError('phone');
                   }}
                   keyboardType="phone-pad"
-                  autoComplete="tel"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   error={fieldErrors.phone}
                   leftIcon={<Phone size={15} color={iconColor} />}
                 />
@@ -733,6 +734,8 @@ export default function SignupScreen() {
                   value={bankAccountNumber}
                   onChangeText={handleBankAccountChange}
                   keyboardType="numeric"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   maxLength={18}
                   error={fieldErrors.bank_account_number}
                   leftIcon={<CreditCard size={15} color={iconColor} />}
@@ -745,6 +748,8 @@ export default function SignupScreen() {
                   value={bankIfscCode}
                   onChangeText={handleBankIfscChange}
                   autoCapitalize="characters"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   maxLength={11}
                   error={fieldErrors.bank_ifsc_code}
                   leftIcon={<Building2 size={15} color={iconColor} />}
@@ -783,6 +788,8 @@ export default function SignupScreen() {
                   value={aadhaarNumber}
                   onChangeText={handleAadhaarChange}
                   keyboardType="numeric"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   maxLength={14}
                   error={fieldErrors.aadhaar_number}
                   leftIcon={<ShieldCheck size={15} color={iconColor} />}
@@ -794,6 +801,8 @@ export default function SignupScreen() {
                   value={licenseNumber}
                   onChangeText={handleLicenseChange}
                   autoCapitalize="characters"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   maxLength={25}
                   error={fieldErrors.license_number}
                   leftIcon={<CreditCard size={15} color={iconColor} />}
@@ -851,7 +860,8 @@ export default function SignupScreen() {
                   }}
                   isPassword
                   autoCapitalize="none"
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   error={fieldErrors.password}
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
@@ -867,7 +877,8 @@ export default function SignupScreen() {
                   }}
                   isPassword
                   autoCapitalize="none"
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   error={fieldErrors.confirm_password}
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
@@ -897,17 +908,18 @@ export default function SignupScreen() {
 
               {/* Terms and Privacy Agreement Checkbox */}
               <View style={{ marginTop: 10, marginBottom: 8 }}>
-                <TouchableOpacity
+                <Pressable
+                  variant="toggle"
+                  haptic="toggle"
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
                   onPress={() => {
-                    haptics.select();
                     setAgreedToTerms((prev) => {
                       const next = !prev;
                       if (next) clearFieldError('terms');
                       return next;
                     });
                   }}
-                  activeOpacity={0.7}
+                  hitSlopToMin48={true}
                 >
                   <View
                     style={{
@@ -920,7 +932,7 @@ export default function SignupScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginTop: 1 }}
-                  >
+                    >
                     {agreedToTerms && <Check size={12} color="#ffffff" strokeWidth={3} />}
                   </View>
                   <Text style={{ flex: 1, color: isDark ? '#9ca3af' : '#6b7280' }}>
@@ -940,7 +952,7 @@ export default function SignupScreen() {
                     </Text>
                     .
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
                 {fieldErrors.terms && (
                   <Text variant="caption" style={{ color: '#ef4444', marginTop: 4, marginLeft: 28 }}>
                     {fieldErrors.terms}
@@ -964,58 +976,33 @@ export default function SignupScreen() {
                 <Text style={[styles.cardFooterText, { color: isDark ? '#71717a' : '#888888' }]}>
                   Already have an account?
                 </Text>
-                <TouchableOpacity
+                <Pressable
+                  variant="plain"
+                  haptic="select"
                   onPress={() => {
-                    haptics.select();
                     router.push('/(auth)/login');
                   }}
-                  activeOpacity={0.7}
-                  hitSlop={8}
+                  hitSlopToMin48={true}
                 >
                   <Text style={[styles.signInLinkText, { color: '#0284c7' }]}>
                     Sign in
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           </View>
 
           {/* Bottom Screen Footer & Theme Toggle */}
+          {/* Footer Copyright */}
           <View style={styles.screenFooter}>
-            <View style={styles.footerInner}>
-              <Text
-                style={[
-                  styles.copyrightText,
-                  { color: isDark ? '#737373' : '#8f8f8f' },
-                ]}
-              >
-                &copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.
-              </Text>
-
-              {/* Floating Theme Switcher */}
-              <TouchableOpacity
-                style={[
-                  styles.themeToggleBtn,
-                  {
-                    backgroundColor: isDark ? '#1e1e1e' : '#f0f0f0',
-                    borderColor: cardBorder,
-                  },
-                ]}
-                onPress={() => {
-                  haptics.select();
-                  setMode(isDark ? 'light' : 'dark');
-                }}
-                activeOpacity={0.7}
-                accessibilityLabel="Toggle Theme"
-                hitSlop={8}
-              >
-                {isDark ? (
-                  <Sun size={15} color="#e0e0e0" />
-                ) : (
-                  <Moon size={15} color="#333333" />
-                )}
-              </TouchableOpacity>
-            </View>
+            <Text
+              style={[
+                styles.copyrightText,
+                { color: isDark ? '#737373' : '#8f8f8f' },
+              ]}
+            >
+              &copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1113,23 +1100,10 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingTop: 12,
     paddingBottom: 4,
-  },
-  footerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  copyrightText: {
-    flex: 1,
-  },
-  themeToggleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
+  },
+  copyrightText: {
+    textAlign: 'center',
   },
 });

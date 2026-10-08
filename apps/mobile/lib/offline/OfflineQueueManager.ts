@@ -6,6 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from '../supabase';
 import {
   QueuedMutation,
@@ -39,7 +40,9 @@ export class OfflineQueueManager {
   private isSyncing = false;
   private isInitialized = false;
   private listeners: Set<QueueEventListener> = new Set();
+  private syncCompleteCallbacks: Set<(syncedCount: number) => void> = new Set();
   private netInfoUnsubscribe: (() => void) | null = null;
+  private appStateSubscription: { remove: () => void } | null = null;
 
   private constructor() {
     this.init();
@@ -53,7 +56,7 @@ export class OfflineQueueManager {
   }
 
   /**
-   * Initializes queue from persistent AsyncStorage and registers NetInfo listener
+   * Initializes queue from persistent AsyncStorage and registers NetInfo + AppState listeners
    */
   public async init(): Promise<void> {
     if (this.isInitialized) return;
@@ -61,7 +64,11 @@ export class OfflineQueueManager {
       await this.loadQueueFromStorage();
       this.isInitialized = true;
       this.registerNetInfoListener();
+      this.registerAppStateListener();
       this.notifyListeners();
+
+      // Cold-start auto-drain: If offline items exist in local storage and device is online, sync immediately!
+      this.checkAndAutoDrain();
     } catch (err) {
       console.warn('[OfflineQueueManager] Initialization error:', err);
     }
@@ -106,20 +113,76 @@ export class OfflineQueueManager {
     try {
       this.netInfoUnsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
         const isOnline = state.isConnected === true && state.isInternetReachable !== false;
-        if (isOnline && !this.isSyncing) {
-          const hasPendingWork = this.queue.some(
-            (item) => item.status === 'pending' || (item.status === 'failed' && item.retry_count < 3)
-          );
-          if (hasPendingWork) {
-            this.drainQueue().catch((err) => {
-              console.warn('[OfflineQueueManager] Auto-drain on reconnect error:', err);
-            });
-          }
+        if (isOnline) {
+          this.checkAndAutoDrain();
         }
       });
     } catch (err) {
       console.warn('[OfflineQueueManager] NetInfo listener registration error:', err);
     }
+  }
+
+  /**
+   * Registers AppState listener to automatically drain queue when app returns to foreground
+   */
+  private registerAppStateListener(): void {
+    if (this.appStateSubscription) return;
+    try {
+      this.appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+          this.checkAndAutoDrain();
+        }
+      });
+    } catch (err) {
+      console.warn('[OfflineQueueManager] AppState listener registration error:', err);
+    }
+  }
+
+  /**
+   * Proactively checks network state and triggers queue drain if items exist
+   */
+  public async checkAndAutoDrain(): Promise<void> {
+    if (this.isSyncing) return;
+    const hasWork = this.queue.some(
+      (item) => item.status === 'pending' || item.status === 'failed' || item.status === 'syncing'
+    );
+    if (!hasWork) return;
+
+    try {
+      const state = await NetInfo.fetch();
+      const isOnline = state.isConnected === true && state.isInternetReachable !== false;
+      if (isOnline && !this.isSyncing) {
+        this.drainQueue().catch((err) => {
+          console.warn('[OfflineQueueManager] Auto-drain on reconnect error:', err);
+        });
+      }
+    } catch (err) {
+      console.warn('[OfflineQueueManager] checkAndAutoDrain fetch error:', err);
+    }
+  }
+
+  /**
+   * Registers a callback invoked whenever offline mutations are successfully synchronized
+   */
+  public onSyncComplete(callback: (syncedCount: number) => void): () => void {
+    this.syncCompleteCallbacks.add(callback);
+    return () => {
+      this.syncCompleteCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Broadcasts sync completion to registered listeners (e.g. for TanStack cache invalidation)
+   */
+  private notifySyncComplete(syncedCount: number): void {
+    if (syncedCount <= 0) return;
+    this.syncCompleteCallbacks.forEach((cb) => {
+      try {
+        cb(syncedCount);
+      } catch (err) {
+        console.warn('[OfflineQueueManager] Sync complete callback error:', err);
+      }
+    });
   }
 
   /**
@@ -130,7 +193,12 @@ export class OfflineQueueManager {
       this.netInfoUnsubscribe();
       this.netInfoUnsubscribe = null;
     }
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
     this.listeners.clear();
+    this.syncCompleteCallbacks.clear();
     this.isInitialized = false;
   }
 
@@ -287,15 +355,22 @@ export class OfflineQueueManager {
       await this.init();
     }
 
+    // Process pending, syncing, and failed items
+    // When coming online or manually syncing, failed items are retried
+    const itemsToProcess = this.queue.filter(
+      (m) => m.status === 'pending' || m.status === 'syncing' || m.status === 'failed'
+    );
+
+    if (itemsToProcess.length === 0) {
+      return;
+    }
+
     this.isSyncing = true;
     this.notifyListeners();
 
-    try {
-      // Process pending and retryable items in strict chronological order for hour logs
-      const itemsToProcess = this.queue.filter(
-        (m) => m.status === 'pending' || (m.status === 'failed' && m.retry_count < 3)
-      );
+    let totalSyncedInRun = 0;
 
+    try {
       // Sort items so SUBMIT_HOUR_LOG mutations execute in strictly chronological order (start_datetime ASC)
       // to ensure machine hour meters and shift timelines advance sequentially without false-positive overlap detections
       itemsToProcess.sort((a, b) => {
@@ -324,7 +399,8 @@ export class OfflineQueueManager {
         try {
           await this.executeMutation(currentItem);
 
-          // Success: mark as synced, then remove from queue after brief persistence
+          // Success: mark as synced, then remove from queue
+          totalSyncedInRun++;
           await this.updateMutation(item.id, {
             status: 'synced',
             last_error: undefined,
@@ -333,6 +409,24 @@ export class OfflineQueueManager {
           // Prune synced item
           await this.removeMutation(item.id);
         } catch (error: any) {
+          // Check if error is due to idempotency duplicate key constraint (row already exists in DB!)
+          const errorMsg = (error?.message || '').toLowerCase();
+          const errorCode = error?.code || '';
+          const isIdempotencyReplay =
+            (errorCode === '23505' || errorMsg.includes('unique constraint')) &&
+            (errorMsg.includes('idempotency_key') || error?.details?.toLowerCase?.().includes('idempotency_key'));
+
+          if (isIdempotencyReplay) {
+            // Already synced previously! Mark synced and remove from queue
+            totalSyncedInRun++;
+            await this.updateMutation(item.id, {
+              status: 'synced',
+              last_error: undefined,
+            });
+            await this.removeMutation(item.id);
+            continue;
+          }
+
           const isBusinessConflict = this.isConflictError(error);
 
           if (isBusinessConflict) {
@@ -368,7 +462,7 @@ export class OfflineQueueManager {
               await this.updateMutation(item.id, {
                 status: 'failed',
                 retry_count: nextRetryCount,
-                last_error: error.message || 'Sync failed after 3 network retry attempts',
+                last_error: error.message || 'Sync failed after network attempts. Will retry when connection stabilizes.',
               });
             }
           }
@@ -377,6 +471,9 @@ export class OfflineQueueManager {
     } finally {
       this.isSyncing = false;
       this.notifyListeners();
+      if (totalSyncedInRun > 0) {
+        this.notifySyncComplete(totalSyncedInRun);
+      }
     }
   }
 
@@ -387,6 +484,15 @@ export class OfflineQueueManager {
     if (!error) return false;
     const msg = (error.message || '').toLowerCase();
     const code = error.code || '';
+    const details = (error.details || '').toLowerCase();
+
+    // Idempotency key duplicate is NOT a business conflict (it's already synced!)
+    if (
+      (code === '23505' || msg.includes('unique constraint')) &&
+      (msg.includes('idempotency_key') || details.includes('idempotency_key'))
+    ) {
+      return false;
+    }
 
     return (
       msg.includes('overlap') ||
@@ -397,6 +503,8 @@ export class OfflineQueueManager {
       msg.includes('maintenance or decommissioned') ||
       msg.includes('unauthorized operator') ||
       msg.includes('client id does not match') ||
+      msg.includes('assigned to shift') ||
+      msg.includes('cannot exceed 24 hours') ||
       code === '23514' || // check_violation
       code === '23505' || // unique_violation
       code === 'P0001'    // raise_exception (trigger error)
@@ -410,85 +518,151 @@ export class OfflineQueueManager {
     const { mutation_type, payload, idempotency_key } = mutation;
 
     if (mutation_type === 'SUBMIT_HOUR_LOG') {
+      // Ensure user session exists/is valid if available
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUserId = sessionData?.session?.user?.id || null;
+
+      const effectiveOperatorId = (payload.operator_id as string) || currentUserId || '';
+      const effectiveEnteredBy = (payload.entered_by as string) || currentUserId || effectiveOperatorId;
+      const startMeterNum = Number(payload.start_meter) || 0;
+      const endMeterNum = Number(payload.end_meter) || 0;
+      const overtimeNum = Number(payload.overtime_hours) || 0;
+      const normalHoursNum = Number(payload.normal_working_hours) || 8;
+      const breakdownHoursNum = Number(payload.breakdown_hours) || 0;
+      const isBreakdown = Boolean(payload.is_breakdown);
+      const effectiveKey = idempotency_key || (payload.idempotency_key as string) || generateUUID();
+
+      const rpcParams = {
+        p_machine_id: payload.machine_id,
+        p_operator_id: effectiveOperatorId,
+        p_client_id: payload.client_id || null,
+        p_shift_code: payload.shift_code || null,
+        p_log_date: payload.log_date || null,
+        p_end_date: payload.end_date || payload.log_date || null,
+        p_start_datetime: payload.start_datetime || null,
+        p_end_datetime: payload.end_datetime || null,
+        p_start_meter: startMeterNum,
+        p_end_meter: endMeterNum,
+        p_start_time: typeof payload.start_time === 'string' ? payload.start_time.trim() : null,
+        p_end_time: typeof payload.end_time === 'string' ? payload.end_time.trim() : null,
+        p_overtime_hours: overtimeNum,
+        p_normal_working_hours: normalHoursNum,
+        p_is_breakdown: isBreakdown,
+        p_breakdown_start_time: payload.breakdown_start_time || null,
+        p_breakdown_end_time: payload.breakdown_end_time || null,
+        p_breakdown_duration: payload.breakdown_duration || null,
+        p_breakdown_hours: breakdownHoursNum,
+        p_shift: payload.shift || (payload.shift_code ? `Shift ${payload.shift_code}` : null),
+        p_machine_condition: payload.machine_condition || (isBreakdown ? 'breakdown' : 'good'),
+        p_location: payload.location || null,
+        p_remarks: payload.remarks || null,
+        p_idempotency_key: effectiveKey,
+        p_entered_by: effectiveEnteredBy,
+      };
+
       // 1. Try atomic PostgreSQL RPC execution first
       let rpcSucceeded = false;
       try {
-        const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_operator_hour_log_atomic', {
-          p_machine_id: payload.machine_id,
-          p_operator_id: payload.operator_id,
-          p_client_id: payload.client_id || null,
-          p_shift_code: payload.shift_code || null,
-          p_log_date: payload.log_date,
-          p_end_date: payload.end_date,
-          p_start_datetime: payload.start_datetime || null,
-          p_end_datetime: payload.end_datetime || null,
-          p_start_meter: payload.start_meter,
-          p_end_meter: payload.end_meter,
-          p_start_time: payload.start_time,
-          p_end_time: payload.end_time,
-          p_overtime_hours: payload.overtime_hours || 0,
-          p_normal_working_hours: payload.normal_working_hours || 0,
-          p_is_breakdown: Boolean(payload.is_breakdown),
-          p_breakdown_start_time: payload.breakdown_start_time || null,
-          p_breakdown_end_time: payload.breakdown_end_time || null,
-          p_breakdown_duration: payload.breakdown_duration || null,
-          p_breakdown_hours: payload.breakdown_hours || 0,
-          p_shift: payload.shift || null,
-          p_machine_condition: payload.machine_condition || (payload.is_breakdown ? 'breakdown' : 'good'),
-          p_location: payload.location || null,
-          p_remarks: payload.remarks || null,
-          p_idempotency_key: idempotency_key,
-          p_entered_by: payload.entered_by || payload.operator_id || null,
-        });
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc(
+          'submit_operator_hour_log_atomic',
+          rpcParams
+        );
 
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
           rpcSucceeded = true;
           return;
         } else if (rpcErr) {
+          // If already inserted with this idempotency key, treat as success!
+          const rpcErrMsg = (rpcErr.message || '').toLowerCase();
+          if (
+            (rpcErr.code === '23505' || rpcErrMsg.includes('unique constraint')) &&
+            (rpcErrMsg.includes('idempotency_key') || rpcErr.details?.toLowerCase?.().includes('idempotency_key'))
+          ) {
+            rpcSucceeded = true;
+            return;
+          }
+
           if (this.isConflictError(rpcErr)) {
             throw rpcErr;
           }
         }
       } catch (rpcCatchErr: any) {
+        const catchMsg = (rpcCatchErr?.message || '').toLowerCase();
+        if (
+          (rpcCatchErr?.code === '23505' || catchMsg.includes('unique constraint')) &&
+          (catchMsg.includes('idempotency_key') || rpcCatchErr?.details?.toLowerCase?.().includes('idempotency_key'))
+        ) {
+          return;
+        }
+
         if (this.isConflictError(rpcCatchErr)) {
           throw rpcCatchErr;
         }
       }
 
-      // 2. Fallback direct table insert if RPC unavailable
+      // 2. Fallback direct table insert if RPC unavailable or had non-conflict error
       if (!rpcSucceeded) {
-        const {
-          machine_code: _mc,
-          model: _md,
-          serial_number: _sn,
-          machine: _m,
-          ...cleanPayload
-        } = (payload || {}) as Record<string, any>;
-
-        const insertPayload = {
-          ...cleanPayload,
-          idempotency_key,
+        const insertPayload: Record<string, any> = {
+          machine_id: payload.machine_id,
+          operator_id: effectiveOperatorId,
+          client_id: payload.client_id || null,
+          site_id: payload.site_id || null,
+          log_date: payload.log_date,
+          end_date: payload.end_date || payload.log_date || null,
+          start_datetime: payload.start_datetime || null,
+          end_datetime: payload.end_datetime || null,
+          start_time: typeof payload.start_time === 'string' ? payload.start_time.trim() : null,
+          end_time: typeof payload.end_time === 'string' ? payload.end_time.trim() : null,
+          start_meter: startMeterNum,
+          end_meter: endMeterNum,
+          overtime_hours: overtimeNum,
+          normal_working_hours: normalHoursNum,
+          is_breakdown: isBreakdown,
+          breakdown_start_time: payload.breakdown_start_time || null,
+          breakdown_end_time: payload.breakdown_end_time || null,
+          breakdown_duration: payload.breakdown_duration || null,
+          breakdown_hours: breakdownHoursNum,
+          shift: payload.shift || (payload.shift_code ? `Shift ${payload.shift_code}` : null),
+          shift_code: payload.shift_code || null,
+          machine_condition: payload.machine_condition || (isBreakdown ? 'breakdown' : 'good'),
+          location: payload.location || null,
+          remarks: payload.remarks || null,
+          idempotency_key: effectiveKey,
+          entered_by: effectiveEnteredBy,
+          entry_source: payload.entry_source || 'operator',
         };
+
+        // Remove any undefined keys to avoid SQL syntax/column mismatches
+        Object.keys(insertPayload).forEach((k) => {
+          if (insertPayload[k] === undefined) delete insertPayload[k];
+        });
 
         const { error: insertErr } = await supabase
           .from('machine_hour_logs')
           .insert([insertPayload]);
 
         if (insertErr) {
+          const insertErrMsg = (insertErr.message || '').toLowerCase();
+          if (
+            (insertErr.code === '23505' || insertErrMsg.includes('unique constraint')) &&
+            (insertErrMsg.includes('idempotency_key') || insertErr.details?.toLowerCase?.().includes('idempotency_key'))
+          ) {
+            // Already saved!
+            return;
+          }
           throw insertErr;
         }
 
         // Update machine meter reading & health status
         const machineId = payload.machine_id as string;
-        const endMeter = Number(payload.end_meter);
-        if (machineId && endMeter > 0) {
+        if (machineId && endMeterNum > 0) {
           await supabase
             .from('machines')
             .update({
-              hour_meter: endMeter,
-              health_status: payload.is_breakdown ? 'breakdown' : 'active',
+              hour_meter: endMeterNum,
+              health_status: isBreakdown ? 'breakdown' : 'active',
               updated_at: new Date().toISOString(),
-              ...(payload.operator_id ? { current_operator_id: payload.operator_id } : {}),
+              ...(effectiveOperatorId ? { current_operator_id: effectiveOperatorId } : {}),
             })
             .eq('id', machineId);
         }

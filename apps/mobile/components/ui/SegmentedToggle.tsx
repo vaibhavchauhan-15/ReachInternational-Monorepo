@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  Pressable,
   Platform,
   type StyleProp,
   type ViewStyle,
@@ -13,11 +12,14 @@ import Animated, {
   withSpring,
   withTiming,
   useReducedMotion,
+  ReduceMotion,
 } from 'react-native-reanimated';
+import { SPATIAL, DUR } from '../../lib/motion/tokens';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { Text } from './Text';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
 
 export interface SegmentedToggleItem<T extends string = string> {
   id: T;
@@ -46,18 +48,18 @@ export interface SegmentedToggleProps<T extends string = string> {
 const SIZE_CONFIGS = {
   xs: {
     padding: 2.5,
-    containerRadius: 9999,
-    pillRadius: 9999,
+    containerRadius: 8,
+    pillRadius: 6,
     minHeight: 32,
     textVariant: 'caption' as const,
     badgeTextVariant: 'caption' as const,
-    itemPaddingHorizontal: 10,
+    itemPaddingHorizontal: 8,
     gap: 4,
   },
   sm: {
     padding: 3,
-    containerRadius: 9999,
-    pillRadius: 9999,
+    containerRadius: 10,
+    pillRadius: 7,
     minHeight: 36,
     textVariant: 'label' as const,
     badgeTextVariant: 'caption' as const,
@@ -66,9 +68,9 @@ const SIZE_CONFIGS = {
   },
   md: {
     padding: 4,
-    containerRadius: 9999,
-    pillRadius: 9999,
-    minHeight: 44,
+    containerRadius: 14,
+    pillRadius: 10,
+    minHeight: 40,
     textVariant: 'subheading' as const,
     badgeTextVariant: 'caption' as const,
     itemPaddingHorizontal: 16,
@@ -76,9 +78,9 @@ const SIZE_CONFIGS = {
   },
   lg: {
     padding: 5,
-    containerRadius: 9999,
-    pillRadius: 9999,
-    minHeight: 48,
+    containerRadius: 16,
+    pillRadius: 12,
+    minHeight: 46,
     textVariant: 'heading' as const,
     badgeTextVariant: 'label' as const,
     itemPaddingHorizontal: 18,
@@ -113,6 +115,15 @@ export function SegmentedToggle<T extends string = string>({
   const { targetX, targetWidth } = useMemo(() => {
     if (items.length === 0) return { targetX: 0, targetWidth: 0 };
 
+    if (fullWidth && containerWidth > 0) {
+      const availWidth = Math.max(0, containerWidth - config.padding * 2);
+      const tabW = availWidth / items.length;
+      return {
+        targetX: config.padding + activeIndex * tabW,
+        targetWidth: tabW,
+      };
+    }
+
     const measured = itemLayouts[activeIndex];
     if (measured && measured.width > 0) {
       return { targetX: measured.x, targetWidth: measured.width };
@@ -128,12 +139,12 @@ export function SegmentedToggle<T extends string = string>({
     }
 
     return { targetX: 0, targetWidth: 0 };
-  }, [items.length, itemLayouts, activeIndex, containerWidth, config.padding]);
+  }, [items.length, itemLayouts, activeIndex, containerWidth, config.padding, fullWidth]);
 
   // Reanimated shared values for high-frequency 60fps sliding pill animation
   const animX = useSharedValue(0);
   const animWidth = useSharedValue(0);
-  const animOpacity = useSharedValue(0);
+  const animOpacity = useSharedValue(1);
   const isInitialized = useRef(false);
 
   useEffect(() => {
@@ -142,7 +153,7 @@ export function SegmentedToggle<T extends string = string>({
     if (!isInitialized.current) {
       animX.value = targetX;
       animWidth.value = targetWidth;
-      animOpacity.value = reduceMotion ? 1 : withTiming(1, { duration: 150 });
+      animOpacity.value = 1;
       isInitialized.current = true;
     } else {
       if (reduceMotion) {
@@ -150,16 +161,14 @@ export function SegmentedToggle<T extends string = string>({
         animWidth.value = targetWidth;
       } else {
         animX.value = withSpring(targetX, {
-          damping: 28,
-          stiffness: 350,
-          mass: 0.75,
-          overshootClamping: false,
+          stiffness: 450,
+          damping: 32,
+          mass: 1,
         });
         animWidth.value = withSpring(targetWidth, {
-          damping: 28,
-          stiffness: 350,
-          mass: 0.75,
-          overshootClamping: false,
+          stiffness: 450,
+          damping: 32,
+          mass: 1,
         });
       }
     }
@@ -201,7 +210,8 @@ export function SegmentedToggle<T extends string = string>({
         {
           padding: config.padding,
           borderRadius: config.containerRadius,
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f4f4f5',
+          minHeight: config.minHeight + config.padding * 2,
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f4f4f5',
           borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e4e4e7',
         },
         fullWidth ? styles.fullWidth : styles.inline,
@@ -218,7 +228,7 @@ export function SegmentedToggle<T extends string = string>({
             bottom: config.padding,
             borderRadius: config.pillRadius,
             backgroundColor: isDark ? '#27272a' : '#ffffff',
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e4e4e7',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
           },
           isDark ? styles.pillShadowDark : styles.pillShadowLight,
           pillAnimatedStyle,
@@ -232,6 +242,8 @@ export function SegmentedToggle<T extends string = string>({
         return (
           <Pressable
             key={item.id}
+            variant="segmentedOption"
+            haptic="select"
             onLayout={(e) => {
               const { x, width } = e.nativeEvent.layout;
               setItemLayouts((prev) => {
@@ -244,7 +256,7 @@ export function SegmentedToggle<T extends string = string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive, disabled: Boolean(item.disabled) }}
             accessibilityLabel={item.accessibilityLabel || (typeof item.label === 'string' ? item.label : undefined)}
-            style={({ pressed }) => [
+            style={[
               styles.item,
               {
                 minHeight: config.minHeight,
@@ -252,7 +264,6 @@ export function SegmentedToggle<T extends string = string>({
                 gap: config.gap,
               },
               fullWidth ? styles.itemFullWidth : styles.itemInline,
-              pressed && !item.disabled && styles.itemPressed,
               item.disabled && styles.itemDisabled,
               itemStyle,
             ]}
@@ -385,21 +396,19 @@ const styles = StyleSheet.create({
       web: {
         cursor: 'pointer',
         userSelect: 'none',
-        transition: 'opacity 150ms ease, transform 150ms ease',
+        outline: 'none',
       } as any,
       default: {},
     }),
   },
   itemFullWidth: {
     flex: 1,
+    flexBasis: 0,
+    width: '100%',
   },
   itemInline: {
     flexGrow: 0,
     flexShrink: 0,
-  },
-  itemPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
   },
   itemDisabled: {
     opacity: 0.4,

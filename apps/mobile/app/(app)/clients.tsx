@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from 'lucide-react-native';
-import { haptics } from '../../lib/interaction/haptics';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from '../../components/ui/icon';
+import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -11,6 +12,7 @@ import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate } from '@reachinternational/utils';
+import { createTempId, reconcileRow, removeTempRow } from '../../lib/optimistic';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -577,38 +579,67 @@ export default function ClientsScreen() {
     const parsedAllowanceMin = Math.max(0, (parseInt(allowanceHours, 10) || 0) * 60 + (parseInt(allowanceMinutes, 10) || 0));
 
     if (editingClient) {
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === editingClient.id
-            ? {
-                ...c,
-                company_name: companyName.trim(),
-                contact_person: contactPerson.trim(),
-                phone: phone.trim(),
-                gstin: gstin.trim().toUpperCase(),
-                pan_number: panNumber.trim().toUpperCase(),
-                street: streetVal,
-                address: fullUnifiedAddress || streetVal,
-                city: city.trim(),
-                district: district.trim(),
-                state: stateName.trim(),
-                pincode: pincode.trim(),
-                is_billing_address_different: isBillingAddressDifferent,
-                billing_address: isBillingAddressDifferent ? billingAddress.trim() : undefined,
-                billing_city: isBillingAddressDifferent ? billingCity.trim() : undefined,
-                billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
-                billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
-                billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
-                maintenance_allowance_minutes: parsedAllowanceMin,
-              }
-            : c
-        )
-      );
+      const prevClients = clients;
+      const updatedClient: ClientItem = {
+        ...editingClient,
+        company_name: companyName.trim(),
+        contact_person: contactPerson.trim(),
+        phone: phone.trim(),
+        gstin: gstin.trim().toUpperCase(),
+        pan_number: panNumber.trim().toUpperCase(),
+        street: streetVal,
+        address: fullUnifiedAddress || streetVal,
+        city: city.trim(),
+        district: district.trim(),
+        state: stateName.trim(),
+        pincode: pincode.trim(),
+        is_billing_address_different: isBillingAddressDifferent,
+        billing_address: isBillingAddressDifferent ? billingAddress.trim() : undefined,
+        billing_city: isBillingAddressDifferent ? billingCity.trim() : undefined,
+        billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
+        billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
+        billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
+        maintenance_allowance_minutes: parsedAllowanceMin,
+      };
+      setClients((prev) => prev.map((c) => (c.id === editingClient.id ? updatedClient : c)));
+      mobileQueryCacheRef.current.clear();
+      setModalVisible(false);
+
+      (async () => {
+        try {
+          const updatePayload: any = {
+            company_name: companyName.trim(),
+            contact_person: contactPerson.trim() || null,
+            phone: phone.trim() || null,
+            gstin: gstin.trim().toUpperCase() || null,
+            pan_number: panNumber.trim().toUpperCase() || null,
+            street: streetVal,
+            city: city.trim(),
+            district: district.trim() || null,
+            state: stateName.trim(),
+            pincode: pincode.trim() || null,
+            is_billing_address_different: isBillingAddressDifferent,
+            billing_address: isBillingAddressDifferent ? billingAddress.trim() : null,
+            billing_city: isBillingAddressDifferent ? billingCity.trim() : null,
+            billing_district: isBillingAddressDifferent ? billingDistrict.trim() : null,
+            billing_state: isBillingAddressDifferent ? billingState.trim() : null,
+            billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : null,
+            maintenance_allowance_minutes: parsedAllowanceMin,
+            updated_at: new Date().toISOString(),
+          };
+          const { error } = await supabase.from('clients').update(updatePayload).eq('id', editingClient.id);
+          if (error) throw error;
+        } catch (err: any) {
+          setClients(prevClients);
+          Alert.alert('Update Failed', err?.message || 'Failed to update client on server.');
+        }
+      })();
     } else {
+      const tempId = createTempId('cli');
       const nextNum = clients.length + 1;
       const code = `CLI-${nextNum.toString().padStart(4, '0')}`;
       const newClient: ClientItem = {
-        id: `cli-${Date.now()}`,
+        id: tempId,
         client_id: code,
         code,
         company_name: companyName.trim(),
@@ -632,36 +663,61 @@ export default function ClientsScreen() {
         status: 'active',
       };
       setClients([newClient, ...clients]);
+      mobileQueryCacheRef.current.clear();
+      setModalVisible(false);
 
-      // If preset selected, provision shifts into client_shift_codes
-      if (selectedPresetId && selectedPresetId !== 'none') {
-        const preset = getClientShiftPresetById(selectedPresetId);
-        if (preset && preset.shifts.length > 0) {
-          const shiftRecords = preset.shifts.map((s) => ({
-            client_id: newClient.id,
-            code: s.code,
-            name: s.name,
-            start_time: s.startTime,
-            end_time: s.endTime,
-            scheduled_minutes: s.scheduledMinutes,
-            normal_minutes: s.normalMinutes,
-            crosses_midnight: s.crossesMidnight,
-            display_order: s.displayOrder,
-            is_active: true,
-            updated_at: new Date().toISOString(),
-          }));
-          (async () => {
-            try {
-              await supabase.from('client_shift_codes').insert(shiftRecords);
-            } catch {
-              // Non-blocking mobile fallback
+      (async () => {
+        try {
+          const insertPayload: any = {
+            code,
+            company_name: companyName.trim(),
+            contact_person: contactPerson.trim() || null,
+            phone: phone.trim() || null,
+            gstin: gstin.trim().toUpperCase() || null,
+            pan_number: panNumber.trim().toUpperCase() || null,
+            street: streetVal,
+            city: city.trim(),
+            district: district.trim() || null,
+            state: stateName.trim(),
+            pincode: pincode.trim() || null,
+            is_billing_address_different: isBillingAddressDifferent,
+            billing_address: isBillingAddressDifferent ? billingAddress.trim() : null,
+            billing_city: isBillingAddressDifferent ? billingCity.trim() : null,
+            billing_district: isBillingAddressDifferent ? billingDistrict.trim() : null,
+            billing_state: isBillingAddressDifferent ? billingState.trim() : null,
+            billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : null,
+            maintenance_allowance_minutes: parsedAllowanceMin,
+          };
+          const { data, error } = await supabase.from('clients').insert(insertPayload).select().single();
+          if (error) throw error;
+          if (data) {
+            setClients((current) => reconcileRow(current, tempId, data as any));
+            if (selectedPresetId && selectedPresetId !== 'none') {
+              const preset = getClientShiftPresetById(selectedPresetId);
+              if (preset && preset.shifts.length > 0) {
+                const shiftRecords = preset.shifts.map((s) => ({
+                  client_id: data.id,
+                  code: s.code,
+                  name: s.name,
+                  start_time: s.startTime,
+                  end_time: s.endTime,
+                  scheduled_minutes: s.scheduledMinutes,
+                  normal_minutes: s.normalMinutes,
+                  crosses_midnight: s.crossesMidnight,
+                  display_order: s.displayOrder,
+                  is_active: true,
+                  updated_at: new Date().toISOString(),
+                }));
+                await supabase.from('client_shift_codes').insert(shiftRecords);
+              }
             }
-          })();
+          }
+        } catch (err: any) {
+          setClients((current) => removeTempRow(current, tempId));
+          Alert.alert('Registration Failed', err?.message || 'Failed to save new client to server.');
         }
-      }
+      })();
     }
-    mobileQueryCacheRef.current.clear();
-    setModalVisible(false);
   };
 
   const handleOpenAddSite = (targetClientId?: string) => {
@@ -751,11 +807,25 @@ export default function ClientsScreen() {
         {
           text: 'Soft Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            const prevClients = clients;
             mobileQueryCacheRef.current.clear();
             setClients((prev) =>
               prev.map((c) => (c.id === client.id ? { ...c, status: 'inactive', deleted_at: new Date().toISOString() } : c))
             );
+            try {
+              const { error } = await supabase
+                .from('clients')
+                .update({ status: 'inactive', deleted_at: new Date().toISOString() })
+                .eq('id', client.id);
+              if (error) {
+                setClients(prevClients);
+                Alert.alert('Error', error.message || 'Failed to soft delete client.');
+              }
+            } catch (err: any) {
+              setClients(prevClients);
+              Alert.alert('Error', err?.message || 'Failed to soft delete client.');
+            }
           },
         },
       ]
@@ -1135,7 +1205,9 @@ export default function ClientsScreen() {
               </Text>
 
               {debouncedSearch.trim() !== '' && (
-                <TouchableOpacity
+                <Pressable
+                  variant="chip"
+                  haptic="select"
                   onPress={() => handleSearchChange('')}
                   style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                 >
@@ -1143,11 +1215,13 @@ export default function ClientsScreen() {
                     Search: "{debouncedSearch}"
                   </Text>
                   <X size={12} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               )}
 
               {activeFilter !== 'all' && (
-                <TouchableOpacity
+                <Pressable
+                  variant="chip"
+                  haptic="select"
                   onPress={() => handleFilterChange('all')}
                   style={[
                     styles.badgeChip,
@@ -1169,11 +1243,13 @@ export default function ClientsScreen() {
                     Status: {CLIENT_STATUS_FILTER_OPTIONS.find((s) => s.id === activeFilter)?.label || activeFilter}
                   </Text>
                   <X size={12} color={activeFilter === 'active' ? '#059669' : '#d97706'} />
-                </TouchableOpacity>
+                </Pressable>
               )}
 
               {sortBy !== 'company_name_asc' && (
-                <TouchableOpacity
+                <Pressable
+                  variant="chip"
+                  haptic="select"
                   onPress={() => setSortBy('company_name_asc')}
                   style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                 >
@@ -1181,15 +1257,15 @@ export default function ClientsScreen() {
                     Sort: {CLIENT_SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}
                   </Text>
                   <X size={12} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               )}
 
-              <TouchableOpacity onPress={handleResetAllFilters} style={styles.resetAllLink}>
+              <Pressable variant="buttonGhost" hitSlopToMin48 onPress={handleResetAllFilters} style={styles.resetAllLink}>
                 <RotateCcw size={11} color={theme.colors.link} />
                 <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
                   Reset all
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         </FilterToolbar>
@@ -1222,7 +1298,8 @@ export default function ClientsScreen() {
         {/* Pagination Controls */}
         {totalPages > 1 && (
           <View style={styles.paginationRow}>
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
               style={[
                 styles.pageBtn,
                 { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
@@ -1232,13 +1309,14 @@ export default function ClientsScreen() {
               onPress={() => setPage((p) => Math.max(1, p - 1))}
             >
               <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Previous</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             <Text style={[styles.pageIndicator, { color: theme.colors.ink }]}>
               Page {page} of {totalPages}
             </Text>
 
-            <TouchableOpacity
+            <Pressable
+              variant="buttonSecondary"
               style={[
                 styles.pageBtn,
                 { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
@@ -1248,7 +1326,7 @@ export default function ClientsScreen() {
               onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
 
@@ -1257,8 +1335,10 @@ export default function ClientsScreen() {
           <View style={styles.pageSizeRow}>
             <Text style={[styles.pageSizeLabel, { color: theme.colors.mute }]}>Rows per page:</Text>
             {([10, 25, 50, 100] as const).map((opt) => (
-              <TouchableOpacity
+              <Pressable
                 key={opt}
+                variant="chip"
+                haptic="select"
                 style={[
                   styles.pageSizeChip,
                   {
@@ -1281,7 +1361,7 @@ export default function ClientsScreen() {
                 >
                   {opt}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
         )}
@@ -1294,9 +1374,9 @@ export default function ClientsScreen() {
               <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
                 {editingClient ? `Edit (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setModalVisible(false)} accessibilityLabel="Close modal">
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
@@ -1594,8 +1674,10 @@ export default function ClientsScreen() {
                     {CLIENT_SHIFT_PRESETS.map((preset) => {
                       const isSelected = selectedPresetId === preset.id;
                       return (
-                        <TouchableOpacity
+                        <Pressable
                           key={preset.id}
+                          variant="cardSelect"
+                          haptic="select"
                           onPress={() => setSelectedPresetId(preset.id)}
                           style={{
                             borderWidth: 1.5,
@@ -1638,7 +1720,7 @@ export default function ClientsScreen() {
                               ))}
                             </View>
                           )}
-                        </TouchableOpacity>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -1689,12 +1771,15 @@ export default function ClientsScreen() {
                   {selectedDetailClient?.company_name}
                 </Text>
               </View>
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
                 onPress={() => setDetailModalVisible(false)}
                 style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLabel="Close detail modal"
               >
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* Scrollable Modal Body with Persistent Summary & Operational Tabs */}
@@ -1710,7 +1795,9 @@ export default function ClientsScreen() {
                       Person: <Text style={{ color: theme.colors.ink }}>{selectedDetailClient?.contact_person || '—'}</Text>
                     </Text>
                     {selectedDetailClient?.phone && (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="buttonGhost"
+                        hitSlopToMin48
                         onPress={() => Linking.openURL(`tel:${selectedDetailClient.phone}`)}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 }}
                       >
@@ -1718,7 +1805,7 @@ export default function ClientsScreen() {
                         <Text variant="mono" style={{ color: theme.colors.primary }}>
                           {selectedDetailClient.phone}
                         </Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   </View>
                 </View>
@@ -1750,7 +1837,9 @@ export default function ClientsScreen() {
                     <Text style={[styles.detailCardTitle, { color: '#059669' }]}>
                       Operational & Billing Addresses
                     </Text>
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonGhost"
+                      hitSlopToMin48
                       onPress={handleToggleMobileLocation}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 6 }}
                     >
@@ -1758,7 +1847,7 @@ export default function ClientsScreen() {
                         {mobileLocationExpanded ? 'Hide' : 'Load On Demand'}
                       </Text>
                       {mobileLocationExpanded ? <ChevronUp size={12} color={theme.colors.primary} /> : <ChevronDown size={12} color={theme.colors.primary} />}
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {!mobileLocationExpanded ? (
@@ -1808,8 +1897,10 @@ export default function ClientsScreen() {
                     const isActive = mobileActiveTab === tab.id;
                     const IconComponent = tab.icon;
                     return (
-                      <TouchableOpacity
+                      <Pressable
                         key={tab.id}
+                        variant="chip"
+                        haptic="select"
                         onPress={() => handleMobileTabChange(tab.id)}
                         style={[
                           styles.detailTabChip,
@@ -1829,7 +1920,7 @@ export default function ClientsScreen() {
                         >
                           {tab.label} {tab.count > 0 ? `(${tab.count})` : ''}
                         </Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     );
                   })}
                 </ScrollView>
@@ -1844,27 +1935,33 @@ export default function ClientsScreen() {
                       Select a tab above to load machines, logs, assignments, history, or audit logs on demand.
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-                      <TouchableOpacity
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => handleMobileTabChange('machines')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Truck size={12} color={theme.colors.primary} />
                         <Text style={{ color: theme.colors.ink }}>Machines</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
+                      </Pressable>
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => handleMobileTabChange('logs')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Clock size={12} color="#059669" />
                         <Text style={{ color: theme.colors.ink }}>Running Logs</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
+                      </Pressable>
+                      <Pressable
+                        variant="chip"
+                        haptic="select"
                         onPress={() => handleMobileTabChange('assignments')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <UserCheck size={12} color="#7e22ce" />
                         <Text style={{ color: theme.colors.ink }}>Assignments</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   </View>
                 )}
@@ -1904,13 +2001,15 @@ export default function ClientsScreen() {
                     <Text variant="caption" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
                       Registered Sites ({mobileSites.length})
                     </Text>
-                    <TouchableOpacity
+                    <Pressable
+                      variant="buttonPrimary"
+                      hitSlopToMin48
                       onPress={() => handleOpenAddSite(selectedDetailClient?.id)}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 32 }}
                     >
                       <Plus size={12} color="#ffffff" />
                       <Text variant="caption" style={{ color: '#ffffff' }}>Add Site</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   {mobileTabLoading === 'sites' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
@@ -2086,9 +2185,9 @@ export default function ClientsScreen() {
                     : 'Register an operational facility'}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setSiteModalVisible(false)}>
+              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setSiteModalVisible(false)} accessibilityLabel="Close site modal">
                 <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>

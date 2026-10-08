@@ -18,18 +18,17 @@ import {
   FlatList,
   ScrollView,
   TextInput,
-  TouchableOpacity,
   Platform,
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { useTheme } from './ThemeProvider';
 import { Text, useTypeStyle } from './Text';
-import { Icon } from './Icon';
+import { Icon } from './icon';
 import { Touchable } from './Touchable';
 import { AppModal } from './AppModal';
-import { ChevronDown, Search, X, Check } from 'lucide-react-native';
+import { ChevronDown, Search, X, Check } from './icon';
 
 export interface SelectOption {
   value: string;
@@ -224,10 +223,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             </Text>
           </View>
           <Icon
-            name={ChevronDown}
+            name="chevron-down"
+            state={isDropdownActive ? 'open' : 'closed'}
             variant="body"
             color={iconColor}
-            style={isDropdownActive ? { transform: [{ rotate: '180deg' }] } : undefined}
           />
         </Touchable>
 

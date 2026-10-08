@@ -3,13 +3,13 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   Platform,
   RefreshControl,
   ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -34,7 +34,7 @@ import {
   AlertCircle,
   Check,
   Truck,
-} from 'lucide-react-native';
+} from '../../components/ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 const ALLOWED_ROLES = ['super_admin', 'admin', 'hr', 'manager', 'supervisor', 'operator'];
@@ -737,11 +737,11 @@ export default function AttendanceScreen() {
       {
         id: 'refresh-attendance',
         label: 'Refresh Attendance',
-        icon: <RefreshCw size={15} color={theme.colors.ink} />,
+        icon: <RefreshCw size={15} color={theme.colors.ink} loading={refreshing} />,
         onPress: onRefresh,
       },
     ];
-  }, [theme.colors.ink, onRefresh]);
+  }, [theme.colors.ink, onRefresh, refreshing]);
 
   if (!isAllowed) {
     return null;
@@ -770,31 +770,35 @@ export default function AttendanceScreen() {
       >
         {/* Month Selector Bar */}
         <View style={[styles.monthBar, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          <TouchableOpacity
+          <Pressable
+            variant="iconButton"
+            hitSlopToMin48
             style={styles.monthNavBtn}
             onPress={handlePrevMonth}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Previous month"
           >
             <ChevronLeft size={20} color={theme.colors.ink} />
-          </TouchableOpacity>
+          </Pressable>
 
           <View style={styles.monthLabelContainer}>
             <Calendar size={16} color={theme.colors.mute} style={{ marginRight: 6 }} />
             <Text style={[styles.monthLabelText, { color: theme.colors.ink }]}>{monthLabel}</Text>
           </View>
 
-          <TouchableOpacity
+          <Pressable
+            variant="iconButton"
+            hitSlopToMin48
             style={styles.monthNavBtn}
             onPress={handleNextMonth}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Next month"
           >
             <ChevronRight size={20} color={theme.colors.ink} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {isOperator ? (
           loading ? (
-            <AttendanceDetailSkeleton />
+            <AttendanceDetailSkeleton showMetaCard={false} />
           ) : detailData ? (
             renderDetailBody(detailData)
           ) : (
@@ -803,6 +807,8 @@ export default function AttendanceScreen() {
               description="No attendance records found for this month."
             />
           )
+        ) : loading && !refreshing ? (
+          <AttendanceListSkeleton count={4} showKpi={true} showSearch={true} showFilters={true} />
         ) : (
           <>
             {/* KPI Strip */}
@@ -856,9 +862,14 @@ export default function AttendanceScreen() {
                 autoCapitalize="none"
               />
               {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('', true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
+                  onPress={() => setSearchQuery('', true)}
+                  accessibilityLabel="Clear search"
+                >
                   <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
+                </Pressable>
               ) : null}
             </View>
 
@@ -879,8 +890,10 @@ export default function AttendanceScreen() {
                   perfect: `Perfect (${employees.filter((e) => e.absent_days === 0 && e.present_days > 0).length})`,
                 };
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={st}
+                    variant="chip"
+                    haptic="select"
                     onPress={() => setStatusFilter(st)}
                     style={[
                       styles.filterChip,
@@ -902,15 +915,13 @@ export default function AttendanceScreen() {
                     >
                       {labels[st]}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </ScrollView>
 
             {/* List Content */}
-            {loading ? (
-              <AttendanceListSkeleton count={4} showKpi={false} />
-            ) : filteredEmployees.length === 0 ? (
+            {filteredEmployees.length === 0 ? (
               <EmptyState
                 title="No Attendance Found"
                 description="No operator records match your filter criteria for this month."
@@ -920,13 +931,13 @@ export default function AttendanceScreen() {
                 {filteredEmployees.map((emp) => {
                   const initials = getInitials(emp.full_name);
                   return (
-                    <TouchableOpacity
+                    <Pressable
                       key={emp.employee_id}
+                      variant="card"
                       style={[
                         styles.employeeCard,
                         { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
                       ]}
-                      activeOpacity={0.7}
                       onPress={() => handleOpenDetail(emp)}
                     >
                       {/* Header Row: Initials Avatar, Name, Role badge */}
@@ -1029,7 +1040,7 @@ export default function AttendanceScreen() {
                           <ChevronRight size={14} color="#0070f3" />
                         </View>
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -1056,17 +1067,27 @@ export default function AttendanceScreen() {
                   {monthLabel} • Shift: {formatTime(selectedEmployee?.shift_start_time ?? null)} - {formatTime(selectedEmployee?.shift_end_time ?? null)}
                 </Text>
               </View>
-              <TouchableOpacity
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
                 onPress={() => setSelectedEmployee(null)}
                 style={styles.closeBtn}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Close modal"
               >
                 <X size={22} color={theme.colors.ink} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {detailLoading ? (
-              <AttendanceDetailSkeleton />
+              <ScrollView
+                style={styles.modalScroll}
+                contentContainerStyle={[
+                  styles.modalScrollContent,
+                  { paddingBottom: insets.bottom + 32 },
+                ]}
+              >
+                <AttendanceDetailSkeleton showMetaCard={true} />
+              </ScrollView>
             ) : detailData ? (
               <ScrollView
                 style={styles.modalScroll}

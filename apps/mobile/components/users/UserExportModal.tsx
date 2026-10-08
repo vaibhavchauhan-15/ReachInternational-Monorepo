@@ -5,15 +5,14 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
-import { haptics } from '@/lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate, formatAadhaar, formatLicenseNumber } from '@reachinternational/utils';
-import { FileSpreadsheet, X, FileText, Download, Check } from 'lucide-react-native';
+import { FileSpreadsheet, X, FileText, Download, Check } from '../ui/icon';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';

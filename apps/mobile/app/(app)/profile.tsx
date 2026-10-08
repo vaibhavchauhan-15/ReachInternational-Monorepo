@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   Platform,
   Dimensions,
   ActivityIndicator,
@@ -14,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme, MobileHeader , Text } from '../../components/ui';
+import { Pressable } from '../../components/ui/touch/Pressable';
 import {
   toProfileView,
   type ProfileViewModel,
@@ -46,8 +46,8 @@ import {
   AlertTriangle,
   XCircle,
   FileText,
-  Image as ImageIcon,
-} from 'lucide-react-native';
+  ImageIcon,
+} from '../../components/ui/icon';
 import {
   pickIdentityDocument,
   uploadUserDocumentDirect,
@@ -61,7 +61,7 @@ import {
   type MobileViewerDoc,
 } from '../../components/documents/MobileDocumentViewerModal';
 import { notifyProfileRequestCancelled } from '../../lib/notifications';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 
 // ─── Section Icon Mapping ───────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -249,17 +249,23 @@ export default function ProfileScreen() {
   const handleCancelPendingRequest = () => {
     if (!pendingRequest?.id) return;
     const executeWithdraw = async () => {
+      const prevReq = pendingRequest;
+      setPendingRequest(null);
       setIsCancellingRequest(true);
       try {
         const { error } = await supabase
           .from('profile_change_requests')
           .delete()
-          .eq('id', pendingRequest.id);
-        if (error) throw error;
+          .eq('id', prevReq.id);
+        if (error) {
+          setPendingRequest(prevReq);
+          throw error;
+        }
         notifyProfileRequestCancelled();
         Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
         await fetchProfileData();
       } catch (err: any) {
+        setPendingRequest(prevReq);
         Alert.alert('Error', err?.message || 'Failed to cancel the change request.');
       } finally {
         setIsCancellingRequest(false);
@@ -298,8 +304,10 @@ export default function ProfileScreen() {
       });
 
       if (!res.success) {
+        haptics.reject();
         Alert.alert('Upload Failed', res.error || 'Failed to upload document.');
       } else {
+        haptics.confirm();
         setReplacingCode(null);
         await fetchProfileData();
       }
@@ -317,8 +325,10 @@ export default function ProfileScreen() {
       try {
         const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
         if (!res.success) {
+          haptics.reject();
           Alert.alert('Delete Failed', res.error || 'Could not delete document.');
         } else {
+          haptics.confirm();
           await fetchProfileData();
         }
       } catch (err: any) {
@@ -482,7 +492,9 @@ export default function ProfileScreen() {
               </View>
 
               {/* Edit Profile Button */}
-              <TouchableOpacity
+              <Pressable
+                variant="buttonSecondary"
+                hitSlopToMin48
                 style={[
                   styles.editProfileBtn,
                   {
@@ -491,14 +503,13 @@ export default function ProfileScreen() {
                   },
                 ]}
                 onPress={() => setEditModalVisible(true)}
-                activeOpacity={0.7}
                 accessibilityLabel="Edit Profile"
               >
                 <Edit size={14} color={theme.colors.link} />
                 <Text style={[styles.editProfileBtnText, { color: theme.colors.ink }]}>
                   Edit Profile
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
 
@@ -543,17 +554,19 @@ export default function ProfileScreen() {
                 </Text>
                 . New edits will overwrite this pending submission.
               </Text>
-              <TouchableOpacity
+              <Pressable
+                variant="buttonGhost"
+                hitSlopToMin48
                 style={styles.cancelRequestBtn}
                 onPress={handleCancelPendingRequest}
                 disabled={isCancellingRequest}
-                activeOpacity={0.7}
+                accessibilityLabel="Withdraw Request"
               >
                 <XCircle size={13} color="#dc2626" />
                 <Text style={styles.cancelRequestText}>
                   {isCancellingRequest ? 'Cancelling...' : 'Withdraw Request'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
 
@@ -628,10 +641,11 @@ export default function ProfileScreen() {
                                   </Text>
                                   {Boolean(cleanAadhaar) && (
                                     <View style={styles.inlineActions}>
-                                      <TouchableOpacity
+                                      <Pressable
+                                        variant="iconButton"
+                                        hitSlopToMin48
                                         style={styles.iconActionBtn}
                                         onPress={() => setShowFullAadhaar((prev) => !prev)}
-                                        activeOpacity={0.7}
                                         accessibilityLabel={
                                           showFullAadhaar ? 'Hide Aadhaar number' : 'Reveal Aadhaar number'
                                         }
@@ -641,11 +655,12 @@ export default function ProfileScreen() {
                                         ) : (
                                           <Eye size={14} color={theme.colors.mute} />
                                         )}
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
+                                      </Pressable>
+                                      <Pressable
+                                        variant="iconButton"
+                                        hitSlopToMin48
                                         style={styles.iconActionBtn}
                                         onPress={() => handleCopy(cleanAadhaar, 'Aadhaar')}
-                                        activeOpacity={0.7}
                                         accessibilityLabel="Copy Aadhaar"
                                       >
                                         {copiedField === 'Aadhaar' ? (
@@ -653,21 +668,22 @@ export default function ProfileScreen() {
                                         ) : (
                                           <Copy size={14} color={theme.colors.mute} />
                                         )}
-                                      </TouchableOpacity>
+                                      </Pressable>
                                     </View>
                                   )}
                                 </View>
                               ) : row.href ? (
-                                <TouchableOpacity
+                                <Pressable
+                                  variant="buttonGhost"
+                                  hitSlopToMin48
                                   style={styles.linkArea}
                                   onPress={() => router.push(row.href as any)}
-                                  activeOpacity={0.7}
                                 >
                                   <Text style={[styles.rowLink, { color: '#0284c7' }]}>
                                     {row.value}
                                   </Text>
                                   <ExternalLink size={12} color="#0284c7" />
-                                </TouchableOpacity>
+                                </Pressable>
                               ) : row.badge ? (
                                 <View style={styles.badgeArea}>
                                   <View
@@ -713,10 +729,11 @@ export default function ProfileScreen() {
                                     {row.value}
                                   </Text>
                                   {row.copyable && row.copyValue && (
-                                    <TouchableOpacity
+                                    <Pressable
+                                      variant="iconButton"
+                                      hitSlopToMin48
                                       style={styles.iconActionBtn}
                                       onPress={() => handleCopy(row.copyValue!, row.label)}
-                                      activeOpacity={0.7}
                                       accessibilityLabel={`Copy ${row.label}`}
                                     >
                                       {copiedField === row.label ? (
@@ -724,7 +741,7 @@ export default function ProfileScreen() {
                                       ) : (
                                         <Copy size={14} color={theme.colors.mute} />
                                       )}
-                                    </TouchableOpacity>
+                                    </Pressable>
                                   )}
                                 </View>
                               )}
@@ -811,7 +828,8 @@ export default function ProfileScreen() {
 
                     {/* 1. Existing Document View (Click to preview, Replace, Delete) */}
                     {existing && !isReplacing ? (
-                      <TouchableOpacity
+                      <Pressable
+                        variant="card"
                         style={[
                           styles.existingDocCard,
                           {
@@ -870,7 +888,9 @@ export default function ProfileScreen() {
 
                         {/* Right: Replace + Delete Actions */}
                         <View style={styles.existingDocRight}>
-                          <TouchableOpacity
+                          <Pressable
+                            variant="buttonSecondary"
+                            hitSlopToMin48
                             style={[
                               styles.docActionBtn,
                               {
@@ -882,16 +902,17 @@ export default function ProfileScreen() {
                               e.stopPropagation?.();
                               setReplacingCode(docType.code);
                             }}
-                            activeOpacity={0.7}
                             accessibilityLabel={`Replace ${docType.label}`}
                           >
                             <RefreshCw size={13} color={theme.colors.mute} />
                             <Text style={[styles.docActionBtnText, { color: theme.colors.ink }]}>
                               Replace
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
 
-                          <TouchableOpacity
+                          <Pressable
+                            variant="iconButton"
+                            hitSlopToMin48
                             style={[
                               styles.docDeleteBtn,
                               {
@@ -903,17 +924,17 @@ export default function ProfileScreen() {
                               e.stopPropagation?.();
                               handleDeleteDocument(existing, docType.label);
                             }}
-                            activeOpacity={0.7}
                             accessibilityLabel={`Delete ${docType.label}`}
                           >
                             <Trash2 size={13} color="#dc2626" />
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : (
                       /* 2. Upload Dropzone (When not uploaded or replacing) */
                       <View style={styles.dropzoneWrap}>
-                        <TouchableOpacity
+                        <Pressable
+                          variant="card"
                           style={[
                             styles.dropzone,
                             {
@@ -923,7 +944,6 @@ export default function ProfileScreen() {
                           ]}
                           onPress={() => handleUploadDocument(docType.code)}
                           disabled={isUploading}
-                          activeOpacity={0.7}
                         >
                           {isUploading ? (
                             <View style={styles.uploadingBox}>
@@ -945,19 +965,21 @@ export default function ProfileScreen() {
                               </Text>
                             </>
                           )}
-                        </TouchableOpacity>
+                        </Pressable>
 
                         {/* Cancel replacement option */}
                         {isReplacing && (
-                          <TouchableOpacity
+                          <Pressable
+                            variant="buttonGhost"
+                            hitSlopToMin48
                             style={styles.cancelReplaceBtn}
                             onPress={() => setReplacingCode(null)}
-                            activeOpacity={0.7}
+                            accessibilityLabel="Cancel replacement"
                           >
                             <Text style={[styles.cancelReplaceText, { color: theme.colors.mute }]}>
                               Cancel
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         )}
                       </View>
                     )}
@@ -974,7 +996,16 @@ export default function ProfileScreen() {
         visible={editModalVisible}
         currentUser={dbUser || authProfile}
         onClose={() => setEditModalVisible(false)}
-        onSuccess={() => {
+        onSuccess={(submittedReq?: any) => {
+          if (submittedReq) {
+            setPendingRequest({
+              id: `tmp_req_${Date.now()}`,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              target_approver_role: submittedReq.target_approver_role,
+              requested_data: submittedReq.requested_data,
+            });
+          }
           fetchProfileData();
           if (refreshSession) refreshSession();
         }}

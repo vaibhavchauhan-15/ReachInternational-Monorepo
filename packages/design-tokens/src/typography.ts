@@ -1,4 +1,5 @@
 export const TYPE_VARIANTS = {
+  hero:       { size: 44, line: 54, font: 'Geist-Bold',       icon: 32 },
   display:    { size: 28, line: 34, font: 'Geist-Bold',       icon: 28 },
   title:      { size: 20, line: 26, font: 'Geist-SemiBold',   icon: 22 },
   heading:    { size: 16, line: 22, font: 'Geist-SemiBold',   icon: 18 },
@@ -6,12 +7,14 @@ export const TYPE_VARIANTS = {
   body:       { size: 14, line: 20, font: 'Geist-Regular',    icon: 16 },
   label:      { size: 13, line: 18, font: 'Geist-Medium',     icon: 14 },
   caption:    { size: 12, line: 16, font: 'Geist-Regular',    icon: 12 },
+  micro:      { size: 11, line: 15, font: 'Geist-Regular',    icon: 11 },
   mono:       { size: 13, line: 18, font: 'GeistMono-Medium', icon: 14 },
 } as const;
 
 export type TypeVariant = keyof typeof TYPE_VARIANTS;
 
 export const iconSize = {
+  hero: TYPE_VARIANTS.hero.icon,
   display: TYPE_VARIANTS.display.icon,
   title: TYPE_VARIANTS.title.icon,
   heading: TYPE_VARIANTS.heading.icon,

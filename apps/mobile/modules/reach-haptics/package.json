@@ -1,0 +1,7 @@
+{
+  "name": "reach-haptics",
+  "version": "0.1.0",
+  "description": "Android semantic haptics Expo module for ReachInternational",
+  "main": "index.ts",
+  "types": "index.ts"
+}

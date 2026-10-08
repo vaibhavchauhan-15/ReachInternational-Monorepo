@@ -16,10 +16,10 @@ import {
 import { useRouter } from 'expo-router';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
-import { Icon as CanonicalIcon } from '../ui/Icon';
+import { Icon as CanonicalIcon } from '../ui/icon';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { haptics } from '../../lib/interaction/haptics';
+import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
@@ -40,7 +40,7 @@ import {
   Home,
   Settings,
   Banknote,
-} from 'lucide-react-native';
+} from '../ui/icon';
 
 export interface MobileCommandPaletteProps {
   isOpen: boolean;

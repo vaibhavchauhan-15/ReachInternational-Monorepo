@@ -22,9 +22,9 @@ import {
   ArrowRight,
   Layers,
   Timer,
-} from 'lucide-react-native';
+} from '../../ui/icon';
 import { formatTo12Hour } from '@reachinternational/utils';
-import { haptics } from '../../../lib/interaction/haptics';
+import { haptics } from '../../../lib/haptics';
 
 export interface OperatorDashboardCardProps {
   data: OperatorDashboardDTO | null;

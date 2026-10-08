@@ -5,17 +5,13 @@
  * Haptic Feedback toggle, and instant animated feedback toasts.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Switch,
-  Platform,
   Animated} from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Card,
   Badge,
@@ -23,7 +19,11 @@ import {
   MobileHeader,
 } from '../../../components/ui';
 import { Text, Text as TypographyText } from '../../../components/ui/Text';
+import { Pressable } from '../../../components/ui/touch/Pressable';
+import { Switch } from '../../../components/ui/Switch';
 import { useTypeScale } from '../../../lib/typography/TypeScaleProvider';
+import { usePreferences, setHapticsEnabled } from '../../../lib/preferences/store';
+import { useReducedMotion } from '../../../lib/preferences/useReducedMotion';
 import { spacingNumeric, radiusNumeric, type FontScalePreset } from '@reachinternational/design-tokens';
 import {
   Palette,
@@ -35,10 +35,8 @@ import {
   Check,
   CheckCircle2,
   Sparkles,
-} from 'lucide-react-native';
-import { haptics } from '../../../lib/interaction/haptics';
-
-const HAPTICS_PREF_KEY = '@reach:haptics_enabled';
+} from '../../../components/ui/icon';
+import { haptics } from '../../../lib/haptics';
 
 const FONT_OPTIONS: { id: FontScalePreset; label: string; desc: string }[] = [
   { id: 'small', label: 'Small (92%)', desc: 'Compact density, maximum screen fit' },
@@ -50,8 +48,8 @@ export default function PreferenceSettingsScreen() {
   const router = useRouter();
   const { theme, isDark, mode, setMode } = useTheme();
   const { preset, setPreset, scale } = useTypeScale();
-
-  const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const { hapticsEnabled } = usePreferences();
+  const reducedMotion = useReducedMotion();
 
   // Live Toast Feedback State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -82,40 +80,25 @@ export default function PreferenceSettingsScreen() {
     }, 2200);
   };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const storedHaptics = await AsyncStorage.getItem(HAPTICS_PREF_KEY);
-        if (storedHaptics !== null) setHapticsEnabled(storedHaptics === 'true');
-      } catch (e) {
-        console.warn('[PreferenceSettings] Failed to load preferences:', e);
-      }
-    })();
-  }, []);
-
   const handleSetTheme = (newMode: 'light' | 'dark' | 'system') => {
-    if (hapticsEnabled) haptics.select();
     setMode(newMode);
     const label = newMode === 'system' ? 'System Default' : newMode === 'dark' ? 'Dark' : 'Light';
     showToast(`Color theme set to ${label}`);
   };
 
   const handleSelectFontSize = (option: FontScalePreset) => {
-    if (hapticsEnabled) haptics.select();
     setPreset(option);
     const item = FONT_OPTIONS.find((f) => f.id === option);
     showToast(`Display scale set to ${item?.label || option}`);
   };
 
-  const handleToggleHaptics = async (value: boolean) => {
-    if (value) haptics.select();
+  const handleToggleHaptics = (value: boolean) => {
     setHapticsEnabled(value);
-    try {
-      await AsyncStorage.setItem(HAPTICS_PREF_KEY, String(value));
-    } catch (e) {
-      console.warn('[PreferenceSettings] Failed to save haptics preference:', e);
+    if (value) {
+      // Play a preview confirmation haptic when enabled
+      haptics.confirm();
     }
-    showToast(`Tactile haptics ${value ? 'enabled' : 'disabled'}`);
+    showToast(`Haptic feedback ${value ? 'enabled' : 'disabled'}`);
   };
 
   return (
@@ -148,7 +131,7 @@ export default function PreferenceSettingsScreen() {
             },
           ]}
         >
-          <CheckCircle2 size={16} color="#059669" />
+          <CheckCircle2 size={16} color="#059669" animate="mount" />
           <Text style={[styles.toastText, { color: isDark ? '#34d399' : '#065f46' }]}>
             {toastMessage}
           </Text>
@@ -177,9 +160,10 @@ export default function PreferenceSettingsScreen() {
 
           <View style={styles.themeOptionsGrid}>
             {/* Light */}
-            <TouchableOpacity
+            <Pressable
+              variant="card"
+              haptic="select"
               onPress={() => handleSetTheme('light')}
-              activeOpacity={0.8}
               style={[
                 styles.themeCardOption,
                 {
@@ -198,12 +182,13 @@ export default function PreferenceSettingsScreen() {
                   <Check size={11} color="#ffffff" />
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Dark */}
-            <TouchableOpacity
+            <Pressable
+              variant="card"
+              haptic="select"
               onPress={() => handleSetTheme('dark')}
-              activeOpacity={0.8}
               style={[
                 styles.themeCardOption,
                 {
@@ -222,12 +207,13 @@ export default function PreferenceSettingsScreen() {
                   <Check size={11} color="#ffffff" />
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             {/* System */}
-            <TouchableOpacity
+            <Pressable
+              variant="card"
+              haptic="select"
               onPress={() => handleSetTheme('system')}
-              activeOpacity={0.8}
               style={[
                 styles.themeCardOption,
                 {
@@ -246,7 +232,7 @@ export default function PreferenceSettingsScreen() {
                   <Check size={11} color="#ffffff" />
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </Card>
 
@@ -270,10 +256,11 @@ export default function PreferenceSettingsScreen() {
             {FONT_OPTIONS.map((item) => {
               const isSelected = preset === item.id;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={item.id}
+                  variant="listRow"
+                  haptic="select"
                   onPress={() => handleSelectFontSize(item.id)}
-                  activeOpacity={0.7}
                   style={[
                     styles.fontOptionRow,
                     {
@@ -302,7 +289,7 @@ export default function PreferenceSettingsScreen() {
                   >
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </View>
@@ -346,18 +333,44 @@ export default function PreferenceSettingsScreen() {
 
             <View style={{ flex: 1 }}>
               <Text style={[styles.hapticTitle, { color: theme.colors.ink }]}>
-                Tactile Haptics
+                Haptic feedback
               </Text>
               <Text style={[styles.hapticSubtitle, { color: theme.colors.mute }]}>
-                Subtle device vibrations for button taps and shift logs
+                Soft vibration on selections and confirmations. Follows your phone's touch-feedback setting.
               </Text>
             </View>
 
             <Switch
               value={hapticsEnabled}
               onValueChange={handleToggleHaptics}
-              trackColor={{ false: theme.colors.hairline, true: theme.colors.link }}
-              thumbColor={Platform.OS === 'android' ? '#ffffff' : undefined}
+              accessibilityLabel="Toggle haptic feedback"
+            />
+          </View>
+        </Card>
+
+        {/* ========================================================================= */}
+        {/* CARD 4: REDUCED MOTION (SYSTEM-DRIVEN) */}
+        {/* ========================================================================= */}
+        <Card variant="elevated" style={styles.card}>
+          <View style={styles.hapticRow}>
+            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5' }]}>
+              <Sparkles size={18} color={isDark ? '#34d399' : '#059669'} />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.hapticTitle, { color: theme.colors.ink }]}>
+                Reduced motion
+              </Text>
+              <Text style={[styles.hapticSubtitle, { color: theme.colors.mute }]}>
+                {reducedMotion
+                  ? 'Active — animations are simplified based on your device accessibility setting.'
+                  : 'Follows device setting — standard spring animations and smooth transitions enabled.'}
+              </Text>
+            </View>
+
+            <Badge
+              status={reducedMotion ? 'active' : 'neutral'}
+              customLabel={reducedMotion ? 'SYSTEM ON' : 'SYSTEM OFF'}
             />
           </View>
         </Card>

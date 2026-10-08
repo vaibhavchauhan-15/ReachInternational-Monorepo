@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/dal";
 import { CACHE_TAGS } from "@/lib/cache";
-import type { HRPayrollSummary } from "@/lib/types/database";
+import type { HRPayrollSummary, HRPayrollOperator } from "@/lib/types/database";
 
 const ALLOWED_ROLES = ["super_admin", "admin", "hr"] as const;
 
@@ -41,11 +41,20 @@ export async function getHRPayrollData(payrollMonth?: string): Promise<HRPayroll
     throw new Error(error.message || "Failed to load payroll data");
   }
 
-  return (data as unknown as HRPayrollSummary) || {
-    payrollMonth: targetDate.slice(0, 7),
-    regularPeriod: "",
-    otPeriod: "",
-    operators: [],
+  // Defensively extract operators array whether the RPC returns a JSON array directly or a wrapper object
+  const rawOperators: HRPayrollOperator[] = Array.isArray(data)
+    ? (data as unknown as HRPayrollOperator[])
+    : (data && Array.isArray((data as any).operators) ? (data as any).operators : []);
+
+  const monthStr = (data && !Array.isArray(data) && (data as any).payrollMonth) || targetDate.slice(0, 7);
+  const regPeriod = (data && !Array.isArray(data) && (data as any).regularPeriod) || "";
+  const otPeriod = (data && !Array.isArray(data) && (data as any).otPeriod) || "";
+
+  return {
+    payrollMonth: monthStr,
+    regularPeriod: regPeriod,
+    otPeriod: otPeriod,
+    operators: rawOperators,
   };
 }
 

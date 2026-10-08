@@ -1,18 +1,18 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   Platform,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { Eye, EyeOff } from 'lucide-react-native';
+import { Eye, EyeOff } from './icon';
 import { useTheme } from './ThemeProvider';
 import { Text, useTypeStyle } from './Text';
-import { Icon } from './Icon';
-import { haptics } from '../../lib/interaction/haptics';
+import { Icon } from './icon';
+import { haptics } from '../../lib/haptics';
+import { Pressable } from './touch/Pressable';
 
 export interface InputProps extends TextInputProps {
   label?: string;
@@ -105,6 +105,10 @@ export const Input: React.FC<InputProps> = ({
         <TextInput
           placeholderTextColor={isDark ? '#71717a' : '#9ca3af'}
           secureTextEntry={effectiveSecureTextEntry}
+          underlineColorAndroid="transparent"
+          selectionColor={isDark ? '#38bdf8' : '#0284c7'}
+          cursorColor={isDark ? '#38bdf8' : '#0284c7'}
+          importantForAutofill={textInputProps.importantForAutofill ?? (Platform.OS === 'android' ? 'no' : 'auto')}
           style={[
             styles.input,
             inputTypeStyle,
@@ -119,29 +123,32 @@ export const Input: React.FC<InputProps> = ({
         />
 
         {isPassword ? (
-          <TouchableOpacity
+          <Pressable
+            variant="iconButton"
+            haptic="select"
             style={styles.rightIconContainer}
             onPress={handleTogglePassword}
-            hitSlop={12}
-            activeOpacity={0.7}
+            hitSlopToMin48={true}
             accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
           >
             <Icon
-              icon={isPasswordVisible ? EyeOff : Eye}
+              name="eye"
+              state={isPasswordVisible ? 'off' : 'on'}
               variant="body"
               color={isDark ? '#9ca3af' : '#6b7280'}
             />
-          </TouchableOpacity>
+          </Pressable>
         ) : rightIcon ? (
-          <TouchableOpacity
+          <Pressable
+            variant="iconButton"
+            haptic="select"
             style={styles.rightIconContainer}
             onPress={onRightIconPress}
             disabled={!onRightIconPress}
-            hitSlop={12}
-            activeOpacity={0.7}
+            hitSlopToMin48={true}
           >
             {rightIcon}
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
       </View>
 

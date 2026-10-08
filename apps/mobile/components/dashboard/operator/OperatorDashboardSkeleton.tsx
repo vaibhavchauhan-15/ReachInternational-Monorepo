@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
-import { Skeleton, useTheme } from '../../ui';
+import { Skeleton } from '../../ui/Skeleton';
+import { useTheme } from '../../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface OperatorDashboardSkeletonProps {

@@ -12,17 +12,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   useWindowDimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Mail, ArrowLeft, ArrowRight, KeyRound, Moon, Sun } from 'lucide-react-native';
+import { Mail, ArrowLeft, ArrowRight, KeyRound, Moon, Sun } from '../../components/ui/icon';
 import { getAppUrl } from '../../lib/env';
 import { supabase } from '../../lib/supabase';
 import { Input, Alert, useTheme , Text } from '../../components/ui';
-import { haptics } from '../../lib/interaction/haptics';
+import { Pressable } from '../../components/ui/touch/Pressable';
+import { haptics } from '../../lib/haptics';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -69,14 +69,14 @@ export default function ForgotPasswordScreen() {
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      haptics.error();
+      haptics.reject();
       setFieldError('Email address is required.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail.toLowerCase())) {
-      haptics.error();
+      haptics.reject();
       setFieldError('Please enter a valid email address.');
       return;
     }
@@ -101,22 +101,22 @@ export default function ForgotPasswordScreen() {
         if (!response.ok && response.status >= 500) {
           const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
           if (sbError) {
-            haptics.error();
+            haptics.reject();
             setErrorMessage(sbError.message || 'No account found with this email address.');
             return;
           }
-          haptics.success();
+          haptics.confirm();
           setSuccessMessage('Password reset instructions have been sent to your email.');
           return;
         }
 
-        haptics.error();
+        haptics.reject();
         setErrorMessage(data.error || 'No account found with this email address.');
         if (data.fieldErrors?.email) {
           setFieldError(data.fieldErrors.email);
         }
       } else {
-        haptics.success();
+        haptics.confirm();
         setSuccessMessage(data.message || 'Password reset instructions have been sent to your email.');
       }
     } catch (err: unknown) {
@@ -124,14 +124,14 @@ export default function ForgotPasswordScreen() {
       try {
         const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
         if (sbError) {
-          haptics.error();
+          haptics.reject();
           setErrorMessage('Failed to send reset email. Please check your internet connection.');
         } else {
-          haptics.success();
+          haptics.confirm();
           setSuccessMessage('Password reset instructions have been sent to your email.');
         }
       } catch {
-        haptics.error();
+        haptics.reject();
         setErrorMessage('Failed to send reset email. Please check your connection and try again.');
       }
     } finally {
@@ -200,17 +200,18 @@ export default function ForgotPasswordScreen() {
               ]}
             >
               {/* Back to Sign In Link */}
-              <TouchableOpacity
+              <Pressable
+                variant="plain"
+                haptic="select"
+                hitSlopToMin48={true}
                 onPress={handleNavigateBack}
                 style={styles.backRow}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <ArrowLeft size={14} color={isDark ? '#a1a1aa' : '#64748b'} />
                 <Text style={[styles.backText, { color: isDark ? '#a1a1aa' : '#64748b' }]}>
                   Back to sign in
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Key Icon Badge */}
               <View
@@ -264,7 +265,9 @@ export default function ForgotPasswordScreen() {
                 />
 
                 {/* Send Reset Link CTA Button */}
-                <TouchableOpacity
+                <Pressable
+                  variant="buttonPrimary"
+                  haptic={false}
                   style={[
                     styles.submitButton,
                     { backgroundColor: primarySkyBlue },
@@ -272,7 +275,6 @@ export default function ForgotPasswordScreen() {
                   ]}
                   onPress={handleReset}
                   disabled={isLoading}
-                  activeOpacity={0.85}
                 >
                   {isLoading ? (
                     <ActivityIndicator size="small" color="#ffffff" />
@@ -282,7 +284,7 @@ export default function ForgotPasswordScreen() {
                       <ArrowRight size={16} color="#ffffff" />
                     </View>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {/* Card Footer: Return to Login */}
@@ -290,15 +292,16 @@ export default function ForgotPasswordScreen() {
                 <Text style={[styles.cardFooterText, { color: isDark ? '#a1a1aa' : '#64748b' }]}>
                   Remember your password?
                 </Text>
-                <TouchableOpacity
+                <Pressable
+                  variant="plain"
+                  haptic="select"
+                  hitSlopToMin48={true}
                   onPress={handleNavigateBack}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Text style={[styles.loginLinkText, { color: primarySkyBlue }]}>
                     Sign in
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -317,7 +320,10 @@ export default function ForgotPasswordScreen() {
         </ScrollView>
 
         {/* Floating Theme Switcher Widget in Bottom-Right matching Web mobile viewport */}
-        <TouchableOpacity
+        <Pressable
+          variant="iconButton"
+          haptic="tap"
+          hitSlopToMin48={true}
           style={[
             styles.floatingThemeBtn,
             {
@@ -326,16 +332,14 @@ export default function ForgotPasswordScreen() {
             },
           ]}
           onPress={handleToggleTheme}
-          activeOpacity={0.8}
           accessibilityLabel="Toggle Theme"
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
           {isDark ? (
             <Sun size={17} color="#fbbf24" strokeWidth={2.2} />
           ) : (
             <Moon size={17} color="#f4f4f5" strokeWidth={2.2} />
           )}
-        </TouchableOpacity>
+        </Pressable>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

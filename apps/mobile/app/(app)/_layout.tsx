@@ -8,7 +8,7 @@ import { OfflineBanner } from '../../components/offline/OfflineBanner';
 
 import { NotificationPermissionModal } from '../../components/permissions';
 import { shouldPromptNotificationPermission } from '../../lib/permissions';
-import { screenAnim } from '../../lib/interaction/screens';
+import { navigationPresets, screenAnim } from '../../lib/motion';
 
 export default function AppLayout() {
   const { session, isLoading, isProfileComplete } = useAuth();
@@ -52,7 +52,7 @@ export default function AppLayout() {
         tabBar={() => <MobileBottomNav />}
         screenOptions={{
           headerShown: false,
-          ...screenAnim.tab,
+          ...navigationPresets.tabsFade,
         }}
       >
         {/* Primary Monorepo Modules Accessible via Bottom Nav */}
@@ -81,7 +81,8 @@ export default function AppLayout() {
         <Tabs.Screen name="profile" options={{ ...screenAnim.tab, title: 'Profile', href: null }} />
         <Tabs.Screen name="privacy" options={{ ...screenAnim.tab, title: 'Privacy Policy', href: null }} />
         <Tabs.Screen name="terms" options={{ ...screenAnim.tab, title: 'Terms of Service', href: null }} />
-        <Tabs.Screen name="account-deletion" options={{ ...screenAnim.tab, title: 'Account Deletion', href: null }} />
+        <Tabs.Screen name="account-deletion" options={{ ...navigationPresets.tabsFade, title: 'Account Deletion', href: null }} />
+        <Tabs.Screen name="motion-lab" options={{ ...navigationPresets.tabsFade, title: 'Motion Lab', href: null }} />
       </Tabs>
 
       {/* Post-Install / First-Run Notification Permission Primer */}

@@ -76,4 +76,14 @@ describe('OfflineQueueManager', () => {
     expect(state.queue.length).toBe(0);
     expect(state.syncingCount).toBe(0);
   });
+
+  it('registers onSyncComplete listener and triggers clean teardown', () => {
+    let synced = 0;
+    const unsubscribe = manager.onSyncComplete((count) => {
+      synced += count;
+    });
+
+    expect(typeof unsubscribe).toBe('function');
+    unsubscribe();
+  });
 });
