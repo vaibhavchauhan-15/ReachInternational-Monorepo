@@ -14,6 +14,7 @@ import { TimeInput } from '../ui/TimeInput';
 import { useTheme } from '../ui/ThemeProvider';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
+import { showToast } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -260,8 +261,9 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
                 delete next[typeCode];
                 return next;
               });
+              showToast('success', 'Document Removed', 'Document has been removed.');
             } else {
-              Alert.alert('Error', res.error || 'Failed to remove document.');
+              showToast('error', 'Error', res.error || 'Failed to remove document.');
             }
           },
         },
@@ -423,7 +425,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
 
     if (!hasUploadedAadhaar || !hasUploadedLicense) {
       setDocErrors(true);
-      Alert.alert('Required Documents', 'Official Aadhaar and Driving Licence documents are mandatory.');
+      showToast('warning', 'Required Documents', 'Official Aadhaar and Driving Licence documents are mandatory.');
       return;
     }
 
@@ -437,7 +439,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       !isDistrictValid ||
       !isStateValid
     ) {
-      Alert.alert('Validation Error', 'Please fix all highlighted errors before submitting.');
+      showToast('warning', 'Validation Error', 'Please fix all highlighted errors before submitting.');
       return;
     }
 
@@ -445,7 +447,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
     if (aadhaarNumber.trim()) {
       const aRes = validateAadhaarNumber(aadhaarNumber);
       if (!aRes.isValid) {
-        Alert.alert('Invalid Aadhaar', aRes.error || 'Please check your 12-digit Aadhaar number.');
+        showToast('warning', 'Invalid Aadhaar', aRes.error || 'Please check your 12-digit Aadhaar number.');
         return;
       }
       cleanAadhaar = aRes.clean || null;
@@ -455,7 +457,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
     if (licenseNumber.trim()) {
       const lRes = validateLicenseNumber(licenseNumber);
       if (!lRes.isValid) {
-        Alert.alert('Invalid Licence', lRes.error || 'Please check your driving licence format.');
+        showToast('warning', 'Invalid Licence', lRes.error || 'Please check your driving licence format.');
         return;
       }
       formattedLicense = lRes.formatted || licenseNumber.trim().toUpperCase();
@@ -491,7 +493,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
     const parsed = ProfileUpdateSchema.safeParse(validationInput);
     if (!parsed.success) {
       const firstError = parsed.error.issues[0]?.message || 'Validation error in profile form.';
-      Alert.alert('Validation Error', firstError);
+      showToast('warning', 'Validation Error', firstError);
       return;
     }
 
@@ -515,7 +517,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         });
 
         if (hasDuplicatePhone) {
-          Alert.alert('Duplicate Phone', 'Another user account with this mobile number already exists.');
+          showToast('error', 'Duplicate Phone', 'Another user account with this mobile number already exists.');
           setIsSubmitting(false);
           return;
         }
@@ -530,7 +532,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
             .maybeSingle();
 
           if (existingAadhaar) {
-            Alert.alert('Duplicate Aadhaar', 'Another user account with this Aadhaar number already exists.');
+            showToast('error', 'Duplicate Aadhaar', 'Another user account with this Aadhaar number already exists.');
             setIsSubmitting(false);
             return;
           }
@@ -546,7 +548,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
             .maybeSingle();
 
           if (existingLic) {
-            Alert.alert('Duplicate Licence', 'Another user account with this driving licence number already exists.');
+            showToast('error', 'Duplicate Licence', 'Another user account with this driving licence number already exists.');
             setIsSubmitting(false);
             return;
           }
@@ -614,7 +616,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         });
 
         notifyProfileUpdated(payload.full_name);
-        Alert.alert('Success', 'Your profile details have been updated directly.');
+        showToast('success', 'Profile Updated', 'Your profile details have been updated directly.');
       } else {
         // Submit profile change request
         // Check if existing pending request exists
@@ -669,7 +671,8 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         }
 
         notifyProfileRequestSubmitted(targetApprover);
-        Alert.alert(
+        showToast(
+          'success',
           'Request Submitted',
           `Your profile update request has been routed to your ${approverLabel} for review.`
         );
@@ -683,7 +686,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       onClose();
     } catch (err: any) {
       console.error('Error submitting profile changes:', err);
-      Alert.alert('Error', err?.message || 'Failed to submit profile changes.');
+      showToast('error', 'Update Failed', err?.message || 'Failed to submit profile changes.');
     } finally {
       setIsSubmitting(false);
     }

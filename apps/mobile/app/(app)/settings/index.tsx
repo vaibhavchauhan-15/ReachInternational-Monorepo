@@ -1,94 +1,96 @@
 /**
- * ReachInternational Mobile — Field Settings Hub
- * Clean, polished modular settings navigation with dedicated sub-pages for:
- * 1. Account & Security (/settings/account)
- * 2. Notifications (/settings/notification)
- * 3. Preferences & Theme (/settings/preference)
+ * ReachInternational Mobile — Clean Settings Hub
+ * 
+ * Displays strictly the 4 canonical navigation cards:
+ * 1. Account (/settings/account)
+ * 2. Notification (/settings/notification)
+ * 3. Preferences (/settings/preference / /settings/prefrences)
  * 4. About App (/settings/aboutapp)
- * Plus Sign Out action button and brand telemetry.
+ * Plus clean secure session sign out.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../../lib/auth/useAuth';
 import {
   Card,
-  Badge,
   Button,
   useTheme,
-  MobileHeader,
-  ReachInternationalLogo,
   ConfirmDialog,
   Text,
-  Pressable,
 } from '../../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import {
-  BRAND_NAME,
-  BRAND_TAGLINE,
-} from '../../../lib/brand';
+import { Pressable } from '../../../components/ui/touch/Pressable';
+import { SettingsScreenContainer } from '../../../components/settings';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
   User,
   Bell,
-  Palette,
+  Sliders,
   Info,
   LogOut,
   ChevronRight,
 } from '../../../components/ui/icon';
 import { haptics } from '../../../lib/haptics';
 
-const NOTIF_PREFS_KEY = '@reach:notification_preferences';
+interface SettingsNavCardProps {
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}
 
-export default function SettingsHubScreen() {
+function SettingsNavCard({
+  icon,
+  iconBg,
+  title,
+  onPress,
+  accessibilityLabel,
+}: SettingsNavCardProps) {
+  const { theme } = useTheme();
+
+  return (
+    <Pressable
+      variant="card"
+      haptic="select"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[
+        styles.navCard,
+        {
+          backgroundColor: theme.colors.canvasElevated,
+          borderColor: theme.colors.hairline,
+        },
+      ]}
+    >
+      <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+        {icon}
+      </View>
+      <Text
+        variant="subheading"
+        style={[styles.cardTitle, { color: theme.colors.ink }]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+      <View style={styles.chevronBox}>
+        <ChevronRight size={18} color={theme.colors.mute} />
+      </View>
+    </Pressable>
+  );
+}
+
+export default function SettingsHomeScreen() {
   const router = useRouter();
-  const { user, role, signOut, refreshSession, userProfile } = useAuth();
-  const { theme, isDark, mode } = useTheme();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
-
-  // Load push preference for badge indicator
-  const loadNotifState = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(NOTIF_PREFS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (typeof parsed.push === 'boolean') {
-          setPushEnabled(parsed.push);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    loadNotifState();
-  }, [loadNotifState]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      if (refreshSession) await refreshSession();
-      await loadNotifState();
-    } catch (e) {
-      console.warn('[SettingsHubScreen] Refresh error:', e);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refreshSession, loadNotifState]);
+  const { signOut } = useAuth();
+  const { theme, isDark } = useTheme();
 
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const handleSignOut = () => {
+  const handleSignOutPress = () => {
     haptics.select();
     setShowSignOutDialog(true);
   };
@@ -98,7 +100,7 @@ export default function SettingsHubScreen() {
       setIsSigningOut(true);
       await signOut();
       setShowSignOutDialog(false);
-      router.replace('/(auth)/login');
+      router.replace('/login');
     } catch (err) {
       console.error('[Settings] Sign out error:', err);
     } finally {
@@ -106,249 +108,61 @@ export default function SettingsHubScreen() {
     }
   };
 
-  const displayName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'User');
-  const displayEmail = userProfile?.email || user?.email || '';
-  const roleLabel = (role || userProfile?.role || 'OPERATOR').toUpperCase().replace(/_/g, ' ');
-
-  const themeModeLabel = mode === 'system' ? 'SYSTEM' : mode === 'dark' ? 'DARK' : 'LIGHT';
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Edge-to-edge Top Header */}
-      <MobileHeader
-        title="Settings"
-        showBack={false}
-        showQuickAccess={true}
-        showQuickAccessCapsule={false}
+    <SettingsScreenContainer
+      title="Settings"
+      showBack={false}
+      contentContainerStyle={styles.containerContent}
+    >
+      {/* 1. Account Card */}
+      <SettingsNavCard
+        icon={<User size={20} color={isDark ? '#818cf8' : '#4f46e5'} />}
+        iconBg={isDark ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff'}
+        title="Account"
+        onPress={() => router.push('/settings/account' as any)}
+        accessibilityLabel="Navigate to Account Settings"
       />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.link}
-          />
-        }
-      >
-        {/* ========================================================================= */}
-        {/* HERO PROFILE ROW (TAP -> /settings/account) */}
-        {/* ========================================================================= */}
-        <Pressable
-          variant="card"
-          haptic="select"
-          onPress={() => {
-            router.push('/(app)/settings/account' as any);
-          }}
-          style={[
-            styles.profileHeroCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.profileLeftRow}>
-            <View
-              style={[
-                styles.avatarOrb,
-                {
-                  backgroundColor: theme.colors.ink,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <Text variant="heading" style={[styles.avatarText, { color: theme.colors.canvas }]}>
-                {displayName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
+      {/* 2. Notification Card */}
+      <SettingsNavCard
+        icon={<Bell size={20} color={isDark ? '#a78bfa' : '#7c3aed'} />}
+        iconBg={isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe'}
+        title="Notification"
+        onPress={() => router.push('/settings/notification' as any)}
+        accessibilityLabel="Navigate to Notification Settings"
+      />
 
-            <View style={{ flex: 1 }}>
-              <View style={styles.nameBadgeRow}>
-                <Text variant="heading" style={[styles.profileName, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {displayName}
-                </Text>
-                <Badge status="active" customLabel={roleLabel} />
-              </View>
-              <Text variant="caption" style={[styles.profileEmail, { color: theme.colors.mute }]} numberOfLines={1}>
-                {displayEmail}
-              </Text>
-            </View>
+      {/* 3. Preferences Card */}
+      <SettingsNavCard
+        icon={<Sliders size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
+        iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
+        title="Preferences"
+        onPress={() => router.push('/settings/preference' as any)}
+        accessibilityLabel="Navigate to Preferences Settings"
+      />
 
-            <View
-              style={[
-                styles.chevronCircle,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvas,
-                },
-              ]}
-            >
-              <ChevronRight size={16} color={theme.colors.mute} />
-            </View>
-          </View>
-        </Pressable>
+      {/* 4. About App Card */}
+      <SettingsNavCard
+        icon={<Info size={20} color={isDark ? '#34d399' : '#059669'} />}
+        iconBg={isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'}
+        title="About App"
+        onPress={() => router.push('/settings/aboutapp' as any)}
+        accessibilityLabel="Navigate to About App"
+      />
 
-        {/* Section Heading */}
-        <Text variant="label" style={[styles.sectionGroupTitle, { color: theme.colors.mute }]}>
-          PREFERENCES & GOVERNANCE
-        </Text>
+      {/* Session Sign Out Action */}
+      <View style={styles.signOutBox}>
+        <Button
+          label="Sign Out"
+          onPress={handleSignOutPress}
+          variant="danger"
+          shape="pill"
+          icon={<LogOut size={16} color="#ffffff" />}
+          fullWidth
+        />
+      </View>
 
-        {/* ========================================================================= */}
-        {/* SUB-PAGE 1: ACCOUNT & SECURITY */}
-        {/* ========================================================================= */}
-        <Card
-          variant="interactive"
-          onPress={() => {
-            haptics.select();
-            router.push('/(app)/settings/account' as any);
-          }}
-          style={styles.navTouchCard}
-        >
-          <View style={styles.navRow}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff' }]}>
-              <User size={19} color={isDark ? '#818cf8' : '#4f46e5'} />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
-                Account & Security
-              </Text>
-              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
-                Change password, personnel profile & data erasure
-              </Text>
-            </View>
-
-            <ChevronRight size={18} color={theme.colors.mute} />
-          </View>
-        </Card>
-
-        {/* ========================================================================= */}
-        {/* SUB-PAGE 2: NOTIFICATIONS */}
-        {/* ========================================================================= */}
-        <Card
-          variant="interactive"
-          onPress={() => {
-            haptics.select();
-            router.push('/(app)/settings/notification' as any);
-          }}
-          style={styles.navTouchCard}
-        >
-          <View style={styles.navRow}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe' }]}>
-              <Bell size={19} color={isDark ? '#a78bfa' : '#7c3aed'} />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View style={styles.navTitleRow}>
-                <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
-                  Notifications
-                </Text>
-                {pushEnabled ? (
-                  <Badge status="active" customLabel="ACTIVE" />
-                ) : (
-                  <Badge status="error" customLabel="MUTED" />
-                )}
-              </View>
-              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
-                Push alerts, shift reminders & breakdown notices
-              </Text>
-            </View>
-
-            <ChevronRight size={18} color={theme.colors.mute} />
-          </View>
-        </Card>
-
-        {/* ========================================================================= */}
-        {/* SUB-PAGE 3: PREFERENCES & THEME */}
-        {/* ========================================================================= */}
-        <Card
-          variant="interactive"
-          onPress={() => {
-            haptics.select();
-            router.push('/(app)/settings/preference' as any);
-          }}
-          style={styles.navTouchCard}
-        >
-          <View style={styles.navRow}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7' }]}>
-              <Palette size={19} color={isDark ? '#fbbf24' : '#d97706'} />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View style={styles.navTitleRow}>
-                <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
-                  Preferences & Theme
-                </Text>
-                <Badge status="pending" customLabel={themeModeLabel} />
-              </View>
-              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
-                Appearance (Light / Dark / System), font scale & haptics
-              </Text>
-            </View>
-
-            <ChevronRight size={18} color={theme.colors.mute} />
-          </View>
-        </Card>
-
-        {/* ========================================================================= */}
-        {/* SUB-PAGE 4: ABOUT APP */}
-        {/* ========================================================================= */}
-        <Card
-          variant="interactive"
-          onPress={() => {
-            haptics.select();
-            router.push('/(app)/settings/aboutapp' as any);
-          }}
-          style={styles.navTouchCard}
-        >
-          <View style={styles.navRow}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5' }]}>
-              <Info size={19} color={isDark ? '#34d399' : '#059669'} />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text variant="subheading" style={[styles.navTitle, { color: theme.colors.ink }]}>
-                About Reach International
-              </Text>
-              <Text variant="caption" style={[styles.navSubtitle, { color: theme.colors.mute }]}>
-                v1.0.0 (Build 42) • Privacy Policy • Terms & Conditions
-              </Text>
-            </View>
-
-            <ChevronRight size={18} color={theme.colors.mute} />
-          </View>
-        </Card>
-
-        {/* ========================================================================= */}
-        {/* SIGN OUT BUTTON AT THE END */}
-        {/* ========================================================================= */}
-        <View style={styles.signOutContainer}>
-          <Button
-            label="Sign Out of Session"
-            onPress={handleSignOut}
-            variant="danger"
-            shape="pill"
-            icon={<LogOut size={16} color="#ffffff" />}
-            fullWidth
-          />
-        </View>
-
-        {/* Brand Footer */}
-        <View style={styles.brandFooter}>
-          <ReachInternationalLogo size={18} showTagline={false} />
-          <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-            {BRAND_NAME} • {BRAND_TAGLINE}
-          </Text>
-          <Text variant="micro" style={[styles.brandVersionText, { color: theme.colors.mute }]}>
-            v1.0.0 (Build 42) • Production Fleet Release
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* ─── Confirm Sign Out Dialog ─── */}
+      {/* Confirm Sign Out Dialog */}
       <ConfirmDialog
         visible={showSignOutDialog}
         onClose={() => {
@@ -363,103 +177,39 @@ export default function SettingsHubScreen() {
         isLoading={isSigningOut}
         icon={<LogOut size={22} color={theme.colors.error} />}
       />
-    </View>
+    </SettingsScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacingNumeric.md,
-    gap: spacingNumeric.sm + 2,
-    paddingBottom: 96,
-  },
-  profileHeroCard: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 4,
-  },
-  profileLeftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  containerContent: {
     gap: 12,
   },
-  avatarOrb: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  avatarText: {
-  },
-  nameBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  profileName: {
-    flex: 1,
-  },
-  profileEmail: {
-    marginTop: 2,
-  },
-  chevronCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  sectionGroupTitle: {
-    marginTop: 6,
-    marginBottom: 2,
-    paddingHorizontal: 4,
-  },
-  navTouchCard: {
-    padding: 14,
+  navCard: {
+    minHeight: 56,
     borderRadius: radiusNumeric.lg,
-  },
-  navRow: {
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
   },
   iconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navTitleRow: {
-    flexDirection: 'row',
+  cardTitle: {
+    flex: 1,
+  },
+  chevronBox: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    justifyContent: 'center',
   },
-  navTitle: {
-  },
-  navSubtitle: {
-    marginTop: 2,
-  },
-  signOutContainer: {
-    marginTop: spacingNumeric.md,
-  },
-  brandFooter: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 4,
-  },
-  brandFooterText: {
-    marginTop: 4,
-  },
-  brandVersionText: {
+  signOutBox: {
+    marginTop: spacingNumeric.lg,
   },
 });

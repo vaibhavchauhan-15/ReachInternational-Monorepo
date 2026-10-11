@@ -1,210 +1,121 @@
-import React, { useState } from 'react';
+/**
+ * ReachInternational Mobile — React Native Reusables Input Component
+ * Official RNR Input primitive with NativeWind styling, accessible labels and error messages.
+ */
+
+import * as React from 'react';
 import {
-  View,
   TextInput,
-  StyleSheet,
-  Platform,
   type TextInputProps,
+  View,
+  Pressable,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Eye, EyeOff } from './icon';
-import { useTheme } from './ThemeProvider';
-import { Text, useTypeStyle } from './Text';
-import { Icon } from './icon';
-import { haptics } from '../../lib/haptics';
-import { Pressable } from './touch/Pressable';
+import { cn } from '@/lib/utils';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { Text } from '@/components/ui/Text';
 
 export interface InputProps extends TextInputProps {
+  className?: string;
+  containerClassName?: string;
   label?: string;
   required?: boolean;
   error?: string;
   helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  onRightIconPress?: () => void;
   isPassword?: boolean;
-  containerStyle?: ViewStyle;
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
-export const Input: React.FC<InputProps> = ({
-  label,
-  required,
-  error,
-  helperText,
-  leftIcon,
-  rightIcon,
-  onRightIconPress,
-  isPassword = false,
-  secureTextEntry,
-  containerStyle,
-  style,
-  onFocus,
-  onBlur,
-  ...textInputProps
-}) => {
-  const { theme, isDark } = useTheme();
-  const [isFocused, setIsFocused] = useState(false);
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
+  (
+    {
+      className,
+      containerClassName,
+      placeholderClassName,
+      label,
+      required = false,
+      error,
+      helperText,
+      leftIcon,
+      rightIcon,
+      isPassword = false,
+      secureTextEntry,
+      containerStyle,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
 
-  const handleFocus = (e: any) => {
-    setIsFocused(true);
-    if (onFocus) onFocus(e);
-  };
+    const actualSecureTextEntry = isPassword
+      ? !isPasswordVisible
+      : secureTextEntry;
 
-  const handleBlur = (e: any) => {
-    setIsFocused(false);
-    if (onBlur) onBlur(e);
-  };
-
-  const handleTogglePassword = () => {
-    haptics.select();
-    setIsPasswordVisible((prev) => !prev);
-  };
-
-  const effectiveSecureTextEntry = isPassword
-    ? !isPasswordVisible
-    : secureTextEntry;
-
-  const inputBg = isDark
-    ? '#121212'
-    : '#fafafa';
-
-  const borderColor = error
-    ? '#ef4444'
-    : isFocused
-    ? (isDark ? '#38bdf8' : '#0284c7')
-    : (isDark ? '#262626' : '#ebebeb');
-
-  const inputTypeStyle = useTypeStyle('body');
-
-  return (
-    <View style={[styles.container, containerStyle]}>
-      {label ? (
-        <View style={styles.labelRow}>
-          <Text variant="label" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
-            {label}
-            {required && <Text variant="label" style={{ color: '#ef4444' }}> *</Text>}
-          </Text>
+    return (
+      <View style={containerStyle} className={cn('w-full', label && 'mb-3', containerClassName)}>
+        {label && (
+          <View className="flex-row items-center mb-1.5">
+            <Text variant="label" className="text-foreground">
+              {label}
+            </Text>
+            {required && <Text variant="label" className="text-destructive ml-1">*</Text>}
+          </View>
+        )}
+        <View className="relative flex-row items-center w-full">
+          {leftIcon && (
+            <View className="absolute left-3 z-10 items-center justify-center pointer-events-none">
+              {leftIcon}
+            </View>
+          )}
+          <TextInput
+            ref={ref}
+            secureTextEntry={actualSecureTextEntry}
+            className={cn(
+              'web:flex h-11 native:h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+              leftIcon && 'pl-10',
+              (rightIcon || isPassword) && 'pr-10',
+              error && 'border-destructive',
+              props.editable === false && 'opacity-50 web:cursor-not-allowed',
+              className
+            )}
+            placeholderClassName={cn('text-muted-foreground', placeholderClassName)}
+            style={style}
+            {...props}
+          />
+          {isPassword ? (
+            <Pressable
+              onPress={() => setIsPasswordVisible((prev) => !prev)}
+              className="absolute right-3 items-center justify-center p-1"
+              accessibilityRole="button"
+              accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
+            >
+              {isPasswordVisible ? (
+                <EyeOff size={18} className="text-muted-foreground" color="#888888" />
+              ) : (
+                <Eye size={18} className="text-muted-foreground" color="#888888" />
+              )}
+            </Pressable>
+          ) : rightIcon ? (
+            <View className="absolute right-3 items-center justify-center">
+              {rightIcon}
+            </View>
+          ) : null}
         </View>
-      ) : null}
-
-      <View
-        style={[
-          styles.inputWrapper,
-          {
-            backgroundColor: error
-              ? (isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.04)')
-              : inputBg,
-            borderColor,
-            borderWidth: isFocused || error ? 1.5 : 1,
-          },
-        ]}
-      >
-        {leftIcon && <View style={styles.leftIconContainer}>{leftIcon}</View>}
-
-        <TextInput
-          placeholderTextColor={isDark ? '#71717a' : '#9ca3af'}
-          secureTextEntry={effectiveSecureTextEntry}
-          underlineColorAndroid="transparent"
-          selectionColor={isDark ? '#38bdf8' : '#0284c7'}
-          cursorColor={isDark ? '#38bdf8' : '#0284c7'}
-          importantForAutofill={textInputProps.importantForAutofill ?? (Platform.OS === 'android' ? 'no' : 'auto')}
-          style={[
-            styles.input,
-            inputTypeStyle,
-            {
-              color: isDark ? '#f8fafc' : '#0f172a',
-            },
-            style,
-          ]}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          {...textInputProps}
-        />
-
-        {isPassword ? (
-          <Pressable
-            variant="iconButton"
-            haptic="select"
-            style={styles.rightIconContainer}
-            onPress={handleTogglePassword}
-            hitSlopToMin48={true}
-            accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
-          >
-            <Icon
-              name="eye"
-              state={isPasswordVisible ? 'off' : 'on'}
-              variant="body"
-              color={isDark ? '#9ca3af' : '#6b7280'}
-            />
-          </Pressable>
-        ) : rightIcon ? (
-          <Pressable
-            variant="iconButton"
-            haptic="select"
-            style={styles.rightIconContainer}
-            onPress={onRightIconPress}
-            disabled={!onRightIconPress}
-            hitSlopToMin48={true}
-          >
-            {rightIcon}
-          </Pressable>
+        {error ? (
+          <Text variant="caption" className="text-destructive mt-1 font-medium">{error}</Text>
+        ) : helperText ? (
+          <Text variant="caption" className="text-muted-foreground mt-1">{helperText}</Text>
         ) : null}
       </View>
+    );
+  }
+);
 
-      {error ? (
-        <Text variant="caption" style={[styles.errorText, { color: '#ef4444' }]}>{error}</Text>
-      ) : helperText ? (
-        <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>{helperText}</Text>
-      ) : null}
-    </View>
-  );
-};
+Input.displayName = 'Input';
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 12,
-    width: '100%',
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  leftIconContainer: {
-    marginRight: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rightIconContainer: {
-    marginLeft: 8,
-    padding: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  input: {
-    flex: 1,
-    height: '100%',
-    paddingVertical: 0,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      } as any,
-    }),
-  },
-  errorText: {
-    marginTop: 4,
-  },
-  helperText: {
-    marginTop: 4,
-  },
-});
+export { Input };
+export default Input;

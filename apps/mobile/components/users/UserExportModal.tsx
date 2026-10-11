@@ -9,6 +9,7 @@ import {
 import { useTheme } from '../ui/ThemeProvider';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
+import { showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate, formatAadhaar, formatLicenseNumber } from '@reachinternational/utils';
@@ -307,7 +308,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
       }
 
       if (!targetUsers || targetUsers.length === 0) {
-        Alert.alert('Export Empty', 'No users found in the chosen export scope.');
+        showToast('info', 'Export Empty', 'No users found in the chosen export scope.');
         return;
       }
 
@@ -334,7 +335,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
         } else {
           notifyUserExported('csv', targetUsers.length);
           haptics.success();
-          Alert.alert('Sharing Unavailable', 'Native sharing is not available on this device.');
+          showToast('warning', 'Sharing Unavailable', 'Native sharing is not available on this device.');
         }
       } else {
         // PDF Export via expo-print and native sharing
@@ -356,12 +357,12 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
           onClose();
         } else {
           haptics.success();
-          Alert.alert('PDF Generated', `Report saved to: ${uri}`);
+          showToast('success', 'PDF Generated', `Report saved to: ${uri}`);
         }
       }
     } catch (err: any) {
       haptics.error();
-      Alert.alert('Export Error', err?.message || 'Failed to export users directory.');
+      showToast('error', 'Export Error', err?.message || 'Failed to export users directory.');
     } finally {
       setIsExporting(false);
     }

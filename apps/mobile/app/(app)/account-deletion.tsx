@@ -22,7 +22,9 @@ import {
   Input,
   useTheme,
   MobileHeader,
-  Text } from '../../components/ui';
+  Text,
+  useToast,
+} from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -51,6 +53,7 @@ export default function AccountDeletionScreen() {
   const router = useRouter();
   const { user, userProfile, role, signOut } = useAuth();
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
 
   const [selectedReason, setSelectedReason] = useState(REASON_OPTIONS[0]);
   const [customReason, setCustomReason] = useState('');
@@ -113,7 +116,7 @@ export default function AccountDeletionScreen() {
   // Handle Deletion Submission
   const handleSubmitDeletion = async () => {
     if (confirmText.trim().toUpperCase() !== 'DELETE') {
-      Alert.alert('Confirmation Required', 'Please type "DELETE" into the box to confirm account de-provisioning.');
+      toast('warning', 'Confirmation Required', 'Please type "DELETE" into the box to confirm account de-provisioning.');
       return;
     }
 
@@ -171,13 +174,14 @@ export default function AccountDeletionScreen() {
                 if (fallbackErr) throw fallbackErr;
               }
 
-              Alert.alert(
+              toast(
+                'success',
                 'Request Submitted',
-                'Your account deletion request has been sent to our administrator and compliance desk. It will be reviewed and processed within 14 business days.',
-                [{ text: 'OK', onPress: () => checkPendingDeletion() }]
+                'Your account deletion request has been sent to our administrator and compliance desk. It will be reviewed and processed within 14 business days.'
               );
+              checkPendingDeletion();
             } catch (err: any) {
-              Alert.alert('Submission Failed', err?.message || 'Failed to submit account deletion request. Please try again.');
+              toast('error', 'Submission Failed', err?.message || 'Failed to submit account deletion request. Please try again.');
             } finally {
               setIsSubmitting(false);
             }
@@ -212,10 +216,10 @@ export default function AccountDeletionScreen() {
                 .update({ status: 'cancelled', updated_at: new Date().toISOString() })
                 .eq('id', pendingRequest.id);
 
-              Alert.alert('Request Withdrawn', 'Your account deletion request has been cancelled.');
+              toast('success', 'Request Withdrawn', 'Your account deletion request has been cancelled.');
               setPendingRequest(null);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to withdraw deletion request.');
+              toast('error', 'Error', err?.message || 'Failed to withdraw deletion request.');
             } finally {
               setIsCancelling(false);
             }
@@ -403,7 +407,7 @@ export default function AccountDeletionScreen() {
               <Button
                 label="Submit Account Deletion Request"
                 onPress={handleSubmitDeletion}
-                variant="danger"
+                variant="destructive"
                 size="md"
                 isLoading={isSubmitting}
                 disabled={isSubmitting || confirmText.trim().toUpperCase() !== 'DELETE'}

@@ -3,15 +3,18 @@ import {
   View,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from 'react-native';
-import { Badge, useTheme, HighlightText, Text, Touchable } from '../ui';
+import * as Clipboard from 'expo-clipboard';
+import { Badge, useTheme, HighlightText, Text, Touchable, showToast } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { haptics } from '../../lib/haptics';
 import {
   Copy,
   Check,
   ChevronRight,
   History,
+  Shield,
+  User,
 } from '../ui/icon';
 
 export interface MobileMachineCardProps {
@@ -38,14 +41,21 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   onViewDetails,
 }) => {
   const { theme, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isMobile = width <= 640;
   const [copied, setCopied] = useState(false);
 
-  const handleCopyId = (e?: any) => {
+  const handleCopyId = async (e?: any) => {
     e?.stopPropagation?.();
     if (!machine.machine_id) return;
+    try {
+      if (Clipboard && Clipboard.setStringAsync) {
+        await Clipboard.setStringAsync(machine.machine_id);
+      }
+    } catch {
+      // Fallback
+    }
+    haptics.select();
     setCopied(true);
+    showToast('success', 'Copied to clipboard', `Machine ID "${machine.machine_id}" copied.`);
     setTimeout(() => setCopied(false), 1800);
   };
 
@@ -72,9 +82,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   const clientName = machine.client?.company_name || machine.customer_name || '—';
 
   return (
-    <Touchable
-      preset="card"
-      onPress={() => onViewDetails(machine)}
+    <View
       style={[
         styles.card,
         {
@@ -84,32 +92,43 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         },
       ]}
     >
-      {/* Top Header Row (Screenshot 1: M/C ID chip + Model name on left, Badges on right) */}
+      {/* Top Header Row: M/C ID chip + Model name on left, Badges on right */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
+          {/* Machine ID Reusable Badge Chip */}
           <Touchable
             preset="icon"
             onPress={handleCopyId}
-            style={[
-              styles.codeBtn,
-              {
-                backgroundColor: theme.colors.canvas,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
+            style={styles.codeBtn}
+            accessibilityLabel={`Copy machine ID ${machine.machine_id}`}
+            accessibilityHint="Copies machine ID to clipboard and shows toast"
           >
-            <HighlightText
-              text={machine.machine_id}
-              query={searchTerm}
-              variant="mono"
-              style={[styles.codeText, { color: theme.colors.ink }]}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
-            />
-            {copied ? (
-              <Check size={12} color={theme.colors.success} strokeWidth={2.5} />
-            ) : (
-              <Copy size={12} color={theme.colors.mute} />
-            )}
+            <Badge
+              variant="outline"
+              size="md"
+              style={[
+                styles.codeBadge,
+                {
+                  backgroundColor: theme.colors.canvas,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <View style={styles.codeBadgeContent}>
+                <HighlightText
+                  text={machine.machine_id}
+                  query={searchTerm}
+                  variant="mono"
+                  style={{ color: theme.colors.ink }}
+                  matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
+                />
+                {copied ? (
+                  <Check size={12} color={theme.colors.success} strokeWidth={2.5} />
+                ) : (
+                  <Copy size={12} color={theme.colors.mute} />
+                )}
+              </View>
+            </Badge>
           </Touchable>
 
           {machine.model && (
@@ -127,43 +146,55 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         {/* Badges Column: Active / Health + Rented / Available */}
         <View style={styles.badgeWrap}>
           {machine.health_status === 'breakdown' && (
-            <Badge status="breakdown" customLabel="Breakdown" size="sm" />
+            <Badge status="breakdown" customLabel="Breakdown" size="md" />
           )}
           {machine.health_status === 'under_maintenance' && (
-            <Badge status="under_maintenance" customLabel="Maintenance" size="sm" />
+            <Badge status="under_maintenance" customLabel="Maintenance" size="md" />
           )}
           {machine.health_status === 'spare' && (
-            <Badge status="spare" customLabel="Spare" size="sm" />
+            <Badge status="spare" customLabel="Spare" size="md" />
           )}
           {(!machine.health_status || machine.health_status === 'active') && (
-            <Badge status="active" customLabel="Active" size="sm" />
+            <Badge status="active" customLabel="Active" size="md" />
           )}
 
           <Badge
             status={machine.status === 'rented' ? 'rented' : 'available'}
             customLabel={machine.status === 'rented' ? 'Rented' : 'Available'}
-            size="sm"
+            size="md"
           />
         </View>
       </View>
 
-      {/* Sub Metadata Row: S/N */}
-      {machine.serial_number && (
+      {/* Sub Metadata Row: S/N and Year of Mfg */}
+      {(machine.serial_number || machine.year_of_mfg) && (
         <View style={styles.metaRow}>
-          <Text variant="caption" style={{ color: theme.colors.body }}>
-            S/N:{' '}
-            <HighlightText
-              text={machine.serial_number}
-              query={searchTerm}
-              variant="mono"
-              style={{ color: theme.colors.body }}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
-            />
-          </Text>
+          {machine.serial_number && (
+            <Text variant="caption" style={{ color: theme.colors.body }}>
+              S/N:{' '}
+              <HighlightText
+                text={machine.serial_number}
+                query={searchTerm}
+                variant="mono"
+                style={{ color: theme.colors.body }}
+                matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
+              />
+            </Text>
+          )}
+          {machine.serial_number && machine.year_of_mfg && (
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              •
+            </Text>
+          )}
+          {machine.year_of_mfg && (
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              Mfg: {machine.year_of_mfg}
+            </Text>
+          )}
         </View>
       )}
 
-      {/* Inset Specs Well (Screenshot 1: Hour Meter & Client in Col 1 & 2; Supervisor & Operator in Row 2) */}
+      {/* Inset Specs Well: Hour Meter & Client in Col 1 & 2; Supervisor & Operator in Row 2 */}
       <View
         style={[
           styles.specsWell,
@@ -174,7 +205,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         ]}
       >
         <View style={styles.twoColGrid}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.gridCol}>
             <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Hour Meter (HMR):
             </Text>
@@ -183,7 +214,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
             </Text>
           </View>
 
-          <View style={{ flex: 1 }}>
+          <View style={styles.gridCol}>
             <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Assigned Client:
             </Text>
@@ -202,8 +233,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         {/* Personnel Rows: Supervisor & Operator (24h) */}
         <View style={styles.twoColGrid}>
           {/* Supervisors */}
-          <View style={{ flex: 1 }}>
+          <View style={styles.gridCol}>
             <View style={styles.personnelHeader}>
+              <Shield size={12} color="#0d9488" />
               <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Supervisor:
               </Text>
@@ -227,29 +259,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                       {s.full_name}
                     </Text>
                     {isLast && remaining > 0 && (
-                      <View
-                        style={[
-                          styles.inlineBadge,
-                          {
-                            backgroundColor: isDark
-                              ? 'rgba(20, 184, 166, 0.15)'
-                              : 'rgba(20, 184, 166, 0.1)',
-                            borderColor: isDark
-                              ? 'rgba(20, 184, 166, 0.3)'
-                              : 'rgba(20, 184, 166, 0.2)',
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="caption"
-                          style={[
-                            styles.inlineBadgeText,
-                            { color: isDark ? '#2dd4bf' : '#0d9488' },
-                          ]}
-                        >
-                          +{remaining}
-                        </Text>
-                      </View>
+                      <Badge variant="neutral" size="md">
+                        +{remaining}
+                      </Badge>
                     )}
                   </View>
                 );
@@ -258,8 +270,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
           </View>
 
           {/* Operators */}
-          <View style={{ flex: 1 }}>
+          <View style={styles.gridCol}>
             <View style={styles.personnelHeader}>
+              <User size={12} color="#d97706" />
               <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Operator (24h):
               </Text>
@@ -283,29 +296,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                       {o.full_name}
                     </Text>
                     {isLast && remaining > 0 && (
-                      <View
-                        style={[
-                          styles.inlineBadge,
-                          {
-                            backgroundColor: isDark
-                              ? 'rgba(245, 158, 11, 0.15)'
-                              : 'rgba(245, 158, 11, 0.1)',
-                            borderColor: isDark
-                              ? 'rgba(245, 158, 11, 0.3)'
-                              : 'rgba(245, 158, 11, 0.2)',
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="caption"
-                          style={[
-                            styles.inlineBadgeText,
-                            { color: isDark ? '#fbbf24' : '#d97706' },
-                          ]}
-                        >
-                          +{remaining}
-                        </Text>
-                      </View>
+                      <Badge variant="neutral" size="md">
+                        +{remaining}
+                      </Badge>
                     )}
                   </View>
                 );
@@ -315,7 +308,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
         </View>
       </View>
 
-      {/* Action Buttons Footer (Screenshot 1: Left History Squircle & Right Details Squircle) */}
+      {/* Action Buttons Footer: Left History Log & Right View Details */}
       <View style={[styles.cardFooter, { borderTopColor: theme.colors.hairline }]}>
         <View style={styles.footerLeftBtns}>
           <Touchable
@@ -343,44 +336,47 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
           </Touchable>
         </View>
 
-        {/* View Details Right Squircle (Screenshot 1: Sky blue background with ChevronRight) */}
+        {/* View Details Right Squircle */}
         <Touchable
-          preset="icon"
+          preset="button"
           onPress={(e) => {
             e?.stopPropagation?.();
             onViewDetails(machine);
           }}
           style={[
-            styles.iconActionBtn,
+            styles.viewDetailsBtn,
             {
-              backgroundColor: isDark ? 'rgba(0, 112, 243, 0.16)' : 'rgba(0, 112, 243, 0.09)',
-              borderColor: isDark ? 'rgba(0, 112, 243, 0.35)' : 'rgba(0, 112, 243, 0.22)',
+              backgroundColor: '#0284c7',
+              borderColor: '#0284c7',
             },
           ]}
           accessibilityLabel="View Machine Details"
         >
-          <ChevronRight size={16} color={theme.colors.link} />
+          <Text variant="label" style={{ color: '#ffffff' }}>
+            Details
+          </Text>
+          <ChevronRight size={14} color="#ffffff" strokeWidth={2.5} />
         </Touchable>
       </View>
-    </Touchable>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     borderLeftWidth: 3.5,
     padding: spacingNumeric.md,
     gap: spacingNumeric.sm,
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
       },
       default: {
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.06,
         shadowRadius: 5,
         elevation: 2,
       },
@@ -400,17 +396,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   codeBtn: {
+    alignSelf: 'flex-start',
+  },
+  codeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radiusNumeric.md,
+  },
+  codeBadgeContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-    borderWidth: 1,
+    gap: 6,
   },
-  codeText: {},
-  modelText: {},
+  modelText: {
+    flexShrink: 1,
+  },
   badgeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -424,10 +424,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacingNumeric.xs,
-    marginTop: 2,
+    marginTop: 1,
   },
   specsWell: {
-    borderRadius: 14,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: 12,
     gap: 8,
@@ -437,11 +437,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacingNumeric.sm,
   },
+  gridCol: {
+    flex: 1,
+  },
   specsDivider: {
     height: 1,
     width: '100%',
   },
-  specLabel: {},
+  specLabel: {
+    marginBottom: 2,
+  },
   specValueHmr: {
     marginTop: 1,
   },
@@ -451,23 +456,18 @@ const styles = StyleSheet.create({
   personnelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+    gap: 4,
+    marginBottom: 3,
   },
   personnelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 1,
+    gap: 5,
+    marginBottom: 2,
   },
-  inlineBadge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1,
+  unassignedText: {
+    fontStyle: 'italic',
   },
-  inlineBadgeText: {},
-  unassignedText: {},
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,15 +480,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
   },
   iconActionBtn: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      web: { cursor: 'pointer' },
+      default: {},
+    }),
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1,
     ...Platform.select({
       web: { cursor: 'pointer' },
       default: {},

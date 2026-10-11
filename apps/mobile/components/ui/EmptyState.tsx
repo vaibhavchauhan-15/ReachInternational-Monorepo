@@ -1,12 +1,12 @@
 /**
- * ServiceCentric Mobile — EmptyState & ErrorState Primitives
+ * ReachInternational Mobile — EmptyState & ErrorState Primitives
+ * Powered by React Native Reusables Card, Text, and Button.
  */
 
 import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
-import { useTheme } from './ThemeProvider';
 import { Button } from './Button';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { Card } from './Card';
 import { Text } from './Text';
 
 export interface EmptyStateProps {
@@ -15,6 +15,7 @@ export interface EmptyStateProps {
   actionLabel?: string;
   onAction?: () => void;
   style?: ViewStyle;
+  icon?: React.ReactNode;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -23,17 +24,32 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   actionLabel,
   onAction,
   style,
+  icon,
 }) => {
-  const { theme } = useTheme();
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }, style]}>
-      <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
-      {description && <Text variant="body" style={[styles.description, { color: theme.colors.mute }]}>{description}</Text>}
-      {actionLabel && onAction && (
-        <Button label={actionLabel} onPress={onAction} variant="outline" size="sm" style={styles.actionBtn} />
-      )}
-    </View>
+    <Card
+      className="items-center justify-center p-6 my-4 w-full text-center"
+      style={style}
+    >
+      {icon ? <View className="mb-3 items-center justify-center">{icon}</View> : null}
+      <Text variant="heading" className="text-center font-semibold text-lg text-foreground mb-1">
+        {title}
+      </Text>
+      {description ? (
+        <Text variant="body" className="text-center text-sm text-muted-foreground mb-4">
+          {description}
+        </Text>
+      ) : null}
+      {actionLabel && onAction ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onPress={onAction}
+          label={actionLabel}
+          className="mt-1"
+        />
+      ) : null}
+    </Card>
   );
 };
 
@@ -48,38 +64,28 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   onRetry,
   style,
 }) => {
-  const { theme } = useTheme();
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.error + '44' }, style]}>
-      <Text variant="heading" style={[styles.title, { color: theme.colors.error }]}>Something Went Wrong</Text>
-      <Text variant="body" style={[styles.description, { color: theme.colors.body }]}>{message}</Text>
-      {onRetry && (
-        <Button label="Retry" onPress={onRetry} variant="danger" size="sm" style={styles.actionBtn} />
-      )}
-    </View>
+    <Card
+      className="items-center justify-center p-6 my-4 w-full border-destructive/30 bg-destructive/5 text-center"
+      style={style}
+    >
+      <Text variant="heading" className="text-center font-semibold text-lg text-destructive mb-1">
+        Something Went Wrong
+      </Text>
+      <Text variant="body" className="text-center text-sm text-muted-foreground mb-4">
+        {message}
+      </Text>
+      {onRetry ? (
+        <Button
+          variant="destructive"
+          size="sm"
+          onPress={onRetry}
+          label="Retry"
+          className="mt-1"
+        />
+      ) : null}
+    </Card>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacingNumeric.lg,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacingNumeric.md,
-    width: '100%',
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: spacingNumeric.xxs,
-  },
-  description: {
-    textAlign: 'center',
-    marginBottom: spacingNumeric.sm,
-  },
-  actionBtn: {
-    marginTop: spacingNumeric.xs,
-  },
-});
+export default EmptyState;

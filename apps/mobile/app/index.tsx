@@ -1,116 +1,59 @@
 import '../lib/suppressWarnings';
-import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Platform } from "react-native";
-import { useRouter } from "expo-router";
-import { useAuth } from "../lib/auth/useAuth";
-import { useTheme } from "../components/ui/ThemeProvider";
-import { ReachBrandEmblem } from "../components/branding";
-import { AppWebView } from "../shell/AppWebView";
-import { getMobileRoleHomeRoute } from "@reachinternational/permissions";
+import React from 'react';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Redirect } from 'expo-router';
+import { useAuth } from '../lib/auth/useAuth';
+import { useTheme } from '../components/ui/ThemeProvider';
+import { AppWebView } from '../shell/AppWebView';
+import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 
-
-const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "native";
+const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || 'native';
 
 function NativeGatewayScreen() {
   const { isLoading, session, role, isProfileComplete } = useAuth();
-  const { theme, isDark } = useTheme();
-  const router = useRouter();
+  const { theme } = useTheme();
 
-  // Subtle breathing animation for the brand logo during initial initialization
-  const pulseAnim = useRef(new Animated.Value(0.92)).current;
-  const opacityAnim = useRef(new Animated.Value(0.4)).current;
-
-  useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pulseAnim, {
-            toValue: 0.92,
-            duration: 1000,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 0.7,
-            duration: 1000,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-        ]),
-      ])
+  // While resolving session, render clean background canvas with subtle indicator
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+      </View>
     );
+  }
 
-    pulseLoop.start();
-    return () => pulseLoop.stop();
-  }, [pulseAnim, opacityAnim]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (session) {
-        if (!isProfileComplete) {
-          router.replace("/(auth)/onboarding");
-        } else {
-          router.replace(getMobileRoleHomeRoute(role) as any);
-        }
-      } else {
-        router.replace("/(auth)/login");
-      }
+  // Directly open the apps without displaying the brand logo
+  if (session) {
+    if (!isProfileComplete) {
+      return <Redirect href="/(auth)/onboarding" />;
     }
-  }, [isLoading, session, isProfileComplete, role, router]);
+    return <Redirect href={getMobileRoleHomeRoute(role) as any} />;
+  }
 
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Centered Brand Logo with smooth pulse animation */}
-      <Animated.View
-        style={[
-          styles.logoWrap,
-          {
-            transform: [{ scale: pulseAnim }],
-            opacity: opacityAnim,
-          },
-        ]}
-      >
-        <ReachBrandEmblem
-          size={88}
-          variant={isDark ? 'dark' : 'light'}
-          bordered={true}
-        />
-      </Animated.View>
-    </View>
-  );
+  return <Redirect href="/(auth)/login" />;
 }
 
 export default function GatewayScreen() {
   // WebView Shell Mode (Optional override via EXPO_PUBLIC_SHELL_MODE=webview)
-  if (SHELL_MODE === "webview") {
+  if (SHELL_MODE === 'webview') {
     return <AppWebView />;
   }
 
   // Authoritative Native Mobile App Mode (Default for Expo Go & Native Builds)
+  if (SHELL_MODE === 'native') {
+    return <NativeGatewayScreen />;
+  }
+
   return <NativeGatewayScreen />;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: '100%',
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-  },
-  logoWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 

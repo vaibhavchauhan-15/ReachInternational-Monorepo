@@ -6,7 +6,6 @@ import {
   StatusCard,
   AlertWidget,
 } from "../shared";
-import { Card } from "@/components/ui/Card";
 import {
   Wrench,
   Building2,
@@ -100,28 +99,14 @@ export async function OperatorDashboardView({
                 : "Remember to submit before the end of your shift."
             }
           />
-          <Card
-            padding="none"
-            className="relative overflow-hidden p-3.5 sm:p-4 md:p-5 flex items-start justify-between gap-3 border border-[var(--color-hairline)] bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] rounded-[var(--radius-md)]"
-          >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-slate-400/40 via-slate-400/20 to-transparent rounded-t-[var(--radius-md)]" />
-            <div className="space-y-1.5">
-              <p className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-                Last Recorded Meter (HMR)
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/15 shrink-0">
-                  <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--color-mute)]" />
-                </div>
-                <span className="text-base sm:text-lg md:text-xl font-bold font-mono text-[var(--color-ink)]">
-                  {data?.today?.lastHmr != null ? `${data.today.lastHmr.toFixed(1)} hrs` : "No prior logs"}
-                </span>
-              </div>
-              <p className="text-[11px] sm:text-xs text-[var(--color-mute)] mt-1">
-                Use as starting meter for your next log
-              </p>
-            </div>
-          </Card>
+          <StatusCard
+            title="Last Recorded Meter (HMR)"
+            status="default"
+            icon={Gauge}
+            label={data?.today?.lastHmr != null ? `${data.today.lastHmr.toFixed(1)} hrs` : "No prior logs"}
+            description="Use as starting meter for your next log"
+            monoValue
+          />
         </div>
       </div>
 
@@ -228,19 +213,11 @@ export async function OperatorDashboardView({
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
           {/* Machine Card */}
-          <Card
-            padding="none"
-            className="relative overflow-hidden p-3.5 sm:p-4 md:p-5 space-y-3 border border-[var(--color-hairline)] bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] rounded-[var(--radius-md)]"
+          <StatusCard
+            title="Assigned Machine"
+            icon={Wrench}
+            status="default"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-slate-400/40 via-slate-400/20 to-transparent rounded-t-[var(--radius-md)]" />
-            <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-              <div className="p-1.5 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/15 shrink-0">
-                <Wrench className="w-3.5 h-3.5 text-[var(--color-mute)]" />
-              </div>
-              <span className="text-xs font-semibold text-[var(--color-ink)] uppercase tracking-wider">
-                Assigned Machine
-              </span>
-            </div>
             {data.machine ? (
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between items-center">
@@ -261,22 +238,14 @@ export async function OperatorDashboardView({
                 No active machine assigned. Contact your site supervisor.
               </p>
             )}
-          </Card>
+          </StatusCard>
 
           {/* Client & Worksite Card */}
-          <Card
-            padding="none"
-            className="relative overflow-hidden p-3.5 sm:p-4 md:p-5 space-y-3 border border-[var(--color-hairline)] bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] rounded-[var(--radius-md)]"
+          <StatusCard
+            title="Client & Location"
+            icon={Building2}
+            status="default"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-slate-400/40 via-slate-400/20 to-transparent rounded-t-[var(--radius-md)]" />
-            <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-              <div className="p-1.5 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/15 shrink-0">
-                <Building2 className="w-3.5 h-3.5 text-[var(--color-mute)]" />
-              </div>
-              <span className="text-xs font-semibold text-[var(--color-ink)] uppercase tracking-wider">
-                Client & Location
-              </span>
-            </div>
             {data.client ? (
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between items-center">
@@ -305,7 +274,7 @@ export async function OperatorDashboardView({
                 Client site will be determined by machine deployment.
               </p>
             )}
-          </Card>
+          </StatusCard>
         </div>
       </div>
     </div>

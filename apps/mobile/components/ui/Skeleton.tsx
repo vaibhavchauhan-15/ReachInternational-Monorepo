@@ -1,90 +1,55 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing, Platform, type ViewStyle, type StyleProp } from 'react-native';
-import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+/**
+ * ReachInternational Mobile — React Native Reusables Skeleton Component
+ * Official RNR Skeleton primitive with animate-pulse and helper variants.
+ */
 
-export interface SkeletonProps {
+import { cn } from '@/lib/utils';
+import * as React from 'react';
+import { View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import { useTheme } from './ThemeProvider';
+
+export interface SkeletonProps extends ViewProps {
+  className?: string;
   width?: number | `${number}%`;
   height?: number;
   borderRadius?: number;
-  style?: StyleProp<ViewStyle>;
-  animate?: boolean;
   variant?: 'rect' | 'circle' | 'text' | 'badge';
+  animate?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-export const Skeleton: React.FC<SkeletonProps> = ({
-  width = '100%',
-  height = 20,
+function Skeleton({
+  className,
+  width,
+  height,
   borderRadius,
-  style,
+  variant,
   animate = true,
-  variant = 'rect',
-}) => {
-  const { theme } = useTheme();
-  const opacityAnim = useRef(new Animated.Value(0.4)).current;
-
-  useEffect(() => {
-    if (!animate) return;
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacityAnim, {
-          toValue: 0.85,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0.4,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ])
-    );
-
-    pulse.start();
-    return () => pulse.stop();
-  }, [animate, opacityAnim]);
-
-  const computedRadius =
-    borderRadius !== undefined
-      ? borderRadius
-      : variant === 'circle'
-      ? 9999
-      : variant === 'badge'
-      ? 9999
-      : variant === 'text'
-      ? radiusNumeric.xs
-      : radiusNumeric.sm;
-
-  const computedHeight =
-    height !== undefined
-      ? height
-      : variant === 'circle' && typeof width === 'number'
-      ? width
-      : variant === 'badge'
-      ? 22
-      : variant === 'text'
-      ? 14
-      : 20;
+  style,
+  ...props
+}: SkeletonProps) {
+  const dynamicStyle: ViewStyle = {};
+  if (width !== undefined) dynamicStyle.width = width as any;
+  if (height !== undefined) dynamicStyle.height = height;
+  if (borderRadius !== undefined) dynamicStyle.borderRadius = borderRadius;
+  if (variant === 'circle') dynamicStyle.borderRadius = 9999;
+  if (variant === 'badge') dynamicStyle.borderRadius = 9999;
 
   return (
-    <Animated.View
-      style={[
-        styles.skeleton,
-        {
-          width,
-          height: computedHeight,
-          borderRadius: computedRadius,
-          backgroundColor: theme.colors.hairlineSoft,
-          opacity: animate ? opacityAnim : 0.6,
-        },
-        style,
-      ]}
+    <View
+      className={cn(
+        'rounded-md bg-muted',
+        animate && 'animate-pulse',
+        variant === 'circle' && 'rounded-full',
+        variant === 'badge' && 'rounded-full h-5 w-16',
+        variant === 'text' && 'h-4 w-full rounded',
+        className
+      )}
+      style={[dynamicStyle, style]}
+      {...props}
     />
   );
-};
+}
 
 export interface SkeletonTextProps {
   lines?: number;
@@ -110,10 +75,8 @@ export const SkeletonText: React.FC<SkeletonTextProps> = ({
           key={idx}
           width={widths[idx % widths.length] || '100%'}
           height={barHeight}
-          borderRadius={radiusNumeric.xs}
           animate={animate}
           variant="text"
-          style={styles.noMargin}
         />
       ))}
     </View>
@@ -137,10 +100,9 @@ export const SkeletonBadge: React.FC<SkeletonBadgeProps> = ({
     <Skeleton
       width={width}
       height={height}
-      borderRadius={9999}
       animate={animate}
       variant="badge"
-      style={[styles.noMargin, style]}
+      style={style}
     />
   );
 };
@@ -158,31 +120,13 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
   const { theme } = useTheme();
   return (
     <View
-      style={[
-        styles.cardShell,
-        {
-          backgroundColor: theme.colors.canvasElevated,
-          borderColor: theme.colors.hairline,
-        },
-        style,
-      ]}
+      className="rounded-xl border border-border bg-card p-4 mb-4"
+      style={[{ backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }, style]}
     >
       {children}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  skeleton: {
-    marginVertical: 4,
-  },
-  noMargin: {
-    marginVertical: 0,
-  },
-  cardShell: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.md,
-    marginBottom: spacingNumeric.md,
-  },
-});
+export { Skeleton };
+export default Skeleton;

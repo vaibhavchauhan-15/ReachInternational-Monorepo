@@ -1,4 +1,5 @@
 import { Text } from '../ui/Text';
+import { Badge } from '../ui/Badge';
 import React, { useState } from 'react';
 import {
   View,
@@ -9,6 +10,7 @@ import {
   ActivityIndicator} from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
+import { showToast } from '../ui';
 import { useTheme } from '../ui/ThemeProvider';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
@@ -306,14 +308,15 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 // Rollback
                 onSuccess({ ...user, status: prevStatus });
                 haptics.reject();
-                Alert.alert('Status Update Failed', error.message || 'Failed to update user status.');
+                showToast('error', 'Status Update Failed', error.message || 'Failed to update user status.');
                 return;
               }
               notifyUserStatusChanged(user.full_name, newStatus);
+              showToast('success', 'Status Updated', `${user.full_name}'s account is now ${newStatus}.`);
             } catch (err: any) {
               onSuccess({ ...user, status: prevStatus });
               haptics.reject();
-              Alert.alert('Status Update Failed', err?.message || 'Failed to update user status.');
+              showToast('error', 'Status Update Failed', err?.message || 'Failed to update user status.');
             }
           },
         },
@@ -330,11 +333,12 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         .eq('id', user.id);
       if (error) throw error;
       notifyUserUpdated(user.full_name, newRole);
+      showToast('success', 'Role Updated', `Updated ${user.full_name}'s role.`);
       setRoleModalVisible(false);
       onSuccess();
       onClose();
     } catch (err: any) {
-      Alert.alert('Role Update Failed', err?.message || 'Failed to update user role.');
+      showToast('error', 'Role Update Failed', err?.message || 'Failed to update user role.');
     } finally {
       setIsUpdating(false);
     }
@@ -362,11 +366,12 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         }
       }
 
+      showToast('success', 'Supervisor Updated', 'Supervisor assignment updated.');
       setSupervisorModalVisible(false);
       onSuccess();
       onClose();
     } catch (err: any) {
-      Alert.alert('Supervisor Update Failed', err?.message || 'Failed to update supervisor assignment.');
+      showToast('error', 'Supervisor Update Failed', err?.message || 'Failed to update supervisor assignment.');
     } finally {
       setIsUpdating(false);
     }
@@ -386,10 +391,11 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             try {
               const { error } = await supabase.from('users').delete().eq('id', user.id);
               if (error) throw error;
+              showToast('success', 'User Deleted', `User ${user.full_name} has been deleted.`);
               onSuccess();
               onClose();
             } catch (err: any) {
-              Alert.alert('Deletion Error', err?.message || 'Failed to delete user account.');
+              showToast('error', 'Deletion Error', err?.message || 'Failed to delete user account.');
             } finally {
               setIsUpdating(false);
             }
@@ -428,8 +434,8 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 {roleMeta.icon}
               </View>
               <View style={styles.headerTextWrap}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]} numberOfLines={1}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text variant="heading" style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]} numberOfLines={1}>
                     {user.full_name}
                   </Text>
                   {user.employee_id ? (
@@ -439,52 +445,51 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        gap: 3,
+                        gap: 4,
                         backgroundColor: theme.colors.canvasElevated,
                         borderWidth: 1,
                         borderColor: theme.colors.hairline,
-                        paddingHorizontal: 5,
-                        paddingVertical: 1.5,
-                        borderRadius: 4 }}
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: radiusNumeric.full,
+                      }}
                     >
                       <Text variant="mono" style={{ color: theme.colors.ink }}>
                         {user.employee_id}
                       </Text>
                       {copiedField === 'Employee ID' ? (
-                        <Check size={9} color="#10b981" />
+                        <Check size={10} color="#10b981" />
                       ) : (
-                        <Copy size={9} color={theme.colors.mute} />
+                        <Copy size={10} color={theme.colors.mute} />
                       )}
                     </Touchable>
                   ) : null}
                 </View>
                 <View style={styles.badgesRow}>
                   {/* Role Badge */}
-                  <View
-                    style={[
-                      styles.roleBadge,
-                      { backgroundColor: roleMeta.badgeBg, borderColor: roleMeta.badgeBorder },
-                    ]}
+                  <Badge
+                    variant="neutral"
+                    size="sm"
+                    style={{
+                      backgroundColor: roleMeta.badgeBg,
+                      borderColor: roleMeta.badgeBorder,
+                    }}
                   >
-                    <Text style={[styles.roleBadgeText, { color: roleMeta.badgeText }]}>
+                    <Text variant="caption" style={{ color: roleMeta.badgeText }}>
                       {roleMeta.label}
                     </Text>
-                  </View>
+                  </Badge>
 
                   {/* Status Badge */}
-                  {user.status === 'active' ? (
-                    <View style={[styles.statusBadge, { backgroundColor: '#d1fae5', borderColor: '#a7f3d0' }]}>
-                      <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.statusBadgeText, { color: '#047857' }]}>Active</Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.statusBadge, { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' }]}>
-                      <View style={[styles.statusDot, { backgroundColor: '#94a3b8' }]} />
-                      <Text style={[styles.statusBadgeText, { color: '#64748b' }]}>
-                        {user.status ? user.status.toUpperCase() : 'INACTIVE'}
-                      </Text>
-                    </View>
-                  )}
+                  <Badge
+                    status={user.status}
+                    size="sm"
+                    dot
+                  >
+                    <Text variant="caption">
+                      {user.status === 'active' ? 'Active' : (user.status ? user.status.toUpperCase() : 'INACTIVE')}
+                    </Text>
+                  </Badge>
                 </View>
               </View>
             </View>

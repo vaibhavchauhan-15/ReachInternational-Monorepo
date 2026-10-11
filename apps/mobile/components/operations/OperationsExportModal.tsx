@@ -10,6 +10,7 @@ import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
+import { showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Printer, FileSpreadsheet, X, Loader2 } from '../ui/icon';
@@ -533,7 +534,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
             UTI: 'com.adobe.pdf',
           });
         } else {
-          Alert.alert('PDF Ready', `Report file created:\n${targetUri}`);
+          showToast('success', 'PDF Ready', `Report file created:\n${targetUri}`);
         }
         notifyLogsPdfExported(activeLogs.length, new Set(activeLogs.map((l) => l.machine_id || l.machine_code)).size);
         await haptics.success();
@@ -542,7 +543,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     } catch (err: any) {
       await haptics.error();
       console.error('[OperationsExportModal] PDF export error:', err);
-      Alert.alert('Export Error', err?.message || 'Failed to generate PDF document.');
+      showToast('error', 'Export Error', err?.message || 'Failed to generate PDF document.');
     } finally {
       setIsExportingPdf(false);
     }
@@ -560,7 +561,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     } catch (err: any) {
       await haptics.error();
       console.error('[OperationsExportModal] Direct print error:', err);
-      Alert.alert('Print Error', err?.message || 'Failed to launch system print spooler.');
+      showToast('error', 'Print Error', err?.message || 'Failed to launch system print spooler.');
     } finally {
       setIsPrinting(false);
     }
@@ -693,7 +694,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
         // Universal web download
         const downloaded = downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
         if (!downloaded) {
-          Alert.alert('Export Failed', 'Unable to initiate file download in browser.');
+          showToast('error', 'Export Failed', 'Unable to initiate file download in browser.');
         } else {
           notifyLogsCsvExported(activeLogs.length);
           await haptics.success();
@@ -714,7 +715,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
             UTI: 'public.comma-separated-values-text',
           });
         } else {
-          Alert.alert('CSV Created', `Spreadsheet saved to:\n${targetUri}`);
+          showToast('success', 'CSV Created', `Spreadsheet saved to:\n${targetUri}`);
         }
         notifyLogsCsvExported(activeLogs.length);
         await haptics.success();
@@ -723,7 +724,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     } catch (err: any) {
       await haptics.error();
       console.error('[OperationsExportModal] CSV export error:', err);
-      Alert.alert('Export Error', err?.message || 'Failed to generate spreadsheet file.');
+      showToast('error', 'Export Error', err?.message || 'Failed to generate spreadsheet file.');
     } finally {
       setIsExportingCsv(false);
     }

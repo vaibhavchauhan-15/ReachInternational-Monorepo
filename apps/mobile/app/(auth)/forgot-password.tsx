@@ -20,13 +20,14 @@ import { useRouter } from 'expo-router';
 import { Mail, ArrowLeft, ArrowRight, KeyRound, Moon, Sun } from '../../components/ui/icon';
 import { getAppUrl } from '../../lib/env';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, useTheme , Text } from '../../components/ui';
+import { Input, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { theme, isDark, setMode } = useTheme();
+  const { toast } = useToast();
   const { width, height } = useWindowDimensions();
 
   // Responsive Breakpoints: Mobile (<=640px), Tablet (641px–1023px), Desktop (>=1024px)
@@ -37,16 +38,12 @@ export default function ForgotPasswordScreen() {
 
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
 
   const handleEmailChange = (val: string) => {
     setEmail(val);
     if (fieldError) setFieldError('');
-    if (errorMessage) setErrorMessage('');
-    if (successMessage) setSuccessMessage('');
   };
 
   const handleNavigateBack = () => {
@@ -63,8 +60,6 @@ export default function ForgotPasswordScreen() {
     if (isSubmittingRef.current || isLoading) return;
 
     haptics.light();
-    setErrorMessage('');
-    setSuccessMessage('');
     setFieldError('');
 
     const trimmedEmail = email.trim();
@@ -102,22 +97,22 @@ export default function ForgotPasswordScreen() {
           const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
           if (sbError) {
             haptics.reject();
-            setErrorMessage(sbError.message || 'No account found with this email address.');
+            toast('error', 'Reset Failed', sbError.message || 'No account found with this email address.');
             return;
           }
           haptics.confirm();
-          setSuccessMessage('Password reset instructions have been sent to your email.');
+          toast('success', 'Reset Link Sent', 'Password reset instructions have been sent to your email.');
           return;
         }
 
         haptics.reject();
-        setErrorMessage(data.error || 'No account found with this email address.');
+        toast('error', 'Reset Failed', data.error || 'No account found with this email address.');
         if (data.fieldErrors?.email) {
           setFieldError(data.fieldErrors.email);
         }
       } else {
         haptics.confirm();
-        setSuccessMessage(data.message || 'Password reset instructions have been sent to your email.');
+        toast('success', 'Reset Link Sent', data.message || 'Password reset instructions have been sent to your email.');
       }
     } catch (err: unknown) {
       // Offline / Network fallback
@@ -125,14 +120,14 @@ export default function ForgotPasswordScreen() {
         const { error: sbError } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
         if (sbError) {
           haptics.reject();
-          setErrorMessage('Failed to send reset email. Please check your internet connection.');
+          toast('error', 'Reset Failed', 'Failed to send reset email. Please check your internet connection.');
         } else {
           haptics.confirm();
-          setSuccessMessage('Password reset instructions have been sent to your email.');
+          toast('success', 'Reset Link Sent', 'Password reset instructions have been sent to your email.');
         }
       } catch {
         haptics.reject();
-        setErrorMessage('Failed to send reset email. Please check your connection and try again.');
+        toast('error', 'Reset Failed', 'Failed to send reset email. Please check your connection and try again.');
       }
     } finally {
       isSubmittingRef.current = false;
@@ -233,20 +228,6 @@ export default function ForgotPasswordScreen() {
               <Text style={[styles.subtitle, { color: isDark ? '#a1a1aa' : '#64748b' }]}>
                 Enter your work email address and we&rsquo;ll send you a password reset link.
               </Text>
-
-              {/* Global Error Banner */}
-              {errorMessage && !fieldError ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="error">{errorMessage}</Alert>
-                </View>
-              ) : null}
-
-              {/* Global Success Banner */}
-              {successMessage ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="success">{successMessage}</Alert>
-                </View>
-              ) : null}
 
               {/* Form Controls */}
               <View style={styles.form}>

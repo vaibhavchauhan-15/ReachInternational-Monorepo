@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StatusBar as RNStatusBar,
+  Modal,
 } from 'react-native';
 import { haptics } from '../../lib/haptics';
 import { useRouter } from 'expo-router';
@@ -16,7 +17,7 @@ import { useTheme } from './ThemeProvider';
 import { Badge } from './Badge';
 import { Text, useTypeStyle } from './Text';
 import { Touchable } from './Touchable';
-import { AppModal } from './AppModal';
+import { Pressable } from './touch/Pressable';
 import {
   ChevronLeft,
   Search,
@@ -178,7 +179,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       if (typeof router.canGoBack === 'function' && router.canGoBack()) {
         router.back();
       } else {
-        router.replace('/(app)/dashboard');
+        router.replace('/dashboard');
       }
     });
 
@@ -191,6 +192,19 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       : isBannerVisible
       ? 6
       : safeTop + 5;
+
+  const closeActionMenu = () => {
+    setMenuOpen(false);
+  };
+
+  const handleActionPress = (action: HeaderActionItem) => {
+    if (action.disabled) return;
+    haptics.select();
+    setMenuOpen(false);
+    setTimeout(() => {
+      action.onPress();
+    }, 60);
+  };
 
   // Measure and Open 3-Dot Menu
   const openActionMenu = () => {
@@ -205,21 +219,25 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         ? window.innerWidth
         : Dimensions.get('window').width;
 
-    if (Platform.OS === 'web' && menuTriggerRef.current && (menuTriggerRef.current as any).getBoundingClientRect) {
+    if (
+      Platform.OS === 'web' &&
+      menuTriggerRef.current &&
+      typeof (menuTriggerRef.current as any).getBoundingClientRect === 'function'
+    ) {
       const rect = (menuTriggerRef.current as any).getBoundingClientRect();
       setMenuCoords({
-        top: rect.bottom + 6,
-        right: Math.max(12, windowWidth - rect.right),
+        top: Math.max(44, Math.round(rect.bottom + 6)),
+        right: Math.max(12, Math.round(windowWidth - rect.right)),
       });
       setMenuOpen(true);
       return;
     }
 
-    if (menuTriggerRef.current) {
+    if (menuTriggerRef.current && typeof menuTriggerRef.current.measureInWindow === 'function') {
       menuTriggerRef.current.measureInWindow((x, y, width, height) => {
         setMenuCoords({
-          top: y + height + 6,
-          right: Math.max(12, windowWidth - (x + width)),
+          top: Math.max(44, Math.round(y + height + 6)),
+          right: Math.max(12, Math.round(windowWidth - (x + width))),
         });
         setMenuOpen(true);
       });
@@ -300,8 +318,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       {/* If Mobile Search is expanded full-width on small screens */}
       {!isWide && isMobileSearchExpanded && search ? (
         <View style={styles.expandedSearchRow}>
-          <Touchable
-            preset="icon"
+          <Pressable
+            variant="plain"
+            haptic={false}
             onPress={() => {
               setIsMobileSearchExpanded(false);
               search.onClear?.();
@@ -317,7 +336,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             accessibilityLabel="Close Search"
           >
             <ArrowLeft size={16} color={theme.colors.ink} />
-          </Touchable>
+          </Pressable>
 
           <View
             style={[
@@ -356,8 +375,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             />
 
             {search.value.length > 0 && (
-              <Touchable
-                preset="icon"
+              <Pressable
+                variant="plain"
+                haptic={false}
                 onPress={() => {
                   search.onClear ? search.onClear() : search.onChangeText('');
                 }}
@@ -365,14 +385,15 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 accessibilityLabel="Clear Search"
               >
                 <X size={12} color={theme.colors.mute} />
-              </Touchable>
+              </Pressable>
             )}
           </View>
 
           {/* 3-Dot Menu Button during expanded search */}
           <View ref={menuTriggerRef} collapsable={false}>
-            <Touchable
-              preset="icon"
+            <Pressable
+              variant="plain"
+              haptic={false}
               onPress={openActionMenu}
               hitSlopToMin48={true}
               style={[
@@ -385,7 +406,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               accessibilityLabel="Other Actions"
             >
               <MoreVertical size={16} color={theme.colors.ink} />
-            </Touchable>
+            </Pressable>
           </View>
         </View>
       ) : (
@@ -394,8 +415,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {/* Left: Back Button + Clean Page Title */}
           <View style={styles.leftSection}>
             {showBack && (
-              <Touchable
-                preset="icon"
+              <Pressable
+                variant="plain"
+                haptic={false}
                 onPress={handleBackPress}
                 hitSlopToMin48={true}
                 style={[
@@ -408,7 +430,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 accessibilityLabel="Go Back"
               >
                 <ChevronLeft size={16} color={theme.colors.ink} />
-              </Touchable>
+              </Pressable>
             )}
 
             <View style={styles.titleTextContainer}>
@@ -491,8 +513,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   />
 
                   {search.value.length > 0 && (
-                    <Touchable
-                      preset="icon"
+                    <Pressable
+                      variant="plain"
+                      haptic={false}
                       onPress={() => {
                         search.onClear ? search.onClear() : search.onChangeText('');
                       }}
@@ -500,13 +523,14 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       accessibilityLabel="Clear Search"
                     >
                       <X size={12} color={theme.colors.mute} />
-                    </Touchable>
+                    </Pressable>
                   )}
                 </View>
               ) : (
                 /* Compact Phone Viewport: Sleek Search Icon Button */
-                <Touchable
-                  preset="icon"
+                <Pressable
+                  variant="plain"
+                  haptic={false}
                   onPress={handleSearchTriggerClick}
                   hitSlopToMin48={true}
                   style={[
@@ -519,7 +543,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   accessibilityLabel="Search"
                 >
                   <Search size={15} color={theme.colors.ink} />
-                </Touchable>
+                </Pressable>
               )
             ) : showQuickAccess ? (
               isWide && showQuickAccessCapsule ? (
@@ -557,8 +581,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 </Touchable>
               ) : (
                 /* Compact Phone Viewport / Dedicated Sleek 32×32 Quick Access Icon Button */
-                <Touchable
-                  preset="icon"
+                <Pressable
+                  variant="plain"
+                  haptic={false}
                   onPress={handleQuickAccessPress}
                   hitSlopToMin48={true}
                   style={[
@@ -571,15 +596,16 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   accessibilityLabel="Quick Access"
                 >
                   <Search size={15} color={theme.colors.ink} />
-                </Touchable>
+                </Pressable>
               )
             ) : null}
 
             {/* 3-DOT MENU BUTTON FOR OTHER ACTIONS */}
             {showMoreMenu !== false && (
               <View ref={menuTriggerRef} collapsable={false}>
-                <Touchable
-                  preset="icon"
+                <Pressable
+                  variant="plain"
+                  haptic={false}
                   onPress={openActionMenu}
                   hitSlopToMin48={true}
                   style={[
@@ -592,87 +618,187 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   accessibilityLabel="Other Actions"
                 >
                   <MoreVertical size={16} color={theme.colors.ink} />
-                </Touchable>
+                </Pressable>
               </View>
             )}
           </View>
         </View>
       )}
 
-      {/* ANCHORED 3-DOT ACTION MENU MODAL */}
-      <AppModal
+      {/* ANCHORED 3-DOT ACTION MENU (PORTALED VIA MODAL) */}
+      <Modal
         visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        variant="bottom"
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        hardwareAccelerated
+        onRequestClose={closeActionMenu}
       >
-        <View
-          style={[
-            styles.menuSheet,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
+        {/* Fullscreen dismiss backdrop */}
+        <Pressable
+          variant="plain"
+          onPress={closeActionMenu}
+          style={StyleSheet.absoluteFill}
+          accessibilityRole="button"
+          accessibilityLabel="Close action menu"
         >
-          <View style={styles.menuHeader}>
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
-              ACTIONS
-            </Text>
-          </View>
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              !isWide ? { backgroundColor: 'rgba(0, 0, 0, 0.45)' } : undefined,
+            ]}
+          />
+        </Pressable>
 
-          <ScrollView
-            style={styles.menuScrollView}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
+        {isWide ? (
+          /* Desktop & Tablet: Anchored Popover Box beneath 3-dot trigger */
+          <View
+            style={[
+              styles.popoverMenu,
+              {
+                top: menuCoords.top,
+                right: menuCoords.right,
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
           >
-            {menuActions.map((action, idx) => (
-              <Touchable
-                key={action.id || idx}
-                preset="row"
-                disabled={action.disabled}
-                onPress={() => {
-                  haptics.select();
-                  setMenuOpen(false);
-                  action.onPress();
-                }}
-                style={[
-                  styles.menuItem,
-                  idx < menuActions.length - 1 && {
-                    borderBottomWidth: 1,
-                    borderBottomColor: theme.colors.hairline,
-                  },
-                  action.disabled && { opacity: 0.4 },
-                ]}
-              >
-                {action.icon && (
-                  <View style={styles.menuItemIcon}>
-                    {action.icon}
-                  </View>
-                )}
+            <View style={styles.menuHeader}>
+              <Text variant="caption" style={{ color: theme.colors.mute }}>
+                ACTIONS
+              </Text>
+            </View>
 
-                <Text
-                  variant="label"
-                  style={{
-                    color: action.destructive ? '#ef4444' : theme.colors.ink,
-                    flex: 1,
-                  }}
-                  numberOfLines={1}
+            <ScrollView
+              style={styles.menuScrollView}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+            >
+              {menuActions.map((action, idx) => (
+                <Touchable
+                  key={action.id || idx}
+                  preset="row"
+                  disabled={action.disabled}
+                  onPress={() => handleActionPress(action)}
+                  style={[
+                    styles.menuItem,
+                    idx < menuActions.length - 1 && {
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.hairline,
+                    },
+                    action.disabled && { opacity: 0.4 },
+                  ]}
                 >
-                  {action.label}
-                </Text>
+                  {action.icon && (
+                    <View style={styles.menuItemIcon}>
+                      {action.icon}
+                    </View>
+                  )}
 
-                {action.badge !== undefined && (
-                  <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
-                    <Text variant="caption" style={{ color: theme.colors.body }}>
-                      {action.badge}
+                  <Text
+                    variant="label"
+                    style={{
+                      color: action.destructive ? '#ef4444' : theme.colors.ink,
+                      flex: 1,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {action.label}
+                  </Text>
+
+                  {action.badge !== undefined && (
+                    <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
+                      <Text variant="caption" style={{ color: theme.colors.body }}>
+                        {action.badge}
+                      </Text>
+                    </View>
+                  )}
+                </Touchable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : (
+          /* Mobile (< 640px): Bottom Sheet Presentation */
+          <View style={styles.mobileSheetWrapper} pointerEvents="box-none">
+            <View
+              style={[
+                styles.mobileSheetPanel,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <View style={styles.handleWrapper}>
+                <View
+                  style={[
+                    styles.dragHandle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.24)'
+                        : 'rgba(0, 0, 0, 0.18)',
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.menuHeader}>
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  ACTIONS
+                </Text>
+              </View>
+
+              <ScrollView
+                style={styles.menuScrollView}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+              >
+                {menuActions.map((action, idx) => (
+                  <Touchable
+                    key={action.id || idx}
+                    preset="row"
+                    disabled={action.disabled}
+                    onPress={() => handleActionPress(action)}
+                    style={[
+                      styles.menuItem,
+                      idx < menuActions.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.colors.hairline,
+                      },
+                      action.disabled && { opacity: 0.4 },
+                    ]}
+                  >
+                    {action.icon && (
+                      <View style={styles.menuItemIcon}>
+                        {action.icon}
+                      </View>
+                    )}
+
+                    <Text
+                      variant="label"
+                      style={{
+                        color: action.destructive ? '#ef4444' : theme.colors.ink,
+                        flex: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {action.label}
                     </Text>
-                  </View>
-                )}
-              </Touchable>
-            ))}
-          </ScrollView>
-        </View>
-      </AppModal>
+
+                    {action.badge !== undefined && (
+                      <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
+                        <Text variant="caption" style={{ color: theme.colors.body }}>
+                          {action.badge}
+                        </Text>
+                      </View>
+                    )}
+                  </Touchable>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+      </Modal>
 
       {/* Integrated Global Command Palette (when search is clicked without direct query) */}
       <MobileCommandPalette
@@ -791,12 +917,64 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
   },
-  menuSheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
+  popoverMenu: {
+    position: 'absolute',
+    minWidth: 230,
+    maxWidth: 290,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
+    paddingVertical: 4,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.26)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.22,
+        shadowRadius: 16,
+        elevation: 20,
+      },
+    }),
+  },
+  mobileSheetWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+  },
+  mobileSheetPanel: {
+    width: '100%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     paddingBottom: 24,
     overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.28)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.24,
+        shadowRadius: 18,
+        elevation: 20,
+      },
+    }),
+  },
+  handleWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  dragHandle: {
+    width: 38,
+    height: 4.5,
+    borderRadius: radiusNumeric.full,
   },
   menuScrollView: {
     maxHeight: 380,

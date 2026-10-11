@@ -26,7 +26,7 @@ export interface ManagerDashboardCardProps {
 export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
   data,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const totalFleet = data?.machineUtilization?.total ?? 0;
   const rentedFleet = data?.machineUtilization?.rented ?? 0;
@@ -40,7 +40,10 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
     <View style={styles.container}>
       {/* Fleet Utilization KPIs */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           FLEET UTILIZATION BREAKDOWN
         </Text>
         <KPIGrid columns={5}>
@@ -48,35 +51,30 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
             label="Total Fleet"
             value={totalFleet}
             icon={Wrench}
-            href="/machines"
             variant="default"
           />
           <KPICard
             label="On Rent"
             value={rentedFleet}
             icon={CheckCircle2}
-            href="/machines"
             variant="success"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
             icon={Layers}
-            href="/operations"
             variant="info"
           />
           <KPICard
             label="Spare / Idle"
             value={spareFleet}
             icon={Clock}
-            href="/machines"
             variant="warning"
           />
           <KPICard
             label="Breakdowns"
             value={breakdownFleet}
             icon={AlertTriangle}
-            href="/machines"
             variant={breakdownFleet > 0 ? 'error' : 'default'}
           />
         </KPIGrid>
@@ -84,7 +82,10 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
 
       {/* Today's Operational Running Hours */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           TODAY'S PRODUCTION & RUNNING METER
         </Text>
         <KPIGrid columns={2}>
@@ -92,14 +93,12 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
             label="Logs Submitted Today"
             value={todayLogs}
             icon={FileSpreadsheet}
-            href="/operations"
             variant="default"
           />
           <KPICard
             label="Running Hours Today"
             value={`${todayHours.toFixed(1)} hrs`}
             icon={Gauge}
-            href="/operations"
             variant="info"
           />
         </KPIGrid>
@@ -107,23 +106,28 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
 
       {/* Primary Management Actions */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           OPERATIONS MANAGEMENT
         </Text>
-        <PrimaryAction
-          title="Daily Operations Review"
-          description="Examine shift logs, running hours, and site location records"
-          href="/operations"
-          icon={FileSpreadsheet}
-          variant="primary"
-        />
-        <PrimaryAction
-          title="Machinery Fleet Roster"
-          description="Reassign equipment, update rental status, and track maintenance"
-          href="/machines"
-          icon={Wrench}
-          variant="secondary"
-        />
+        <View style={styles.actionList}>
+          <PrimaryAction
+            title="Daily Operations Review"
+            description="Examine shift logs, running hours, and site location records"
+            href="/operations"
+            icon={FileSpreadsheet}
+            variant="primary"
+          />
+          <PrimaryAction
+            title="Machinery Fleet Roster"
+            description="Reassign equipment, update rental status, and track maintenance"
+            href="/machines"
+            icon={Wrench}
+            variant="secondary"
+          />
+        </View>
       </View>
     </View>
   );
@@ -138,6 +142,9 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 2,
+    marginBottom: spacingNumeric.xs + 4,
+  },
+  actionList: {
+    gap: spacingNumeric.sm,
   },
 });

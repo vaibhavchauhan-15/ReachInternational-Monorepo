@@ -7,7 +7,6 @@
 import React, { useState, useMemo } from 'react';
 import {
   View,
-  TextInput,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
@@ -15,15 +14,15 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../ui/ThemeProvider';
-import { Text, useTypeStyle } from '../ui/Text';
+import { Text } from '../ui/Text';
 import { Icon as CanonicalIcon } from '../ui/icon';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
+import { SearchInput } from '../ui/SearchInput';
 import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  Search,
   Wrench,
   Gauge,
   Activity,
@@ -33,7 +32,6 @@ import {
   Building2,
   User,
   ChevronRight,
-  X,
   LogOut,
   Sun,
   Moon,
@@ -69,7 +67,6 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
   const { signOut } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const bodyTypeStyle = useTypeStyle('body');
 
   const handleNavigate = (href: string) => {
     onClose();
@@ -98,7 +95,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Executive overview, fleet utilization KPIs & recent activities',
         category: 'Navigation',
         icon: Home,
-        href: '/(app)/dashboard',
+        href: '/dashboard',
         keywords: ['home', 'dashboard', 'kpi', 'metrics', 'overview', 'analytics'],
       },
       {
@@ -107,7 +104,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Fleet inventory, specs, HMR running hours & status tracking',
         category: 'Navigation',
         icon: Wrench,
-        href: '/(app)/machines',
+        href: '/machines',
         keywords: ['equipment', 'devices', 'inventory', 'assets', 'fleet', 'scissor lift'],
         roles: ['super_admin', 'admin', 'manager', 'supervisor'],
       },
@@ -117,7 +114,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'View specifications and worksite details for your assigned machine',
         category: 'Navigation',
         icon: Wrench,
-        href: '/(app)/machines',
+        href: '/machines',
         keywords: ['equipment', 'machine', 'assigned machine', 'specs', 'details'],
         roles: ['operator'],
       },
@@ -127,7 +124,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Daily machine running logs, overtime & operator shift assignments',
         category: 'Navigation',
         icon: Gauge,
-        href: '/(app)/operations',
+        href: '/operations',
         keywords: ['hours', 'duty', 'meter', 'shifts', 'assignments', 'logs', 'hmr'],
         roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
       },
@@ -137,7 +134,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'View and export daily equipment meter logs and overtime disputes',
         category: 'Navigation',
         icon: Activity,
-        href: '/(app)/running-logs',
+        href: '/running-logs',
         keywords: ['running hours', 'meter log', 'log history', 'daily log', 'running logs'],
         roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr'],
       },
@@ -147,7 +144,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Calculate monthly operator compensation and client-lagged overtime wages',
         category: 'Navigation',
         icon: Banknote,
-        href: '/(app)/payroll',
+        href: '/payroll',
         keywords: ['payroll', 'salary', 'wages', 'rates', 'hr', 'operator pay', 'overtime pay', 'compensation'],
         roles: ['super_admin', 'admin', 'hr'],
       },
@@ -157,7 +154,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Registered customer organizations, sites, billing & assigned equipment',
         category: 'Navigation',
         icon: Building2,
-        href: '/(app)/clients',
+        href: '/clients',
         keywords: ['clients', 'customers', 'accounts', 'sites', 'locations'],
         roles: ['super_admin', 'admin', 'manager'],
       },
@@ -167,7 +164,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Personnel directory, RBAC roles, KYC docs & account approvals',
         category: 'Navigation',
         icon: Users,
-        href: '/(app)/users',
+        href: '/users',
         keywords: ['users', 'user', 'employees', 'staff', 'operators', 'supervisors', 'hr', 'kyc', 'aadhaar'],
         roles: ['super_admin', 'admin', 'manager', 'hr', 'supervisor'],
       },
@@ -177,7 +174,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'View account credentials, contact info, shift timing & Aadhaar card',
         category: 'Navigation',
         icon: User,
-        href: '/(app)/profile',
+        href: '/profile',
         keywords: ['profile', 'account', 'identity', 'phone', 'address'],
       },
       {
@@ -186,7 +183,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Configure notifications, appearance theme, offline queue sync & password',
         category: 'Navigation',
         icon: Settings,
-        href: '/(app)/settings',
+        href: '/settings',
         keywords: ['settings', 'preferences', 'theme', 'notifications', 'offline', 'sync', 'password', 'dark mode'],
       },
 
@@ -197,7 +194,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Register industrial machine with serial number and initial HMR',
         category: 'Quick Actions',
         icon: Wrench,
-        href: '/(app)/machines',
+        href: '/machines',
         keywords: ['add machine', 'create machine', 'new equipment'],
         roles: ['super_admin', 'admin', 'manager'],
       },
@@ -207,7 +204,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         subtitle: 'Schedule field operator to equipment shift roster',
         category: 'Quick Actions',
         icon: ClipboardList,
-        href: '/(app)/operations',
+        href: '/operations',
         keywords: ['assign operator', 'assign machine', 'new assignment'],
         roles: ['super_admin', 'admin', 'manager', 'supervisor'],
       },
@@ -304,38 +301,15 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
           <View style={[styles.notchBar, { backgroundColor: theme.colors.mute }]} />
 
           {/* Search Header Bar */}
-          <View
-            style={[
-              styles.searchBarContainer,
-              {
-                backgroundColor: theme.colors.canvas,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Search size={18} color={theme.colors.mute} />
-            <TextInput
-              style={[
-                styles.searchInput,
-                bodyTypeStyle,
-                { color: theme.colors.ink },
-              ]}
-              placeholder="Search all pages, modules, commands..."
-              placeholderTextColor={theme.colors.mute}
+          <View style={styles.searchBarWrapper}>
+            <SearchInput
               value={search}
               onChangeText={setSearch}
+              onClear={() => setSearch('')}
+              placeholder="Search all pages, modules, commands..."
               autoFocus
-              clearButtonMode="while-editing"
+              size="lg"
             />
-            {search.length > 0 && (
-              <Touchable
-                preset="icon"
-                onPress={() => setSearch('')}
-                style={styles.clearBtn}
-              >
-                <CanonicalIcon icon={X} variant="body" color={theme.colors.mute} />
-              </Touchable>
-            )}
           </View>
 
           {/* Results List */}
@@ -489,31 +463,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     opacity: 0.4,
   },
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  searchBarWrapper: {
     marginHorizontal: spacingNumeric.md,
     marginBottom: spacingNumeric.sm,
-    paddingHorizontal: 12,
-    height: 46,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    paddingVertical: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      } as any,
-    }),
-  },
-  clearBtn: {
-    padding: 4,
   },
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,

@@ -1,14 +1,15 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { AnimatedTrash, AnimatedAlertTriangle, AnimatedInfo } from "./animated-icons";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { isRedirectError } from "@/lib/utils";
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   title: string;
   description: ReactNode;
   confirmLabel?: string;
@@ -28,6 +29,9 @@ export function ConfirmationDialog({
   variant = "danger",
   loading = false,
 }: ConfirmationDialogProps) {
+  const [internalLoading, setInternalLoading] = useState(false);
+  const isLoading = Boolean(loading || internalLoading);
+
   const iconConfig = {
     danger: {
       icon: AnimatedTrash,
@@ -49,8 +53,36 @@ export function ConfirmationDialog({
   const currentConfig = iconConfig[variant];
   const Icon = currentConfig.icon;
 
+  const handleClose = () => {
+    if (!isLoading) {
+      onClose();
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (isLoading) return;
+    try {
+      const result = onConfirm();
+      if (result && typeof (result as any).then === "function") {
+        setInternalLoading(true);
+        await result;
+      }
+    } catch (error) {
+      if (isRedirectError(error)) {
+        throw error;
+      }
+      setInternalLoading(false);
+    }
+  };
+
   return (
-    <Modal open={isOpen} onClose={onClose} title={title}>
+    <Modal
+      open={isOpen}
+      onClose={handleClose}
+      title={title}
+      showCloseButton={!isLoading}
+      preventClose={isLoading}
+    >
       <div className="flex flex-col gap-4">
         <div className="flex items-start gap-3">
           <div className={`p-2.5 rounded-[var(--radius-md)] flex-shrink-0 ${currentConfig.bg}`}>
@@ -62,13 +94,13 @@ export function ConfirmationDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--color-hairline)] mt-2">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+          <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
             {cancelLabel}
           </Button>
           <Button
             variant={currentConfig.buttonVariant}
-            onClick={onConfirm}
-            loading={loading}
+            onClick={handleConfirm}
+            loading={isLoading}
           >
             {confirmLabel}
           </Button>

@@ -1,9 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../../ui/ThemeProvider';
 import { Text } from '../../ui/Text';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Calendar } from '../../ui/icon';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 
 interface DashboardHeaderProps {
   userName: string;
@@ -18,28 +17,16 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-function formatDate(): string {
-  return new Intl.DateTimeFormat('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date());
-}
-
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   userName,
   subtitle,
   actions,
 }) => {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 640;
   const greeting = getGreeting();
-  const dateStr = formatDate();
 
   return (
-    <View style={[styles.container, { borderBottomColor: theme.colors.hairline }]}>
+    <View style={styles.container}>
       <View style={styles.titleContainer}>
         <Text variant="title" style={[styles.greetingText, { color: theme.colors.ink }]}>
           {greeting}, {userName}
@@ -50,25 +37,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </Text>
         ) : null}
       </View>
-      <View style={styles.actionsContainer}>
-        {isWide ? (
-          <View
-            style={[
-              styles.dateBadge,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Calendar size={13} color={theme.colors.mute} />
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
-              {dateStr}
-            </Text>
-          </View>
-        ) : null}
-        {actions}
-      </View>
+      {actions ? (
+        <View style={styles.actionsContainer}>
+          {actions}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -78,9 +51,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: spacingNumeric.sm + 4,
-    marginBottom: spacingNumeric.md,
-    borderBottomWidth: 1,
+    paddingTop: spacingNumeric.xs,
+    paddingBottom: spacingNumeric.xs,
+    marginBottom: spacingNumeric.sm + 4,
   },
   titleContainer: {
     flex: 1,
@@ -96,15 +69,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacingNumeric.xs,
     flexShrink: 0,
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
   },
 });
 

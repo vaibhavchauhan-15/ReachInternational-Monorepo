@@ -10,9 +10,9 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme, MobileHeader , Text } from '../../components/ui';
+import { useTheme, MobileHeader , Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import {
   toProfileView,
@@ -133,6 +133,9 @@ export default function ProfileScreen() {
   const { user, role, refreshSession, userProfile: authProfile } = useAuth();
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
 
   // Screen width for responsive 1-col mobile vs 2-col tablet/desktop
   const [screenWidth, setScreenWidth] = useState(() => {
@@ -141,6 +144,12 @@ export default function ProfileScreen() {
     }
     return Dimensions.get('window').width;
   });
+
+  useEffect(() => {
+    if (edit === 'true' || edit === '1') {
+      setEditModalVisible(true);
+    }
+  }, [edit]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -262,11 +271,11 @@ export default function ProfileScreen() {
           throw error;
         }
         notifyProfileRequestCancelled();
-        Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
+        toast('success', 'Request Withdrawn', 'Your profile change request has been cancelled.');
         await fetchProfileData();
       } catch (err: any) {
         setPendingRequest(prevReq);
-        Alert.alert('Error', err?.message || 'Failed to cancel the change request.');
+        toast('error', 'Withdraw Failed', err?.message || 'Failed to cancel the change request.');
       } finally {
         setIsCancellingRequest(false);
       }
@@ -305,14 +314,15 @@ export default function ProfileScreen() {
 
       if (!res.success) {
         haptics.reject();
-        Alert.alert('Upload Failed', res.error || 'Failed to upload document.');
+        toast('error', 'Upload Failed', res.error || 'Failed to upload document.');
       } else {
         haptics.confirm();
+        toast('success', 'Document Uploaded', 'Document attached successfully.');
         setReplacingCode(null);
         await fetchProfileData();
       }
     } catch (err: any) {
-      Alert.alert('Upload Error', err?.message || 'Failed to select document.');
+      toast('error', 'Upload Error', err?.message || 'Failed to select document.');
     } finally {
       setUploadingCode(null);
     }
@@ -326,13 +336,14 @@ export default function ProfileScreen() {
         const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
         if (!res.success) {
           haptics.reject();
-          Alert.alert('Delete Failed', res.error || 'Could not delete document.');
+          toast('error', 'Delete Failed', res.error || 'Could not delete document.');
         } else {
           haptics.confirm();
+          toast('success', 'Document Removed', `${label} removed successfully.`);
           await fetchProfileData();
         }
       } catch (err: any) {
-        Alert.alert('Error', err?.message || 'Failed to remove document.');
+        toast('error', 'Delete Error', err?.message || 'Failed to remove document.');
       }
     };
 

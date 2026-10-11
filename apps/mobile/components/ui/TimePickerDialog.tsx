@@ -1,27 +1,34 @@
 /**
  * ReachInternational Mobile — Material Design 3 Clock Time Picker Dialog
- * High-performance, lightweight, buttery-smooth interactive clock dial primitive adhering 100% to Google M3 specs.
- * Features:
- *  - 100% Focused Clock Dial UI: optimized, lightweight, zero bloat
- *  - Precomputed static trigonometric geometry: zero math allocation during render loops
- *  - Throttled state updates: only renders and fires haptic tick when the selected hour/minute actually changes
- *  - Interactive 256dp dial face with fluid touch & drag pan responder
- *  - Hour selector (1-12) with automatic smooth advance to minutes upon release
- *  - Minute selector (00-59) with 5-minute primary ticks and minute-level precision
- *  - Tactile haptic feedback on dial ticks (haptics.select) and confirmation (haptics.confirm)
- *  - High-contrast vertically stacked AM/PM segmented switcher
- *  - Vercel Geist design tokens & theme synchronization (light/dark)
- *  - Strict zero-raw-typography compliance via canonical <Text variant="...">
+ * Completely redesigned from scratch for buttery-smooth mobile touch ergonomics,
+ * tactile haptic feedback, SVG vector precision, and arbitrary hour & minute selection.
+ *
+ * Key Architecture & Ergonomics:
+ *  - 100% Zero-Jitter Touch Architecture: Dedicated child-free touch responder overlay
+ *    permanently eliminating target flipping and coordinate jumping in React Native.
+ *  - Arbitrary Minute Precision: Select ANY minute (00-59) via smooth dial dragging,
+ *    tap snapping, or dedicated -5m / -1m / +1m / +5m fine-tuning steppers.
+ *  - 48 Intermediate Minute Ticks: High-precision SVG chronograph dial with 5-minute major
+ *    indicators and intermediate minute tick dots.
+ *  - SVG Vector Hand Line: Mathematically anchored from center pivot to selector disc,
+ *    eliminating Android/iOS transform matrix rotation offsets.
+ *  - Tactile Haptics: Distinct, guarded haptic feedback on dial dragging, step adjustments,
+ *    unit switching, and confirmation.
+ *  - Auto-Advance: Automatically glides from Hour selection to Minute selection on release.
+ *  - Vercel Geist Design System: 100% synchronized light/dark theme tokens, 1px hairlines,
+ *    and canonical <Text variant="..."> typography with zero raw property violations.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Modal,
   StyleSheet,
+  PanResponder,
   useWindowDimensions,
   type GestureResponderEvent,
 } from 'react-native';
+import Svg, { Circle, Line } from 'react-native-svg';
 import { useTheme } from './ThemeProvider';
 import { Text, useTypeStyle } from './Text';
 import { Pressable } from './touch/Pressable';
@@ -97,31 +104,46 @@ export function formatTimeOfDay(hour: number, minute: number, period: 'AM' | 'PM
 
 const DIAL_DIAMETER = 256;
 const DIAL_RADIUS = DIAL_DIAMETER / 2; // 128
-const NUM_RADIUS = 96; // distance of numbers from center
-const SELECTOR_RADIUS = 20; // 40dp diameter circle
+const NUM_RADIUS = 96; // Distance from dial center to number ring
+const SELECTOR_RADIUS = 20; // 40dp diameter selector bubble
 
-// Pre-computed static hour dial positions (1 to 12) — calculated once at startup
+// Precomputed 12-hour dial positions (1 to 12)
 const STATIC_HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => {
-  const angle = ((h % 12) * 30 - 90) * (Math.PI / 180);
+  const clockDeg = (h % 12) * 30;
+  const cartesianRad = ((clockDeg - 90) * Math.PI) / 180;
   return {
     value: h,
-    x: DIAL_RADIUS + NUM_RADIUS * Math.cos(angle),
-    y: DIAL_RADIUS + NUM_RADIUS * Math.sin(angle),
-    angleDeg: (h % 12) * 30,
+    x: DIAL_RADIUS + NUM_RADIUS * Math.cos(cartesianRad),
+    y: DIAL_RADIUS + NUM_RADIUS * Math.sin(cartesianRad),
+    angleDeg: clockDeg,
   };
 });
 
-// Pre-computed static minute dial positions (00, 05, 10, ..., 55)
+// Precomputed 5-minute major dial positions (00, 05, ..., 55)
 const STATIC_MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => {
-  const angle = (m * 6 - 90) * (Math.PI / 180);
+  const clockDeg = m * 6;
+  const cartesianRad = ((clockDeg - 90) * Math.PI) / 180;
   return {
     value: m,
     label: String(m).padStart(2, '0'),
-    x: DIAL_RADIUS + NUM_RADIUS * Math.cos(angle),
-    y: DIAL_RADIUS + NUM_RADIUS * Math.sin(angle),
-    angleDeg: m * 6,
+    x: DIAL_RADIUS + NUM_RADIUS * Math.cos(cartesianRad),
+    y: DIAL_RADIUS + NUM_RADIUS * Math.sin(cartesianRad),
+    angleDeg: clockDeg,
   };
 });
+
+// Precomputed 48 intermediate minute tick dots (minutes not divisible by 5)
+const INTERMEDIATE_MINUTE_TICKS = Array.from({ length: 60 }, (_, i) => i)
+  .filter((m) => m % 5 !== 0)
+  .map((m) => {
+    const clockDeg = m * 6;
+    const cartesianRad = ((clockDeg - 90) * Math.PI) / 180;
+    return {
+      minute: m,
+      x: DIAL_RADIUS + NUM_RADIUS * Math.cos(cartesianRad),
+      y: DIAL_RADIUS + NUM_RADIUS * Math.sin(cartesianRad),
+    };
+  });
 
 export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
   visible,
@@ -134,16 +156,21 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const monoStyle = useTypeStyle('mono');
 
-  // Active unit currently selected on the dial: 'hour' | 'minute'
+  // Active dial unit: 'hour' | 'minute'
   const [activeUnit, setActiveUnit] = useState<'hour' | 'minute'>('hour');
 
-  // Internal Time State
+  // Selected time state
   const [selectedHour, setSelectedHour] = useState<number>(8);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
 
-  // Sync state when dialog opens or initialTime changes
+  // Dial layout reference for rock-solid window coordinate tracking
+  const dialRef = useRef<View>(null);
+  const dialScreenCoord = useRef<{ x: number; y: number } | null>(null);
+
+  // Sync internal state when dialog opens or initialTime changes
   useEffect(() => {
     if (visible) {
       const parsed = parseInitialTime(initialTime);
@@ -154,26 +181,72 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
     }
   }, [visible, initialTime]);
 
+  // Update measured dial position on screen
+  const measureDialPosition = useCallback(() => {
+    dialRef.current?.measureInWindow((x, y) => {
+      dialScreenCoord.current = { x, y };
+    });
+  }, []);
+
   // Switch between Hour and Minute selection
   const handleSelectUnit = (unit: 'hour' | 'minute') => {
     haptics.select();
     setActiveUnit(unit);
   };
 
-  // AM/PM change handler
+  // AM/PM switcher
   const handlePeriodChange = (period: 'AM' | 'PM') => {
     haptics.select();
     setSelectedPeriod(period);
   };
 
-  // Dial touch responder math with state-diff guard for optimal 60fps performance
-  const handleDialTouch = useCallback(
-    (x: number, y: number) => {
-      const dx = x - DIAL_RADIUS;
-      const dy = y - DIAL_RADIUS;
+  // Step minutes by delta (-5, -1, +1, +5) with wrap-around and haptics
+  const handleStepMinute = (delta: number) => {
+    haptics.select();
+    setSelectedMinute((prev) => {
+      let next = (prev + delta) % 60;
+      if (next < 0) next += 60;
+      return next;
+    });
+  };
+
+  // Step hours by delta (-1, +1) with 1..12 wrap-around and haptics
+  const handleStepHour = (delta: number) => {
+    haptics.select();
+    setSelectedHour((prev) => {
+      let next = prev + delta;
+      if (next > 12) next = 1;
+      if (next < 1) next = 12;
+      return next;
+    });
+  };
+
+  // Quick shift preset (e.g. 06 AM, 02 PM)
+  const handleQuickShift = (hour: number, period: 'AM' | 'PM') => {
+    haptics.confirm();
+    setSelectedHour(hour);
+    setSelectedMinute(0);
+    setSelectedPeriod(period);
+    setActiveUnit('minute');
+  };
+
+  // Compute clock angle and update hour/minute state
+  const processDialCoordinate = useCallback(
+    (evt: GestureResponderEvent) => {
+      let localX = evt.nativeEvent.locationX;
+      let localY = evt.nativeEvent.locationY;
+
+      // When page coordinates are available, calculate relative to measured dial center
+      if (dialScreenCoord.current && evt.nativeEvent.pageX !== undefined) {
+        localX = evt.nativeEvent.pageX - dialScreenCoord.current.x;
+        localY = evt.nativeEvent.pageY - dialScreenCoord.current.y;
+      }
+
+      const dx = localX - DIAL_RADIUS;
+      const dy = localY - DIAL_RADIUS;
       const rad = Math.atan2(dy, dx);
       const deg = (rad * 180) / Math.PI;
-      // Clock 0 degrees is straight up (-90 deg in cartesian)
+      // Clock 12 o'clock is at 0 degrees (-90 deg in cartesian space)
       const clockAngle = (deg + 90 + 360) % 360;
 
       if (activeUnit === 'hour') {
@@ -200,15 +273,35 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
     [activeUnit]
   );
 
+  // Auto-advance to minute selection upon releasing touch in hour mode
   const handleDialRelease = useCallback(() => {
-    // When picking hour, auto-advance smoothly to minutes upon release
     if (activeUnit === 'hour') {
       haptics.confirm();
       setActiveUnit('minute');
     }
   }, [activeUnit]);
 
-  // Confirmation handler
+  // Dedicated PanResponder bound exclusively to the top-level transparent touch layer
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          measureDialPosition();
+          processDialCoordinate(evt);
+        },
+        onPanResponderMove: (evt) => {
+          processDialCoordinate(evt);
+        },
+        onPanResponderRelease: () => {
+          handleDialRelease();
+        },
+      }),
+    [measureDialPosition, processDialCoordinate, handleDialRelease]
+  );
+
+  // Confirm dialog action
   const handleConfirm = () => {
     haptics.confirm();
     const formatted = formatTimeOfDay(selectedHour, selectedMinute, selectedPeriod);
@@ -221,33 +314,21 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
     onClose();
   };
 
-  // Direct number click handlers
-  const handleTapHour = (h: number) => {
-    haptics.select();
-    setSelectedHour(h);
-    setActiveUnit('minute');
-  };
-
-  const handleTapMinute = (m: number) => {
-    haptics.select();
-    setSelectedMinute(m);
-  };
-
-  // Compute selector disc position and rotation angle on the dial
+  // Current angle and hand tip coordinates
   const currentAngleDeg = useMemo(() => {
     return activeUnit === 'hour'
       ? (selectedHour % 12) * 30
       : selectedMinute * 6;
   }, [activeUnit, selectedHour, selectedMinute]);
 
-  const selectorCoords = useMemo(() => {
+  const handTip = useMemo(() => {
     const rad = ((currentAngleDeg - 90) * Math.PI) / 180;
-    const cx = DIAL_RADIUS + NUM_RADIUS * Math.cos(rad);
-    const cy = DIAL_RADIUS + NUM_RADIUS * Math.sin(rad);
-    return { cx, cy };
+    return {
+      x: DIAL_RADIUS + NUM_RADIUS * Math.cos(rad),
+      y: DIAL_RADIUS + NUM_RADIUS * Math.sin(rad),
+    };
   }, [currentAngleDeg]);
 
-  const monoStyle = useTypeStyle('mono');
   const dialogWidth = Math.min(screenWidth - 32, 336);
 
   if (!visible) return null;
@@ -262,9 +343,9 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.scrimBackdrop}>
-        {/* Dismiss Scrim Area */}
+        {/* Scrim Dismiss Layer */}
         <Pressable
-          variant="card"
+          variant="plain"
           onPress={onClose}
           style={StyleSheet.absoluteFill}
           accessibilityRole="button"
@@ -282,7 +363,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
             },
           ]}
         >
-          {/* Header Title (M3 Specification) */}
+          {/* Header Title */}
           <View style={styles.headerRow}>
             <Text variant="label" style={{ color: theme.colors.mute }}>
               {helpText || 'Select time'}
@@ -388,7 +469,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
             >
               {/* AM Segment */}
               <Pressable
-                variant="segmentedOption"
+                variant="plain"
                 haptic="select"
                 onPress={() => handlePeriodChange('AM')}
                 accessibilityRole="button"
@@ -415,7 +496,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
                 </Text>
               </Pressable>
 
-              {/* Center Divider */}
+              {/* Center Hairline Divider */}
               <View
                 style={[
                   styles.ampmDivider,
@@ -425,7 +506,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
 
               {/* PM Segment */}
               <Pressable
-                variant="segmentedOption"
+                variant="plain"
                 haptic="select"
                 onPress={() => handlePeriodChange('PM')}
                 accessibilityRole="button"
@@ -454,128 +535,311 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
             </View>
           </View>
 
-          {/* Interactive Clock Face Dial */}
+          {/* Interactive Clock Dial Face */}
           <View
+            ref={dialRef}
+            onLayout={measureDialPosition}
             style={[
               styles.dialContainer,
-              { backgroundColor: isDark ? '#222226' : '#f1f5f9' },
+              {
+                backgroundColor: isDark ? '#222226' : '#f1f5f9',
+                borderColor: isDark ? '#2e2e33' : '#e2e8f0',
+              },
             ]}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-            onResponderGrant={(e: GestureResponderEvent) =>
-              handleDialTouch(e.nativeEvent.locationX, e.nativeEvent.locationY)
-            }
-            onResponderMove={(e: GestureResponderEvent) =>
-              handleDialTouch(e.nativeEvent.locationX, e.nativeEvent.locationY)
-            }
-            onResponderRelease={handleDialRelease}
           >
-            {/* Center Pivot Pin */}
-            <View style={styles.centerPivot} />
+            {/* Layer A: SVG Dial Rendering (Vector Hand Line, Pivot & Selector Bubble) */}
+            <Svg
+              width={DIAL_DIAMETER}
+              height={DIAL_DIAMETER}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            >
+              {/* Intermediate minute tick marks (visible only in minute mode) */}
+              {activeUnit === 'minute' &&
+                INTERMEDIATE_MINUTE_TICKS.map((tick) => (
+                  <Circle
+                    key={`tick-${tick.minute}`}
+                    cx={tick.x}
+                    cy={tick.y}
+                    r={1.5}
+                    fill={isDark ? '#52525b' : '#94a3b8'}
+                  />
+                ))}
 
-            {/* Selector Hand Line */}
-            <View
-              style={[
-                styles.selectorHand,
-                {
-                  height: NUM_RADIUS,
-                  transform: [
-                    { translateY: NUM_RADIUS / 2 },
-                    { rotate: `${currentAngleDeg}deg` },
-                    { translateY: -NUM_RADIUS / 2 },
-                  ],
-                },
-              ]}
-            />
+              {/* Hand Line (Anchored directly from dial center to handTip) */}
+              <Line
+                x1={DIAL_RADIUS}
+                y1={DIAL_RADIUS}
+                x2={handTip.x}
+                y2={handTip.y}
+                stroke="#0284c7"
+                strokeWidth={2}
+              />
 
-            {/* Selector Disc Bubble (Centered at Tip of Hand) */}
-            <View
-              style={[
-                styles.selectorDisc,
-                {
-                  left: selectorCoords.cx - SELECTOR_RADIUS,
-                  top: selectorCoords.cy - SELECTOR_RADIUS,
-                },
-              ]}
-            />
+              {/* Center Pivot Pin */}
+              <Circle cx={DIAL_RADIUS} cy={DIAL_RADIUS} r={5} fill="#0284c7" />
+              <Circle cx={DIAL_RADIUS} cy={DIAL_RADIUS} r={2} fill="#ffffff" />
 
-            {/* Dial Numbers: Hours (1-12) or Minutes (00-55) */}
-            {activeUnit === 'hour'
-              ? STATIC_HOURS.map((item) => {
-                  const isSelected = selectedHour === item.value;
-                  return (
-                    <Pressable
-                      key={`h-${item.value}`}
-                      onPress={() => handleTapHour(item.value)}
-                      style={[
-                        styles.numberCell,
-                        {
-                          left: item.x - 18,
-                          top: item.y - 18,
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="heading"
+              {/* Selector Disc Bubble (40dp diameter at hand tip) */}
+              <Circle
+                cx={handTip.x}
+                cy={handTip.y}
+                r={SELECTOR_RADIUS}
+                fill="#0284c7"
+              />
+            </Svg>
+
+            {/* Layer B: Number Display Ring */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              {activeUnit === 'hour'
+                ? STATIC_HOURS.map((item) => {
+                    const isSelected = selectedHour === item.value;
+                    return (
+                      <View
+                        key={`h-${item.value}`}
                         style={[
-                          monoStyle,
+                          styles.numberCell,
                           {
-                            color: isSelected ? '#ffffff' : theme.colors.ink,
+                            left: item.x - 18,
+                            top: item.y - 18,
                           },
                         ]}
                       >
-                        {item.value}
-                      </Text>
-                    </Pressable>
-                  );
-                })
-              : STATIC_MINUTES.map((item) => {
-                  const isSelected = selectedMinute === item.value;
-                  return (
-                    <Pressable
-                      key={`m-${item.value}`}
-                      onPress={() => handleTapMinute(item.value)}
-                      style={[
-                        styles.numberCell,
-                        {
-                          left: item.x - 18,
-                          top: item.y - 18,
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="heading"
+                        <Text
+                          variant="heading"
+                          style={[
+                            monoStyle,
+                            {
+                              color: isSelected ? '#ffffff' : theme.colors.ink,
+                            },
+                          ]}
+                        >
+                          {item.value}
+                        </Text>
+                      </View>
+                    );
+                  })
+                : STATIC_MINUTES.map((item) => {
+                    const isSelected = selectedMinute === item.value;
+                    return (
+                      <View
+                        key={`m-${item.value}`}
                         style={[
-                          monoStyle,
+                          styles.numberCell,
                           {
-                            color: isSelected ? '#ffffff' : theme.colors.ink,
+                            left: item.x - 18,
+                            top: item.y - 18,
                           },
                         ]}
                       >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        <Text
+                          variant="heading"
+                          style={[
+                            monoStyle,
+                            {
+                              color: isSelected ? '#ffffff' : theme.colors.ink,
+                            },
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
 
-            {/* If minute is not a multiple of 5, show exact minute inside selector disc */}
-            {activeUnit === 'minute' && selectedMinute % 5 !== 0 && (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.numberCell,
-                  {
-                    left: selectorCoords.cx - 18,
-                    top: selectorCoords.cy - 18,
-                  },
-                ]}
-              >
-                <Text
-                  variant="heading"
-                  style={[monoStyle, { color: '#ffffff' }]}
+              {/* In minute mode, if selected minute is not a multiple of 5, show minute value in selector disc */}
+              {activeUnit === 'minute' && selectedMinute % 5 !== 0 && (
+                <View
+                  style={[
+                    styles.numberCell,
+                    {
+                      left: handTip.x - 18,
+                      top: handTip.y - 18,
+                    },
+                  ]}
                 >
-                  {String(selectedMinute).padStart(2, '0')}
-                </Text>
+                  <Text
+                    variant="subheading"
+                    style={[monoStyle, { color: '#ffffff' }]}
+                  >
+                    {String(selectedMinute).padStart(2, '0')}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Layer C: Pure Transparent Touch & Drag Surface (Zero children to ensure 100% stable coordinates) */}
+            <View
+              style={[StyleSheet.absoluteFill, styles.touchOverlay]}
+              {...panResponder.panHandlers}
+            />
+          </View>
+
+          {/* Stepper Toolbar for Fine Adjustments & Quick Presets */}
+          <View style={styles.stepperContainer}>
+            {activeUnit === 'minute' ? (
+              <View style={styles.stepperRow}>
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepMinute(-5)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Subtract 5 minutes"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    -5m
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepMinute(-1)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Subtract 1 minute"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    -1m
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepMinute(1)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add 1 minute"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    +1m
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepMinute(5)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add 5 minutes"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    +5m
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.stepperRow}>
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepHour(-1)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Subtract 1 hour"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    -1 hr
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => handleStepHour(1)}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add 1 hour"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    +1 hr
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="confirm"
+                  hitSlopToMin48
+                  onPress={() => handleQuickShift(6, 'AM')}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quick Shift 06:00 AM"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    06 AM
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  variant="buttonSecondary"
+                  haptic="confirm"
+                  hitSlopToMin48
+                  onPress={() => handleQuickShift(2, 'PM')}
+                  style={[
+                    styles.stepperPill,
+                    {
+                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quick Shift 02:00 PM"
+                >
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    02 PM
+                  </Text>
+                </Pressable>
               </View>
             )}
           </View>
@@ -632,7 +896,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     paddingTop: 24,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
@@ -641,19 +905,19 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   headerRow: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   displayClusterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   timeBox: {
     width: 86,
     height: 76,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -661,7 +925,7 @@ const styles = StyleSheet.create({
   ampmContainer: {
     width: 52,
     height: 76,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
     flexDirection: 'column',
@@ -680,35 +944,13 @@ const styles = StyleSheet.create({
     width: DIAL_DIAMETER,
     height: DIAL_DIAMETER,
     borderRadius: DIAL_RADIUS,
+    borderWidth: 1,
     alignSelf: 'center',
     position: 'relative',
-    marginBottom: 16,
+    overflow: 'hidden',
   },
-  centerPivot: {
-    position: 'absolute',
-    left: DIAL_RADIUS - 4,
-    top: DIAL_RADIUS - 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0284c7',
-    zIndex: 10,
-  },
-  selectorHand: {
-    position: 'absolute',
-    left: DIAL_RADIUS - 1,
-    top: DIAL_RADIUS - NUM_RADIUS,
-    width: 2,
-    backgroundColor: '#0284c7',
-    zIndex: 5,
-  },
-  selectorDisc: {
-    position: 'absolute',
-    width: SELECTOR_RADIUS * 2,
-    height: SELECTOR_RADIUS * 2,
-    borderRadius: SELECTOR_RADIUS,
-    backgroundColor: '#0284c7',
-    zIndex: 6,
+  touchOverlay: {
+    zIndex: 50,
   },
   numberCell: {
     position: 'absolute',
@@ -716,7 +958,26 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 8,
+  },
+  stepperContainer: {
+    marginTop: 14,
+    marginBottom: 8,
+    width: '100%',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  stepperPill: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   bottomBarRow: {
     flexDirection: 'row',

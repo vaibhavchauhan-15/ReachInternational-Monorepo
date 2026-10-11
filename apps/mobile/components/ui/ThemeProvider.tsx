@@ -7,6 +7,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRNTheme } from '@reachinternational/design-tokens';
+import { colorScheme } from 'nativewind';
 
 export type RNThemeType = ReturnType<typeof getRNTheme>;
 
@@ -33,16 +34,27 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<'light' | 'dark' | 'system'>('light');
 
+  // Initial sync: Ensure NativeWind starts aligned with default 'light' mode
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((savedMode) => {
-      if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
-        setModeState(savedMode);
-      }
-    }).catch(() => {});
+    colorScheme.set('light');
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((savedMode) => {
+        if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
+          setModeState(savedMode);
+          colorScheme.set(savedMode);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  // Synchronize NativeWind whenever mode changes
+  useEffect(() => {
+    colorScheme.set(mode);
+  }, [mode]);
 
   const setMode = (newMode: 'light' | 'dark' | 'system') => {
     setModeState(newMode);
+    colorScheme.set(newMode);
     AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
   };
 

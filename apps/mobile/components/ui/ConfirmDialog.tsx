@@ -1,13 +1,14 @@
+/**
+ * ReachInternational Mobile — ConfirmDialog Primitive
+ * Material 3 Expressive motion dialog with canonical design tokens,
+ * high-contrast icons, tactile haptic feedback, and loading state spinner.
+ */
+
 import React from 'react';
-import {
-  View,
-  StyleSheet,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { AlertCircle, AlertTriangle, Info, LogOut } from './icon';
+import { AlertTriangle, Info, LogOut } from './icon';
 import { Text } from './Text';
 import { Dialog } from './overlay/Dialog';
 import { Touchable } from './Touchable';
@@ -186,6 +187,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: spacingNumeric.lg,
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 8px 10px -6px rgba(0, 0, 0, 0.35)',
+      },
+      default: {
+        elevation: 32,
+      },
+    }),
   },
   innerContent: {
     width: '100%',
@@ -245,3 +254,5 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 });
+
+export default ConfirmDialog;

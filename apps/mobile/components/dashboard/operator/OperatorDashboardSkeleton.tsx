@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Skeleton } from '../../ui/Skeleton';
 import { useTheme } from '../../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -12,8 +12,6 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
   animate = true,
 }) => {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 640;
 
   return (
     <View style={styles.container}>
@@ -60,12 +58,11 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
           animate={animate}
           style={styles.eyebrowMargin}
         />
-        <View style={isWide ? styles.twoColRow : styles.oneColCol}>
+        <View style={styles.oneColCol}>
           {/* Status Card 1: Log Submission Status */}
           <View
             style={[
               styles.cardShell,
-              isWide && styles.cardInRow,
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
@@ -84,7 +81,6 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
           <View
             style={[
               styles.cardShell,
-              isWide && styles.cardInRow,
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
@@ -147,12 +143,11 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
           animate={animate}
           style={styles.eyebrowMargin}
         />
-        <View style={isWide ? styles.twoColRow : styles.oneColCol}>
+        <View style={styles.oneColCol}>
           {/* Machine Card */}
           <View
             style={[
               styles.assignmentCardShell,
-              isWide && styles.cardInRow,
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
@@ -183,7 +178,6 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
           <View
             style={[
               styles.assignmentCardShell,
-              isWide && styles.cardInRow,
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
@@ -233,14 +227,6 @@ const styles = StyleSheet.create({
   oneColCol: {
     flexDirection: 'column',
     gap: spacingNumeric.sm,
-  },
-  twoColRow: {
-    flexDirection: 'row',
-    gap: spacingNumeric.sm + 2,
-    alignItems: 'stretch',
-  },
-  cardInRow: {
-    flex: 1,
   },
   alertCardShell: {
     borderRadius: radiusNumeric.md || 14,

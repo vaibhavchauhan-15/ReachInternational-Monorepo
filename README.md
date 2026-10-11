@@ -299,7 +299,7 @@
     - `WEEK_OFF`: Fixed weekly off-day (Sunday).
   - **Sub-5ms PostgreSQL Kernel RPCs (`get_attendance_monthly_summary`, `get_attendance_daily_detail`)**:
     - `get_attendance_monthly_summary(p_year, p_month, p_role, p_search, p_status, p_page, p_page_size, p_overtime, p_state, p_sort_by)`: Paginated operator directory with scheduled days, present days, absent days, half-days, worked minutes, overtime minutes, fleet KPI summary cards, advanced overtime/state/sorting filters, and search across names, phones, cities, and states (Migrations 097, 106, 107, 137). Leverages composite index `idx_mhl_operator_date_created` on `(operator_id, log_date DESC, created_at DESC, id DESC)`. Hardened with strict database-level exception raising `42501` against operators attempting to query organization-wide roster summaries.
-    - `get_attendance_daily_detail(p_employee_id, p_year, p_month)`: Calendar-day breakdown (1st through 31st) for an employee including shift intervals, breakdown minutes, individual log entries, machine telemetry (`machine_code`, `model`, `serial_number`, `machine_name`), and day-of-week rollup averages (`dow` 0–6) (Migrations 116, 136, 137). Hardened with strict database-level self-isolation (`IF v_caller_role = 'operator' AND auth.uid() <> p_employee_id THEN RAISE EXCEPTION 'Unauthorized: operators can only view their own attendance' USING ERRCODE = '42501'; END IF;`).
+    - `get_attendance_daily_detail(p_employee_id, p_year, p_month)`: Calendar-day breakdown (1st through 31st) for an employee including shift intervals, breakdown minutes, individual log entries, machine telemetry (`machine_code`, `model`, `serial_number`, `machine_name`), and day-of-week rollup averages (`dow` 0–6) (Migrations 116, 136, 137, 159). Hardened with strict database-level self-isolation (`IF v_caller_role = 'operator' AND auth.uid() <> p_employee_id THEN RAISE EXCEPTION 'Unauthorized: operators can only view their own attendance' USING ERRCODE = '42501'; END IF;`) and fallback `COALESCE(m.machine_name, m.model, '')`.
     - Caller authorization checks allow `service_role` and authenticated management (`super_admin`, `admin`, `hr`, `manager`, `supervisor`), while operators are strictly locked to their own employee ID.
 - **Targeted Cache Strategy & Next.js Data Access Layer**:
   - `apps/web/lib/data/attendance/`: Cached with Next.js `unstable_cache` (45s TTL for monthly summary tagged `attendance:summary:${yearMonth}`, 60s TTL for operator daily detail tagged `attendance:detail:${userId}:${yearMonth}`).
@@ -456,14 +456,14 @@
 - **Export Controls**: `<ExportButton>` and `<ExportDropdown>` supporting Excel (`.xlsx`), CSV (`.csv`), PDF (`.pdf`), and Print actions with tooltips and mobile responsiveness.
 - **Feedback & Navigation**: `<Alert>`, `<Drawer>`, `<Modal>`, `<ConfirmationDialog>`, `<Tabs>`, `<Breadcrumb>`, `<PageContainer>`, and `<Section>`.
 
-### 9. ⚙️ Mobile Field Settings & User Preferences (`apps/mobile/app/(app)/settings.tsx`)
+### 9. ⚙️ Mobile Field Settings & User Preferences (`apps/mobile/app/(app)/settings/index.tsx`)
 - **Mobile Field Settings Screen**: Tailored for field operators and mobile device behavior.
   - **Bottom Floating Navbar**: Promoted Settings to the 4th primary bottom navigation tab in `MobileBottomNav.tsx`.
   - **My Account Touch Card**: Compact card with Avatar, Name, Role badge, and email; tapping opens `AccountSettingsModal` containing shift schedule, assigned yard, KYC compliance, Edit Profile launcher, Change Password modal trigger, and link to full Profile screen.
   - **Notifications Touch Card**: Compact card with active alert count badge; tapping opens `NotificationSettingsModal` with switches for Push Notifications, Shift Reminders, Breakdown Alerts, Assignment Alerts, and Overtime Alerts.
   - **App Appearance**: Dedicated theme selector for `Light`, `Dark`, and `System` appearance adhering to Vercel Geist tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`).
   - **App Permissions**: Push notification permission status badge and `NotificationPermissionModal` launcher.
-  - **About & Legal**: App version `v1.0.0 (Build 1)`, Expo SDK 57 runtime, dedicated Privacy Policy (`/(app)/privacy`), Terms of Service (`/(app)/terms`), and official brand footer (`BRAND_NAME`, `BRAND_TAGLINE`).
+  - **About & Legal**: App version `v1.0.0 (Build 1)`, Expo SDK 57 runtime, dedicated Privacy Policy (`/privacy`), Terms of Service (`/terms`), and official brand footer (`BRAND_NAME`, `BRAND_TAGLINE`).
   - **Google Play Store Compliance**: Full Play Store submission suite: production AAB configuration (`eas.json`), `versionCode: 1`, blocked transitive permissions (`app.json`), public web compliance endpoints (`/privacy`, `/terms`, `/account-deletion`), store listing copy and visual assets (`apps/mobile/store-assets/`), Data Safety declaration (`PLAY_STORE_DATA_SAFETY.md`), Content Rating guide (`PLAY_STORE_CONTENT_RATING.md`), and end-to-end AAB build checklist (`PLAY_STORE_SUBMISSION_CHECKLIST.md`).
   - **Sign Out**: Red pill button with confirmation alert calling `signOut()` and navigating to login.
 
@@ -830,6 +830,12 @@ The monorepo enforces enterprise-grade performance optimizations across Web and 
   - Upgraded `get_operator_entry_context` to resolve active assignment's `shift_code` and return `assigned_shift_code`.
   - Upgraded `get_today_shift_log_monitor` to match on `COALESCE(a.oma_shift_code, csc.code)` with `LEFT JOIN` and start/end time fallback.
   - Aligned supervisor assignment modal (`AssignOperatorModal.tsx`) with client shift pills and manual override toggle, and operator entry form (`OperatorEntryClient.tsx`) with automatic shift pre-selection.
+- **Migration 158 (Historical Date Shift Log Monitor & Roster Surfacing)**:
+  - Upgraded `get_today_shift_log_monitor(uuid, date, text)`:
+    - Retains live active machine assignments when viewing `CURRENT_DATE`.
+    - For historical dates, matches entered `machine_hour_logs` on `p_log_date` regardless of whether the machine/operator is currently active or unassigned.
+    - Appends an `extra_entered_logs` CTE guaranteeing 100% of entered shift logs on historical dates are surfaced as `entered` records within actor RBAC scope.
+  - Enabled canonical `CustomDatePicker` filtering on Web (`/operations`) and searchable date dropdown on Mobile (`MobileTodayShiftMonitorTab`).
 
 ### 5. Mobile Data Architecture (TanStack Query v5)
 - **`apps/mobile/lib/hooks/useOperationsData.ts`**: Connected TanStack Query v5 hooks (`useOperationsMasterData`, `useOperationsLogs`) providing a 5-minute cache for equipment, active operators, and clients, and a 1-minute cache for operational logs. Eliminates the 5-query cascade on every screen focus and filter tap while preserving seamless pull-to-refresh.
@@ -992,6 +998,39 @@ To support diverse multi-client 24h machinery operations (e.g., Client A running
 6. **HR Attendance & Payroll Parity**: Attendance counts distinct worked calendar dates (`COUNT(DISTINCT log_date)` = 1 attended day, not 2). Payroll computes standard normal pay and overtime pay directly from `SUM(normal_working_hours)` and `SUM(overtime_hours)` without double-counting attendance days.
 7. **Daily Running Logs Access Control (`/running-logs`)**: Restricted strictly to roles above operator (`super_admin`, `admin`, `manager`, `supervisor`, `hr`). The `operator` role is strictly disallowed from viewing or exporting fleet-wide machinery running logs and client operational records, retaining access only to personal single-shift entry and history via `/operations`.
 8. **Operator Self Attendance Isolation (`/attendance`)**: Operators are granted access to view their own personal monthly attendance ledger and daily calendar records. Under no circumstances can an operator view, list, or export another employee's attendance data. This boundary is enforced across the database RPC (`get_attendance_daily_detail` with `auth.uid() = p_employee_id` check and 42501 error code), Next.js server actions (403 Forbidden on foreign IDs), route middleware (automatic redirection to `/attendance/${user.id}`), and the mobile app screen (`apps/mobile/app/(app)/attendance.tsx`). The interface is 3-tier responsive, reusing detail components with mobile touch cards, payable days KPI grid, and minimum 44px tap targets.
+
+---
+
+## ⚙️ Native Mobile Settings & Preferences Architecture (`apps/mobile`)
+
+The Reach International mobile application features a modular, page-based Settings architecture built strictly on shared design tokens, 100% Web & Native parity, and reusable component primitives (`apps/mobile/components/settings/`):
+
+### 1. Main Settings Hub (`/settings`)
+Organized into four clearly separated sections adhering to Vercel Geist design standards:
+- **A. Notifications**: Push notifications master switch (`pushEnabled`), notification channel preferences link, and system OS permission status with live verification trigger.
+- **B. Preferences**: Appearance & theme value row (`LIGHT`, `DARK`, `SYSTEM`), tactile haptic feedback switch, and font size scaling value row.
+- **C. Account**: Edit profile link (`/profile`), change password link (`/settings/password`), session security telemetry link (`/settings/security`), and statutory account deletion link (`/account-deletion`).
+- **D. About App**: App version and build specifications (`v1.1.0 (Build 42)`), privacy policy link (`/privacy`), terms & conditions link (`/terms`), and official support mailto trigger.
+- **Session Sign Out**: In-flight optimistic logout action with full-screen confirmation overlay (`ConfirmDialog`).
+
+### 2. Dedicated Route Hierarchy
+Every setting and substantial action is backed by a valid, directly navigable Expo Router route:
+- `/settings` (Settings Home Hub)
+- `/settings/notification` (Granular alert categories: Shift Reminders, Breakdown Alerts, Machine Assignments, Overtime Approvals, Daily Running Log Submissions, and Android 13+ / Web Notification API permission check)
+- `/settings/preference` (3-way theme selection, haptic feedback toggle, font scale presets: Small 92%, Medium 100%, Large 120%, with live interactive preview card)
+- `/settings/account` (Personnel profile summary, contact specifications, and credential actions)
+- `/settings/password` (Dedicated Change Password form with real-time complexity score, criteria checklist, and Supabase Auth reauthentication)
+- `/settings/security` (Dedicated Account Security sub-page displaying JWT token protocol, TLS 1.3 encryption, Row Level Security enforcement, and hardware-backed SecureStore status)
+- `/settings/aboutapp` (Dedicated About App specifications, platform runtime details, Hermes engine status, and official enterprise channels)
+
+### 3. Reusable Settings Components (`components/settings/`)
+- `SettingsScreenContainer`: Edge-to-edge layout, safe-area padding, pull-to-refresh, and keyboard-aware scroll.
+- `SettingsSection`: Uppercase section header with optional subtitle and elevated card enclosure.
+- `SettingsRow`: Interactive row with tinted icon box, title, subtitle, optional status badge, pressable feedback, and chevron navigation.
+- `SettingsSwitchRow`: Toggle row with integrated `Switch`, status badge (`ACTIVE`/`MUTED` or `ON`/`OFF`), and tactile haptics.
+- `SettingsValueRow`: Displays currently active selection value badge with chevron navigation.
+- `SettingsRadioOption`: Multi-choice selection row with radio circle indicator, title, and description.
+- `SettingsDivider`: 1px hairline separation matching `theme.colors.hairline` with optional 52px inset.
 
 ---
 

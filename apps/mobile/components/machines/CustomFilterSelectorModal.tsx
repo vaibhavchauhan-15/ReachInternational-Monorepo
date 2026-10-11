@@ -3,12 +3,12 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text, useTypeStyle } from '../ui/Text';
 import { Pressable } from '../ui/touch/Pressable';
+import { SearchInput } from '../ui/SearchInput';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X } from '../ui/icon';
 
@@ -85,33 +85,13 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
               {/* Optional Search Bar for longer lists (e.g. Supervisors) */}
               {options.length > 5 && (
                 <View style={[styles.searchWrapper, { borderBottomColor: theme.colors.hairline }]}>
-                  <TextInput
+                  <SearchInput
                     placeholder={`Search ${title.toLowerCase()}...`}
                     placeholderTextColor={theme.colors.mute}
                     value={modalSearch}
                     onChangeText={setModalSearch}
-                    style={[
-                      styles.searchInput,
-                      bodyTypeStyle,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                        color: theme.colors.ink,
-                      },
-                    ]}
+                    onClear={() => setModalSearch('')}
                   />
-                  {modalSearch.length > 0 && (
-                    <Pressable
-                      variant="iconButton"
-                      haptic="tap"
-                      hitSlopToMin48
-                      onPress={() => setModalSearch('')}
-                      style={styles.searchClearBtn}
-                      accessibilityLabel="Clear search"
-                    >
-                      <X size={14} color={theme.colors.mute} />
-                    </Pressable>
-                  )}
                 </View>
               )}
 

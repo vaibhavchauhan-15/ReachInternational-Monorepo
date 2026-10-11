@@ -1,5 +1,15 @@
-import { Text } from '../components/ui/Text';
 import '../lib/suppressWarnings';
+import '../global.css';
+import { Text } from '../components/ui/Text';
+import { PortalHost } from '@rn-primitives/portal';
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
+
+// Disable Reanimated strict mode warning triggered by NativeWind v4 (react-native-css-interop)
+// which writes to shared values during component render when processing CSS animations/transitions.
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false,
+});
 
 /**
  * ServiceCentric Mobile — Root Layout
@@ -7,7 +17,7 @@ import '../lib/suppressWarnings';
  */
 
 import React from 'react';
-import { View, StyleSheet, Platform, AppState, type AppStateStatus } from 'react-native';
+import { View, StyleSheet, Platform, AppState, type AppStateStatus, useWindowDimensions } from 'react-native';
 import { Slot, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
@@ -31,20 +41,69 @@ import { offlineQueueManager, syncCoordinator, networkConnectivityManager } from
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { OverlayHostProvider } from '../components/ui/overlay';
+import { OverlayHostProvider, ToastProvider } from '../components/ui/overlay';
 import { Pressable } from '../components/ui/touch/Pressable';
 
-// Keep native splash screen visible until root layout mounts
-SplashScreen.preventAutoHideAsync().catch(() => {});
+// Immediately allow native splash screen to hide so the app opens directly
+SplashScreen.hideAsync().catch(() => {});
 
 function MobileAgentation() {
-  if (process.env.NODE_ENV !== 'development' || Platform.OS !== 'web') {
+  if (Platform.OS !== 'web') {
     return null;
   }
+
+  // Allow explicit opt-out
+  if (process.env.EXPO_PUBLIC_ENABLE_AGENTATION === 'false') {
+    return null;
+  }
+
+  // Render in development mode (or if explicitly enabled via EXPO_PUBLIC_ENABLE_AGENTATION=true)
+  const isDev = __DEV__ || process.env.NODE_ENV === 'development';
+  const isExplicitlyEnabled = process.env.EXPO_PUBLIC_ENABLE_AGENTATION === 'true';
+  if (!isDev && !isExplicitlyEnabled) {
+    return null;
+  }
+
+  const [isMounted, setIsMounted] = React.useState(false);
+  const pathname = usePathname();
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const savedPosition = localStorage.getItem('feedback-toolbar-position');
+      if (savedPosition) {
+        const pos = JSON.parse(savedPosition);
+        if (
+          typeof pos?.x === 'number' &&
+          typeof pos?.y === 'number' &&
+          (pos.x > window.innerWidth - 44 ||
+            pos.y > window.innerHeight - 44 ||
+            pos.x < 0 ||
+            pos.y < 0)
+        ) {
+          localStorage.removeItem('feedback-toolbar-position');
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [pathname]);
+
+  if (!isMounted) {
+    return null;
+  }
+
   try {
     const { Agentation } = require('agentation');
-    return <Agentation />;
-  } catch {
+    return <Agentation key={pathname || 'mobile-web'} className="reach-agentation-toolbar" />;
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[MobileAgentation] Failed to mount agentation toolbar:', err);
+    }
     return null;
   }
 }
@@ -76,7 +135,7 @@ function MobileGoogleAnalytics() {
 }
 
 function MobileWebScrollbarStyles() {
-  const { isDark } = useTheme();
+  const { isDark, theme } = useTheme();
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -90,9 +149,27 @@ function MobileWebScrollbarStyles() {
     const thumbColor = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.22)';
     const thumbHover = isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.38)';
     styleEl.innerHTML = `
+      html, body {
+        background-color: ${isDark ? '#09090b' : theme.colors.canvas};
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        width: 100%;
+        flex: 1;
+      }
       * {
         scrollbar-width: thin;
         scrollbar-color: ${thumbColor} transparent;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      *:focus, *:active {
+        outline: none !important;
       }
       ::-webkit-scrollbar {
         width: 6px;
@@ -112,8 +189,24 @@ function MobileWebScrollbarStyles() {
       input, textarea {
         outline: none !important;
       }
+      /* Agentation Toolbar Floating Layer on Web */
+      .reach-agentation-toolbar,
+      [data-agentation-toolbar] {
+        z-index: 100000 !important;
+      }
+      @media (max-width: 767px) {
+        .reach-agentation-toolbar,
+        [data-agentation-toolbar] {
+          max-width: calc(100vw - 24px) !important;
+        }
+        .reach-agentation-toolbar:not([style*="top"]),
+        [data-agentation-toolbar]:not([style*="top"]) {
+          bottom: 16px !important;
+          right: 14px !important;
+        }
+      }
     `;
-  }, [isDark]);
+  }, [isDark, theme.colors.canvas]);
 
   return null;
 }
@@ -275,6 +368,14 @@ function MobileScreenSyncWatcher() {
   React.useEffect(() => {
     if (pathname) {
       syncCoordinator.setActiveScreen(pathname);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const raw = window.location.pathname;
+        if (raw.includes('/(app)') || (raw.endsWith('/index') && raw !== '/index')) {
+          const clean = raw.replace(/\/\(app\)/g, '').replace(/\/index$/, '') || '/';
+          window.history.replaceState(null, '', clean + window.location.search + window.location.hash);
+        }
+      }
     }
   }, [pathname]);
 
@@ -315,6 +416,7 @@ function ThemedAppContainer() {
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Slot />
+      <PortalHost />
       <PostNotificationBanner />
       <MobileOperatorAlertsListener />
       <MobileOfflineSyncListener />
@@ -399,7 +501,9 @@ function RootLayout() {
               <AuthProvider>
                 <ThemeProvider>
                   <OverlayHostProvider>
-                    <ThemedAppContainer />
+                    <ToastProvider>
+                      <ThemedAppContainer />
+                    </ToastProvider>
                   </OverlayHostProvider>
                 </ThemeProvider>
               </AuthProvider>
@@ -416,12 +520,18 @@ export default Sentry.wrap(RootLayout);
 const styles = StyleSheet.create({
   gestureRoot: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   safeArea: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   container: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   errorContainer: {
     flex: 1,

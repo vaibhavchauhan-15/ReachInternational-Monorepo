@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme, MobileHeader, type HeaderActionItem } from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
@@ -52,70 +53,71 @@ export default function DashboardScreen() {
   const { theme, isDark, setMode } = useTheme();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Role dashboard data states
-  const [superAdminData, setSuperAdminData] = useState<SuperAdminDashboardDTO | null>(null);
-  const [adminData, setAdminData] = useState<AdminDashboardDTO | null>(null);
-  const [managerData, setManagerData] = useState<ManagerDashboardDTO | null>(null);
-  const [supervisorData, setSupervisorData] = useState<SupervisorDashboardDTO | null>(null);
-  const [hrData, setHrData] = useState<HRDashboardDTO | null>(null);
-  const [operatorData, setOperatorData] = useState<OperatorDashboardDTO | null>(null);
 
   const activeRole = (role as DashboardRole) || 'operator';
   const userName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'User');
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      if (!user?.id) return;
+  // Optimistic & Cached server state using TanStack Query
+  const {
+    data: dashboardData,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['dashboard', activeRole, user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
 
       switch (activeRole) {
         case 'super_admin': {
           const { data, error } = await supabase.rpc('get_super_admin_dashboard');
-          if (!error && data) setSuperAdminData(data as SuperAdminDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as SuperAdminDashboardDTO;
         }
         case 'admin': {
           const { data, error } = await supabase.rpc('get_admin_dashboard');
-          if (!error && data) setAdminData(data as AdminDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as AdminDashboardDTO;
         }
         case 'manager': {
           const { data, error } = await supabase.rpc('get_manager_dashboard');
-          if (!error && data) setManagerData(data as ManagerDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as ManagerDashboardDTO;
         }
         case 'supervisor': {
           const { data, error } = await supabase.rpc('get_supervisor_dashboard', {
             p_supervisor_id: user.id,
           });
-          if (!error && data) setSupervisorData(data as SupervisorDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as SupervisorDashboardDTO;
         }
         case 'hr': {
           const { data, error } = await supabase.rpc('get_hr_dashboard');
-          if (!error && data) setHrData(data as HRDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as HRDashboardDTO;
         }
         case 'operator':
         default: {
           const { data, error } = await supabase.rpc('get_operator_dashboard', {
             p_operator_id: user.id,
           });
-          if (!error && data) setOperatorData(data as OperatorDashboardDTO);
-          break;
+          if (error) throw error;
+          return data as OperatorDashboardDTO;
         }
       }
-    } catch (err) {
-      console.warn('[DashboardScreen] Error fetching dashboard data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id, activeRole]);
+    },
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 5, // 5 minutes fresh cache
+  });
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  const superAdminData = activeRole === 'super_admin' ? (dashboardData as SuperAdminDashboardDTO | null) : null;
+  const adminData = activeRole === 'admin' ? (dashboardData as AdminDashboardDTO | null) : null;
+  const managerData = activeRole === 'manager' ? (dashboardData as ManagerDashboardDTO | null) : null;
+  const supervisorData = activeRole === 'supervisor' ? (dashboardData as SupervisorDashboardDTO | null) : null;
+  const hrData = activeRole === 'hr' ? (dashboardData as HRDashboardDTO | null) : null;
+  const operatorData =
+    activeRole === 'operator' || !['super_admin', 'admin', 'manager', 'supervisor', 'hr'].includes(activeRole)
+      ? (dashboardData as OperatorDashboardDTO | null)
+      : null;
 
   const onRefresh = useCallback(async () => {
     try {
@@ -124,13 +126,17 @@ export default function DashboardScreen() {
       // ignore
     }
     setRefreshing(true);
-    await fetchDashboardData();
+    await refetch();
     setRefreshing(false);
-  }, [fetchDashboardData]);
+  }, [refetch]);
+
+  const handleScreenSyncRefresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   useScreenSync({
     screen: 'dashboard',
-    onRefresh: fetchDashboardData,
+    onRefresh: handleScreenSyncRefresh,
   });
 
   // Extra functions for 3-dot more menu on Home screen
@@ -153,19 +159,19 @@ export default function DashboardScreen() {
             id: 'op-logs',
             label: 'Review Shift Logs',
             icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/operations'),
+            onPress: () => router.push('/operations'),
           },
           {
             id: 'op-fleet',
             label: 'Supervised Machinery',
             icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/machines'),
+            onPress: () => router.push('/machines'),
           },
           {
             id: 'op-attendance',
             label: 'Shift Attendance',
             icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/attendance'),
+            onPress: () => router.push('/attendance'),
           }
         );
         break;
@@ -176,25 +182,25 @@ export default function DashboardScreen() {
             id: 'op-entry',
             label: 'Record Running Hours',
             icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/operations'),
+            onPress: () => router.push('/operations'),
           },
           {
             id: 'op-machine',
             label: 'Assigned Equipment',
             icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/machines'),
+            onPress: () => router.push('/machines'),
           },
           {
             id: 'op-history',
             label: 'Shift History & Logs',
             icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/operations'),
+            onPress: () => router.push('/operations'),
           },
           {
             id: 'op-attendance',
             label: 'My Attendance',
             icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/attendance'),
+            onPress: () => router.push('/attendance'),
           }
         );
         break;
@@ -205,25 +211,25 @@ export default function DashboardScreen() {
             id: 'mgr-ops',
             label: 'Operations Review',
             icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/operations'),
+            onPress: () => router.push('/operations'),
           },
           {
             id: 'mgr-fleet',
             label: 'Fleet Utilization',
             icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/machines'),
+            onPress: () => router.push('/machines'),
           },
           {
             id: 'mgr-attendance',
             label: 'Attendance Roster',
             icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/attendance'),
+            onPress: () => router.push('/attendance'),
           },
           {
             id: 'mgr-payroll',
             label: 'Running Hours & Payroll',
             icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/payroll'),
+            onPress: () => router.push('/payroll'),
           }
         );
         break;
@@ -234,25 +240,25 @@ export default function DashboardScreen() {
             id: 'adm-ops',
             label: 'Operations & Running Logs',
             icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/operations'),
+            onPress: () => router.push('/operations'),
           },
           {
             id: 'adm-fleet',
             label: 'Machinery Fleet',
             icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/machines'),
+            onPress: () => router.push('/machines'),
           },
           {
             id: 'adm-users',
             label: 'Personnel & Directory',
             icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/users'),
+            onPress: () => router.push('/users'),
           },
           {
             id: 'adm-clients',
             label: 'Client Worksites',
             icon: <Building2 size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/clients'),
+            onPress: () => router.push('/clients'),
           }
         );
         break;
@@ -263,19 +269,19 @@ export default function DashboardScreen() {
             id: 'sa-fleet',
             label: 'Machinery Fleet Matrix',
             icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/machines'),
+            onPress: () => router.push('/machines'),
           },
           {
             id: 'sa-users',
             label: 'User Directory & Access',
             icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/users'),
+            onPress: () => router.push('/users'),
           },
           {
             id: 'sa-clients',
             label: 'Client Directory',
             icon: <Building2 size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/clients'),
+            onPress: () => router.push('/clients'),
           }
         );
         break;
@@ -286,19 +292,19 @@ export default function DashboardScreen() {
             id: 'hr-staff',
             label: 'Employee Directory',
             icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/users'),
+            onPress: () => router.push('/users'),
           },
           {
             id: 'hr-attendance',
             label: 'Attendance Records',
             icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/attendance'),
+            onPress: () => router.push('/attendance'),
           },
           {
             id: 'hr-payroll',
             label: 'Payroll Overview',
             icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/(app)/payroll'),
+            onPress: () => router.push('/payroll'),
           }
         );
         break;
@@ -310,7 +316,7 @@ export default function DashboardScreen() {
         id: 'app-settings',
         label: 'Settings & Preferences',
         icon: <Settings size={15} color={theme.colors.ink} />,
-        onPress: () => router.push('/(app)/settings'),
+        onPress: () => router.push('/settings' as any),
       },
       {
         id: 'theme-toggle',
@@ -361,7 +367,7 @@ export default function DashboardScreen() {
           : {
               id: 'entry-pending',
               severity: 'warning' as const,
-              title: "Shift Logs Pending",
+              title: 'Shift Logs Pending',
               description: `You have ${totalAssignedCount} assigned shifts pending submission today.`,
               actionUrl: '/operations',
             },
@@ -372,7 +378,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Flush edge-to-edge solid mobile top header: [Home] title + [Quick Search] matching web Screenshot 1 */}
+      {/* Flush edge-to-edge solid mobile top header: [Home] title + [Quick Search] matching web Screenshot */}
       <MobileHeader
         title="Home"
         showBack={false}
@@ -382,7 +388,7 @@ export default function DashboardScreen() {
         actions={headerActions}
       />
 
-      {isLoading ? (
+      {isLoading && !dashboardData ? (
         <DashboardSkeleton
           role={activeRole}
           kpiCount={activeRole === 'super_admin' ? 6 : activeRole === 'admin' ? 5 : 4}

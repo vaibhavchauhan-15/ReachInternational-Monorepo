@@ -36,6 +36,7 @@ export interface OperationsClientProps {
   assignedMachine?: Machine | null;
   recentLogs?: OperatorHourLog[];
   allMachines?: any[];
+  initialDate?: string;
 }
 
 export function OperationsClient({
@@ -48,6 +49,7 @@ export function OperationsClient({
   assignedMachine,
   recentLogs = [],
   allMachines = [],
+  initialDate,
 }: OperationsClientProps) {
   const handleOpenPrintModal = useCallback(() => {
     window.dispatchEvent(new CustomEvent("reach:export-print"));
@@ -87,6 +89,7 @@ export function OperationsClient({
         dbClients={dbClients}
         operators={operators}
         initialRows={initialTodayRows}
+        initialDate={initialDate}
       />
     </div>
   );

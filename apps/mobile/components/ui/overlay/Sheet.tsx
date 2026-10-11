@@ -31,9 +31,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { Scrim } from './Scrim';
 import { useOverlayHost } from './OverlayHost';
+import { haptics } from '../../../lib/haptics';
 import { useMotion } from '../../../lib/motion/useMotion';
 import { SPATIAL, DUR, SCALE } from '../../../lib/motion/tokens';
 import { project, rubberband } from '../../../lib/motion/springs';
@@ -87,9 +87,7 @@ export const Sheet: React.FC<SheetProps> = ({
   }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
 
   const triggerHapticSnap = useCallback(() => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
+    haptics.dragEnd();
   }, []);
 
   const handleDismissComplete = useCallback(() => {

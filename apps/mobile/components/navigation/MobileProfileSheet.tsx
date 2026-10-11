@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, Text, AppModal, Touchable } from '../ui';
+import { useTheme, Text, AppModal, Touchable, showToast } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -97,7 +97,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
       if (error) {
         setPasswordError(error.message || 'Failed to update password.');
       } else {
-        Alert.alert('Password Updated', 'Your account password has been changed successfully.');
+        showToast('success', 'Password Updated', 'Your account password has been changed successfully.');
         setPasswordModalOpen(false);
         setNewPassword('');
         setConfirmPassword('');
@@ -116,13 +116,12 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
   const handleConfirmSignOut = async () => {
     try {
       setIsSigningOut(true);
+      await signOut();
       setShowSignOutConfirm(false);
       onClose();
-      await signOut();
-      router.replace('/(auth)/login');
+      router.replace('/login');
     } catch (err) {
       console.error('[MobileProfileSheet] Sign out error:', err);
-    } finally {
       setIsSigningOut(false);
     }
   };
@@ -540,7 +539,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
                   label="View & Edit Full Profile"
                   onPress={() => {
                     onClose();
-                    router.push('/(app)/profile' as any);
+                    router.push('/profile' as any);
                   }}
                   variant="primary"
                   size="md"

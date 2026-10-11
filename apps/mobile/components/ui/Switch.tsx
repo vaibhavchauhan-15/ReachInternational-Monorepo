@@ -1,126 +1,54 @@
 /**
- * ReachInternational Mobile — Standardized Switch Primitive
- * Smooth Reanimated thumb spring motion, native ripple,
- * semantic haptics.toggle(on), and 48dp touch target.
+ * ReachInternational Mobile — React Native Reusables Switch Component
+ * Official RNR Switch primitive powered by @rn-primitives/switch.
  */
 
-import React, { memo, useEffect } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  interpolateColor,
-} from 'react-native-reanimated';
-import { motion, radiusNumeric } from '@reachinternational/design-tokens';
-import { useTheme } from './ThemeProvider';
-import { haptics } from '../../lib/haptics';
-import { Pressable } from './touch/Pressable';
+import * as SwitchPrimitives from '@rn-primitives/switch';
+import * as React from 'react';
+import { Platform } from 'react-native';
+import { cn } from '@/lib/utils';
 
-export interface SwitchProps {
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  disabled?: boolean;
-  accessibilityLabel?: string;
-  style?: ViewStyle;
+export interface SwitchProps
+  extends Omit<React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>, 'checked' | 'onCheckedChange'> {
+  checked?: boolean;
+  value?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  onValueChange?: (value: boolean) => void;
+  trackColor?: { false?: string; true?: string };
+  thumbColor?: string;
 }
 
-const TRACK_WIDTH = 48;
-const TRACK_HEIGHT = 28;
-const THUMB_SIZE = 22;
-const THUMB_OFFSET = 3;
+const Switch = React.forwardRef<
+  React.ElementRef<typeof SwitchPrimitives.Root>,
+  SwitchProps
+>(({ className, checked, value, onCheckedChange, onValueChange, ...props }, ref) => {
+  const isChecked = checked ?? value ?? false;
 
-export const Switch = memo(function Switch({
-  value,
-  onValueChange,
-  disabled = false,
-  accessibilityLabel = 'Toggle switch',
-  style,
-}: SwitchProps) {
-  const { theme, isDark } = useTheme();
-  const progress = useSharedValue(value ? 1 : 0);
-
-  useEffect(() => {
-    progress.value = withSpring(value ? 1 : 0, motion.spring.default);
-  }, [value, progress]);
-
-  const handlePress = () => {
-    if (disabled) return;
-    const nextValue = !value;
-    haptics.toggle(nextValue);
-    onValueChange(nextValue);
+  const handleCheckedChange = (val: boolean) => {
+    onCheckedChange?.(val);
+    onValueChange?.(val);
   };
 
-  const trackStyle = useAnimatedStyle(() => {
-    const activeColor = theme.colors.primary;
-    const inactiveColor = isDark ? '#262626' : '#e5e5e5';
-    const backgroundColor = interpolateColor(
-      progress.value,
-      [0, 1],
-      [inactiveColor, activeColor]
-    );
-
-    return {
-      backgroundColor,
-    };
-  });
-
-  const thumbStyle = useAnimatedStyle(() => {
-    const translateX = progress.value * (TRACK_WIDTH - THUMB_SIZE - THUMB_OFFSET * 2);
-    return {
-      transform: [{ translateX }],
-    };
-  });
-
   return (
-    <Pressable
-      variant="toggle"
-      haptic={false} // Handled directly inside handlePress
-      hitSlopToMin48={true}
-      disabled={disabled}
-      onPress={handlePress}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
-      accessibilityLabel={accessibilityLabel}
-      style={[styles.container, style]}
+    <SwitchPrimitives.Root
+      className={cn(
+        'peer flex-row h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input p-0.5',
+        className
+      )}
+      checked={isChecked}
+      onCheckedChange={handleCheckedChange}
+      {...props}
+      ref={ref}
     >
-      <Animated.View style={[styles.track, trackStyle]}>
-        <Animated.View
-          style={[
-            styles.thumb,
-            { backgroundColor: '#ffffff' },
-            thumbStyle,
-          ]}
-        />
-      </Animated.View>
-    </Pressable>
+      <SwitchPrimitives.Thumb
+        className={cn(
+          'pointer-events-none block h-5 w-5 rounded-full bg-background shadow-md ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0'
+        )}
+      />
+    </SwitchPrimitives.Root>
   );
 });
+Switch.displayName = SwitchPrimitives.Root.displayName;
 
-const styles = StyleSheet.create({
-  container: {
-    minWidth: 48,
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  track: {
-    width: TRACK_WIDTH,
-    height: TRACK_HEIGHT,
-    borderRadius: radiusNumeric.full,
-    padding: THUMB_OFFSET,
-    justifyContent: 'center',
-  },
-  thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: radiusNumeric.full,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-});
-
+export { Switch };
 export default Switch;

@@ -192,7 +192,7 @@ export function SegmentedToggle<T extends string = string>({
 
   if (!items || items.length === 0) return null;
 
-  const resolvedActiveColor = activeColor || theme.colors.link || '#0070f3';
+  const resolvedActiveColor = activeColor || '#0284c7';
   const inactiveTextColor = isDark ? '#a1a1aa' : '#52525b';
 
   return (
@@ -218,22 +218,24 @@ export function SegmentedToggle<T extends string = string>({
         style,
       ]}
     >
-      {/* 1. SLIDING ACTIVE INDICATOR PILL (Smooth GPU-accelerated spring glide) */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.slidingPill,
-          {
-            top: config.padding,
-            bottom: config.padding,
-            borderRadius: config.pillRadius,
-            backgroundColor: isDark ? '#27272a' : '#ffffff',
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-          },
-          isDark ? styles.pillShadowDark : styles.pillShadowLight,
-          pillAnimatedStyle,
-        ]}
-      />
+      {/* 1. SLIDING ACTIVE INDICATOR PILL (iOS / Android Native) */}
+      {Platform.OS !== 'web' && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.slidingPill,
+            {
+              top: config.padding,
+              bottom: config.padding,
+              borderRadius: config.pillRadius,
+              backgroundColor: resolvedActiveColor,
+              borderColor: resolvedActiveColor,
+            },
+            styles.pillShadowBrand,
+            pillAnimatedStyle,
+          ]}
+        />
+      )}
 
       {/* 2. TAB ITEMS */}
       {items.map((item, index) => {
@@ -262,7 +264,12 @@ export function SegmentedToggle<T extends string = string>({
                 minHeight: config.minHeight,
                 paddingHorizontal: config.itemPaddingHorizontal,
                 gap: config.gap,
+                borderRadius: config.pillRadius,
               },
+              Platform.OS === 'web' && isActive && {
+                backgroundColor: resolvedActiveColor,
+                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.35)',
+              } as any,
               fullWidth ? styles.itemFullWidth : styles.itemInline,
               item.disabled && styles.itemDisabled,
               itemStyle,
@@ -280,7 +287,7 @@ export function SegmentedToggle<T extends string = string>({
                 style={[
                   styles.itemText,
                   {
-                    color: isActive ? resolvedActiveColor : inactiveTextColor,
+                    color: isActive ? '#ffffff' : inactiveTextColor,
                   },
                 ]}
                 numberOfLines={1}
@@ -299,16 +306,12 @@ export function SegmentedToggle<T extends string = string>({
                   styles.countBadge,
                   {
                     backgroundColor: isActive
-                      ? isDark
-                        ? 'rgba(56, 189, 248, 0.16)'
-                        : 'rgba(2, 132, 199, 0.12)'
+                      ? 'rgba(255, 255, 255, 0.22)'
                       : isDark
                       ? '#27272a'
                       : '#e4e4e7',
                     borderColor: isActive
-                      ? isDark
-                        ? 'rgba(56, 189, 248, 0.35)'
-                        : 'rgba(2, 132, 199, 0.28)'
+                      ? 'rgba(255, 255, 255, 0.35)'
                       : isDark
                       ? '#3f3f46'
                       : '#d4d4d8',
@@ -321,10 +324,10 @@ export function SegmentedToggle<T extends string = string>({
                     styles.countText,
                     {
                       color: isActive
-                        ? isDark
-                          ? '#38bdf8'
-                          : '#0284c7'
-                        : inactiveTextColor,
+                        ? '#ffffff'
+                        : isDark
+                        ? '#d4d4d8'
+                        : '#52525b',
                     },
                   ]}
                 >
@@ -358,6 +361,20 @@ const styles = StyleSheet.create({
     left: 0,
     borderWidth: 1,
     zIndex: 0,
+  },
+  pillShadowBrand: {
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(2, 132, 199, 0.35)',
+      } as any,
+      default: {
+        shadowColor: '#0284c7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.32,
+        shadowRadius: 4,
+        elevation: 3,
+      },
+    }),
   },
   pillShadowLight: {
     ...Platform.select({
@@ -396,7 +413,7 @@ const styles = StyleSheet.create({
       web: {
         cursor: 'pointer',
         userSelect: 'none',
-        outline: 'none',
+        outlineStyle: 'none',
       } as any,
       default: {},
     }),

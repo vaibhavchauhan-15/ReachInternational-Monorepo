@@ -10,7 +10,7 @@ import {
   LayoutAnimation} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -100,14 +100,15 @@ export default function RunningLogsScreen() {
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
   // Guard: Restrict operator role from accessing Daily Running Logs
   useEffect(() => {
     if (role && role.toLowerCase() === 'operator') {
-      Alert.alert('Access Denied', 'You do not have permission to view Daily Running Logs.');
-      router.replace('/(app)/operations');
+      toast('error', 'Access Denied', 'You do not have permission to view Daily Running Logs.');
+      router.replace('/operations');
     }
-  }, [role, router]);
+  }, [role, router, toast]);
 
   // Master Data State
   const [logs, setLogs] = useState<HourLogRecord[]>([]);

@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  TextInput,
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
+import { Textarea } from '../ui/textarea';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { AlertTriangle, X } from '../ui/icon';
@@ -103,7 +103,7 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
             <Text style={[styles.label, { color: theme.colors.ink }]}>
               Rejection Reason (Optional)
             </Text>
-            <TextInput
+            <Textarea
               style={[
                 styles.input,
                 {
@@ -116,9 +116,7 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
               onChangeText={setReason}
               placeholder="e.g. Identity document not clear or timing mismatch"
               placeholderTextColor={theme.colors.mute}
-              multiline
               numberOfLines={3}
-              textAlignVertical="top"
               editable={!isSubmitting}
             />
           </View>

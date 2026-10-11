@@ -746,6 +746,9 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
+      const finalSupervisors = supervisorsList.filter((s) => supervisorIds.includes(s.id));
+      const finalOperators = operatorsList.filter((o) => operatorIds.includes(o.id));
+
       const savedResult = {
         ...(machineToEdit || {}),
         id: machineToEdit?.id || `tmp_mach_${Date.now()}`,
@@ -761,7 +764,11 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         operator_ids: operatorIds,
         current_operator_id: operatorIds[0] || null,
         client_id: effectiveClientId,
-        client: selectedClient,
+        client: selectedClient || machineToEdit?.client || null,
+        supervisors: finalSupervisors.length > 0 ? finalSupervisors : (machineToEdit?.supervisors || []),
+        current_supervisor: finalSupervisors[0] || (machineToEdit?.current_supervisor || null),
+        operators: finalOperators.length > 0 ? finalOperators : (machineToEdit?.operators || []),
+        current_operator: finalOperators[0] || (machineToEdit?.current_operator || null),
         updated_at: new Date().toISOString(),
       };
 

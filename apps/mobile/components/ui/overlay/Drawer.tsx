@@ -24,6 +24,8 @@ import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   withSpring,
+  withTiming,
+  Easing,
   runOnJS,
   ReduceMotion,
 } from 'react-native-reanimated';
@@ -49,20 +51,9 @@ export interface DrawerProps {
   testID?: string;
 }
 
-// Tuned 60/120fps fluid springs matching web 280ms cubic-bezier(.32,.72,0,1) with zero wobble
-const OPEN_SPRING = {
-  damping: 30,
-  stiffness: 320,
-  mass: 0.85,
-  overshootClamping: true,
-};
-
-const CLOSE_SPRING = {
-  damping: 32,
-  stiffness: 360,
-  mass: 0.8,
-  overshootClamping: true,
-};
+// Tuned 60/120fps fluid curves matching web 220ms/180ms cubic-bezier for silky smooth, lightweight drawer motion
+const OPEN_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+const CLOSE_EASING = Easing.bezier(0.3, 0, 0.8, 0.15);
 
 export const Drawer: React.FC<DrawerProps> = ({
   visible,
@@ -87,7 +78,7 @@ export const Drawer: React.FC<DrawerProps> = ({
   const drawerWidth = Math.min(screenWidth * widthRatio, maxPixelWidth);
   const [mounted, setMounted] = useState(visible);
 
-  const translateX = useSharedValue(drawerWidth);
+  const translateX = useSharedValue(visible ? 0 : drawerWidth);
   const contextX = useSharedValue(0);
 
   // Synchronized scrim opacity linked directly to drawer position on UI thread
@@ -111,14 +102,25 @@ export const Drawer: React.FC<DrawerProps> = ({
     return () => unregisterOverlay(instanceId);
   }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
 
+  // Guaranteed fallback unmount timer in case animation is preempted
+  useEffect(() => {
+    if (!visible && mounted) {
+      const fallbackTimer = setTimeout(() => {
+        handleDismissComplete();
+      }, 240);
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [visible, mounted, handleDismissComplete]);
+
   useEffect(() => {
     if (visible) {
       setMounted(true);
       if (isReduced) {
         translateX.value = 0;
       } else {
-        translateX.value = withSpring(0, {
-          ...OPEN_SPRING,
+        translateX.value = withTiming(0, {
+          duration: 220,
+          easing: OPEN_EASING,
           reduceMotion: ReduceMotion.System,
         });
       }
@@ -127,27 +129,30 @@ export const Drawer: React.FC<DrawerProps> = ({
         translateX.value = drawerWidth;
         handleDismissComplete();
       } else {
-        translateX.value = withSpring(
+        translateX.value = withTiming(
           drawerWidth,
           {
-            ...CLOSE_SPRING,
+            duration: 180,
+            easing: CLOSE_EASING,
             reduceMotion: ReduceMotion.System,
           },
-          (finished) => {
-            if (finished) {
-              runOnJS(handleDismissComplete)();
-            }
+          () => {
+            runOnJS(handleDismissComplete)();
           },
         );
       }
     }
   }, [visible, isReduced, drawerWidth, translateX, handleDismissComplete]);
 
-  // Gesture to swipe right to close drawer
+  // Gesture to swipe right to close drawer.
+  // CRITICAL: activeOffsetX(25) ensures normal taps (translationX = 0) NEVER activate the Pan gesture,
+  // preventing child Pressable / Touchable touch cancellation and stuck ripple artifacts.
   const panGesture = useMemo(() => {
     return Gesture.Pan()
-      .activeOffsetX([15, 15])
-      .failOffsetY([-15, 15])
+      .activeOffsetX(25)
+      .failOffsetX(-15)
+      .failOffsetY([-25, 25])
+      .cancelsTouchesInView(false)
       .onStart(() => {
         'worklet';
         contextX.value = translateX.value;
@@ -163,27 +168,25 @@ export const Drawer: React.FC<DrawerProps> = ({
       .onEnd((e) => {
         'worklet';
         const projectedX = translateX.value + project(e.velocityX);
-        const dismissThreshold = drawerWidth * 0.35;
+        const dismissThreshold = drawerWidth * 0.3;
 
-        if (projectedX > dismissThreshold || e.velocityX > 400) {
-          translateX.value = withSpring(
+        if (projectedX > dismissThreshold || e.velocityX > 350) {
+          translateX.value = withTiming(
             drawerWidth,
             {
-              ...CLOSE_SPRING,
-              velocity: e.velocityX,
+              duration: 160,
+              easing: CLOSE_EASING,
               reduceMotion: ReduceMotion.System,
             },
-            (finished) => {
-              if (finished) {
-                runOnJS(onClose)();
-                runOnJS(handleDismissComplete)();
-              }
+            () => {
+              runOnJS(onClose)();
+              runOnJS(handleDismissComplete)();
             },
           );
         } else {
-          translateX.value = withSpring(0, {
-            ...OPEN_SPRING,
-            velocity: e.velocityX,
+          translateX.value = withTiming(0, {
+            duration: 180,
+            easing: OPEN_EASING,
             reduceMotion: ReduceMotion.System,
           });
         }

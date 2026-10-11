@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, TextInput, Switch, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal } from '../../components/ui';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from '../../components/ui/icon';
 import { haptics } from '../../lib/haptics';
@@ -123,6 +123,7 @@ const DEFAULT_CLIENTS_FILTERS = {
 
 export default function ClientsScreen() {
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
   const { role } = useAuth();
   const router = useRouter();
 
@@ -131,7 +132,7 @@ export default function ClientsScreen() {
 
   useEffect(() => {
     if (role && !canAccessClients) {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [role, canAccessClients, router]);
 
@@ -550,7 +551,7 @@ export default function ClientsScreen() {
 
   const handleSave = () => {
     if (!companyName.trim()) {
-      Alert.alert('Validation Error', 'Please enter a valid company name.');
+      toast('warning', 'Validation Error', 'Please enter a valid company name.');
       return;
     }
 
@@ -559,15 +560,16 @@ export default function ClientsScreen() {
       (c) => c.company_name.trim().toLowerCase() === normEntered && (!editingClient || c.id !== editingClient.id)
     );
     if (isDuplicate) {
-      Alert.alert(
+      toast(
+        'warning',
         'Duplicate Client',
-        `A client named "${companyName.trim()}" already exists. Each client company can only be registered once. If this client has another location, please add it as a site under the existing client.`
+        `A client named "${companyName.trim()}" already exists. Each client company can only be registered once.`
       );
       return;
     }
 
     if (!address.trim() || !city.trim() || !stateName.trim()) {
-      Alert.alert('Validation Error', 'Address, City, and State are required fields.');
+      toast('warning', 'Validation Error', 'Address, City, and State are required fields.');
       return;
     }
 
@@ -604,6 +606,7 @@ export default function ClientsScreen() {
       setClients((prev) => prev.map((c) => (c.id === editingClient.id ? updatedClient : c)));
       mobileQueryCacheRef.current.clear();
       setModalVisible(false);
+      toast('success', 'Client Updated', `Details for ${companyName.trim()} have been saved.`);
 
       (async () => {
         try {
@@ -631,7 +634,7 @@ export default function ClientsScreen() {
           if (error) throw error;
         } catch (err: any) {
           setClients(prevClients);
-          Alert.alert('Update Failed', err?.message || 'Failed to update client on server.');
+          toast('error', 'Update Failed', err?.message || 'Failed to update client on server.');
         }
       })();
     } else {
@@ -665,6 +668,7 @@ export default function ClientsScreen() {
       setClients([newClient, ...clients]);
       mobileQueryCacheRef.current.clear();
       setModalVisible(false);
+      toast('success', 'Client Registered', `Client ${companyName.trim()} registered successfully.`);
 
       (async () => {
         try {
@@ -714,7 +718,7 @@ export default function ClientsScreen() {
           }
         } catch (err: any) {
           setClients((current) => removeTempRow(current, tempId));
-          Alert.alert('Registration Failed', err?.message || 'Failed to save new client to server.');
+          toast('error', 'Registration Failed', err?.message || 'Failed to save new client to server.');
         }
       })();
     }
@@ -734,27 +738,27 @@ export default function ClientsScreen() {
   const handleSaveSite = async () => {
     const cId = siteTargetClientId || selectedDetailClient?.id;
     if (!cId) {
-      Alert.alert('Validation Error', 'Please select a client.');
+      toast('warning', 'Validation Error', 'Please select a client.');
       return;
     }
     if (!siteFormName.trim()) {
-      Alert.alert('Validation Error', 'Site name is required.');
+      toast('warning', 'Validation Error', 'Site name is required.');
       return;
     }
     if (!siteFormStreet.trim()) {
-      Alert.alert('Validation Error', 'Street / Area is required.');
+      toast('warning', 'Validation Error', 'Street / Area is required.');
       return;
     }
     if (!siteFormCity.trim()) {
-      Alert.alert('Validation Error', 'City / Town is required.');
+      toast('warning', 'Validation Error', 'City / Town is required.');
       return;
     }
     if (!siteFormDistrict.trim()) {
-      Alert.alert('Validation Error', 'District is required.');
+      toast('warning', 'Validation Error', 'District is required.');
       return;
     }
     if (!siteFormPincode.trim() || siteFormPincode.length !== 6) {
-      Alert.alert('Validation Error', 'A valid 6-digit pincode is required.');
+      toast('warning', 'Validation Error', 'A valid 6-digit pincode is required.');
       return;
     }
 
@@ -776,14 +780,14 @@ export default function ClientsScreen() {
 
       if (error) {
         if (error.code === '23505') {
-          Alert.alert('Duplicate Site', 'A site with this address or name already exists for this client.');
+          toast('warning', 'Duplicate Site', 'A site with this address or name already exists for this client.');
         } else {
-          Alert.alert('Error', error.message || 'Failed to create site.');
+          toast('error', 'Error', error.message || 'Failed to create site.');
         }
         return;
       }
 
-      Alert.alert('Success', `Site "${siteFormName}" created successfully (${data.site_code}).`);
+      toast('success', 'Site Created', `Site "${siteFormName}" created successfully (${data.site_code}).`);
       setSiteModalVisible(false);
       if (cId) {
         mobileDetailCacheRef.current.delete(`${cId}:sites`);
@@ -792,7 +796,7 @@ export default function ClientsScreen() {
         }
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to create site.');
+      toast('error', 'Error', err.message || 'Failed to create site.');
     } finally {
       setIsSavingSite(false);
     }
@@ -820,11 +824,13 @@ export default function ClientsScreen() {
                 .eq('id', client.id);
               if (error) {
                 setClients(prevClients);
-                Alert.alert('Error', error.message || 'Failed to soft delete client.');
+                toast('error', 'Error', error.message || 'Failed to soft delete client.');
+              } else {
+                toast('success', 'Client Archived', `"${client.company_name}" has been soft deleted.`);
               }
             } catch (err: any) {
               setClients(prevClients);
-              Alert.alert('Error', err?.message || 'Failed to soft delete client.');
+              toast('error', 'Error', err?.message || 'Failed to soft delete client.');
             }
           },
         },
@@ -1392,7 +1398,7 @@ export default function ClientsScreen() {
                         <Text variant="mono" style={{ color: theme.colors.mute }}>Permanent</Text>
                       </View>
                     </View>
-                    <TextInput
+                    <Input
                       value={editingClient.client_id || editingClient.code}
                       editable={false}
                       style={[styles.modalInput, useTypeStyle('mono'), { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas }]}
@@ -1402,7 +1408,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Company Name *</Text>
-                  <TextInput
+                  <Input
                     value={companyName}
                     onChangeText={setCompanyName}
                     placeholder="e.g. Pushpa Infracon Pvt Ltd"
@@ -1413,7 +1419,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Contact Person</Text>
-                  <TextInput
+                  <Input
                     value={contactPerson}
                     onChangeText={setContactPerson}
                     placeholder="e.g. Rajesh Sharma"
@@ -1424,7 +1430,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Phone Number</Text>
-                  <TextInput
+                  <Input
                     value={phone}
                     onChangeText={setPhone}
                     placeholder="e.g. +91 98765 43210"
@@ -1437,9 +1443,9 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>GSTIN Number</Text>
-                    <TextInput
+                    <Input
                       value={gstin}
-                      onChangeText={(t) => setGstin(t.toUpperCase())}
+                      onChangeText={(t: string) => setGstin(t.toUpperCase())}
                       placeholder="07AAAAA0000A1Z5"
                       placeholderTextColor={theme.colors.mute}
                       autoCapitalize="characters"
@@ -1449,9 +1455,9 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>PAN Number</Text>
-                    <TextInput
+                    <Input
                       value={panNumber}
-                      onChangeText={(t) => setPanNumber(t.toUpperCase())}
+                      onChangeText={(t: string) => setPanNumber(t.toUpperCase())}
                       placeholder="ABCDE1234F"
                       placeholderTextColor={theme.colors.mute}
                       autoCapitalize="characters"
@@ -1466,7 +1472,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
-                  <TextInput
+                  <Input
                     value={address}
                     onChangeText={setAddress}
                     placeholder="e.g. Plot 42, Sector 18, Industrial Area"
@@ -1478,7 +1484,7 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town / Village *</Text>
-                    <TextInput
+                    <Input
                       value={city}
                       onChangeText={setCity}
                       placeholder="e.g. Pune"
@@ -1489,7 +1495,7 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District</Text>
-                    <TextInput
+                    <Input
                       value={district}
                       onChangeText={setDistrict}
                       placeholder="e.g. Pune"
@@ -1502,7 +1508,7 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-                    <TextInput
+                    <Input
                       value={stateName}
                       onChangeText={setStateName}
                       placeholder="e.g. Maharashtra"
@@ -1513,7 +1519,7 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode</Text>
-                    <TextInput
+                    <Input
                       value={pincode}
                       onChangeText={setPincode}
                       placeholder="411001"
@@ -1543,7 +1549,7 @@ export default function ClientsScreen() {
                   <View style={{ marginTop: 8 }}>
                     <View style={styles.formGroup}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Street / Area</Text>
-                      <TextInput
+                      <Input
                         value={billingAddress}
                         onChangeText={setBillingAddress}
                         placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
@@ -1555,7 +1561,7 @@ export default function ClientsScreen() {
                     <View style={styles.rowInputs}>
                       <View style={[styles.formGroup, { flex: 1 }]}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing City / Town / Village</Text>
-                        <TextInput
+                        <Input
                           value={billingCity}
                           onChangeText={setBillingCity}
                           placeholder="e.g. Gurugram"
@@ -1566,7 +1572,7 @@ export default function ClientsScreen() {
 
                       <View style={[styles.formGroup, { flex: 1 }]}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing District</Text>
-                        <TextInput
+                        <Input
                           value={billingDistrict}
                           onChangeText={setBillingDistrict}
                           placeholder="e.g. Gurugram"
@@ -1579,7 +1585,7 @@ export default function ClientsScreen() {
                     <View style={styles.rowInputs}>
                       <View style={[styles.formGroup, { flex: 1 }]}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing State</Text>
-                        <TextInput
+                        <Input
                           value={billingState}
                           onChangeText={setBillingState}
                           placeholder="e.g. Haryana"
@@ -1590,7 +1596,7 @@ export default function ClientsScreen() {
 
                       <View style={[styles.formGroup, { flex: 1 }]}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Pincode</Text>
-                        <TextInput
+                        <Input
                           value={billingPincode}
                           onChangeText={setBillingPincode}
                           placeholder="122002"
@@ -1628,7 +1634,7 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Hours</Text>
-                    <TextInput
+                    <Input
                       value={allowanceHours}
                       onChangeText={setAllowanceHours}
                       placeholder="0"
@@ -1640,7 +1646,7 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Minutes</Text>
-                    <TextInput
+                    <Input
                       value={allowanceMinutes}
                       onChangeText={setAllowanceMinutes}
                       placeholder="0"
@@ -2194,7 +2200,7 @@ export default function ClientsScreen() {
               <View style={styles.formSection}>
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Site Name *</Text>
-                  <TextInput
+                  <Input
                     value={siteFormName}
                     onChangeText={setSiteFormName}
                     placeholder="e.g. Pune Manufacturing Facility"
@@ -2205,7 +2211,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
-                  <TextInput
+                  <Input
                     value={siteFormStreet}
                     onChangeText={setSiteFormStreet}
                     placeholder="e.g. Plot 42, MIDC Phase 2"
@@ -2217,7 +2223,7 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town *</Text>
-                    <TextInput
+                    <Input
                       value={siteFormCity}
                       onChangeText={setSiteFormCity}
                       placeholder="e.g. Pune"
@@ -2228,7 +2234,7 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District *</Text>
-                    <TextInput
+                    <Input
                       value={siteFormDistrict}
                       onChangeText={setSiteFormDistrict}
                       placeholder="e.g. Pune"
@@ -2241,7 +2247,7 @@ export default function ClientsScreen() {
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State (Default: MH)</Text>
-                    <TextInput
+                    <Input
                       value="Maharashtra"
                       editable={false}
                       style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, minHeight: 44 }]}
@@ -2250,7 +2256,7 @@ export default function ClientsScreen() {
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode (6 digits) *</Text>
-                    <TextInput
+                    <Input
                       value={siteFormPincode}
                       onChangeText={setSiteFormPincode}
                       placeholder="411001"

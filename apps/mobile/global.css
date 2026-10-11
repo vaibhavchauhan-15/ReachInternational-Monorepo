@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 201 98% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 56%;
+    --accent: 0 0% 95%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 100% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 92%;
+    --input: 0 0% 92%;
+    --ring: 201 98% 39%;
+    --radius: 0.75rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark:root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 199 89% 48%;
+    --radius: 0.75rem;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+/* ============================================
+   Agentation Floating Toolbar Responsiveness & Visibility
+   ============================================ */
+.reach-agentation-toolbar,
+[data-agentation-toolbar] {
+  z-index: 100000 !important;
+}
+
+@media (max-width: 767px) {
+  .reach-agentation-toolbar,
+  [data-agentation-toolbar] {
+    max-width: calc(100vw - 24px) !important;
+  }
+}
+
+/* ============================================
+   Zero Tap-Highlight & Suppress Browser Focus Rings
+   ============================================ */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+*:focus,
+*:active {
+  outline: none !important;
+}

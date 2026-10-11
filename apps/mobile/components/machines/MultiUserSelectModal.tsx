@@ -3,18 +3,18 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
-import { Text, useTypeStyle } from '../ui/Text';
+import { Text } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
 import { Pressable } from '../ui/touch/Pressable';
+import { SearchInput } from '../ui/SearchInput';
 import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X, Search, UserCheck, Clock } from '../ui/icon';
+import { Check, X, UserCheck, Clock } from '../ui/icon';
 
 export interface SelectableUser {
   id: string;
@@ -47,7 +47,6 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
   roleLabel = 'personnel',
 }) => {
   const { theme } = useTheme();
-  const bodyTypeStyle = useTypeStyle('body');
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
   const [search, setSearch] = useState('');
 
@@ -129,30 +128,12 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
 
           {/* Search Bar */}
           <View style={[styles.searchContainer, { borderBottomColor: theme.colors.hairline }]}>
-            <View
-              style={[
-                styles.searchInputWrap,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <Search size={14} color={theme.colors.mute} />
-              <TextInput
-                style={[styles.searchInput, bodyTypeStyle, { color: theme.colors.ink }]}
-                placeholder={`Search ${roleLabel} by name, phone...`}
-                placeholderTextColor={theme.colors.mute}
-                value={search}
-                onChangeText={setSearch}
-                autoCorrect={false}
-              />
-              {search.length > 0 && (
-                <Touchable preset="icon" onPress={() => setSearch('')}>
-                  <X size={14} color={theme.colors.mute} />
-                </Touchable>
-              )}
-            </View>
+            <SearchInput
+              value={search}
+              onChangeText={setSearch}
+              onClear={() => setSearch('')}
+              placeholder={`Search ${roleLabel} by name, phone...`}
+            />
           </View>
 
           {/* Selected Chips Strip */}
@@ -362,26 +343,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
     borderBottomWidth: 1,
-  },
-  searchInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacingNumeric.sm,
-    gap: spacingNumeric.xs,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 0,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      } as any,
-    }),
   },
   chipsContainer: {
     paddingHorizontal: spacingNumeric.md,

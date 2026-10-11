@@ -1,14 +1,9 @@
-import { Text } from '../ui/Text';
 import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  TextInput,
 } from 'react-native';
-import { useTheme } from '../ui/ThemeProvider';
-import { Button } from '../ui/Button';
-import { Touchable } from '../ui/Touchable';
-import { AppModal } from '../ui/AppModal';
+import { Text, useTheme, Button, Touchable, AppModal, Input } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, Copy, X, KeyRound } from '../ui/icon';
 import * as Clipboard from 'expo-clipboard';
@@ -113,7 +108,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                     TEMPORARY PASSWORD
                   </Text>
                   <View style={styles.pwdRow}>
-                    <TextInput
+                    <Input
                       value={temporaryPassword}
                       editable={false}
                       selectTextOnFocus

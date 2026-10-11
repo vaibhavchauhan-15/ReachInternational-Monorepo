@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Keyboard,
   Platform,
+  Pressable,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -23,9 +24,9 @@ import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
-import { Touchable } from '../ui/Touchable';
 import { Icon as CanonicalIcon } from '../ui/icon';
 import { useAuth } from '../../lib/auth/useAuth';
+import { haptics } from '../../lib/haptics';
 import {
   getNavForRole,
   labelFor,
@@ -45,6 +46,7 @@ interface BottomNavTabItemProps {
   state?: 'open' | 'closed';
   onPress: () => void;
   theme: any;
+  isDark: boolean;
 }
 
 const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
@@ -53,49 +55,88 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
   state,
   onPress,
   theme,
+  isDark,
 }) => {
   const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
 
+  const handlePress = () => {
+    try {
+      haptics.tap();
+    } catch {
+      // ignore
+    }
+    onPress();
+  };
+
   return (
-    <Touchable
-      preset="nav"
-      onPress={onPress}
+    <Pressable
+      onPress={handlePress}
       style={styles.navItemBtn}
+      android_ripple={{
+        color: isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(23, 23, 23, 0.10)',
+        borderless: true,
+        radius: 22,
+        foreground: false,
+      }}
       accessibilityRole="tab"
       accessibilityState={{ selected: isActive }}
       accessibilityLabel={item.label}
     >
-      <View style={styles.itemContent}>
-        <CanonicalIcon
-          name={item.icon}
-          level="body"
-          color={itemColor}
-          pulseKey={isActive}
-          animate={isActive ? 'pulse' : 'auto'}
-          state={state}
-        />
-        <Text
-          variant="caption"
-          numberOfLines={1}
-          style={[
-            styles.itemLabel,
-            {
-              color: itemColor,
-            },
-          ]}
-        >
-          {item.label}
-        </Text>
+      {({ pressed, hovered }: any) => {
+        const isPressed = Boolean(pressed);
+        const isHovered = Boolean(hovered && !pressed);
 
-        {/* Active Dot Indicator */}
-        <View
-          style={[
-            styles.activeDot,
-            { backgroundColor: isActive ? theme.colors.ink : 'transparent' },
-          ]}
-        />
-      </View>
-    </Touchable>
+        return (
+          <View style={styles.itemContent}>
+            <View
+              style={[
+                styles.iconCircle,
+                isHovered && {
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : 'rgba(23, 23, 23, 0.05)',
+                },
+                isPressed && {
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.16)'
+                    : 'rgba(23, 23, 23, 0.10)',
+                  transform: [{ scale: 0.92 }],
+                },
+              ]}
+            >
+              <CanonicalIcon
+                name={item.icon}
+                level="body"
+                color={itemColor}
+                pulseKey={isActive}
+                animate={isActive ? 'pulse' : 'auto'}
+                state={state}
+              />
+            </View>
+            <Text
+              variant="caption"
+              numberOfLines={1}
+              style={[
+                styles.itemLabel,
+                {
+                  color: itemColor,
+                },
+              ]}
+            >
+              {item.label}
+            </Text>
+
+            {/* Active Dot Indicator */}
+            <View
+              style={[
+                styles.activeDot,
+                { backgroundColor: isActive ? theme.colors.ink : 'transparent' },
+              ]}
+            />
+          </View>
+        );
+      }}
+    </Pressable>
   );
 };
 
@@ -145,18 +186,26 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
     const primaryKeySet = new Set(primary.map((p) => p.key));
     const drawerItems = more
       .filter((i) => !primaryKeySet.has(i.key))
-      .map((i) => ({
-        key: i.key,
-        label: labelFor(i, normalizedRole),
-        href: i.href.startsWith('/(app)') ? i.href : `/(app)${i.href}`,
-        icon: i.icon,
-        match: i.match,
-      }));
+      .map((i) => {
+        let routeHref = i.href;
+        if (i.key === 'settings') {
+          routeHref = '/settings';
+        } else {
+          routeHref = routeHref.replace(/^\/\(app\)/, '');
+        }
+        return {
+          key: i.key,
+          label: labelFor(i, normalizedRole),
+          href: routeHref,
+          icon: i.icon,
+          match: i.match,
+        };
+      });
 
     const primaryItems = primary.map(i => ({
       key: i.key,
       label: labelFor(i, normalizedRole),
-      href: i.href.startsWith('/(app)') ? i.href : `/(app)${i.href}`,
+      href: i.href.replace(/^\/\(app\)/, ''),
       icon: i.icon,
       match: i.match,
     }));
@@ -170,14 +219,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
       ...primary.map((i) => ({
         key: i.key,
         label: labelFor(i, normalizedRole),
-        href: `/(app)${i.href}`,
+        href: i.href.replace(/^\/\(app\)/, ''),
         icon: i.icon,
         match: i.match,
       })),
       {
         key: 'more' as const,
         label: hasMore ? 'Menu' : 'Account',
-        href: hasMore ? '' : '/(app)/profile',
+        href: hasMore ? '' : '/profile',
         icon: hasMore ? 'menu' : 'user',
         match: hasMore
           ? more.flatMap((i) => i.match)
@@ -232,6 +281,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
                     router.push(item.href as any);
                   }}
                   theme={theme}
+                  isDark={isDark}
                 />
               );
             })}
@@ -269,7 +319,7 @@ const styles = StyleSheet.create({
   },
   pillBar: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 580,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -302,6 +352,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 38,
+  },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        transition: 'background-color 150ms ease, transform 150ms ease',
+      } as any,
+      default: {},
+    }),
   },
   itemLabel: {
     marginTop: 2,

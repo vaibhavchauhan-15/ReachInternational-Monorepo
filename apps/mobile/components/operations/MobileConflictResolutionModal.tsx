@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
-import { Button, Input, useTheme, Text } from '../ui';
+import { Button, Input, Separator, useTheme, Text } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -243,7 +243,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 </View>
               </View>
 
-              <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
+              <Separator className="my-1.5" />
 
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryCol}>
@@ -258,7 +258,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 </View>
               </View>
 
-              <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
+              <Separator className="my-1.5" />
 
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryCol}>
@@ -277,7 +277,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
 
               {conflictDetails.conflictingEntity && (
                 <>
-                  <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
+                  <Separator className="my-1.5" />
                   <View style={styles.conflictEntityRow}>
                     <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
                     <Text variant="label" style={{ color: isDark ? '#f87171' : '#b91c1c' }}>
@@ -562,10 +562,6 @@ const styles = StyleSheet.create({
   bulletDot: {},
   bulletText: {
     flex: 1,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 6,
   },
   errorBox: {
     flexDirection: 'row',

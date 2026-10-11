@@ -1,10 +1,15 @@
+/**
+ * ReachInternational Mobile — Dashboard Alert Widget
+ * Migrated to React Native Reusables Card and Geist tokens for 100% web mobile parity.
+ */
+
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from '../../ui/AppLinearGradient';
-import { useTheme } from '../../ui/ThemeProvider';
+import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { useTheme } from '../../ui/ThemeProvider';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { DashboardAlert } from '@reachinternational/types';
 import {
   AlertCircle,
@@ -13,27 +18,22 @@ import {
   CheckCircle2,
   ArrowUpRight,
 } from '../../ui/icon';
-import { haptics } from '../../../lib/haptics';
-
-import { Touchable } from '../../ui/Touchable';
 
 interface AlertWidgetProps {
   alerts: DashboardAlert[];
   title?: string;
   showCount?: boolean;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }
 
 const severityConfig = {
   critical: {
-    gradientLight: ['rgba(244, 63, 94, 0.10)', 'rgba(244, 63, 94, 0.04)', 'transparent'] as const,
-    gradientDark: ['rgba(76, 5, 25, 0.40)', 'rgba(76, 5, 25, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(244, 63, 94, 0.25)',
+    cardBgLight: '#fff1f2',
+    cardBgDark: 'rgba(76, 5, 25, 0.25)',
+    borderLight: 'rgba(244, 63, 94, 0.30)',
     borderDark: 'rgba(251, 113, 133, 0.30)',
     iconBgLight: 'rgba(244, 63, 94, 0.15)',
     iconBgDark: 'rgba(251, 113, 133, 0.20)',
-    iconBorderLight: 'rgba(244, 63, 94, 0.25)',
-    iconBorderDark: 'rgba(251, 113, 133, 0.30)',
     iconColorLight: '#e11d48',
     iconColorDark: '#fb7185',
     titleColorLight: '#881337',
@@ -43,14 +43,12 @@ const severityConfig = {
     icon: AlertCircle,
   },
   warning: {
-    gradientLight: ['rgba(245, 158, 11, 0.10)', 'rgba(245, 158, 11, 0.03)', 'transparent'] as const,
-    gradientDark: ['rgba(69, 26, 3, 0.35)', 'rgba(69, 26, 3, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(245, 158, 11, 0.25)',
+    cardBgLight: '#fffbeb',
+    cardBgDark: 'rgba(69, 26, 3, 0.25)',
+    borderLight: 'rgba(245, 158, 11, 0.30)',
     borderDark: 'rgba(251, 191, 36, 0.30)',
     iconBgLight: 'rgba(245, 158, 11, 0.15)',
     iconBgDark: 'rgba(245, 158, 11, 0.25)',
-    iconBorderLight: 'rgba(245, 158, 11, 0.25)',
-    iconBorderDark: 'rgba(251, 191, 36, 0.35)',
     iconColorLight: '#d97706',
     iconColorDark: '#fbbf24',
     titleColorLight: '#78350f',
@@ -60,14 +58,12 @@ const severityConfig = {
     icon: AlertTriangle,
   },
   success: {
-    gradientLight: ['rgba(16, 185, 129, 0.10)', 'rgba(16, 185, 129, 0.04)', 'transparent'] as const,
-    gradientDark: ['rgba(2, 44, 34, 0.40)', 'rgba(2, 44, 34, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(16, 185, 129, 0.25)',
+    cardBgLight: '#f0fdf4',
+    cardBgDark: 'rgba(2, 44, 34, 0.25)',
+    borderLight: 'rgba(16, 185, 129, 0.30)',
     borderDark: 'rgba(52, 211, 153, 0.30)',
     iconBgLight: 'rgba(16, 185, 129, 0.15)',
     iconBgDark: 'rgba(16, 185, 129, 0.25)',
-    iconBorderLight: 'rgba(16, 185, 129, 0.25)',
-    iconBorderDark: 'rgba(52, 211, 153, 0.35)',
     iconColorLight: '#059669',
     iconColorDark: '#34d399',
     titleColorLight: '#064e3b',
@@ -77,14 +73,12 @@ const severityConfig = {
     icon: CheckCircle2,
   },
   info: {
-    gradientLight: ['rgba(14, 165, 233, 0.10)', 'rgba(14, 165, 233, 0.04)', 'transparent'] as const,
-    gradientDark: ['rgba(8, 47, 73, 0.40)', 'rgba(8, 47, 73, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(14, 165, 233, 0.25)',
+    cardBgLight: '#f0f9ff',
+    cardBgDark: 'rgba(8, 47, 73, 0.25)',
+    borderLight: 'rgba(14, 165, 233, 0.30)',
     borderDark: 'rgba(56, 189, 248, 0.30)',
     iconBgLight: 'rgba(14, 165, 233, 0.15)',
     iconBgDark: 'rgba(14, 165, 233, 0.25)',
-    iconBorderLight: 'rgba(14, 165, 233, 0.25)',
-    iconBorderDark: 'rgba(56, 189, 248, 0.35)',
     iconColorLight: '#0284c7',
     iconColorDark: '#38bdf8',
     titleColorLight: '#0369a1',
@@ -97,14 +91,9 @@ const severityConfig = {
 
 const resolveAppRoute = (url?: string): string | null => {
   if (!url) return null;
-  if (url.startsWith('/operations')) return url.startsWith('/(app)') ? url : `/(app)${url}`;
-  if (url.startsWith('/machines')) return '/(app)/machines';
-  if (url.startsWith('/users')) return '/(app)/users';
-  if (url.startsWith('/clients')) return '/(app)/clients';
-  if (url.startsWith('/attendance')) return '/(app)/attendance';
-  if (url.startsWith('/payroll')) return '/(app)/payroll';
-  if (url.startsWith('/audit')) return '/(app)/dashboard';
-  return url.startsWith('/(app)') ? url : `/(app)${url}`;
+  const cleanUrl = url.replace(/^\/\(app\)/, '');
+  if (cleanUrl.startsWith('/audit')) return '/dashboard';
+  return cleanUrl;
 };
 
 export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
@@ -115,23 +104,21 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
 
   const targetRoute = resolveAppRoute(alert.actionUrl);
 
-  const handlePress = async () => {
+  const handlePress = () => {
     if (targetRoute) {
       router.push(targetRoute as any);
     }
   };
 
-  const content = (
-    <LinearGradient
-      colors={isDark ? config.gradientDark : config.gradientLight}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
-      style={[
-        styles.alertCard,
-        {
-          borderColor: isDark ? config.borderDark : config.borderLight,
-        },
-      ]}
+  return (
+    <Card
+      onPress={targetRoute ? handlePress : undefined}
+      className="p-3.5 rounded-2xl flex-row items-start justify-between"
+      style={{
+        backgroundColor: isDark ? config.cardBgDark : config.cardBgLight,
+        borderColor: isDark ? config.borderDark : config.borderLight,
+        borderWidth: 1,
+      }}
     >
       <View style={styles.leftRow}>
         <View
@@ -139,14 +126,12 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
             styles.iconContainer,
             {
               backgroundColor: isDark ? config.iconBgDark : config.iconBgLight,
-              borderColor: isDark ? config.iconBorderDark : config.iconBorderLight,
             },
           ]}
         >
           <Icon
-            size={16}
+            size={18}
             color={isDark ? config.iconColorDark : config.iconColorLight}
-            animate="mount"
           />
         </View>
 
@@ -183,23 +168,8 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
           />
         </View>
       ) : null}
-    </LinearGradient>
+    </Card>
   );
-
-  if (targetRoute) {
-    return (
-      <Touchable
-        preset="card"
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel={alert.title}
-      >
-        {content}
-      </Touchable>
-    );
-  }
-
-  return content;
 };
 
 export const AlertWidget: React.FC<AlertWidgetProps> = ({
@@ -234,35 +204,11 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.md,
   },
   eyebrowHeader: {
+    textTransform: 'uppercase',
     marginBottom: spacingNumeric.xs,
   },
   list: {
     gap: spacingNumeric.xs,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    padding: spacingNumeric.sm + 2,
-    borderRadius: radiusNumeric.md || 12,
-    borderWidth: 1,
-    gap: spacingNumeric.xs,
-    position: 'relative',
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-      web: {
-        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
-      } as any,
-    }),
   },
   leftRow: {
     flexDirection: 'row',
@@ -273,8 +219,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 32,
     height: 32,
-    borderRadius: 9,
-    borderWidth: 1,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

@@ -16,7 +16,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  TextInput,
   ActivityIndicator,
   Alert,
   Platform,
@@ -25,6 +24,8 @@ import {
 import { AppModal } from '../ui/AppModal';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
+import { SearchInput } from '../ui/SearchInput';
+import { showToast } from '../ui';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
@@ -34,7 +35,6 @@ import { OperationLogListSkeleton } from './OperationsSkeleton';
 import {
   FileSpreadsheet,
   Printer,
-  Search,
   X,
   SlidersHorizontal,
   Calendar,
@@ -309,7 +309,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
       haptics.select();
 
       if (!filteredLogs || filteredLogs.length === 0) {
-        Alert.alert('No Logs', 'No machine logs found to export for the selected filters.');
+        showToast('info', 'No Logs', 'No machine logs found to export for the selected filters.');
         return;
       }
 
@@ -370,13 +370,13 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
             UTI: 'public.comma-separated-values-text',
           });
         } else {
-          Alert.alert('Export Complete', `Saved to ${fileUri}`);
+          showToast('success', 'Export Complete', `Saved to ${fileUri}`);
         }
       }
       haptics.success();
     } catch (err: any) {
       console.error('[MobileOperatorHistoryTab] Export Excel error:', err);
-      Alert.alert('Export Error', err?.message || 'Failed to export logs.');
+      showToast('error', 'Export Error', err?.message || 'Failed to export logs.');
     } finally {
       setIsExportingExcel(false);
     }
@@ -422,33 +422,13 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
         {/* 2. Search & Filter Bar (Screenshot 4) */}
         <View style={styles.searchFilterRow}>
-          {/* Search Box with Search Icon and Clear Button */}
-          <View
-            style={[
-              styles.searchBox,
-              {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Search size={14} color={theme.colors.mute} style={styles.searchIcon} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
-              placeholderTextColor={theme.colors.mute}
-              style={[
-                styles.searchInput,
-                { color: theme.colors.ink },
-              ]}
-            />
-            {search.trim() !== '' && (
-              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')} style={styles.clearSearchBtn} accessibilityLabel="Clear search">
-                <X size={13} color={theme.colors.mute} />
-              </Pressable>
-            )}
-          </View>
+          <SearchInput
+            value={search}
+            onChangeText={setSearch}
+            onClear={() => setSearch('')}
+            placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
+            containerStyle={{ flex: 1 }}
+          />
 
           {/* Filter Dropdown Toggle Button */}
           <Pressable variant="outline" haptic="select" hitSlopToMin48 onPress={() => setIsFilterModalOpen(true)} style={[styles.filterBtn, { backgroundColor: activeFilterCount > 0 ? (isDark ? "rgba(0, 112, 243, 0.15)" : "#eff6ff") : (isDark ? "rgba(255,255,255,0.04)" : "#ffffff"), borderColor: activeFilterCount > 0 ? (isDark ? "rgba(0, 112, 243, 0.3)" : "#bfdbfe") : theme.colors.hairline }]} accessibilityRole="button" accessibilityLabel="Filter shift logs">
@@ -956,26 +936,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  searchBox: {
-    flex: 1,
-    height: 42,
-    borderRadius: 22,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 6,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    paddingVertical: 0,
-  },
-  clearSearchBtn: {
-    padding: 4,
   },
   filterBtn: {
     height: 42,

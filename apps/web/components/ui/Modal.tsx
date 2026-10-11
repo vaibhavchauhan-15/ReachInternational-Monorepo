@@ -28,6 +28,8 @@ export interface ModalProps {
   footerClassName?: string;
   preventAutoFocus?: boolean;
   onOpenAutoFocus?: (event: Event) => void;
+  showCloseButton?: boolean;
+  preventClose?: boolean;
 }
 
 const sizeClasses = {
@@ -53,13 +55,30 @@ export function Modal({
   footerClassName,
   preventAutoFocus = true,
   onOpenAutoFocus,
+  showCloseButton = true,
+  preventClose = false,
 }: ModalProps) {
   return (
-    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        if (!val && !preventClose) onClose();
+      }}
+    >
       <DialogContent
         from={from}
-        showCloseButton={true}
+        showCloseButton={showCloseButton && !preventClose}
         className={cn(sizeClasses[size], className)}
+        onPointerDownOutside={(e) => {
+          if (preventClose) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          if (preventClose) {
+            e.preventDefault();
+          }
+        }}
         onOpenAutoFocus={(e) => {
           if (preventAutoFocus) {
             e.preventDefault();

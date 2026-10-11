@@ -67,12 +67,16 @@ export default function AppLayout() {
 
         {/* Settings Module Dedicated Sub-Pages */}
         <Tabs.Screen name="settings/account" options={{ ...screenAnim.tab, title: 'Account Settings', href: null }} />
+        <Tabs.Screen name="settings/password" options={{ ...screenAnim.tab, title: 'Change Password', href: null }} />
+        <Tabs.Screen name="settings/security" options={{ ...screenAnim.tab, title: 'Account Security', href: null }} />
         <Tabs.Screen name="settings/notification" options={{ ...screenAnim.tab, title: 'Notification Settings', href: null }} />
         <Tabs.Screen name="settings/preference" options={{ ...screenAnim.tab, title: 'Preferences', href: null }} />
-        <Tabs.Screen name="settings/prefrence" options={{ href: null }} />
+        <Tabs.Screen name="settings/preferences" options={{ ...screenAnim.tab, title: 'Preferences', href: null }} />
+        <Tabs.Screen name="settings/prefrences" options={{ ...screenAnim.tab, title: 'Preferences', href: null }} />
+        <Tabs.Screen name="settings/fontsize" options={{ ...screenAnim.tab, title: 'Font Size', href: null }} />
         <Tabs.Screen name="settings/aboutapp" options={{ ...screenAnim.tab, title: 'About App', href: null }} />
-        <Tabs.Screen name="setting/index" options={{ href: null }} />
-        <Tabs.Screen name="setting/[...slug]" options={{ href: null }} />
+        <Tabs.Screen name="settings/appinfo" options={{ ...screenAnim.tab, title: 'App Information', href: null }} />
+        <Tabs.Screen name="settings/support" options={{ ...screenAnim.tab, title: 'Support & Contact', href: null }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
         <Tabs.Screen name="running-logs" options={{ ...screenAnim.tab, title: 'Running Logs', href: null }} />

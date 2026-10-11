@@ -1,12 +1,11 @@
 /**
- * ReachInternational Mobile — Canonical Icon Button Primitive
- * Borderless ripple, radius 24, minimum 48dp touch target, optional tap haptics,
- * and automatic pressNudge spring feedback on the child icon.
+ * ReachInternational Mobile — Icon Button Primitive
+ * Backed by React Native Reusables Button (variant="ghost", size="icon").
  */
 
 import React, { memo } from 'react';
 import { type ViewStyle } from 'react-native';
-import { Pressable } from './touch/Pressable';
+import { Button } from './Button';
 import { Icon, type IconName, type IconTone } from './icon';
 import type { SemanticHapticKind } from '../../lib/haptics';
 
@@ -25,6 +24,7 @@ export interface IconButtonProps {
   haptic?: SemanticHapticKind | false;
   disabled?: boolean;
   style?: ViewStyle;
+  className?: string;
 }
 
 export const IconButton = memo(function IconButton({
@@ -32,32 +32,30 @@ export const IconButton = memo(function IconButton({
   name,
   onPress,
   accessibilityLabel,
-  size = 40,
-  radius = 24,
+  size = 44,
   iconSize = 20,
   color,
   tone,
-  haptic,
   disabled = false,
   style,
+  className,
 }: IconButtonProps) {
-  const content = icon ?? (name ? <Icon name={name} size={iconSize} color={color} tone={tone} animate="press" /> : null);
+  const content = icon ?? (name ? <Icon name={name} size={iconSize} color={color} tone={tone} /> : null);
 
   return (
-    <Pressable
-      variant="iconButton"
-      haptic={haptic}
-      rippleRadius={radius}
-      hitSlopToMin48={true}
+    <Button
+      variant="ghost"
+      size="icon"
       disabled={disabled}
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      className={className}
       style={[
         {
           width: size,
           height: size,
-          borderRadius: radius,
+          minWidth: 44,
+          minHeight: 44,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -65,7 +63,7 @@ export const IconButton = memo(function IconButton({
       ]}
     >
       {content}
-    </Pressable>
+    </Button>
   );
 });
 

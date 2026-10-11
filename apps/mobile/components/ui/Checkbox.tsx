@@ -1,105 +1,67 @@
 /**
- * ReachInternational Mobile — Standardized Checkbox Primitive
- * Features check animation, semantic toggle haptics, and 48dp touch target.
+ * ReachInternational Mobile — React Native Reusables Checkbox Component
+ * Official RNR Checkbox primitive powered by @rn-primitives/checkbox and Lucide Check.
  */
 
-import React, { memo, useEffect } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import { Check } from './icon';
-import { motion, radiusNumeric } from '@reachinternational/design-tokens';
-import { useTheme } from './ThemeProvider';
-import { haptics } from '../../lib/haptics';
-import { Pressable } from './touch/Pressable';
+import * as CheckboxPrimitive from '@rn-primitives/checkbox';
+import * as React from 'react';
+import { Platform } from 'react-native';
+import { Check } from 'lucide-react-native';
+import { cn } from '@/lib/utils';
 
-export interface CheckboxProps {
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  disabled?: boolean;
-  accessibilityLabel?: string;
-  size?: number;
-  style?: ViewStyle;
+export interface CheckboxProps
+  extends Omit<React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>, 'checked' | 'onCheckedChange'> {
+  checked?: boolean;
+  value?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  onChange?: (checked: boolean) => void;
+  onValueChange?: (checked: boolean) => void;
 }
 
-export const Checkbox = memo(function Checkbox({
-  checked,
-  onCheckedChange,
-  disabled = false,
-  accessibilityLabel = 'Checkbox',
-  size = 20,
-  style,
-}: CheckboxProps) {
-  const { theme, isDark } = useTheme();
-  const scale = useSharedValue(checked ? 1 : 0);
+const Checkbox = React.forwardRef<
+  React.ElementRef<typeof CheckboxPrimitive.Root>,
+  CheckboxProps
+>(
+  (
+    {
+      className,
+      checked,
+      value,
+      onCheckedChange,
+      onChange,
+      onValueChange,
+      ...props
+    },
+    ref
+  ) => {
+    const isChecked = checked ?? value ?? false;
 
-  useEffect(() => {
-    scale.value = withSpring(checked ? 1 : 0, motion.spring.default);
-  }, [checked, scale]);
+    const handleCheckedChange = (val: boolean) => {
+      onCheckedChange?.(val);
+      onChange?.(val);
+      onValueChange?.(val);
+    };
 
-  const handlePress = () => {
-    if (disabled) return;
-    const nextChecked = !checked;
-    haptics.toggle(nextChecked);
-    onCheckedChange(nextChecked);
-  };
-
-  const checkAnim = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: scale.value,
-  }));
-
-  const activeColor = theme.colors.primary;
-  const inactiveBorder = isDark ? '#383838' : '#d4d4d4';
-  const inactiveBg = isDark ? '#171717' : '#ffffff';
-
-  return (
-    <Pressable
-      variant="toggle"
-      haptic={false}
-      hitSlopToMin48={true}
-      disabled={disabled}
-      onPress={handlePress}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled }}
-      accessibilityLabel={accessibilityLabel}
-      style={[styles.hitBox, style]}
-    >
-      <View
-        style={[
-          styles.box,
-          {
-            width: size,
-            height: size,
-            borderRadius: radiusNumeric.sm,
-            borderColor: checked ? activeColor : inactiveBorder,
-            backgroundColor: checked ? activeColor : inactiveBg,
-          },
-        ]}
+    return (
+      <CheckboxPrimitive.Root
+        ref={ref}
+        checked={isChecked}
+        onCheckedChange={handleCheckedChange}
+        className={cn(
+          'web:peer h-5 w-5 shrink-0 rounded border border-primary web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground items-center justify-center',
+          className
+        )}
+        {...props}
       >
-        <Animated.View style={checkAnim}>
-          <Check size={size - 6} color="#ffffff" strokeWidth={3} />
-        </Animated.View>
-      </View>
-    </Pressable>
-  );
-});
+        <CheckboxPrimitive.Indicator className={cn('items-center justify-center h-full w-full')}>
+          <Check size={14} strokeWidth={3.5} className="text-primary-foreground" color="#ffffff" />
+        </CheckboxPrimitive.Indicator>
+      </CheckboxPrimitive.Root>
+    );
+  }
+);
 
-const styles = StyleSheet.create({
-  hitBox: {
-    minWidth: 48,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  box: {
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+Checkbox.displayName = CheckboxPrimitive.Root.displayName;
 
+export { Checkbox };
 export default Checkbox;

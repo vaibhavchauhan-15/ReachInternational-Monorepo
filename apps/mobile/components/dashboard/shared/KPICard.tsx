@@ -1,11 +1,15 @@
+/**
+ * ReachInternational Mobile — Dashboard KPI Card Component
+ * Migrated to React Native Reusables Card and Geist design tokens for 100% web mobile parity.
+ */
+
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from '../../ui/AppLinearGradient';
-import { useTheme } from '../../ui/ThemeProvider';
+import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { Touchable } from '../../ui/Touchable';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { useTheme } from '../../ui/ThemeProvider';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 
 export type KPIVariant =
   | 'default'
@@ -23,25 +27,22 @@ export interface KPICardProps {
   variant?: KPIVariant;
   href?: string;
   onPress?: () => void;
+  interactive?: boolean;
   active?: boolean;
   subtitle?: string;
   trend?: {
     value: string | number;
     isUp: boolean;
   };
-  style?: any;
-  containerStyle?: any;
+  style?: StyleProp<ViewStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
-const variantStyles: Record<
+const variantConfig: Record<
   KPIVariant,
   {
-    cardGradientLight: readonly [string, string, ...string[]];
-    cardGradientDark: readonly [string, string, ...string[]];
-    iconGradientLight: readonly [string, string, ...string[]];
-    iconGradientDark: readonly [string, string, ...string[]];
-    borderColorLight: string;
-    borderColorDark: string;
+    iconBgLight: string;
+    iconBgDark: string;
     iconColorLight: string;
     iconColorDark: string;
     valueColorLight: string;
@@ -49,84 +50,56 @@ const variantStyles: Record<
   }
 > = {
   default: {
-    cardGradientLight: ['#ffffff', '#f8fafc', '#f1f5f9'],
-    cardGradientDark: ['#1e293b', '#172033', '#0f172a'],
-    iconGradientLight: ['rgba(100, 116, 139, 0.16)', 'rgba(100, 116, 139, 0.06)'],
-    iconGradientDark: ['rgba(148, 163, 184, 0.25)', 'rgba(148, 163, 184, 0.10)'],
-    borderColorLight: 'rgba(226, 232, 240, 0.9)',
-    borderColorDark: 'rgba(51, 65, 85, 0.8)',
-    iconColorLight: '#475569',
-    iconColorDark: '#cbd5e1',
-    valueColorLight: '#0f172a',
+    iconBgLight: 'rgba(100, 116, 139, 0.12)',
+    iconBgDark: 'rgba(148, 163, 184, 0.16)',
+    iconColorLight: '#64748b',
+    iconColorDark: '#94a3b8',
+    valueColorLight: '#171717',
     valueColorDark: '#f8fafc',
   },
   info: {
-    cardGradientLight: ['#ffffff', '#f0f9ff', '#e0f2fe'],
-    cardGradientDark: ['#0b1e33', '#082f49', '#0c4a6e'],
-    iconGradientLight: ['rgba(14, 165, 233, 0.22)', 'rgba(14, 165, 233, 0.08)'],
-    iconGradientDark: ['rgba(56, 189, 248, 0.35)', 'rgba(14, 165, 233, 0.15)'],
-    borderColorLight: 'rgba(14, 165, 233, 0.25)',
-    borderColorDark: 'rgba(56, 189, 248, 0.35)',
+    iconBgLight: 'rgba(14, 165, 233, 0.16)',
+    iconBgDark: 'rgba(56, 189, 248, 0.20)',
     iconColorLight: '#0284c7',
     iconColorDark: '#38bdf8',
     valueColorLight: '#0284c7',
     valueColorDark: '#38bdf8',
   },
   warning: {
-    cardGradientLight: ['#ffffff', '#fffbeb', '#fef3c7'],
-    cardGradientDark: ['#271708', '#451a03', '#78350f'],
-    iconGradientLight: ['rgba(245, 158, 11, 0.22)', 'rgba(245, 158, 11, 0.08)'],
-    iconGradientDark: ['rgba(251, 191, 36, 0.35)', 'rgba(245, 158, 11, 0.15)'],
-    borderColorLight: 'rgba(245, 158, 11, 0.25)',
-    borderColorDark: 'rgba(251, 191, 36, 0.35)',
+    iconBgLight: 'rgba(245, 158, 11, 0.16)',
+    iconBgDark: 'rgba(251, 191, 36, 0.20)',
     iconColorLight: '#d97706',
     iconColorDark: '#fbbf24',
-    valueColorLight: '#b45309',
+    valueColorLight: '#d97706',
     valueColorDark: '#fbbf24',
   },
   success: {
-    cardGradientLight: ['#ffffff', '#f0fdf4', '#dcfce7'],
-    cardGradientDark: ['#072419', '#022c22', '#064e3b'],
-    iconGradientLight: ['rgba(16, 185, 129, 0.22)', 'rgba(16, 185, 129, 0.08)'],
-    iconGradientDark: ['rgba(52, 211, 153, 0.35)', 'rgba(16, 185, 129, 0.15)'],
-    borderColorLight: 'rgba(16, 185, 129, 0.25)',
-    borderColorDark: 'rgba(52, 211, 153, 0.35)',
-    iconColorLight: '#059669',
+    iconBgLight: 'rgba(16, 185, 129, 0.16)',
+    iconBgDark: 'rgba(52, 211, 153, 0.20)',
+    iconColorLight: '#10b981',
     iconColorDark: '#34d399',
-    valueColorLight: '#059669',
+    valueColorLight: '#10b981',
     valueColorDark: '#34d399',
   },
   error: {
-    cardGradientLight: ['#ffffff', '#fff1f2', '#ffe4e6'],
-    cardGradientDark: ['#290812', '#4c0519', '#881337'],
-    iconGradientLight: ['rgba(244, 63, 94, 0.22)', 'rgba(244, 63, 94, 0.08)'],
-    iconGradientDark: ['rgba(251, 113, 133, 0.35)', 'rgba(244, 63, 94, 0.15)'],
-    borderColorLight: 'rgba(244, 63, 94, 0.25)',
-    borderColorDark: 'rgba(251, 113, 133, 0.35)',
+    iconBgLight: 'rgba(244, 63, 94, 0.16)',
+    iconBgDark: 'rgba(251, 113, 133, 0.20)',
     iconColorLight: '#e11d48',
     iconColorDark: '#fb7185',
     valueColorLight: '#e11d48',
     valueColorDark: '#fb7185',
   },
   purple: {
-    cardGradientLight: ['#ffffff', '#faf5ff', '#ede9fe'],
-    cardGradientDark: ['#1d0d3b', '#2e1065', '#3b0764'],
-    iconGradientLight: ['rgba(139, 92, 246, 0.22)', 'rgba(139, 92, 246, 0.08)'],
-    iconGradientDark: ['rgba(192, 132, 252, 0.35)', 'rgba(139, 92, 246, 0.15)'],
-    borderColorLight: 'rgba(139, 92, 246, 0.25)',
-    borderColorDark: 'rgba(192, 132, 252, 0.35)',
+    iconBgLight: 'rgba(139, 92, 246, 0.16)',
+    iconBgDark: 'rgba(192, 132, 252, 0.20)',
     iconColorLight: '#7c3aed',
     iconColorDark: '#c084fc',
     valueColorLight: '#7c3aed',
     valueColorDark: '#c084fc',
   },
   indigo: {
-    cardGradientLight: ['#ffffff', '#eef2ff', '#e0e7ff'],
-    cardGradientDark: ['#131238', '#1e1b4b', '#312e81'],
-    iconGradientLight: ['rgba(79, 70, 229, 0.22)', 'rgba(79, 70, 229, 0.08)'],
-    iconGradientDark: ['rgba(129, 140, 248, 0.35)', 'rgba(79, 70, 229, 0.15)'],
-    borderColorLight: 'rgba(79, 70, 229, 0.25)',
-    borderColorDark: 'rgba(129, 140, 248, 0.35)',
+    iconBgLight: 'rgba(79, 70, 229, 0.16)',
+    iconBgDark: 'rgba(129, 140, 248, 0.20)',
     iconColorLight: '#4338ca',
     iconColorDark: '#a5b4fc',
     valueColorLight: '#4338ca',
@@ -136,14 +109,9 @@ const variantStyles: Record<
 
 const resolveRoute = (href?: string): string | null => {
   if (!href) return null;
-  if (href.startsWith('/operations')) return '/(app)/operations';
-  if (href.startsWith('/machines')) return '/(app)/machines';
-  if (href.startsWith('/users')) return '/(app)/users';
-  if (href.startsWith('/clients')) return '/(app)/clients';
-  if (href.startsWith('/attendance')) return '/(app)/attendance';
-  if (href.startsWith('/payroll')) return '/(app)/payroll';
-  if (href.startsWith('/audit')) return '/(app)/dashboard';
-  return href.startsWith('/(app)') ? href : `/(app)${href}`;
+  const cleanRoute = href.replace(/^\/\(app\)/, '');
+  if (cleanRoute.startsWith('/audit')) return '/dashboard';
+  return cleanRoute;
 };
 
 export const KPICard: React.FC<KPICardProps> = ({
@@ -153,15 +121,16 @@ export const KPICard: React.FC<KPICardProps> = ({
   variant = 'default',
   href,
   onPress,
+  interactive = false,
   active = false,
   style,
   containerStyle,
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-  const config = variantStyles[variant] || variantStyles.default;
+  const config = variantConfig[variant] || variantConfig.default;
   const targetRoute = resolveRoute(href);
-  const isInteractive = Boolean(onPress || targetRoute);
+  const isInteractive = interactive && Boolean(onPress || targetRoute);
 
   const handlePress = () => {
     if (isInteractive) {
@@ -173,87 +142,66 @@ export const KPICard: React.FC<KPICardProps> = ({
     }
   };
 
-  const cardContent = (
-    <LinearGradient
-      colors={isDark ? config.cardGradientDark : config.cardGradientLight}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[
-        styles.card,
-        {
-          borderColor: active
-            ? (isDark ? '#f8fafc' : theme.colors.ink)
-            : (isDark ? config.borderColorDark : config.borderColorLight),
-          borderWidth: active ? 1.5 : 1,
-        },
-        style,
-      ]}
-    >
-      {/* Header Row: Label & Creative Icon Capsule */}
-      <View style={styles.headerRow}>
-        <Text
-          variant="label"
-          style={[
-            styles.label,
-            { color: isDark ? theme.colors.mute : '#64748b' },
-          ]}
-          numberOfLines={2}
-        >
-          {label}
-        </Text>
-
-        {Icon ? (
-          <LinearGradient
-            colors={isDark ? config.iconGradientDark : config.iconGradientLight}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+  return (
+    <View style={[styles.touchWrapper, containerStyle]}>
+      <Card
+        onPress={isInteractive ? handlePress : undefined}
+        className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 flex-col justify-between h-full"
+        style={[
+          active && {
+            borderColor: isDark ? '#f8fafc' : theme.colors.ink,
+            borderWidth: 1.5,
+          },
+          style,
+        ]}
+      >
+        {/* Header Row: Label & Icon Capsule */}
+        <View style={styles.headerRow}>
+          <Text
+            variant="label"
             style={[
-              styles.iconCircle,
+              styles.label,
+              { color: isDark ? '#94a3b8' : '#64748b' },
+            ]}
+            numberOfLines={2}
+          >
+            {label}
+          </Text>
+
+          {Icon ? (
+            <View
+              style={[
+                styles.iconCircle,
+                {
+                  backgroundColor: isDark ? config.iconBgDark : config.iconBgLight,
+                },
+              ]}
+            >
+              <Icon
+                size={16}
+                color={isDark ? config.iconColorDark : config.iconColorLight}
+              />
+            </View>
+          ) : null}
+        </View>
+
+        {/* Metric Value */}
+        <View style={styles.valueRow}>
+          <Text
+            variant="display"
+            style={[
+              styles.value,
               {
-                borderColor: isDark ? config.borderColorDark : config.borderColorLight,
+                color: isDark ? config.valueColorDark : config.valueColorLight,
               },
             ]}
           >
-            <Icon
-              size={16}
-              color={isDark ? config.iconColorDark : config.iconColorLight}
-            />
-          </LinearGradient>
-        ) : null}
-      </View>
-
-      {/* Metric Value */}
-      <View style={styles.valueRow}>
-        <Text
-          variant="display"
-          style={[
-            styles.value,
-            {
-              color: isDark ? config.valueColorDark : config.valueColorLight,
-            },
-          ]}
-        >
-          {value}
-        </Text>
-      </View>
-    </LinearGradient>
+            {value}
+          </Text>
+        </View>
+      </Card>
+    </View>
   );
-
-  if (isInteractive) {
-    return (
-      <Touchable
-        preset="card"
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value}`}
-        style={[styles.touchWrapper, containerStyle]}
-      >
-        {cardContent}
-      </Touchable>
-    );
-  }
-
-  return <View style={[styles.touchWrapper, containerStyle]}>{cardContent}</View>;
 };
 
 const styles = StyleSheet.create({
@@ -263,30 +211,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  card: {
-    borderRadius: radiusNumeric.md || 14,
-    borderWidth: 1,
-    padding: spacingNumeric.md - 2,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: 96,
-    height: '100%',
-    justifyContent: 'space-between',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 1,
-      },
-      web: {
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
-      } as any,
-    }),
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -295,18 +219,18 @@ const styles = StyleSheet.create({
   },
   label: {
     flex: 1,
+    minHeight: 28,
   },
   iconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   valueRow: {
-    marginTop: spacingNumeric.xs,
+    marginTop: spacingNumeric.xs + 2,
   },
   value: {},
 });

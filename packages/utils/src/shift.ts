@@ -3,7 +3,7 @@
  * Deterministically resolves and pre-selects the operator's assigned or roster shift.
  */
 
-import { parseTimeToMinutes } from './date';
+import { parseTimeToMinutes, formatTo12Hour } from './date';
 
 export interface ShiftMatchTarget {
   code: string;
@@ -374,4 +374,167 @@ export function getClientShiftPresetById(id?: string | null): ClientShiftPreset 
   if (!id) return undefined;
   return CLIENT_SHIFT_PRESETS.find((p) => p.id === id);
 }
+
+/**
+ * Sanitizes and cleans operational shift log errors into short, human-readable titles and messages.
+ * Replaces cryptic database exceptions like:
+ * "Cannot log before shift end. (end_dt=2026-10-11 14:00:00+05:30, now=2026-10-11 10:55:51.30018+05:30)"
+ * with clean, meaningful instructions:
+ * { title: 'Shift In Progress', message: 'Shift has not ended yet. Logs can be submitted after shift ends.' }
+ */
+export function parseOperationalErrorMessage(
+  err: any,
+  context?: {
+    endTime?: string;
+    startMeter?: number;
+    endMeter?: number;
+    assignedShifts?: string[];
+  }
+): { title: string; message: string } {
+  const rawMsg = (err?.message || err?.details || (typeof err === 'string' ? err : '')).trim();
+  const lower = rawMsg.toLowerCase();
+  const formattedEnd = context?.endTime ? formatTo12Hour(context.endTime) || context.endTime : null;
+
+  // 1. Shift End Future Guard
+  if (
+    lower.includes('cannot log before shift end') ||
+    lower.includes('end_dt=') ||
+    lower.includes('future shift end') ||
+    lower.includes('shift end timestamp') ||
+    lower.includes('shift is in progress')
+  ) {
+    return {
+      title: 'Shift In Progress',
+      message: formattedEnd
+        ? `Shift has not ended yet. Logs can be submitted after ${formattedEnd}.`
+        : 'Shift has not ended yet. Logs can be submitted after shift ends.',
+    };
+  }
+
+  // 2. Meter Regression (End < Start)
+  if (
+    lower.includes('cannot be less than start meter') ||
+    lower.includes('chk_machine_hour_logs_meter_range') ||
+    lower.includes('must be ≥ start meter') ||
+    lower.includes('end meter must be')
+  ) {
+    const startStr = context?.startMeter !== undefined ? `${context.startMeter.toFixed(1)}` : 'start meter';
+    return {
+      title: 'Invalid Meter Reading',
+      message: `Ending meter reading cannot be less than starting meter (${startStr}).`,
+    };
+  }
+
+  // 3. Exceeds 24 Hours
+  if (lower.includes('cannot exceed 24 hours') || lower.includes('exceed 24h')) {
+    return {
+      title: 'Operating Limit Exceeded',
+      message: 'Operating hours cannot exceed 24 hours in a single shift.',
+    };
+  }
+
+  // 4. Overlapping / Conflict
+  if (lower.includes('overlap') || lower.includes('overlapping') || lower.includes('tstzrange')) {
+    return {
+      title: 'Shift Time Conflict',
+      message: 'This equipment already has a log recorded for this time window.',
+    };
+  }
+
+  // 5. Breakdown duration exceeds shift
+  if (
+    lower.includes('breakdown duration') ||
+    lower.includes('cannot exceed total shift duration') ||
+    lower.includes('cannot exceed shift')
+  ) {
+    return {
+      title: 'Invalid Breakdown Time',
+      message: 'Breakdown duration cannot exceed total shift hours.',
+    };
+  }
+
+  // 6. Unassigned Shift
+  if (
+    lower.includes('assigned to shift') ||
+    lower.includes('unassigned shift') ||
+    lower.includes('please select your assigned shift')
+  ) {
+    const shiftsStr = context?.assignedShifts && context.assignedShifts.length > 0
+      ? `Shift ${context.assignedShifts.join(', ')}`
+      : 'your assigned shift';
+    return {
+      title: 'Unassigned Shift',
+      message: `You are assigned to ${shiftsStr}. Please select your assigned shift.`,
+    };
+  }
+
+  // 7. Machine inactive or in maintenance
+  if (lower.includes('maintenance or decommissioned') || lower.includes('inactive')) {
+    return {
+      title: 'Equipment Unavailable',
+      message: 'This equipment is currently inactive or under maintenance.',
+    };
+  }
+
+  // 8. Unauthorized operator
+  if (lower.includes('unauthorized operator') || err?.code === '42501') {
+    return {
+      title: 'Unauthorized Action',
+      message: 'You are not authorized to submit logs for this equipment.',
+    };
+  }
+
+  // 9. Client mismatch
+  if (lower.includes('client id does not match') || err?.code === '23503') {
+    return {
+      title: 'Site Mismatch',
+      message: 'Equipment is not deployed at the selected client site.',
+    };
+  }
+
+  // 10. Date older than 7 days
+  if (lower.includes('previous 7 days') || lower.includes('older than 7 days')) {
+    return {
+      title: 'Date Window Locked',
+      message: 'Shift logs cannot be submitted for dates older than 7 days.',
+    };
+  }
+
+  // 11. Duplicate key (idempotency)
+  if (lower.includes('duplicate key') || err?.code === '23505') {
+    return {
+      title: 'Already Recorded',
+      message: 'This shift log has already been recorded in the system.',
+    };
+  }
+
+  // 12. Network / connection drop
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('network request failed') ||
+    lower.includes('network error') ||
+    lower.includes('timeout') ||
+    lower.includes('connection')
+  ) {
+    return {
+      title: 'Network Disconnected',
+      message: 'Connection dropped. Shift log saved offline and will auto-sync.',
+    };
+  }
+
+  // 13. Clean any remaining raw Postgres/DB error
+  const clean = rawMsg
+    .replace(/^error:\s*/i, '')
+    .replace(/\(sqlstate\s+\w+\)/i, '')
+    .replace(/context:[\s\S]*/i, '')
+    .replace(/where:[\s\S]*/i, '')
+    .replace(/detail:[\s\S]*/i, '')
+    .trim();
+
+  return {
+    title: 'Submission Error',
+    message: clean || 'Failed to submit shift log. Please verify details and try again.',
+  };
+}
+
 

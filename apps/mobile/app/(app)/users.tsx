@@ -6,14 +6,14 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  TextInput,
+  type TextInput,
   Animated,
   Easing,
   Platform,
   StatusBar,
   FlatList,
   ListRenderItem} from 'react-native';
-import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle } from '../../components/ui';
+import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle, SearchInput, useToast } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
@@ -269,11 +269,19 @@ const UserTouchCard = React.memo(function UserTouchCard({
   searchTerm,
 }: UserTouchCardProps) {
   const accentColor = getRoleAccentColor(u.role);
+  const hasMeta = Boolean(
+    u.phone ||
+    u.city ||
+    u.district ||
+    u.state ||
+    (u.supervisors && u.supervisors.length > 0) ||
+    u.supervisor?.full_name
+  );
 
   return (
     <Pressable
-      variant="longPressRow"
-      haptic="longPress"
+      variant="plain"
+      haptic={false}
       onPress={() => onPress(u)}
       onLongPress={() => onLongPress(u)}
     >
@@ -294,7 +302,7 @@ const UserTouchCard = React.memo(function UserTouchCard({
           },
         ]}
       >
-        {/* Card Header */}
+        {/* Card Header: Avatar, Name & Code on left; Role & Status Badges + Chevron on right */}
         <View style={styles.userCardHeader}>
           <View style={styles.userAvatarRow}>
             {isSelectMode ? (
@@ -307,70 +315,91 @@ const UserTouchCard = React.memo(function UserTouchCard({
               </View>
             ) : (
               <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
                   {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
                 </Text>
               </View>
             )}
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <HighlightText
                   text={truncateText(u.full_name, 20)}
                   query={searchTerm}
+                  variant="label"
                   style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
                   numberOfLines={1}
                 />
                 {u.employee_id ? (
-                  <View style={{ backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    style={[
+                      styles.empIdBadge,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
                     <HighlightText
                       text={u.employee_id}
                       query={searchTerm}
                       variant="mono"
                       style={{ color: theme.colors.ink }}
                     />
-                  </View>
+                  </Badge>
                 ) : null}
               </View>
               <HighlightText
                 text={truncateText(u.email, 28)}
                 query={searchTerm}
+                variant="caption"
                 style={[styles.userEmail, { color: theme.colors.mute }]}
                 numberOfLines={1}
               />
             </View>
           </View>
 
-          {/* Status Dot & Badge */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {u.status === 'active' ? (
-              <View style={[styles.cardStatusBadge, { backgroundColor: '#d1fae5', borderColor: '#a7f3d0' }]}>
-                <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                <Text style={[styles.cardStatusText, { color: '#047857' }]}>Active</Text>
-              </View>
-            ) : (
-              <View style={[styles.cardStatusBadge, { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' }]}>
-                <View style={[styles.statusDot, { backgroundColor: '#94a3b8' }]} />
-                <Text style={[styles.cardStatusText, { color: '#64748b' }]}>
-                  {u.status ? u.status.toUpperCase() : 'INACTIVE'}
+          {/* Header Right: Role Badge, Status Badge & Chevron */}
+          <View style={styles.headerRightActions}>
+            <View style={styles.headerBadgesCluster}>
+              <Badge
+                variant="neutral"
+                size="sm"
+                style={[
+                  styles.roleBadgePill,
+                  {
+                    backgroundColor: accentColor + '18',
+                    borderColor: accentColor + '35',
+                  },
+                ]}
+              >
+                <Text variant="caption" style={{ color: accentColor }}>
+                  {formatRoleName(u.role)}
                 </Text>
-              </View>
-            )}
+              </Badge>
+
+              <Badge
+                status={u.status}
+                size="sm"
+                dot
+              >
+                <Text variant="caption">
+                  {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
+                </Text>
+              </Badge>
+            </View>
+
             <ChevronRight size={16} color={theme.colors.mute} />
           </View>
         </View>
 
-        {/* Card Metadata Section */}
-        <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-          <View style={styles.cardMetaRow}>
-            <View style={[styles.roleBadgePill, { backgroundColor: accentColor + '18', borderColor: accentColor + '35' }]}>
-              <Text style={[styles.roleBadgePillText, { color: accentColor }]}>
-                {formatRoleName(u.role)}
-              </Text>
-            </View>
-
+        {/* Card Metadata Section (organized and balanced) */}
+        {hasMeta && (
+          <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
             {u.phone ? (
-              <View style={styles.metaChip}>
-                <Phone size={11} color={theme.colors.mute} />
+              <View style={styles.metaChipRow}>
+                <Phone size={12} color={theme.colors.mute} />
                 <HighlightText
                   text={u.phone}
                   query={searchTerm}
@@ -379,31 +408,31 @@ const UserTouchCard = React.memo(function UserTouchCard({
                 />
               </View>
             ) : null}
+
+            {(u.city || u.district || u.state) && (
+              <View style={styles.metaChipRow}>
+                <MapPin size={12} color={theme.colors.mute} />
+                <HighlightText
+                  text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                  query={searchTerm}
+                  variant="caption"
+                  style={[styles.metaChipText, { color: theme.colors.mute }]}
+                />
+              </View>
+            )}
+
+            {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
+              <View style={styles.metaChipRow}>
+                <User size={12} color="#0d9488" />
+                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                  Supervisor: {u.supervisors && u.supervisors.length > 0
+                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                    : u.supervisor?.full_name}
+                </Text>
+              </View>
+            )}
           </View>
-
-          {/* Location and Supervisor Details */}
-          {(u.city || u.state) && (
-            <View style={styles.metaChipRow}>
-              <MapPin size={11} color={theme.colors.mute} />
-              <HighlightText
-                text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                query={searchTerm}
-                style={[styles.metaChipText, { color: theme.colors.mute }]}
-              />
-            </View>
-          )}
-
-          {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
-            <View style={styles.metaChipRow}>
-              <User size={11} color="#0d9488" />
-              <Text style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                Supervisor: {u.supervisors && u.supervisors.length > 0
-                  ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                  : u.supervisor?.full_name}
-              </Text>
-            </View>
-          )}
-        </View>
+        )}
       </View>
     </Pressable>
   );
@@ -420,6 +449,7 @@ const DEFAULT_USERS_FILTERS = {
 
 export default function UsersScreen() {
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
   const { role: currentUserRole, user: authUser } = useAuth();
   const router = useRouter();
   const localParams = useLocalSearchParams<{ search?: string }>();
@@ -429,7 +459,7 @@ export default function UsersScreen() {
 
   useEffect(() => {
     if (currentUserRole && !canAccessUsers) {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [currentUserRole, canAccessUsers, router]);
 
@@ -655,147 +685,194 @@ export default function UsersScreen() {
       {/* Active Filter Chips Strip */}
       {activeFilterCount > 0 && (
         <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-          <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+          <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
             Active Filters:
           </Text>
           {debouncedSearch.trim() !== '' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={handleClearSearch}
-              style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove search query ${debouncedSearch}`}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                Search: "{debouncedSearch}"
-              </Text>
-              <X size={12} color={theme.colors.mute} />
+              <Badge variant="outline" size="md" style={styles.filterBadge}>
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    Search: "{debouncedSearch}"
+                  </Text>
+                  <X size={12} color={theme.colors.mute} />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {roleFilter !== 'all' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setRoleFilter('all')}
-              style={[styles.badgeChip, { backgroundColor: isDark ? '#1e3a8a26' : '#eff6ff', borderColor: '#3b82f633' }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove role filter ${currentRoleLabel}`}
             >
-              <Text style={[styles.badgeChipText, { color: '#2563eb' }]}>
-                Role: {currentRoleLabel}
-              </Text>
-              <X size={12} color="#2563eb" />
+              <Badge variant="info" size="md" style={styles.filterBadge}>
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                    Role: {currentRoleLabel}
+                  </Text>
+                  <X size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {statusFilter !== 'all' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setStatusFilter('all')}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor:
-                    statusFilter === 'active'
-                      ? isDark ? '#064e3b26' : '#ecfdf5'
-                      : statusFilter === 'pending'
-                      ? isDark ? '#78350f26' : '#fffbeb'
-                      : isDark ? '#33415526' : '#f1f5f9',
-                  borderColor:
-                    statusFilter === 'active'
-                      ? '#10b98133'
-                      : statusFilter === 'pending'
-                      ? '#f59e0b33'
-                      : '#94a3b833',
-                },
-              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove status filter ${currentStatusLabel}`}
             >
-              <Text
-                style={[
-                  styles.badgeChipText,
-                  {
-                    color:
-                      statusFilter === 'active'
-                        ? '#059669'
-                        : statusFilter === 'pending'
-                        ? '#d97706'
-                        : '#64748b',
-                  },
-                ]}
-              >
-                Status: {currentStatusLabel}
-              </Text>
-              <X
-                size={12}
-                color={
+              <Badge
+                variant={
                   statusFilter === 'active'
-                    ? '#059669'
+                    ? 'success'
                     : statusFilter === 'pending'
-                    ? '#d97706'
-                    : '#64748b'
+                    ? 'warning'
+                    : 'neutral'
                 }
-              />
+                size="md"
+                style={styles.filterBadge}
+              >
+                <View style={styles.filterBadgeContent}>
+                  <Text
+                    variant="caption"
+                    style={{
+                      color:
+                        statusFilter === 'active'
+                          ? isDark ? '#34d399' : '#059669'
+                          : statusFilter === 'pending'
+                          ? isDark ? '#fbbf24' : '#d97706'
+                          : isDark ? '#94a3b8' : '#64748b',
+                    }}
+                  >
+                    Status: {currentStatusLabel}
+                  </Text>
+                  <X
+                    size={12}
+                    color={
+                      statusFilter === 'active'
+                        ? isDark ? '#34d399' : '#059669'
+                        : statusFilter === 'pending'
+                        ? isDark ? '#fbbf24' : '#d97706'
+                        : isDark ? '#94a3b8' : '#64748b'
+                    }
+                  />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {stateFilter !== 'all' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setStateFilter('all')}
-              style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove state filter ${currentStateLabel}`}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                State: {currentStateLabel}
-              </Text>
-              <X size={12} color={theme.colors.mute} />
+              <Badge variant="outline" size="md" style={styles.filterBadge}>
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    State: {currentStateLabel}
+                  </Text>
+                  <X size={12} color={theme.colors.mute} />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {kycFilter !== 'all' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setKycFilter('all')}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor: kycFilter === 'verified' ? (isDark ? '#064e3b26' : '#ecfdf5') : (isDark ? '#78350f26' : '#fffbeb'),
-                  borderColor: kycFilter === 'verified' ? '#10b98133' : '#f59e0b33',
-                },
-              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove KYC filter ${currentKycLabel}`}
             >
-              <Text style={[styles.badgeChipText, { color: kycFilter === 'verified' ? '#059669' : '#d97706' }]}>
-                KYC: {currentKycLabel}
-              </Text>
-              <X size={12} color={kycFilter === 'verified' ? '#059669' : '#d97706'} />
+              <Badge
+                variant={kycFilter === 'verified' ? 'success' : 'warning'}
+                size="md"
+                style={styles.filterBadge}
+              >
+                <View style={styles.filterBadgeContent}>
+                  <Text
+                    variant="caption"
+                    style={{
+                      color:
+                        kycFilter === 'verified'
+                          ? isDark ? '#34d399' : '#059669'
+                          : isDark ? '#fbbf24' : '#d97706',
+                    }}
+                  >
+                    KYC: {currentKycLabel}
+                  </Text>
+                  <X
+                    size={12}
+                    color={
+                      kycFilter === 'verified'
+                        ? isDark ? '#34d399' : '#059669'
+                        : isDark ? '#fbbf24' : '#d97706'
+                    }
+                  />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {dateRangeFilter !== 'all' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setDateRangeFilter('all')}
-              style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove date range filter ${currentJoinedLabel}`}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                Joined: {currentJoinedLabel}
-              </Text>
-              <X size={12} color={theme.colors.mute} />
+              <Badge variant="outline" size="md" style={styles.filterBadge}>
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    Joined: {currentJoinedLabel}
+                  </Text>
+                  <X size={12} color={theme.colors.mute} />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
           {sortBy !== 'newest' && (
             <Pressable
-              variant="chip"
+              variant="plain"
               haptic="select"
+              hitSlopToMin48
               onPress={() => setSortBy('newest')}
-              style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Reset sort order ${currentSortLabel}`}
             >
-              <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                Sort: {currentSortLabel}
-              </Text>
-              <X size={12} color={theme.colors.mute} />
+              <Badge variant="outline" size="md" style={styles.filterBadge}>
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                    Sort: {currentSortLabel}
+                  </Text>
+                  <X size={12} color={theme.colors.mute} />
+                </View>
+              </Badge>
             </Pressable>
           )}
 
@@ -806,7 +883,7 @@ export default function UsersScreen() {
             style={styles.resetAllLink}
           >
             <RotateCcw size={11} color={theme.colors.link} />
-            <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+            <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
               Reset all
             </Text>
           </Pressable>
@@ -1161,10 +1238,10 @@ export default function UsersScreen() {
 
       if (reqErr) throw reqErr;
 
-      Alert.alert('Approved', 'Profile changes have been approved and applied.');
+      toast('success', 'Profile Approved', 'Profile changes have been approved and applied.');
       fetchUsers(false, 1);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to approve profile changes.');
+      toast('error', 'Approval Failed', e?.message || 'Failed to approve profile changes.');
     } finally {
       setApprovingProfileId(null);
     }
@@ -1184,10 +1261,10 @@ export default function UsersScreen() {
 
       if (error) throw error;
       setRejectModalReq(null);
-      Alert.alert('Rejected', 'Profile change request has been declined.');
+      toast('info', 'Profile Request Declined', 'Profile change request has been declined.');
       fetchUsers(false, 1);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to reject profile changes.');
+      toast('error', 'Rejection Failed', e?.message || 'Failed to reject profile changes.');
     } finally {
       setIsRejectingProfileReq(false);
     }
@@ -1214,10 +1291,10 @@ export default function UsersScreen() {
           })
           .eq('id', pr.id);
       }
-      Alert.alert('Success', `Approved all ${profileRequests.length} profile requests.`);
+      toast('success', 'Requests Approved', `Approved all ${profileRequests.length} profile requests.`);
       fetchUsers(false, 1);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to bulk approve profile requests.');
+      toast('error', 'Bulk Approval Failed', e?.message || 'Failed to bulk approve profile requests.');
     } finally {
       setIsBulkApprovingProfile(false);
     }
@@ -1236,10 +1313,10 @@ export default function UsersScreen() {
         })
         .in('id', reqIds);
 
-      Alert.alert('Success', `Rejected all ${profileRequests.length} profile requests.`);
+      toast('info', 'Requests Declined', `Rejected all ${profileRequests.length} profile requests.`);
       fetchUsers(false, 1);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to bulk reject profile requests.');
+      toast('error', 'Bulk Rejection Failed', e?.message || 'Failed to bulk reject profile requests.');
     } finally {
       setIsBulkRejectingProfile(false);
     }
@@ -1324,10 +1401,10 @@ export default function UsersScreen() {
                 // non-blocking
               }
 
-              Alert.alert('Approved', `Account for ${displayName} has been deactivated.`);
+              toast('success', 'Account Deactivated', `Account for ${displayName} has been deactivated.`);
               fetchUsers(false, 1);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to approve account deletion.');
+              toast('error', 'Deactivation Failed', err?.message || 'Failed to approve account deletion.');
             } finally {
               setApprovingDeletionId(null);
             }
@@ -1377,10 +1454,10 @@ export default function UsersScreen() {
                 }
               }
 
-              Alert.alert('Declined', `Deletion request for ${displayName} has been declined.`);
+              toast('info', 'Request Declined', `Deletion request for ${displayName} has been declined.`);
               fetchUsers(false, 1);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to decline deletion request.');
+              toast('error', 'Action Failed', err?.message || 'Failed to decline deletion request.');
             } finally {
               setRejectingDeletionId(null);
             }
@@ -1460,10 +1537,11 @@ export default function UsersScreen() {
               if (error) throw error;
               setSelectedIds([]);
               setIsSelectMode(false);
+              toast('success', 'Users Deleted', `Successfully deleted ${toDelete.length} user account${toDelete.length > 1 ? 's' : ''}.`);
               fetchUsers(false, 1);
             } catch (err: any) {
               setUsers(prevUsers);
-              Alert.alert('Error', err?.message || 'Failed to delete selected users.');
+              toast('error', 'Delete Failed', err?.message || 'Failed to delete selected users.');
             } finally {
               setIsDeletingBulk(false);
             }
@@ -1567,8 +1645,8 @@ export default function UsersScreen() {
       return (
         <View style={[styles.initialErrorContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           <Users size={32} color={theme.colors.error} />
-          <Text style={[styles.initialErrorTitle, { color: theme.colors.ink }]}>Failed to load users</Text>
-          <Text style={[styles.initialErrorSubtext, { color: theme.colors.mute }]}>
+          <Text variant="heading" style={[styles.initialErrorTitle, { color: theme.colors.ink }]}>Failed to load users</Text>
+          <Text variant="body" style={[styles.initialErrorSubtext, { color: theme.colors.mute }]}>
             {initialError}
           </Text>
           <Pressable
@@ -1577,7 +1655,7 @@ export default function UsersScreen() {
             style={[styles.retryInitialBtn, { backgroundColor: theme.colors.ink }]}
           >
             <RotateCcw size={13} color={theme.colors.canvas} />
-            <Text style={[styles.retryInitialBtnText, { color: theme.colors.canvas }]}>Try Again</Text>
+            <Text variant="label" style={[styles.retryInitialBtnText, { color: theme.colors.canvas }]}>Try Again</Text>
           </Pressable>
         </View>
       );
@@ -1586,8 +1664,8 @@ export default function UsersScreen() {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
         <Users size={36} color={theme.colors.mute} />
-        <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
-        <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+        <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
+        <Text variant="body" style={[styles.emptySubtext, { color: theme.colors.mute }]}>
           {search.trim() !== ''
             ? `No users match "${search.trim()}". Try clearing search or changing filters.`
             : 'No users in this directory scope.'}
@@ -1598,7 +1676,7 @@ export default function UsersScreen() {
             onPress={handleResetAllFilters}
             style={[styles.resetEmptyBtn, { backgroundColor: theme.colors.ink }]}
           >
-            <Text style={styles.resetEmptyBtnText}>Reset Search & Filters</Text>
+            <Text variant="label" style={styles.resetEmptyBtnText}>Reset Search & Filters</Text>
           </Pressable>
         )}
       </View>
@@ -1610,7 +1688,7 @@ export default function UsersScreen() {
       return (
         <View style={styles.paginationFooterContainer}>
           <ActivityIndicator size="small" color={theme.colors.link} />
-          <Text style={[styles.paginationFooterText, { color: theme.colors.mute }]}>
+          <Text variant="caption" style={[styles.paginationFooterText, { color: theme.colors.mute }]}>
             Loading more staff...
           </Text>
         </View>
@@ -1621,7 +1699,7 @@ export default function UsersScreen() {
       return (
         <View style={[styles.paginationErrorCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           <View style={styles.paginationErrorRow}>
-            <Text style={[styles.paginationErrorText, { color: theme.colors.error }]}>
+            <Text variant="caption" style={[styles.paginationErrorText, { color: theme.colors.error }]}>
               {loadMoreError}
             </Text>
             <Pressable
@@ -1631,7 +1709,7 @@ export default function UsersScreen() {
               style={[styles.retryLoadMoreBtn, { backgroundColor: theme.colors.ink }]}
             >
               <RotateCcw size={12} color={theme.colors.canvas} />
-              <Text style={[styles.retryLoadMoreBtnText, { color: theme.colors.canvas }]}>
+              <Text variant="caption" style={[styles.retryLoadMoreBtnText, { color: theme.colors.canvas }]}>
                 Retry
               </Text>
             </Pressable>
@@ -1646,7 +1724,7 @@ export default function UsersScreen() {
           <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
           <View style={styles.endOfListContent}>
             <Check size={12} color={theme.colors.mute} />
-            <Text style={[styles.endOfListText, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
               All users have been displayed
             </Text>
           </View>
@@ -1673,18 +1751,13 @@ export default function UsersScreen() {
         renderItem={renderUserCardItem}
         ListHeaderComponent={
           <View style={styles.listHeaderWrapper}>
-            {/* Interactive 4-Card KPI Metric Grid */}
+            {/* 4-Card KPI Metric Grid (Zero Touch Effect) */}
             <KPIGrid columns={4}>
               <KPICard
                 label="Total Staff"
                 value={totalUsersCount || users.length}
                 icon={Users}
                 variant="default"
-                active={roleFilter === 'all' && statusFilter === 'all'}
-                onPress={() => {
-                  setRoleFilter('all');
-                  setStatusFilter('all');
-                }}
               />
 
               <KPICard
@@ -1692,10 +1765,6 @@ export default function UsersScreen() {
                 value={activeCount}
                 icon={UserCheck}
                 variant="success"
-                active={statusFilter === 'active'}
-                onPress={() => {
-                  setStatusFilter((prev) => (prev === 'active' ? 'all' : 'active'));
-                }}
               />
 
               <KPICard
@@ -1703,10 +1772,6 @@ export default function UsersScreen() {
                 value={operatorCount}
                 icon={Wrench}
                 variant="warning"
-                active={roleFilter === 'operator'}
-                onPress={() => {
-                  setRoleFilter((prev) => (prev === 'operator' ? 'all' : 'operator'));
-                }}
               />
 
               <KPICard
@@ -1714,10 +1779,6 @@ export default function UsersScreen() {
                 value={pendingCount}
                 icon={Clock}
                 variant={pendingCount > 0 ? 'purple' : 'default'}
-                active={statusFilter === 'pending'}
-                onPress={() => {
-                  setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'));
-                }}
               />
             </KPIGrid>
 
@@ -1733,66 +1794,22 @@ export default function UsersScreen() {
             >
               {/* Top Search & Filter Action Row */}
               <View style={styles.toolbarTopRow}>
-                {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
-                <Pressable
-                  variant="plain"
-                  onPress={() => searchInputRef.current?.focus()}
-                  style={[
-                    styles.searchBarBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: isSearchFocused ? theme.colors.ink : theme.colors.hairline,
-                    },
-                    isSearchFocused && Platform.OS === 'web' && ({
-                      boxShadow: isDark
-                        ? '0 0 0 1px rgba(255, 255, 255, 0.35)'
-                        : '0 0 0 1px rgba(0, 0, 0, 0.22)',
-                    } as any),
-                  ]}
-                >
-                  {isSearching ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.colors.mute}
-                      style={styles.searchIcon}
-                    />
-                  ) : (
-                    <Search
-                      size={15}
-                      color={isSearchFocused ? theme.colors.ink : theme.colors.mute}
-                      style={styles.searchIcon}
-                    />
-                  )}
-                  <TextInput
+                {/* Search Input Bar */}
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <SearchInput
                     ref={searchInputRef}
                     placeholder="Search staff by name, email, phone, city..."
                     placeholderTextColor={theme.colors.mute}
                     value={search}
                     onChangeText={setSearch}
                     onSubmitEditing={handleSearchSubmit}
-                    onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
-                    style={[
-                      styles.searchInputText,
-                      { color: theme.colors.ink },
-                      Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
-                    ]}
+                    onClear={handleClearSearch}
+                    isLoading={isSearching}
                     returnKeyType="search"
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  {search.length > 0 && (
-                    <Pressable
-                      variant="iconButton"
-                      hitSlopToMin48
-                      onPress={handleClearSearch}
-                      style={styles.searchClearBtn}
-                      accessibilityLabel="Clear search"
-                    >
-                      <X size={14} color={theme.colors.mute} />
-                    </Pressable>
-                  )}
-                </Pressable>
+                </View>
 
                 {/* Filter Toggle Button */}
                 <Pressable
@@ -1825,6 +1842,7 @@ export default function UsersScreen() {
                     }
                   />
                   <Text
+                    variant="label"
                     style={[
                       styles.filterToggleBtnText,
                       {
@@ -1850,6 +1868,7 @@ export default function UsersScreen() {
                       ]}
                     >
                       <Text
+                        variant="micro"
                         style={[
                           styles.activeCountBadgeText,
                           {
@@ -1921,7 +1940,7 @@ export default function UsersScreen() {
                     accessibilityLabel="Reset all filters"
                   >
                     <RotateCcw size={13} color={theme.colors.mute} />
-                    <Text style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                       Reset
                     </Text>
                   </Pressable>
@@ -1970,7 +1989,7 @@ export default function UsersScreen() {
 
             {/* Results count indicator */}
             <View style={styles.resultsCountRow}>
-              <Text style={[styles.resultsCountText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.resultsCountText, { color: theme.colors.mute }]}>
                 Showing {users.length} {users.length === 1 ? 'staff member' : 'staff members'}
                 {totalUsersCount > 0 ? ` of ${totalUsersCount}` : ''}
                 {activeFilterCount > 0 ? ' (filtered)' : ''}
@@ -1983,7 +2002,7 @@ export default function UsersScreen() {
                 <View style={[styles.changeReqsHeader, { borderBottomColor: '#6366f120' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={[styles.alertDot, { backgroundColor: '#6366f1' }]} />
-                    <Text style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
+                    <Text variant="label" style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
                       Profile Change Requests ({profileRequests.length})
                     </Text>
                   </View>
@@ -1995,7 +2014,7 @@ export default function UsersScreen() {
                       onPress={handleApproveAllProfileReqs}
                       disabled={isBulkApprovingProfile}
                     >
-                      <Text style={styles.miniActionBtnTextWhite}>Accept All</Text>
+                      <Text variant="caption" style={styles.miniActionBtnTextWhite}>Accept All</Text>
                     </Pressable>
                     <Pressable
                       variant="buttonSecondary"
@@ -2004,7 +2023,7 @@ export default function UsersScreen() {
                       onPress={handleRejectAllProfileReqs}
                       disabled={isBulkRejectingProfile}
                     >
-                      <Text style={[styles.miniActionBtnText, { color: theme.colors.ink }]}>Reject All</Text>
+                      <Text variant="caption" style={[styles.miniActionBtnText, { color: theme.colors.ink }]}>Reject All</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -2020,20 +2039,20 @@ export default function UsersScreen() {
                       <View style={styles.changeReqCardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                           <View style={[styles.avatarCircle, { backgroundColor: '#6366f115', borderColor: '#6366f130', borderWidth: 1 }]}>
-                            <Text style={[styles.avatarLetter, { color: '#6366f1' }]}>
+                            <Text variant="label" style={[styles.avatarLetter, { color: '#6366f1' }]}>
                               {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
                             </Text>
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.changeReqUserName, { color: theme.colors.ink }]}>
+                            <Text variant="label" style={[styles.changeReqUserName, { color: theme.colors.ink }]}>
                               {reqUser.full_name || 'Staff Member'}
                             </Text>
-                            <Text style={[styles.changeReqUserSub, { color: theme.colors.mute }]}>
+                            <Text variant="caption" style={[styles.changeReqUserSub, { color: theme.colors.mute }]}>
                               {formatRoleName(reqUser.role || pr.requester_role)} • {reqUser.phone || reqUser.email || '—'}
                             </Text>
                           </View>
                         </View>
-                        <Text style={[styles.changeReqTime, { color: theme.colors.mute }]}>
+                        <Text variant="micro" style={[styles.changeReqTime, { color: theme.colors.mute }]}>
                           {formatTinyRelativeTime(pr.created_at)}
                         </Text>
                       </View>
@@ -2041,67 +2060,67 @@ export default function UsersScreen() {
                       {/* Diff Box */}
                       <View style={[styles.diffsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                         {reqData.full_name && reqData.full_name !== currData.full_name && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>Name: </Text>
-                            <Text style={styles.diffOld}>{currData.full_name || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.full_name}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>Name: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.full_name || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.full_name}</Text>
                           </Text>
                         )}
                         {reqData.phone && reqData.phone !== currData.phone && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>Phone: </Text>
-                            <Text style={styles.diffOld}>{currData.phone || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.phone}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>Phone: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.phone || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.phone}</Text>
                           </Text>
                         )}
                         {reqData.city && reqData.city !== currData.city && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>City: </Text>
-                            <Text style={styles.diffOld}>{currData.city || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.city}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>City: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.city || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.city}</Text>
                           </Text>
                         )}
                         {reqData.district && reqData.district !== currData.district && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>District: </Text>
-                            <Text style={styles.diffOld}>{currData.district || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.district}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>District: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.district || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.district}</Text>
                           </Text>
                         )}
                         {reqData.state && reqData.state !== currData.state && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>State: </Text>
-                            <Text style={styles.diffOld}>{currData.state || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.state}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>State: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.state || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.state}</Text>
                           </Text>
                         )}
                         {reqData.address && reqData.address !== currData.address && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>Address: </Text>
-                            <Text style={styles.diffOld}>{currData.address || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.address}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>Address: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.address || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.address}</Text>
                           </Text>
                         )}
                         {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>Aadhaar: </Text>
-                            <Text style={styles.diffOld}>{currData.aadhaar_number || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.aadhaar_number}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>Aadhaar: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.aadhaar_number || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.aadhaar_number}</Text>
                           </Text>
                         )}
                         {reqData.license_number && reqData.license_number !== currData.license_number && (
-                          <Text style={styles.diffItem}>
-                            <Text style={{ color: theme.colors.mute }}>Licence: </Text>
-                            <Text style={styles.diffOld}>{currData.license_number || '—'}</Text>
-                            <Text style={styles.diffArrow}> → </Text>
-                            <Text style={styles.diffNew}>{reqData.license_number}</Text>
+                          <Text variant="caption" style={styles.diffItem}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>Licence: </Text>
+                            <Text variant="caption" style={styles.diffOld}>{currData.license_number || '—'}</Text>
+                            <Text variant="caption" style={styles.diffArrow}> → </Text>
+                            <Text variant="caption" style={styles.diffNew}>{reqData.license_number}</Text>
                           </Text>
                         )}
                       </View>
@@ -2118,7 +2137,7 @@ export default function UsersScreen() {
                           {isApproving ? (
                             <ActivityIndicator size="small" color="#ffffff" />
                           ) : (
-                            <Text style={styles.reqBtnTextWhite}>Approve</Text>
+                            <Text variant="label" style={styles.reqBtnTextWhite}>Approve</Text>
                           )}
                         </Pressable>
                         <Pressable
@@ -2128,7 +2147,7 @@ export default function UsersScreen() {
                           onPress={() => setRejectModalReq(pr)}
                           disabled={isApproving}
                         >
-                          <Text style={[styles.reqBtnText, { color: theme.colors.error }]}>Reject...</Text>
+                          <Text variant="label" style={[styles.reqBtnText, { color: theme.colors.error }]}>Reject...</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -2143,17 +2162,17 @@ export default function UsersScreen() {
                 <View style={[styles.changeReqsHeader, { borderBottomColor: isDark ? '#7f1d1d40' : '#fee2e2' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={[styles.alertDot, { backgroundColor: '#ef4444' }]} />
-                    <Text style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
+                    <Text variant="label" style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
                       Account Deletion Requests ({deletionRequests.length})
                     </Text>
                   </View>
                   <View style={[styles.deletionCountPill, { backgroundColor: isDark ? '#7f1d1d66' : '#fee2e2' }]}>
                     <AlertTriangle size={11} color="#ef4444" />
-                    <Text style={[styles.deletionCountPillText, { color: '#dc2626' }]}>Action Required</Text>
+                    <Text variant="micro" style={[styles.deletionCountPillText, { color: '#dc2626' }]}>Action Required</Text>
                   </View>
                 </View>
 
-                <Text style={[styles.deletionSectionSubtext, { color: theme.colors.mute }]}>
+                <Text variant="caption" style={[styles.deletionSectionSubtext, { color: theme.colors.mute }]}>
                   Requests received via Web Portal & Mobile App. Approving deactivates account access and wipes personal KYC data; statutory machine logs (HMR) are permanently retained.
                 </Text>
 
@@ -2169,36 +2188,36 @@ export default function UsersScreen() {
                       <View style={styles.changeReqCardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                           <View style={[styles.avatarCircle, { backgroundColor: isDark ? '#7f1d1d33' : '#fee2e2', borderColor: '#ef444440', borderWidth: 1 }]}>
-                            <Text style={[styles.avatarLetter, { color: '#ef4444' }]}>
+                            <Text variant="label" style={[styles.avatarLetter, { color: '#ef4444' }]}>
                               {displayName ? displayName[0].toUpperCase() : 'D'}
                             </Text>
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={[styles.changeReqUserName, { color: theme.colors.ink }]} numberOfLines={1}>
+                              <Text variant="label" style={[styles.changeReqUserName, { color: theme.colors.ink }]} numberOfLines={1}>
                                 {displayName}
                               </Text>
                               <View style={[styles.sourceBadge, { backgroundColor: isWebPortal ? (isDark ? '#1e3a8a33' : '#eff6ff') : (isDark ? '#581c8733' : '#f5f3ff'), borderColor: isWebPortal ? '#3b82f640' : '#8b5cf640' }]}>
                                 {isWebPortal ? <Globe size={9} color={theme.colors.link} /> : <Smartphone size={9} color="#7c3aed" />}
-                                <Text style={[styles.sourceBadgeText, { color: isWebPortal ? theme.colors.link : '#7c3aed' }]}>
+                                <Text variant="micro" style={[styles.sourceBadgeText, { color: isWebPortal ? theme.colors.link : '#7c3aed' }]}>
                                   {isWebPortal ? 'Web Portal' : 'Mobile App'}
                                 </Text>
                               </View>
                             </View>
-                            <Text style={[styles.changeReqUserSub, { color: theme.colors.mute }]} numberOfLines={1}>
+                            <Text variant="caption" style={[styles.changeReqUserSub, { color: theme.colors.mute }]} numberOfLines={1}>
                               {dr.email || reqUser.email || '—'}{dr.phone ? ` • ${dr.phone}` : ''}
                             </Text>
                           </View>
                         </View>
-                        <Text style={[styles.changeReqTime, { color: theme.colors.mute }]}>
+                        <Text variant="micro" style={[styles.changeReqTime, { color: theme.colors.mute }]}>
                           {formatTinyRelativeTime(dr.created_at)}
                         </Text>
                       </View>
 
                       {/* Reason Box */}
                       <View style={[styles.deletionReasonBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                        <Text style={[styles.deletionReasonLabel, { color: theme.colors.mute }]}>Reason for deletion:</Text>
-                        <Text style={[styles.deletionReasonText, { color: theme.colors.ink }]}>
+                        <Text variant="micro" style={[styles.deletionReasonLabel, { color: theme.colors.mute }]}>Reason for deletion:</Text>
+                        <Text variant="caption" style={[styles.deletionReasonText, { color: theme.colors.ink }]}>
                           "{dr.reason || 'No specific reason provided'}"
                         </Text>
                       </View>
@@ -2215,7 +2234,7 @@ export default function UsersScreen() {
                           {isApproving ? (
                             <ActivityIndicator size="small" color="#ffffff" />
                           ) : (
-                            <Text style={styles.reqBtnTextWhite}>Approve & Deactivate</Text>
+                            <Text variant="label" style={styles.reqBtnTextWhite}>Approve & Deactivate</Text>
                           )}
                         </Pressable>
                         <Pressable
@@ -2228,7 +2247,7 @@ export default function UsersScreen() {
                           {isRejecting ? (
                             <ActivityIndicator size="small" color={theme.colors.mute} />
                           ) : (
-                            <Text style={[styles.reqBtnText, { color: theme.colors.ink }]}>Decline</Text>
+                            <Text variant="label" style={[styles.reqBtnText, { color: theme.colors.ink }]}>Decline</Text>
                           )}
                         </Pressable>
                       </View>
@@ -2284,9 +2303,9 @@ export default function UsersScreen() {
               <X size={15} color="#ffffff" />
             </Pressable>
             <View style={[styles.bulkBadge, { backgroundColor: theme.colors.link }]}>
-              <Text style={styles.bulkBadgeText}>{selectedIds.length}</Text>
+              <Text variant="micro" style={styles.bulkBadgeText}>{selectedIds.length}</Text>
             </View>
-            <Text style={styles.bulkSelectedText}>selected</Text>
+            <Text variant="caption" style={styles.bulkSelectedText}>selected</Text>
           </View>
 
           <View style={styles.bulkActionsRow}>
@@ -2295,7 +2314,7 @@ export default function UsersScreen() {
               onPress={handleSelectAll}
               style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
             >
-              <Text style={styles.bulkBtnSecondaryText}>
+              <Text variant="caption" style={styles.bulkBtnSecondaryText}>
                 {selectedIds.length === users.length ? 'Deselect' : 'All'}
               </Text>
             </Pressable>
@@ -2306,7 +2325,7 @@ export default function UsersScreen() {
               style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
             >
               <FileSpreadsheet size={13} color="#10b981" />
-              <Text style={styles.bulkBtnSecondaryText}>Export</Text>
+              <Text variant="caption" style={styles.bulkBtnSecondaryText}>Export</Text>
             </Pressable>
 
             <Pressable
@@ -2316,7 +2335,7 @@ export default function UsersScreen() {
               style={[styles.bulkBtnDanger, { backgroundColor: theme.colors.error }]}
             >
               <Trash2 size={13} color="#ffffff" />
-              <Text style={styles.bulkBtnDangerText}>Delete</Text>
+              <Text variant="caption" style={styles.bulkBtnDangerText}>Delete</Text>
             </Pressable>
           </View>
         </View>
@@ -2701,7 +2720,39 @@ const styles = StyleSheet.create({
   userCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between' },
+    justifyContent: 'space-between',
+    gap: 10 },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0 },
+  headerBadgesCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end' },
+  empIdBadge: {
+    borderRadius: radiusNumeric.full,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderWidth: 1 },
+  roleBadgePill: {
+    borderRadius: radiusNumeric.full,
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderWidth: 1 },
+  filterBadge: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: radiusNumeric.full },
+  filterBadgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4 },
   userAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2743,11 +2794,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 6 },
-  roleBadgePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
   roleBadgePillText: {
     },
   metaChip: {

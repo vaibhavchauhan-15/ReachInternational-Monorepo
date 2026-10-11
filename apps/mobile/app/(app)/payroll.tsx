@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   Alert,
   RefreshControl,
   Platform} from 'react-native';
@@ -11,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal, Input, SearchInput, useToast } from '../../components/ui';
 import { PayrollSkeleton } from '../../components/payroll';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
@@ -44,6 +43,7 @@ const ALLOWED_ROLES = ['super_admin', 'admin', 'hr'];
 export default function PayrollScreen() {
   const { theme, isDark } = useTheme();
   const { role } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -53,7 +53,7 @@ export default function PayrollScreen() {
 
   useEffect(() => {
     if (role && !isAllowed) {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [role, isAllowed, router]);
 
@@ -121,7 +121,7 @@ export default function PayrollScreen() {
 
       if (error) {
         console.error('[HRPayrollScreen] Fetch error:', error);
-        Alert.alert('Error', error.message || 'Failed to fetch payroll data');
+        toast('error', 'Error', error.message || 'Failed to fetch payroll data');
       } else if (data) {
         const rawOperators: HRPayrollOperator[] = Array.isArray(data)
           ? (data as unknown as HRPayrollOperator[])
@@ -292,15 +292,16 @@ export default function PayrollScreen() {
 
       if (error) {
         haptics.reject();
-        Alert.alert('Update Failed', error.message);
+        toast('error', 'Update Failed', error.message);
       } else {
         haptics.confirm();
+        toast('success', 'Salary Statement Updated', 'Changes have been saved successfully.');
         // Refresh payroll list
         fetchPayroll(selectedMonth);
         setEditingOperator(null);
       }
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to save salary statement.');
+      toast('error', 'Error', 'Failed to save salary statement.');
     } finally {
       setSavingStatement(false);
     }
@@ -416,28 +417,14 @@ export default function PayrollScreen() {
         </KPIGrid>
 
         {/* Search Bar */}
-        <View
-          style={[
-            styles.searchBar,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <Search size={16} color={theme.colors.mute} />
-          <TextInput
+        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <SearchInput
             placeholder="Search operator, phone, city, IFSC..."
             placeholderTextColor={theme.colors.mute}
             value={searchQuery}
             onChangeText={(t) => setSearchQuery(t)}
-            style={[styles.searchInput, { color: theme.colors.ink }]}
+            onClear={() => setSearchQuery('', true)}
           />
-          {searchQuery.length > 0 && (
-            <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setSearchQuery('', true)} accessibilityLabel="Clear search">
-              <X size={16} color={theme.colors.mute} />
-            </Pressable>
-          )}
         </View>
 
         {/* Payout Filter Strip */}
@@ -519,7 +506,7 @@ export default function PayrollScreen() {
                       style={styles.headerLeft}
                       onPress={() =>
                         router.push({
-                          pathname: '/(app)/users',
+                          pathname: '/users',
                           params: { search: op.full_name },
                         })
                       }
@@ -837,7 +824,7 @@ export default function PayrollScreen() {
                   <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>
                     Basic Monthly Salary (₹)
                   </Text>
-                  <TextInput
+                  <Input
                     style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                     keyboardType="numeric"
                     value={editBasic}
@@ -848,7 +835,7 @@ export default function PayrollScreen() {
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>Attended Days (A/D)</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editAttendedDays}
@@ -857,7 +844,7 @@ export default function PayrollScreen() {
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>Working Days (W/D)</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editWorkingDays}
@@ -869,7 +856,7 @@ export default function PayrollScreen() {
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>Overtime Days (OT)</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editOtDays}
@@ -878,7 +865,7 @@ export default function PayrollScreen() {
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>PL Adjusted</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editPlAdj}
@@ -890,7 +877,7 @@ export default function PayrollScreen() {
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>Loan Deduction (₹)</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editLoan}
@@ -899,7 +886,7 @@ export default function PayrollScreen() {
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>Advance Deduction (₹)</Text>
-                    <TextInput
+                    <Input
                       style={[styles.textInput, { color: theme.colors.ink, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
                       keyboardType="numeric"
                       value={editAdvance}

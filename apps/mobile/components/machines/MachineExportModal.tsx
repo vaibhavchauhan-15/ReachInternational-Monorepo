@@ -12,6 +12,7 @@ import { Text } from '../ui/Text';
 import { Button } from '../ui/Button';
 import { Touchable } from '../ui/Touchable';
 import { AppModal } from '../ui/AppModal';
+import { showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Printer, FileSpreadsheet, X, CheckCircle, Clock, ShieldAlert, SlidersHorizontal } from '../ui/icon';
@@ -264,11 +265,11 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
           dialogTitle: 'Share Machine Fleet Directory Report',
         });
       } else {
-        Alert.alert('PDF Generated', `Report saved to: ${uri}`);
+        showToast('success', 'PDF Generated', `Report saved to: ${uri}`);
       }
     } catch (err: any) {
       haptics.error();
-      Alert.alert('Error', err?.message || 'Failed to export PDF.');
+      showToast('error', 'Error', err?.message || 'Failed to export PDF.');
     } finally {
       setIsExportingPdf(false);
     }
@@ -282,7 +283,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
       haptics.success();
     } catch (err: any) {
       haptics.error();
-      Alert.alert('Print Error', err?.message || 'Failed to start print spooler.');
+      showToast('error', 'Print Error', err?.message || 'Failed to start print spooler.');
     } finally {
       setIsPrinting(false);
     }
@@ -337,11 +338,11 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
           dialogTitle: 'Export Machine Directory Spreadsheet',
         });
       } else {
-        Alert.alert('Exported', `Spreadsheet saved: ${fileUri}`);
+        showToast('success', 'Exported', `Spreadsheet saved: ${fileUri}`);
       }
     } catch (err: any) {
       haptics.error();
-      Alert.alert('Error', err?.message || 'Failed to export CSV spreadsheet.');
+      showToast('error', 'Error', err?.message || 'Failed to export CSV spreadsheet.');
     } finally {
       setIsExportingCsv(false);
     }

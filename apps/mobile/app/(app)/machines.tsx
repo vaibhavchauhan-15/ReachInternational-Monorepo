@@ -8,13 +8,13 @@ import {
   BackHandler,
   Platform,
   StatusBar,
-  TextInput,
+  type TextInput,
   Animated,
   Easing,
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid , Text } from '../../components/ui';
+import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid, Text, SearchInput, useToast, Badge } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { Pressable } from '../../components/ui/touch/Pressable';
@@ -131,12 +131,13 @@ export default function MachinesScreen() {
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
+  const { toast } = useToast();
 
   const isHr = (role || '').toLowerCase() === 'hr';
 
   useEffect(() => {
     if (role && isHr) {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [role, isHr, router]);
 
@@ -733,6 +734,13 @@ export default function MachinesScreen() {
     }
 
     list.push({
+      id: 'refresh-fleet',
+      label: 'Refresh Fleet',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => fetchMachines(),
+    });
+
+    list.push({
       id: 'export-fleet',
       label: 'Export Fleet Directory',
       icon: <Printer size={16} color={theme.colors.ink} />,
@@ -754,7 +762,161 @@ export default function MachinesScreen() {
     });
 
     return list;
-  }, [canCreate, theme.colors.ink, handleResetAllFilters]);
+  }, [canCreate, theme.colors.ink, handleResetAllFilters, fetchMachines, normalizedRole]);
+
+  const renderActiveFilterChips = () => {
+    if (activeFilterCount === 0) return null;
+
+    const healthVariant =
+      healthFilter === 'spare'
+        ? 'info'
+        : healthFilter === 'breakdown'
+        ? 'error'
+        : healthFilter === 'under_maintenance'
+        ? 'warning'
+        : 'success';
+
+    return (
+      <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
+        <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+          Active Filters:
+        </Text>
+
+        {debouncedSearch.trim() !== '' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={handleClearSearch}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove search query ${debouncedSearch}`}
+          >
+            <Badge variant="outline" size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  Search: "{debouncedSearch}"
+                </Text>
+                <X size={12} color={theme.colors.mute} />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
+        {rentalFilter !== 'all' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setRentalFilter('all')}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove rental filter ${currentRentalLabel}`}
+          >
+            <Badge variant="info" size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                  Rental: {currentRentalLabel}
+                </Text>
+                <X size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
+        {healthFilter !== 'all' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setHealthFilter('all')}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove health filter ${currentHealthLabel}`}
+          >
+            <Badge variant={healthVariant} size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text
+                  variant="caption"
+                  style={{
+                    color:
+                      healthFilter === 'spare'
+                        ? isDark ? '#38bdf8' : '#0284c7'
+                        : healthFilter === 'breakdown'
+                        ? isDark ? '#f87171' : '#dc2626'
+                        : isDark ? '#fbbf24' : '#d97706',
+                  }}
+                >
+                  Health: {currentHealthLabel}
+                </Text>
+                <X
+                  size={12}
+                  color={
+                    healthFilter === 'spare'
+                      ? isDark ? '#38bdf8' : '#0284c7'
+                      : healthFilter === 'breakdown'
+                      ? isDark ? '#f87171' : '#dc2626'
+                      : isDark ? '#fbbf24' : '#d97706'
+                  }
+                />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
+        {supervisorFilter !== 'all' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setSupervisorFilter('all')}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove supervisor filter ${currentSupervisorLabel}`}
+          >
+            <Badge variant="outline" size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  Supervisor: {currentSupervisorLabel}
+                </Text>
+                <X size={12} color={theme.colors.mute} />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
+        {sortBy !== 'machine_id_asc' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setSortBy('machine_id_asc')}
+            accessibilityRole="button"
+            accessibilityLabel={`Reset sort filter ${currentSortLabel}`}
+          >
+            <Badge variant="neutral" size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  Sort: {currentSortLabel}
+                </Text>
+                <X size={12} color={theme.colors.mute} />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
+        <Pressable
+          variant="buttonGhost"
+          hitSlopToMin48
+          onPress={handleResetAllFilters}
+          style={styles.resetAllLink}
+          accessibilityRole="button"
+          accessibilityLabel="Reset all active filters"
+        >
+          <RotateCcw size={11} color={theme.colors.link} />
+          <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+            Reset all
+          </Text>
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -768,7 +930,10 @@ export default function MachinesScreen() {
             setSelectedMachine(null);
             setDetailInitialTab('overview');
           }}
-          onMachineUpdated={() => {
+          onMachineUpdated={(updatedMachine?: any) => {
+            if (updatedMachine) {
+              setSelectedMachine((prev: any) => ({ ...prev, ...updatedMachine }));
+            }
             fetchMachines();
           }}
           onMachineDeleted={() => {
@@ -805,47 +970,30 @@ export default function MachinesScreen() {
           <MachineListSkeleton count={3} />
         ) : (
           <>
-        {/* Interactive 4-Card KPI Metric Grid (2x2 on Mobile matching Screenshot 1) */}
+        {/* 4-Card KPI Metric Grid (Static Clean Presentation) */}
         <KPIGrid columns={2}>
           <KPICard
             label="ASSIGNED FLEET"
             value={statsSummary.totalCount}
             variant="default"
-            active={rentalFilter === 'all' && healthFilter === 'all'}
-            onPress={() => {
-              setRentalFilter('all');
-              setHealthFilter('all');
-            }}
           />
 
           <KPICard
             label="AVAILABLE"
             value={statsSummary.availableCount}
             variant="success"
-            active={rentalFilter === 'available'}
-            onPress={() => {
-              setRentalFilter((prev) => (prev === 'available' ? 'all' : 'available'));
-            }}
           />
 
           <KPICard
             label="ON RENT"
             value={statsSummary.rentedCount}
             variant="info"
-            active={rentalFilter === 'rented'}
-            onPress={() => {
-              setRentalFilter((prev) => (prev === 'rented' ? 'all' : 'rented'));
-            }}
           />
 
           <KPICard
             label="BREAKDOWN EVENTS"
             value={statsSummary.breakdownCount}
             variant={statsSummary.breakdownCount > 0 ? 'error' : 'default'}
-            active={healthFilter === 'breakdown'}
-            onPress={() => {
-              setHealthFilter((prev) => (prev === 'breakdown' ? 'all' : 'breakdown'));
-            }}
           />
         </KPIGrid>
 
@@ -853,66 +1001,22 @@ export default function MachinesScreen() {
         <View style={styles.filterToolbar}>
           {/* Top Search & Filter Action Row */}
           <View style={styles.toolbarTopRow}>
-            {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
-            <Pressable
-              variant="plain"
-              onPress={() => searchInputRef.current?.focus()}
-              style={[
-                styles.searchBarBox,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: isSearchFocused ? theme.colors.ink : theme.colors.hairline,
-                },
-                isSearchFocused && Platform.OS === 'web' && ({
-                  boxShadow: isDark
-                    ? '0 0 0 1px rgba(255, 255, 255, 0.35)'
-                    : '0 0 0 1px rgba(0, 0, 0, 0.22)',
-                } as any),
-              ]}
-            >
-              {isSearching ? (
-                <ActivityIndicator
-                  size="small"
-                  color={theme.colors.mute}
-                  style={styles.searchIcon}
-                />
-              ) : (
-                <Search
-                  size={15}
-                  color={isSearchFocused ? theme.colors.ink : theme.colors.mute}
-                  style={styles.searchIcon}
-                />
-              )}
-              <TextInput
+            {/* Search Input Bar */}
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <SearchInput
                 ref={searchInputRef}
                 placeholder="Search Machine ID, Model, Serial Number..."
                 placeholderTextColor={theme.colors.mute}
                 value={search}
                 onChangeText={setSearch}
                 onSubmitEditing={handleSearchSubmit}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-                style={[
-                  styles.searchInputText,
-                  { color: theme.colors.ink },
-                  Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
-                ]}
+                onClear={handleClearSearch}
+                isLoading={isSearching}
                 returnKeyType="search"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {search.length > 0 && (
-                <Pressable
-                  variant="iconButton"
-                  hitSlopToMin48
-                  onPress={handleClearSearch}
-                  style={styles.searchClearBtn}
-                  accessibilityLabel="Clear search"
-                >
-                  <X size={14} color={theme.colors.mute} />
-                </Pressable>
-              )}
-            </Pressable>
+            </View>
 
 
             {/* Filter Toggle Button */}
@@ -1113,138 +1217,7 @@ export default function MachinesScreen() {
                   </View>
 
                   {/* Active Filter Chips Strip */}
-                  {activeFilterCount > 0 && (
-                    <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-                      <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
-                        Active Filters:
-                      </Text>
-                      {debouncedSearch.trim() !== '' && (
-                        <Pressable
-                          variant="chip"
-                          haptic="select"
-                          onPress={handleClearSearch}
-                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                        >
-                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                            Search: "{debouncedSearch}"
-                          </Text>
-                          <X size={12} color={theme.colors.mute} />
-                        </Pressable>
-                      )}
-
-
-                      {rentalFilter !== 'all' && (
-                        <Pressable
-                          variant="chip"
-                          haptic="select"
-                          onPress={() => setRentalFilter('all')}
-                          style={[
-                            styles.badgeChip,
-                            {
-                              backgroundColor: isDark ? '#0c4a6e26' : '#f0f9ff',
-                              borderColor: '#0ea5e933',
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.badgeChipText, { color: '#0284c7' }]}>
-                            Rental: {currentRentalLabel}
-                          </Text>
-                          <X size={12} color="#0284c7" />
-                        </Pressable>
-                      )}
-
-                      {healthFilter !== 'all' && (
-                        <Pressable
-                          variant="chip"
-                          haptic="select"
-                          onPress={() => setHealthFilter('all')}
-                          style={[
-                            styles.badgeChip,
-                            {
-                              backgroundColor:
-                                healthFilter === 'spare'
-                                  ? isDark ? '#164e6326' : '#ecfeff'
-                                  : healthFilter === 'breakdown'
-                                  ? isDark ? '#7f1d1d26' : '#fff1f2'
-                                  : isDark ? '#78350f26' : '#fffbeb',
-                              borderColor:
-                                healthFilter === 'spare'
-                                  ? '#06b6d433'
-                                  : healthFilter === 'breakdown'
-                                  ? '#ef444433'
-                                  : '#f59e0b33',
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.badgeChipText,
-                              {
-                                color:
-                                  healthFilter === 'spare'
-                                    ? '#0891b2'
-                                    : healthFilter === 'breakdown'
-                                    ? '#dc2626'
-                                    : '#d97706',
-                              },
-                            ]}
-                          >
-                            Health: {currentHealthLabel}
-                          </Text>
-                          <X
-                            size={12}
-                            color={
-                              healthFilter === 'spare'
-                                ? '#0891b2'
-                                : healthFilter === 'breakdown'
-                                ? '#dc2626'
-                                : '#d97706'
-                            }
-                          />
-                        </Pressable>
-                      )}
-
-                      {supervisorFilter !== 'all' && (
-                        <Pressable
-                          variant="chip"
-                          haptic="select"
-                          onPress={() => setSupervisorFilter('all')}
-                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                        >
-                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                            Supervisor: {currentSupervisorLabel}
-                          </Text>
-                          <X size={12} color={theme.colors.mute} />
-                        </Pressable>
-                      )}
-
-                      {sortBy !== 'machine_id_asc' && (
-                        <Pressable
-                          variant="chip"
-                          haptic="select"
-                          onPress={() => setSortBy('machine_id_asc')}
-                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                        >
-                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                            Sort: {currentSortLabel}
-                          </Text>
-                          <X size={12} color={theme.colors.mute} />
-                        </Pressable>
-                      )}
-
-                      <Pressable
-                        variant="buttonGhost"
-                        hitSlopToMin48
-                        onPress={handleResetAllFilters}
-                        style={styles.resetAllLink}
-                      >
-                        <RotateCcw size={11} color={theme.colors.link} />
-                        <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
-                          Reset all
-                        </Text>
-                      </Pressable>
-                    </View>
-                  )}
+                  {renderActiveFilterChips()}
                 </View>
               </View>
             </View>
@@ -1312,138 +1285,7 @@ export default function MachinesScreen() {
                 </View>
 
                 {/* Active Filter Chips Strip */}
-                {activeFilterCount > 0 && (
-                  <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-                    <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
-                      Active Filters:
-                    </Text>
-                    {debouncedSearch.trim() !== '' && (
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={handleClearSearch}
-                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                      >
-                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                          Search: "{debouncedSearch}"
-                        </Text>
-                        <X size={12} color={theme.colors.mute} />
-                      </Pressable>
-                    )}
-
-
-                    {rentalFilter !== 'all' && (
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => setRentalFilter('all')}
-                        style={[
-                          styles.badgeChip,
-                          {
-                            backgroundColor: isDark ? '#0c4a6e26' : '#f0f9ff',
-                            borderColor: '#0ea5e933',
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.badgeChipText, { color: '#0284c7' }]}>
-                          Rental: {currentRentalLabel}
-                        </Text>
-                        <X size={12} color="#0284c7" />
-                      </Pressable>
-                    )}
-
-                    {healthFilter !== 'all' && (
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => setHealthFilter('all')}
-                        style={[
-                          styles.badgeChip,
-                          {
-                            backgroundColor:
-                              healthFilter === 'spare'
-                                ? isDark ? '#164e6326' : '#ecfeff'
-                                : healthFilter === 'breakdown'
-                                ? isDark ? '#7f1d1d26' : '#fff1f2'
-                                : isDark ? '#78350f26' : '#fffbeb',
-                            borderColor:
-                              healthFilter === 'spare'
-                                ? '#06b6d433'
-                                : healthFilter === 'breakdown'
-                                ? '#ef444433'
-                                : '#f59e0b33',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.badgeChipText,
-                            {
-                              color:
-                                healthFilter === 'spare'
-                                  ? '#0891b2'
-                                  : healthFilter === 'breakdown'
-                                  ? '#dc2626'
-                                  : '#d97706',
-                            },
-                          ]}
-                        >
-                          Health: {currentHealthLabel}
-                        </Text>
-                        <X
-                          size={12}
-                          color={
-                            healthFilter === 'spare'
-                              ? '#0891b2'
-                              : healthFilter === 'breakdown'
-                              ? '#dc2626'
-                              : '#d97706'
-                          }
-                        />
-                      </Pressable>
-                    )}
-
-                    {supervisorFilter !== 'all' && (
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => setSupervisorFilter('all')}
-                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                      >
-                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                          Supervisor: {currentSupervisorLabel}
-                        </Text>
-                        <X size={12} color={theme.colors.mute} />
-                      </Pressable>
-                    )}
-
-                    {sortBy !== 'machine_id_asc' && (
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => setSortBy('machine_id_asc')}
-                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                      >
-                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                          Sort: {currentSortLabel}
-                        </Text>
-                        <X size={12} color={theme.colors.mute} />
-                      </Pressable>
-                    )}
-
-                    <Pressable
-                      variant="buttonGhost"
-                      hitSlopToMin48
-                      onPress={handleResetAllFilters}
-                      style={styles.resetAllLink}
-                    >
-                      <RotateCcw size={11} color={theme.colors.link} />
-                      <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
-                        Reset all
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
+                {renderActiveFilterChips()}
               </View>
             </Animated.View>
           )}
@@ -1593,6 +1435,8 @@ export default function MachinesScreen() {
         onSuccess={(savedMachine?: any) => {
           setMachineModalOpen(false);
           if (savedMachine) {
+            const isEdit = Boolean(machineToEdit);
+            toast('success', isEdit ? 'Machine Updated' : 'Machine Added', `Asset ${savedMachine.model || 'record'} (${savedMachine.serial_number || savedMachine.machine_id || ''}) saved successfully.`);
             setMachines((prev) => {
               const existingIdx = prev.findIndex((m) => m.id === savedMachine.id);
               if (existingIdx >= 0) {
@@ -1642,17 +1486,18 @@ export default function MachinesScreen() {
               setMachines(prevMachines);
               queryClient.setQueriesData({ queryKey: ['machines'] }, prevMachines);
               haptics.reject();
-              Alert.alert('Error', error.message || 'Failed to delete machine');
+              toast('error', 'Delete Failed', error.message || 'Failed to delete machine.');
               return;
             }
             haptics.confirm();
+            toast('success', 'Machine Deleted', `Machine asset ${target.machine_id || 'record'} removed from active fleet.`);
             notifyMachineDeleted(target.machine_id || 'Machine');
             fetchMachines();
           } catch (err: any) {
             setMachines(prevMachines);
             queryClient.setQueriesData({ queryKey: ['machines'] }, prevMachines);
             haptics.reject();
-            Alert.alert('Error', err?.message || 'Failed to delete machine');
+            toast('error', 'Delete Failed', err?.message || 'Failed to delete machine.');
           }
         }}
       />
@@ -1818,16 +1663,14 @@ const styles = StyleSheet.create({
   activeBadgesHeader: {
     marginRight: 2,
   },
-  badgeChip: {
+  filterBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  filterBadgeContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  badgeChipText: {
   },
   resetAllLink: {
     flexDirection: 'row',

@@ -5,9 +5,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Switch,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector, Text, useTypeStyle, Touchable, AppModal } from '../ui';
+import { Button, Input, TimeInput, useTheme, SearchableSelect, type SelectOption, ShiftCardSelector, Text, useTypeStyle, Touchable, AppModal, Switch, showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -24,6 +23,7 @@ import {
   getISTDateString,
   resolveDefaultOperatorShift,
   getShiftSubtitle,
+  parseOperationalErrorMessage,
 } from '@reachinternational/utils';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
@@ -399,17 +399,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   } | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const reportError = (msg: string) => {
-    if (msg) haptics.error();
-    setError(msg);
+    if (msg) {
+      haptics.error();
+      showToast('error', 'Validation Error', msg);
+    }
   };
 
-  const reportSuccess = (msg: string) => {
-    if (msg) haptics.success();
-    setSuccess(msg);
+  const reportSuccess = (msg: string, desc?: string) => {
+    showToast('success', msg, desc);
   };
 
   // Interval ticker for real-time validation against current clock
@@ -483,8 +482,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       }
       fetchTargetUserShift();
       fetchClients();
-      setError('');
-      setSuccess('');
       if (machineId) {
         fetchLatestMachineLog();
       }
@@ -556,21 +553,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
   const handleStartMeterChange = (val: string) => {
     const res = validateMobileClipboardInput(val, HmrSchema);
-    if (!res.success && val.trim() !== '') {
-      setError(res.error || 'Invalid start meter reading.');
-    } else {
-      setError('');
-    }
     setStartMeter(res.sanitizedValue);
   };
 
   const handleEndMeterChange = (val: string) => {
     const res = validateMobileClipboardInput(val, HmrSchema);
-    if (!res.success && val.trim() !== '') {
-      setError(res.error || 'Invalid end meter reading.');
-    } else {
-      setError('');
-    }
     setEndMeter(res.sanitizedValue);
   };
 
@@ -630,7 +617,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     }
 
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
-      reportError(shiftStats.errorMessage || 'Cannot log before shift end.');
+      reportError(shiftStats.errorMessage || 'Shift is in progress. Logs can be submitted after shift ends.');
       return;
     }
 
@@ -651,7 +638,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       }
     }
 
-    setError('');
     setIsSubmitting(true);
 
     let logPayload: Record<string, any> | null = null;
@@ -660,7 +646,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (isAssisted && userId) {
         const callerRole = currentUserRole || (await supabase.from('users').select('role').eq('id', userId).single()).data?.role;
         if (callerRole && !['super_admin', 'admin', 'manager'].includes(callerRole)) {
-          setError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
+          reportError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
           setIsSubmitting(false);
           return;
         }
@@ -723,7 +709,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         if (isBreakdown) {
           notifyMachineStatusChanged(machineCode || 'Machine', 'breakdown');
         }
-        setSuccess('Working Offline: Shift log queued locally for auto-sync!');
+        reportSuccess('Working Offline', 'Shift log queued locally for auto-sync.');
         setTimeout(() => {
           if (onSubmit) {
             onSubmit({
@@ -791,7 +777,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             .eq('id', machineId);
         }
 
-        setSuccess('Daily machine log updated successfully!');
+        reportSuccess('Daily Machine Log Updated', `Log for ${machineCode || 'Machine'} updated successfully.`);
         setTimeout(() => {
           if (onSubmit) onSubmit({ ...existingLog, ...updatePayload });
           onClose();
@@ -1045,11 +1031,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         },
       };
 
-      reportSuccess('Daily machine log recorded successfully!');
+      reportSuccess('Daily Machine Log Recorded', `Logged ${runningHours} running hours for ${machineCode || 'Machine'}.`);
       setTimeout(() => {
         if (onSubmit) onSubmit(submittedLogRecord);
         onClose();
-      }, 1000);
+      }, 500);
     } catch (err: any) {
       let errMsg = err?.message || 'Failed to submit meter log.';
 
@@ -1063,7 +1049,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (isNetworkErr && logPayload) {
         try {
           const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
-          reportSuccess('Connection lost: Shift log saved to offline queue!');
+          reportSuccess('Working Offline', 'Connection lost: Shift log saved to offline queue.');
           setTimeout(() => {
             if (onSubmit) {
               onSubmit({
@@ -1081,41 +1067,21 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               });
             }
             onClose();
-          }, 800);
+          }, 500);
           return;
         } catch (queueErr) {
           console.warn('[MeterLogModal] Fallback enqueue failed:', queueErr);
         }
       }
 
-      if (errMsg.includes('violates check constraint') || errMsg.includes('23514')) {
-        if (errMsg.includes('assigned to Shift') || errMsg.includes('unassigned shift') || errMsg.includes('assigned shift')) {
-          errMsg = err.message;
-        } else if (errMsg.includes('machines_status_check')) {
-          errMsg = "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";
-        } else if (errMsg.includes('chk_machine_hour_logs_meter_range') || errMsg.includes('cannot be less than start meter')) {
-          errMsg = "Ending hour meter reading cannot be less than starting hour meter reading.";
-        } else if (errMsg.includes('Breakdown duration') || errMsg.includes('cannot exceed total shift duration')) {
-          errMsg = err.message;
-        } else if (errMsg.includes('maintenance or decommissioned')) {
-          errMsg = "Cannot record operational hours for equipment currently in maintenance or decommissioned status.";
-        } else if (errMsg.includes('Cannot log before shift end')) {
-          errMsg = "Cannot log before shift end.";
-        } else {
-          errMsg = "Database validation failed. Please verify meter readings and timings.";
-        }
-      } else if (errMsg.includes('assigned to Shift') || errMsg.includes('unassigned shift') || errMsg.includes('Please select your assigned shift')) {
-        errMsg = err.message;
-      } else if (errMsg.includes('Shift end timestamp') || errMsg.includes('must be strictly after start timestamp')) {
-        errMsg = "Shift end time must be strictly after the start time.";
-      } else if (errMsg.includes('overlap') || errMsg.includes('overlapping')) {
-        errMsg = "Shift time overlaps with an existing log for this machine.";
-      } else if (errMsg.includes('Unauthorized operator') || errMsg.includes('42501')) {
-        errMsg = "Unauthorized: You cannot submit logs on behalf of another operator.";
-      } else if (errMsg.includes('Client ID does not match') || errMsg.includes('23503')) {
-        errMsg = "Client does not match assigned machine deployment.";
-      }
-      reportError(errMsg);
+      const parsedErr = parseOperationalErrorMessage(err, {
+        endTime,
+        startMeter: parseFloat(startMeter),
+        endMeter: parseFloat(endMeter),
+        assignedShifts: assignedShiftCodes,
+      });
+      haptics.reject();
+      showToast('error', parsedErr.title, parsedErr.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1178,18 +1144,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </Text>
             </View>
           )}
-
-          {error ? (
-            <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
-              <Text variant="caption" style={{ color: theme.colors.error, textAlign: 'center' }}>{error}</Text>
-            </View>
-          ) : null}
-
-          {success ? (
-            <View style={[styles.alertBox, { backgroundColor: theme.colors.success + '1a', borderColor: theme.colors.success }]}>
-              <Text variant="caption" style={{ color: theme.colors.success, textAlign: 'center' }}>{success}</Text>
-            </View>
-          ) : null}
 
           <ScrollView style={styles.formScroll} contentContainerStyle={{ gap: spacingNumeric.xs }} showsVerticalScrollIndicator={false}>
             {/* Log Date Selector Strip (Today + Past 7 Days) */}
@@ -1464,7 +1418,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                 }]}>
                   <AlertTriangle size={14} color={theme.colors.error} />
                   <Text variant="caption" style={{ color: theme.colors.error, flex: 1 }}>
-                    {shiftStats.errorMessage || 'Cannot log before shift end.'}
+                    {shiftStats.errorMessage || 'Shift is in progress. Logs can be submitted after shift ends.'}
                   </Text>
                 </View>
               )}

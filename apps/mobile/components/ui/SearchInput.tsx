@@ -44,7 +44,7 @@ export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const SearchInput: React.FC<SearchInputProps> = ({
+export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
   value,
   onChangeText,
   onClear,
@@ -61,10 +61,12 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   onFocus,
   onBlur,
   ...restProps
-}) => {
+}, ref) => {
   const { theme, isDark } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  React.useImperativeHandle(ref, () => inputRef.current as TextInput);
 
   const handleFocus = (e: any) => {
     setIsFocused(true);
@@ -150,8 +152,8 @@ export const SearchInput: React.FC<SearchInputProps> = ({
       {/* Clear Button or Custom Right Icon */}
       {value.length > 0 ? (
         <Pressable
-          variant="iconButton"
-          haptic="select"
+          variant="plain"
+          haptic={false}
           onPress={handleClear}
           hitSlopToMin48={true}
           accessibilityLabel="Clear search input"
@@ -164,7 +166,9 @@ export const SearchInput: React.FC<SearchInputProps> = ({
       ) : null}
     </View>
   );
-};
+});
+
+SearchInput.displayName = 'SearchInput';
 
 const styles = StyleSheet.create({
   container: {

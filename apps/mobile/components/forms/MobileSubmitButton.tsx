@@ -1,11 +1,7 @@
-import { Text } from '../ui/Text';
 import React, { useRef } from 'react';
-import {
-  View,
-  StyleSheet,
-  ActivityIndicator,
-  type ViewStyle} from 'react-native';
-import { Pressable } from '../ui/touch/Pressable';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { Button } from '../ui/Button';
+import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
 import { AlertCircle, CheckCircle2 } from '../ui/icon';
 import { haptics } from '../../lib/haptics';
@@ -63,7 +59,7 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {/* 1. Status Banner: Incomplete (Amber) or Ready (Emerald) matching web mobile viewport */}
+      {/* 1. Status Banner: Incomplete (Amber) or Ready (Emerald) */}
       {!isReady && !isLoading && (
         <View
           style={[
@@ -120,32 +116,16 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
         </View>
       )}
 
-      {/* 2. Submit Button */}
-      <Pressable
-        variant="primary"
-        haptic="none"
-        onPress={handlePress}
+      {/* 2. Submit Button backed by RNR Button */}
+      <Button
+        variant="default"
+        size="lg"
+        fullWidth
+        label={isLoading ? loadingLabel : label}
+        isLoading={isLoading}
         disabled={isLocked}
-        style={[
-          styles.button,
-          {
-            backgroundColor: isReady
-              ? '#0284c7'
-              : isDark
-              ? 'rgba(2, 132, 199, 0.35)'
-              : '#7dd3fc',
-          },
-        ]}
-      >
-        {isLoading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#ffffff" />
-            <Text style={styles.buttonText}>{loadingLabel}</Text>
-          </View>
-        ) : (
-          <Text style={styles.buttonText}>{label}</Text>
-        )}
-      </Pressable>
+        onPress={handlePress}
+      />
     </View>
   );
 };
@@ -177,21 +157,5 @@ const styles = StyleSheet.create({
   },
   tagText: {
     textTransform: 'uppercase',
-  },
-  button: {
-    height: 46,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
   },
 });

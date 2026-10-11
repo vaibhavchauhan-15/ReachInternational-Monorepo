@@ -146,7 +146,7 @@ export function SegmentedToggle<T extends string = string>({
               isVertical ? "flex-1 min-h-0 py-0 px-0.5" : config.item,
               config.text,
               isActive
-                ? "text-sky-600 dark:text-sky-400 font-extrabold"
+                ? "text-white font-extrabold"
                 : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-medium hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50",
               item.disabled && "opacity-40 cursor-not-allowed pointer-events-none",
               itemClassName
@@ -156,7 +156,7 @@ export function SegmentedToggle<T extends string = string>({
               <motion.div
                 layoutId={effectiveLayoutId}
                 className={cn(
-                  "absolute inset-0 bg-white dark:bg-neutral-800 shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 z-0 pointer-events-none",
+                  "absolute inset-0 bg-sky-600 dark:bg-sky-600 shadow-sm shadow-sky-600/30 border border-sky-600 z-0 pointer-events-none",
                   isVertical ? "rounded-[5px] sm:rounded-md" : "rounded-lg sm:rounded-xl"
                 )}
                 transition={{ type: "spring", stiffness: 450, damping: 32 }}
@@ -185,7 +185,7 @@ export function SegmentedToggle<T extends string = string>({
                     "ml-1 rounded-full font-mono font-bold shrink-0 border",
                     config.badge,
                     isActive
-                      ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/25"
+                      ? "bg-white/20 text-white border-white/30"
                       : "bg-neutral-200/80 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-300/60 dark:border-neutral-700/60"
                   )}
                 >

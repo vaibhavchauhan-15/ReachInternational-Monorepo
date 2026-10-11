@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Mail, Lock, Check } from '../../components/ui/icon';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, useTheme , Text } from '../../components/ui';
+import { Input, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -35,8 +35,21 @@ export default function LoginScreen() {
   const router = useRouter();
   const localParams = useLocalSearchParams<{ message?: string }>();
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
   const { session, isLoading: authLoading, isProfileComplete, role } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { width: rawWidth, height: rawHeight } = useWindowDimensions();
+
+  // Safe fallback dimensions on web to prevent 0x0 initial mount layout collapse
+  const width =
+    rawWidth ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.innerWidth
+      : 390);
+  const height =
+    rawHeight ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.innerHeight
+      : 844);
 
   // Responsive Breakpoints: Mobile (<=640px), Tablet (641px–1023px), Desktop (>=1024px)
   const isDesktop = width >= 1024;
@@ -55,15 +68,13 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
-  const [successMessage, setSuccessMessage] = useState(localParams.message || '');
-  const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
   useEffect(() => {
     if (localParams.message) {
-      setSuccessMessage(localParams.message);
+      toast('info', 'Notice', localParams.message);
     }
-  }, [localParams.message]);
+  }, [localParams.message, toast]);
 
   // Redirect authenticated user away from login to role Home or onboarding
   useEffect(() => {
@@ -81,24 +92,12 @@ export default function LoginScreen() {
     if (fieldErrors.email) {
       setFieldErrors((prev) => ({ ...prev, email: undefined }));
     }
-    if (errorMessage) {
-      setErrorMessage('');
-    }
-    if (successMessage) {
-      setSuccessMessage('');
-    }
   };
 
   const handlePasswordChange = (val: string) => {
     setPassword(val);
     if (fieldErrors.password) {
       setFieldErrors((prev) => ({ ...prev, password: undefined }));
-    }
-    if (errorMessage) {
-      setErrorMessage('');
-    }
-    if (successMessage) {
-      setSuccessMessage('');
     }
   };
 
@@ -122,8 +121,6 @@ export default function LoginScreen() {
     if (isSubmittingRef.current || isLoading) return;
 
     haptics.light();
-    setErrorMessage('');
-    setSuccessMessage('');
 
     // Field-level validation matching Web client
     const newFieldErrors: { email?: string; password?: string } = {};
@@ -161,24 +158,26 @@ export default function LoginScreen() {
       if (error) {
         haptics.reject();
         const errorLower = error.message.toLowerCase();
+        let errorMsg = error.message || 'An error occurred while signing in.';
         if (errorLower.includes('email not confirmed')) {
-          setErrorMessage(
-            'Your email is not confirmed yet. Please wait for an administrator to approve your account.'
-          );
+          errorMsg = 'Your email is not confirmed yet. Please wait for an administrator to approve your account.';
+          toast('warning', 'Email Unconfirmed', errorMsg);
         } else if (
           errorLower.includes('invalid login credentials') ||
           errorLower.includes('invalid_grant') ||
           errorLower.includes('invalid credentials')
         ) {
-          setErrorMessage('Invalid email or password.');
+          errorMsg = 'Invalid email or password.';
           setFieldErrors({
             email: 'Invalid email or password.',
             password: 'Invalid email or password.',
           });
+          toast('error', 'Login Failed', errorMsg);
         } else if (errorLower.includes('network') || errorLower.includes('fetch')) {
-          setErrorMessage('Network connection error. Please check your internet connection.');
+          errorMsg = 'Network connection error. Please check your internet connection.';
+          toast('error', 'Network Error', errorMsg);
         } else {
-          setErrorMessage(error.message || 'An error occurred while signing in.');
+          toast('error', 'Login Failed', errorMsg);
         }
         isSubmittingRef.current = false;
         setIsLoading(false);
@@ -196,7 +195,7 @@ export default function LoginScreen() {
         if (profileError || !profile) {
           haptics.reject();
           await supabase.auth.signOut();
-          setErrorMessage('User profile not found. Contact your administrator.');
+          toast('error', 'Profile Not Found', 'User profile not found. Contact your administrator.');
           isSubmittingRef.current = false;
           setIsLoading(false);
           return;
@@ -205,7 +204,7 @@ export default function LoginScreen() {
         if (profile.status === 'inactive') {
           haptics.reject();
           await supabase.auth.signOut();
-          setErrorMessage('Your account has been deactivated. Contact your administrator.');
+          toast('error', 'Account Deactivated', 'Your account has been deactivated. Contact your administrator.');
           isSubmittingRef.current = false;
           setIsLoading(false);
           return;
@@ -214,7 +213,9 @@ export default function LoginScreen() {
         if (profile.status === 'pending') {
           haptics.reject();
           await supabase.auth.signOut();
-          setErrorMessage(
+          toast(
+            'info',
+            'Pending Approval',
             'Your account is pending approval. Please wait for an administrator to approve your account.'
           );
           isSubmittingRef.current = false;
@@ -235,7 +236,7 @@ export default function LoginScreen() {
 
     } catch (err: unknown) {
       haptics.reject();
-      setErrorMessage('An unexpected error occurred during login. Please try again.');
+      toast('error', 'Login Error', 'An unexpected error occurred during login. Please try again.');
       isSubmittingRef.current = false;
       setIsLoading(false);
     }
@@ -295,6 +296,7 @@ export default function LoginScreen() {
           <View style={styles.showcaseHeroContent}>
             <View style={styles.showcaseHeadingBlock}>
               <Text
+                variant="display"
                 style={[
                   styles.showcaseTitle,
                   { color: isDark ? '#ffffff' : '#0f172a' },
@@ -302,7 +304,10 @@ export default function LoginScreen() {
               >
                 Manage your fleet.
               </Text>
-              <Text style={[styles.showcaseSubtitle, { color: primarySkyBlue }]}>
+              <Text
+                variant="display"
+                style={[styles.showcaseSubtitle, { color: primarySkyBlue }]}
+              >
                 Track every hour.
               </Text>
             </View>
@@ -407,6 +412,7 @@ export default function LoginScreen() {
 
                 {/* Card Title */}
                 <Text
+                  variant="title"
                   style={[
                     styles.title,
                     {
@@ -417,20 +423,6 @@ export default function LoginScreen() {
                 >
                   Welcome back
                 </Text>
-
-                {/* Global Error Banner */}
-                {errorMessage && Object.keys(fieldErrors).length === 0 ? (
-                  <View style={styles.bannerContainer}>
-                    <Alert variant="error">{errorMessage}</Alert>
-                  </View>
-                ) : null}
-
-                {/* Global Success Banner */}
-                {successMessage && !errorMessage ? (
-                  <View style={styles.bannerContainer}>
-                    <Alert variant="success">{successMessage}</Alert>
-                  </View>
-                ) : null}
 
                 {/* Form Controls */}
                 <View style={[styles.form, { gap: isShortScreen ? 10 : 14 }]}>
@@ -498,6 +490,7 @@ export default function LoginScreen() {
                         {rememberMe && <Check size={12} color="#ffffff" strokeWidth={3} />}
                       </View>
                       <Text
+                        variant="body"
                         style={[
                           styles.rememberMeText,
                           { color: isDark ? '#a1a1aa' : '#64748b' },
@@ -513,7 +506,10 @@ export default function LoginScreen() {
                       hitSlopToMin48={true}
                       onPress={handleNavigateForgotPassword}
                     >
-                      <Text style={[styles.forgotPasswordText, { color: primarySkyBlue }]}>
+                      <Text
+                        variant="label"
+                        style={[styles.forgotPasswordText, { color: primarySkyBlue }]}
+                      >
                         Forgot password?
                       </Text>
                     </Pressable>
@@ -534,7 +530,9 @@ export default function LoginScreen() {
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.signInButtonText}>Sign in</Text>
+                      <Text variant="heading" style={styles.signInButtonText}>
+                        Sign in
+                      </Text>
                     )}
                   </Pressable>
                 </View>
@@ -551,6 +549,7 @@ export default function LoginScreen() {
                   ]}
                 >
                   <Text
+                    variant="caption"
                     style={[
                       styles.cardFooterText,
                       { color: isDark ? '#a1a1aa' : '#64748b' },
@@ -564,7 +563,10 @@ export default function LoginScreen() {
                     hitSlopToMin48={true}
                     onPress={handleNavigateSignup}
                   >
-                    <Text style={[styles.requestAccessText, { color: primarySkyBlue }]}>
+                    <Text
+                      variant="label"
+                      style={[styles.requestAccessText, { color: primarySkyBlue }]}
+                    >
                       Request access
                     </Text>
                   </Pressable>
@@ -575,6 +577,7 @@ export default function LoginScreen() {
             {/* Bottom Screen Copyright Footer */}
             <View style={styles.screenFooter}>
               <Text
+                variant="micro"
                 style={[
                   styles.copyrightText,
                   { color: isDark ? '#737373' : '#888888' },
@@ -628,8 +631,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   showcaseHeroContent: {
-    marginVertical: 'auto',
     alignItems: 'flex-start',
+    justifyContent: 'center',
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
@@ -672,6 +675,7 @@ const styles = StyleSheet.create({
   machineImage: {
     width: '100%',
     maxWidth: 340,
+    aspectRatio: 1.5,
   },
   showcaseBottomSpacer: {
     height: 12,
@@ -698,7 +702,8 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 'auto',
+    flex: 1,
+    marginVertical: 12,
   },
   card: {
     width: '100%',

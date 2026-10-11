@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ScrollView,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
@@ -115,6 +116,9 @@ export const MobileMenuDrawer: React.FC<Props> = ({
 
   const handleLogout = () => {
     haptics.warning();
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      (document.activeElement as HTMLElement)?.blur?.();
+    }
     setShowLogoutConfirm(true);
   };
 
@@ -131,13 +135,37 @@ export const MobileMenuDrawer: React.FC<Props> = ({
   };
 
   const handleNavigate = (rawHref: string) => {
-    const targetHref = rawHref.startsWith('/(app)') ? rawHref : `/(app)${rawHref}`;
-    const normalize = (p: string) => p.replace(/^\/\(app\)/, '').replace(/\/$/, '') || '/';
+    haptics.select();
+
+    let target = rawHref;
+    // Map settings route variants to canonical Expo Router tab screen
+    if (
+      target === '/settings' ||
+      target === '/(app)/settings' ||
+      target === '/setting' ||
+      target === '/(app)/setting' ||
+      target === '/settings/index' ||
+      target === '/(app)/settings/index'
+    ) {
+      target = '/settings';
+    } else {
+      target = target.replace(/^\/\(app\)/, '');
+    }
+
+    const normalize = (p: string) =>
+      p
+        .replace(/^\/\(app\)/, '')
+        .replace(/\/index$/, '')
+        .replace(/\/$/, '') || '/';
+
+    const isSameRoute = normalize(pathname) === normalize(target);
+
     closeDrawer();
-    if (normalize(pathname) !== normalize(rawHref)) {
-      setTimeout(() => {
-        router.push(targetHref as any);
-      }, 50);
+
+    if (!isSameRoute) {
+      requestAnimationFrame(() => {
+        router.push(target as any);
+      });
     }
   };
 
@@ -148,7 +176,11 @@ export const MobileMenuDrawer: React.FC<Props> = ({
   }, [items, primaryItems]);
 
   const checkIsActive = (item: MenuItem) => {
-    const normalize = (p: string) => p.replace(/^\/\(app\)/, '').replace(/\/$/, '') || '/';
+    const normalize = (p: string) =>
+      p
+        .replace(/^\/\(app\)/, '')
+        .replace(/\/index$/, '')
+        .replace(/\/$/, '') || '/';
     const current = normalize(pathname);
     const target = normalize(item.href);
 
@@ -309,7 +341,7 @@ export const MobileMenuDrawer: React.FC<Props> = ({
                     borderColor: theme.colors.hairline,
                   },
                 ]}
-                onPress={() => handleNavigate('/(app)/profile')}
+                onPress={() => handleNavigate('/profile')}
                 accessibilityRole="button"
                 accessibilityLabel="Open user profile"
               >

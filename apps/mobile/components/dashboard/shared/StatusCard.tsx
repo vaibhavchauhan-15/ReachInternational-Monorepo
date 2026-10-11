@@ -1,93 +1,99 @@
+/**
+ * ReachInternational Mobile — Dashboard Status Card Component
+ * Migrated to React Native Reusables Card and Geist tokens for 100% web mobile parity.
+ */
+
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from '../../ui/AppLinearGradient';
-import { useTheme } from '../../ui/ThemeProvider';
+import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { Touchable } from '../../ui/Touchable';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { CheckCircle2, Clock, AlertTriangle } from '../../ui/icon';
+import { useTheme } from '../../ui/ThemeProvider';
+import { spacingNumeric } from '@reachinternational/design-tokens';
+import { CheckCircle2, Clock, AlertTriangle, ArrowRight, Info } from '../../ui/icon';
 
 export interface StatusCardProps {
   title: string;
-  status: 'success' | 'pending' | 'warning';
-  label: string;
+  status?: 'success' | 'pending' | 'warning' | 'info' | 'default';
+  label?: string;
   description?: string;
+  icon?: React.ComponentType<{ size?: number; color?: string; style?: any }>;
   href?: string;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
+  monoValue?: boolean;
+  children?: React.ReactNode;
 }
 
 const statusConfig = {
+  default: {
+    iconBgLight: 'rgba(100, 116, 139, 0.12)',
+    iconBgDark: 'rgba(148, 163, 184, 0.16)',
+    iconColorLight: '#64748b',
+    iconColorDark: '#94a3b8',
+    labelColorLight: '#171717',
+    labelColorDark: '#fafafa',
+    icon: Clock,
+  },
+  info: {
+    iconBgLight: 'rgba(14, 165, 233, 0.16)',
+    iconBgDark: 'rgba(56, 189, 248, 0.20)',
+    iconColorLight: '#0284c7',
+    iconColorDark: '#38bdf8',
+    labelColorLight: '#0284c7',
+    labelColorDark: '#38bdf8',
+    icon: Info,
+  },
   success: {
-    accentGradient: ['#10b981', 'rgba(16, 185, 129, 0.6)', 'transparent'] as const,
-    cardGradientLight: ['rgba(16, 185, 129, 0.10)', 'rgba(16, 185, 129, 0.04)', 'transparent'] as const,
-    cardGradientDark: ['rgba(2, 44, 34, 0.35)', 'rgba(2, 44, 34, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(16, 185, 129, 0.25)',
-    borderDark: 'rgba(52, 211, 153, 0.30)',
-    textLight: '#059669',
-    textDark: '#34d399',
-    iconBgLight: 'rgba(16, 185, 129, 0.15)',
+    iconBgLight: 'rgba(16, 185, 129, 0.16)',
     iconBgDark: 'rgba(52, 211, 153, 0.20)',
-    iconBorderLight: 'rgba(16, 185, 129, 0.25)',
-    iconBorderDark: 'rgba(52, 211, 153, 0.30)',
-    iconColorLight: '#059669',
+    iconColorLight: '#10b981',
     iconColorDark: '#34d399',
+    labelColorLight: '#059669',
+    labelColorDark: '#34d399',
     icon: CheckCircle2,
   },
   pending: {
-    accentGradient: ['#f59e0b', 'rgba(245, 158, 11, 0.6)', 'transparent'] as const,
-    cardGradientLight: ['rgba(245, 158, 11, 0.10)', 'rgba(245, 158, 11, 0.04)', 'transparent'] as const,
-    cardGradientDark: ['rgba(69, 26, 3, 0.35)', 'rgba(69, 26, 3, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(245, 158, 11, 0.25)',
-    borderDark: 'rgba(251, 191, 36, 0.30)',
-    textLight: '#b45309',
-    textDark: '#fbbf24',
-    iconBgLight: 'rgba(245, 158, 11, 0.15)',
+    iconBgLight: 'rgba(245, 158, 11, 0.16)',
     iconBgDark: 'rgba(251, 191, 36, 0.20)',
-    iconBorderLight: 'rgba(245, 158, 11, 0.25)',
-    iconBorderDark: 'rgba(251, 191, 36, 0.30)',
     iconColorLight: '#d97706',
     iconColorDark: '#fbbf24',
+    labelColorLight: '#b45309',
+    labelColorDark: '#fbbf24',
     icon: Clock,
   },
   warning: {
-    accentGradient: ['#f43f5e', 'rgba(244, 63, 94, 0.6)', 'transparent'] as const,
-    cardGradientLight: ['rgba(244, 63, 94, 0.10)', 'rgba(244, 63, 94, 0.04)', 'transparent'] as const,
-    cardGradientDark: ['rgba(76, 5, 25, 0.40)', 'rgba(76, 5, 25, 0.15)', 'transparent'] as const,
-    borderLight: 'rgba(244, 63, 94, 0.25)',
-    borderDark: 'rgba(251, 113, 133, 0.30)',
-    textLight: '#e11d48',
-    textDark: '#fb7185',
-    iconBgLight: 'rgba(244, 63, 94, 0.15)',
+    iconBgLight: 'rgba(244, 63, 94, 0.16)',
     iconBgDark: 'rgba(251, 113, 133, 0.20)',
-    iconBorderLight: 'rgba(244, 63, 94, 0.25)',
-    iconBorderDark: 'rgba(251, 113, 133, 0.30)',
     iconColorLight: '#e11d48',
     iconColorDark: '#fb7185',
+    labelColorLight: '#e11d48',
+    labelColorDark: '#fb7185',
     icon: AlertTriangle,
   },
 };
 
 const resolveRoute = (href?: string): string | null => {
   if (!href) return null;
-  if (href.startsWith('/operations')) return href.startsWith('/(app)') ? href : `/(app)${href}`;
-  if (href.startsWith('/machines')) return '/(app)/machines';
-  if (href.startsWith('/users')) return '/(app)/users';
-  return href.startsWith('/(app)') ? href : `/(app)${href}`;
+  const cleanRoute = href.replace(/^\/\(app\)/, '');
+  if (cleanRoute.startsWith('/audit')) return '/dashboard';
+  return cleanRoute;
 };
 
 export const StatusCard: React.FC<StatusCardProps> = ({
   title,
-  status,
+  status = 'default',
   label,
   description,
+  icon: customIcon,
   href,
   style,
+  monoValue = false,
+  children,
 }) => {
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const router = useRouter();
-  const config = statusConfig[status] || statusConfig.pending;
-  const Icon = config.icon;
+  const config = statusConfig[status] || statusConfig.default;
+  const Icon = customIcon || config.icon;
   const targetRoute = resolveRoute(href);
 
   const handlePress = () => {
@@ -96,148 +102,117 @@ export const StatusCard: React.FC<StatusCardProps> = ({
     }
   };
 
-  const content = (
-    <LinearGradient
-      colors={isDark ? config.cardGradientDark : config.cardGradientLight}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[
-        styles.card,
-        {
-          borderColor: isDark ? config.borderDark : config.borderLight,
-        },
-        style,
-      ]}
+  return (
+    <Card
+      onPress={targetRoute ? handlePress : undefined}
+      className="p-3.5 sm:p-4 rounded-2xl border border-border bg-card flex-col justify-between"
+      style={style}
     >
-      {/* Top Hairline Gradient Accent Bar */}
-      <LinearGradient
-        colors={[config.accentGradient[0], config.accentGradient[1], 'transparent']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.topAccentBar}
-      />
-
-      <Text variant="caption" style={[styles.titleEyebrow, { color: isDark ? '#94a3b8' : '#64748b' }]}>
-        {title}
-      </Text>
-
-      <View style={styles.contentRow}>
-        <View
-          style={[
-            styles.iconContainer,
-            {
-              backgroundColor: isDark ? config.iconBgDark : config.iconBgLight,
-              borderColor: isDark ? config.iconBorderDark : config.iconBorderLight,
-            },
-          ]}
-        >
-          <Icon
-            size={16}
-            color={isDark ? config.iconColorDark : config.iconColorLight}
-          />
-        </View>
-        <Text
-          variant="subheading"
-          style={[
-            styles.label,
-            { color: isDark ? config.textDark : config.textLight },
-          ]}
-          numberOfLines={2}
-        >
-          {label}
-        </Text>
-      </View>
-
-      {description ? (
+      <View style={styles.topRow}>
         <Text
           variant="caption"
-          style={[styles.description, { color: isDark ? '#94a3b8' : '#64748b' }]}
-          numberOfLines={2}
+          style={[
+            styles.eyebrow,
+            { color: isDark ? '#94a3b8' : '#64748b' },
+          ]}
         >
-          {description}
+          {title}
         </Text>
+        {targetRoute ? (
+          <ArrowRight size={14} color={isDark ? '#94a3b8' : '#64748b'} />
+        ) : null}
+      </View>
+
+      {label ? (
+        <View style={styles.contentRow}>
+          <View
+            style={[
+              styles.iconCircle,
+              {
+                backgroundColor: isDark ? config.iconBgDark : config.iconBgLight,
+              },
+            ]}
+          >
+            <Icon
+              size={18}
+              color={isDark ? config.iconColorDark : config.iconColorLight}
+            />
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text
+              variant={monoValue ? 'mono' : 'subheading'}
+              style={[
+                styles.label,
+                { color: isDark ? config.labelColorDark : config.labelColorLight },
+              ]}
+            >
+              {label}
+            </Text>
+            {description ? (
+              <Text
+                variant="caption"
+                style={[
+                  styles.description,
+                  { color: isDark ? '#94a3b8' : '#64748b' },
+                ]}
+                numberOfLines={2}
+              >
+                {description}
+              </Text>
+            ) : null}
+          </View>
+        </View>
       ) : null}
-    </LinearGradient>
+
+      {children ? (
+        <View style={label ? styles.childrenWithLabel : styles.childrenOnly}>
+          {children}
+        </View>
+      ) : null}
+    </Card>
   );
-
-  if (targetRoute) {
-    return (
-      <Touchable
-        preset="card"
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}: ${label}`}
-        style={styles.touchWrapper}
-      >
-        {content}
-      </Touchable>
-    );
-  }
-
-  return <View style={styles.touchWrapper}>{content}</View>;
 };
 
 const styles = StyleSheet.create({
-  touchWrapper: {
-    flex: 1,
-    minWidth: '47%',
-  },
-  card: {
-    borderRadius: radiusNumeric.md || 14,
-    borderWidth: 1,
-    padding: spacingNumeric.md - 2,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: 108,
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 1,
-      },
-      web: {
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
-      } as any,
-    }),
+    marginBottom: spacingNumeric.xs + 2,
   },
-  titleEyebrow: {
+  eyebrow: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs,
-    zIndex: 1,
   },
   contentRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.xs + 2,
-    marginBottom: spacingNumeric.xs,
-    zIndex: 1,
+    alignItems: 'flex-start',
+    gap: spacingNumeric.sm + 2,
   },
-  iconContainer: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
+  iconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 1,
   },
-  label: {
+  textContainer: {
     flex: 1,
+    minWidth: 0,
   },
+  label: {},
   description: {
-    zIndex: 1,
+    marginTop: 2,
   },
-  topAccentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    zIndex: 2,
+  childrenWithLabel: {
+    marginTop: spacingNumeric.sm,
+    paddingTop: spacingNumeric.xs + 2,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  childrenOnly: {
+    paddingTop: spacingNumeric.xs,
   },
 });

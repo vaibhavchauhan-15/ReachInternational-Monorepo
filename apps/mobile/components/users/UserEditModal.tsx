@@ -5,8 +5,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert} from 'react-native';
-import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
+} from 'react-native';
+import { Text, Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable, showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -83,7 +83,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
   // Working Location State
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -107,7 +106,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setAadhaarNumber(user.aadhaar_number ? formatAadhaar(user.aadhaar_number) : '');
       setLicenseNumber(user.license_number || '');
       setSupervisorId(user.supervisor_id || (user.supervisor_ids && user.supervisor_ids[0]) || '');
-      setError('');
     }
   }, [user]);
 
@@ -168,24 +166,23 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   ].filter(Boolean).length;
 
   const handleSave = async () => {
-    setError('');
     if (!fullName.trim() || fullName.trim().length < 2) {
-      setError('Full Name is required.');
+      showToast('warning', 'Validation Error', 'Full Name is required.');
       return;
     }
     if (cleanPhone.length < 10) {
-      setError('Valid 10-digit mobile phone number is required.');
+      showToast('warning', 'Validation Error', 'Valid 10-digit mobile phone number is required.');
       return;
     }
     if (!street.trim() || !city.trim() || !district.trim() || !stateName.trim()) {
-      setError('Street address, City, District, and State are required.');
+      showToast('warning', 'Validation Error', 'Street address, City, District, and State are required.');
       return;
     }
 
     if (role === 'operator') {
       const sal = Number(monthlySalary);
       if (!monthlySalary || isNaN(sal) || sal <= 0) {
-        setError('Monthly salary is mandatory for operator accounts and must be greater than 0.');
+        showToast('warning', 'Validation Error', 'Monthly salary is mandatory for operator accounts and must be greater than 0.');
         return;
       }
     }
@@ -194,7 +191,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     if (aadhaarNumber.trim()) {
       const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
       if (!aadhaarRes.isValid) {
-        setError(aadhaarRes.error || 'Invalid Aadhaar number.');
+        showToast('warning', 'Validation Error', aadhaarRes.error || 'Invalid Aadhaar number.');
         return;
       }
       cleanAadhaar = aadhaarRes.clean || null;
@@ -204,7 +201,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     if (licenseNumber.trim()) {
       const licRes = validateLicenseNumber(licenseNumber);
       if (!licRes.isValid) {
-        setError(licRes.error || 'Invalid driving licence format.');
+        showToast('warning', 'Validation Error', licRes.error || 'Invalid driving licence format.');
         return;
       }
       formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
@@ -267,12 +264,12 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
       haptics.success();
       notifyUserUpdated(fullName.trim(), role);
-      Alert.alert('Account Updated', `Account details for ${fullName} have been saved successfully.`);
+      showToast('success', 'Account Updated', `Account details for ${fullName} have been saved successfully.`);
       onSuccess();
       onClose();
     } catch (err: any) {
       haptics.error();
-      setError(err?.message || 'Failed to update user account details.');
+      showToast('error', 'Update Failed', err?.message || 'Failed to update user account details.');
     } finally {
       setIsLoading(false);
     }
@@ -308,14 +305,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               <X size={20} color={theme.colors.mute} />
             </Touchable>
           </View>
-
-          {error ? (
-            <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '14', borderColor: theme.colors.error + '33' }]}>
-              <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
-                {error}
-              </Text>
-            </View>
-          ) : null}
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
             {/* Section 1: Contact & Identity Info */}
@@ -434,7 +423,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 label="Aadhaar Card Number"
                 placeholder="12-digit Aadhaar Number"
                 value={aadhaarNumber}
-                onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
+                onChangeText={(val: string) => setAadhaarNumber(formatAadhaar(val))}
                 keyboardType="number-pad"
                 maxLength={14}
                 leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
@@ -444,7 +433,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 label="Driving Licence Number"
                 placeholder="e.g. MH12 20110012345"
                 value={licenseNumber}
-                onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
+                onChangeText={(val: string) => setLicenseNumber(val.toUpperCase())}
                 autoCapitalize="characters"
                 maxLength={25}
                 leftIcon={<CreditCard size={16} color={theme.colors.mute} />}

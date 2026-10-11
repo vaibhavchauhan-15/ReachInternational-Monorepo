@@ -8,10 +8,11 @@ import {
   Platform,
   TextInput,
   useWindowDimensions} from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { AppModal } from '../ui/AppModal';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
-import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader , Text } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -38,6 +39,7 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
+  WhatsAppIcon,
   AlertCircle,
   AlertTriangle,
   ArrowUpDown,
@@ -59,7 +61,7 @@ import { MachineAuditSkeleton } from './MachineAuditSkeleton';
 export interface MachineDetailViewProps {
   machine: any;
   onBack: () => void;
-  onMachineUpdated?: () => void;
+  onMachineUpdated?: (updatedMachine?: any) => void;
   onMachineDeleted?: () => void;
   userRole?: string | null;
   initialTab?: 'overview' | 'running_hours' | 'audit_trail';
@@ -207,7 +209,7 @@ function formatDiffValueMobile(val: any): string {
 }
 
 export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
-  machine,
+  machine: initialMachine,
   onBack,
   onMachineUpdated,
   onMachineDeleted,
@@ -215,6 +217,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   initialTab,
 }) => {
   const { theme, isDark } = useTheme();
+  const [machine, setMachine] = useState<any>(initialMachine);
+
+  useEffect(() => {
+    setMachine(initialMachine);
+  }, [initialMachine]);
 
   // On-demand full client profile loading with instant cache retrieval
   const [fullClient, setFullClient] = useState<any>(() => {
@@ -369,9 +376,19 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     return [];
   }, [machine.operators, machine.current_operator]);
 
-  // Copy handlers
-  const handleCopy = (setter: (v: boolean) => void) => {
+  // Copy handlers with clipboard & toast feedback
+  const handleCopy = async (text: string, label: string, setter: (v: boolean) => void) => {
+    if (!text) return;
+    try {
+      if (Clipboard && Clipboard.setStringAsync) {
+        await Clipboard.setStringAsync(text);
+      }
+    } catch {
+      // Fallback
+    }
+    haptics.select();
     setter(true);
+    showToast('success', 'Copied to clipboard', `${label} copied.`);
     setTimeout(() => setter(false), 1800);
   };
 
@@ -970,13 +987,85 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     if (url) Linking.openURL(url);
   };
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    if (canManage) {
+      list.push({
+        id: 'edit-info',
+        label: 'Edit Machine Info',
+        icon: <Wrench size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setEditSection('info');
+          setEditModalVisible(true);
+        },
+      });
+      list.push({
+        id: 'edit-personnel',
+        label: 'Manage Shift Personnel',
+        icon: <Shield size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setEditSection('personnel');
+          setEditModalVisible(true);
+        },
+      });
+      list.push({
+        id: 'edit-client',
+        label: 'Edit Client Assignment',
+        icon: <Building2 size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setEditSection('client');
+          setEditModalVisible(true);
+        },
+      });
+    } else if (isSupervisor) {
+      list.push({
+        id: 'assign-personnel',
+        label: 'Assign Operators',
+        icon: <UserCheck size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setEditSection('personnel');
+          setEditModalVisible(true);
+        },
+      });
+    }
+
+    list.push({
+      id: 'share-machine',
+      label: 'Share Machine Profile',
+      icon: <Share2 size={16} color={theme.colors.ink} />,
+      onPress: () => setShareModalVisible(true),
+    });
+
+    list.push({
+      id: 'refresh-machine',
+      label: 'Refresh Machine Details',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => handleRefresh(),
+    });
+
+    if (canDelete) {
+      list.push({
+        id: 'delete-machine',
+        label: 'Delete Machine',
+        icon: <Trash2 size={16} color="#ef4444" />,
+        destructive: true,
+        onPress: () => setDeleteDialogVisible(true),
+      });
+    }
+
+    return list;
+  }, [canManage, isSupervisor, canDelete, theme.colors.ink, handleRefresh]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       {/* Top Standardized Mobile Header */}
       <MobileHeader
         title="Machine Details"
+        subtitle={machine.machine_id ? `${machine.machine_id} • ${machine.model || 'Equipment'}` : undefined}
         showBack={true}
         onPressBack={onBack}
+        actions={headerActions}
       />
 
       <ScrollView
@@ -1203,7 +1292,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                       MACHINE ID
                     </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedId)} accessibilityLabel="Copy Machine Code">
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)} accessibilityLabel="Copy Machine Code">
                       {copiedId ? (
                         <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                       ) : (
@@ -1230,7 +1319,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
                     {Boolean(machine.model) && (
-                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedModel)} accessibilityLabel="Copy Model Name">
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.model, `Model "${machine.model}"`, setCopiedModel)} accessibilityLabel="Copy Model Name">
                         {copiedModel ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
@@ -1258,7 +1347,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={styles.specBoxHeader}>
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
                     {Boolean(machine.serial_number) && (
-                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedSerial)} accessibilityLabel="Copy Serial Number">
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.serial_number, `Serial Number "${machine.serial_number}"`, setCopiedSerial)} accessibilityLabel="Copy Serial Number">
                         {copiedSerial ? (
                           <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
                         ) : (
@@ -1397,24 +1486,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={handleRefresh}
-                    style={[
-                      styles.headerActionBtnSm,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Sync Personnel"
-                  >
-                    <RefreshCw size={12} color={theme.colors.mute} />
-                    <Text style={[styles.headerActionBtnSmText, { color: theme.colors.mute }]}>Sync</Text>
-                  </Pressable>
-
-                  {canAssignOperator && (
+                {canAssignOperator && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Pressable variant="outline" haptic="tap"
                       onPress={() => {
                         setEditSection('personnel');
@@ -1435,8 +1508,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         {isSupervisor ? 'Assign' : 'Edit'}
                       </Text>
                     </Pressable>
-                  )}
-                </View>
+                  </View>
+                )}
               </View>
 
               <View style={[styles.personnelSectionBody, { flexDirection: isMobile ? 'column' : 'row', gap: 12 }]}>
@@ -1705,7 +1778,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
-                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedGstin)} accessibilityLabel="Copy GSTIN">
+                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientGstin, `GSTIN "${clientGstin}"`, setCopiedGstin)} accessibilityLabel="Copy GSTIN">
                             {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </Pressable>
                         </View>
@@ -1719,7 +1792,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
                           <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
-                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedPan)} accessibilityLabel="Copy PAN">
+                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientPan, `PAN "${clientPan}"`, setCopiedPan)} accessibilityLabel="Copy PAN">
                             {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </Pressable>
                         </View>
@@ -1735,7 +1808,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
-                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedSiteAddress)} accessibilityLabel="Copy Site Address">
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(fullSiteAddress, 'Site Location', setCopiedSiteAddress)} accessibilityLabel="Copy Site Address">
                           {copiedSiteAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </Pressable>
                       </View>
@@ -1750,7 +1823,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
                         <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>BILLING ADDRESS</Text>
-                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(setCopiedBillingAddress)} accessibilityLabel="Copy Billing Address">
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(fullBillingAddress, 'Billing Address', setCopiedBillingAddress)} accessibilityLabel="Copy Billing Address">
                           {copiedBillingAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </Pressable>
                       </View>
@@ -1765,22 +1838,24 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     {clientPhone ? (
                       <Pressable variant="outline" haptic="tap"
                         onPress={() => handleCall(clientPhone)}
-                        style={[styles.touchActionBtn, { backgroundColor: '#10b98118', borderColor: '#10b98135' }]}
+                        style={[styles.touchActionBtn, { backgroundColor: '#16a34a', borderColor: '#16a34a' }]}
                         activeOpacity={0.7}
+                        accessibilityLabel="Call"
                       >
-                        <Phone size={14} color="#10b981" />
-                        <Text style={[styles.touchActionText, { color: '#10b981' }]}>Call</Text>
+                        <Phone size={14} color="#ffffff" />
+                        <Text variant="label" style={[styles.touchActionText, { color: '#ffffff' }]}>Call</Text>
                       </Pressable>
                     ) : null}
 
                     {clientPhone ? (
                       <Pressable variant="outline" haptic="tap"
                         onPress={() => handleWhatsApp(clientPhone)}
-                        style={[styles.touchActionBtn, { backgroundColor: '#22c55e18', borderColor: '#22c55e35' }]}
+                        style={[styles.touchActionBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}
                         activeOpacity={0.7}
+                        accessibilityLabel="WhatsApp"
                       >
-                        <MessageSquare size={14} color="#22c55e" />
-                        <Text style={[styles.touchActionText, { color: '#22c55e' }]}>WhatsApp</Text>
+                        <WhatsAppIcon size={14} color="#ffffff" />
+                        <Text variant="label" style={[styles.touchActionText, { color: '#ffffff' }]}>WhatsApp</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -2817,8 +2892,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         visible={editModalVisible}
         onClose={() => setEditModalVisible(false)}
         machineToEdit={machine}
-        onSuccess={() => {
-          if (onMachineUpdated) onMachineUpdated();
+        onSuccess={(savedMachine?: any) => {
+          if (savedMachine) {
+            setMachine((prev: any) => ({ ...prev, ...savedMachine }));
+          }
+          if (onMachineUpdated) onMachineUpdated(savedMachine);
         }}
         userRole={userRole}
         initialSection={editSection}
@@ -3030,8 +3108,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     height: 34,
-    paddingHorizontal: 10,
-    borderRadius: radiusNumeric.md,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
   },
   heroEditBtnText: {
@@ -3041,8 +3119,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     height: 30,
-    paddingHorizontal: 8,
-    borderRadius: radiusNumeric.sm,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
   },
   headerActionBtnSmText: {
@@ -3178,9 +3256,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0ea5e918',
     borderColor: '#0ea5e935',
     borderWidth: 1,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 4,
+    borderRadius: radiusNumeric.pill,
   },
   clientCodePillText: {
     color: '#0ea5e9',
@@ -3368,7 +3446,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    borderRadius: radiusNumeric.lg,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
     minHeight: 44,
   },
@@ -3473,9 +3551,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
   },
   filterChipText: {
@@ -3499,7 +3577,7 @@ const styles = StyleSheet.create({
   logOperatorBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
   },
   logOperatorName: {

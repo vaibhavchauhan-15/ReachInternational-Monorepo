@@ -13,8 +13,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
-  TextInput,
   Animated,
   Easing,
   Platform,
@@ -27,8 +25,8 @@ import {
   type FilterOption,
   HighlightText,
   Text,
-  useTypeStyle,
 } from '../ui';
+import { SearchInput } from '../ui/SearchInput';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useTodayShiftMonitor } from '../../lib/hooks/useOperationsData';
 import { ShiftRosterListSkeleton } from './OperationsSkeleton';
@@ -45,17 +43,17 @@ import {
   X,
   UserPlus,
   UserX,
-  Search,
   SlidersHorizontal,
   RotateCcw,
   ChevronDown,
+  Calendar,
   Wrench,
   Edit2,
-  ChevronRight,
   Icon,
 } from '../ui/icon';
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { isManagerOrAbove } from '@reachinternational/permissions';
+import { getISTDateString, formatDate, addDaysToDateStr } from '@reachinternational/utils';
 import { useAuth } from '../../lib/auth/useAuth';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
@@ -63,6 +61,7 @@ import { Pressable } from '../ui/touch/Pressable';
 export interface MobileTodayShiftMonitorTabProps {
   actorId?: string;
   userRole?: string;
+  initialDate?: string;
   onEnterLog: (row: TodayShiftMonitorRow) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -89,6 +88,7 @@ const SORT_FILTER_OPTIONS: FilterOption[] = [
 export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProps> = ({
   actorId,
   userRole,
+  initialDate,
   onEnterLog,
   onRefresh,
   refreshing = false,
@@ -96,19 +96,27 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   onCloseAssignModal,
 }) => {
   const { theme, isDark } = useTheme();
-  const bodyTypeStyle = useTypeStyle('body');
   const { role: authRole, userProfile } = useAuth();
   const effectiveRole = (userRole || authRole || userProfile?.role || '').toLowerCase().replace(/[\s-]/g, '_');
   const canEnterLog = isManagerOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager'].includes(effectiveRole);
-  const { data: rows = [], isLoading, refetch } = useTodayShiftMonitor(actorId);
+
+  const todayStr = useMemo(() => getISTDateString(), []);
+  const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
+
+  useEffect(() => {
+    if (initialDate && initialDate !== selectedDate) {
+      setSelectedDate(initialDate);
+    }
+  }, [initialDate]);
+
+  const { data: rows = [], isLoading, refetch } = useTodayShiftMonitor(actorId, selectedDate);
 
   // Search & Filter State (reusing User Page canonical architecture)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'entered' | 'unassigned'>('all');
   const [shiftFilter, setShiftFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('default');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<any>(null);
 
   // Animated Expandable Filter Drawer state
   const isWeb = Platform.OS === 'web';
@@ -186,6 +194,46 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     return list;
   }, [rows]);
 
+  const dateOptions = useMemo<FilterOption[]>(() => {
+    const options: FilterOption[] = [];
+    const today = getISTDateString();
+    const yesterday = addDaysToDateStr(today, -1);
+
+    options.push({
+      id: today,
+      label: `Today (${formatDate(today)})`,
+    });
+
+    options.push({
+      id: yesterday,
+      label: `Yesterday (${formatDate(yesterday)})`,
+    });
+
+    for (let i = 2; i <= 30; i++) {
+      const d = addDaysToDateStr(today, -i);
+      options.push({
+        id: d,
+        label: formatDate(d),
+      });
+    }
+
+    if (selectedDate && !options.some((o) => o.id === selectedDate)) {
+      options.push({
+        id: selectedDate,
+        label: formatDate(selectedDate),
+      });
+    }
+
+    return options;
+  }, [selectedDate]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (selectedDate === todayStr) return 'Today';
+    const yesterday = addDaysToDateStr(todayStr, -1);
+    if (selectedDate === yesterday) return `Yesterday (${formatDate(selectedDate)})`;
+    return formatDate(selectedDate);
+  }, [selectedDate, todayStr]);
+
   const currentStatusLabel =
     STATUS_FILTER_OPTIONS.find((opt) => opt.id === statusFilter)?.label || 'Status';
   const currentShiftLabel =
@@ -195,19 +243,31 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
+    if (selectedDate !== todayStr) count++;
     if (statusFilter !== 'all') count++;
     if (shiftFilter !== 'all') count++;
     if (sortBy !== 'default') count++;
     return count;
-  }, [statusFilter, shiftFilter, sortBy]);
+  }, [selectedDate, todayStr, statusFilter, shiftFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
     haptics.confirm();
+    setSelectedDate(todayStr);
     setStatusFilter('all');
     setShiftFilter('all');
     setSortBy('default');
     setSearchQuery('');
-  }, []);
+  }, [todayStr]);
+
+  const handleCardEnterLog = useCallback(
+    (row: TodayShiftMonitorRow) => {
+      onEnterLog({
+        ...row,
+        log_date: row.log_date || selectedDate,
+      });
+    },
+    [onEnterLog, selectedDate]
+  );
 
   const filtered = useMemo(() => {
     let r = [...rows];
@@ -274,6 +334,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       ]}
     >
       <View style={styles.filterSelectorsGrid}>
+        {/* Date Dropdown */}
+        <DropdownFilterSelector
+          label="Date"
+          value={selectedDate}
+          options={dateOptions}
+          onChange={(val) => setSelectedDate(val)}
+          showSearch={true}
+          minMenuWidth={220}
+        />
+
         {/* Status Dropdown */}
         <DropdownFilterSelector
           label="Status"
@@ -314,6 +384,27 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 Search: "{searchQuery}"
               </Text>
               <X size={12} color={theme.colors.mute} />
+            </Pressable>
+          )}
+
+          {selectedDate !== todayStr && (
+            <Pressable
+              variant="chip"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={() => setSelectedDate(todayStr)}
+              style={[
+                styles.badgeChip,
+                {
+                  backgroundColor: isDark ? '#0284c726' : '#f0f9ff',
+                  borderColor: '#0284c733',
+                },
+              ]}
+            >
+              <Text variant="caption" style={[styles.badgeChipText, { color: '#0284c7' }]}>
+                Date: {selectedDateLabel}
+              </Text>
+              <X size={12} color="#0284c7" />
             </Pressable>
           )}
 
@@ -392,6 +483,49 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
   return (
     <View style={styles.container}>
+      {/* Historical Date Notice Banner */}
+      {selectedDate !== todayStr && (
+        <View
+          style={[
+            styles.historicalBanner,
+            {
+              backgroundColor: isDark ? '#082f49' : '#f0f9ff',
+              borderColor: isDark ? '#0369a1' : '#bae6fd',
+            },
+          ]}
+        >
+          <View style={styles.historicalBannerLeft}>
+            <Calendar size={15} color="#0284c7" />
+            <View style={styles.historicalBannerTextCol}>
+              <Text variant="label" style={{ color: isDark ? '#e0f2fe' : '#0369a1' }}>
+                Historical Date: {formatDate(selectedDate)}
+              </Text>
+              <Text variant="caption" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
+                Viewing entered shifts and roster for {formatDate(selectedDate)}.
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            variant="ghost"
+            haptic="tap"
+            hitSlopToMin48
+            onPress={() => setSelectedDate(todayStr)}
+            style={[
+              styles.historicalReturnBtn,
+              {
+                backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe',
+                borderColor: isDark ? '#0284c7' : '#7dd3fc',
+              },
+            ]}
+          >
+            <RotateCcw size={12} color="#0284c7" />
+            <Text variant="caption" style={{ color: '#0284c7' }}>
+              Today
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* 1. KPI COUNTER SUMMARY CARDS */}
       <KPIGrid columns={4}>
         <KPICard
@@ -399,32 +533,24 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           value={summary.total}
           icon={Clock}
           variant="default"
-          active={statusFilter === 'all'}
-          onPress={() => setStatusFilter('all')}
         />
         <KPICard
           label="Entered"
           value={summary.entered}
           icon={CheckCircle2}
           variant="success"
-          active={statusFilter === 'entered'}
-          onPress={() => setStatusFilter((prev) => (prev === 'entered' ? 'all' : 'entered'))}
         />
         <KPICard
           label="Pending"
           value={summary.pending}
           icon={AlertCircle}
           variant={summary.pending > 0 ? 'warning' : 'default'}
-          active={statusFilter === 'pending'}
-          onPress={() => setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
         />
         <KPICard
           label="Unassigned"
           value={summary.unassigned}
           icon={UserX}
           variant={summary.unassigned > 0 ? 'error' : 'default'}
-          active={statusFilter === 'unassigned'}
-          onPress={() => setStatusFilter((prev) => (prev === 'unassigned' ? 'all' : 'unassigned'))}
         />
       </KPIGrid>
 
@@ -432,72 +558,33 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       <View style={styles.toolbarContainer}>
         {/* Top Search & Filter Action Row */}
         <View style={styles.toolbarTopRow}>
-          {/* Search Input Bar (Capsule Pill with Web Outline Suppression & Focus Ring) */}
-          <Pressable
-            variant="plain"
-            haptic="none"
-            onPress={() => searchInputRef.current?.focus()}
-            style={[
-              styles.searchBarBox,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: isSearchFocused ? theme.colors.ink : theme.colors.hairline,
-              },
-              isSearchFocused && Platform.OS === 'web' && ({
-                boxShadow: isDark
-                  ? '0 0 0 1.5px rgba(255, 255, 255, 0.4)'
-                  : '0 0 0 1.5px rgba(0, 0, 0, 0.15)',
-              } as any),
-            ]}
-          >
-            {isLoading && rows.length > 0 ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.mute}
-                style={styles.searchIcon}
-              />
-            ) : (
-              <Search
-                size={15}
-                color={isSearchFocused ? theme.colors.ink : theme.colors.mute}
-                style={styles.searchIcon}
-              />
-            )}
-            <TextInput
-              ref={searchInputRef}
-              placeholder="Search operator, machine, client..."
-              placeholderTextColor={theme.colors.mute}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              style={[
-                styles.searchInputText,
-                bodyTypeStyle,
-                { color: theme.colors.ink },
-                Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
-              ]}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearchQuery('')} style={styles.searchClearBtn} accessibilityLabel="Clear search">
-                <X size={14} color={theme.colors.mute} />
-              </Pressable>
-            )}
-          </Pressable>
+          {/* Search Input Bar */}
+          <SearchInput
+            ref={searchInputRef}
+            placeholder="Search operator, machine, client..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onClear={() => setSearchQuery('')}
+            isLoading={isLoading && rows.length > 0}
+            containerStyle={{ flex: 1 }}
+          />
 
           {/* Filter Toggle Button */}
-          <Pressable variant="outline" haptic="select" hitSlopToMin48 onPress={() => setFilterPanelOpen((prev) => !prev)} style={[styles.filterToggleBtn,
+          <Pressable
+            variant="outline"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setFilterPanelOpen((prev) => !prev)}
+            style={[
+              styles.filterToggleBtn,
               {
                 backgroundColor:
                   filterPanelOpen || activeFilterCount > 0
-                    ? theme.colors.ink
+                    ? '#0284c7'
                     : theme.colors.canvasElevated,
                 borderColor:
                   filterPanelOpen || activeFilterCount > 0
-                    ? theme.colors.ink
+                    ? '#0284c7'
                     : theme.colors.hairline,
               },
               isWeb && ({
@@ -510,7 +597,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               size={13}
               color={
                 filterPanelOpen || activeFilterCount > 0
-                  ? theme.colors.canvas
+                  ? '#ffffff'
                   : theme.colors.ink
               }
             />
@@ -521,7 +608,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 {
                   color:
                     filterPanelOpen || activeFilterCount > 0
-                      ? theme.colors.canvas
+                      ? '#ffffff'
                       : theme.colors.ink,
                 },
               ]}
@@ -535,8 +622,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   {
                     backgroundColor:
                       filterPanelOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
-                        : theme.colors.ink,
+                        ? '#ffffff'
+                        : '#0284c7',
                   },
                 ]}
               >
@@ -547,8 +634,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     {
                       color:
                         filterPanelOpen || activeFilterCount > 0
-                          ? theme.colors.ink
-                          : theme.colors.canvas,
+                          ? '#0284c7'
+                          : '#ffffff',
                     },
                   ]}
                 >
@@ -561,7 +648,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               size={13}
               color={
                 filterPanelOpen || activeFilterCount > 0
-                  ? theme.colors.canvas
+                  ? '#ffffff'
                   : theme.colors.mute
               }
               state={filterPanelOpen ? 'open' : 'closed'}
@@ -642,15 +729,31 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
             {searchQuery
               ? `No matching shifts found for "${searchQuery}". Try changing search or filters.`
               : statusFilter === 'pending'
-              ? 'All operators have submitted their shift logs today!'
-              : 'No active shift assignments found for today.'}
+              ? (selectedDate !== todayStr ? `All shifts for ${formatDate(selectedDate)} have been entered!` : 'All operators have submitted their shift logs today!')
+              : (selectedDate !== todayStr ? `No shift records found for ${formatDate(selectedDate)}.` : 'No active shift assignments found for today.')}
           </Text>
-          {!searchQuery && (
+          {selectedDate !== todayStr ? (
+            <Pressable
+              variant="outline"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={() => setSelectedDate(todayStr)}
+              style={[
+                styles.emptyReturnBtn,
+                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+              ]}
+            >
+              <RotateCcw size={13} color={theme.colors.link} />
+              <Text variant="label" style={{ color: theme.colors.link }}>
+                Return to Today
+              </Text>
+            </Pressable>
+          ) : !searchQuery ? (
             <Pressable variant="primary" haptic="tap" hitSlopToMin48 onPress={() => handleOpenAssignModal(undefined)} style={[styles.emptyAssignButton, { backgroundColor: theme.colors.link }]}>
               <UserPlus size={14} color="#ffffff" />
               <Text variant="label" style={styles.emptyAssignButtonText}>Assign Operator</Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
       ) : (
         <View style={styles.cardsList}>
@@ -684,7 +787,9 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               : null;
 
             return (
-              <Pressable key={cardKey} variant="card" haptic="select" onPress={() => { if (isUnassigned) { handleOpenAssignModal(row.machine_id); } else if (canEnterLog) { onEnterLog(row); } }} style={[
+              <View
+                key={cardKey}
+                style={[
                   styles.card,
                   {
                     backgroundColor: theme.colors.canvasElevated,
@@ -692,10 +797,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     borderLeftColor: accentColor,
                     borderLeftWidth: 4,
                   },
-                  isWeb && ({
-                    cursor: isUnassigned || canEnterLog ? 'pointer' : 'default',
-                    transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
-                  } as any),
                 ]}
                 accessibilityLabel={`${row.operator_name || 'Unassigned Machine'}, ${row.shift_name || row.shift_code}, Status: ${row.status}`}
               >
@@ -708,14 +809,14 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         {
                           backgroundColor: isUnassigned
                             ? isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
-                            : theme.colors.ink,
+                            : '#0284c7',
                         },
                       ]}
                     >
                       {isUnassigned ? (
                         <UserX size={15} color={isDark ? '#fbbf24' : '#d97706'} />
                       ) : (
-                        <Text variant="heading" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                        <Text variant="heading" style={[styles.avatarLetter, { color: '#ffffff' }]}>
                           {row.operator_name ? row.operator_name[0].toUpperCase() : 'O'}
                         </Text>
                       )}
@@ -788,9 +889,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         {isEntered ? 'ENTERED' : isUnassigned ? 'UNASSIGNED' : 'PENDING'}
                       </Text>
                     </View>
-                    {(canEnterLog || isUnassigned) && (
-                      <ChevronRight size={15} color={theme.colors.mute} />
-                    )}
                   </View>
                 </View>
 
@@ -842,26 +940,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         Sr No:
                       </Text>
                     </View>
-                    <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
-                        e?.stopPropagation?.(); handleOpenAssignModal(row.machine_id); }} style={[styles.monoBadge,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
+                    <HighlightText
+                      variant="caption"
+                      text={row.machine_serial_number || row.machine_code || '—'}
+                      query={searchQuery}
+                      style={[
+                        styles.metaFieldValue,
+                        { color: theme.colors.link },
                       ]}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <HighlightText
-                        variant="mono"
-                        text={row.machine_serial_number || row.machine_code || '—'}
-                        query={searchQuery}
-                        style={[
-                          styles.metaFieldValueMono,
-                          { color: theme.colors.link },
-                        ]}
-                        numberOfLines={1}
-                      />
-                    </Pressable>
+                      numberOfLines={1}
+                    />
                   </View>
 
                   {/* LINE 5: Client Name */}
@@ -905,17 +993,25 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
                 {/* Action Buttons: Assign Operator (Unassigned) or Enter Shift Log (Pending) / Edit Shift Log (Entered) */}
                 {isUnassigned ? (
-                  <Pressable variant="primary" haptic="tap" onPress={(e) => { // @ts-ignore
-                      e?.stopPropagation?.(); handleOpenAssignModal(row.machine_id); }} style={[styles.assignRowBtn, { backgroundColor: theme.colors.ink }]}>
-                    <UserPlus size={14} color={theme.colors.canvas} />
-                    <Text variant="label" style={[styles.assignRowBtnText, { color: theme.colors.canvas }]}>
+                  <Pressable
+                    variant="primary"
+                    haptic="tap"
+                    onPress={() => handleOpenAssignModal(row.machine_id)}
+                    style={[styles.assignRowBtn, { backgroundColor: '#0284c7' }]}
+                  >
+                    <UserPlus size={14} color="#ffffff" />
+                    <Text variant="label" style={[styles.assignRowBtnText, { color: '#ffffff' }]}>
                       Assign Operator to {row.machine_code}
                     </Text>
                   </Pressable>
                 ) : !isEntered ? (
                   canEnterLog ? (
-                    <Pressable variant="secondary" haptic="tap" onPress={(e) => { // @ts-ignore
-                        e?.stopPropagation?.(); onEnterLog(row); }} style={[styles.enterLogBtn, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '35' }]}>
+                    <Pressable
+                      variant="secondary"
+                      haptic="tap"
+                      onPress={() => handleCardEnterLog(row)}
+                      style={[styles.enterLogBtn, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '35' }]}
+                    >
                       <User size={14} color={theme.colors.link} />
                       <Text variant="label" style={[styles.enterLogBtnText, { color: theme.colors.link }]} numberOfLines={1}>
                         Enter Shift Log for {row.operator_name || 'Operator'}
@@ -923,15 +1019,19 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     </Pressable>
                   ) : null
                 ) : canEnterLog ? (
-                  <Pressable variant="secondary" haptic="tap" onPress={(e) => { // @ts-ignore
-                      e?.stopPropagation?.(); onEnterLog(row); }} style={[styles.enterLogBtn, { backgroundColor: isDark ? '#064e3b18' : '#ecfdf5', borderColor: isDark ? '#064e3b40' : '#a7f3d0' }]}>
+                  <Pressable
+                    variant="secondary"
+                    haptic="tap"
+                    onPress={() => handleCardEnterLog(row)}
+                    style={[styles.enterLogBtn, { backgroundColor: isDark ? '#064e3b18' : '#ecfdf5', borderColor: isDark ? '#064e3b40' : '#a7f3d0' }]}
+                  >
                     <Edit2 size={13} color={isDark ? '#34d399' : '#059669'} />
                     <Text variant="label" style={[styles.enterLogBtnText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
                       Edit Shift Log for {row.operator_name || 'Operator'}
                     </Text>
                   </Pressable>
                 ) : null}
-              </Pressable>
+              </View>
             );
           })}
         </View>
@@ -954,6 +1054,37 @@ const styles = StyleSheet.create({
   container: {
     gap: spacingNumeric.sm,
   },
+  historicalBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    gap: 10,
+  },
+  historicalBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  historicalBannerTextCol: {
+    flex: 1,
+    gap: 1,
+  },
+  historicalReturnBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 34,
+    minHeight: 34,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+  },
   loadingContainer: {
     paddingVertical: 48,
     alignItems: 'center',
@@ -967,30 +1098,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  searchBarBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 42,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInputText: {
-    flex: 1,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    height: '100%',
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
-  searchClearBtn: {
-    padding: 3,
-    marginLeft: 4,
   },
   filterToggleBtn: {
     flexDirection: 'row',
@@ -1083,6 +1190,18 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     textAlign: 'center',
     maxWidth: 280,
+  },
+  emptyReturnBtn: {
+    height: 44,
+    minHeight: 44,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    marginTop: 6,
   },
   emptyAssignButton: {
     height: 44,
@@ -1179,13 +1298,6 @@ const styles = StyleSheet.create({
   metaFieldValue: {
     flex: 1,
   },
-  monoBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  metaFieldValueMono: {},
   // Summary & Actions
   attributionRow: {
     flexDirection: 'row',

@@ -26,7 +26,7 @@ export interface AdminDashboardCardProps {
 }
 
 export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const totalMachines = data?.totalMachines ?? 0;
   const activeUsers = data?.activeUsers ?? 0;
@@ -41,7 +41,10 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
     <View style={styles.container}>
       {/* Core Fleet & Organization KPIs */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           FLEET & PERSONNEL SUMMARY
         </Text>
         <KPIGrid columns={5}>
@@ -49,35 +52,30 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
             label="Total Machines"
             value={totalMachines}
             icon={Wrench}
-            href="/machines"
             variant="info"
           />
           <KPICard
             label="Active Users"
             value={activeUsers}
             icon={Users}
-            href="/users"
             variant="default"
           />
           <KPICard
             label="Clients"
             value={totalClients}
             icon={Building2}
-            href="/clients"
             variant="default"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
             icon={CalendarCheck}
-            href="/operations"
             variant="warning"
           />
           <KPICard
             label="Logs Today"
             value={todayLogs}
             icon={Clock}
-            href="/operations"
             variant={todayLogs > 0 ? 'success' : 'default'}
           />
         </KPIGrid>
@@ -85,7 +83,10 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
 
       {/* Operational Telemetry & Exceptions */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           TODAY'S OPERATIONAL EXCEPTIONS
         </Text>
         <KPIGrid columns={3}>
@@ -93,21 +94,18 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
             label="Breakdowns Reported"
             value={breakdowns}
             icon={AlertTriangle}
-            href="/operations"
             variant={breakdowns > 0 ? 'error' : 'default'}
           />
           <KPICard
             label="Overtime Entries"
             value={overtime}
             icon={Timer}
-            href="/operations"
             variant={overtime > 0 ? 'warning' : 'default'}
           />
           <KPICard
             label="Schedule Conflicts"
             value={overlappingLogs}
             icon={Layers}
-            href="/operations"
             variant={overlappingLogs > 0 ? 'error' : 'default'}
           />
         </KPIGrid>
@@ -115,23 +113,28 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
 
       {/* Quick Action Navigation */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           QUICK MANAGEMENT
         </Text>
-        <PrimaryAction
-          title="Operations Hub & Running Logs"
-          description="Review daily operator submissions, meter readings, and client worksites"
-          href="/operations"
-          icon={FileSpreadsheet}
-          variant="primary"
-        />
-        <PrimaryAction
-          title="Machinery Fleet & Maintenance"
-          description="Configure machine assignments, track hours, and update equipment status"
-          href="/machines"
-          icon={Wrench}
-          variant="secondary"
-        />
+        <View style={styles.actionList}>
+          <PrimaryAction
+            title="Operations Hub & Running Logs"
+            description="Review daily operator submissions, meter readings, and client worksites"
+            href="/operations"
+            icon={FileSpreadsheet}
+            variant="primary"
+          />
+          <PrimaryAction
+            title="Machinery Fleet & Maintenance"
+            description="Configure machine assignments, track hours, and update equipment status"
+            href="/machines"
+            icon={Wrench}
+            variant="secondary"
+          />
+        </View>
       </View>
     </View>
   );
@@ -146,6 +149,9 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 2,
+    marginBottom: spacingNumeric.xs + 4,
+  },
+  actionList: {
+    gap: spacingNumeric.sm,
   },
 });

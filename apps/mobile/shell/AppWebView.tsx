@@ -176,7 +176,7 @@ export function AppWebView() {
   if (isOffline) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <StatusBar barStyle="light-content" backgroundColor={colorsDark.canvas} />
+        <StatusBar barStyle="light-content" translucent />
         <OfflineScreen onRetry={handleReload} />
       </SafeAreaView>
     );
@@ -186,7 +186,7 @@ export function AppWebView() {
   if (hasFatalError) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <StatusBar barStyle="light-content" backgroundColor={colorsDark.canvas} />
+        <StatusBar barStyle="light-content" translucent />
         <ErrorScreen
           errorDescription={errorMessage || undefined}
           onReload={handleReload}
@@ -198,7 +198,7 @@ export function AppWebView() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <StatusBar barStyle="light-content" backgroundColor={colorsDark.canvas} />
+      <StatusBar barStyle="light-content" translucent />
 
       {/* Progress Bar Indicator */}
       {loadProgress < 1 && (

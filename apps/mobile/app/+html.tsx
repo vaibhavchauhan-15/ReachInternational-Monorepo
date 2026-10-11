@@ -62,6 +62,25 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
+        {/* Early URL Normalizer: rewrite /(app) group segments and trailing /index before router boot */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if (typeof window !== 'undefined' && window.location) {
+                    var p = window.location.pathname;
+                    if (p.indexOf('/(app)') !== -1 || p.indexOf('/index') !== -1) {
+                      var clean = p.replace(/\\/\\(app\\)/g, '').replace(/\\/index$/, '') || '/';
+                      window.history.replaceState(null, '', clean + window.location.search + window.location.hash);
+                    }
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+
         <ScrollViewStyleReset />
 
         <style dangerouslySetInnerHTML={{ __html: responsiveStyles }} />

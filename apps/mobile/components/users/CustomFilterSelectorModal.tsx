@@ -1,14 +1,14 @@
-import { Text } from '../ui/Text';
 import React, { useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   Platform} from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
 import { Pressable } from '../ui/touch/Pressable';
+import { Text } from '../ui/Text';
+import { SearchInput } from '../ui/SearchInput';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { INDIAN_STATES } from '@reachinternational/utils';
 import { Check, X, Search } from '../ui/icon';
@@ -168,35 +168,16 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
 
               {/* Search Bar */}
               {shouldEnableSearch && options.length > 6 && (
-                <View
-                  style={[
-                    styles.searchWrap,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <Search size={14} color={theme.colors.mute} />
-                  <TextInput
+                <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+                  <SearchInput
                     placeholder="Search options..."
                     placeholderTextColor={theme.colors.mute}
                     value={searchTerm}
                     onChangeText={setSearchTerm}
-                    style={[styles.searchInput, { color: theme.colors.ink }]}
+                    onClear={() => setSearchTerm('')}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  {searchTerm.length > 0 && (
-                    <Pressable
-                      variant="iconButton"
-                      onPress={() => setSearchTerm('')}
-                      hitSlopToMin48={true}
-                      accessibilityLabel="Clear search"
-                    >
-                      <X size={14} color={theme.colors.mute} />
-                    </Pressable>
-                  )}
                 </View>
               )}
 

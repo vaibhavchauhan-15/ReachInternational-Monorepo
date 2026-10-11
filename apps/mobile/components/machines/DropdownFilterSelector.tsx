@@ -5,14 +5,16 @@ import {
   ScrollView,
   Platform,
   Dimensions,
-  TextInput,
+  Modal,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
-import { Text, useTypeStyle } from '../ui/Text';
+import { Text } from '../ui/Text';
 import { Pressable } from '../ui/touch/Pressable';
+import { SearchInput } from '../ui/SearchInput';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { ChevronDown, Check, X, Search, Icon } from '../ui/icon';
+import { ChevronDown, Check, X, Icon } from '../ui/icon';
+import { haptics } from '../../lib/haptics';
 import type { FilterOption } from './CustomFilterSelectorModal';
 
 export type { FilterOption };
@@ -37,28 +39,111 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
   showSearch = false,
 }) => {
   const { theme, isDark } = useTheme();
-  const bodyTypeStyle = useTypeStyle('body');
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({
+  const [windowWidth, setWindowWidth] = useState(() =>
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.innerWidth
+      : Dimensions.get('window').width
+  );
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  }>({
     top: 0,
     left: 0,
     width: minMenuWidth,
+    maxHeight: 280,
   });
 
   const buttonRef = useRef<View>(null);
+
+  // Monitor window resize on web / orientation changes
+  useEffect(() => {
+    const updateDimensions = () => {
+      const w =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.innerWidth
+          : Dimensions.get('window').width;
+      setWindowWidth(w);
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('resize', updateDimensions);
+      return () => window.removeEventListener('resize', updateDimensions);
+    } else {
+      const sub = Dimensions.addEventListener('change', updateDimensions);
+      return () => sub.remove();
+    }
+  }, []);
+
+  const isMobile = windowWidth <= 640;
 
   const selectedOption = useMemo(() => {
     return options.find((opt) => opt.id === value) || options[0];
   }, [options, value]);
 
-  const hasSearch = Boolean(showSearch);
+  const hasSearch = Boolean(showSearch || options.length > 7);
 
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options;
     const q = searchQuery.toLowerCase().trim();
     return options.filter((opt) => opt.label.toLowerCase().includes(q));
   }, [options, searchQuery]);
+
+  const computeViewportPosition = (
+    triggerX: number,
+    triggerY: number,
+    triggerW: number,
+    triggerH: number
+  ) => {
+    const currentWindowW =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerWidth
+        : Dimensions.get('window').width;
+
+    const currentWindowH =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerHeight
+        : Dimensions.get('window').height;
+
+    const menuWidth = Math.max(triggerW, minMenuWidth);
+    let left = align === 'right' ? triggerX + triggerW - menuWidth : triggerX;
+
+    // Viewport horizontal clamp
+    if (left < 12) left = 12;
+    if (left + menuWidth > currentWindowW - 12) {
+      left = Math.max(12, currentWindowW - menuWidth - 12);
+    }
+
+    const itemHeight = 38;
+    const searchHeight = hasSearch ? 48 : 0;
+    const desiredMenuHeight = Math.min(
+      options.length * itemHeight + searchHeight + 16,
+      280
+    );
+
+    // Viewport vertical available space
+    const spaceBelow = currentWindowH - (triggerY + triggerH) - 16;
+    const spaceAbove = triggerY - 16;
+
+    const shouldOpenUpwards = spaceBelow < desiredMenuHeight && spaceAbove > spaceBelow;
+    const availableSpace = shouldOpenUpwards ? spaceAbove : spaceBelow;
+    const maxHeight = Math.min(280, Math.max(140, availableSpace));
+    const top = shouldOpenUpwards
+      ? Math.max(12, triggerY - Math.min(desiredMenuHeight, maxHeight) - 4)
+      : triggerY + triggerH + 4;
+
+    setCoords({
+      top: Math.round(top),
+      left: Math.round(left),
+      width: Math.round(menuWidth),
+      maxHeight: Math.round(maxHeight),
+    });
+    setOpen(true);
+  };
 
   const measureAndOpen = () => {
     if (open) {
@@ -67,56 +152,28 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
     }
 
     setSearchQuery('');
+    haptics.select();
+
+    if (isMobile) {
+      setOpen(true);
+      return;
+    }
 
     if (!buttonRef.current) {
       setOpen(true);
       return;
     }
 
-    const windowWidth = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.innerWidth
-      : Dimensions.get('window').width;
-
-    const windowHeight = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.innerHeight
-      : Dimensions.get('window').height;
-
     // Web synchronous bounding rect
     if (Platform.OS === 'web' && (buttonRef.current as any).getBoundingClientRect) {
       const rect = (buttonRef.current as any).getBoundingClientRect();
-      const menuWidth = Math.max(rect.width, minMenuWidth);
-      let left = align === 'right' ? rect.right - menuWidth : rect.left;
-
-      if (left < 8) left = 8;
-      if (left + menuWidth > windowWidth - 8) {
-        left = windowWidth - menuWidth - 8;
-      }
-
-      const menuHeight = Math.min(options.length * 38 + (hasSearch ? 45 : 0) + 16, 260);
-      const shouldOpenUpwards = rect.bottom + menuHeight > windowHeight - 16 && rect.top > menuHeight + 16;
-      const top = shouldOpenUpwards ? rect.top - menuHeight - 4 : rect.bottom + 4;
-
-      setCoords({ top: Math.max(8, top), left: Math.max(8, left), width: menuWidth });
-      setOpen(true);
+      computeViewportPosition(rect.left, rect.top, rect.width, rect.height);
       return;
     }
 
     // Native measureInWindow
     buttonRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-      const menuWidth = Math.max(width, minMenuWidth);
-      let left = align === 'right' ? x + width - menuWidth : x;
-
-      if (left < 8) left = 8;
-      if (left + menuWidth > windowWidth - 8) {
-        left = windowWidth - menuWidth - 8;
-      }
-
-      const menuHeight = Math.min(options.length * 38 + (hasSearch ? 45 : 0) + 16, 260);
-      const shouldOpenUpwards = y + height + menuHeight > windowHeight - 16 && y > menuHeight + 16;
-      const top = shouldOpenUpwards ? y - menuHeight - 4 : y + height + 4;
-
-      setCoords({ top: Math.max(8, top), left: Math.max(8, left), width: menuWidth });
-      setOpen(true);
+      computeViewportPosition(x, y, width, height);
     });
   };
 
@@ -129,6 +186,12 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
+
+  const handleSelectOption = (optId: string) => {
+    haptics.select();
+    onChange(optId);
+    setOpen(false);
+  };
 
   const isFiltered = value !== 'all' && value !== 'machine_id_asc';
 
@@ -153,7 +216,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
           accessibilityLabel={`${label} filter: ${selectedOption?.label}`}
         >
           <View style={styles.triggerLeft}>
-            <Text variant="caption" style={[styles.triggerLabel, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[{ color: theme.colors.mute }]}>
               {label}:
             </Text>
             {selectedOption?.dotColor && (
@@ -164,7 +227,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
               style={[
                 styles.triggerValue,
                 {
-                  color: isFiltered ? theme.colors.ink : theme.colors.ink,
+                  color: theme.colors.ink,
                 },
               ]}
               numberOfLines={1}
@@ -181,119 +244,224 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
         </Pressable>
       </View>
 
-      {/* Floating Dropdown Menu */}
-      <AppModal
-        visible={open}
-        onClose={() => setOpen(false)}
-        variant="fullscreen"
-        backdropColor="transparent"
-      >
-        <View
-          style={[
-            styles.dropdownMenu,
-            {
-              top: coords.top,
-              left: coords.left,
-              width: coords.width,
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
+      {/* Presentation Mode: Bottom Sheet on Mobile, Viewport-Aware Popover on Desktop / Tablet */}
+      {isMobile ? (
+        <AppModal
+          visible={open}
+          onClose={() => setOpen(false)}
+          variant="bottom"
         >
-                {/* Search Bar if long list */}
-                {hasSearch && (
-                  <View style={[styles.menuSearchBox, { borderBottomColor: theme.colors.hairline }]}>
-                    <Search size={13} color={theme.colors.mute} style={{ marginRight: 6 }} />
-                    <TextInput
-                      placeholder={`Search ${label.toLowerCase()}...`}
-                      placeholderTextColor={theme.colors.mute}
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      autoFocus
-                      style={[styles.menuSearchInput, bodyTypeStyle, { color: theme.colors.ink }]}
-                    />
-                    {searchQuery.length > 0 && (
-                      <Pressable
-                        variant="iconButton"
-                        haptic="tap"
-                        hitSlopToMin48
-                        onPress={() => setSearchQuery('')}
-                        accessibilityLabel="Clear search"
-                      >
-                        <X size={13} color={theme.colors.mute} />
-                      </Pressable>
-                    )}
-                  </View>
-                )}
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {/* Sheet Header */}
+            <View style={[styles.sheetHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text variant="subheading" style={{ color: theme.colors.ink }}>
+                Filter by {label}
+              </Text>
+              <Pressable
+                variant="iconButton"
+                haptic="tap"
+                hitSlopToMin48
+                onPress={() => setOpen(false)}
+                accessibilityLabel="Close filter options"
+              >
+                <X size={16} color={theme.colors.mute} />
+              </Pressable>
+            </View>
 
-                {/* Options List */}
-                <ScrollView
-                  style={styles.menuScroll}
-                  showsVerticalScrollIndicator={true}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                >
-                  {filteredOptions.length === 0 ? (
-                    <View style={styles.noOptions}>
-                      <Text variant="caption" style={[styles.noOptionsText, { color: theme.colors.mute }]}>
-                        No matching options
-                      </Text>
-                    </View>
-                  ) : (
-                    filteredOptions.map((opt: FilterOption) => {
-                      const isSelected = opt.id === value;
-                      return (
-                        <Pressable
-                          key={opt.id}
-                          variant="listRow"
-                          haptic="select"
-                          onPress={() => {
-                            onChange(opt.id);
-                            setOpen(false);
+            {/* Optional Search */}
+            {hasSearch && (
+              <View style={[styles.sheetSearchBox, { borderBottomColor: theme.colors.hairline }]}>
+                <SearchInput
+                  placeholder={`Search ${label.toLowerCase()}...`}
+                  placeholderTextColor={theme.colors.mute}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onClear={() => setSearchQuery('')}
+                />
+              </View>
+            )}
+
+            {/* Options List */}
+            <ScrollView
+              style={styles.sheetScroll}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredOptions.length === 0 ? (
+                <View style={styles.noOptions}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>
+                    No matching options
+                  </Text>
+                </View>
+              ) : (
+                filteredOptions.map((opt: FilterOption) => {
+                  const isSelected = opt.id === value;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      variant="listRow"
+                      haptic="select"
+                      onPress={() => handleSelectOption(opt.id)}
+                      style={[
+                        styles.sheetOptionItem,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.colors.ink
+                            : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={styles.optionLeft}>
+                        {opt.dotColor && (
+                          <View
+                            style={[
+                              styles.optionDot,
+                              {
+                                backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                              },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          variant="body"
+                          style={{
+                            color: isSelected ? theme.colors.canvas : theme.colors.ink,
                           }}
-                          style={[
-                            styles.optionItem,
-                            {
-                              backgroundColor: isSelected
-                                ? theme.colors.ink
-                                : 'transparent',
-                            },
-                          ]}
+                          numberOfLines={1}
                         >
-                          <View style={styles.optionLeft}>
-                            {opt.dotColor && (
-                              <View
-                                style={[
-                                  styles.optionDot,
-                                  {
-                                    backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
-                                  },
-                                ]}
-                              />
-                            )}
-                            <Text
-                              variant="caption"
-                              style={[
-                                styles.optionText,
-                                {
-                                  color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                                },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {opt.label}
-                            </Text>
-                          </View>
-                          {isSelected && (
-                            <Check size={14} color={theme.colors.canvas} strokeWidth={2.5} animate="mount" />
-                          )}
-                        </Pressable>
-                      );
-                    })
-                  )}
-                </ScrollView>
-        </View>
-      </AppModal>
+                          {opt.label}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Check size={16} color={theme.colors.canvas} strokeWidth={2.5} />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </AppModal>
+      ) : (
+        <Modal
+          visible={open}
+          transparent={true}
+          animationType="none"
+          onRequestClose={() => setOpen(false)}
+        >
+          {/* Fullscreen transparent dismiss backdrop */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setOpen(false)}
+            accessibilityLabel="Close dropdown menu"
+          >
+            <View style={StyleSheet.absoluteFill} />
+          </Pressable>
+
+          {/* Dynamic Anchored Popover Box */}
+          <View
+            style={[
+              styles.dropdownMenu,
+              {
+                top: coords.top,
+                left: coords.left,
+                width: coords.width,
+                maxHeight: coords.maxHeight,
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {/* Search Bar if long list */}
+            {hasSearch && (
+              <View
+                style={[
+                  styles.menuSearchWrapper,
+                  { borderBottomColor: theme.colors.hairline },
+                ]}
+              >
+                <SearchInput
+                  placeholder={`Search ${label.toLowerCase()}...`}
+                  placeholderTextColor={theme.colors.mute}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onClear={() => setSearchQuery('')}
+                  autoFocus
+                />
+              </View>
+            )}
+
+            {/* Options List */}
+            <ScrollView
+              style={styles.menuScroll}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              {filteredOptions.length === 0 ? (
+                <View style={styles.noOptions}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>
+                    No matching options
+                  </Text>
+                </View>
+              ) : (
+                filteredOptions.map((opt: FilterOption) => {
+                  const isSelected = opt.id === value;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      variant="listRow"
+                      haptic="select"
+                      onPress={() => handleSelectOption(opt.id)}
+                      style={[
+                        styles.optionItem,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.colors.ink
+                            : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={styles.optionLeft}>
+                        {opt.dotColor && (
+                          <View
+                            style={[
+                              styles.optionDot,
+                              {
+                                backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                              },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: isSelected ? theme.colors.canvas : theme.colors.ink,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {opt.label}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Check size={14} color={theme.colors.canvas} strokeWidth={2.5} animate="mount" />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -319,7 +487,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 4,
   },
-  triggerLabel: {},
   triggerValue: {
     flexShrink: 1,
   },
@@ -328,43 +495,32 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
   },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
   dropdownMenu: {
     position: 'absolute',
-    borderRadius: radiusNumeric.lg,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: 4,
-    maxHeight: 260,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 10,
+    zIndex: 99999,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.14)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 14,
+        elevation: 16,
+      },
+    }),
   },
-  menuSearchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  menuSearchWrapper: {
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
   },
-  menuSearchInput: {
-    flex: 1,
-    paddingVertical: 0,
-    height: 26,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      } as any,
-    }),
-  },
   menuScroll: {
-    maxHeight: 210,
+    flexGrow: 0,
   },
   optionItem: {
     flexDirection: 'row',
@@ -372,7 +528,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: radiusNumeric.md,
+    borderRadius: radiusNumeric.sm,
     minHeight: 36,
   },
   optionLeft: {
@@ -387,13 +543,43 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
   },
-  optionText: {
-    flexShrink: 1,
-  },
   noOptions: {
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noOptionsText: {},
+  sheetContainer: {
+    borderTopLeftRadius: radiusNumeric.lg,
+    borderTopRightRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    paddingBottom: spacingNumeric.lg,
+    maxHeight: '80%',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.md,
+    borderBottomWidth: 1,
+  },
+  sheetSearchBox: {
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.sm,
+    borderBottomWidth: 1,
+  },
+  sheetScroll: {
+    paddingHorizontal: spacingNumeric.sm,
+    paddingVertical: spacingNumeric.xs,
+  },
+  sheetOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.md,
+    borderRadius: radiusNumeric.md,
+    minHeight: 44,
+    marginVertical: 1,
+  },
 });

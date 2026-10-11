@@ -22,9 +22,9 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';
@@ -135,7 +135,7 @@ export function MobileDocumentViewerModal({
     >
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.colors.canvasElevated}
+        translucent
       />
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.canvas }]}

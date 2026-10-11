@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { Input, Alert, TimeInput, SearchableSelect, useTheme , Text } from '../../components/ui';
+import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
@@ -61,6 +61,7 @@ const SIGNUP_ROLES = [
 export default function SignupScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -97,8 +98,6 @@ export default function SignupScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
@@ -369,7 +368,7 @@ export default function SignupScreen() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setErrorMessage('Please correct the highlighted fields before submitting.');
+      toast('warning', 'Missing Details', 'Please complete all required fields highlighted below.');
       haptics.reject();
       return;
     }
@@ -416,7 +415,7 @@ export default function SignupScreen() {
       });
 
       if (error) {
-        setErrorMessage(error.message);
+        toast('error', 'Registration Failed', error.message);
         isSubmittingRef.current = false;
         setIsLoading(false);
         haptics.reject();
@@ -459,18 +458,17 @@ export default function SignupScreen() {
           }
         }
 
-        setSuccessMessage('Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in.');
+        toast(
+          'success',
+          'Registration Submitted',
+          'Your account is pending administrator approval. Once approved, you can log in.'
+        );
         setTimeout(() => {
-          router.replace({
-            pathname: '/(auth)/login',
-            params: {
-              message: 'Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in.',
-            },
-          });
+          router.replace('/(auth)/login');
         }, 1200);
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'An unexpected error occurred during signup.');
+      toast('error', 'Registration Error', err?.message || 'An unexpected error occurred during signup.');
       isSubmittingRef.current = false;
       setIsLoading(false);
       haptics.error();
@@ -523,20 +521,6 @@ export default function SignupScreen() {
               <Text style={[styles.title, { color: isDark ? '#ffffff' : '#0f172a' }]}>
                 Create an account
               </Text>
-
-              {/* Global Error Banner */}
-              {errorMessage && Object.keys(fieldErrors).length === 0 ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="error">{errorMessage}</Alert>
-                </View>
-              ) : null}
-
-              {/* Global Success Banner */}
-              {successMessage ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="success">{successMessage}</Alert>
-                </View>
-              ) : null}
 
               {/* Section 1: Account & Role */}
               <MobileFormSectionCard
@@ -939,14 +923,14 @@ export default function SignupScreen() {
                     I have read and agree to the{' '}
                     <Text
                       style={{ color: '#0284c7' }}
-                      onPress={() => router.push('/(app)/terms')}
+                      onPress={() => router.push('/terms')}
                     >
                       Terms of Service
                     </Text>{' '}
                     and{' '}
                     <Text
                       style={{ color: '#0284c7' }}
-                      onPress={() => router.push('/(app)/privacy')}
+                      onPress={() => router.push('/privacy')}
                     >
                       Privacy Policy
                     </Text>

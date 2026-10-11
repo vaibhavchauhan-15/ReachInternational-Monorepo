@@ -1,126 +1,103 @@
-import React from 'react';
-import { View, StyleSheet, type ViewStyle } from 'react-native';
-import { AlertCircle, CheckCircle2, AlertTriangle, Info, X } from './icon';
-import { useTheme } from './ThemeProvider';
-import { Text } from './Text';
-import { Icon } from './icon';
-import { Pressable } from './touch/Pressable';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+/**
+ * ReachInternational Mobile — React Native Reusables Alert Component
+ * Official RNR Alert primitive with AlertTitle and AlertDescription.
+ */
 
-export type AlertVariant = 'info' | 'success' | 'warning' | 'error';
+import { TextClassContext } from '@/components/ui/Text';
+import { cn } from '@/lib/utils';
+import { cva, type VariantProps } from 'class-variance-authority';
+import * as React from 'react';
+import { View, type ViewProps, Text as RNText } from 'react-native';
+import { AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react-native';
 
-export interface AlertProps {
-  variant?: AlertVariant;
-  title?: string;
-  children: React.ReactNode;
-  icon?: React.ReactNode;
-  onDismiss?: () => void;
-  style?: ViewStyle;
-}
+const alertVariants = cva(
+  'relative w-full rounded-xl border p-4 flex-row items-start gap-3',
+  {
+    variants: {
+      variant: {
+        default: 'border-border bg-card text-foreground',
+        destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
+        error: 'border-destructive/30 bg-destructive/10 text-destructive',
+        success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+        warning: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        info: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
 
-export function Alert({
-  variant = 'error',
-  title,
-  children,
-  icon,
-  onDismiss,
-  style,
-}: AlertProps) {
-  const { isDark } = useTheme();
-
-  const variantStyles = {
-    info: {
-      bg: isDark ? 'rgba(14, 165, 233, 0.12)' : 'rgba(14, 165, 233, 0.08)',
-      border: isDark ? 'rgba(14, 165, 233, 0.3)' : 'rgba(14, 165, 233, 0.25)',
-      text: isDark ? '#bae6fd' : '#0369a1',
-      title: isDark ? '#e0f2fe' : '#075985',
-      iconColor: '#0ea5e9',
-      defaultIcon: <Icon name={Info} animate="mount" variant="subheading" color="#0ea5e9" />,
-    },
-    success: {
-      bg: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)',
-      border: isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)',
-      text: isDark ? '#a7f3d0' : '#047857',
-      title: isDark ? '#d1fae5' : '#065f46',
-      iconColor: '#10b981',
-      defaultIcon: <Icon name={CheckCircle2} animate="mount" variant="subheading" color="#10b981" />,
-    },
-    warning: {
-      bg: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
-      border: isDark ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.25)',
-      text: isDark ? '#fde68a' : '#b45309',
-      title: isDark ? '#fef3c7' : '#92400e',
-      iconColor: '#f59e0b',
-      defaultIcon: <Icon name={AlertTriangle} animate="mount" variant="subheading" color="#f59e0b" />,
-    },
-    error: {
-      bg: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
-      border: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.25)',
-      text: isDark ? '#fecaca' : '#b91c1c',
-      title: isDark ? '#fee2e2' : '#991b1b',
-      iconColor: '#ef4444',
-      defaultIcon: <Icon name={AlertCircle} animate="mount" variant="subheading" color="#ef4444" />,
-    },
+export type AlertProps = ViewProps &
+  VariantProps<typeof alertVariants> & {
+    className?: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+    title?: string;
+    message?: string;
   };
 
-  const current = variantStyles[variant];
+const Alert = React.forwardRef<React.ElementRef<typeof View>, AlertProps>(
+  ({ className, variant, type, title, message, children, ...props }, ref) => {
+    let effectiveVariant = variant ?? 'default';
+    if (!variant && type) {
+      if (type === 'error') effectiveVariant = 'destructive';
+      else if (type === 'success') effectiveVariant = 'success';
+      else if (type === 'warning') effectiveVariant = 'warning';
+      else if (type === 'info') effectiveVariant = 'info';
+    }
 
-  return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: current.bg,
-          borderColor: current.border,
-        },
-        style,
-      ]}
-    >
-      <View style={styles.iconWrapper}>
-        {icon || current.defaultIcon}
+    const renderIcon = () => {
+      if (effectiveVariant === 'destructive' || effectiveVariant === 'error') {
+        return <AlertCircle size={20} className="text-destructive mt-0.5" color="#ef4444" />;
+      }
+      if (effectiveVariant === 'success') {
+        return <CheckCircle2 size={20} className="text-emerald-600 mt-0.5" color="#10b981" />;
+      }
+      if (effectiveVariant === 'warning') {
+        return <AlertTriangle size={20} className="text-amber-600 mt-0.5" color="#f5a623" />;
+      }
+      return <Info size={20} className="text-primary mt-0.5" color="#0284c7" />;
+    };
+
+    return (
+      <View
+        ref={ref}
+        role="alert"
+        className={cn(alertVariants({ variant: effectiveVariant }), className)}
+        {...props}
+      >
+        {renderIcon()}
+        <View className="flex-1 flex-col">
+          {title && <AlertTitle>{title}</AlertTitle>}
+          {message && <AlertDescription>{message}</AlertDescription>}
+          {children}
+        </View>
       </View>
+    );
+  }
+);
+Alert.displayName = 'Alert';
 
-      <View style={styles.contentWrapper}>
-        {title ? (
-          <Text variant="subheading" style={[styles.titleText, { color: current.title }]}>{title}</Text>
-        ) : null}
-        {typeof children === 'string' ? (
-          <Text variant="body" style={[styles.messageText, { color: current.text }]}>{children}</Text>
-        ) : (
-          children
-        )}
-      </View>
+const AlertTitle = React.forwardRef<
+  React.ElementRef<typeof View>,
+  ViewProps & { className?: string }
+>(({ className, ...props }, ref) => (
+  <TextClassContext.Provider value="text-base font-semibold leading-none tracking-tight text-foreground mb-1">
+    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
+  </TextClassContext.Provider>
+));
+AlertTitle.displayName = 'AlertTitle';
 
-      {onDismiss ? (
-        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48={true} onPress={onDismiss} style={styles.dismissBtn}>
-          <Icon name={X} variant="caption" color={current.text} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
+const AlertDescription = React.forwardRef<
+  React.ElementRef<typeof View>,
+  ViewProps & { className?: string }
+>(({ className, ...props }, ref) => (
+  <TextClassContext.Provider value="text-sm leading-relaxed text-muted-foreground">
+    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
+  </TextClassContext.Provider>
+));
+AlertDescription.displayName = 'AlertDescription';
 
-const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    padding: spacingNumeric.sm,
-    gap: 10,
-  },
-  iconWrapper: {
-    paddingTop: 1,
-  },
-  contentWrapper: {
-    flex: 1,
-  },
-  titleText: {
-    marginBottom: 2,
-  },
-  messageText: {},
-  dismissBtn: {
-    padding: 2,
-  },
-});
+export { Alert, AlertTitle, AlertDescription, alertVariants };
+export default Alert;

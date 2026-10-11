@@ -1433,7 +1433,7 @@ export function OperatorDashboard({
             items={[
               {
                 id: "entry",
-                label: "Log Entry",
+                label: "Shift",
               },
               {
                 id: "history",
@@ -2011,7 +2011,7 @@ export function OperatorDashboard({
                 <p className="text-[11px]">
                   {historySearch || historyDateFilter !== "all"
                     ? "Try adjusting your search query or date filter selection."
-                    : "Switch to the 'Log Entry' tab above to submit your daily machine log."}
+                    : "Switch to the 'Shift' tab above to submit your daily machine log."}
                 </p>
                 {logsList.length === 0 && (
                   <button

@@ -161,7 +161,7 @@ Alternatively, in Google Play Console: navigate to **Release → Production → 
 
 ## Phase 5: Over-the-Air (OTA) Updates & Routing Rules
 
-With `expo-updates` configured with `"runtimeVersion": { "policy": "appVersion" }`, you can deliver immediate bug fixes, UI enhancements, and operational logic updates without resubmitting to Google Play.
+With `expo-updates` configured with `"runtimeVersion": "1.1.0"` (matching `version`), you can deliver immediate bug fixes, UI enhancements, and operational logic updates without resubmitting to Google Play.
 
 ### 1. Deterministic Routing Rules
 - **Binary Releases (Phase B — `deploy-android.yml`)**:
@@ -178,5 +178,5 @@ With `expo-updates` configured with `"runtimeVersion": { "policy": "appVersion" 
 
 ### 2. Version Governance
 - **`versionCode` Ownership**: `autoIncrement: true` and `appVersionSource: remote` in `eas.json` mean EAS automatically increments and owns `versionCode` in the cloud. Do not manually manipulate `versionCode` in `app.json`.
-- **`runtimeVersion` Alignment**: Set to `{"policy": "appVersion"}`. EAS Update guarantees that OTA updates only land on installed binaries with matching `appVersion` (`1.0.0`), preventing binary incompatibility crashes.
+- **`runtimeVersion` Alignment**: Set to explicit version string `"1.1.0"` (matching `version`). In bare workflow projects with native code, Expo requires an explicit runtime version string rather than dynamic policy objects, guaranteeing full compatibility across Expo Go, local development, and EAS Update.
 

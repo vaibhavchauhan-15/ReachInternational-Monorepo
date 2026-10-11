@@ -18,7 +18,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  TextInput,
   ActivityIndicator,
   Alert,
   ScrollView,
@@ -57,16 +56,20 @@ import {
   addDaysToDateStr,
   resolveDefaultOperatorShift,
   calculateEffectiveShiftDurationHours,
+  parseOperationalErrorMessage,
   type ShiftMatchTarget,
 } from '@reachinternational/utils';
+import { useToast } from '../ui';
 import type { OperatorEntryContext, ClientShiftCode } from '@reachinternational/types';
 import { supabase } from '../../lib/supabase';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
-import { notifyLogEntryCreated, notifyMachineStatusChanged } from '../../lib/notifications';
+import { notifyLogEntryCreated, notifyMachineStatusChanged, postNotification } from '../../lib/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Text, useTypeStyle } from '../ui/Text';
+import { Input } from '../ui/Input';
+import { Textarea } from '../ui/textarea';
 import { TimeInput } from '../ui/TimeInput';
 import { ShiftCardSelector, formatCompactShiftRange, getShiftDisplayTitle, type ShiftCardItem } from '../ui/ShiftCardSelector';
 import { OperatorEntrySkeleton } from './OperationsSkeleton';
@@ -135,6 +138,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   initialShift,
 }) => {
   const { theme, isDark } = useTheme();
+  const { toast } = useToast();
   const { isOffline } = useNetworkStatus();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -209,7 +213,6 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   // Modals & Submission State
   const [isDatePickerModalOpen, setIsDatePickerModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // Sync with entryContext when loaded
   useEffect(() => {
@@ -411,76 +414,94 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         })
       );
       haptics.confirm();
-      setStatusMessage({
-        type: 'success',
-        text: 'Draft saved locally on this device.',
+      postNotification({
+        category: 'log_entry',
+        title: 'Draft Saved',
+        body: 'Draft saved locally on this device.',
+        severity: 'success',
       });
+      toast('success', 'Draft Saved', 'Draft saved locally on this device.');
     } catch {
       haptics.reject();
-      setStatusMessage({
-        type: 'error',
-        text: 'Could not save draft.',
+      postNotification({
+        category: 'log_entry',
+        title: 'Save Failed',
+        body: 'Could not save draft.',
+        severity: 'error',
       });
+      toast('error', 'Save Failed', 'Could not save draft.');
     }
   };
 
   // Submit Handler
   const handleSubmit = async () => {
-    setStatusMessage(null);
-
     if (isSubmitting) return;
 
-    if (!entryContext?.operator?.id) {
+    if (!entryContext?.operator?.id && !user?.id) {
       haptics.reject();
-      setStatusMessage({ type: 'error', text: 'Operator profile not found.' });
+      const err = { title: 'Operator Profile Missing', message: 'Operator profile not found.' };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
       return;
     }
 
     if (!entryContext?.machine?.id) {
       haptics.reject();
-      setStatusMessage({ type: 'error', text: 'No machine assigned to your account.' });
+      const err = { title: 'No Machine Assigned', message: 'No machine assigned to your account.' };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
       return;
     }
 
     if (!selectedShiftCode || !selectedShiftCode.trim()) {
       haptics.reject();
-      setStatusMessage({ type: 'error', text: 'Please select an operational shift.' });
+      const err = { title: 'Shift Required', message: 'Please select an operational shift.' };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
       return;
     }
 
     if (!endMeter.trim() || isNaN(endNum) || endNum < startNum) {
       haptics.reject();
-      setStatusMessage({
-        type: 'error',
-        text: `End meter must be ≥ start meter (${startNum.toFixed(1)}).`,
-      });
+      const err = {
+        title: 'Invalid Meter Reading',
+        message: `End meter must be ≥ start meter (${startNum.toFixed(1)}).`,
+      };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
       return;
     }
 
     if (runningHours > 24) {
       haptics.reject();
-      setStatusMessage({ type: 'error', text: 'Running hours cannot exceed 24h per shift.' });
+      const err = { title: 'Operating Limit Exceeded', message: 'Running hours cannot exceed 24h per shift.' };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
       return;
     }
 
     if (isBreakdown) {
       if (!breakdownStartTime || !breakdownEndTime) {
         haptics.reject();
-        setStatusMessage({ type: 'error', text: 'Enter breakdown start and end times.' });
+        const err = { title: 'Breakdown Incomplete', message: 'Enter breakdown start and end times.' };
+        postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+        toast('error', err.title, err.message);
         return;
       }
       const maxAllowed = shiftDurationHours > 0 ? shiftDurationHours : 24;
       if (breakdownStats && breakdownStats.durationDecimalHours > maxAllowed) {
         haptics.reject();
-        setStatusMessage({
-          type: 'error',
-          text: `Breakdown (${breakdownStats.durationDecimalHours}h) cannot exceed shift (${maxAllowed}h).`,
-        });
+        const err = {
+          title: 'Invalid Breakdown Time',
+          message: `Breakdown (${breakdownStats.durationDecimalHours}h) cannot exceed shift (${maxAllowed}h).`,
+        };
+        postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+        toast('error', err.title, err.message);
         return;
       }
     }
 
-    const effectiveOperatorId = entryContext.operator?.id || user?.id;
+    const effectiveOperatorId = entryContext?.operator?.id || user?.id;
     let prevHistory: any = null;
     let prevContext: any = null;
     let shiftTiming: any = null;
@@ -499,6 +520,25 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         startTime,
         endTime,
       });
+
+      // Future Shift End Validation (Shift is in progress)
+      // 1-minute grace margin accommodates minor client-server clock drift
+      const nowWithGrace = Date.now() + 60 * 1000;
+      if (shiftTiming?.endDateTime && shiftTiming.endDateTime.getTime() > nowWithGrace) {
+        const formattedEndTime = formatTo12Hour(endTime) || endTime;
+        const errTitle = 'Shift In Progress';
+        const errMessage = `Shift has not ended yet. You can submit logs after ${formattedEndTime}.`;
+        haptics.reject();
+        postNotification({
+          category: 'log_entry',
+          title: errTitle,
+          body: errMessage,
+          severity: 'error',
+        });
+        toast('error', errTitle, errMessage);
+        setIsSubmitting(false);
+        return;
+      }
 
       const idempotencyKey = `ihl_op_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
@@ -597,10 +637,13 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         }
         await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
         haptics.confirm();
-        setStatusMessage({
-          type: 'success',
-          text: 'Shift log saved locally! Will sync automatically when online.',
+        postNotification({
+          category: 'log_entry',
+          title: 'Shift Log Queued',
+          body: 'Shift log saved locally! Will sync automatically when back online.',
+          severity: 'info',
         });
+        toast('info', 'Shift Log Queued', 'Shift log saved locally! Will sync automatically when back online.');
         setStartMeter(String(endNum));
         setEndMeter(String(endNum));
         if (onSuccess) onSuccess();
@@ -697,10 +740,16 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
       haptics.confirm();
 
-      setStatusMessage({
-        type: 'success',
-        text: `Log recorded successfully! (${runningHours} operating hours)`,
+      const successTitle = 'Daily Log Submitted';
+      const successBody = `Log recorded successfully! (${runningHours} operating hours)`;
+
+      postNotification({
+        category: 'log_entry',
+        title: successTitle,
+        body: successBody,
+        severity: 'success',
       });
+      toast('success', successTitle, successBody);
 
       // Advance start meter
       setStartMeter(String(endNum));
@@ -731,10 +780,13 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           }
           await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
           haptics.confirm();
-          setStatusMessage({
-            type: 'success',
-            text: 'Network lost: Shift log saved locally! Will sync automatically when back online.',
+          postNotification({
+            category: 'log_entry',
+            title: 'Saved Offline',
+            body: 'Network lost. Shift log saved locally and will sync when back online.',
+            severity: 'info',
           });
+          toast('info', 'Saved Offline', 'Network lost: Shift log saved locally! Will sync automatically when back online.');
           setStartMeter(String(endNum));
           setEndMeter(String(endNum));
           setIsBreakdown(false);
@@ -753,11 +805,22 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       if (effectiveOperatorId && prevContext) {
         queryClient.setQueryData(['operator', 'entry-context', effectiveOperatorId], prevContext);
       }
-      haptics.reject();
-      setStatusMessage({
-        type: 'error',
-        text: err?.message || 'Failed to submit log. Please try again.',
+
+      const parsedErr = parseOperationalErrorMessage(err, {
+        endTime,
+        startMeter: startNum,
+        endMeter: endNum,
+        assignedShifts: assignedShiftCodes,
       });
+
+      haptics.reject();
+      postNotification({
+        category: 'log_entry',
+        title: parsedErr.title,
+        body: parsedErr.message,
+        severity: 'error',
+      });
+      toast('error', parsedErr.title, parsedErr.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -987,7 +1050,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             </Pressable>
           </View>
 
-          <TextInput
+          <Input
             keyboardType="decimal-pad"
             value={startMeter}
             onChangeText={handleStartMeterChange}
@@ -1020,7 +1083,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             </Text>
           </View>
 
-          <TextInput
+          <Input
             keyboardType="decimal-pad"
             value={endMeter}
             onChangeText={setEndMeter}
@@ -1134,17 +1197,18 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 styles.manualToggleBtn,
                 {
                   backgroundColor: showManualTimes
-                    ? (isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe')
+                    ? '#0284c7'
                     : (isDark ? 'rgba(255,255,255,0.05)' : '#ffffff'),
                   borderColor: showManualTimes ? '#0284c7' : theme.colors.hairline,
                 },
               ]}
             >
-              <SlidersHorizontal size={12} color={showManualTimes ? '#0284c7' : theme.colors.mute} />
+              <SlidersHorizontal size={12} color={showManualTimes ? '#ffffff' : theme.colors.mute} />
               <Text
                 variant="mono"
                 style={{
-                  color: showManualTimes ? '#0284c7' : theme.colors.mute }}
+                  color: showManualTimes ? '#ffffff' : theme.colors.mute,
+                }}
               >
                 {showManualTimes ? 'Shift' : 'Manual'}
               </Text>
@@ -1357,8 +1421,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink, marginBottom: 4 }]}>
                 Breakdown Reason & Action Taken
               </Text>
-              <TextInput
-                multiline
+              <Textarea
                 numberOfLines={2}
                 value={breakdownReason}
                 onChangeText={setBreakdownReason}
@@ -1378,33 +1441,6 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           </View>
         )}
       </View>
-
-      {/* Status / Feedback Banner */}
-      {statusMessage && (
-        <View
-          style={[
-            styles.statusBanner,
-            {
-              backgroundColor: statusMessage.type === 'error' ? '#fee2e2' : '#dcfce7',
-              borderColor: statusMessage.type === 'error' ? '#fecaca' : '#bbf7d0',
-            },
-          ]}
-        >
-          {statusMessage.type === 'error' ? (
-            <AlertCircle size={13} color="#dc2626" animate="mount" />
-          ) : (
-            <CheckCircle2 size={13} color="#15803d" animate="mount" />
-          )}
-          <Text
-            variant="micro"
-            style={{
-              color: statusMessage.type === 'error' ? '#b91c1c' : '#14532d',
-              flex: 1 }}
-          >
-            {statusMessage.text}
-          </Text>
-        </View>
-      )}
 
       {/* Footer Auto-save Notice & CTAs (Screenshot 2 & 3) */}
       <Text variant="caption" style={[styles.draftNotice, { color: theme.colors.mute }]}>

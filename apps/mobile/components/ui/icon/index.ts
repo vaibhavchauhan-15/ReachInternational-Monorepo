@@ -9,3 +9,4 @@ export * from './useIconBehavior';
 export * from './behaviors';
 export * from './createIconComponent';
 export * from './icons';
+export * from './WhatsAppIcon';

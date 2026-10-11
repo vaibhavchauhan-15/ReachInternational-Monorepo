@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
 import { Pressable } from '../ui/touch/Pressable';
+import { SearchInput } from '../ui/SearchInput';
 import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, X, Search, Building2, MapPin, User, Phone } from '../ui/icon';
@@ -111,30 +111,14 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
 
           {/* Search Input */}
           <View style={[styles.searchContainer, { borderBottomColor: theme.colors.hairline }]}>
-            <View
-              style={[
-                styles.searchInputWrap,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <Search size={14} color={theme.colors.mute} />
-              <TextInput
-                style={[styles.searchInput, bodyTypeStyle, { color: theme.colors.ink }]}
-                placeholder="Search client by name, city, address..."
-                placeholderTextColor={theme.colors.mute}
-                value={search}
-                onChangeText={setSearch}
-                autoCorrect={false}
-              />
-              {search.length > 0 && (
-                <Touchable preset="icon" onPress={() => setSearch('')}>
-                  <X size={14} color={theme.colors.mute} />
-                </Touchable>
-              )}
-            </View>
+            <SearchInput
+              value={search}
+              onChangeText={setSearch}
+              onClear={() => setSearch('')}
+              placeholder="Search client by name, city, address..."
+              placeholderTextColor={theme.colors.mute}
+              autoCorrect={false}
+            />
           </View>
 
           {/* Client List */}

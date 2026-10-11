@@ -12,7 +12,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable } from '../ui';
+import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable, showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, AlertTriangle, Clock, RefreshCw, Trash2, ShieldAlert } from '../ui/icon';
@@ -118,6 +118,7 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
       offlineQueueManager.drainQueue().catch(() => {});
 
       haptics.success();
+      showToast('success', 'Draft Updated', 'Queued draft updated and scheduled for background sync.');
       if (onResubmitSuccess) {
         onResubmitSuccess();
       }
@@ -144,6 +145,7 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
             try {
               await offlineQueueManager.removeMutation(queuedMutation.id);
               haptics.success();
+              showToast('success', 'Draft Discarded', 'Offline draft has been discarded.');
               onClose();
             } catch (err) {
               haptics.error();

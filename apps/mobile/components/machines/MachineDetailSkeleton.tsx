@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Skeleton, useTheme } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
@@ -8,7 +8,7 @@ export interface MachineDetailSkeletonProps {
 }
 
 /**
- * Full page skeleton shell matching Machine Details page (Screenshots 3 & 4):
+ * Full page skeleton shell matching Machine Details page:
  * 1. Hero Machine Banner (avatar squircle, model/serial title, machine ID, status badges)
  * 2. Segmented Toggle Capsule ([ Basic Info ]  [ HMR ])
  * 3. Basic Info Card (2x4 grid of spec cards)
@@ -19,14 +19,10 @@ export const MachineDetailSkeleton: React.FC<MachineDetailSkeletonProps> = ({
   animate = true,
 }) => {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
-  const isMobile = width <= 640;
-  const isTablet = width > 640 && width < 1024;
-  const numCols = isMobile ? 2 : isTablet ? 3 : 4;
 
   return (
     <View style={styles.container}>
-      {/* 1. Hero Machine Banner (Screenshot 3) */}
+      {/* 1. Hero Machine Banner */}
       <View
         style={[
           styles.heroCard,
@@ -49,7 +45,7 @@ export const MachineDetailSkeleton: React.FC<MachineDetailSkeletonProps> = ({
           <View style={styles.heroTitleWrap}>
             {/* Title: Model - Serial No */}
             <Skeleton
-              width={isMobile ? '80%' : 240}
+              width="80%"
               height={18}
               borderRadius={radiusNumeric.xs}
               animate={animate}
@@ -166,7 +162,7 @@ export const MachineDetailSkeleton: React.FC<MachineDetailSkeletonProps> = ({
                 {
                   backgroundColor: theme.colors.canvas,
                   borderColor: theme.colors.hairline,
-                  width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
+                  width: '48.5%',
                 },
               ]}
             >

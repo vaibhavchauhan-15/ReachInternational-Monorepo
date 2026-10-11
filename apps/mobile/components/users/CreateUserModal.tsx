@@ -5,7 +5,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform} from 'react-native';
-import { Text,  Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable } from '../ui';
+import { Text, Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable, showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -97,7 +97,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   }, [visible]);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const availableRoles = isSuperAdmin
     ? USER_ROLES
@@ -143,32 +142,31 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   ].filter(Boolean).length;
 
   const handleCreate = async () => {
-    setError('');
     if (!fullName.trim() || fullName.trim().length < 2) {
-      setError('Full Name is required (minimum 2 characters).');
+      showToast('warning', 'Validation Error', 'Full Name is required (minimum 2 characters).');
       return;
     }
     if (cleanPhone.length < 10) {
-      setError('Valid 10-digit mobile phone number is required.');
+      showToast('warning', 'Validation Error', 'Valid 10-digit mobile phone number is required.');
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      setError('Valid email address is required.');
+      showToast('warning', 'Validation Error', 'Valid email address is required.');
       return;
     }
     if (!password.trim() || password.length < 6) {
-      setError('Password must be at least 6 characters.');
+      showToast('warning', 'Validation Error', 'Password must be at least 6 characters.');
       return;
     }
     if (!street.trim() || !city.trim() || !district.trim() || !stateVal.trim()) {
-      setError('Street address, City, District, and State are required.');
+      showToast('warning', 'Validation Error', 'Street address, City, District, and State are required.');
       return;
     }
 
     if (role === 'operator') {
       const sal = Number(monthlySalary);
       if (!monthlySalary || isNaN(sal) || sal <= 0) {
-        setError('Monthly salary is mandatory for operator accounts and must be greater than 0.');
+        showToast('warning', 'Validation Error', 'Monthly salary is mandatory for operator accounts and must be greater than 0.');
         return;
       }
     }
@@ -177,7 +175,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     if (aadhaarNumber.trim()) {
       const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
       if (!aadhaarRes.isValid) {
-        setError(aadhaarRes.error || 'Invalid Aadhaar number.');
+        showToast('warning', 'Validation Error', aadhaarRes.error || 'Invalid Aadhaar number.');
         return;
       }
       cleanAadhaar = aadhaarRes.clean || null;
@@ -187,7 +185,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     if (licenseNumber.trim()) {
       const licRes = validateLicenseNumber(licenseNumber);
       if (!licRes.isValid) {
-        setError(licRes.error || 'Invalid driving licence format.');
+        showToast('warning', 'Validation Error', licRes.error || 'Invalid driving licence format.');
         return;
       }
       formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
@@ -266,11 +264,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
       haptics.success();
       notifyUserCreated(fullName.trim(), role);
+      showToast('success', 'User Created', `Account for ${fullName} has been created successfully.`);
       onSuccess();
       onClose();
     } catch (err: any) {
       haptics.error();
-      setError(err?.message || 'Failed to create user account.');
+      showToast('error', 'Creation Failed', err?.message || 'Failed to create user account.');
     } finally {
       setIsLoading(false);
     }
@@ -314,14 +313,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               Direct Account Activation: Account is instantly verified and activated upon creation. The employee can immediately log in.
             </Text>
           </View>
-
-          {error ? (
-            <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '14', borderColor: theme.colors.error + '33' }]}>
-              <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
-                {error}
-              </Text>
-            </View>
-          ) : null}
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
             {/* Section 1: Account Credentials */}
@@ -457,7 +448,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 label="Aadhaar Card Number"
                 placeholder="12-digit Aadhaar Number"
                 value={aadhaarNumber}
-                onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
+                onChangeText={(val: string) => setAadhaarNumber(formatAadhaar(val))}
                 keyboardType="number-pad"
                 maxLength={14}
                 leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
@@ -467,7 +458,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 label="Driving Licence Number"
                 placeholder="e.g. MH12 20110012345"
                 value={licenseNumber}
-                onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
+                onChangeText={(val: string) => setLicenseNumber(val.toUpperCase())}
                 autoCapitalize="characters"
                 maxLength={25}
                 leftIcon={<CreditCard size={16} color={theme.colors.mute} />}

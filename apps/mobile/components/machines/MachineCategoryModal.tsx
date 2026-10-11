@@ -4,16 +4,17 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
+import { showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
@@ -86,7 +87,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
   const handleAddCategory = async () => {
     if (!newName.trim()) {
       haptics.error();
-      Alert.alert('Required Field', 'Please enter a category name.');
+      showToast('warning', 'Required Field', 'Please enter a category name.');
       return;
     }
 
@@ -100,22 +101,23 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
       if (error) {
         haptics.error();
         if (error.code === '23505') {
-          Alert.alert('Duplicate Category', `Category "${newName.trim()}" already exists.`);
+          showToast('warning', 'Duplicate Category', `Category "${newName.trim()}" already exists.`);
           return;
         }
         throw error;
       }
 
       haptics.success();
+      const addedName = newName.trim();
       setNewName('');
       setNewDesc('');
       setShowAddForm(false);
       await fetchCategories();
       onCategoriesChanged?.();
-      Alert.alert('Success', `Category "${newName.trim()}" added successfully.`);
+      showToast('success', 'Category Added', `Category "${addedName}" added successfully.`);
     } catch (err: any) {
       haptics.error();
-      Alert.alert('Error', err?.message || 'Failed to add category.');
+      showToast('error', 'Error', err?.message || 'Failed to add category.');
     } finally {
       setIsAdding(false);
     }
@@ -142,11 +144,12 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
               if (error) throw error;
 
               haptics.success();
+              showToast('success', 'Category Deleted', `Category "${cat.name}" has been deleted.`);
               await fetchCategories();
               onCategoriesChanged?.();
             } catch (err: any) {
               haptics.error();
-              Alert.alert('Error', err?.message || 'Failed to delete category.');
+              showToast('error', 'Error', err?.message || 'Failed to delete category.');
             } finally {
               setDeletingId(null);
             }
@@ -193,7 +196,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
               <View style={[styles.formCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                 <Text variant="subheading" style={[styles.formTitle, { color: theme.colors.ink }]}>New Category Details</Text>
                 
-                <TextInput
+                <Input
                   style={[
                     styles.textInput,
                     bodyTypeStyle,
@@ -210,7 +213,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
                   autoFocus
                 />
 
-                <TextInput
+                <Input
                   style={[
                     styles.textInput,
                     styles.textArea,

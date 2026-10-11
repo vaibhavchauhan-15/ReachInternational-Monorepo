@@ -39,6 +39,7 @@ interface AssistedShiftEntryModalProps {
   onClose: () => void;
   row: TodayShiftMonitorRow | null;
   userRole?: string;
+  selectedDate?: string;
   onSuccess: (data?: AssistedShiftEntrySuccessData) => void;
 }
 
@@ -47,12 +48,13 @@ export function AssistedShiftEntryModal({
   onClose,
   row,
   userRole,
+  selectedDate,
   onSuccess,
 }: AssistedShiftEntryModalProps) {
 
   const { toast } = useToast();
 
-  const [logDate, setLogDate] = useState<string>(() => getISTDateString());
+  const [logDate, setLogDate] = useState<string>(() => row?.log_date || selectedDate || getISTDateString());
   const [startMeter, setStartMeter] = useState<string>("0");
   const [endMeter, setEndMeter] = useState<string>("");
   const [isStartMeterLocked, setIsStartMeterLocked] = useState<boolean>(true);
@@ -155,7 +157,7 @@ export function AssistedShiftEntryModal({
   // Initialize/reset form state when a new row is opened
   useEffect(() => {
     if (row && open) {
-      setLogDate(row.log_date || getISTDateString());
+      setLogDate(row.log_date || selectedDate || getISTDateString());
       const initialHmr = row.current_meter != null ? String(row.current_meter) : "0";
       setStartMeter(initialHmr);
       setEndMeter(initialHmr);

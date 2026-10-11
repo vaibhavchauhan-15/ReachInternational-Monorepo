@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useTransition, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getTodayShiftMonitorAction } from "@/app/actions/operators";
-import { Badge, useToast, Button, EmptyState } from "@/components/ui";
+import { Badge, useToast, Button, EmptyState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
-import { getISTDateString } from "@reachinternational/utils";
+import { getISTDateString, formatDate } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow } from "@/lib/data/operations/today-shift-monitor";
 import type { User, CRMClient, Machine } from "@/lib/types/database";
-import { RefreshCw, UserCheck, Clock, AlertCircle, UserPlus } from "lucide-react";
+import { UserCheck, Clock, AlertCircle, UserPlus, Calendar } from "lucide-react";
 import { ClipboardCheck } from "@/components/icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import dynamic from "next/dynamic";
@@ -36,6 +36,7 @@ interface TodayShiftMonitorProps {
   dbClients?: CRMClient[];
   operators?: User[];
   initialRows?: TodayShiftMonitorRow[];
+  initialDate?: string;
 }
 
 export function TodayShiftMonitorTab({
@@ -45,13 +46,14 @@ export function TodayShiftMonitorTab({
   dbClients = [],
   operators = [],
   initialRows,
+  initialDate,
 }: TodayShiftMonitorProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [rows, setRows] = useState<TodayShiftMonitorRow[]>(initialRows || []);
   const [loading, setLoading] = useState(!initialRows);
-  const [isPending, startTransition] = useTransition();
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "entered" | "unassigned">("all");
+  const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [selectedRowForEntry, setSelectedRowForEntry] = useState<TodayShiftMonitorRow | null>(null);
@@ -61,25 +63,36 @@ export function TodayShiftMonitorTab({
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Sync selectedDate with initialDate prop if it changes
+  useEffect(() => {
+    if (initialDate && initialDate !== selectedDate) {
+      setSelectedDate(initialDate);
+    }
+  }, [initialDate]);
+
   // Permission Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs
   const effectiveRole = userRole || user?.role || "";
   const canEnterLog = ["super_admin", "admin", "manager"].includes(effectiveRole);
 
-  const fetchData = useCallback(async (search?: string, bypassCache: boolean = true) => {
-    if (!search && !initialRows) setLoading(true);
-    else if (search) setIsSearching(true);
-    try {
-      const result = await getTodayShiftMonitorAction(undefined, search || undefined, bypassCache);
-      if (result.success && result.data) {
-        setRows(result.data);
+  const fetchData = useCallback(
+    async (dateToFetch?: string, search?: string, bypassCache: boolean = true) => {
+      const targetDate = dateToFetch !== undefined ? dateToFetch : selectedDate;
+      if (!search && !initialRows) setLoading(true);
+      else if (search) setIsSearching(true);
+      try {
+        const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache);
+        if (result.success && result.data) {
+          setRows(result.data);
+        }
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
+        setIsSearching(false);
       }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-      setIsSearching(false);
-    }
-  }, [initialRows]);
+    },
+    [initialRows, selectedDate]
+  );
 
   useEffect(() => {
     if (!initialRows) {
@@ -90,10 +103,10 @@ export function TodayShiftMonitorTab({
   // Auto-refresh every 30 seconds (fallback polling when not searching)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!searchQuery.trim()) fetchData(undefined, true);
+      if (!searchQuery.trim()) fetchData(selectedDate, undefined, true);
     }, 30_000);
     return () => clearInterval(interval);
-  }, [fetchData, searchQuery]);
+  }, [fetchData, searchQuery, selectedDate]);
 
   // Real-time broadcast listener for instant roster revalidation
   useEffect(() => {
@@ -102,20 +115,20 @@ export function TodayShiftMonitorTab({
 
     rosterChannel
       .on("broadcast", { event: "assignment_changed" }, () => {
-        fetchData(searchQuery.trim() || undefined, true);
+        fetchData(selectedDate, searchQuery.trim() || undefined, true);
       })
       .on("broadcast", { event: "roster_updated" }, () => {
-        fetchData(searchQuery.trim() || undefined, true);
+        fetchData(selectedDate, searchQuery.trim() || undefined, true);
       })
       .on("broadcast", { event: "log_entered" }, () => {
-        fetchData(searchQuery.trim() || undefined, true);
+        fetchData(selectedDate, searchQuery.trim() || undefined, true);
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(rosterChannel);
     };
-  }, [fetchData, searchQuery]);
+  }, [fetchData, searchQuery, selectedDate]);
 
 
   // Debounced server-side search
@@ -123,9 +136,9 @@ export function TodayShiftMonitorTab({
     setSearchQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchData(value.trim() || undefined);
+      fetchData(selectedDate, value.trim() || undefined);
     }, 300);
-  }, [fetchData]);
+  }, [fetchData, selectedDate]);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -184,6 +197,16 @@ export function TodayShiftMonitorTab({
     const unassigned = rows.filter((r) => r.status === "unassigned").length;
     return { total, entered, pending, unassigned };
   }, [rows]);
+
+  const statusOptions: FilterDropdownOption[] = useMemo(
+    () => [
+      { value: "all", label: "All", count: summary.total },
+      { value: "pending", label: "Pending", dotColor: "bg-amber-500", count: summary.pending },
+      { value: "entered", label: "Entered", dotColor: "bg-emerald-500", count: summary.entered },
+      { value: "unassigned", label: "Unassigned", dotColor: "bg-rose-500", count: summary.unassigned },
+    ],
+    [summary]
+  );
 
   const handleEnterLog = useCallback((row: TodayShiftMonitorRow) => {
     setSelectedRowForEntry(row);
@@ -268,35 +291,58 @@ export function TodayShiftMonitorTab({
         );
       }
       // Re-fetch 100% authoritative data directly from DB
-      fetchData(searchQuery.trim() || undefined, true);
+      fetchData(selectedDate, searchQuery.trim() || undefined, true);
       router.refresh();
     },
-    [fetchData, searchQuery, user, router]
+    [fetchData, searchQuery, selectedDate, user, router]
   );
 
-  const handleRefresh = useCallback(() => {
-    startTransition(() => {
-      fetchData(searchQuery.trim() || undefined, true);
-      router.refresh();
-    });
-  }, [fetchData, searchQuery, router]);
+  const handleDateChange = useCallback(
+    (newDate: string) => {
+      if (!newDate || newDate === selectedDate) return;
+      setSelectedDate(newDate);
+      fetchData(newDate, searchQuery.trim() || undefined, true);
 
+      try {
+        const url = new URL(window.location.href);
+        if (newDate === getISTDateString()) {
+          url.searchParams.delete("date");
+        } else {
+          url.searchParams.set("date", newDate);
+        }
+        router.replace(url.pathname + url.search, { scroll: false });
+      } catch {
+        // fallback
+      }
+    },
+    [selectedDate, searchQuery, fetchData, router]
+  );
 
   const handleResetFilters = useCallback(() => {
     setStatusFilter("all");
     setSearchQuery("");
+    const todayStr = getISTDateString();
+    setSelectedDate(todayStr);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("date");
+      router.replace(url.pathname + url.search, { scroll: false });
+    } catch {
+      // fallback
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    fetchData();
-  }, [fetchData]);
+    fetchData(todayStr, undefined, true);
+  }, [fetchData, router]);
 
-  const activeFilterCount = (statusFilter !== "all" ? 1 : 0);
+  const isDateFiltered = selectedDate !== getISTDateString();
+  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (isDateFiltered ? 1 : 0);
 
   if (loading) {
     return (
       <div className="space-y-3">
         {/* KPI skeleton */}
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-20 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] animate-pulse" />
           ))}
         </div>
@@ -310,47 +356,27 @@ export function TodayShiftMonitorTab({
     );
   }
 
-  if (rows.length === 0 && !searchQuery.trim()) {
-    return (
-      <div className="space-y-4">
-        <EmptyState
-          icon={<ClipboardCheck className="w-10 h-10 text-sky-500" />}
-          title="No Shift Roster Found"
-          description="No active machines with assigned operators and shift codes found for today."
-          action={
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setAssignModalMachineId(undefined);
-                setIsAssignModalOpen(true);
-              }}
-              className="mt-2 flex items-center gap-1.5 h-10 px-4 text-xs font-semibold cursor-pointer"
-            >
-              <UserPlus size={14} />
-              <span>Assign Personnel</span>
-            </Button>
-          }
-        />
-        <AssignOperatorModal
-          isOpen={isAssignModalOpen}
-          onClose={() => {
-            setIsAssignModalOpen(false);
-            setAssignModalMachineId(undefined);
-          }}
-          machines={combinedMachines}
-          operators={operators}
-          initialMachineId={assignModalMachineId}
-          onSuccess={() => {
-            fetchData();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      {/* Active Historical Date Banner */}
+      {isDateFiltered && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl border border-sky-500/25 bg-sky-500/10 text-xs">
+          <div className="flex items-center gap-2 text-sky-800 dark:text-sky-200 font-medium">
+            <Calendar size={14} className="shrink-0 text-sky-600 dark:text-sky-400" />
+            <span>
+              Viewing shift logs for <strong>{formatDate(selectedDate)}</strong> ({selectedDate})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleDateChange(getISTDateString())}
+            className="text-xs font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer self-start sm:self-auto"
+          >
+            Return to Today
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4">
@@ -385,46 +411,77 @@ export function TodayShiftMonitorTab({
         activeFilterCount={activeFilterCount}
         onResetFilters={handleResetFilters}
         isLoading={isSearching}
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={isPending}
-              className="h-11 sm:h-9 w-11 sm:w-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] flex items-center justify-center hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-              title="Refresh"
-            >
-              <RefreshCw size={14} className={`text-muted-foreground ${isPending ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-        }
       >
-        {/* Status Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Status</span>
-          {(["all", "pending", "entered", "unassigned"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-colors cursor-pointer ${
-                statusFilter === f
-                  ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-transparent"
-                  : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:bg-[var(--color-canvas)]"
-              }`}
-            >
-              {f === "all"
-                ? `All (${summary.total})`
-                : f === "pending"
-                ? `Pending (${summary.pending})`
-                : f === "entered"
-                ? `Entered (${summary.entered})`
-                : `Unassigned (${summary.unassigned})`}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full">
+          {/* Date Picker Filter (Kept only CustomDatePicker as requested) */}
+          <div className="w-full sm:w-60 md:w-64 min-w-0">
+            <CustomDatePicker
+              value={selectedDate}
+              onChange={handleDateChange}
+              allowAnyPast={true}
+              allowFutureDays={0}
+              showRelativeBadge={true}
+              placeholder="Select date..."
+            />
+          </div>
+
+          {/* Status Dropdown Filter (Custom existing FilterDropdown instead of horizontal spread, responsive for mobile devices) */}
+          <div className="w-full sm:w-56 min-w-0">
+            <FilterDropdown
+              label="Status"
+              value={statusFilter}
+              onChange={(val) => setStatusFilter(val as any)}
+              options={statusOptions}
+              className="w-full"
+              dropdownClassName="w-full sm:w-56"
+            />
+          </div>
         </div>
       </FilterToolbar>
 
-      {/* Desktop Table */}
-      <div className="hidden sm:block rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
+      {/* Content: Empty State when 0 rows, otherwise Table and Cards */}
+      {rows.length === 0 ? (
+        <div className="py-6">
+          <EmptyState
+            icon={<ClipboardCheck className="w-10 h-10 text-sky-500" />}
+            title={isDateFiltered ? `No Shift Logs for ${formatDate(selectedDate)}` : "No Shift Roster Found"}
+            description={
+              isDateFiltered
+                ? `No shift logs were recorded or rostered for ${formatDate(selectedDate)} (${selectedDate}).`
+                : "No active machines with assigned operators and shift codes found for today."
+            }
+            action={
+              isDateFiltered ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDateChange(getISTDateString())}
+                  className="mt-2 flex items-center gap-1.5 h-10 px-4 text-xs font-semibold cursor-pointer"
+                >
+                  <Calendar size={14} />
+                  <span>Return to Today</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setAssignModalMachineId(undefined);
+                    setIsAssignModalOpen(true);
+                  }}
+                  className="mt-2 flex items-center gap-1.5 h-10 px-4 text-xs font-semibold cursor-pointer"
+                >
+                  <UserPlus size={14} />
+                  <span>Assign Personnel</span>
+                </Button>
+              )
+            }
+          />
+        </div>
+      ) : (
+        <>
+          {/* Desktop Table */}
+          <div className="hidden sm:block rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
@@ -742,6 +799,8 @@ export function TodayShiftMonitorTab({
           })
         )}
       </div>
+    </>
+  )}
 
       {/* Assisted Shift Entry Modal */}
       <AssistedShiftEntryModal
@@ -749,6 +808,7 @@ export function TodayShiftMonitorTab({
         onClose={() => setSelectedRowForEntry(null)}
         row={selectedRowForEntry}
         userRole={effectiveRole}
+        selectedDate={selectedDate}
         onSuccess={handleEnterLogSuccess}
       />
 
@@ -763,17 +823,18 @@ export function TodayShiftMonitorTab({
         operators={operators}
         initialMachineId={assignModalMachineId}
         onSuccess={() => {
-          fetchData();
+          fetchData(selectedDate, undefined, true);
         }}
       />
 
-      {/* Today's Shift Logs Export Modal (Excel & PDF) */}
+      {/* Shift Logs Export Modal (Excel & PDF) */}
       {isExportModalOpen && (
         <TodayShiftExportModal
           open={isExportModalOpen}
           onClose={() => setIsExportModalOpen(false)}
           rows={filtered.length < rows.length && filtered.length > 0 ? filtered : rows}
           user={user}
+          dateStr={selectedDate}
         />
       )}
     </div>

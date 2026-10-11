@@ -7,7 +7,11 @@
  * synchronously BEFORE react-native-web evaluates module stylesheets.
  */
 
-const IGNORED_WARNING_PATTERNS = [
+const IGNORED_WARNING_PATTERNS: (string | RegExp)[] = [
+  'Cannot connect to Expo CLI',
+  'Metro disconnected',
+  'Failed to connect to the dev server',
+  'Unable to connect to Metro',
   'shadow*',
   'boxShadow',
   'useNativeDriver',
@@ -17,7 +21,34 @@ const IGNORED_WARNING_PATTERNS = [
   'Invalid style property of "outline"',
   'validateDOMNesting',
   'style props are deprecated',
+  'Writing to `value` during component render',
+  '[Reanimated] Writing to `value` during component render',
+  'shared value while React is rendering a component',
+  'logger-configuration',
+  'Cannot record touch end without a touch start',
+  'Cannot record touch move without a touch start',
+  'Cannot find single active touch',
+  'Touch End:',
+  'Touch Bank:',
+  'Touch Move:',
+  '"shadow*" style props are deprecated',
+  'Use "boxShadow"',
+  'SafeAreaView has been deprecated',
 ];
+
+// Configure Reanimated Logger to disable strict mode warnings triggered by NativeWind v4 (react-native-css-interop)
+// which writes to shared values during component render when processing CSS animations/transitions.
+try {
+  const { configureReanimatedLogger, ReanimatedLogLevel } = require('react-native-reanimated');
+  if (typeof configureReanimatedLogger === 'function') {
+    configureReanimatedLogger({
+      level: ReanimatedLogLevel?.warn ?? 1,
+      strict: false,
+    });
+  }
+} catch {
+  // Ignore if react-native-reanimated is not initialized yet
+}
 
 const shouldSuppress = (args: any[]): boolean => {
   if (!args || args.length === 0) return false;
@@ -33,7 +64,15 @@ const shouldSuppress = (args: any[]): boolean => {
     })
     .join(' ');
 
-  return IGNORED_WARNING_PATTERNS.some((pattern) => fullMsg.includes(pattern));
+  return IGNORED_WARNING_PATTERNS.some((pattern) => {
+    if (typeof pattern === 'string') {
+      return fullMsg.includes(pattern);
+    }
+    if (pattern instanceof RegExp) {
+      return pattern.test(fullMsg);
+    }
+    return false;
+  });
 };
 
 if (typeof console !== 'undefined') {

@@ -33,7 +33,10 @@ try {
   assert(appJson.expo?.name === 'Reach Ops', 'app.json expo.name is Reach Ops');
   assert(appJson.expo?.android?.package === 'com.reachinternational.app', 'Android package is com.reachinternational.app');
   assert(appJson.expo?.updates?.url?.startsWith('https://u.expo.dev/'), 'EAS Update URL is configured');
-  assert(appJson.expo?.runtimeVersion?.policy === 'appVersion', 'Runtime version policy is set to appVersion');
+  assert(
+    typeof appJson.expo?.runtimeVersion === 'string' || appJson.expo?.runtimeVersion?.policy === 'appVersion',
+    'Runtime version is properly configured for bare workflow (string literal or policy)'
+  );
   assert(appJson.expo?.extra?.eas?.projectId === '40432ac1-55a2-4bfa-985e-a51562398743', 'EAS project ID is linked');
 
   // Test 2: Validate eas.json structure

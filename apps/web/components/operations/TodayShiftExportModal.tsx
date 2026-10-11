@@ -28,6 +28,7 @@ export interface TodayShiftExportModalProps {
   onClose: () => void;
   rows: TodayShiftMonitorRow[];
   user?: User;
+  dateStr?: string;
 }
 
 const formatTime12H = (t?: string | null): string => {
@@ -202,10 +203,11 @@ export function TodayShiftExportModal({
   onClose,
   rows,
   user,
+  dateStr: dateStrProp,
 }: TodayShiftExportModalProps) {
   const { toast } = useToast();
   const [mounted, setMounted] = useState(false);
-  const dateStr = useMemo(() => getISTDateString(), []);
+  const dateStr = useMemo(() => dateStrProp || getISTDateString(), [dateStrProp]);
   const userName = user?.full_name || "Manager";
 
   useEffect(() => {
@@ -216,16 +218,16 @@ export function TodayShiftExportModal({
   const entered = rows.filter((r) => r.status === "entered").length;
   const pending = rows.filter((r) => r.status === "pending").length;
 
-  const pdfFileName = `Today_Shift_Monitor_${dateStr}`;
+  const pdfFileName = `Shift_Monitor_${dateStr}`;
 
   const handleExportExcel = useCallback(() => {
     if (rows.length === 0) {
-      toast("info", "No Data", "No shifts available to export for today.");
+      toast("info", "No Data", "No shifts available to export for this date.");
       return;
     }
     try {
       exportTodayShiftLogsToExcel(rows, dateStr);
-      toast("success", "Excel Exported", `Today's shift logs saved to ${pdfFileName}.xlsx`);
+      toast("success", "Excel Exported", `Shift logs saved to ${pdfFileName}.xlsx`);
     } catch (err: any) {
       toast("error", "Export Failed", err?.message || "Failed to generate Excel file.");
     }
@@ -233,11 +235,13 @@ export function TodayShiftExportModal({
 
   const handlePrintPdf = useCallback(() => {
     if (rows.length === 0) {
-      toast("info", "No Data", "No shifts available to export for today.");
+      toast("info", "No Data", "No shifts available to export for this date.");
       return;
     }
     handleBrowserPrint(pdfFileName);
   }, [rows.length, pdfFileName, toast]);
+
+  const isToday = dateStr === getISTDateString();
 
   return (
     <>
@@ -262,7 +266,7 @@ export function TodayShiftExportModal({
         title={
           <div className="flex items-center gap-2 pr-6">
             <span className="text-base sm:text-lg font-extrabold text-[var(--color-ink)]">
-              Export Today's Shift Logs
+              {isToday ? "Export Today's Shift Logs" : `Export Shift Logs (${formatDate(dateStr)})`}
             </span>
             <Badge variant="info" className="text-[10px] font-mono px-2 py-0.5">
               {formatDate(dateStr)}

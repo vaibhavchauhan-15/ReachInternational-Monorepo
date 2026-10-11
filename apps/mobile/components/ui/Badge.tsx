@@ -1,113 +1,165 @@
 /**
- * ServiceCentric Mobile — Native Badge Primitive
- * Status badge powered by @reachinternational/design-tokens getStatusBadgeConfig.
+ * ReachInternational Mobile — React Native Reusables Badge Component
+ * Official RNR Badge primitive powered by class-variance-authority and TextClassContext.
  */
 
-import React from 'react';
-import { View, StyleSheet, type ViewStyle } from 'react-native';
-import { useTheme } from './ThemeProvider';
-import { getStatusBadgeConfig, radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Text } from './Text';
+import * as Slot from '@rn-primitives/slot';
+import type { SlottableTextProps, TextRef } from '@rn-primitives/types';
+import { cva, type VariantProps } from 'class-variance-authority';
+import * as React from 'react';
+import { View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Text, TextClassContext } from '@/components/ui/Text';
+import { cn } from '@/lib/utils';
 
-export interface BadgeProps {
-  status: string;
-  customLabel?: string;
-  size?: 'sm' | 'md';
-  uppercase?: boolean;
-  style?: ViewStyle;
-}
-
-export const Badge: React.FC<BadgeProps> = ({
-  status,
-  customLabel,
-  size = 'md',
-  uppercase = false,
-  style,
-}) => {
-  const { theme, isDark } = useTheme();
-  const config = getStatusBadgeConfig(status);
-
-  // Normalize status for special machine statuses
-  const normalizedStatus = status.toLowerCase();
-  let colorValue: string;
-
-  if (normalizedStatus === 'available') {
-    colorValue = isDark ? '#94a3b8' : '#64748b';
-  } else if (normalizedStatus === 'rented' || normalizedStatus === 'on_rent') {
-    colorValue = isDark ? '#38bdf8' : '#0284c7';
-  } else {
-    const colorsRecord = theme.colors as unknown as Record<string, string>;
-    colorValue = colorsRecord[config.colorToken] || theme.colors.link;
+const badgeVariants = cva(
+  'inline-flex flex-row items-center rounded-full border web:transition-colors web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary',
+        secondary: 'border-transparent bg-secondary',
+        destructive: 'border-transparent bg-destructive',
+        error: 'border-rose-500/20 bg-rose-500/10',
+        info: 'border-sky-500/20 bg-sky-500/10',
+        outline: 'border-border text-foreground',
+        success: 'border-emerald-500/20 bg-emerald-500/10',
+        warning: 'border-amber-500/20 bg-amber-500/10',
+        neutral: 'border-border bg-muted',
+      },
+      size: {
+        sm: 'px-2 py-0',
+        md: 'px-2.5 py-0.5',
+        lg: 'px-3 py-1',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'md',
+    },
   }
+);
 
-  const isSmall = size === 'sm';
-
-  return (
-    <View
-      style={[
-        styles.badge,
-        isSmall ? styles.badgeSm : styles.badgeMd,
-        {
-          backgroundColor: colorValue + (isDark ? '22' : '14'),
-          borderColor: colorValue + (isDark ? '45' : '30'),
-        },
-        style,
-      ]}
-    >
-      <View
-        style={[
-          styles.dot,
-          isSmall ? styles.dotSm : styles.dotMd,
-          { backgroundColor: colorValue },
-        ]}
-      />
-      <Text
-        variant="caption"
-        style={{
-          color: colorValue,
-          textTransform: uppercase ? 'uppercase' : 'none',
-        }}
-        numberOfLines={1}
-      >
-        {customLabel || config.label}
-      </Text>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
+const badgeTextVariants = cva('font-semibold', {
+  variants: {
+    variant: {
+      default: 'text-primary-foreground',
+      secondary: 'text-secondary-foreground',
+      destructive: 'text-destructive-foreground',
+      error: 'text-rose-700 dark:text-rose-400',
+      info: 'text-sky-700 dark:text-sky-400',
+      outline: 'text-foreground',
+      success: 'text-emerald-700 dark:text-emerald-400',
+      warning: 'text-amber-700 dark:text-amber-400',
+      neutral: 'text-muted-foreground',
+    },
+    size: {
+      sm: 'text-[10px]',
+      md: 'text-xs',
+      lg: 'text-sm',
+    },
   },
-  badgeSm: {
-    paddingVertical: 2.5,
-    paddingHorizontal: 8,
-    minHeight: 22,
-    height: 22,
-    gap: 5,
-  },
-  badgeMd: {
-    paddingVertical: 3,
-    paddingHorizontal: 9,
-    minHeight: 24,
-    height: 24,
-    gap: 5.5,
-  },
-  dot: {
-    borderRadius: 9999,
-  },
-  dotSm: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  dotMd: {
-    width: 5.5,
-    height: 5.5,
-    borderRadius: 3,
+  defaultVariants: {
+    variant: 'default',
+    size: 'md',
   },
 });
+
+export type BadgeProps = ViewProps &
+  VariantProps<typeof badgeVariants> & {
+    className?: string;
+    textClassName?: string;
+    label?: string;
+    customLabel?: string;
+    status?: string;
+    size?: 'sm' | 'md' | 'lg';
+    dot?: boolean;
+    style?: StyleProp<ViewStyle>;
+  };
+
+const STATUS_VARIANT_MAP: Record<string, 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {
+  active: 'success',
+  completed: 'success',
+  verified: 'success',
+  running: 'success',
+  present: 'success',
+  pending: 'warning',
+  warning: 'warning',
+  paused: 'warning',
+  in_progress: 'warning',
+  half_day: 'warning',
+  inactive: 'neutral',
+  archived: 'neutral',
+  rest_day: 'neutral',
+  week_off: 'neutral',
+  error: 'error',
+  failed: 'error',
+  rejected: 'error',
+  stopped: 'error',
+  maintenance: 'error',
+  breakdown: 'error',
+  absent: 'error',
+  destructive: 'destructive',
+  info: 'info',
+  draft: 'neutral',
+};
+
+const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<View>> = React.forwardRef(
+  (
+    {
+      className,
+      textClassName,
+      variant,
+      size = 'md',
+      status,
+      label,
+      customLabel,
+      dot = false,
+      children,
+      style,
+      ...props
+    }: BadgeProps,
+    ref
+  ) => {
+    let effectiveVariant = variant ?? 'default';
+    if (!variant && status && STATUS_VARIANT_MAP[status]) {
+      effectiveVariant = STATUS_VARIANT_MAP[status];
+    }
+
+    const displayText = customLabel || label;
+
+    return (
+      <TextClassContext.Provider
+        value={cn(badgeTextVariants({ variant: effectiveVariant, size }), textClassName)}
+      >
+        <View
+          ref={ref}
+          className={cn(badgeVariants({ variant: effectiveVariant, size }), className)}
+          style={style}
+          {...props}
+        >
+          {dot && (
+            <View
+              className={cn(
+                'h-1.5 w-1.5 rounded-full mr-1.5',
+                effectiveVariant === 'success' && 'bg-emerald-500',
+                effectiveVariant === 'warning' && 'bg-amber-500',
+                effectiveVariant === 'destructive' && 'bg-destructive',
+                effectiveVariant === 'error' && 'bg-rose-500',
+                effectiveVariant === 'info' && 'bg-sky-500',
+                effectiveVariant === 'default' && 'bg-primary-foreground',
+                effectiveVariant === 'neutral' && 'bg-muted-foreground',
+                effectiveVariant === 'outline' && 'bg-foreground'
+              )}
+            />
+          )}
+          {displayText ? <Text>{displayText}</Text> : children}
+        </View>
+      </TextClassContext.Provider>
+    );
+  }
+);
+
+Badge.displayName = 'Badge';
+
+export { Badge, badgeVariants, badgeTextVariants };
+export default Badge;

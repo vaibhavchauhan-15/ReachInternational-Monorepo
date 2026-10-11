@@ -39,13 +39,20 @@ export const OverlayHostProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeCount, setActiveCount] = useState(0);
 
   const registerOverlay = useCallback((instance: OverlayInstance) => {
-    stackRef.current = [...stackRef.current.filter((o) => o.id !== instance.id), instance];
+    const existingIndex = stackRef.current.findIndex((o) => o.id === instance.id);
+    if (existingIndex >= 0) {
+      stackRef.current[existingIndex] = instance;
+      return;
+    }
+    stackRef.current = [...stackRef.current, instance];
     setActiveCount(stackRef.current.length);
   }, []);
 
   const unregisterOverlay = useCallback((id: string) => {
-    stackRef.current = stackRef.current.filter((o) => o.id !== id);
-    setActiveCount(stackRef.current.length);
+    const nextStack = stackRef.current.filter((o) => o.id !== id);
+    if (nextStack.length === stackRef.current.length) return;
+    stackRef.current = nextStack;
+    setActiveCount(nextStack.length);
   }, []);
 
   // Intercept Android hardware back button
@@ -67,14 +74,21 @@ export const OverlayHostProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return () => sub.remove();
   }, []);
 
+  const value = React.useMemo(
+    () => ({ registerOverlay, unregisterOverlay, activeCount }),
+    [registerOverlay, unregisterOverlay, activeCount]
+  );
+
   return (
-    <OverlayHostContext.Provider value={{ registerOverlay, unregisterOverlay, activeCount }}>
+    <OverlayHostContext.Provider value={value}>
       <View style={styles.container}>
         {children}
       </View>
     </OverlayHostContext.Provider>
   );
 };
+
+export const OverlayHost = OverlayHostProvider;
 
 const styles = StyleSheet.create({
   container: {

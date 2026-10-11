@@ -23,7 +23,7 @@ export interface SupervisorDashboardCardProps {
 export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = ({
   data,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const submitted = data?.todayLogs?.submitted ?? 0;
   const pending = data?.todayLogs?.pending ?? 0;
@@ -36,7 +36,10 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
     <View style={styles.container}>
       {/* Team Scope & Shift Submissions */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           MY SUPERVISED FLEET & TEAM
         </Text>
         <KPIGrid columns={4}>
@@ -44,28 +47,24 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
             label="Machines"
             value={assignedMachines}
             icon={Wrench}
-            href="/machines"
             variant="default"
           />
           <KPICard
             label="Field Operators"
             value={assignedOperators}
             icon={Users}
-            href="/operations"
             variant="info"
           />
           <KPICard
             label="Logs Submitted"
             value={submitted}
             icon={CheckCircle2}
-            href="/operations"
             variant="success"
           />
           <KPICard
             label="Logs Pending"
             value={pending}
             icon={Clock}
-            href="/operations"
             variant={pending > 0 ? 'warning' : 'default'}
           />
         </KPIGrid>
@@ -73,7 +72,10 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
 
       {/* Daily Field Exceptions */}
       <View style={styles.section}>
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text
+          variant="caption"
+          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+        >
           FIELD EXCEPTIONS & SHIFT METRICS
         </Text>
         <KPIGrid columns={2}>
@@ -86,7 +88,6 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
                 ? 'Machinery downtime reported on site today. Review logs.'
                 : 'All supervised machinery operating normally.'
             }
-            href="/operations"
           />
           <StatusCard
             title="Overtime Shifts"
@@ -101,7 +102,6 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
                 ? 'Operators working beyond configured shift parameters.'
                 : 'All shifts operating within normal hours.'
             }
-            href="/operations"
           />
         </KPIGrid>
       </View>
@@ -118,6 +118,6 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 2,
+    marginBottom: spacingNumeric.xs + 4,
   },
 });

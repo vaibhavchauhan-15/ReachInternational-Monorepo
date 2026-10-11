@@ -24,7 +24,7 @@ export function EntryHeader({
         items={[
           {
             id: "entry",
-            label: "Log Entry",
+            label: "Shift",
           },
           {
             id: "history",

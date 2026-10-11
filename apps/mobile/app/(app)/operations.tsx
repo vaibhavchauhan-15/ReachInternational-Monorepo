@@ -11,7 +11,7 @@ import {
   LayoutAnimation} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle, useToast } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -146,6 +146,7 @@ export default function OperationsScreen() {
   const { role, user, userProfile } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const isHr = (role || '').toLowerCase() === 'hr';
   const isOperator = (role || '').toLowerCase() === 'operator';
@@ -360,7 +361,7 @@ export default function OperationsScreen() {
 
   const handleDeleteLog = useCallback((log: HourLogRecord) => {
     if (!isSuperAdmin) {
-      Alert.alert('Permission Denied', 'Only Super Admin is authorized to delete daily running hour logs.');
+      toast('error', 'Permission Denied', 'Only Super Admin is authorized to delete daily running hour logs.');
       return;
     }
     Alert.alert(
@@ -394,7 +395,7 @@ export default function OperationsScreen() {
                 // Rollback
                 setLogs(previousLogs);
                 queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
-                Alert.alert('Error', error.message || 'Failed to delete log');
+                toast('error', 'Delete Failed', error.message || 'Failed to delete log.');
                 return;
               }
               if (log.machine_id) {
@@ -413,11 +414,12 @@ export default function OperationsScreen() {
                     .eq('id', log.machine_id);
                 }
               }
+              toast('success', 'Daily Log Deleted', `The running hour log for ${log.machine?.model || log.machine_code || 'equipment'} has been deleted.`);
               refetchLogs();
             } catch (err: any) {
               setLogs(previousLogs);
               queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
-              Alert.alert('Error', err?.message || 'Failed to delete log');
+              toast('error', 'Delete Failed', err?.message || 'Failed to delete log.');
             }
           },
         },
@@ -790,7 +792,7 @@ export default function OperationsScreen() {
         <View style={styles.segmentedToggleWrapper}>
           <SegmentedToggle<'entry' | 'history'>
             items={[
-              { id: 'entry', label: 'Log Entry' },
+              { id: 'entry', label: 'Shift' },
               {
                 id: 'history',
                 label: 'Log History',

@@ -205,7 +205,7 @@ function formatOperatorDatabaseError(error: any): string {
       details.includes("Cannot log before shift end") ||
       msg.includes("before shift end")
     ) {
-      return "Cannot log before shift end.";
+      return "Shift has not ended yet. Shift logs can only be submitted after your shift ends.";
     }
     return "The entered values violate database consistency rules. Please verify meter readings and shift times.";
   }

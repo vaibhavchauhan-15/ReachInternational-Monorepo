@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 
 export interface OperationsPageSearchParams {
   tab?: string;
+  date?: string;
 }
 
 export default async function OperationsPage(props: {
@@ -31,6 +32,10 @@ export default async function OperationsPage(props: {
   const rawTab = searchParams?.tab;
   const currentTab = typeof rawTab === "string" ? rawTab : Array.isArray(rawTab) ? rawTab[0] : undefined;
 
+  const rawDate = searchParams?.date;
+  const parsedDate = typeof rawDate === "string" ? rawDate : Array.isArray(rawDate) ? rawDate[0] : undefined;
+  const currentDate = parsedDate && /^\d{4}-\d{2}-\d{2}$/.test(parsedDate) ? parsedDate : undefined;
+
   // Fast Path: Operator Entry/History landing loads ONLY the lightweight entry context
   if (user?.role === "operator") {
     const entryContext = await getOperatorEntryContext(user.id);
@@ -43,9 +48,9 @@ export default async function OperationsPage(props: {
     );
   }
 
-  // Dedicated Today's Shift Logs view for supervisors, managers, admins, and HR
+  // Dedicated Shift Logs view for supervisors, managers, admins, and HR
   const [initialTodayRows, machineRes, dbClients, activeOperators] = await Promise.all([
-    getTodayShiftLogMonitor(user.id),
+    getTodayShiftLogMonitor(user.id, currentDate),
     getMachines({ pageSize: 100 }),
     getClients(),
     getActiveOperators(),
@@ -59,6 +64,7 @@ export default async function OperationsPage(props: {
       dbClients={dbClients}
       operators={activeOperators}
       initialTodayRows={initialTodayRows}
+      initialDate={currentDate}
     />
   );
 }

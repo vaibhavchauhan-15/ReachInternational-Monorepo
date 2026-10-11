@@ -3,16 +3,16 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
-import { Text, useTypeStyle } from '../ui';
+import { Text } from '../ui';
+import { SearchInput } from '../ui/SearchInput';
 import { Pressable } from '../ui/touch/Pressable';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { Check, X, Search } from '../ui/icon';
+import { Check, X } from '../ui/icon';
 
 export interface FilterSelectOption {
   id: string;
@@ -45,7 +45,6 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
   showSearch = true,
 }) => {
   const { theme, isDark } = useTheme();
-  const bodyTypeStyle = useTypeStyle('body');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredOptions = useMemo(() => {
@@ -107,35 +106,12 @@ export const OperationsFilterSelectorModal: React.FC<OperationsFilterSelectorMod
                 {/* Search Input */}
                 {showSearch && (
                   <View style={[styles.searchWrap, { borderBottomColor: theme.colors.hairline }]}>
-                    <Search size={14} color={theme.colors.mute} style={styles.searchIcon} />
-                    <TextInput
-                      style={[
-                        styles.searchInput,
-                        bodyTypeStyle,
-                        {
-                          color: theme.colors.ink,
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                      placeholder={searchPlaceholder}
-                      placeholderTextColor={theme.colors.mute}
+                    <SearchInput
                       value={searchTerm}
                       onChangeText={setSearchTerm}
-                      autoCapitalize="none"
-                      autoCorrect={false}
+                      onClear={() => setSearchTerm('')}
+                      placeholder={searchPlaceholder}
                     />
-                    {searchTerm.length > 0 && (
-                      <Pressable
-                        variant="iconButton"
-                        haptic="tap"
-                        hitSlopToMin48={true}
-                        onPress={() => setSearchTerm('')}
-                        style={styles.clearSearchBtn}
-                      >
-                        <X size={12} color={theme.colors.mute} />
-                      </Pressable>
-                    )}
                   </View>
                 )}
 
@@ -315,30 +291,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
     borderBottomWidth: 1,
-    position: 'relative',
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: spacingNumeric.md + 10,
-    zIndex: 1,
-  },
-  searchInput: {
-    flex: 1,
-    height: 38,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    paddingLeft: 34,
-    paddingRight: 32,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      } as any,
-    }),
-  },
-  clearSearchBtn: {
-    position: 'absolute',
-    right: spacingNumeric.md + 10,
-    padding: 4,
   },
   optionsList: {
     maxHeight: 400,

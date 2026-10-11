@@ -25,6 +25,7 @@ import {
 import type { UserRole } from "@reachinternational/types";
 import { logout } from "@/app/actions/auth";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { isRedirectError } from "@/lib/utils";
 
 const MobileMenuDrawer = dynamic(() => import("./MobileMenuDrawer"));
 
@@ -53,6 +54,7 @@ export function BottomNav({ role, user }: { role: UserRole; user?: { full_name?:
   const { primary, more, hasMore } = getNavForRole(role);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Build tab list: primary items + More/Account as last slot
   const tabs = [
@@ -199,15 +201,26 @@ export function BottomNav({ role, user }: { role: UserRole; user?: { full_name?:
       {logoutConfirmOpen && (
         <ConfirmationDialog
           isOpen={logoutConfirmOpen}
-          onClose={() => setLogoutConfirmOpen(false)}
+          onClose={() => {
+            if (!isLoggingOut) setLogoutConfirmOpen(false);
+          }}
           title="Sign Out"
           description="Are you sure you want to sign out?"
-          confirmLabel="Sign Out"
+          confirmLabel={isLoggingOut ? "Signing Out..." : "Sign Out"}
           cancelLabel="Cancel"
           variant="danger"
-          onConfirm={() => {
-            setLogoutConfirmOpen(false);
-            logout();
+          loading={isLoggingOut}
+          onConfirm={async () => {
+            try {
+              setIsLoggingOut(true);
+              await logout();
+            } catch (err) {
+              if (isRedirectError(err)) {
+                return;
+              }
+              console.error("[BottomNav] Logout error:", err);
+              setIsLoggingOut(false);
+            }
           }}
         />
       )}

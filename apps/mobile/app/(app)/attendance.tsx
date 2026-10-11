@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   Alert,
   Platform,
   RefreshControl,
@@ -13,10 +12,11 @@ import { Pressable } from '../../components/ui/touch/Pressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid, type HeaderActionItem , Text, AppModal } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid, type HeaderActionItem , Text, AppModal, SearchInput, useToast } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { AttendanceListSkeleton, AttendanceDetailSkeleton } from '../../components/attendance';
 import { supabase } from '../../lib/supabase';
+import { getAttendanceDailyDetail } from '../../lib/queries/attendance';
 import {
   CalendarCheck,
   Calendar,
@@ -131,6 +131,7 @@ const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function AttendanceScreen() {
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -141,7 +142,7 @@ export default function AttendanceScreen() {
 
   useEffect(() => {
     if (role && !isAllowed) {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [role, isAllowed, router]);
 
@@ -201,21 +202,8 @@ export default function AttendanceScreen() {
           setRefreshing(false);
           return;
         }
-        const { data, error } = await supabase.rpc('get_attendance_daily_detail', {
-          p_employee_id: user.id,
-          p_year: y,
-          p_month: m,
-        });
-
-        if (error) {
-          console.error('[AttendanceScreen] Operator fetch error:', error);
-          Alert.alert('Error', error.message || 'Failed to fetch attendance data');
-        } else if (data && !('error' in (data as any))) {
-          setDetailData(data as unknown as AttendanceDetailData);
-        } else if (data && 'error' in (data as any)) {
-          console.warn('[AttendanceScreen] Operator fetch returned error:', (data as any).error);
-          Alert.alert('Attendance', (data as any).error || 'Unable to load attendance data');
-        }
+        const data = await getAttendanceDailyDetail(user.id, y, m);
+        setDetailData(data);
       } else {
         const { data, error } = await supabase.rpc('get_attendance_monthly_summary', {
           p_year: y,
@@ -226,7 +214,7 @@ export default function AttendanceScreen() {
 
         if (error) {
           console.error('[AttendanceScreen] Fetch error:', error);
-          Alert.alert('Error', error.message || 'Failed to fetch attendance data');
+          toast('error', 'Error', error.message || 'Failed to fetch attendance data');
         } else if (data) {
           setEmployees(data.rows || []);
           if (data.kpis) {
@@ -240,7 +228,7 @@ export default function AttendanceScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [normalizedRole, user?.id]);
+  }, [normalizedRole, user?.id, toast]);
 
   useEffect(() => {
     if (isAllowed) {
@@ -282,20 +270,11 @@ export default function AttendanceScreen() {
     setDetailLoading(true);
     setDetailData(null);
     try {
-      const { data, error } = await supabase.rpc('get_attendance_daily_detail', {
-        p_employee_id: emp.employee_id,
-        p_year: year,
-        p_month: month,
-      });
-      if (error) {
-        Alert.alert('Error', error.message || 'Failed to load employee detail');
-      } else if (data && !('error' in (data as any))) {
-        setDetailData(data as unknown as AttendanceDetailData);
-      } else if (data && 'error' in (data as any)) {
-        Alert.alert('Attendance', (data as any).error || 'Unable to load employee detail');
-      }
+      const data = await getAttendanceDailyDetail(emp.employee_id, year, month);
+      setDetailData(data);
     } catch (err: any) {
       console.error('[AttendanceDetail] Error:', err);
+      toast('error', 'Attendance', 'Unable to load employee detail');
     } finally {
       setDetailLoading(false);
     }
@@ -375,41 +354,23 @@ export default function AttendanceScreen() {
   ) => {
     switch (status) {
       case 'PRESENT':
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.3)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: '#16a34a' }]} />
-            <Text style={[styles.statusBadgeText, { color: '#16a34a' }]}>Present</Text>
-          </View>
-        );
+        return <Badge variant="success" dot size="sm" customLabel="Present" />;
       case 'HALF_DAY':
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: 'rgba(217, 119, 6, 0.3)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: '#d97706' }]} />
-            <Text style={[styles.statusBadgeText, { color: '#d97706' }]}>Half Day</Text>
-          </View>
-        );
+        return <Badge variant="warning" dot size="sm" customLabel="Half Day" />;
       case 'WEEK_OFF':
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(107, 114, 128, 0.12)', borderColor: 'rgba(107, 114, 128, 0.3)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: '#6b7280' }]} />
-            <Text style={[styles.statusBadgeText, { color: '#6b7280' }]}>Rest Day</Text>
-          </View>
-        );
+        return <Badge variant="neutral" dot size="sm" customLabel="Rest Day" />;
       case 'DISABLED':
         return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(156, 163, 175, 0.12)', borderColor: 'rgba(156, 163, 175, 0.25)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: '#9ca3af' }]} />
-            <Text style={[styles.statusBadgeText, { color: '#9ca3af' }]}>{isToday ? 'In Progress' : 'Upcoming'}</Text>
-          </View>
+          <Badge
+            variant="neutral"
+            dot
+            size="sm"
+            customLabel={isToday ? 'In Progress' : 'Upcoming'}
+          />
         );
       case 'ABSENT':
       default:
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(220, 38, 38, 0.12)', borderColor: 'rgba(220, 38, 38, 0.3)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: '#dc2626' }]} />
-            <Text style={[styles.statusBadgeText, { color: '#dc2626' }]}>Absent</Text>
-          </View>
-        );
+        return <Badge variant="error" dot size="sm" customLabel="Absent" />;
     }
   };
 
@@ -520,7 +481,7 @@ export default function AttendanceScreen() {
           const [yearStr, monthStr, dayNum] = day.date.split('-');
           const monthIdx = parseInt(monthStr, 10) - 1;
           const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][monthIdx] || '';
-          const dowFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day.dow] || '';
+          const dowShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.dow] || '';
           const isSunday = day.dow === 0;
           const todayStr = new Date().toISOString().slice(0, 10);
           const isFuture = day.date > todayStr;
@@ -547,71 +508,49 @@ export default function AttendanceScreen() {
                 styles.dayCard,
                 {
                   backgroundColor: theme.colors.canvasElevated,
-                  borderColor: isToday
-                    ? theme.colors.link
-                    : effectiveStatus === 'PRESENT'
-                    ? 'rgba(22, 163, 74, 0.25)'
-                    : effectiveStatus === 'HALF_DAY'
-                    ? 'rgba(217, 119, 6, 0.25)'
-                    : effectiveStatus === 'ABSENT'
-                    ? 'rgba(220, 38, 38, 0.25)'
-                    : theme.colors.hairline,
-                  opacity: isCardDimmed ? 0.65 : 1,
+                  borderColor: isToday ? theme.colors.link : theme.colors.hairline,
+                  opacity: isCardDimmed ? 0.75 : 1,
                 },
               ]}
             >
-              {/* Card Header: Date Pill, Month & Day, Today Tag, Status Badge */}
-              <View style={styles.dayCardHeader}>
-                <View style={styles.dayCardDateGroup}>
-                  <View
-                    style={[
-                      styles.dayNumberPill,
-                      {
-                        backgroundColor: isToday
-                          ? theme.colors.link
-                          : (isDark ? '#262626' : '#f4f4f5'),
-                      },
-                    ]}
+              {/* Card Header: Date & Day of Week in ONE line at top, Today Badge, Status Badge */}
+              <View
+                style={[
+                  styles.dayCardHeader,
+                  { borderBottomColor: theme.colors.hairline },
+                ]}
+              >
+                <View style={styles.dayCardDateRow}>
+                  <Text
+                    variant="label"
+                    style={{ color: isToday ? theme.colors.link : theme.colors.ink }}
                   >
-                    <Text
-                      style={[
-                        styles.dayNumberText,
-                        { color: isToday ? '#ffffff' : theme.colors.ink },
-                      ]}
-                    >
-                      {dayNum}
-                    </Text>
-                  </View>
-                  <View style={{ marginLeft: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.dayMonthText, { color: theme.colors.ink }]}>
-                        {dayNum} {monthName}
-                      </Text>
-                      {isToday && (
-                        <View style={[styles.todayBadge, { backgroundColor: 'rgba(0, 112, 243, 0.12)' }]}>
-                          <Text style={[styles.todayBadgeText, { color: theme.colors.link }]}>TODAY</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.dayDowFullText, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>
-                      {dowFull}
-                    </Text>
-                  </View>
+                    {dayNum} {monthName}
+                  </Text>
+                  <Text
+                    variant="caption"
+                    style={{ color: isSunday ? '#ef4444' : theme.colors.mute }}
+                  >
+                    • {dowShort}{isSunday ? ' (Rest)' : ''}
+                  </Text>
+                  {isToday && (
+                    <Badge variant="default" size="sm" customLabel="TODAY" />
+                  )}
                 </View>
 
-                {/* Status Badge */}
+                {/* Status Badge using React Native Reusable Badge Component */}
                 {renderStatusBadge(effectiveStatus, isToday)}
               </View>
 
-              {/* Card Body: Worked Hours, Punches, Machine, Location */}
+              {/* Card Body: Worked Hours, Shift, Machine, Location */}
               {hasWorked ? (
                 <View style={styles.dayCardContent}>
-                  {/* Hours & Punches Box */}
+                  {/* Hours & Shift Box */}
                   <View
                     style={[
                       styles.dayHoursWell,
                       {
-                        backgroundColor: theme.colors.canvas,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
                         borderColor: theme.colors.hairline,
                       },
                     ]}
@@ -619,31 +558,33 @@ export default function AttendanceScreen() {
                     <View style={styles.dayPunchesCol}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                         <Clock size={12} color={theme.colors.mute} />
-                        <Text style={[styles.dayPunchesLabel, { color: theme.colors.mute }]}>
-                          PUNCHES
+                        <Text variant="caption" style={{ color: theme.colors.mute }}>
+                          SHIFT
                         </Text>
                       </View>
-                      <Text style={[styles.dayPunchesTime, { color: theme.colors.ink }]}>
+                      <Text variant="small" style={[styles.dayPunchesTime, { color: theme.colors.ink }]}>
                         {day.punch_in && day.punch_out
                           ? `${formatTimeAMPM(day.punch_in)} – ${formatTimeAMPM(day.punch_out)}`
+                          : emp.shift_start_time && emp.shift_end_time
+                          ? `${formatTimeAMPM(emp.shift_start_time)} – ${formatTimeAMPM(emp.shift_end_time)}`
                           : '06:00 AM – 02:00 PM'}
                       </Text>
                     </View>
 
                     <View style={styles.dayWorkedCol}>
-                      <Text style={[styles.dayWorkedLabel, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={{ color: theme.colors.mute }}>
                         WORKED
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.dayWorkedHours, { color: theme.colors.ink }]}>
+                        <Text variant="small" style={[styles.dayWorkedHours, { color: theme.colors.ink }]}>
                           {formatMins(day.worked_minutes)}
                         </Text>
                         {day.overtime_minutes > 0 && (
-                          <View style={styles.dayOtPill}>
-                            <Text style={styles.dayOtPillText}>
-                              +{formatMins(day.overtime_minutes)} OT
-                            </Text>
-                          </View>
+                          <Badge
+                            variant="warning"
+                            size="sm"
+                            customLabel={`+${formatMins(day.overtime_minutes)} OT`}
+                          />
                         )}
                       </View>
                     </View>
@@ -658,7 +599,7 @@ export default function AttendanceScreen() {
                           style={[
                             styles.dayEntryCard,
                             {
-                              backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.015)',
                               borderColor: theme.colors.hairline,
                             },
                           ]}
@@ -666,17 +607,17 @@ export default function AttendanceScreen() {
                           <View style={styles.dayEntryRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                               <Truck size={13} color={theme.colors.link} />
-                              <Text style={[styles.entryMachineTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                              <Text variant="small" style={{ color: theme.colors.ink }} numberOfLines={1}>
                                 {entry.machine_code || 'Machinery'}
                                 {entry.machine_name ? ` • ${entry.machine_name}` : entry.model ? ` • ${entry.model}` : ''}
                               </Text>
                             </View>
                             {entry.shift_code && (
-                              <View style={[styles.shiftCodeBadge, { borderColor: theme.colors.hairline }]}>
-                                <Text style={[styles.shiftCodeBadgeText, { color: theme.colors.mute }]}>
-                                  Shift {entry.shift_code}
-                                </Text>
-                              </View>
+                              <Badge
+                                variant="outline"
+                                size="sm"
+                                customLabel={`Shift ${entry.shift_code}`}
+                              />
                             )}
                           </View>
 
@@ -684,18 +625,18 @@ export default function AttendanceScreen() {
                             {entry.location ? (
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
                                 <MapPin size={11} color={theme.colors.mute} />
-                                <Text style={[styles.entryMetaText, { color: theme.colors.mute }]} numberOfLines={1}>
+                                <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
                                   {entry.location}
                                 </Text>
                               </View>
                             ) : null}
 
                             {entry.is_breakdown ? (
-                              <View style={styles.breakdownBadge}>
-                                <Text style={styles.breakdownBadgeText}>
-                                  {entry.running_hours ? 'Breakdown' : 'Machine Breakdown'}
-                                </Text>
-                              </View>
+                              <Badge
+                                variant="error"
+                                size="sm"
+                                customLabel={entry.running_hours ? 'Breakdown' : 'Machine Breakdown'}
+                              />
                             ) : null}
                           </View>
                         </View>
@@ -714,7 +655,7 @@ export default function AttendanceScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.dayEmptyStateText, { color: theme.colors.mute }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>
                     {isSunday
                       ? 'Scheduled Rest Day / Weekend Off'
                       : effectiveStatus === 'ABSENT'
@@ -851,26 +792,15 @@ export default function AttendanceScreen() {
             </ScrollView>
 
             {/* Search Input */}
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Search size={16} color={theme.colors.mute} style={{ marginRight: 8 }} />
-              <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Search operator by name, phone, city..."
-                placeholderTextColor={theme.colors.mute}
+            <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+              <SearchInput
                 value={searchQuery}
                 onChangeText={(text) => setSearchQuery(text)}
+                onClear={() => setSearchQuery('', true)}
+                placeholder="Search operator by name, phone, city..."
+                placeholderTextColor={theme.colors.mute}
                 autoCapitalize="none"
               />
-              {searchQuery ? (
-                <Pressable
-                  variant="iconButton"
-                  hitSlopToMin48
-                  onPress={() => setSearchQuery('', true)}
-                  accessibilityLabel="Clear search"
-                >
-                  <X size={16} color={theme.colors.mute} />
-                </Pressable>
-              ) : null}
             </View>
 
             {/* Status Filter Strip */}
@@ -908,6 +838,7 @@ export default function AttendanceScreen() {
                     ]}
                   >
                     <Text
+                      variant="caption"
                       style={[
                         styles.filterChipText,
                         { color: active ? '#ffffff' : theme.colors.ink },
@@ -964,11 +895,7 @@ export default function AttendanceScreen() {
                                 style={[styles.empName, { color: theme.colors.ink }]}
                                 numberOfLines={1}
                               />
-                              <View style={[styles.roleBadge, { borderColor: theme.colors.hairline }]}>
-                                <Text style={[styles.roleBadgeText, { color: theme.colors.mute }]}>
-                                  OPERATOR
-                                </Text>
-                              </View>
+                              <Badge variant="outline" size="sm" customLabel="OPERATOR" />
                             </View>
 
                             <View style={styles.metaRow}>
@@ -1000,23 +927,23 @@ export default function AttendanceScreen() {
                       {/* Day Counts Strip */}
                       <View style={[styles.statsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
                         <View style={styles.statCol}>
-                          <Text style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
-                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
+                          <Text variant="small" style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
+                          <Text variant="caption" style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statCol}>
-                          <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
-                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
+                          <Text variant="small" style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
+                          <Text variant="caption" style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statCol}>
-                          <Text style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
-                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
+                          <Text variant="small" style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
+                          <Text variant="caption" style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statCol}>
-                          <Text style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
-                          <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
+                          <Text variant="small" style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
+                          <Text variant="caption" style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
                         </View>
                       </View>
 
@@ -1024,14 +951,17 @@ export default function AttendanceScreen() {
                       <View style={styles.cardFooter}>
                         <View style={styles.hoursItem}>
                           <Clock size={13} color={theme.colors.mute} style={{ marginRight: 4 }} />
-                          <Text style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
-                          <Text style={[styles.hoursValue, { color: theme.colors.ink }]}>
+                          <Text variant="caption" style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
+                          <Text variant="small" style={[styles.hoursValue, { color: theme.colors.ink }]}>
                             {formatMins(emp.worked_minutes)}
                           </Text>
                           {emp.overtime_minutes > 0 ? (
-                            <Text style={[styles.otBadge, { color: '#2563eb' }]}>
-                              {' '}+{formatMins(emp.overtime_minutes)} OT
-                            </Text>
+                            <Badge
+                              variant="warning"
+                              size="sm"
+                              customLabel={`+${formatMins(emp.overtime_minutes)} OT`}
+                              style={{ marginLeft: 6 }}
+                            />
                           ) : null}
                         </View>
 
@@ -1369,35 +1299,22 @@ const styles = StyleSheet.create({
   dayCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    marginBottom: 12,
-    padding: 14,
+    marginBottom: 10,
+    padding: 12,
   },
   dayCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingBottom: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
   },
-  dayCardDateGroup: {
+  dayCardDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  dayNumberPill: {
-    width: 38,
-    height: 38,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayNumberText: {  },
-  dayMonthText: {  },
-  todayBadge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  todayBadgeText: {  },
-  dayDowFullText: {    marginTop: 1,
+    gap: 6,
+    flexWrap: 'wrap',
   },
   dayCardContent: {
     gap: 8,
@@ -1414,21 +1331,17 @@ const styles = StyleSheet.create({
   dayPunchesCol: {
     flex: 1,
   },
-  dayPunchesLabel: {  },
-  dayPunchesTime: {    marginTop: 2,  },
+  dayPunchesLabel: {},
+  dayPunchesTime: {
+    marginTop: 2,
+  },
   dayWorkedCol: {
     alignItems: 'flex-end',
   },
-  dayWorkedLabel: {  },
-  dayWorkedHours: {    marginTop: 2,  },
-  dayOtPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+  dayWorkedLabel: {},
+  dayWorkedHours: {
     marginTop: 2,
   },
-  dayOtPillText: {    color: '#d97706',  },
   dayEntriesStack: {
     gap: 6,
   },
@@ -1443,29 +1356,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  entryMachineTitle: {  },
-  shiftCodeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  shiftCodeBadgeText: {  },
+  entryMachineTitle: {},
   dayEntryMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  entryMetaText: {  },
-  breakdownBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    backgroundColor: 'rgba(220, 38, 38, 0.12)',
-  },
-  breakdownBadgeText: {    color: '#dc2626',
-  },
+  entryMetaText: {},
   dayEmptyStateWell: {
     padding: 12,
     borderRadius: radiusNumeric.sm,
@@ -1473,5 +1371,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayEmptyStateText: {  },
+  dayEmptyStateText: {},
 });

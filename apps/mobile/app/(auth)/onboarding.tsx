@@ -26,7 +26,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Input, Alert, TimeInput, SearchableSelect, useTheme , Text } from '../../components/ui';
+import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
@@ -92,6 +92,7 @@ function formatTimeTo12Hour(timeStr?: string | null): string {
 export default function OnboardingScreen() {
   const router = useRouter();
   const { theme, isDark, setMode } = useTheme();
+  const { toast } = useToast();
   const { user, userProfile, refreshSession } = useAuth();
   const { width, height } = useWindowDimensions();
 
@@ -141,8 +142,6 @@ export default function OnboardingScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const clearFieldError = (fieldName: string) => {
@@ -157,7 +156,7 @@ export default function OnboardingScreen() {
   // If already onboarded, immediately route to dashboard
   useEffect(() => {
     if (userProfile?.complete_profile === true || (userProfile as any)?.complete_profile === 'yes') {
-      router.replace('/(app)/dashboard');
+      router.replace('/dashboard');
     }
   }, [userProfile?.complete_profile, router]);
 
@@ -509,13 +508,13 @@ export default function OnboardingScreen() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setErrorMessage('Please complete all mandatory fields highlighted below.');
+      toast('warning', 'Missing Information', 'Please complete all mandatory fields highlighted below.');
       haptics.reject();
       return;
     }
 
     if (!user?.id) {
-      setErrorMessage('Authentication session expired. Please log in again.');
+      toast('error', 'Session Expired', 'Authentication session expired. Please log in again.');
       haptics.reject();
       return;
     }
@@ -547,7 +546,7 @@ export default function OnboardingScreen() {
           await uploadUserDocumentDirect({
             userId: user.id,
             documentTypeCode: 'aadhaar',
-            doc: aadhaarDoc,
+            doc: bankDoc ? aadhaarDoc : aadhaarDoc,
           });
         } catch (uErr) {
           console.warn('[Onboarding] Aadhaar document upload error:', uErr);
@@ -591,7 +590,7 @@ export default function OnboardingScreen() {
         .eq('id', user.id);
 
       if (updateError) {
-        setErrorMessage(updateError.message || 'Failed to save profile details. Please try again.');
+        toast('error', 'Save Failed', updateError.message || 'Failed to save profile details. Please try again.');
         isSubmittingRef.current = false;
         setIsLoading(false);
         haptics.reject();
@@ -602,13 +601,13 @@ export default function OnboardingScreen() {
       await refreshSession();
 
       haptics.confirm();
-      setSuccessMessage('Profile completed successfully! Directing to dashboard...');
+      toast('success', 'Profile Completed', 'Profile details saved. Directing to dashboard...');
 
       setTimeout(() => {
-        router.replace('/(app)/dashboard');
+        router.replace('/dashboard');
       }, 1000);
     } catch (err: any) {
-      setErrorMessage(err?.message || 'An unexpected error occurred while saving profile.');
+      toast('error', 'Save Error', err?.message || 'An unexpected error occurred while saving profile.');
       isSubmittingRef.current = false;
       setIsLoading(false);
       haptics.reject();
@@ -784,20 +783,6 @@ export default function OnboardingScreen() {
                 <Text style={[styles.subtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                   Fill in your remaining profile and verification details to activate your account.
                 </Text>
-
-              {/* Global Error Banner */}
-              {errorMessage && Object.keys(fieldErrors).length === 0 ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="error">{errorMessage}</Alert>
-                </View>
-              ) : null}
-
-              {/* Global Success Banner */}
-              {successMessage ? (
-                <View style={styles.bannerContainer}>
-                  <Alert variant="success">{successMessage}</Alert>
-                </View>
-              ) : null}
 
               {/* Section 1: Account & Role */}
               <MobileFormSectionCard
@@ -1037,6 +1022,7 @@ export default function OnboardingScreen() {
                         delete copy['bank_document'];
                         return copy;
                       });
+                      toast('success', 'Document Removed', 'Bank document has been removed.');
                     }
                     setBankDoc(null);
                     setBankDocError(null);
@@ -1095,6 +1081,7 @@ export default function OnboardingScreen() {
                         delete copy['aadhaar'];
                         return copy;
                       });
+                      toast('success', 'Document Removed', 'Aadhaar document has been removed.');
                     }
                     setAadhaarDoc(null);
                     setAadhaarDocError(null);
@@ -1119,6 +1106,7 @@ export default function OnboardingScreen() {
                         delete copy['driving_license'];
                         return copy;
                       });
+                      toast('success', 'Document Removed', 'Licence document has been removed.');
                     }
                     setLicenseDoc(null);
                     setLicenseDocError(null);
