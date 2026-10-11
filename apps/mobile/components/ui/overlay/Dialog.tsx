@@ -9,7 +9,7 @@
  * - IME & keyboard safe
  */
 
-import React, { useEffect, useState, useId } from 'react';
+import React, { useEffect, useState, useId, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -60,15 +60,18 @@ export const Dialog: React.FC<DialogProps> = ({
   const opacity = useSharedValue(visible ? 1 : 0);
   const scale = useSharedValue(visible ? 1 : SCALE.dialogFrom);
 
+  const onDismissRef = useRef(onClose);
+  onDismissRef.current = onClose;
+
   // Register in top-level overlay stack for hardware back priority
   useEffect(() => {
     if (visible) {
-      registerOverlay({ id: instanceId, onDismiss: onClose });
+      registerOverlay({ id: instanceId, onDismiss: () => onDismissRef.current() });
     } else {
       unregisterOverlay(instanceId);
     }
     return () => unregisterOverlay(instanceId);
-  }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
+  }, [visible, instanceId, registerOverlay, unregisterOverlay]);
 
   useEffect(() => {
     if (visible) {

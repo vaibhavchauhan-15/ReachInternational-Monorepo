@@ -11,7 +11,7 @@
  * - Safe area insets & keyboard aware
  */
 
-import React, { useEffect, useState, useMemo, useId, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useId, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -76,15 +76,18 @@ export const Sheet: React.FC<SheetProps> = ({
   const contextY = useSharedValue(0);
   const sheetScale = useSharedValue(1);
 
+  const onDismissRef = useRef(onClose);
+  onDismissRef.current = onClose;
+
   // Register in top-level overlay stack for hardware back priority
   useEffect(() => {
     if (visible) {
-      registerOverlay({ id: instanceId, onDismiss: onClose });
+      registerOverlay({ id: instanceId, onDismiss: () => onDismissRef.current() });
     } else {
       unregisterOverlay(instanceId);
     }
     return () => unregisterOverlay(instanceId);
-  }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
+  }, [visible, instanceId, registerOverlay, unregisterOverlay]);
 
   const triggerHapticSnap = useCallback(() => {
     haptics.dragEnd();

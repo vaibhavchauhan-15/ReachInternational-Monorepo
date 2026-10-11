@@ -93,6 +93,11 @@ export interface UserRecord {
     type?: string;
     city?: string | null;
   } | null;
+  assigned_machines?: Array<{
+    id: string;
+    machine_id: string;
+    model?: string | null;
+  }>;
   created_at?: string;
 }
 

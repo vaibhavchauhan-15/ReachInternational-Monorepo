@@ -9,7 +9,7 @@
  * - Top-most BackHandler dismissal priority
  */
 
-import React, { useEffect, useState, useMemo, useId, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useId, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -81,6 +81,9 @@ export const Drawer: React.FC<DrawerProps> = ({
   const translateX = useSharedValue(visible ? 0 : drawerWidth);
   const contextX = useSharedValue(0);
 
+  const onDismissRef = useRef(onClose);
+  onDismissRef.current = onClose;
+
   // Synchronized scrim opacity linked directly to drawer position on UI thread
   const scrimOpacity = useDerivedValue(() => {
     'worklet';
@@ -95,12 +98,12 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   useEffect(() => {
     if (visible) {
-      registerOverlay({ id: instanceId, onDismiss: onClose });
+      registerOverlay({ id: instanceId, onDismiss: () => onDismissRef.current() });
     } else {
       unregisterOverlay(instanceId);
     }
     return () => unregisterOverlay(instanceId);
-  }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
+  }, [visible, instanceId, registerOverlay, unregisterOverlay]);
 
   // Guaranteed fallback unmount timer in case animation is preempted
   useEffect(() => {

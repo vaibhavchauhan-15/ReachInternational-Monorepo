@@ -23,6 +23,9 @@ import {
 } from '@reachinternational/utils';
 import { supabase } from '../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Briefcase,
   CreditCard,
@@ -47,6 +50,7 @@ import {
   XCircle,
   FileText,
   ImageIcon,
+  Download,
 } from '../../components/ui/icon';
 import {
   pickIdentityDocument,
@@ -134,6 +138,7 @@ export default function ProfileScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const { toast } = useToast();
+  const insets = useSafeAreaInsets();
 
   const { edit } = useLocalSearchParams<{ edit?: string }>();
 
@@ -181,6 +186,7 @@ export default function ProfileScreen() {
   const [replacingCode, setReplacingCode] = useState<string | null>(null);
   const [uploadingCode, setUploadingCode] = useState<string | null>(null);
   const [activeViewerDoc, setActiveViewerDoc] = useState<MobileViewerDoc | null>(null);
+  const handleCloseViewer = useCallback(() => setActiveViewerDoc(null), []);
 
   // Fetch full user profile data
   const fetchProfileData = useCallback(async () => {
@@ -401,17 +407,115 @@ export default function ProfileScreen() {
       : cleanAadhaar
     : 'Not Provided';
 
+  // Open document smoothly with fresh signed URL fallback
+  const handleOpenDocument = useCallback(async (doc: UserDocumentInfo, label: string) => {
+    try {
+      haptics.select();
+      let url = doc.signed_url;
+      if (!url && doc.storage_path) {
+        const { data: signedData } = await supabase.storage
+          .from('user_files')
+          .createSignedUrl(doc.storage_path, 3600);
+        url = signedData?.signedUrl || null;
+      }
+      setActiveViewerDoc({
+        title: label,
+        url: url || undefined,
+        uri: url || undefined,
+        mimeType: doc.mime_type,
+        fileSizeBytes: doc.file_size_bytes,
+        fileName: doc.storage_path.split('/').pop(),
+      });
+    } catch (err: any) {
+      toast('error', 'Open Failed', err?.message || 'Could not open document.');
+    }
+  }, [toast]);
+
+  // Export / Download profile summary as text file
+  const handleDownloadProfile = useCallback(async () => {
+    try {
+      haptics.select();
+      const profileText = [
+        `REACH INTERNATIONAL - EMPLOYEE PROFILE`,
+        `=======================================`,
+        `Name: ${view.name || 'N/A'}`,
+        `Employee ID: ${mergedUserData?.employee_id || 'N/A'}`,
+        `Email: ${view.email || 'N/A'}`,
+        `Role: ${(mergedUserData?.role || role || 'Operator').toUpperCase()}`,
+        `Status: ${(view.status || 'ACTIVE').toUpperCase()}`,
+        `Phone: ${mergedUserData?.phone || 'N/A'}`,
+        `Shift: ${view.shiftTimingDisplay || 'N/A'}`,
+        `Supervisor: ${mergedUserData?.supervisor?.full_name || 'N/A'}`,
+        `Aadhaar: ${cleanAadhaar ? (showFullAadhaar ? formattedFullAadhaar : maskedAadhaar) : 'Not Provided'}`,
+        `Driving Licence: ${mergedUserData?.license_number || 'Not Provided'}`,
+        `Bank Account: ${mergedUserData?.bank_account_number || 'Not Configured'}`,
+        `Bank IFSC: ${mergedUserData?.bank_ifsc_code || 'Not Configured'}`,
+        `Monthly Base Salary: ${mergedUserData?.monthly_salary ? `₹${Number(mergedUserData.monthly_salary).toLocaleString('en-IN')}` : 'N/A'}`,
+        `Exported At: ${new Date().toLocaleString('en-IN')}`,
+      ].join('\n');
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([profileText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Profile_${(view.name || 'User').replace(/\s+/g, '_')}_${mergedUserData?.employee_id || 'Summary'}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast('success', 'Profile Downloaded', 'Profile summary saved to downloads.');
+      } else {
+        if (FileSystem.cacheDirectory) {
+          const fileUri = `${FileSystem.cacheDirectory}profile_summary.txt`;
+          await FileSystem.writeAsStringAsync(fileUri, profileText);
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(fileUri);
+          } else {
+            toast('success', 'Profile Exported', 'Profile summary generated.');
+          }
+        }
+      }
+    } catch (err: any) {
+      toast('error', 'Download Failed', err?.message || 'Failed to download profile summary.');
+    }
+  }, [view, mergedUserData, role, cleanAadhaar, showFullAadhaar, formattedFullAadhaar, maskedAadhaar, toast]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Header: Back arrow + Profile Title + Search Quick Access Icon */}
+      {/* Top Header: Back arrow + Profile Title + Download Icon in Header + Search Quick Access Icon */}
       <MobileHeader
         title="Profile"
         showBack={true}
         showQuickAccess={true}
+        rightAction={
+          <Pressable
+            variant="iconButton"
+            hitSlopToMin48
+            style={[
+              styles.headerDownloadBtn,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+            onPress={handleDownloadProfile}
+            accessibilityLabel="Download profile summary"
+          >
+            <Download size={17} color={theme.colors.ink} />
+          </Pressable>
+        }
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { backgroundColor: theme.colors.canvas }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            backgroundColor: theme.colors.canvas,
+            paddingBottom: Math.max(insets.bottom, 16) + 100,
+          },
+        ]}
         showsVerticalScrollIndicator={true}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />
@@ -614,33 +718,24 @@ export default function ProfileScreen() {
 
                       return (
                         <View key={row.label} style={styles.rowWrap}>
-                          <View
-                            style={[
-                              styles.rowContent,
-                              isWide ? styles.rowContentWide : styles.rowContentMobile,
-                            ]}
-                          >
-                            {/* Label */}
+                          <View style={styles.rowContent}>
+                            {/* Label on top line */}
                             <Text
+                              variant="caption"
                               style={[
                                 styles.rowLabel,
-                                isWide && styles.rowLabelWide,
                                 { color: theme.colors.mute },
                               ]}
                             >
                               {row.label}
                             </Text>
 
-                            {/* Value / Badges / Actions */}
-                            <View
-                              style={[
-                                styles.rowValueArea,
-                                isWide ? styles.rowValueAreaWide : styles.rowValueAreaMobile,
-                              ]}
-                            >
+                            {/* Value / Badges / Actions on new line */}
+                            <View style={styles.rowValueArea}>
                               {isAadhaar ? (
                                 <View style={styles.aadhaarArea}>
                                   <Text
+                                    variant="body"
                                     style={[
                                       styles.rowValue,
                                       styles.monoText,
@@ -690,7 +785,7 @@ export default function ProfileScreen() {
                                   style={styles.linkArea}
                                   onPress={() => router.push(row.href as any)}
                                 >
-                                  <Text style={[styles.rowLink, { color: '#0284c7' }]}>
+                                  <Text variant="body" style={[styles.rowLink, { color: '#0284c7' }]}>
                                     {row.value}
                                   </Text>
                                   <ExternalLink size={12} color="#0284c7" />
@@ -713,6 +808,7 @@ export default function ProfileScreen() {
                                     ]}
                                   >
                                     <Text
+                                      variant="caption"
                                       style={[
                                         styles.statusPillText,
                                         {
@@ -730,6 +826,7 @@ export default function ProfileScreen() {
                               ) : (
                                 <View style={styles.valueWithCopyArea}>
                                   <Text
+                                    variant="body"
                                     style={[
                                       styles.rowValue,
                                       row.isMonospace && styles.monoText,
@@ -826,12 +923,11 @@ export default function ProfileScreen() {
                   >
                     {/* Slot Header Row */}
                     <View style={styles.docSlotHeaderRow}>
-                      <Text style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
+                      <Text variant="label" style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
                         {docType.label}
                       </Text>
                       {existing && !isReplacing && (
                         <View style={styles.uploadedBadgeSmall}>
-                          <Check size={10} color="#059669" />
                           <Text variant="caption" style={styles.uploadedBadgeSmallText}>Uploaded</Text>
                         </View>
                       )}
@@ -839,8 +935,7 @@ export default function ProfileScreen() {
 
                     {/* 1. Existing Document View (Click to preview, Replace, Delete) */}
                     {existing && !isReplacing ? (
-                      <Pressable
-                        variant="card"
+                      <View
                         style={[
                           styles.existingDocCard,
                           {
@@ -848,25 +943,20 @@ export default function ProfileScreen() {
                             borderColor: theme.colors.hairline,
                           },
                         ]}
-                        onPress={() => {
-                          setActiveViewerDoc({
-                            title: docType.label,
-                            url: existing.signed_url || undefined,
-                            uri: existing.signed_url || undefined,
-                            mimeType: existing.mime_type,
-                            fileSizeBytes: existing.file_size_bytes,
-                            fileName: existing.storage_path.split('/').pop(),
-                          });
-                        }}
-                        activeOpacity={0.8}
                       >
-                        {/* Left: Thumbnail/Icon + Details */}
-                        <View style={styles.existingDocLeft}>
+                        {/* Left: Thumbnail/Icon + Details (Clickable Preview) */}
+                        <Pressable
+                          variant="ghost"
+                          style={styles.existingDocLeft}
+                          onPress={() => handleOpenDocument(existing, docType.label)}
+                          accessibilityLabel={`Preview ${docType.label}`}
+                        >
                           {isImage && existing.signed_url ? (
                             <Image
                               source={{ uri: existing.signed_url }}
                               style={styles.docThumbImage}
                               resizeMode="cover"
+                              fadeDuration={0}
                             />
                           ) : isPdf ? (
                             <View style={[styles.formatBadgeSquare, styles.formatBadgePdf]}>
@@ -895,7 +985,7 @@ export default function ProfileScreen() {
                               {existing.file_size_bytes ? ` • ${(Number(existing.file_size_bytes) / 1024).toFixed(0)} KB` : ''}
                             </Text>
                           </View>
-                        </View>
+                        </Pressable>
 
                         {/* Right: Replace + Delete Actions */}
                         <View style={styles.existingDocRight}>
@@ -909,14 +999,11 @@ export default function ProfileScreen() {
                                 borderColor: theme.colors.hairline,
                               },
                             ]}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              setReplacingCode(docType.code);
-                            }}
+                            onPress={() => setReplacingCode(docType.code)}
                             accessibilityLabel={`Replace ${docType.label}`}
                           >
-                            <RefreshCw size={13} color={theme.colors.mute} />
-                            <Text style={[styles.docActionBtnText, { color: theme.colors.ink }]}>
+                            <RefreshCw size={12} color={theme.colors.mute} />
+                            <Text variant="caption" style={[styles.docActionBtnText, { color: theme.colors.ink }]}>
                               Replace
                             </Text>
                           </Pressable>
@@ -931,16 +1018,13 @@ export default function ProfileScreen() {
                                 borderColor: theme.colors.hairline,
                               },
                             ]}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              handleDeleteDocument(existing, docType.label);
-                            }}
+                            onPress={() => handleDeleteDocument(existing, docType.label)}
                             accessibilityLabel={`Delete ${docType.label}`}
                           >
                             <Trash2 size={13} color="#dc2626" />
                           </Pressable>
                         </View>
-                      </Pressable>
+                      </View>
                     ) : (
                       /* 2. Upload Dropzone (When not uploaded or replacing) */
                       <View style={styles.dropzoneWrap}>
@@ -1025,7 +1109,7 @@ export default function ProfileScreen() {
       {/* In-App Document Viewer Modal */}
       <MobileDocumentViewerModal
         document={activeViewerDoc}
-        onClose={() => setActiveViewerDoc(null)}
+        onClose={handleCloseViewer}
       />
     </View>
   );
@@ -1205,37 +1289,29 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase' },
   sectionBody: {
     width: '100%' },
+  headerDownloadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center' },
   rowWrap: {
     width: '100%' },
   rowContent: {
-    paddingVertical: 10 },
-  rowContentMobile: {
+    paddingVertical: 9,
     flexDirection: 'column',
-    gap: 3 },
-  rowContentWide: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12 },
+    gap: 4 },
   rowLabel: {
     },
-  rowLabelWide: {
-    width: '35%',
-    flexShrink: 0 },
   rowValueArea: {
     flexDirection: 'row',
-    alignItems: 'center' },
-  rowValueAreaMobile: {
-    justifyContent: 'flex-start',
+    alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6 },
-  rowValueAreaWide: {
-    width: '65%',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: 6 },
+    gap: 6,
+    minWidth: 0 },
   rowValue: {
-    },
+    flexShrink: 1 },
   monoText: {
     },
   rowDivider: {

@@ -5,4 +5,6 @@ export * from './PasswordResetModal';
 export * from './RejectReasonModal';
 export * from './UserExportModal';
 export * from './CustomFilterSelectorModal';
+export * from './AssignSupervisorModal';
+export * from './AssignMachineModal';
 export * from './UserCardSkeleton';

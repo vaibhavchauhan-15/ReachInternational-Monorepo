@@ -8,7 +8,7 @@
  * - Back button and backdrop dismiss
  */
 
-import React, { useEffect, useState, useId } from 'react';
+import React, { useEffect, useState, useId, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -68,14 +68,17 @@ export const Popover: React.FC<PopoverProps> = ({
   const opacity = useSharedValue(visible ? 1 : 0);
   const scaleY = useSharedValue(visible ? 1 : 0.8);
 
+  const onDismissRef = useRef(onClose);
+  onDismissRef.current = onClose;
+
   useEffect(() => {
     if (visible) {
-      registerOverlay({ id: instanceId, onDismiss: onClose });
+      registerOverlay({ id: instanceId, onDismiss: () => onDismissRef.current() });
     } else {
       unregisterOverlay(instanceId);
     }
     return () => unregisterOverlay(instanceId);
-  }, [visible, instanceId, onClose, registerOverlay, unregisterOverlay]);
+  }, [visible, instanceId, registerOverlay, unregisterOverlay]);
 
   useEffect(() => {
     if (visible) {

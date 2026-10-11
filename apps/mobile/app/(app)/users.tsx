@@ -12,7 +12,9 @@ import {
   Platform,
   StatusBar,
   FlatList,
-  ListRenderItem} from 'react-native';
+  ListRenderItem,
+  Linking,
+} from 'react-native';
 import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle, SearchInput, useToast } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { Pressable } from '../../components/ui/touch/Pressable';
@@ -21,12 +23,15 @@ import { UserEditModal } from '../../components/users/UserEditModal';
 import { PasswordResetModal } from '../../components/users/PasswordResetModal';
 import { RejectReasonModal } from '../../components/users/RejectReasonModal';
 import { UserExportModal } from '../../components/users/UserExportModal';
+import { AssignSupervisorModal } from '../../components/users/AssignSupervisorModal';
+import { AssignMachineModal } from '../../components/users/AssignMachineModal';
 import { UserListSkeleton } from '../../components/users/UserCardSkeleton';
 import { supabase } from '../../lib/supabase';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
+import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { formatTinyRelativeTime, INDIAN_STATES } from '@reachinternational/utils';
 import {
@@ -50,7 +55,6 @@ import {
   Square,
   Mail,
   Clock,
-  ChevronRight,
   Filter,
   FileSpreadsheet,
   RotateCcw,
@@ -60,6 +64,10 @@ import {
   Globe,
   Smartphone,
   Wrench,
+  Edit2,
+  KeyRound,
+  Eye,
+  WhatsAppIcon,
 } from '../../components/ui/icon';
 
 const ROLE_FILTER_OPTIONS: FilterOption[] = [
@@ -257,6 +265,17 @@ interface UserTouchCardProps {
   onPress: (user: UserRecord) => void;
   onLongPress: (user: UserRecord) => void;
   searchTerm?: string;
+  onViewDetails: (user: UserRecord) => void;
+  onEdit?: (user: UserRecord) => void;
+  onDelete?: (user: UserRecord) => void;
+  onAssignSupervisor?: (user: UserRecord) => void;
+  onAssignMachine?: (user: UserRecord) => void;
+  onResetPassword?: (user: UserRecord) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canAssignSupervisor?: boolean;
+  canAssignMachine?: boolean;
+  canResetPwd?: boolean;
 }
 
 const UserTouchCard = React.memo(function UserTouchCard({
@@ -267,174 +286,364 @@ const UserTouchCard = React.memo(function UserTouchCard({
   onPress,
   onLongPress,
   searchTerm,
+  onViewDetails,
+  onEdit,
+  onDelete,
+  onAssignSupervisor,
+  onAssignMachine,
+  onResetPassword,
+  canEdit = false,
+  canDelete = false,
+  canAssignSupervisor = false,
+  canAssignMachine = false,
+  canResetPwd = false,
 }: UserTouchCardProps) {
   const accentColor = getRoleAccentColor(u.role);
   const hasMeta = Boolean(
+    u.employee_id ||
+    u.email ||
     u.phone ||
     u.city ||
     u.district ||
     u.state ||
     (u.supervisors && u.supervisors.length > 0) ||
-    u.supervisor?.full_name
+    u.supervisor?.full_name ||
+    (u.assigned_machines && u.assigned_machines.length > 0) ||
+    u.shift_time
   );
 
+  const handleCall = () => {
+    if (!u.phone) return;
+    haptics.select();
+    const clean = u.phone.replace(/[^0-9+]/g, '');
+    Linking.openURL(`tel:${clean}`);
+  };
+
+  const handleWhatsApp = () => {
+    if (!u.phone) return;
+    haptics.select();
+    const clean = u.phone.replace(/[^0-9]/g, '');
+    const msg = `Hello ${u.full_name}, reaching out from Reach International.`;
+    Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`);
+  };
+
   return (
-    <Pressable
-      variant="plain"
-      haptic={false}
-      onPress={() => onPress(u)}
-      onLongPress={() => onLongPress(u)}
+    <View
+      style={[
+        styles.userCard,
+        {
+          backgroundColor: theme.colors.canvasElevated,
+          borderColor: theme.colors.hairline,
+          borderLeftColor: accentColor,
+          borderLeftWidth: 4,
+        },
+        isSelectMode && isSelected && {
+          borderColor: theme.colors.link,
+          borderWidth: 1.5,
+          borderLeftWidth: 4,
+          backgroundColor: theme.colors.canvas,
+        },
+      ]}
     >
-      <View
-        style={[
-          styles.userCard,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-            borderLeftColor: accentColor,
-            borderLeftWidth: 4,
-          },
-          isSelectMode && isSelected && {
-            borderColor: theme.colors.link,
-            borderWidth: 1.5,
-            borderLeftWidth: 4,
-            backgroundColor: theme.colors.canvas,
-          },
-        ]}
+      {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side in one row on right */}
+      <Pressable
+        variant="plain"
+        haptic={false}
+        onPress={() => (isSelectMode ? onPress(u) : onViewDetails(u))}
+        onLongPress={() => onLongPress(u)}
+        style={styles.userCardHeader}
       >
-        {/* Card Header: Avatar, Name & Code on left; Role & Status Badges + Chevron on right */}
-        <View style={styles.userCardHeader}>
-          <View style={styles.userAvatarRow}>
-            {isSelectMode ? (
-              <View style={{ marginRight: 6 }}>
-                {isSelected ? (
-                  <CheckSquare size={20} color={theme.colors.link} />
-                ) : (
-                  <Square size={20} color={theme.colors.mute} />
-                )}
-              </View>
-            ) : (
-              <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                  {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <HighlightText
-                  text={truncateText(u.full_name, 20)}
-                  query={searchTerm}
-                  variant="label"
-                  style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
-                  numberOfLines={1}
-                />
-                {u.employee_id ? (
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    style={[
-                      styles.empIdBadge,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <HighlightText
-                      text={u.employee_id}
-                      query={searchTerm}
-                      variant="mono"
-                      style={{ color: theme.colors.ink }}
-                    />
-                  </Badge>
-                ) : null}
-              </View>
-              <HighlightText
-                text={truncateText(u.email, 28)}
-                query={searchTerm}
-                variant="caption"
-                style={[styles.userEmail, { color: theme.colors.mute }]}
-                numberOfLines={1}
-              />
+        <View style={styles.userAvatarRow}>
+          {isSelectMode ? (
+            <View style={{ marginRight: 6 }}>
+              {isSelected ? (
+                <CheckSquare size={20} color={theme.colors.link} />
+              ) : (
+                <Square size={20} color={theme.colors.mute} />
+              )}
             </View>
-          </View>
-
-          {/* Header Right: Role Badge, Status Badge & Chevron */}
-          <View style={styles.headerRightActions}>
-            <View style={styles.headerBadgesCluster}>
-              <Badge
-                variant="neutral"
-                size="sm"
-                style={[
-                  styles.roleBadgePill,
-                  {
-                    backgroundColor: accentColor + '18',
-                    borderColor: accentColor + '35',
-                  },
-                ]}
-              >
-                <Text variant="caption" style={{ color: accentColor }}>
-                  {formatRoleName(u.role)}
-                </Text>
-              </Badge>
-
-              <Badge
-                status={u.status}
-                size="sm"
-                dot
-              >
-                <Text variant="caption">
-                  {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
-                </Text>
-              </Badge>
+          ) : (
+            <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
+              <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
+              </Text>
             </View>
-
-            <ChevronRight size={16} color={theme.colors.mute} />
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <HighlightText
+              text={truncateText(u.full_name, 28)}
+              query={searchTerm}
+              variant="label"
+              style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
+              numberOfLines={1}
+            />
           </View>
         </View>
 
-        {/* Card Metadata Section (organized and balanced) */}
-        {hasMeta && (
-          <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-            {u.phone ? (
-              <View style={styles.metaChipRow}>
-                <Phone size={12} color={theme.colors.mute} />
+        {/* Header Right: Role Badge & Status Badge in ONE ROW (no Chevron) */}
+        <View style={styles.headerRightActions}>
+          <View style={styles.headerBadgesCluster}>
+            <Badge
+              variant="neutral"
+              size="sm"
+              style={[
+                styles.roleBadgePill,
+                {
+                  backgroundColor: accentColor + '18',
+                  borderColor: accentColor + '35',
+                },
+              ]}
+            >
+              <Text variant="caption" style={{ color: accentColor }}>
+                {formatRoleName(u.role)}
+              </Text>
+            </Badge>
+
+            <Badge
+              status={u.status}
+              size="sm"
+              dot
+            >
+              <Text variant="caption">
+                {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
+              </Text>
+            </Badge>
+          </View>
+        </View>
+      </Pressable>
+
+      {/* Card Metadata Section (organized and balanced at the bottom along with other details) */}
+      {hasMeta && (
+        <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+          {u.employee_id ? (
+            <View style={styles.metaChipRow}>
+              <Badge
+                variant="outline"
+                size="sm"
+                style={[
+                  styles.empIdBadge,
+                  {
+                    backgroundColor: theme.colors.canvasElevated,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
                 <HighlightText
-                  text={u.phone}
+                  text={u.employee_id}
                   query={searchTerm}
                   variant="mono"
-                  style={[styles.metaChipText, { color: theme.colors.ink }]}
+                  style={{ color: theme.colors.ink }}
                 />
-              </View>
-            ) : null}
+              </Badge>
+            </View>
+          ) : null}
 
-            {(u.city || u.district || u.state) && (
-              <View style={styles.metaChipRow}>
-                <MapPin size={12} color={theme.colors.mute} />
-                <HighlightText
-                  text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                  query={searchTerm}
-                  variant="caption"
-                  style={[styles.metaChipText, { color: theme.colors.mute }]}
-                />
-              </View>
-            )}
+          {u.email ? (
+            <View style={styles.metaChipRow}>
+              <Mail size={12} color={theme.colors.mute} />
+              <HighlightText
+                text={u.email}
+                query={searchTerm}
+                variant="caption"
+                style={[styles.metaChipText, { color: theme.colors.ink }]}
+                numberOfLines={1}
+              />
+            </View>
+          ) : null}
 
-            {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
-              <View style={styles.metaChipRow}>
-                <User size={12} color="#0d9488" />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Supervisor: {u.supervisors && u.supervisors.length > 0
-                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                    : u.supervisor?.full_name}
-                </Text>
-              </View>
-            )}
-          </View>
+          {u.phone ? (
+            <View style={styles.metaChipRow}>
+              <Phone size={12} color={theme.colors.mute} />
+              <HighlightText
+                text={u.phone}
+                query={searchTerm}
+                variant="mono"
+                style={[styles.metaChipText, { color: theme.colors.ink }]}
+              />
+            </View>
+          ) : null}
+
+          {(u.city || u.district || u.state) && (
+            <View style={styles.metaChipRow}>
+              <MapPin size={12} color={theme.colors.mute} />
+              <HighlightText
+                text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                query={searchTerm}
+                variant="caption"
+                style={[styles.metaChipText, { color: theme.colors.mute }]}
+                numberOfLines={1}
+              />
+            </View>
+          )}
+
+          {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
+            <View style={styles.metaChipRow}>
+              <User size={12} color="#0d9488" />
+              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                Supervisor: {u.supervisors && u.supervisors.length > 0
+                  ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                  : u.supervisor?.full_name}
+              </Text>
+            </View>
+          )}
+
+          {u.assigned_machines && u.assigned_machines.length > 0 && (
+            <View style={styles.metaChipRow}>
+              <Wrench size={12} color="#d97706" />
+              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                Machines: {u.assigned_machines.map((m) => m.machine_id).join(', ')}
+              </Text>
+            </View>
+          )}
+
+          {u.shift_time && (
+            <View style={styles.metaChipRow}>
+              <Clock size={12} color={theme.colors.mute} />
+              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
+                Shift: {u.shift_time}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Action Buttons Toolbar at the bottom of every card */}
+      <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
+        {/* 1. View Profile */}
+        <Pressable
+          variant="plain"
+          hitSlopToMin48
+          onPress={() => {
+            haptics.select();
+            onViewDetails(u);
+          }}
+          style={[styles.actionPillBtn, styles.actionPillPrimary]}
+        >
+          <User size={12} color="#ffffff" />
+          <Text variant="caption" style={styles.actionPillPrimaryText}>
+            View
+          </Text>
+        </Pressable>
+
+        {/* 2. Edit User */}
+        {canEdit && onEdit && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={() => {
+              haptics.select();
+              onEdit(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
+          >
+            <Edit2 size={12} color={theme.colors.ink} />
+            <Text variant="caption" style={{ color: theme.colors.ink }}>
+              Edit
+            </Text>
+          </Pressable>
+        )}
+
+        {/* 3. Assign Supervisor */}
+        {canAssignSupervisor && onAssignSupervisor && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={() => {
+              haptics.select();
+              onAssignSupervisor(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: '#0d948840', backgroundColor: '#0d948812' }]}
+          >
+            <ShieldCheck size={12} color="#0d9488" />
+            <Text variant="caption" style={{ color: '#0d9488' }}>
+              Supervisor
+            </Text>
+          </Pressable>
+        )}
+
+        {/* 4. Assign Machine */}
+        {canAssignMachine && onAssignMachine && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={() => {
+              haptics.select();
+              onAssignMachine(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: '#d9770640', backgroundColor: '#d9770612' }]}
+          >
+            <Wrench size={12} color="#d97706" />
+            <Text variant="caption" style={{ color: '#d97706' }}>
+              Machine
+            </Text>
+          </Pressable>
+        )}
+
+        {/* 5. Reset Password */}
+        {canResetPwd && onResetPassword && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={() => {
+              haptics.select();
+              onResetPassword(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: '#6366f140', backgroundColor: '#6366f112' }]}
+          >
+            <KeyRound size={12} color="#6366f1" />
+            <Text variant="caption" style={{ color: '#6366f1' }}>
+              Reset Pwd
+            </Text>
+          </Pressable>
+        )}
+
+        {/* 6. Contact: Call & WhatsApp */}
+        {u.phone ? (
+          <>
+            <Pressable
+              variant="plain"
+              hitSlopToMin48
+              onPress={handleCall}
+              style={[styles.actionPillBtn, { backgroundColor: '#16a34a', borderColor: '#16a34a' }]}
+            >
+              <Phone size={12} color="#ffffff" />
+              <Text variant="caption" style={{ color: '#ffffff' }}>
+                Call
+              </Text>
+            </Pressable>
+            <Pressable
+              variant="plain"
+              hitSlopToMin48
+              onPress={handleWhatsApp}
+              style={[styles.actionPillBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}
+            >
+              <WhatsAppIcon size={12} color="#ffffff" />
+              <Text variant="caption" style={{ color: '#ffffff' }}>
+                WhatsApp
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
+
+        {/* 7. Delete User */}
+        {canDelete && onDelete && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={() => {
+              haptics.select();
+              onDelete(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: '#ee000040', backgroundColor: '#ee000012' }]}
+          >
+            <Trash2 size={12} color="#ee0000" />
+            <Text variant="caption" style={{ color: '#ee0000' }}>
+              Delete
+            </Text>
+          </Pressable>
         )}
       </View>
-    </Pressable>
+    </View>
   );
 });
 
