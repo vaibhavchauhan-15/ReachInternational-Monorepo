@@ -1057,8 +1057,15 @@ export function AssignPersonnelModal({
           });
         }
 
+        const isNeedsActivation = Boolean(
+          activeMachine?.health_status === "breakdown" ||
+          activeMachine?.health_status === "under_maintenance" ||
+          activeMachine?.status === "under_maintenance"
+        );
+
         const res = await updateMachinePersonnelAction(activeMachine.id, {
           supervisorIds: canEditSupervisor ? machineSupervisorIds : undefined,
+          activateMachine: isNeedsActivation,
           operators: machineOperators.map((item) => ({
             operatorId: item.operatorId,
             shiftCode: item.shiftCode,
@@ -1254,6 +1261,33 @@ export function AssignPersonnelModal({
               />
             </div>
           )}
+
+          {/* Breakdown or Maintenance Warning Banner */}
+          {activeMachine &&
+            (activeMachine.health_status === "breakdown" ||
+              activeMachine.health_status === "under_maintenance" ||
+              activeMachine.status === "under_maintenance") && (
+              <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 flex-1 min-w-0">
+                  <div className="font-bold text-rose-800 dark:text-rose-200">
+                    Machine Status:{" "}
+                    {activeMachine.health_status === "breakdown"
+                      ? "Breakdown"
+                      : "Under Maintenance"}
+                  </div>
+                  <p className="text-[11px] text-rose-700/95 dark:text-rose-300/95 leading-relaxed font-medium">
+                    This machinery is currently flagged as{" "}
+                    <strong>
+                      {activeMachine.health_status === "breakdown"
+                        ? "Breakdown"
+                        : "Under Maintenance"}
+                    </strong>
+                    . Assigning operators and saving will automatically reactivate this equipment for active operational service.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* SECTION 1: ASSIGNED SUPERVISORS */}
             <div

@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { getTodayShiftMonitorAction } from "@/app/actions/operators";
+import { getTodayShiftMonitorAction, activateMachineAction } from "@/app/actions/operators";
 import { Badge, useToast, Button, EmptyState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { getISTDateString, formatDate } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow } from "@/lib/data/operations/today-shift-monitor";
 import type { User, CRMClient, Machine } from "@/lib/types/database";
-import { UserCheck, Clock, AlertCircle, UserPlus, Calendar } from "lucide-react";
+import { UserCheck, Clock, AlertCircle, UserPlus, Calendar, Wrench, Edit2, MoreVertical } from "lucide-react";
 import { ClipboardCheck } from "@/components/icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import dynamic from "next/dynamic";
@@ -21,6 +21,14 @@ const AssistedShiftEntryModal = dynamic(
 
 const AssignOperatorModal = dynamic(
   () => import("./modals/AssignOperatorModal").then((mod) => mod.AssignOperatorModal),
+  { ssr: false }
+);
+
+const MachineStatusWarningDialog = dynamic(
+  () =>
+    import("./modals/MachineStatusWarningDialog").then(
+      (mod) => mod.MachineStatusWarningDialog
+    ),
   { ssr: false }
 );
 
@@ -52,7 +60,8 @@ export function TodayShiftMonitorTab({
   const router = useRouter();
   const [rows, setRows] = useState<TodayShiftMonitorRow[]>(initialRows || []);
   const [loading, setLoading] = useState(!initialRows);
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "entered" | "unassigned">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "entered" | "unassigned" | "breakdown" | "maintenance">("all");
+  const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -60,8 +69,41 @@ export function TodayShiftMonitorTab({
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignModalMachineId, setAssignModalMachineId] = useState<string | undefined>();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [warningMachine, setWarningMachine] = useState<{
+    id: string;
+    code: string;
+    serialNumber?: string | null;
+    model?: string | null;
+    healthStatus?: string | null;
+    status?: string | null;
+    clientName?: string | null;
+  } | null>(null);
+  const [isWarningDialogOpen, setIsWarningDialogOpen] = useState(false);
+  const [activeMenuCardKey, setActiveMenuCardKey] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Close card 3-dot actions menu on click outside or escape key
+  useEffect(() => {
+    if (!activeMenuCardKey) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setActiveMenuCardKey(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setActiveMenuCardKey(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeMenuCardKey]);
 
   // Sync selectedDate with initialDate prop if it changes
   useEffect(() => {
@@ -80,7 +122,11 @@ export function TodayShiftMonitorTab({
       if (!search && !initialRows) setLoading(true);
       else if (search) setIsSearching(true);
       try {
-        const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache);
+        const clientParam =
+          selectedClient !== "all" && !selectedClient.startsWith("name:") && selectedClient !== "unassigned"
+            ? selectedClient
+            : undefined;
+        const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache, clientParam);
         if (result.success && result.data) {
           setRows(result.data);
         }
@@ -91,7 +137,7 @@ export function TodayShiftMonitorTab({
         setIsSearching(false);
       }
     },
-    [initialRows, selectedDate]
+    [initialRows, selectedDate, selectedClient]
   );
 
   useEffect(() => {
@@ -152,15 +198,91 @@ export function TodayShiftMonitorTab({
     setIsAssignModalOpen(true);
   }, []);
 
+  const handleInitiateAssign = useCallback(
+    (rowOrMachineId: TodayShiftMonitorRow | string) => {
+      let targetRow: TodayShiftMonitorRow | undefined;
+      let targetMachineId: string | undefined;
+
+      if (typeof rowOrMachineId === "string") {
+        targetMachineId = rowOrMachineId;
+        targetRow = rows.find((r) => r.machine_id === rowOrMachineId);
+      } else {
+        targetRow = rowOrMachineId;
+        targetMachineId = rowOrMachineId.machine_id;
+      }
+
+      if (targetRow) {
+        const isBreakdown = targetRow.machine_health_status === "breakdown";
+        const isMaintenance =
+          targetRow.machine_health_status === "under_maintenance" ||
+          targetRow.machine_status === "under_maintenance";
+        if (isBreakdown || isMaintenance) {
+          setWarningMachine({
+            id: targetRow.machine_id,
+            code: targetRow.machine_code,
+            serialNumber: targetRow.machine_serial_number,
+            model: targetRow.machine_model,
+            healthStatus: targetRow.machine_health_status,
+            status: targetRow.machine_status,
+            clientName: targetRow.client_name,
+          });
+          setIsWarningDialogOpen(true);
+          return;
+        }
+      }
+
+      handleAssignOperator(targetMachineId);
+    },
+    [rows, handleAssignOperator]
+  );
+
+  const handleConfirmActiveAndAssign = useCallback(
+    async (machineId: string) => {
+      try {
+        const res = await activateMachineAction(machineId);
+        if (res.success) {
+          toast(
+            "success",
+            "Machine Activated",
+            `Machine ${warningMachine?.code || ""} has been set to Active.`
+          );
+          setRows((prev) =>
+            prev.map((r) =>
+              r.machine_id === machineId
+                ? {
+                    ...r,
+                    machine_health_status: "active",
+                    machine_status: r.client_id ? "rented" : "active",
+                  }
+                : r
+            )
+          );
+          setIsWarningDialogOpen(false);
+          setWarningMachine(null);
+          handleAssignOperator(machineId);
+        } else {
+          toast("error", "Activation Failed", res.error || "Failed to set machine to active.");
+        }
+      } catch {
+        toast("error", "Activation Error", "An error occurred while activating the machine.");
+      }
+    },
+    [warningMachine, toast, handleAssignOperator]
+  );
+
   // Listen for reach:quick-assign event dispatched from header or other components
   useEffect(() => {
     const handleQuickAssign = (e: any) => {
       const targetMachineId = e.detail?.machineId;
-      handleAssignOperator(targetMachineId);
+      if (targetMachineId) {
+        handleInitiateAssign(targetMachineId);
+      } else {
+        handleAssignOperator(undefined);
+      }
     };
     window.addEventListener("reach:quick-assign", handleQuickAssign);
     return () => window.removeEventListener("reach:quick-assign", handleQuickAssign);
-  }, [handleAssignOperator]);
+  }, [handleInitiateAssign, handleAssignOperator]);
 
   // Merge prop machines with any unique machines present in today shift rows to guarantee 100% modal option coverage
   const combinedMachines = useMemo(() => {
@@ -177,25 +299,92 @@ export function TodayShiftMonitorTab({
           model: r.machine_model,
           client_id: r.client_id,
           client: r.client_name ? { company_name: r.client_name, code: r.client_code } : undefined,
-          status: "active",
+          status: (r.machine_status as any) || "active",
+          health_status: (r.machine_health_status as any) || "active",
         } as Machine);
       }
     });
     return Array.from(map.values());
   }, [machines, rows]);
 
+  const clientOptions: FilterDropdownOption[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    const clientNames = new Map<string, string>();
+
+    rows.forEach((r) => {
+      const key = r.client_id || (r.client_name ? `name:${r.client_name}` : "unassigned");
+      counts.set(key, (counts.get(key) || 0) + 1);
+      if (r.client_name && !clientNames.has(key)) {
+        clientNames.set(key, r.client_name);
+      }
+    });
+
+    dbClients.forEach((c) => {
+      if (!clientNames.has(c.id)) {
+        clientNames.set(c.id, c.company_name);
+      }
+    });
+
+    const list: FilterDropdownOption[] = [
+      { value: "all", label: "All Clients", count: rows.length },
+    ];
+
+    const clientEntries = Array.from(clientNames.entries())
+      .filter(([id]) => (counts.get(id) || 0) > 0)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+
+    clientEntries.forEach(([id, name]) => {
+      list.push({
+        value: id,
+        label: name,
+        count: counts.get(id) || 0,
+      });
+    });
+
+    return list;
+  }, [rows, dbClients]);
+
   const filtered = useMemo(() => {
     let r = rows;
-    if (statusFilter !== "all") r = r.filter((row) => row.status === statusFilter);
+    if (statusFilter !== "all") {
+      if (statusFilter === "breakdown") {
+        r = r.filter((row) => row.machine_health_status === "breakdown");
+      } else if (statusFilter === "maintenance") {
+        r = r.filter(
+          (row) =>
+            row.machine_health_status === "under_maintenance" ||
+            row.machine_status === "under_maintenance"
+        );
+      } else {
+        r = r.filter((row) => row.status === statusFilter);
+      }
+    }
+    if (selectedClient !== "all") {
+      r = r.filter((row) => {
+        if (selectedClient === "unassigned") {
+          return !row.client_id && (!row.client_name || row.client_name === "Available / Unassigned");
+        }
+        if (selectedClient.startsWith("name:")) {
+          return row.client_name === selectedClient.replace("name:", "");
+        }
+        return row.client_id === selectedClient;
+      });
+    }
     return r;
-  }, [rows, statusFilter]);
+  }, [rows, statusFilter, selectedClient]);
 
   const summary = useMemo(() => {
     const total = rows.length;
     const entered = rows.filter((r) => r.status === "entered").length;
     const pending = rows.filter((r) => r.status === "pending").length;
     const unassigned = rows.filter((r) => r.status === "unassigned").length;
-    return { total, entered, pending, unassigned };
+    const breakdown = rows.filter((r) => r.machine_health_status === "breakdown").length;
+    const maintenance = rows.filter(
+      (r) =>
+        r.machine_health_status === "under_maintenance" ||
+        r.machine_status === "under_maintenance"
+    ).length;
+    return { total, entered, pending, unassigned, breakdown, maintenance };
   }, [rows]);
 
   const statusOptions: FilterDropdownOption[] = useMemo(
@@ -204,6 +393,26 @@ export function TodayShiftMonitorTab({
       { value: "pending", label: "Pending", dotColor: "bg-amber-500", count: summary.pending },
       { value: "entered", label: "Entered", dotColor: "bg-emerald-500", count: summary.entered },
       { value: "unassigned", label: "Unassigned", dotColor: "bg-rose-500", count: summary.unassigned },
+      ...(summary.breakdown > 0
+        ? [
+            {
+              value: "breakdown",
+              label: "Breakdown",
+              dotColor: "bg-rose-600",
+              count: summary.breakdown,
+            },
+          ]
+        : []),
+      ...(summary.maintenance > 0
+        ? [
+            {
+              value: "maintenance",
+              label: "Maintenance",
+              dotColor: "bg-amber-600",
+              count: summary.maintenance,
+            },
+          ]
+        : []),
     ],
     [summary]
   );
@@ -320,6 +529,7 @@ export function TodayShiftMonitorTab({
 
   const handleResetFilters = useCallback(() => {
     setStatusFilter("all");
+    setSelectedClient("all");
     setSearchQuery("");
     const todayStr = getISTDateString();
     setSelectedDate(todayStr);
@@ -335,7 +545,11 @@ export function TodayShiftMonitorTab({
   }, [fetchData, router]);
 
   const isDateFiltered = selectedDate !== getISTDateString();
-  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (isDateFiltered ? 1 : 0);
+  const isClientFiltered = selectedClient !== "all";
+  const activeFilterCount =
+    (statusFilter !== "all" ? 1 : 0) +
+    (isDateFiltered ? 1 : 0) +
+    (isClientFiltered ? 1 : 0);
 
   if (loading) {
     return (
@@ -364,7 +578,7 @@ export function TodayShiftMonitorTab({
           <div className="flex items-center gap-2 text-sky-800 dark:text-sky-200 font-medium">
             <Calendar size={14} className="shrink-0 text-sky-600 dark:text-sky-400" />
             <span>
-              Viewing shift logs for <strong>{formatDate(selectedDate)}</strong> ({selectedDate})
+              Viewing shift logs for <strong>{formatDate(selectedDate)}</strong>
             </span>
           </div>
           <button
@@ -425,8 +639,8 @@ export function TodayShiftMonitorTab({
             />
           </div>
 
-          {/* Status Dropdown Filter (Custom existing FilterDropdown instead of horizontal spread, responsive for mobile devices) */}
-          <div className="w-full sm:w-56 min-w-0">
+          {/* Status Dropdown Filter */}
+          <div className="w-full sm:w-52 min-w-0">
             <FilterDropdown
               label="Status"
               value={statusFilter}
@@ -434,6 +648,20 @@ export function TodayShiftMonitorTab({
               options={statusOptions}
               className="w-full"
               dropdownClassName="w-full sm:w-56"
+            />
+          </div>
+
+          {/* Client Dropdown Filter */}
+          <div className="w-full sm:w-60 md:w-64 min-w-0">
+            <FilterDropdown
+              label="Client"
+              value={selectedClient}
+              onChange={(val) => setSelectedClient(val)}
+              options={clientOptions}
+              className="w-full"
+              dropdownClassName="w-full sm:w-64"
+              searchable={true}
+              searchPlaceholder="Search client..."
             />
           </div>
         </div>
@@ -447,7 +675,7 @@ export function TodayShiftMonitorTab({
             title={isDateFiltered ? `No Shift Logs for ${formatDate(selectedDate)}` : "No Shift Roster Found"}
             description={
               isDateFiltered
-                ? `No shift logs were recorded or rostered for ${formatDate(selectedDate)} (${selectedDate}).`
+                ? `No shift logs were recorded or rostered for ${formatDate(selectedDate)}.`
                 : "No active machines with assigned operators and shift codes found for today."
             }
             action={
@@ -508,15 +736,23 @@ export function TodayShiftMonitorTab({
               filtered.map((row, idx) => {
                 const isUnassigned = row.status === "unassigned" || !row.operator_id;
                 const isEntered = row.status === "entered";
+                const isBreakdown = row.machine_health_status === "breakdown";
+                const isMaintenance =
+                  row.machine_health_status === "under_maintenance" ||
+                  row.machine_status === "under_maintenance";
 
                 return (
                   <tr
                     key={row.operator_id ? `${row.operator_id}-${row.machine_id}-${row.shift_code}` : `unassigned-${row.machine_id}-${idx}`}
                     onClick={() => {
-                      if (isUnassigned) handleAssignOperator(row.machine_id);
+                      if (isUnassigned) handleInitiateAssign(row);
                     }}
                     className={`border-b border-[var(--color-hairline)] last:border-b-0 transition-colors ${
-                      isUnassigned
+                      isBreakdown
+                        ? "bg-rose-500/[0.04] hover:bg-rose-500/10 cursor-pointer"
+                        : isMaintenance
+                        ? "bg-amber-500/[0.04] hover:bg-amber-500/10 cursor-pointer"
+                        : isUnassigned
                         ? "bg-amber-500/[0.03] hover:bg-amber-500/10 cursor-pointer"
                         : "hover:bg-[var(--color-canvas)]/50"
                     }`}
@@ -526,18 +762,42 @@ export function TodayShiftMonitorTab({
                     <td className="px-3 py-2">
                       {isUnassigned ? (
                         <div>
-                          <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
-                            <AlertCircle size={12} />
-                            <span>Unassigned</span>
+                          {isBreakdown ? (
+                            <div className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
+                              <AlertCircle size={12} />
+                              <span>Unassigned (Breakdown)</span>
+                            </div>
+                          ) : isMaintenance ? (
+                            <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                              <Wrench size={12} />
+                              <span>Unassigned (Maintenance)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                              <AlertCircle size={12} />
+                              <span>Unassigned</span>
+                            </div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {isBreakdown
+                              ? "Machine in breakdown · Click to activate"
+                              : isMaintenance
+                              ? "Under maintenance · Click to activate"
+                              : "Click to assign operator"}
                           </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">Click to assign operator</div>
                         </div>
                       ) : (
                         <>
                           <div className="font-medium text-[var(--color-ink)]"><Highlight text={row.operator_name} query={searchQuery} /></div>
-                          {row.operator_phone && (
-                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5"><Highlight text={row.operator_phone} query={searchQuery} /></div>
-                          )}
+                          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {row.operator_employee_id && (
+                              <span className="font-semibold text-sky-700 dark:text-sky-300"><Highlight text={row.operator_employee_id} query={searchQuery} /></span>
+                            )}
+                            {row.operator_employee_id && row.operator_phone && <span>·</span>}
+                            {row.operator_phone && (
+                              <span><Highlight text={row.operator_phone} query={searchQuery} /></span>
+                            )}
+                          </div>
                         </>
                       )}
                     </td>
@@ -547,10 +807,14 @@ export function TodayShiftMonitorTab({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleAssignOperator(row.machine_id);
+                          handleInitiateAssign(row);
                         }}
                         className="text-left group cursor-pointer"
-                        title={`Assign personnel to ${row.machine_code}`}
+                        title={
+                          isBreakdown || isMaintenance
+                            ? `Reactivate & assign ${row.machine_code}`
+                            : `Assign personnel to ${row.machine_code}`
+                        }
                       >
                         <div className="font-mono text-[11px] font-medium text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
                           <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
@@ -559,14 +823,29 @@ export function TodayShiftMonitorTab({
                           {row.machine_model && <span><Highlight text={row.machine_model} query={searchQuery} /> · </span>}
                           <Highlight text={row.machine_code} query={searchQuery} />
                         </div>
+                        {isBreakdown ? (
+                          <Badge variant="error" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
+                            Breakdown
+                          </Badge>
+                        ) : isMaintenance ? (
+                          <Badge variant="warning" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
+                            Maintenance
+                          </Badge>
+                        ) : null}
                       </button>
                     </td>
                     {/* Client: name + client_id below */}
                     <td className="px-3 py-2 max-w-[160px]">
                       <div className="text-[var(--color-ink)] truncate"><Highlight text={row.client_name} query={searchQuery} /></div>
-                      {(row.client_code || row.client_id) && (
-                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate"><Highlight text={row.client_code || row.client_id} query={searchQuery} /></div>
-                      )}
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate flex items-center gap-1">
+                        {(row.client_code || row.client_id) && (
+                          <span><Highlight text={row.client_code || row.client_id} query={searchQuery} /></span>
+                        )}
+                        {(row.client_code || row.client_id) && (row.client_city || row.site_name) && <span>·</span>}
+                        {(row.client_city || row.site_name) && (
+                          <span className="text-[var(--color-ink)] font-sans font-medium"><Highlight text={row.client_city || row.site_name} query={searchQuery} /></span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       {isUnassigned ? (
@@ -592,13 +871,37 @@ export function TodayShiftMonitorTab({
                     </td>
                     <td className="px-3 py-2 text-center">
                       <Badge
-                        variant={isEntered ? "success" : isUnassigned ? "warning" : "warning"}
+                        variant={
+                          isEntered
+                            ? "success"
+                            : isBreakdown
+                            ? "error"
+                            : isMaintenance
+                            ? "warning"
+                            : isUnassigned
+                            ? "warning"
+                            : "warning"
+                        }
                         dot
                         className={`text-[10px] px-1.5 py-0.5 ${
-                          isUnassigned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300" : ""
+                          isBreakdown
+                            ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                            : isMaintenance
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            : isUnassigned
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            : ""
                         }`}
                       >
-                        {isEntered ? "Entered" : isUnassigned ? "Unassigned" : "Pending"}
+                        {isEntered
+                          ? "Entered"
+                          : isBreakdown
+                          ? "Breakdown"
+                          : isMaintenance
+                          ? "Maintenance"
+                          : isUnassigned
+                          ? "Unassigned"
+                          : "Pending"}
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
@@ -616,23 +919,33 @@ export function TodayShiftMonitorTab({
                       )}
                     </td>
                     <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                      {isEntered && row.start_meter != null && row.end_meter != null
+                      {row.start_meter != null && row.end_meter != null
                         ? `${row.start_meter} → ${row.end_meter}`
+                        : row.start_meter != null
+                        ? `${row.start_meter} → —`
+                        : row.current_meter != null
+                        ? `${row.current_meter}`
                         : "—"}
                     </td>
                     <td className="px-3 py-2 text-center">
                       {isUnassigned ? (
                         <Button
-                          variant="primary"
+                          variant={isBreakdown ? "outline" : "primary"}
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleAssignOperator(row.machine_id);
+                            handleInitiateAssign(row);
                           }}
-                          className="h-7 px-2.5 text-[10px] font-semibold bg-sky-600 hover:bg-sky-500 text-white flex items-center gap-1 cursor-pointer mx-auto"
+                          className={`h-7 px-2.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer mx-auto ${
+                            isBreakdown
+                              ? "border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
+                              : isMaintenance
+                              ? "bg-amber-600 hover:bg-amber-500 text-white"
+                              : "bg-sky-600 hover:bg-sky-500 text-white"
+                          }`}
                         >
-                          <UserPlus size={11} />
-                          <span>Assign</span>
+                          {isBreakdown || isMaintenance ? <Wrench size={11} /> : <UserPlus size={11} />}
+                          <span>{isBreakdown || isMaintenance ? "Activate" : "Assign"}</span>
                         </Button>
                       ) : row.status === "pending" ? (
                         canEnterLog ? (
@@ -649,6 +962,18 @@ export function TodayShiftMonitorTab({
                         ) : (
                           <span className="text-muted-foreground/60 text-[10px] font-medium">Pending</span>
                         )
+                      ) : canEnterLog ? (
+                        <Button
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEnterLog(row);
+                          }}
+                          className="h-7 px-2.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 border border-sky-500/30 bg-sky-500/15 hover:bg-sky-500/25 cursor-pointer inline-flex items-center gap-1 mx-auto"
+                        >
+                          <Edit2 size={11} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                          <span>Edit Log</span>
+                        </Button>
                       ) : (
                         <span className="text-emerald-600 text-[10px] font-semibold">✓</span>
                       )}
@@ -669,21 +994,31 @@ export function TodayShiftMonitorTab({
           filtered.map((row, idx) => {
             const isUnassigned = row.status === "unassigned" || !row.operator_id;
             const isEntered = row.status === "entered";
+            const isBreakdown = row.machine_health_status === "breakdown";
+            const isMaintenance =
+              row.machine_health_status === "under_maintenance" ||
+              row.machine_status === "under_maintenance";
+
+            const cardKey = row.operator_id ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}` : `m-unassigned-${row.machine_id}-${idx}`;
 
             return (
               <div
-                key={row.operator_id ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}` : `m-unassigned-${row.machine_id}-${idx}`}
+                key={cardKey}
                 onClick={() => {
                   if (isUnassigned) {
-                    handleAssignOperator(row.machine_id);
-                  } else if (canEnterLog && row.status === "pending") {
-                    handleEnterLog(row);
+                    handleInitiateAssign(row);
                   }
                 }}
-                className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-3 space-y-2 transition-all active:scale-[0.99] ${
-                  isUnassigned || (canEnterLog && row.status === "pending") ? "cursor-pointer hover:border-[var(--color-ink)]/30" : ""
+                className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-2.5 space-y-1.5 transition-all ${
+                  isUnassigned ? "cursor-pointer hover:border-[var(--color-ink)]/30 active:scale-[0.99]" : ""
                 } ${
-                  isUnassigned
+                  isEntered
+                    ? "border-sky-500/30 bg-sky-500/[0.03] dark:border-sky-500/30 dark:bg-sky-950/20"
+                    : isBreakdown
+                    ? "border-rose-500/30 bg-rose-500/[0.03]"
+                    : isMaintenance
+                    ? "border-amber-500/30 bg-amber-500/[0.03]"
+                    : isUnassigned
                     ? "border-amber-500/30 bg-amber-500/[0.02]"
                     : "border-[var(--color-hairline)]"
                 }`}
@@ -692,74 +1027,198 @@ export function TodayShiftMonitorTab({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     {isUnassigned ? (
-                      <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base text-amber-600 dark:text-amber-400">
-                        <AlertCircle size={16} />
-                        <span>Unassigned Machine</span>
-                      </div>
+                      isBreakdown ? (
+                        <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base text-rose-600 dark:text-rose-400">
+                          <AlertCircle size={15} />
+                          <span>Breakdown Machine</span>
+                        </div>
+                      ) : isMaintenance ? (
+                        <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base text-amber-600 dark:text-amber-400">
+                          <Wrench size={15} />
+                          <span>Under Maintenance</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base text-amber-600 dark:text-amber-400">
+                          <AlertCircle size={15} />
+                          <span>Unassigned Machine</span>
+                        </div>
+                      )
                     ) : (
-                      <>
-                        <div className="font-bold text-sm sm:text-base text-[var(--color-ink)] truncate"><Highlight text={row.operator_name} query={searchQuery} /></div>
-                        {row.operator_phone && (
-                          <div className="text-xs text-muted-foreground font-mono mt-0.5"><Highlight text={row.operator_phone} query={searchQuery} /></div>
-                        )}
-                      </>
+                      <div className="font-bold text-sm text-[var(--color-ink)] truncate">
+                        <Highlight text={row.operator_name} query={searchQuery} />
+                      </div>
                     )}
                   </div>
-                  <Badge
-                    variant={isEntered ? "success" : isUnassigned ? "warning" : "warning"}
-                    dot
-                    className="text-xs font-semibold px-2 py-0.5 shrink-0"
-                  >
-                    {isEntered ? "Entered" : isUnassigned ? "Unassigned" : "Pending"}
-                  </Badge>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge
+                      variant={
+                        isEntered
+                          ? "success"
+                          : isBreakdown
+                          ? "error"
+                          : isMaintenance
+                          ? "warning"
+                          : isUnassigned
+                          ? "warning"
+                          : "warning"
+                      }
+                      dot
+                      className={`text-xs font-semibold px-2 py-0.5 shrink-0 ${
+                        isBreakdown
+                          ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                          : isMaintenance
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                          : ""
+                      }`}
+                    >
+                      {isEntered
+                        ? "Entered"
+                        : isBreakdown
+                        ? "Breakdown"
+                        : isMaintenance
+                        ? "Maintenance"
+                        : isUnassigned
+                        ? "Unassigned"
+                        : "Pending"}
+                    </Badge>
+
+                    {/* 3-Dot Action Menu Button (Gated by RBAC: only authorized roles e.g. super_admin, admin, manager) */}
+                    {canEnterLog && !isUnassigned && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuCardKey((prev) => (prev === cardKey ? null : cardKey));
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-elevated)] hover:border-[var(--color-ink)]/30 text-muted-foreground hover:text-[var(--color-ink)] cursor-pointer transition-colors"
+                          aria-label="Shift actions"
+                          title="Shift actions"
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+
+                        {activeMenuCardKey === cardKey && (
+                          <div
+                            ref={menuRef}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 top-full mt-1 z-40 min-w-[160px] rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-lg py-1 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-100"
+                          >
+                            {isEntered ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuCardKey(null);
+                                  handleEnterLog(row);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                              >
+                                <Edit2 size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                                <span>Edit Shift Log</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuCardKey(null);
+                                  handleEnterLog(row);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                              >
+                                <ClipboardCheck className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                                <span>Enter Shift Log</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Machine & Client Info — clickable to assign */}
-                <button
-                  type="button"
+                {/* Rectangular Metadata Box */}
+                <div
                   onClick={(e) => {
-                    e.stopPropagation();
-                    handleAssignOperator(row.machine_id);
+                    if (isUnassigned) {
+                      e.stopPropagation();
+                      handleInitiateAssign(row);
+                    }
                   }}
-                  className="w-full text-left space-y-0.5 p-1.5 -m-1 rounded hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className={`rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2 space-y-1 text-xs ${
+                    isUnassigned ? "cursor-pointer hover:border-sky-500/50" : ""
+                  }`}
                 >
-                  <div className="text-xs text-[var(--color-ink)] font-mono font-semibold">
-                    <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
-                    {row.machine_model && <span className="text-muted-foreground font-normal"> · <Highlight text={row.machine_model} query={searchQuery} /></span>}
-                  </div>
-                  <div className="text-xs text-muted-foreground font-mono"><Highlight text={row.machine_code} query={searchQuery} /></div>
-                  <div className="text-xs text-muted-foreground">
-                    <Highlight text={row.client_name} query={searchQuery} />
-                    {(row.client_code || row.client_id) && <span className="font-mono font-medium"> · <Highlight text={row.client_code || row.client_id} query={searchQuery} /></span>}
-                  </div>
-                </button>
-
-                {/* Details */}
-                {!isUnassigned && (
-                  <div className="flex items-center gap-2 flex-wrap text-xs">
-                    <Badge variant="info" className="text-xs font-semibold px-2 py-0.5 font-mono">
-                      Shift {row.shift_code}
-                    </Badge>
-                    {row.shift_name && (
-                      <span className="text-xs text-muted-foreground font-medium truncate max-w-[150px]">
-                        {row.shift_name.replace(new RegExp(`^shift\\s*${row.shift_code}\\s*[:\\-•]?\\s*\\(?`, "i"), "").replace(/\)$/, "").trim() || row.shift_name}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {formatTime(row.shift_start)} – {formatTime(row.shift_end)}
+                  {/* Shift */}
+                  <div className="flex items-baseline gap-1.5 py-0.5 border-b border-[var(--color-hairline)]/30">
+                    <span className="text-muted-foreground font-medium shrink-0">Shift:</span>
+                    <span className="font-semibold text-sky-600 dark:text-sky-400 truncate">
+                      {row.shift_code || "—"}
                     </span>
-                    {isEntered && row.start_meter != null && row.end_meter != null && (
-                      <span className="text-xs text-muted-foreground font-mono">
-                        HMR: {row.start_meter} → {row.end_meter}
-                      </span>
-                    )}
                   </div>
-                )}
 
-                {/* Entered By */}
+                  {/* M/C Model */}
+                  <div className="flex items-baseline gap-1.5 py-0.5 border-b border-[var(--color-hairline)]/30">
+                    <span className="text-muted-foreground font-medium shrink-0">M/C Model:</span>
+                    <span className="font-medium text-[var(--color-ink)] truncate">
+                      <Highlight text={row.machine_model || "—"} query={searchQuery} />
+                    </span>
+                  </div>
+
+                  {/* M/C Sr no */}
+                  <div className="flex items-baseline gap-1.5 py-0.5 border-b border-[var(--color-hairline)]/30">
+                    <span className="text-muted-foreground font-medium shrink-0">M/C Sr no:</span>
+                    <span className="font-mono font-medium text-sky-600 dark:text-sky-400 truncate">
+                      <Highlight text={row.machine_serial_number || "—"} query={searchQuery} />
+                    </span>
+                  </div>
+
+                  {/* HMR */}
+                  <div className="flex items-baseline gap-1.5 py-0.5 border-b border-[var(--color-hairline)]/30">
+                    <span className="text-muted-foreground font-medium shrink-0">HMR:</span>
+                    <span className="font-mono font-semibold text-[var(--color-ink)] truncate">
+                      {(() => {
+                        const start = row.start_meter;
+                        const end = row.end_meter;
+                        if (start != null && end != null) {
+                          return `${start}->${end}`;
+                        }
+                        if (start != null) {
+                          return `${start}->${end ?? "—"}`;
+                        }
+                        if (end != null) {
+                          return `—->${end}`;
+                        }
+                        if (row.current_meter != null) {
+                          return `${row.current_meter}`;
+                        }
+                        return "—";
+                      })()}
+                    </span>
+                  </div>
+
+                  {/* Client */}
+                  <div className="flex items-baseline gap-1.5 py-0.5 border-b border-[var(--color-hairline)]/30">
+                    <span className="text-muted-foreground font-medium shrink-0">Client:</span>
+                    <span className="font-medium text-[var(--color-ink)] truncate">
+                      <Highlight text={row.client_name || "—"} query={searchQuery} />
+                    </span>
+                  </div>
+
+                  {/* Site */}
+                  <div className="flex items-baseline gap-1.5 py-0.5">
+                    <span className="text-muted-foreground font-medium shrink-0">Site:</span>
+                    <span className="font-medium text-[var(--color-ink)] truncate">
+                      <Highlight text={row.client_city || row.site_name || "—"} query={searchQuery} />
+                    </span>
+                  </div>
+                </div>
+
+                {/* Entered By Attribution */}
                 {isEntered && row.entered_by_name && (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <UserCheck size={13} />
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5 px-0.5">
+                    <UserCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
                     <span>Entered by {row.entered_by_name}</span>
                     {row.entry_source && row.entry_source !== "operator" && (
                       <Badge variant="info" className="text-xs font-semibold px-1.5 py-0.5">{row.entry_source}</Badge>
@@ -767,32 +1226,31 @@ export function TodayShiftMonitorTab({
                   </div>
                 )}
 
-                {/* Action */}
+                {/* Action - for unassigned machines only */}
                 {isUnassigned ? (
                   <Button
-                    variant="primary"
+                    variant={isBreakdown ? "outline" : "primary"}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleAssignOperator(row.machine_id);
+                      handleInitiateAssign(row);
                     }}
-                    className="w-full h-11 text-sm font-semibold flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white cursor-pointer"
+                    className={`w-full h-10 text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isBreakdown
+                        ? "border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
+                        : isMaintenance
+                        ? "bg-amber-600 hover:bg-amber-500 text-white"
+                        : "bg-sky-600 hover:bg-sky-500 text-white"
+                    }`}
                   >
-                    <UserPlus size={16} />
-                    <span>Assign Operator to {row.machine_code}</span>
+                    {isBreakdown || isMaintenance ? <Wrench size={15} /> : <UserPlus size={15} />}
+                    <span>
+                      {isBreakdown
+                        ? `Activate & Assign ${row.machine_code}`
+                        : isMaintenance
+                        ? `Activate & Assign ${row.machine_code}`
+                        : `Assign Operator to ${row.machine_code}`}
+                    </span>
                   </Button>
-                ) : row.status === "pending" ? (
-                  canEnterLog ? (
-                    <Button
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEnterLog(row);
-                      }}
-                      className="w-full h-11 text-sm font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer"
-                    >
-                      Enter Log for {row.operator_name}
-                    </Button>
-                  ) : null
                 ) : null}
               </div>
             );
@@ -826,6 +1284,19 @@ export function TodayShiftMonitorTab({
           fetchData(selectedDate, undefined, true);
         }}
       />
+
+      {/* Machine Status Warning Dialog (Breakdown / Maintenance) */}
+      {warningMachine && (
+        <MachineStatusWarningDialog
+          isOpen={isWarningDialogOpen}
+          onClose={() => {
+            setIsWarningDialogOpen(false);
+            setWarningMachine(null);
+          }}
+          machine={warningMachine}
+          onConfirmActiveAndAssign={handleConfirmActiveAndAssign}
+        />
+      )}
 
       {/* Shift Logs Export Modal (Excel & PDF) */}
       {isExportModalOpen && (

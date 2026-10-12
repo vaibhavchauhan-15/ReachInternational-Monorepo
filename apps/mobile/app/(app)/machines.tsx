@@ -94,6 +94,7 @@ const DEFAULT_MACHINE_FILTERS = {
   rentalFilter: 'all' as RentalFilterType,
   healthFilter: 'all' as HealthFilterType,
   supervisorFilter: 'all',
+  clientFilter: 'all',
   sortBy: 'machine_id_asc' as SortOptionType,
 };
 
@@ -148,6 +149,7 @@ export default function MachinesScreen() {
   // Data states
   const [machines, setMachines] = useState<any[]>([]);
   const [supervisorsList, setSupervisorsList] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [clientsList, setClientsList] = useState<Array<{ id: string; company_name: string; code?: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -165,6 +167,7 @@ export default function MachinesScreen() {
     rentalFilter: RentalFilterType;
     healthFilter: HealthFilterType;
     supervisorFilter: string;
+    clientFilter: string;
     sortBy: SortOptionType;
   }>({
     storageKey: 'reach_filters_machines',
@@ -176,11 +179,13 @@ export default function MachinesScreen() {
   const rentalFilter = filters.rentalFilter;
   const healthFilter = filters.healthFilter;
   const supervisorFilter = filters.supervisorFilter;
+  const clientFilter = filters.clientFilter || 'all';
   const sortBy = filters.sortBy;
 
   const setRentalFilter = useCallback((val: RentalFilterType | ((prev: RentalFilterType) => RentalFilterType)) => setFilter('rentalFilter', val), [setFilter]);
   const setHealthFilter = useCallback((val: HealthFilterType | ((prev: HealthFilterType) => HealthFilterType)) => setFilter('healthFilter', val), [setFilter]);
   const setSupervisorFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('supervisorFilter', val), [setFilter]);
+  const setClientFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('clientFilter', val), [setFilter]);
   const setSortBy = useCallback((val: SortOptionType | ((prev: SortOptionType) => SortOptionType)) => setFilter('sortBy', val), [setFilter]);
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -544,6 +549,25 @@ export default function MachinesScreen() {
     loadSupervisors();
   }, []);
 
+  // Fetch active clients for filter dropdown
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        const { data } = await supabase
+          .from('clients')
+          .select('id, company_name, code')
+          .is('deleted_at', null)
+          .order('company_name');
+        if (data) {
+          setClientsList(data);
+        }
+      } catch (err) {
+        console.warn('Error loading clients:', err);
+      }
+    }
+    loadClients();
+  }, []);
+
   useEffect(() => {
     fetchMachines();
   }, [fetchMachines]);
@@ -602,6 +626,26 @@ export default function MachinesScreen() {
     return [{ id: 'all', label: 'All Supervisors' }, ...items];
   }, [supervisorsList, machines]);
 
+  // Dynamic Client Options for DropdownFilterSelector
+  const clientFilterOptions = useMemo<FilterOption[]>(() => {
+    const map = new Map<string, string>();
+    clientsList.forEach((c) => {
+      const name = c.company_name || c.code;
+      if (c.id && name) map.set(c.id, name);
+    });
+    machines.forEach((m) => {
+      if (m.client_id && m.client?.company_name) {
+        map.set(m.client_id, m.client.company_name);
+      }
+    });
+    const items: FilterOption[] = Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      label: name,
+    }));
+    items.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ id: 'all', label: 'All Clients' }, ...items];
+  }, [clientsList, machines]);
+
   // Interactive KPI Metrics Summary
   const statsSummary = useMemo(() => {
     let availableCount = 0;
@@ -634,11 +678,12 @@ export default function MachinesScreen() {
     let count = 0;
     if (rentalFilter !== 'all') count++;
     if (healthFilter !== 'all') count++;
+    if (clientFilter !== 'all') count++;
     if (supervisorFilter !== 'all') count++;
     if (debouncedSearch.trim() !== '') count++;
     if (sortBy !== 'machine_id_asc') count++;
     return count;
-  }, [rentalFilter, healthFilter, supervisorFilter, debouncedSearch, sortBy]);
+  }, [rentalFilter, healthFilter, clientFilter, supervisorFilter, debouncedSearch, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
     resetListFilters();
@@ -670,6 +715,11 @@ export default function MachinesScreen() {
       list = list.filter((m) => m.health_status === healthFilter);
     }
 
+    // Client filter
+    if (clientFilter !== 'all') {
+      list = list.filter((m) => m.client_id === clientFilter);
+    }
+
     // Supervisor filter
     if (supervisorFilter !== 'all') {
       list = list.filter((m) => {
@@ -694,7 +744,7 @@ export default function MachinesScreen() {
     });
 
     return list;
-  }, [machines, debouncedSearch, rentalFilter, healthFilter, supervisorFilter, sortBy]);
+  }, [machines, debouncedSearch, rentalFilter, healthFilter, clientFilter, supervisorFilter, sortBy]);
 
 
   // Get current filter label helpers
@@ -702,6 +752,8 @@ export default function MachinesScreen() {
     RENTAL_FILTER_OPTIONS.find((opt) => opt.id === rentalFilter)?.label || 'Rental Status';
   const currentHealthLabel =
     HEALTH_FILTER_OPTIONS.find((opt) => opt.id === healthFilter)?.label || 'Health Status';
+  const currentClientLabel =
+    clientFilterOptions.find((opt) => opt.id === clientFilter)?.label || 'Client';
   const currentSupervisorLabel =
     supervisorFilterOptions.find((opt) => opt.id === supervisorFilter)?.label || 'Supervisor';
   const currentSortLabel =
@@ -881,6 +933,26 @@ export default function MachinesScreen() {
           </Pressable>
         )}
 
+        {clientFilter !== 'all' && (
+          <Pressable
+            variant="plain"
+            haptic="select"
+            hitSlopToMin48
+            onPress={() => setClientFilter('all')}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove client filter ${currentClientLabel}`}
+          >
+            <Badge variant="outline" size="md" style={styles.filterBadge}>
+              <View style={styles.filterBadgeContent}>
+                <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  Client: {currentClientLabel}
+                </Text>
+                <X size={12} color={theme.colors.mute} />
+              </View>
+            </Badge>
+          </Pressable>
+        )}
+
         {sortBy !== 'machine_id_asc' && (
           <Pressable
             variant="plain"
@@ -1028,11 +1100,11 @@ export default function MachinesScreen() {
                 {
                   backgroundColor:
                     filterPanelOpen || activeFilterCount > 0
-                      ? theme.colors.ink
+                      ? '#0284c7'
                       : theme.colors.canvas,
                   borderColor:
                     filterPanelOpen || activeFilterCount > 0
-                      ? theme.colors.ink
+                      ? '#0284c7'
                       : theme.colors.hairline,
                 },
                 isWeb && ({
@@ -1045,7 +1117,7 @@ export default function MachinesScreen() {
                 size={13}
                 color={
                   filterPanelOpen || activeFilterCount > 0
-                    ? theme.colors.canvas
+                    ? '#ffffff'
                     : theme.colors.ink
                 }
               />
@@ -1055,7 +1127,7 @@ export default function MachinesScreen() {
                   {
                     color:
                       filterPanelOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
+                        ? '#ffffff'
                         : theme.colors.ink,
                   },
                 ]}
@@ -1069,8 +1141,8 @@ export default function MachinesScreen() {
                     {
                       backgroundColor:
                         filterPanelOpen || activeFilterCount > 0
-                          ? theme.colors.canvas
-                          : theme.colors.ink,
+                          ? '#ffffff'
+                          : '#0284c7',
                     },
                   ]}
                 >
@@ -1080,8 +1152,8 @@ export default function MachinesScreen() {
                       {
                         color:
                           filterPanelOpen || activeFilterCount > 0
-                            ? theme.colors.ink
-                            : theme.colors.canvas,
+                            ? '#0284c7'
+                            : '#ffffff',
                       },
                     ]}
                   >
@@ -1100,7 +1172,7 @@ export default function MachinesScreen() {
                     size={13}
                     color={
                       filterPanelOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
+                        ? '#ffffff'
                         : theme.colors.mute
                     }
                   />
@@ -1122,7 +1194,7 @@ export default function MachinesScreen() {
                     size={13}
                     color={
                       filterPanelOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
+                        ? '#ffffff'
                         : theme.colors.mute
                     }
                   />
@@ -1178,7 +1250,7 @@ export default function MachinesScreen() {
                   }}
                   style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
                 >
-                  {/* 4 Dimension Filter Selector Dropdowns */}
+                  {/* 5 Dimension Filter Selector Dropdowns */}
                   <View style={styles.filterSelectorsGrid}>
                     {/* 1. Rental Status Dropdown */}
                     <DropdownFilterSelector
@@ -1196,7 +1268,16 @@ export default function MachinesScreen() {
                       onChange={(val) => setHealthFilter(val as HealthFilterType)}
                     />
 
-                    {/* 3. Supervisor Dropdown */}
+                    {/* 3. Client Dropdown */}
+                    <DropdownFilterSelector
+                      label="Client"
+                      value={clientFilter}
+                      options={clientFilterOptions}
+                      onChange={(val) => setClientFilter(val)}
+                      showSearch
+                    />
+
+                    {/* 4. Supervisor Dropdown */}
                     <DropdownFilterSelector
                       label="Supervisor"
                       value={supervisorFilter}
@@ -1205,7 +1286,7 @@ export default function MachinesScreen() {
                       showSearch
                     />
 
-                    {/* 4. Sort By Dropdown (search bar explicitly removed) */}
+                    {/* 5. Sort By Dropdown (search bar explicitly removed) */}
                     <DropdownFilterSelector
                       label="Sort"
                       value={sortBy}
@@ -1246,7 +1327,7 @@ export default function MachinesScreen() {
                 }}
                 style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
               >
-                {/* 4 Dimension Filter Selector Dropdowns */}
+                {/* 5 Dimension Filter Selector Dropdowns */}
                 <View style={styles.filterSelectorsGrid}>
                   {/* 1. Rental Status Dropdown */}
                   <DropdownFilterSelector
@@ -1264,7 +1345,16 @@ export default function MachinesScreen() {
                     onChange={(val) => setHealthFilter(val as HealthFilterType)}
                   />
 
-                  {/* 3. Supervisor Dropdown */}
+                  {/* 3. Client Dropdown */}
+                  <DropdownFilterSelector
+                    label="Client"
+                    value={clientFilter}
+                    options={clientFilterOptions}
+                    onChange={(val) => setClientFilter(val)}
+                    showSearch
+                  />
+
+                  {/* 4. Supervisor Dropdown */}
                   <DropdownFilterSelector
                     label="Supervisor"
                     value={supervisorFilter}
@@ -1273,7 +1363,7 @@ export default function MachinesScreen() {
                     showSearch
                   />
 
-                  {/* 4. Sort By Dropdown (search bar explicitly removed) */}
+                  {/* 5. Sort By Dropdown (search bar explicitly removed) */}
                   <DropdownFilterSelector
                     label="Sort"
                     value={sortBy}
@@ -1648,9 +1738,9 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   filterSelectorsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     gap: 8,
+    width: '100%',
   },
   activeBadgesRow: {
     flexDirection: 'row',

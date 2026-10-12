@@ -207,8 +207,12 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
           style={[
             styles.triggerBtn,
             {
-              backgroundColor: theme.colors.canvas,
-              borderColor: isFiltered ? theme.colors.ink : theme.colors.hairline,
+              backgroundColor: isFiltered
+                ? isDark
+                  ? 'rgba(2, 132, 199, 0.12)'
+                  : 'rgba(2, 132, 199, 0.08)'
+                : theme.colors.canvas,
+              borderColor: isFiltered ? '#0284c7' : theme.colors.hairline,
             },
           ]}
           accessibilityRole="combobox"
@@ -227,7 +231,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
               style={[
                 styles.triggerValue,
                 {
-                  color: theme.colors.ink,
+                  color: isFiltered ? '#0284c7' : theme.colors.ink,
                 },
               ]}
               numberOfLines={1}
@@ -238,7 +242,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
           <Icon
             name="chevron-down"
             size={13}
-            color={open ? theme.colors.ink : theme.colors.mute}
+            color={open || isFiltered ? '#0284c7' : theme.colors.mute}
             state={open ? 'open' : 'closed'}
           />
         </Pressable>
@@ -314,7 +318,9 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         styles.sheetOptionItem,
                         {
                           backgroundColor: isSelected
-                            ? theme.colors.ink
+                            ? isDark
+                              ? 'rgba(2, 132, 199, 0.2)'
+                              : 'rgba(2, 132, 199, 0.12)'
                             : 'transparent',
                         },
                       ]}
@@ -325,7 +331,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                             style={[
                               styles.optionDot,
                               {
-                                backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                                backgroundColor: opt.dotColor,
                               },
                             ]}
                           />
@@ -333,7 +339,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         <Text
                           variant="body"
                           style={{
-                            color: isSelected ? theme.colors.canvas : theme.colors.ink,
+                            color: isSelected ? '#0284c7' : theme.colors.ink,
                           }}
                           numberOfLines={1}
                         >
@@ -341,7 +347,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         </Text>
                       </View>
                       {isSelected && (
-                        <Check size={16} color={theme.colors.canvas} strokeWidth={2.5} />
+                        <Check size={16} color="#0284c7" strokeWidth={2.5} />
                       )}
                     </Pressable>
                   );
@@ -425,7 +431,9 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         styles.optionItem,
                         {
                           backgroundColor: isSelected
-                            ? theme.colors.ink
+                            ? isDark
+                              ? 'rgba(2, 132, 199, 0.2)'
+                              : 'rgba(2, 132, 199, 0.12)'
                             : 'transparent',
                         },
                       ]}
@@ -436,7 +444,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                             style={[
                               styles.optionDot,
                               {
-                                backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                                backgroundColor: opt.dotColor,
                               },
                             ]}
                           />
@@ -444,7 +452,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         <Text
                           variant="caption"
                           style={{
-                            color: isSelected ? theme.colors.canvas : theme.colors.ink,
+                            color: isSelected ? '#0284c7' : theme.colors.ink,
                           }}
                           numberOfLines={1}
                         >
@@ -452,7 +460,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = ({
                         </Text>
                       </View>
                       {isSelected && (
-                        <Check size={14} color={theme.colors.canvas} strokeWidth={2.5} animate="mount" />
+                        <Check size={14} color="#0284c7" strokeWidth={2.5} animate="mount" />
                       )}
                     </Pressable>
                   );

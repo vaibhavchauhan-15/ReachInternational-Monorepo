@@ -2,10 +2,12 @@
 
 This index maps features directly to exact file paths. AI agents must use this to read ONLY the relevant files for a given task.
 
-## 1. Authentication & Users
-- Pages: `app/login/page.tsx`, `app/signup/page.tsx`, `app/forgot-password/page.tsx`
-- Server Actions: `app/actions/auth.ts`, `app/actions/users.ts`
+## 1. Authentication, Users & Profile
+- Pages: `app/login/page.tsx`, `app/signup/page.tsx`, `app/forgot-password/page.tsx`, `app/(app)/profile/page.tsx`, `app/(app)/profile/edit/page.tsx`
+- Server Actions: `app/actions/auth.ts`, `app/actions/users.ts`, `app/actions/profile.ts`
 - Client Management: `components/users/*` (User table, role assign modals)
+- Profile Components: `components/profile/ProfileEditForm.tsx`, `components/profile/EditProfileModal.tsx`, `components/profile/ProfileEditButton.tsx`
+- Mobile Profile: `apps/mobile/app/(app)/profile/index.tsx`, `apps/mobile/app/(app)/profile/edit.tsx`, `apps/mobile/components/profile/ProfileEditForm.tsx`
 - Supabase Clients: `lib/supabase/server.ts`, `lib/supabase/browser.ts`, `lib/supabase/admin.ts`
 - Data Access: `lib/dal.ts`
 

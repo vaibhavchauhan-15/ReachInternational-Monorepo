@@ -45,6 +45,13 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       secureTextEntry,
       containerStyle,
       style,
+      autoComplete,
+      textContentType,
+      importantForAutofill,
+      autoCorrect,
+      spellCheck,
+      keyboardType,
+      inputMode,
       ...props
     },
     ref
@@ -54,6 +61,33 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
     const actualSecureTextEntry = isPassword
       ? !isPasswordVisible
       : secureTextEntry;
+
+    // Default autofill / autocomplete to safe non-credential behavior monorepo-wide
+    // Passwords default to current-password; non-passwords strictly default to 'off'
+    const effectiveAutoComplete = isPassword
+      ? (autoComplete ?? 'current-password')
+      : (autoComplete ?? 'off');
+
+    const effectiveTextContentType = isPassword
+      ? (textContentType ?? 'password')
+      : (textContentType ?? 'none');
+
+    const effectiveImportantForAutofill = isPassword
+      ? (importantForAutofill ?? 'yes')
+      : (importantForAutofill ?? 'no');
+
+    const effectiveAutoCorrect = autoCorrect ?? false;
+    const effectiveSpellCheck = spellCheck ?? false;
+
+    // Automatically infer inputMode from keyboardType when not explicitly provided
+    const effectiveInputMode = inputMode ?? (
+      keyboardType === 'decimal-pad' ? 'decimal' :
+      keyboardType === 'numeric' || keyboardType === 'number-pad' ? 'numeric' :
+      keyboardType === 'email-address' ? 'email' :
+      keyboardType === 'phone-pad' ? 'tel' :
+      keyboardType === 'url' ? 'url' :
+      undefined
+    );
 
     return (
       <View style={containerStyle} className={cn('w-full', label && 'mb-3', containerClassName)}>
@@ -74,6 +108,14 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
           <TextInput
             ref={ref}
             secureTextEntry={actualSecureTextEntry}
+            autoComplete={effectiveAutoComplete}
+            textContentType={effectiveTextContentType}
+            importantForAutofill={effectiveImportantForAutofill}
+            autoCorrect={effectiveAutoCorrect}
+            spellCheck={effectiveSpellCheck}
+            keyboardType={keyboardType}
+            inputMode={effectiveInputMode}
+            aria-autocomplete="none"
             className={cn(
               'web:flex h-11 native:h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
               leftIcon && 'pl-10',
@@ -89,7 +131,8 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
           {isPassword ? (
             <Pressable
               onPress={() => setIsPasswordVisible((prev) => !prev)}
-              className="absolute right-3 items-center justify-center p-1"
+              className="absolute right-3 z-10 items-center justify-center p-1"
+              style={{ zIndex: 10 }}
               accessibilityRole="button"
               accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
             >
@@ -100,7 +143,7 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
               )}
             </Pressable>
           ) : rightIcon ? (
-            <View className="absolute right-3 items-center justify-center">
+            <View className="absolute right-3 z-10 items-center justify-center" style={{ zIndex: 10 }}>
               {rightIcon}
             </View>
           ) : null}

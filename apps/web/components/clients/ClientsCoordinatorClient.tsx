@@ -114,6 +114,16 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
     };
   }, [open]);
 
+  const isFiltered = value !== "all" && value !== "";
+  const [filterSearch, setFilterSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const displayedOptions = useMemo(() => {
+    if (!filterSearch.trim()) return options;
+    const term = filterSearch.toLowerCase().trim();
+    return options.filter((opt) => opt.label.toLowerCase().includes(term));
+  }, [options, filterSearch]);
+
   return (
     <div
       ref={containerRef}
@@ -126,7 +136,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
         onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
-        className="w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
+        className={`w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border text-xs flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs ${
+          isFiltered
+            ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
+            : open
+            ? "border-sky-500 bg-[var(--color-canvas)] text-[var(--color-ink)] ring-2 ring-sky-500/15"
+            : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)]"
+        }`}
       >
         <div className="flex items-center gap-2 truncate min-w-0">
           <span className="text-[var(--color-mute)] font-medium shrink-0">{label}:</span>
@@ -135,8 +151,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           )}
           <span
             className={`truncate font-semibold ${
-              selectedOption?.id !== "all"
-                ? selectedOption?.activeColor || "text-[var(--color-ink)]"
+              isFiltered
+                ? selectedOption?.activeColor || "text-[#0284c7] dark:text-sky-400"
                 : "text-[var(--color-ink)]"
             }`}
           >
@@ -154,7 +170,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
               },
               size: (icon as any).props?.size ?? 14,
               className: `shrink-0 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
+                open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : ""
               } ${(icon as any).props?.className || ""}`,
             })
           ) : (
@@ -164,8 +180,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           <ChevronDown
             ref={iconRef as any}
             size={14}
-            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
-              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            className={`shrink-0 transition-transform duration-200 ${
+              open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
             }`}
           />
         )}
@@ -186,38 +202,78 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
                 : "left-0 right-auto sm:left-0 sm:min-w-[220px]"
             }`}
           >
-            {options.map((opt) => {
-              const isSelected = opt.id === value;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    onChange(opt.id);
-                    setOpen(false);
-                  }}
-                  className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
-                    isSelected
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
-                      : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {opt.dotColor && (
-                      <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isSelected ? "bg-white" : opt.dotColor
-                        }`}
-                      />
-                    )}
-                    <span className="truncate">{opt.label}</span>
-                  </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
-                </button>
-              );
-            })}
+            {options.length > 5 && (
+              <div
+                className="p-1 pb-1.5 mb-1 border-b border-[var(--color-hairline)] sticky top-0 bg-[var(--color-canvas-elevated)] z-20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="relative flex items-center">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-mute)] pointer-events-none" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder={`Search ${label.toLowerCase()}...`}
+                    value={filterSearch}
+                    onChange={(e) => setFilterSearch(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Escape") setOpen(false);
+                    }}
+                    className="w-full h-8 pl-8 pr-7 text-xs rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/20 transition-all"
+                    autoFocus
+                  />
+                  {filterSearch && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilterSearch("");
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {displayedOptions.length === 0 ? (
+              <div className="py-4 px-2 text-center text-xs text-[var(--color-mute)] italic">
+                No matching {label.toLowerCase()} found
+              </div>
+            ) : (
+              displayedOptions.map((opt) => {
+                const isSelected = opt.id === value;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
+                      isSelected
+                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold shadow-xs"
+                        : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {opt.dotColor && (
+                        <span
+                          className={`h-2 w-2 rounded-full shrink-0 ${opt.dotColor}`}
+                        />
+                      )}
+                      <span className="truncate">{opt.label}</span>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
           </motion.div>
         )}
       </AnimatePresence>

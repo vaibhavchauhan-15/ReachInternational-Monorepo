@@ -95,6 +95,11 @@ export function HMRInputs({
               type="number"
               step="0.1"
               min="0"
+              name="start_meter_hmr"
+              id="start_meter_hmr"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
               value={startMeter}
               onChange={(e) => onStartMeterChange(e.target.value)}
               disabled={isStartMeterLocked}
@@ -128,6 +133,11 @@ export function HMRInputs({
               type="number"
               step="0.1"
               min={startNum}
+              name="end_meter_hmr"
+              id="end_meter_hmr"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
               value={endMeter}
               onChange={(e) => onEndMeterChange(e.target.value)}
               required

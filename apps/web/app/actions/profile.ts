@@ -7,7 +7,13 @@ import { getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
 import { ProfileUpdateSchema } from "@reachinternational/validation";
-import { validateAadhaarNumber, validateLicenseNumber, parseProfileShiftTime } from "@reachinternational/utils";
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  validateBankAccountNumber,
+  validateIfscCode,
+  parseProfileShiftTime,
+} from "@reachinternational/utils";
 import type { UserRole, ProfileChangeRequest, User } from "@/lib/types/database";
 
 export interface ProfileFormState {
@@ -115,9 +121,14 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       }
     }
 
+    const canEditRestricted = ["super_admin", "admin", "manager"].includes(currentUser.role);
+
+    const fullNameRaw = (formData.get("full_name") as string)?.trim();
+    const phoneRaw = (formData.get("phone") as string)?.trim();
+
     const rawData = {
-      full_name: (formData.get("full_name") as string)?.trim() || "",
-      phone: (formData.get("phone") as string)?.trim() || "",
+      full_name: fullNameRaw !== undefined && fullNameRaw !== "" ? fullNameRaw : currentUser.full_name,
+      phone: phoneRaw !== undefined && phoneRaw !== "" ? phoneRaw : (currentUser.phone || ""),
       shift_time: shiftTimeRaw,
       shift_start_time: shiftStartRaw,
       shift_end_time: shiftEndRaw,
@@ -127,9 +138,11 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
       state_id: formData.get("state_id") ? Number(formData.get("state_id")) : null,
-      aadhaar_number: (formData.get("aadhaar_number") as string)?.trim() || null,
-      license_number: (formData.get("license_number") as string)?.trim() || null,
-      monthly_salary,
+      aadhaar_number: canEditRestricted ? ((formData.get("aadhaar_number") as string)?.trim() || null) : (currentUser.aadhaar_number || null),
+      license_number: canEditRestricted ? ((formData.get("license_number") as string)?.trim() || null) : (currentUser.license_number || null),
+      bank_account_number: canEditRestricted ? ((formData.get("bank_account_number") as string)?.trim() || null) : (currentUser.bank_account_number || null),
+      bank_ifsc_code: canEditRestricted ? ((formData.get("bank_ifsc_code") as string)?.trim()?.toUpperCase() || null) : (currentUser.bank_ifsc_code || null),
+      monthly_salary: canEditRestricted ? monthly_salary : (currentUser.monthly_salary ?? null),
     };
 
     const parsed = ProfileUpdateSchema.safeParse(rawData);
@@ -207,6 +220,25 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       }
     }
 
+    // Validate Bank Details if provided
+    let cleanBankAccount: string | null = null;
+    if (parsed.data.bank_account_number) {
+      const bankResult = validateBankAccountNumber(parsed.data.bank_account_number);
+      if (!bankResult.isValid) {
+        return { error: bankResult.error || "Invalid bank account number." };
+      }
+      cleanBankAccount = bankResult.clean || null;
+    }
+
+    let cleanIfsc: string | null = null;
+    if (parsed.data.bank_ifsc_code) {
+      const ifscResult = validateIfscCode(parsed.data.bank_ifsc_code);
+      if (!ifscResult.isValid) {
+        return { error: ifscResult.error || "Invalid IFSC code." };
+      }
+      cleanIfsc = ifscResult.clean || parsed.data.bank_ifsc_code.trim().toUpperCase();
+    }
+
     const stateInfo = await resolveStateInfo(adminSupabase, parsed.data.state, parsed.data.state_id);
 
     const resolvedStreet = (parsed.data.street || parsed.data.address || "").trim() || null;
@@ -221,6 +253,8 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       state_id: stateInfo.state_id,
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
+      bank_account_number: cleanBankAccount,
+      bank_ifsc_code: cleanIfsc,
       ...(parsed.data.shift_start_time ? { shift_start_time: parsed.data.shift_start_time } : {}),
       ...(parsed.data.shift_end_time ? { shift_end_time: parsed.data.shift_end_time } : {}),
       ...(currentUser.role === "super_admin" && parsed.data.monthly_salary !== undefined && parsed.data.monthly_salary !== null
@@ -228,26 +262,47 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
         : {}),
     };
 
-    // 1. Super Admin bypasses approval and updates immediately
-    if (currentUser.role === "super_admin") {
+    // 1. Direct update for Super Admin or personal details updates (full_name and phone)
+    const isPersonalDetailsOnly =
+      !payload.aadhaar_number &&
+      !payload.license_number &&
+      !payload.bank_account_number &&
+      !payload.bank_ifsc_code &&
+      (payload.monthly_salary === undefined || payload.monthly_salary === null);
+
+    if (currentUser.role === "super_admin" || isPersonalDetailsOnly) {
+      const updateData: Record<string, any> = {
+        full_name: payload.full_name,
+        phone: payload.phone,
+        updated_at: new Date().toISOString(),
+      };
+      if (currentUser.role === "super_admin") {
+        Object.assign(updateData, payload);
+      } else if (payload.street) {
+        updateData.street = payload.street;
+        updateData.address = payload.address;
+        updateData.city = payload.city;
+        updateData.district = payload.district;
+        updateData.state = payload.state;
+        updateData.state_id = payload.state_id;
+      }
+
       const { error: updateError } = await adminSupabase
         .from("users")
-        .update({
-          ...payload,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", currentUser.id);
 
       if (updateError) {
-        console.error("Error updating super admin profile:", updateError);
+        console.error("Error updating user profile:", updateError);
         return { error: "Failed to update profile. Please try again." };
       }
 
       // Update auth metadata
       await adminSupabase.auth.admin.updateUserById(currentUser.id, {
         user_metadata: {
-          ...payload,
-          location: `${payload.city}, ${payload.district}, ${payload.state}`,
+          full_name: payload.full_name,
+          phone: payload.phone,
+          location: `${payload.city || currentUser.city || ""}, ${payload.district || currentUser.district || ""}, ${payload.state || currentUser.state || ""}`,
         },
       });
 
@@ -272,17 +327,13 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
         metadata: {
           full_name: payload.full_name,
           phone: payload.phone,
-          shift_start_time: payload.shift_start_time,
-          shift_end_time: payload.shift_end_time,
-          street: payload.street,
-          city: payload.city,
-          state: payload.state,
           updated_by: currentUser.email,
         },
       });
 
       revalidatePath("/");
       revalidatePath("/profile");
+      revalidatePath("/profile/edit");
       revalidatePath("/users");
       revalidateTag(CACHE_TAGS.users, "max");
 
@@ -307,6 +358,8 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       state_id: currentUser.state_id,
       aadhaar_number: currentUser.aadhaar_number,
       license_number: currentUser.license_number,
+      bank_account_number: currentUser.bank_account_number,
+      bank_ifsc_code: currentUser.bank_ifsc_code,
     };
 
     // Check if there is already an active pending request
@@ -496,6 +549,8 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       state_id: requestedData.state_id || null,
       aadhaar_number: requestedData.aadhaar_number || null,
       license_number: requestedData.license_number || null,
+      bank_account_number: requestedData.bank_account_number || null,
+      bank_ifsc_code: requestedData.bank_ifsc_code || null,
       updated_at: new Date().toISOString(),
     };
     if (requestedData.shift_start_time) userUpdatePayload.shift_start_time = requestedData.shift_start_time;

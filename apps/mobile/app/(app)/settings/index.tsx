@@ -123,11 +123,11 @@ export default function SettingsHomeScreen() {
         accessibilityLabel="Navigate to Account Settings"
       />
 
-      {/* 2. Notification Card */}
+      {/* 2. Notifications Card */}
       <SettingsNavCard
         icon={<Bell size={20} color={isDark ? '#a78bfa' : '#7c3aed'} />}
         iconBg={isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe'}
-        title="Notification"
+        title="Notifications"
         onPress={() => router.push('/settings/notification' as any)}
         accessibilityLabel="Navigate to Notification Settings"
       />
@@ -155,9 +155,9 @@ export default function SettingsHomeScreen() {
         <Button
           label="Sign Out"
           onPress={handleSignOutPress}
-          variant="danger"
+          variant="outline"
           shape="pill"
-          icon={<LogOut size={16} color="#ffffff" />}
+          icon={<LogOut size={16} color={theme.colors.ink} />}
           fullWidth
         />
       </View>

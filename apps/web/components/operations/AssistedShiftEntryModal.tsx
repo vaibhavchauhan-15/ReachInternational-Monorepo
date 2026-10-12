@@ -158,10 +158,16 @@ export function AssistedShiftEntryModal({
   useEffect(() => {
     if (row && open) {
       setLogDate(row.log_date || selectedDate || getISTDateString());
-      const initialHmr = row.current_meter != null ? String(row.current_meter) : "0";
-      setStartMeter(initialHmr);
-      setEndMeter(initialHmr);
-      setIsStartMeterLocked(true);
+      const isEntered = row.status === "entered";
+      const startVal = isEntered && row.start_meter != null
+        ? String(row.start_meter)
+        : (row.current_meter != null ? String(row.current_meter) : (row.end_meter != null ? String(row.end_meter) : "0"));
+      const endVal = isEntered && row.end_meter != null
+        ? String(row.end_meter)
+        : startVal;
+      setStartMeter(startVal);
+      setEndMeter(endVal);
+      setIsStartMeterLocked(!isEntered);
 
       const initialShift = row.shift_code || "S1";
       setSelectedShiftCode(initialShift);

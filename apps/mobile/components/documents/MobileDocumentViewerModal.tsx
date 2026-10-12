@@ -645,7 +645,7 @@ export function MobileDocumentViewerModal({
 
 const styles = StyleSheet.create({
   modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 99999,
     ...Platform.select({
       web: {

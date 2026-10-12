@@ -5,8 +5,19 @@ import { FONT_SCALE_PRESETS, OS_FONT_SCALE_CAP, type FontScalePreset } from '@re
 
 const KEY = '@reach:font_size_preference';
 
-type Ctx = { preset: FontScalePreset; scale: number; ready: boolean; setPreset: (p: FontScalePreset) => void };
-const TypeScaleContext = createContext<Ctx>({ preset: 'medium', scale: 1, ready: false, setPreset: () => {} });
+export type TypeScaleContextValue = {
+  preset: FontScalePreset;
+  scale: number;
+  ready: boolean;
+  setPreset: (p: FontScalePreset) => void;
+};
+
+export const TypeScaleContext = createContext<TypeScaleContextValue>({
+  preset: 'medium',
+  scale: 1,
+  ready: false,
+  setPreset: () => {},
+});
 
 export function TypeScaleProvider({ children }: { children: ReactNode }) {
   const { fontScale: os = 1 } = useWindowDimensions();
@@ -32,10 +43,44 @@ export function TypeScaleProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(KEY, p).catch(() => {});
   }, []);
 
-  const value = useMemo(
-    () => ({ preset, ready, setPreset, scale: FONT_SCALE_PRESETS[preset] * Math.min(os || 1, OS_FONT_SCALE_CAP) }),
+  const value = useMemo<TypeScaleContextValue>(
+    () => ({
+      preset,
+      ready,
+      setPreset,
+      scale: FONT_SCALE_PRESETS[preset] * Math.min(os || 1, OS_FONT_SCALE_CAP),
+    }),
     [preset, ready, setPreset, os],
   );
+  return <TypeScaleContext.Provider value={value}>{children}</TypeScaleContext.Provider>;
+}
+
+export function TypeScaleScope({
+  preset,
+  scale: customScale,
+  children,
+}: {
+  preset?: FontScalePreset;
+  scale?: number;
+  children: ReactNode;
+}) {
+  const { fontScale: os = 1 } = useWindowDimensions();
+  const parent = useTypeScale();
+  const effectivePreset = preset ?? parent.preset;
+  const effectiveScale =
+    customScale ??
+    FONT_SCALE_PRESETS[effectivePreset] * Math.min(os || 1, OS_FONT_SCALE_CAP);
+
+  const value = useMemo<TypeScaleContextValue>(
+    () => ({
+      preset: effectivePreset,
+      ready: true,
+      setPreset: parent.setPreset,
+      scale: effectiveScale,
+    }),
+    [effectivePreset, effectiveScale, parent.setPreset],
+  );
+
   return <TypeScaleContext.Provider value={value}>{children}</TypeScaleContext.Provider>;
 }
 

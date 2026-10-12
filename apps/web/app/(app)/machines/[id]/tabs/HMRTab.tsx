@@ -72,6 +72,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
     };
   }, [open]);
 
+  const isFiltered = value !== "all" && value !== "";
+
   return (
     <div
       ref={containerRef}
@@ -84,7 +86,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
         onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
-        className="w-full h-9 px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
+        className={`w-full h-9 px-3 rounded-lg border text-xs flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs ${
+          isFiltered
+            ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
+            : open
+            ? "border-sky-500 bg-[var(--color-canvas)] text-[var(--color-ink)] ring-2 ring-sky-500/15"
+            : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)]"
+        }`}
       >
         <div className="flex items-center gap-2 truncate min-w-0">
           <span className="text-[var(--color-mute)] font-medium shrink-0">{label}:</span>
@@ -93,8 +101,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           )}
           <span
             className={`truncate font-semibold ${
-              selectedOption?.id !== "all"
-                ? selectedOption?.activeColor || "text-[var(--color-ink)]"
+              isFiltered
+                ? selectedOption?.activeColor || "text-[#0284c7] dark:text-sky-400"
                 : "text-[var(--color-ink)]"
             }`}
           >
@@ -112,7 +120,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
               },
               size: (icon as any).props?.size ?? 14,
               className: `shrink-0 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
+                open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : ""
               } ${(icon as any).props?.className || ""}`,
             })
           ) : (
@@ -122,8 +130,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           <ChevronDown
             ref={iconRef as any}
             size={14}
-            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
-              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            className={`shrink-0 transition-transform duration-200 ${
+              open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
             }`}
           />
         )}
@@ -158,21 +166,19 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
                   }}
                   className={`w-full min-h-[36px] flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
+                      ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold shadow-xs"
                       : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     {opt.dotColor && (
                       <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isSelected ? "bg-white" : opt.dotColor
-                        }`}
+                        className={`h-2 w-2 rounded-full shrink-0 ${opt.dotColor}`}
                       />
                     )}
                     <span className="truncate">{opt.label}</span>
                   </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  {isSelected && <Check className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />}
                 </button>
               );
             })}

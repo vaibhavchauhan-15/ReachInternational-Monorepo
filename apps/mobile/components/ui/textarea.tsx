@@ -13,6 +13,11 @@ const Textarea = React.forwardRef<React.ElementRef<typeof TextInput>, TextareaPr
       multiline = true,
       numberOfLines = Platform.select({ web: 3, native: 4 }),
       placeholderClassName,
+      autoComplete = 'off',
+      textContentType = 'none',
+      importantForAutofill = 'no',
+      autoCorrect = false,
+      spellCheck = false,
       ...props
     },
     ref
@@ -20,6 +25,12 @@ const Textarea = React.forwardRef<React.ElementRef<typeof TextInput>, TextareaPr
     return (
       <TextInput
         ref={ref}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        importantForAutofill={importantForAutofill}
+        autoCorrect={autoCorrect}
+        spellCheck={spellCheck}
+        aria-autocomplete="none"
         className={cn(
           'text-foreground border-input dark:bg-input/20 flex min-h-20 w-full flex-row rounded-lg border bg-background px-3 py-2 text-base shadow-sm shadow-black/5 md:text-sm',
           Platform.select({

@@ -40,6 +40,7 @@ export interface MobileDocumentUploadCardProps {
   subtitle?: string;
   docTypeCode: 'aadhaar' | 'driving_license' | 'bank_document' | 'bank_passbook' | string;
   required?: boolean;
+  readOnly?: boolean;
   selectedDoc: MobilePickedDocument | null;
   existingDoc?: UserDocumentInfo | null;
   onDocSelected: (doc: MobilePickedDocument) => void;
@@ -55,6 +56,7 @@ export function MobileDocumentUploadCard({
   subtitle,
   docTypeCode,
   required = false,
+  readOnly = false,
   selectedDoc,
   existingDoc,
   onDocSelected,
@@ -120,7 +122,7 @@ export function MobileDocumentUploadCard({
         <Text variant="label" style={[styles.label, { color: isDark ? '#ffffff' : '#0f172a' }]}>
           {cleanTitle}
         </Text>
-        {required && <Text variant="label" style={styles.requiredStar}>*</Text>}
+        {required && !readOnly && <Text variant="label" style={styles.requiredStar}>*</Text>}
       </View>
 
       {/* Progress Bar (when uploading) */}
@@ -140,43 +142,60 @@ export function MobileDocumentUploadCard({
         </View>
       )}
 
-      {/* Empty State: Dashed Upload Box */}
+      {/* Empty State: Dashed Upload Box or Read Only Placeholder */}
       {!hasFile ? (
-        <Pressable
-          variant="outline"
-          haptic="tap"
-          onPress={handlePick}
-          disabled={uploading}
-          style={[
-            styles.dashedBox,
-            {
-              borderColor: errorMessage
-                ? '#ef4444'
-                : isDark
-                ? '#333333'
-                : '#d1d5db',
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
-            },
-          ]}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#0284c7" />
-          ) : (
-            <View style={styles.dashedInner}>
-              <Upload size={15} color={isDark ? '#737373' : '#9ca3af'} />
-              <Text
-                variant="caption"
-                style={[
-                  styles.dashedText,
-                  { color: isDark ? '#71717a' : '#9ca3af' },
-                ]}
-                numberOfLines={1}
-              >
-                {subtitle || defaultPlaceholder}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+        readOnly ? (
+          <View
+            style={[
+              styles.dashedBox,
+              {
+                borderColor: isDark ? '#262626' : '#e2e8f0',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                borderStyle: 'solid',
+              },
+            ]}
+          >
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              Not on file (View Only)
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            variant="outline"
+            haptic="tap"
+            onPress={handlePick}
+            disabled={uploading}
+            style={[
+              styles.dashedBox,
+              {
+                borderColor: errorMessage
+                  ? '#ef4444'
+                  : isDark
+                  ? '#333333'
+                  : '#d1d5db',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
+              },
+            ]}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#0284c7" />
+            ) : (
+              <View style={styles.dashedInner}>
+                <Upload size={15} color={isDark ? '#737373' : '#9ca3af'} />
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.dashedText,
+                    { color: isDark ? '#71717a' : '#9ca3af' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {subtitle || defaultPlaceholder}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        )
       ) : (
         /* Attached Document Banner */
         <View
@@ -229,18 +248,20 @@ export function MobileDocumentUploadCard({
             </View>
           </Pressable>
 
-          {/* Remove Button */}
-          <Pressable
-            variant="iconButton"
-            haptic="tap"
-            hitSlopToMin48
-            onPress={handleRemove}
-            disabled={uploading}
-            style={styles.removeBtn}
-            accessibilityLabel="Remove attached document"
-          >
-            <X size={15} color={isDark ? '#a1a1aa' : '#6b7280'} />
-          </Pressable>
+          {/* Remove Button — only if editable */}
+          {!readOnly && (
+            <Pressable
+              variant="iconButton"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={handleRemove}
+              disabled={uploading}
+              style={styles.removeBtn}
+              accessibilityLabel="Remove attached document"
+            >
+              <X size={15} color={isDark ? '#a1a1aa' : '#6b7280'} />
+            </Pressable>
+          )}
         </View>
       )}
 

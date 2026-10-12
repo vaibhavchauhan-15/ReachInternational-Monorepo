@@ -135,22 +135,28 @@ function MobileGoogleAnalytics() {
 }
 
 function MobileWebScrollbarStyles() {
-  const { isDark, theme } = useTheme();
-
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const styleId = 'reach-mobile-scrollbar-styles';
-    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
-    const thumbColor = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.22)';
-    const thumbHover = isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.38)';
+    if (document.getElementById(styleId)) return;
+
+    const styleEl = document.createElement('style');
+    styleEl.id = styleId;
     styleEl.innerHTML = `
+      :root {
+        --mobile-scrollbar-thumb: rgba(0, 0, 0, 0.22);
+        --mobile-scrollbar-thumb-hover: rgba(0, 0, 0, 0.38);
+        --mobile-canvas: #fafafa;
+      }
+      :root.dark,
+      .dark:root,
+      .dark {
+        --mobile-scrollbar-thumb: rgba(255, 255, 255, 0.22);
+        --mobile-scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
+        --mobile-canvas: #09090b;
+      }
       html, body {
-        background-color: ${isDark ? '#09090b' : theme.colors.canvas};
+        background-color: var(--mobile-canvas);
         margin: 0;
         padding: 0;
         height: 100%;
@@ -165,7 +171,7 @@ function MobileWebScrollbarStyles() {
       }
       * {
         scrollbar-width: thin;
-        scrollbar-color: ${thumbColor} transparent;
+        scrollbar-color: var(--mobile-scrollbar-thumb) transparent;
         -webkit-tap-highlight-color: transparent !important;
       }
       *:focus, *:active {
@@ -179,11 +185,11 @@ function MobileWebScrollbarStyles() {
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: ${thumbColor};
+        background: var(--mobile-scrollbar-thumb);
         border-radius: 9999px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: ${thumbHover};
+        background: var(--mobile-scrollbar-thumb-hover);
       }
       /* Suppress user-agent default outlines and borders on text inputs */
       input, textarea {
@@ -206,7 +212,8 @@ function MobileWebScrollbarStyles() {
         }
       }
     `;
-  }, [isDark, theme.colors.canvas]);
+    document.head.appendChild(styleEl);
+  }, []);
 
   return null;
 }

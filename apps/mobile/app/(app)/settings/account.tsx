@@ -18,6 +18,7 @@ import { radiusNumeric } from '@reachinternational/design-tokens';
 import {
   User,
   KeyRound,
+  Shield,
   Trash2,
   ChevronRight,
 } from '../../../components/ui/icon';
@@ -87,7 +88,7 @@ export default function AccountSettingsScreen() {
     <SettingsScreenContainer
       title="Account"
       showBack={true}
-      onPressBack={() => router.push('/settings' as any)}
+      onPressBack={() => router.back()}
       contentContainerStyle={styles.containerContent}
     >
       {/* 1. Edit Profile Card */}
@@ -95,7 +96,7 @@ export default function AccountSettingsScreen() {
         icon={<User size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
         iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
         title="Edit Profile"
-        onPress={() => router.push('/profile?edit=true' as any)}
+        onPress={() => router.push('/profile/edit' as any)}
         accessibilityLabel="Open Edit Profile screen"
       />
 
@@ -108,7 +109,16 @@ export default function AccountSettingsScreen() {
         accessibilityLabel="Navigate to Change Password screen"
       />
 
-      {/* 3. Delete Account Card */}
+      {/* 3. Account Security Card */}
+      <AccountNavCard
+        icon={<Shield size={20} color={isDark ? '#34d399' : '#059669'} />}
+        iconBg={isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'}
+        title="Account Security"
+        onPress={() => router.push('/settings/security' as any)}
+        accessibilityLabel="Navigate to Account Security screen"
+      />
+
+      {/* 4. Delete Account Card */}
       <AccountNavCard
         icon={<Trash2 size={20} color="#e11d48" />}
         iconBg={isDark ? 'rgba(225, 29, 72, 0.15)' : '#fee2e2'}

@@ -40,6 +40,40 @@ export const BankIfscSchema = z
     }
   });
 
+export const OptionalBankAccountFieldSchema = z
+  .string()
+  .trim()
+  .max(30, "Bank account number cannot exceed 30 characters")
+  .optional()
+  .nullable()
+  .superRefine((val, ctx) => {
+    if (!val || !val.trim()) return;
+    const res = validateBankAccountNumber(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || "Invalid bank account number",
+      });
+    }
+  });
+
+export const OptionalBankIfscFieldSchema = z
+  .string()
+  .trim()
+  .max(20, "IFSC code cannot exceed 20 characters")
+  .optional()
+  .nullable()
+  .superRefine((val, ctx) => {
+    if (!val || !val.trim()) return;
+    const res = validateIfscCode(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || "Invalid IFSC code",
+      });
+    }
+  });
+
 export const AadhaarFieldSchema = z
   .string()
   .trim()
@@ -194,6 +228,8 @@ export const ProfileUpdateSchema = z.object({
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
+  bank_account_number: OptionalBankAccountFieldSchema,
+  bank_ifsc_code: OptionalBankIfscFieldSchema,
 });
 
 export const ResetPasswordSchema = z.object({

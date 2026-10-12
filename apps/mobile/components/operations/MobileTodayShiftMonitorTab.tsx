@@ -16,6 +16,8 @@ import {
   Animated,
   Easing,
   Platform,
+  Alert,
+  Modal,
 } from 'react-native';
 import {
   useTheme,
@@ -50,6 +52,9 @@ import {
   Wrench,
   Edit2,
   Icon,
+  Gauge,
+  MapPin,
+  MoreVertical,
 } from '../ui/icon';
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { isManagerOrAbove } from '@reachinternational/permissions';
@@ -74,6 +79,8 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
   { id: 'pending', label: 'Pending', dotColor: '#f59e0b' },
   { id: 'entered', label: 'Entered', dotColor: '#10b981' },
   { id: 'unassigned', label: 'Unassigned', dotColor: '#94a3b8' },
+  { id: 'breakdown', label: 'Breakdown', dotColor: '#ef4444' },
+  { id: 'maintenance', label: 'Maintenance', dotColor: '#f59e0b' },
 ];
 
 const SORT_FILTER_OPTIONS: FilterOption[] = [
@@ -112,11 +119,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const { data: rows = [], isLoading, refetch } = useTodayShiftMonitor(actorId, selectedDate);
 
   // Search & Filter State (reusing User Page canonical architecture)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'entered' | 'unassigned'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'entered' | 'unassigned' | 'breakdown' | 'maintenance'>('all');
+  const [clientFilter, setClientFilter] = useState<string>('all');
   const [shiftFilter, setShiftFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('default');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<any>(null);
+  const [menuRow, setMenuRow] = useState<TodayShiftMonitorRow | null>(null);
 
   // Animated Expandable Filter Drawer state
   const isWeb = Platform.OS === 'web';
@@ -234,8 +243,29 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     return formatDate(selectedDate);
   }, [selectedDate, todayStr]);
 
+  // Dynamic Client filter options derived from live roster rows
+  const clientOptions = useMemo<FilterOption[]>(() => {
+    const list: FilterOption[] = [{ id: 'all', label: 'All Clients' }];
+    const clientMap = new Map<string, string>();
+    rows.forEach((r) => {
+      const key = r.client_id || (r.client_name ? `name:${r.client_name}` : 'unassigned');
+      const name = r.client_name || (r.client_id ? 'Client' : 'Available / Unassigned');
+      if (!clientMap.has(key)) {
+        clientMap.set(key, name);
+      }
+    });
+    Array.from(clientMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .forEach(([id, name]) => {
+        list.push({ id, label: name });
+      });
+    return list;
+  }, [rows]);
+
   const currentStatusLabel =
     STATUS_FILTER_OPTIONS.find((opt) => opt.id === statusFilter)?.label || 'Status';
+  const currentClientLabel =
+    clientOptions.find((opt) => opt.id === clientFilter)?.label || 'Client';
   const currentShiftLabel =
     shiftOptions.find((opt) => opt.id === shiftFilter)?.label || 'Shift';
   const currentSortLabel =
@@ -245,15 +275,17 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     let count = 0;
     if (selectedDate !== todayStr) count++;
     if (statusFilter !== 'all') count++;
+    if (clientFilter !== 'all') count++;
     if (shiftFilter !== 'all') count++;
     if (sortBy !== 'default') count++;
     return count;
-  }, [selectedDate, todayStr, statusFilter, shiftFilter, sortBy]);
+  }, [selectedDate, todayStr, statusFilter, clientFilter, shiftFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
     haptics.confirm();
     setSelectedDate(todayStr);
     setStatusFilter('all');
+    setClientFilter('all');
     setShiftFilter('all');
     setSortBy('default');
     setSearchQuery('');
@@ -269,20 +301,87 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     [onEnterLog, selectedDate]
   );
 
+  const handleInitiateAssign = useCallback(
+    (row: TodayShiftMonitorRow) => {
+      const isBreakdown = row.machine_health_status === 'breakdown';
+      const isMaintenance =
+        row.machine_health_status === 'under_maintenance' ||
+        row.machine_status === 'under_maintenance';
+
+      if (isBreakdown || isMaintenance) {
+        const statusLabel = isBreakdown ? 'Breakdown' : 'Under Maintenance';
+        Alert.alert(
+          `Equipment in ${statusLabel}`,
+          `Machine ${row.machine_code} is currently flagged as ${statusLabel}. Reactivating this machinery will set it to Active status and allow assigning an operator. Proceed?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Mark Active & Assign',
+              onPress: async () => {
+                try {
+                  const { error } = await supabase.rpc('activate_machine_for_assignment', {
+                    p_machine_id: row.machine_id,
+                    p_actor_id: actorId || null,
+                  });
+                  if (error) {
+                    Alert.alert('Activation Failed', error.message);
+                    return;
+                  }
+                  haptics.confirm();
+                  refetch();
+                  handleOpenAssignModal(row.machine_id);
+                } catch (err: any) {
+                  Alert.alert('Activation Error', err?.message || 'Could not reactivate machine');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      handleOpenAssignModal(row.machine_id);
+    },
+    [actorId, refetch]
+  );
+
   const filtered = useMemo(() => {
     let r = [...rows];
 
     // 1. Status Filter
     if (statusFilter !== 'all') {
-      r = r.filter((row) => row.status === statusFilter);
+      if (statusFilter === 'breakdown') {
+        r = r.filter((row) => row.machine_health_status === 'breakdown');
+      } else if (statusFilter === 'maintenance') {
+        r = r.filter(
+          (row) =>
+            row.machine_health_status === 'under_maintenance' ||
+            row.machine_status === 'under_maintenance'
+        );
+      } else {
+        r = r.filter((row) => row.status === statusFilter);
+      }
     }
 
-    // 2. Shift Filter
+    // 2. Client Filter
+    if (clientFilter !== 'all') {
+      r = r.filter((row) => {
+        if (clientFilter === 'unassigned') {
+          return !row.client_id && (!row.client_name || row.client_name === 'Available / Unassigned');
+        }
+        if (clientFilter.startsWith('name:')) {
+          return row.client_name === clientFilter.replace('name:', '');
+        }
+        return row.client_id === clientFilter;
+      });
+    }
+
+    // 3. Shift Filter
     if (shiftFilter !== 'all') {
       r = r.filter((row) => row.shift_code === shiftFilter || row.shift_name === shiftFilter);
     }
 
-    // 3. Search Query Filter
+    // 4. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().replace(/\s+/g, '');
       r = r.filter(
@@ -297,7 +396,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       );
     }
 
-    // 4. Sorting
+    // 5. Sorting
     if (sortBy === 'operator_asc') {
       r.sort((a, b) => (a.operator_name || '').localeCompare(b.operator_name || ''));
     } else if (sortBy === 'operator_desc') {
@@ -352,6 +451,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           onChange={(val) => setStatusFilter(val as any)}
         />
 
+        {/* Client Dropdown */}
+        <DropdownFilterSelector
+          label="Client"
+          value={clientFilter}
+          options={clientOptions}
+          onChange={(val) => setClientFilter(val)}
+          showSearch={true}
+          minMenuWidth={220}
+        />
+
         {/* Shift Dropdown */}
         <DropdownFilterSelector
           label="Shift"
@@ -377,6 +486,27 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
             Active Filters:
           </Text>
+
+          {clientFilter !== 'all' && (
+            <Pressable
+              variant="chip"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={() => setClientFilter('all')}
+              style={[
+                styles.badgeChip,
+                {
+                  backgroundColor: isDark ? '#0284c726' : '#eff6ff',
+                  borderColor: '#3b82f633',
+                },
+              ]}
+            >
+              <Text variant="caption" style={[styles.badgeChipText, { color: '#0284c7' }]}>
+                Client: {currentClientLabel}
+              </Text>
+              <X size={12} color="#0284c7" />
+            </Pressable>
+          )}
 
           {searchQuery.trim() !== '' && (
             <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={() => setSearchQuery('')} style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
@@ -760,12 +890,21 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           {filtered.map((row, idx) => {
             const isUnassigned = row.status === 'unassigned' || !row.operator_id;
             const isEntered = row.status === 'entered';
+            const isBreakdown = row.machine_health_status === 'breakdown';
+            const isMaintenance =
+              row.machine_health_status === 'under_maintenance' ||
+              row.machine_status === 'under_maintenance';
+
             const cardKey = row.operator_id
               ? `mon-${row.operator_id}-${row.machine_id}-${row.shift_code}`
               : `mon-unassigned-${row.machine_id}-${idx}`;
 
             const accentColor = isEntered
               ? '#10b981'
+              : isBreakdown
+              ? '#ef4444'
+              : isMaintenance
+              ? '#f59e0b'
               : isUnassigned
               ? isDark ? '#fbbf24' : '#d97706'
               : '#f59e0b';
@@ -792,8 +931,16 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 style={[
                   styles.card,
                   {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
+                    backgroundColor: isEntered
+                      ? (isDark ? 'rgba(2, 132, 199, 0.05)' : 'rgba(2, 132, 199, 0.03)')
+                      : theme.colors.canvasElevated,
+                    borderColor: isEntered
+                      ? (isDark ? '#0284c755' : '#7dd3fc')
+                      : isBreakdown
+                      ? (isDark ? '#ef444455' : '#fca5a5')
+                      : isMaintenance
+                      ? (isDark ? '#f59e0b55' : '#fcd34d')
+                      : theme.colors.hairline,
                     borderLeftColor: accentColor,
                     borderLeftWidth: 4,
                   },
@@ -808,13 +955,23 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         styles.avatarCircle,
                         {
                           backgroundColor: isUnassigned
-                            ? isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
+                            ? isBreakdown
+                              ? isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2'
+                              : isMaintenance
+                              ? isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
+                              : isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
                             : '#0284c7',
                         },
                       ]}
                     >
                       {isUnassigned ? (
-                        <UserX size={15} color={isDark ? '#fbbf24' : '#d97706'} />
+                        isBreakdown ? (
+                          <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} />
+                        ) : isMaintenance ? (
+                          <Wrench size={15} color={isDark ? '#fbbf24' : '#d97706'} />
+                        ) : (
+                          <UserX size={15} color={isDark ? '#fbbf24' : '#d97706'} />
+                        )
                       ) : (
                         <Text variant="heading" style={[styles.avatarLetter, { color: '#ffffff' }]}>
                           {row.operator_name ? row.operator_name[0].toUpperCase() : 'O'}
@@ -828,14 +985,24 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           styles.operatorName,
                           {
                             color: isUnassigned
-                              ? isDark ? '#fbbf24' : '#d97706'
+                              ? isBreakdown
+                                ? isDark ? '#f87171' : '#dc2626'
+                                : isMaintenance
+                                ? isDark ? '#fbbf24' : '#d97706'
+                                : isDark ? '#fbbf24' : '#d97706'
                               : theme.colors.ink,
                           },
                         ]}
                         numberOfLines={1}
                       >
                         {isUnassigned ? (
-                          'Unassigned Machine'
+                          isBreakdown ? (
+                            'Breakdown Equipment'
+                          ) : isMaintenance ? (
+                            'Under Maintenance'
+                          ) : (
+                            'Unassigned Machine'
+                          )
                         ) : (
                           <HighlightText
                             variant="subheading"
@@ -849,15 +1016,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           />
                         )}
                       </Text>
-                      {row.operator_phone && !isUnassigned ? (
-                        <Text variant="caption" style={[styles.operatorPhoneText, { color: theme.colors.mute }]} numberOfLines={1}>
-                          {row.operator_phone}
-                        </Text>
-                      ) : null}
                     </View>
                   </View>
 
-                  {/* Right Header: Shift Log Status Badge & Touch Chevron */}
+                  {/* Right Header: Shift Log Status Badge + 3-Dot Action Menu */}
                   <View style={styles.cardHeaderRight}>
                     <View
                       style={[
@@ -865,10 +1027,20 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         {
                           backgroundColor: isEntered
                             ? isDark ? '#064e3b26' : '#d1fae5'
+                            : isBreakdown
+                            ? isDark ? '#7f1d1d26' : '#fee2e2'
+                            : isMaintenance
+                            ? isDark ? '#78350f26' : '#fef3c7'
                             : isUnassigned
                             ? isDark ? '#78350f26' : '#fef3c7'
                             : isDark ? '#78350f26' : '#fffbeb',
-                          borderColor: isEntered ? '#10b98133' : '#f59e0b33',
+                          borderColor: isEntered
+                            ? '#10b98133'
+                            : isBreakdown
+                            ? '#ef444433'
+                            : isMaintenance
+                            ? '#f59e0b33'
+                            : '#f59e0b33',
                         },
                       ]}
                     >
@@ -880,19 +1052,51 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                           {
                             color: isEntered
                               ? '#047857'
+                              : isBreakdown
+                              ? '#dc2626'
+                              : isMaintenance
+                              ? '#d97706'
                               : isUnassigned
                               ? isDark ? '#fbbf24' : '#b45309'
                               : isDark ? '#fbbf24' : '#d97706',
                           },
                         ]}
                       >
-                        {isEntered ? 'ENTERED' : isUnassigned ? 'UNASSIGNED' : 'PENDING'}
+                        {isEntered
+                          ? 'ENTERED'
+                          : isBreakdown
+                          ? 'BREAKDOWN'
+                          : isMaintenance
+                          ? 'MAINTENANCE'
+                          : isUnassigned
+                          ? 'UNASSIGNED'
+                          : 'PENDING'}
                       </Text>
                     </View>
+
+                    {/* 3-Dot Action Menu Button (Gated by RBAC: only authorized roles e.g. super_admin, admin, manager) */}
+                    {canEnterLog && !isUnassigned && (
+                      <Pressable
+                        variant="plain"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={() => setMenuRow(row)}
+                        style={[
+                          styles.cardMoreBtn,
+                          {
+                            backgroundColor: theme.colors.canvas,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                        accessibilityLabel="Shift actions"
+                      >
+                        <MoreVertical size={14} color={theme.colors.mute} />
+                      </Pressable>
+                    )}
                   </View>
                 </View>
 
-                {/* USER DETAILS CARD METADATA BOX (Lines 2, 3, 4, 5) */}
+                {/* USER DETAILS CARD METADATA BOX (6 Focused Key-Value Rows) */}
                 <View
                   style={[
                     styles.cardMetaBox,
@@ -902,7 +1106,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     },
                   ]}
                 >
-                  {/* LINE 2: Shift Name */}
+                  {/* Row 1: Shift */}
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Clock size={12} color={theme.colors.mute} />
@@ -910,17 +1114,17 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                         Shift:
                       </Text>
                     </View>
-                    <Text variant="caption" style={[styles.metaFieldValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                      {row.shift_name || (row.shift_code ? `Shift ${row.shift_code}` : 'Shift A')}
+                    <Text variant="caption" style={[styles.metaFieldValue, { color: theme.colors.link }]} numberOfLines={1}>
+                      {row.shift_code || '—'}
                     </Text>
                   </View>
 
-                  {/* LINE 3: Machine Model */}
+                  {/* Row 2: M/C Model */}
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Wrench size={12} color={theme.colors.mute} />
                       <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
-                        Model:
+                        M/C Model:
                       </Text>
                     </View>
                     <HighlightText
@@ -932,17 +1136,17 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     />
                   </View>
 
-                  {/* LINE 4: Machine Sr No */}
+                  {/* Row 3: M/C Sr no */}
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Truck size={12} color={theme.colors.link} />
                       <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
-                        Sr No:
+                        M/C Sr no:
                       </Text>
                     </View>
                     <HighlightText
                       variant="caption"
-                      text={row.machine_serial_number || row.machine_code || '—'}
+                      text={row.machine_serial_number || '—'}
                       query={searchQuery}
                       style={[
                         styles.metaFieldValue,
@@ -952,7 +1156,36 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     />
                   </View>
 
-                  {/* LINE 5: Client Name */}
+                  {/* Row 4: HMR */}
+                  <View style={styles.metaFieldRow}>
+                    <View style={styles.metaFieldLabelGroup}>
+                      <Gauge size={12} color={theme.colors.mute} />
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                        HMR:
+                      </Text>
+                    </View>
+                    <Text variant="caption" style={[styles.metaFieldValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {(() => {
+                        const start = row.start_meter;
+                        const end = row.end_meter;
+                        if (start != null && end != null) {
+                          return `${start}->${end}`;
+                        }
+                        if (start != null) {
+                          return `${start}->${end ?? '—'}`;
+                        }
+                        if (end != null) {
+                          return `—->${end}`;
+                        }
+                        if (row.current_meter != null) {
+                          return `${row.current_meter}`;
+                        }
+                        return '—';
+                      })()}
+                    </Text>
+                  </View>
+
+                  {/* Row 5: Client */}
                   <View style={styles.metaFieldRow}>
                     <View style={styles.metaFieldLabelGroup}>
                       <Building2 size={12} color={theme.colors.mute} />
@@ -962,7 +1195,24 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     </View>
                     <HighlightText
                       variant="caption"
-                      text={`${row.client_name || 'Direct / Internal Fleet'}${row.client_code ? ` (${row.client_code})` : ''}`}
+                      text={row.client_name || '—'}
+                      query={searchQuery}
+                      style={[styles.metaFieldValue, { color: theme.colors.ink }]}
+                      numberOfLines={1}
+                    />
+                  </View>
+
+                  {/* Row 6: Site */}
+                  <View style={[styles.metaFieldRow, { borderBottomWidth: 0 }]}>
+                    <View style={styles.metaFieldLabelGroup}>
+                      <MapPin size={12} color={theme.colors.mute} />
+                      <Text variant="caption" style={[styles.metaFieldLabel, { color: theme.colors.mute }]}>
+                        Site:
+                      </Text>
+                    </View>
+                    <HighlightText
+                      variant="caption"
+                      text={row.client_city || row.site_name || '—'}
                       query={searchQuery}
                       style={[styles.metaFieldValue, { color: theme.colors.ink }]}
                       numberOfLines={1}
@@ -991,43 +1241,32 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   </View>
                 )}
 
-                {/* Action Buttons: Assign Operator (Unassigned) or Enter Shift Log (Pending) / Edit Shift Log (Entered) */}
+                {/* Action Button: Assign Operator (Unassigned only) */}
                 {isUnassigned ? (
                   <Pressable
                     variant="primary"
                     haptic="tap"
-                    onPress={() => handleOpenAssignModal(row.machine_id)}
-                    style={[styles.assignRowBtn, { backgroundColor: '#0284c7' }]}
+                    onPress={() => handleInitiateAssign(row)}
+                    style={[
+                      styles.assignRowBtn,
+                      {
+                        backgroundColor: isBreakdown
+                          ? '#dc2626'
+                          : isMaintenance
+                          ? '#d97706'
+                          : '#0284c7',
+                      },
+                    ]}
                   >
-                    <UserPlus size={14} color="#ffffff" />
+                    {isBreakdown || isMaintenance ? (
+                      <Wrench size={14} color="#ffffff" />
+                    ) : (
+                      <UserPlus size={14} color="#ffffff" />
+                    )}
                     <Text variant="label" style={[styles.assignRowBtnText, { color: '#ffffff' }]}>
-                      Assign Operator to {row.machine_code}
-                    </Text>
-                  </Pressable>
-                ) : !isEntered ? (
-                  canEnterLog ? (
-                    <Pressable
-                      variant="secondary"
-                      haptic="tap"
-                      onPress={() => handleCardEnterLog(row)}
-                      style={[styles.enterLogBtn, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '35' }]}
-                    >
-                      <User size={14} color={theme.colors.link} />
-                      <Text variant="label" style={[styles.enterLogBtnText, { color: theme.colors.link }]} numberOfLines={1}>
-                        Enter Shift Log for {row.operator_name || 'Operator'}
-                      </Text>
-                    </Pressable>
-                  ) : null
-                ) : canEnterLog ? (
-                  <Pressable
-                    variant="secondary"
-                    haptic="tap"
-                    onPress={() => handleCardEnterLog(row)}
-                    style={[styles.enterLogBtn, { backgroundColor: isDark ? '#064e3b18' : '#ecfdf5', borderColor: isDark ? '#064e3b40' : '#a7f3d0' }]}
-                  >
-                    <Edit2 size={13} color={isDark ? '#34d399' : '#059669'} />
-                    <Text variant="label" style={[styles.enterLogBtnText, { color: isDark ? '#34d399' : '#047857' }]} numberOfLines={1}>
-                      Edit Shift Log for {row.operator_name || 'Operator'}
+                      {isBreakdown || isMaintenance
+                        ? `Activate & Assign ${row.machine_code}`
+                        : `Assign Operator to ${row.machine_code}`}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -1046,6 +1285,137 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           refetch();
         }}
       />
+
+      {/* 3-DOT ACTION BOTTOM SHEET MODAL */}
+      <Modal
+        visible={Boolean(menuRow)}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        hardwareAccelerated
+        onRequestClose={() => setMenuRow(null)}
+      >
+        <Pressable
+          variant="plain"
+          haptic={false}
+          onPress={() => setMenuRow(null)}
+          style={StyleSheet.absoluteFill}
+          accessibilityLabel="Close action sheet"
+        >
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} />
+        </Pressable>
+
+        <View style={styles.sheetBackdropContainer} pointerEvents="box-none">
+          <View
+            style={[
+              styles.actionSheetCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandleWrapper}>
+              <View style={[styles.sheetHandle, { backgroundColor: theme.colors.hairline }]} />
+            </View>
+
+            {/* Sheet Header */}
+            <View style={styles.sheetHeader}>
+              <Text variant="subheading" style={[styles.sheetTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                {menuRow?.operator_name || 'Operator Shift'}
+              </Text>
+              <Text variant="caption" style={[styles.sheetSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
+                {`Shift ${menuRow?.shift_code || '—'} • ${menuRow?.machine_model || menuRow?.machine_code || 'Machine'}`}
+              </Text>
+            </View>
+
+            {/* Actions List */}
+            <View style={styles.sheetActionsList}>
+              {menuRow?.status === 'entered' ? (
+                <Pressable
+                  variant="plain"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    const rowToEdit = menuRow;
+                    setMenuRow(null);
+                    if (rowToEdit) handleCardEnterLog(rowToEdit);
+                  }}
+                  style={[
+                    styles.sheetActionItem,
+                    {
+                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+                      borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#7dd3fc',
+                    },
+                  ]}
+                >
+                  <View style={[styles.sheetActionIconCircle, { backgroundColor: '#0284c7' }]}>
+                    <Edit2 size={16} color="#ffffff" />
+                  </View>
+                  <View style={styles.sheetActionTextCol}>
+                    <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
+                      Edit Shift Log
+                    </Text>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      Update HMR meter readings or shift notes
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : (
+                <Pressable
+                  variant="plain"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    const rowToEnter = menuRow;
+                    setMenuRow(null);
+                    if (rowToEnter) handleCardEnterLog(rowToEnter);
+                  }}
+                  style={[
+                    styles.sheetActionItem,
+                    {
+                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+                      borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#7dd3fc',
+                    },
+                  ]}
+                >
+                  <View style={[styles.sheetActionIconCircle, { backgroundColor: '#0284c7' }]}>
+                    <User size={16} color="#ffffff" />
+                  </View>
+                  <View style={styles.sheetActionTextCol}>
+                    <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
+                      Enter Shift Log
+                    </Text>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      Record start & end HMR meters for this shift
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Cancel Button */}
+            <Pressable
+              variant="outline"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={() => setMenuRow(null)}
+              style={[
+                styles.sheetCancelBtn,
+                {
+                  backgroundColor: theme.colors.canvas,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <Text variant="label" style={{ color: theme.colors.mute }}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1223,8 +1593,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    padding: spacingNumeric.md,
-    gap: 10,
+    padding: 10,
+    gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1280,23 +1650,22 @@ const styles = StyleSheet.create({
   cardMetaBox: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    padding: 10,
-    gap: 7,
+    padding: 8,
+    gap: 4,
   },
   metaFieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   metaFieldLabelGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    width: 62,
   },
   metaFieldLabel: {},
   metaFieldValue: {
-    flex: 1,
+    flexShrink: 1,
   },
   // Summary & Actions
   attributionRow: {
@@ -1329,5 +1698,71 @@ const styles = StyleSheet.create({
   },
   assignRowBtnText: {
     color: '#ffffff',
+  },
+  cardMoreBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetBackdropContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  actionSheetCard: {
+    borderTopLeftRadius: radiusNumeric.lg,
+    borderTopRightRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    padding: spacingNumeric.md,
+    gap: spacingNumeric.md,
+    paddingBottom: Platform.OS === 'ios' ? 36 : spacingNumeric.lg,
+  },
+  sheetHandleWrapper: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  sheetHeader: {
+    gap: 2,
+  },
+  sheetTitle: {},
+  sheetSubtitle: {},
+  sheetActionsList: {
+    gap: 8,
+  },
+  sheetActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    minHeight: 48,
+  },
+  sheetActionIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  sheetCancelBtn: {
+    height: 44,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
   },
 });

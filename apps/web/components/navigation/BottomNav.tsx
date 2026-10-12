@@ -98,7 +98,7 @@ export function BottomNav({ role, user }: { role: UserRole; user?: { full_name?:
     <>
       <nav
         aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-40 md:hidden print:hidden border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]/95 backdrop-blur-xl shadow-[0_-1px_3px_rgba(0,0,0,0.06)] transition-transform"
+        className="fixed inset-x-0 bottom-0 z-40 md:hidden print:hidden rounded-t-2xl border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-none transition-transform"
         style={{
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
@@ -118,28 +118,30 @@ export function BottomNav({ role, user }: { role: UserRole; user?: { full_name?:
                   size={18}
                   className={`shrink-0 transition-colors duration-150 ${
                     active
-                      ? "text-[var(--color-ink)]"
+                      ? "text-[#0284c7] dark:text-[#0ea5e9]"
                       : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
                   }`}
                   aria-hidden
                 />
-                <span className="truncate max-w-full text-center leading-none mt-1 text-[10px] sm:text-[11px] tracking-tight">
+                <span className={`truncate max-w-full text-center leading-none mt-1 text-[10px] sm:text-[11px] tracking-tight ${
+                  active ? "text-[#0284c7] dark:text-[#0ea5e9] font-medium" : "text-[var(--color-mute)]"
+                }`}>
                   {t.label}
                 </span>
                 {/* Active dot indicator (in-flow below label, never overlaps text) */}
                 <span
                   className={`h-1 w-1 rounded-full mt-1 transition-all duration-150 ${
-                    active ? "bg-[var(--color-ink)] opacity-100" : "opacity-0"
+                    active ? "bg-[#0284c7] dark:bg-[#0ea5e9] opacity-100" : "opacity-0"
                   }`}
                   aria-hidden
                 />
               </>
             );
 
-            const className = `group group/nav interactive-parent relative flex flex-col items-center justify-center w-full h-full min-h-[44px] px-0.5 py-1 rounded-md transition-all duration-150 active:scale-95 ${
+            const className = `group group/nav interactive-parent relative flex flex-col items-center justify-center w-full max-w-[72px] h-full min-h-[44px] px-0.5 py-1 rounded-xl transition-all duration-150 active:bg-[var(--color-canvas)] dark:active:bg-white/[0.06] active:scale-100 ${
               active
-                ? "text-[var(--color-ink)] font-semibold"
-                : "text-[var(--color-mute)] font-medium hover:text-[var(--color-ink)]"
+                ? "text-[#0284c7] dark:text-[#0ea5e9] font-medium"
+                : "text-[var(--color-mute)] font-normal hover:text-[var(--color-ink)]"
             }`;
 
             return (

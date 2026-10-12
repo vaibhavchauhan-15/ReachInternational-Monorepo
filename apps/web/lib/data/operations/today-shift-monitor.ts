@@ -14,16 +14,18 @@ export type { TodayShiftMonitorRow };
  * When p_search is provided, server-side ILIKE filtering is applied inside the RPC.
  */
 export const getTodayShiftLogMonitor = cache(
-  async (actorId: string, logDate?: string, search?: string, bypassCache?: boolean): Promise<TodayShiftMonitorRow[]> => {
+  async (actorId: string, logDate?: string, search?: string, bypassCache?: boolean, clientId?: string): Promise<TodayShiftMonitorRow[]> => {
     const trimmedSearch = search?.trim() || undefined;
+    const trimmedClientId = clientId?.trim() || undefined;
 
-    // When searching or explicitly bypassing cache (e.g. after mutations/refreshes), query DB directly
-    if (trimmedSearch || bypassCache) {
+    // When searching, filtering by client, or explicitly bypassing cache, query DB directly
+    if (trimmedSearch || trimmedClientId || bypassCache) {
       const supabase = createSupabaseAdminClient();
       const { data, error } = await supabase.rpc("get_today_shift_log_monitor", {
         p_actor_id: actorId,
         ...(logDate ? { p_log_date: logDate } : {}),
         ...(trimmedSearch ? { p_search: trimmedSearch } : {}),
+        ...(trimmedClientId ? { p_client_id: trimmedClientId } : {}),
       });
       if (error) {
         console.error("Error fetching today shift log monitor (direct):", error);
@@ -33,7 +35,7 @@ export const getTodayShiftLogMonitor = cache(
     }
 
     // No search & normal read — use cached version
-    const cacheKey = `today-shift-monitor:${actorId}:${logDate || "today"}`;
+    const cacheKey = `today-shift-monitor:${actorId}:${logDate || "today"}:${clientId || "all"}`;
 
     const fetchCached = unstable_cache(
       async (): Promise<TodayShiftMonitorRow[]> => {
@@ -42,6 +44,7 @@ export const getTodayShiftLogMonitor = cache(
         const { data, error } = await supabase.rpc("get_today_shift_log_monitor", {
           p_actor_id: actorId,
           ...(logDate ? { p_log_date: logDate } : {}),
+          ...(trimmedClientId ? { p_client_id: trimmedClientId } : {}),
         });
 
         if (error) {

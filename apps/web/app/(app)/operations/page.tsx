@@ -2,7 +2,6 @@ import { requirePermission, getCurrentUser } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
 import { getTodayShiftLogMonitor } from "@/lib/data/operations/today-shift-monitor";
-import { getMachines } from "@/lib/queries/machines";
 import { getClients } from "@/lib/queries/clients";
 import { getActiveOperators } from "@/lib/data/machines/machine-filters";
 import { OperationsClient } from "@/components/operations/OperationsClient";
@@ -49,9 +48,8 @@ export default async function OperationsPage(props: {
   }
 
   // Dedicated Shift Logs view for supervisors, managers, admins, and HR
-  const [initialTodayRows, machineRes, dbClients, activeOperators] = await Promise.all([
+  const [initialTodayRows, dbClients, activeOperators] = await Promise.all([
     getTodayShiftLogMonitor(user.id, currentDate),
-    getMachines({ pageSize: 100 }),
     getClients(),
     getActiveOperators(),
   ]);
@@ -60,7 +58,7 @@ export default async function OperationsPage(props: {
     <OperationsClient
       userRole={user?.role}
       user={user!}
-      machines={machineRes?.machines || []}
+      machines={[]}
       dbClients={dbClients}
       operators={activeOperators}
       initialTodayRows={initialTodayRows}

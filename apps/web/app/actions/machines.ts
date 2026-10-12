@@ -1534,6 +1534,7 @@ export async function updateMachinePersonnelAction(
   payload: {
     supervisorIds?: string[];
     operators?: OperatorAssignmentInput[];
+    activateMachine?: boolean;
   }
 ): Promise<{
   success?: boolean;
@@ -1956,6 +1957,10 @@ export async function updateMachinePersonnelAction(
     if (payload.operators !== undefined) {
       updateData.operator_ids = uniqueOpIds;
       updateData.current_operator_id = uniqueOpIds[0] || null;
+    }
+
+    if (payload.activateMachine) {
+      updateData.health_status = "active";
     }
 
     const { error: mUpdateError } = await supabaseAdmin

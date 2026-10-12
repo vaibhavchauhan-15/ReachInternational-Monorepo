@@ -128,11 +128,11 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               {
                 backgroundColor:
                   isFilterOpen || activeFilterCount > 0
-                    ? theme.colors.ink
+                    ? '#0284c7'
                     : theme.colors.canvas,
                 borderColor:
                   isFilterOpen || activeFilterCount > 0
-                    ? theme.colors.ink
+                    ? '#0284c7'
                     : theme.colors.hairline,
               },
             ]}
@@ -142,7 +142,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               size={13}
               color={
                 isFilterOpen || activeFilterCount > 0
-                  ? theme.colors.canvas
+                  ? '#ffffff'
                   : theme.colors.ink
               }
             />
@@ -151,7 +151,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               style={{
                 color:
                   isFilterOpen || activeFilterCount > 0
-                    ? theme.colors.canvas
+                    ? '#ffffff'
                     : theme.colors.ink,
               }}
             >
@@ -164,8 +164,8 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
                   {
                     backgroundColor:
                       isFilterOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
-                        : theme.colors.ink,
+                        ? '#ffffff'
+                        : '#0284c7',
                   },
                 ]}
               >
@@ -174,8 +174,8 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
                   style={{
                     color:
                       isFilterOpen || activeFilterCount > 0
-                        ? theme.colors.ink
-                        : theme.colors.canvas,
+                        ? '#0284c7'
+                        : '#ffffff',
                   }}
                 >
                   {activeFilterCount}
@@ -187,7 +187,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               state={isFilterOpen ? 'open' : 'closed'}
               color={
                 isFilterOpen || activeFilterCount > 0
-                  ? theme.colors.canvas
+                  ? '#ffffff'
                   : theme.colors.ink
               }
             />

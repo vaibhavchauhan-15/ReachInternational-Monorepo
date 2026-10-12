@@ -27,12 +27,17 @@ const textVariants = cva('text-foreground web:select-text', {
       large: 'text-lg font-semibold',
       small: 'text-sm font-medium leading-none',
       muted: 'text-sm text-muted-foreground',
-      // Reach tokens variants
-      heading: 'text-xl font-semibold',
-      subheading: 'text-base font-medium text-muted-foreground',
-      body: 'text-base font-normal',
-      label: 'text-sm font-medium',
-      caption: 'text-xs text-muted-foreground',
+      // Reach tokens variants (sizes & line heights dynamically controlled by dynamicTypeStyle)
+      hero: 'font-bold',
+      display: 'font-bold',
+      title: 'font-semibold',
+      heading: 'font-semibold',
+      subheading: 'font-medium text-muted-foreground',
+      body: 'font-normal',
+      label: 'font-medium',
+      caption: 'text-muted-foreground',
+      micro: 'text-muted-foreground',
+      mono: 'font-mono',
     },
   },
   defaultVariants: {

@@ -13,6 +13,7 @@ import {
   isPublicLegalRoute,
   isDeprecatedRoute,
   isRouteAllowedForRole,
+  labelFor,
 } from "./navigation.ts";
 import type { UserRole } from "@reachinternational/types";
 
@@ -135,5 +136,15 @@ test("getDrawerItems returns correct overflow items and no /more exists in any r
     NAV_ITEMS.some((item) => item.key === "profile"),
     "NAV_ITEMS must contain profile"
   );
+});
+
+test("labelFor resolves correctly including operator Shift override", () => {
+  const operationsItem = NAV_ITEMS.find((i) => i.key === "operations")!;
+  assert.equal(labelFor(operationsItem, "operator"), "Shift");
+  assert.equal(labelFor(operationsItem, "admin"), "Operations");
+  assert.equal(labelFor(operationsItem, "manager"), "Operations");
+  assert.equal(labelFor(operationsItem, "supervisor"), "Operations");
+  assert.equal(labelFor(operationsItem, "hr"), "Operations");
+  assert.equal(labelFor(operationsItem, "super_admin"), "Operations");
 });
 

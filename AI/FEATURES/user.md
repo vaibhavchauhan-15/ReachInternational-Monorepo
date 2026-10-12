@@ -8,8 +8,9 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
 - **Client Hub**: `app/(app)/users/users-client.tsx`
 - **Sections**: `app/(app)/users/ProfileChangeRequestsSection.tsx` (Profile detail changes review & batch approval)
 - **Row & Detail Sheet**: `app/(app)/users/UserRow.tsx`, `UserDetailSheet.tsx`
-- **Modals**: `app/(app)/users/UserCreateModal.tsx`, `UserEditModal.tsx`, `components/profile/EditProfileModal.tsx`
-- **Mobile**: `apps/mobile/app/(app)/profile.tsx`, `apps/mobile/app/(app)/users.tsx`, `apps/mobile/components/profile/EditProfileModal.tsx`
+- **Modals & Forms**: `apps/web/components/profile/ProfileEditForm.tsx`, `EditProfileModal.tsx`, `ProfileEditButton.tsx`
+- **Mobile**: `apps/mobile/app/(app)/profile/index.tsx`, `apps/mobile/app/(app)/profile/edit.tsx`, `apps/mobile/components/profile/ProfileEditForm.tsx`, `apps/mobile/components/profile/EditProfileModal.tsx`
+- **Profile Routes**: `/profile` (View Profile), `/profile/edit` (Dedicated Edit Screen), `/profile?edit=true` (Modal Toggle)
 - **RBAC Matrix & Scopes**: `lib/auth/rbac.ts`, `lib/auth/scope.ts`, `@reachinternational/permissions`
 - **Actions**: `app/actions/users.ts`, `app/actions/profile.ts`, `app/actions/auth.ts`
 - **DAL & Queries**: `lib/dal.ts`, `lib/queries/users.ts`
@@ -157,3 +158,10 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
   - Next.js searchParams passthrough in `app/(app)/users/page.tsx` supports URL bookmarking, deep linking, and zero client-side filter computation.
   - Full Web-to-Mobile parity synchronized in `apps/mobile/app/(app)/users.tsx` with `debouncedSearch` (500ms timer, min 2-character requirement) and `applyOptimizedUserSearch(query, debouncedSearch)`.
 
+## Profile Edit Architecture & Form Sections (`/profile/edit`)
+- **Shared Primitives**: `apps/web/components/profile/ProfileEditForm.tsx` & `apps/mobile/components/profile/ProfileEditForm.tsx`.
+- **Streamlined Personal Details Form**:
+  - Exclusively focuses on Personal Details: **Full Name** and **Mobile Phone Number** (both editable by all authenticated users).
+  - Backed by database trigger `public.prevent_self_role_status_mutation()` (`164_allow_user_self_edit_name_and_phone.sql`) permitting self-service updates of `full_name` and `phone` while strictly guarding `role`, `status`, `email`, KYC, and banking fields.
+  - Secondary sections (Shift Timing, Address, Banking Details, Compensation) and KYC attachments (Aadhaar & Licence) are decoupled from the self-edit profile form and managed via master profile views (`/profile`) and admin management (`/users`).
+  - **Action Button Ergonomics**: Cancel and Save Changes buttons formatted in a single balanced row at the bottom of the form inside the scrollable content with generous safe area bottom clearance (`paddingBottom: Math.max(insets.bottom + 90, 120)`), eliminating overlap with `MobileBottomNav`.

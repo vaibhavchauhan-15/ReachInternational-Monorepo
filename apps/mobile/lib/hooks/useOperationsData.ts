@@ -391,15 +391,21 @@ export function useOperatorEntryContext(operatorId?: string) {
  * Hook for Today's Shift Log Monitor on Mobile.
  * Queries get_today_shift_log_monitor RPC with 30s auto-refresh interval.
  */
-export function useTodayShiftMonitor(actorId?: string, logDate?: string, enabled: boolean = true) {
+export function useTodayShiftMonitor(
+  actorId?: string,
+  logDate?: string,
+  enabled: boolean = true,
+  clientId?: string
+) {
   return useQuery<TodayShiftMonitorRow[]>({
-    queryKey: ['operations', 'today-shift-monitor', actorId, logDate || 'today'],
+    queryKey: ['operations', 'today-shift-monitor', actorId, logDate || 'today', clientId || 'all'],
     enabled: Boolean(actorId) && enabled,
     queryFn: async () => {
       if (!actorId) return [];
       const { data, error } = await supabase.rpc('get_today_shift_log_monitor', {
         p_actor_id: actorId,
         ...(logDate ? { p_log_date: logDate } : {}),
+        ...(clientId ? { p_client_id: clientId } : {}),
       });
 
       if (error) {

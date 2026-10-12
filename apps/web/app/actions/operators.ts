@@ -1477,7 +1477,8 @@ export async function getOperatorHistoryLogsAction(limit: number = 100): Promise
 export async function getTodayShiftMonitorAction(
   logDate?: string,
   search?: string,
-  bypassCache: boolean = false
+  bypassCache: boolean = false,
+  clientId?: string
 ): Promise<{
   success: boolean;
   data?: import("@/lib/data/operations/today-shift-monitor").TodayShiftMonitorRow[];
@@ -1491,11 +1492,54 @@ export async function getTodayShiftMonitorAction(
 
   try {
     const { getTodayShiftLogMonitor } = await import("@/lib/data/operations/today-shift-monitor");
-    const data = await getTodayShiftLogMonitor(user.id, logDate || undefined, search || undefined, bypassCache);
+    const data = await getTodayShiftLogMonitor(user.id, logDate || undefined, search || undefined, bypassCache, clientId || undefined);
     return { success: true, data };
   } catch (err) {
     console.error("[getTodayShiftMonitorAction] Exception:", err);
     return { success: false, error: "Failed to fetch shift monitor data" };
+  }
+}
+
+/**
+ * Server action: Activate machine from breakdown / maintenance for operator assignment.
+ * Permitted for supervisors, managers, admins, and super_admins.
+ */
+export async function activateMachineAction(machineId: string): Promise<{
+  success: boolean;
+  error?: string;
+  data?: any;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+  if (!["supervisor", "manager", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions: Only supervisors and administrators can activate equipment." };
+  }
+
+  try {
+    const supabaseAdmin = createSupabaseAdminClient();
+    const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc("activate_machine_for_assignment", {
+      p_machine_id: machineId,
+      p_actor_id: user.id,
+    });
+
+    if (rpcErr) {
+      console.error("[activateMachineAction] RPC error:", rpcErr);
+      return { success: false, error: rpcErr.message || "Failed to activate machine." };
+    }
+
+    if (rpcRes && typeof rpcRes === "object" && (rpcRes as any).success === false) {
+      return { success: false, error: (rpcRes as any).error || "Failed to activate machine." };
+    }
+
+    revalidateTag(TAGS.todayShiftMonitor, "max");
+    revalidateTag(TAGS.machinesList, "max");
+    revalidateTag(TAGS.machinesKpis, "max");
+    revalidateTag(TAGS.machines, "max");
+
+    return { success: true, data: rpcRes };
+  } catch (err) {
+    console.error("[activateMachineAction] Exception:", err);
+    return { success: false, error: "An unexpected error occurred while activating the machine." };
   }
 }
 

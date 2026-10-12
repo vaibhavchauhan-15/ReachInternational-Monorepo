@@ -3,6 +3,7 @@
 import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { verifySession, getCurrentUserRole } from "@/lib/dal";
+import { isManagerOrAbove } from "@reachinternational/permissions";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
 
@@ -105,7 +106,23 @@ export async function confirmDocumentUploadAction(params: {
     }
 
     const session = await verifySession();
+    const userRole = await getCurrentUserRole();
+    const canManageDocs = isManagerOrAbove(userRole);
+
     const supabase = await createSupabaseServerClient();
+
+    if (!canManageDocs) {
+      const { data: existingDoc } = await supabase
+        .from("user_documents")
+        .select("id")
+        .eq("user_id", session.userId)
+        .eq("document_type_code", params.documentTypeCode)
+        .maybeSingle();
+
+      if (existingDoc) {
+        return { success: false, error: "Only administrators and managers can replace official documents." };
+      }
+    }
 
     const { error } = await supabase
       .from("user_documents")
@@ -255,6 +272,13 @@ export async function deleteDocumentAction(
     }
 
     const session = await verifySession();
+    const userRole = await getCurrentUserRole();
+    const canManageDocs = isManagerOrAbove(userRole);
+
+    if (!canManageDocs) {
+      return { success: false, error: "Only administrators and managers can remove official documents." };
+    }
+
     const supabase = await createSupabaseServerClient();
 
     // Fetch existing doc to get storage path

@@ -11,10 +11,11 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Pressable } from '../../components/ui/touch/Pressable';
-import { useAuth } from '../../lib/auth/useAuth';
+import { Pressable } from '../../../components/ui/touch/Pressable';
+import { useAuth } from '../../../lib/auth/useAuth';
 import {
   Card,
   Badge,
@@ -24,22 +25,17 @@ import {
   MobileHeader,
   Text,
   useToast,
-} from '../../components/ui';
-import { supabase } from '../../lib/supabase';
+  SearchableSelect,
+} from '../../../components/ui';
+import { supabase } from '../../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   Trash2,
-  AlertTriangle,
-  CheckCircle2,
-  FileCheck,
-  Shield,
-  User,
-  Mail,
   Clock,
   ChevronRight,
-  ArrowLeft,
   XCircle,
-} from '../../components/ui/icon';
+  FileText,
+} from '../../../components/ui/icon';
 
 const REASON_OPTIONS = [
   'Leaving organization / Change of employment',
@@ -51,7 +47,7 @@ const REASON_OPTIONS = [
 
 export default function AccountDeletionScreen() {
   const router = useRouter();
-  const { user, userProfile, role, signOut } = useAuth();
+  const { user, userProfile, role } = useAuth();
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
 
@@ -65,7 +61,6 @@ export default function AccountDeletionScreen() {
 
   const userEmail = user?.email || userProfile?.email || '';
   const userName = userProfile?.full_name || 'Field Personnel';
-  const roleLabel = (role || userProfile?.role || 'operator').replace(/_/g, ' ').toUpperCase();
 
   // Check if user already has a pending deletion request
   const checkPendingDeletion = useCallback(async () => {
@@ -115,6 +110,11 @@ export default function AccountDeletionScreen() {
 
   // Handle Deletion Submission
   const handleSubmitDeletion = async () => {
+    if (selectedReason === 'Other operational reason' && !customReason.trim()) {
+      toast('warning', 'Reason Required', 'Please describe your operational reason in the text box.');
+      return;
+    }
+
     if (confirmText.trim().toUpperCase() !== 'DELETE') {
       toast('warning', 'Confirmation Required', 'Please type "DELETE" into the box to confirm account de-provisioning.');
       return;
@@ -131,9 +131,12 @@ export default function AccountDeletionScreen() {
           onPress: async () => {
             setIsSubmitting(true);
             try {
-              const fullReason = customReason.trim()
-                ? `${selectedReason}: ${customReason.trim()}`
-                : selectedReason;
+              const fullReason =
+                selectedReason === 'Other operational reason'
+                  ? customReason.trim()
+                    ? `Other operational reason: ${customReason.trim()}`
+                    : 'Other operational reason'
+                  : selectedReason;
 
               // Try inserting into account_deletion_requests
               const { error: directErr } = await supabase
@@ -229,6 +232,12 @@ export default function AccountDeletionScreen() {
     );
   };
 
+  const isDeleteDisabled =
+    isSubmitting ||
+    confirmText.trim().toUpperCase() !== 'DELETE' ||
+    !selectedReason ||
+    (selectedReason === 'Other operational reason' && !customReason.trim());
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <MobileHeader
@@ -243,45 +252,43 @@ export default function AccountDeletionScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Hero Policy Card */}
-          <Card variant="elevated" style={styles.card}>
-            <View style={styles.heroHeader}>
-              <View style={[styles.heroIconBox, { backgroundColor: 'rgba(220, 38, 38, 0.1)' }]}>
-                <Trash2 size={22} color="#dc2626" />
+          {/* Top Guide Action Button / Banner */}
+          <Pressable
+            variant="card"
+            haptic="select"
+            onPress={() => router.push('/account-deletion/guide')}
+            style={[
+              styles.guideBanner,
+              {
+                borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : 'rgba(2, 132, 199, 0.25)',
+                backgroundColor: isDark ? 'rgba(2, 132, 199, 0.08)' : 'rgba(2, 132, 199, 0.04)',
+              },
+            ]}
+          >
+            <View style={styles.guideBannerLeft}>
+              <View
+                style={[
+                  styles.guideIconBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : 'rgba(2, 132, 199, 0.1)',
+                  },
+                ]}
+              >
+                <FileText size={18} color="#0284c7" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.heroTitle, { color: theme.colors.ink }]}>
-                  Request Account & Data Erasure
+              <View style={styles.guideTextCol}>
+                <Text variant="subheading" style={{ color: theme.colors.ink }}>
+                  Read this before delete the account
                 </Text>
-                <Text style={[styles.heroSub, { color: theme.colors.mute }]}>
-                  Google Play Store Policy & Privacy Compliance
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  Review policy, purged data &amp; statutory records retention
                 </Text>
               </View>
             </View>
-
-            <Text style={[styles.heroBody, { color: theme.colors.mute }]}>
-              Under statutory data privacy regulations and Google Play Developer policies, you may request permanent de-provisioning of your user account and erasure of personal KYC data.
-            </Text>
-          </Card>
-
-          {/* User Identity Card */}
-          <Card variant="elevated" style={styles.card}>
-            <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>ACCOUNT TO BE DELETED</Text>
-
-            <View style={styles.identityRow}>
-              <View style={[styles.avatarCircle, { backgroundColor: theme.colors.link }]}>
-                <Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.identityName, { color: theme.colors.ink }]}>{userName}</Text>
-                  <Badge status="active" customLabel={roleLabel} />
-                </View>
-                <Text style={[styles.identityEmail, { color: theme.colors.mute }]}>{userEmail}</Text>
-              </View>
-            </View>
-          </Card>
+            <ChevronRight size={16} color={theme.colors.mute} />
+          </Pressable>
 
           {/* Pending Request Banner if already submitted */}
           {pendingRequest && (
@@ -295,11 +302,11 @@ export default function AccountDeletionScreen() {
               <View style={styles.pendingHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Clock size={16} color="#d97706" />
-                  <Text style={styles.pendingTitle}>Deletion Request Pending Review</Text>
+                  <Text variant="subheading" style={styles.pendingTitle}>Deletion Request Pending Review</Text>
                 </View>
                 <Badge status="pending" customLabel="PENDING" />
               </View>
-              <Text style={[styles.pendingBody, { color: theme.colors.ink }]}>
+              <Text variant="body" style={[styles.pendingBody, { color: theme.colors.ink }]}>
                 Your account deletion request was received and is currently in the compliance queue. It will be reviewed and finalized within 14 business days.
               </Text>
               <Button
@@ -314,81 +321,56 @@ export default function AccountDeletionScreen() {
             </Card>
           )}
 
-          {/* Data Erasure Breakdown */}
-          <Card variant="elevated" style={styles.card}>
-            <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>DATA RETENTION & ERASURE RULES</Text>
-
-            {/* Purged */}
-            <View style={[styles.infoBox, { backgroundColor: 'rgba(16, 185, 129, 0.06)', borderColor: 'rgba(16, 185, 129, 0.25)' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <CheckCircle2 size={14} color="#059669" />
-                <Text style={[styles.infoBoxTitle, { color: '#059669' }]}>Data Permanently Purged</Text>
-              </View>
-              <Text style={[styles.infoBoxBody, { color: theme.colors.ink }]}>
-                • Legal name, official email, phone number{'\n'}
-                • Authentication sessions and passwords{'\n'}
-                • Aadhaar and Driving Licence numbers{'\n'}
-                • Push tokens and device telemetry
-              </Text>
-            </View>
-
-            {/* Retained */}
-            <View style={[styles.infoBox, { backgroundColor: 'rgba(217, 119, 6, 0.06)', borderColor: 'rgba(217, 119, 6, 0.25)', marginTop: 8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <FileCheck size={14} color="#d97706" />
-                <Text style={[styles.infoBoxTitle, { color: '#d97706' }]}>Statutory Machinery Records</Text>
-              </View>
-              <Text style={[styles.infoBoxBody, { color: theme.colors.ink }]}>
-                Under industrial safety and equipment warranty legislation, historical machine hour meter logs (HMR), pre-shift checklists, and breakdown tickets are preserved in an anonymized format for auditing purposes.
-              </Text>
-            </View>
-          </Card>
-
           {/* Deletion Form (Hidden if request already pending) */}
           {!pendingRequest && (
             <Card variant="elevated" style={styles.card}>
-              <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>SUBMIT DELETION REQUEST</Text>
+              <Text variant="caption" style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>
+                SUBMIT DELETION REQUEST
+              </Text>
 
-              <Text style={[styles.label, { color: theme.colors.ink, marginTop: 4 }]}>Select Reason</Text>
-              {REASON_OPTIONS.map((opt) => (
-                <Pressable
-                  key={opt}
-                  variant="cardSelect"
-                  haptic="select"
-                  onPress={() => setSelectedReason(opt)}
-                  style={[
-                    styles.radioRow,
-                    {
-                      borderColor: selectedReason === opt ? theme.colors.link : theme.colors.hairline,
-                      backgroundColor: selectedReason === opt ? (isDark ? 'rgba(14, 165, 233, 0.1)' : '#f0f9ff') : 'transparent',
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      {
-                        borderColor: selectedReason === opt ? theme.colors.link : theme.colors.mute,
-                      },
-                    ]}
-                  >
-                    {selectedReason === opt && (
-                      <View style={[styles.radioDot, { backgroundColor: theme.colors.link }]} />
-                    )}
-                  </View>
-                  <Text style={[styles.radioText, { color: theme.colors.ink }]}>{opt}</Text>
-                </Pressable>
-              ))}
-
-              <Text style={[styles.label, { color: theme.colors.ink, marginTop: 10 }]}>Additional Notes (Optional)</Text>
-              <Input
-                placeholder="Any comments for the compliance desk..."
-                value={customReason}
-                onChangeText={setCustomReason}
-                containerStyle={{ marginVertical: 4 }}
+              {/* Custom Dropdown Selection */}
+              <SearchableSelect
+                label="Reason for Deletion"
+                required
+                options={REASON_OPTIONS.map((opt) => ({ value: opt, label: opt }))}
+                value={selectedReason}
+                onChange={(val) => {
+                  setSelectedReason(val);
+                  if (val !== 'Other operational reason') {
+                    setCustomReason('');
+                  }
+                }}
+                placeholder="Select a reason for deletion..."
+                searchable={false}
+                presentation="dropdown"
+                containerStyle={{ marginTop: 6, marginBottom: 10 }}
               />
 
-              <View style={[styles.confirmBox, { borderColor: 'rgba(220, 38, 38, 0.3)', backgroundColor: 'rgba(220, 38, 38, 0.05)' }]}>
+              {/* Input for other reasons if "Other operational reason" is selected */}
+              {selectedReason === 'Other operational reason' && (
+                <View style={styles.otherReasonContainer}>
+                  <Text variant="label" style={{ color: theme.colors.ink, marginBottom: 4 }}>
+                    Specify Reason <Text variant="label" style={{ color: '#ef4444' }}>*</Text>
+                  </Text>
+                  <Input
+                    placeholder="Enter your operational reason for deletion..."
+                    value={customReason}
+                    onChangeText={setCustomReason}
+                    containerStyle={{ marginVertical: 0 }}
+                  />
+                </View>
+              )}
+
+              {/* Confirmation Box */}
+              <View
+                style={[
+                  styles.confirmBox,
+                  {
+                    borderColor: 'rgba(220, 38, 38, 0.3)',
+                    backgroundColor: 'rgba(220, 38, 38, 0.05)',
+                  },
+                ]}
+              >
                 <Text variant="label" style={{ color: '#dc2626', marginBottom: 4 }}>
                   TYPE &quot;DELETE&quot; TO CONFIRM
                 </Text>
@@ -404,13 +386,14 @@ export default function AccountDeletionScreen() {
                 />
               </View>
 
+              {/* Submit Button */}
               <Button
                 label="Submit Account Deletion Request"
                 onPress={handleSubmitDeletion}
                 variant="destructive"
                 size="md"
                 isLoading={isSubmitting}
-                disabled={isSubmitting || confirmText.trim().toUpperCase() !== 'DELETE'}
+                disabled={isDeleteDisabled}
                 icon={<Trash2 size={16} color="#ffffff" />}
                 fullWidth
                 style={{ marginTop: spacingNumeric.md }}
@@ -421,7 +404,7 @@ export default function AccountDeletionScreen() {
           {/* Processing Timeline Notice */}
           <View style={styles.timelineNotice}>
             <Clock size={14} color={theme.colors.mute} />
-            <Text style={[styles.timelineText, { color: theme.colors.mute }]}>
+            <Text variant="caption" style={[styles.timelineText, { color: theme.colors.mute }]}>
               Processing Timeline: Requests are acknowledged within 48 hours and executed within 14 business days.
             </Text>
           </View>
@@ -432,31 +415,78 @@ export default function AccountDeletionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: spacingNumeric.md, paddingBottom: spacingNumeric.xl },
-  card: { marginVertical: spacingNumeric.xs, padding: spacingNumeric.md },
-  heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  heroIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { },
-  heroSub: { marginTop: 1 },
-  heroBody: { marginTop: 4 },
-  sectionEyebrow: { textTransform: 'uppercase', marginBottom: 8 },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#ffffff' },
-  identityName: { },
-  identityEmail: { marginTop: 1 },
-  pendingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  pendingTitle: { color: '#d97706' },
-  pendingBody: { },
-  infoBox: { padding: 10, borderRadius: radiusNumeric.md, borderWidth: 1 },
-  infoBoxTitle: { },
-  infoBoxBody: { marginTop: 2 },
-  label: { marginBottom: 4 },
-  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: radiusNumeric.md, borderWidth: 1, marginVertical: 3 },
-  radioCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  radioDot: { width: 9, height: 9, borderRadius: 4.5 },
-  radioText: { flex: 1 },
-  confirmBox: { padding: 12, borderRadius: radiusNumeric.md, borderWidth: 1, marginTop: 12 },
-  timelineNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingVertical: 12, justifyContent: 'center' },
-  timelineText: { textAlign: 'center', flex: 1 } });
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: spacingNumeric.md,
+    paddingBottom: spacingNumeric.xl,
+  },
+  card: {
+    marginVertical: spacingNumeric.xs,
+    padding: spacingNumeric.md,
+  },
+  guideBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    marginBottom: spacingNumeric.sm,
+    minHeight: 52,
+  },
+  guideBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  guideIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideTextCol: {
+    flex: 1,
+  },
+  sectionEyebrow: {
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  otherReasonContainer: {
+    marginBottom: 12,
+  },
+  pendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pendingTitle: {
+    color: '#d97706',
+  },
+  pendingBody: {
+    marginTop: 2,
+  },
+  confirmBox: {
+    padding: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  timelineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  timelineText: {
+    textAlign: 'center',
+    flex: 1,
+  },
+});

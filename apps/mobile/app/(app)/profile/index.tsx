@@ -11,9 +11,9 @@ import {
   Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme, MobileHeader , Text, useToast } from '../../components/ui';
-import { Pressable } from '../../components/ui/touch/Pressable';
+import { useAuth } from '../../../lib/auth/useAuth';
+import { useTheme, MobileHeader , Text, useToast } from '../../../components/ui';
+import { Pressable } from '../../../components/ui/touch/Pressable';
 import {
   toProfileView,
   type ProfileViewModel,
@@ -21,7 +21,7 @@ import {
   type ProfileRow,
   formatDate,
 } from '@reachinternational/utils';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -51,21 +51,21 @@ import {
   FileText,
   ImageIcon,
   Download,
-} from '../../components/ui/icon';
+} from '../../../components/ui/icon';
 import {
   pickIdentityDocument,
   uploadUserDocumentDirect,
   deleteUserDocument,
   fetchUserDocuments,
   type UserDocumentInfo,
-} from '../../lib/documents';
-import { EditProfileModal } from '../../components/profile/EditProfileModal';
+} from '../../../lib/documents';
+import { EditProfileModal } from '../../../components/profile/EditProfileModal';
 import {
   MobileDocumentViewerModal,
   type MobileViewerDoc,
-} from '../../components/documents/MobileDocumentViewerModal';
-import { notifyProfileRequestCancelled } from '../../lib/notifications';
-import { haptics } from '../../lib/haptics';
+} from '../../../components/documents/MobileDocumentViewerModal';
+import { notifyProfileRequestCancelled } from '../../../lib/notifications';
+import { haptics } from '../../../lib/haptics';
 
 // ─── Section Icon Mapping ───────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -617,7 +617,7 @@ export default function ProfileScreen() {
                     backgroundColor: theme.colors.canvas,
                   },
                 ]}
-                onPress={() => setEditModalVisible(true)}
+                onPress={() => router.push('/profile/edit' as any)}
                 accessibilityLabel="Edit Profile"
               >
                 <Edit size={14} color={theme.colors.link} />
@@ -1389,15 +1389,15 @@ const styles = StyleSheet.create({
   docSlotTitle: {
     },
   uploadedBadgeSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)' },
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center' },
   uploadedBadgeSmallText: {
     color: '#059669' },
   docThumbImage: {
@@ -1483,22 +1483,22 @@ const styles = StyleSheet.create({
   docActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 6,
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
     borderWidth: 1,
-    minHeight: 34 },
+    minHeight: 32 },
   docActionBtnText: {
     },
   docDeleteBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 7,
-    borderRadius: 6,
-    borderWidth: 1,
-    minHeight: 34,
-    minWidth: 34 },
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1 },
   dropzoneWrap: {
     gap: 6 },
   dropzone: {

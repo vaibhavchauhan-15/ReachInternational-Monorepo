@@ -19,7 +19,6 @@ import {
   Input,
   useTheme,
   Text,
-  Card,
 } from '../../../components/ui';
 import {
   SettingsScreenContainer,
@@ -27,18 +26,13 @@ import {
 } from '../../../components/settings';
 import { Pressable } from '../../../components/ui/touch/Pressable';
 import { supabase } from '../../../lib/supabase';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 import {
-  radiusNumeric,
-  spacingNumeric,
-} from '@reachinternational/design-tokens';
-import {
-  KeyRound,
   Eye,
   EyeOff,
   CheckCircle2,
   AlertCircle,
   Lock,
-  ShieldAlert,
 } from '../../../components/ui/icon';
 import { haptics } from '../../../lib/haptics';
 
@@ -163,7 +157,7 @@ export default function ChangePasswordScreen() {
     <SettingsScreenContainer
       title="Change Password"
       showBack={true}
-      onPressBack={() => router.push('/settings/account' as any)}
+      onPressBack={() => router.back()}
     >
       {/* Banner Feedback */}
       {passwordSuccess ? (
@@ -207,42 +201,41 @@ export default function ChangePasswordScreen() {
       ) : null}
 
       {/* Main Password Form Card */}
-      <SettingsSection
-        title="Password Credentials"
-        description="Verify your current password and choose a resilient new passphrase"
-      >
+      <SettingsSection>
         <View style={styles.formPadding}>
           {/* Current Password Field */}
           <View style={styles.fieldGroup}>
             <Text variant="label" style={{ color: theme.colors.ink }}>
               Current Password
             </Text>
-            <View style={styles.inputWrapper}>
-              <Input
-                placeholder="Enter current password"
-                value={currentPassword}
-                onChangeText={(text) => {
-                  setCurrentPassword(text);
-                  setPasswordError(null);
-                }}
-                secureTextEntry={!showCurrentPassword}
-                autoCapitalize="none"
-                style={{ flex: 1 }}
-              />
-              <Pressable
-                variant="iconButton"
-                hitSlopToMin48
-                style={styles.eyeBtn}
-                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                accessibilityLabel="Toggle current password visibility"
-              >
-                {showCurrentPassword ? (
-                  <EyeOff size={18} color={theme.colors.mute} />
-                ) : (
-                  <Eye size={18} color={theme.colors.mute} />
-                )}
-              </Pressable>
-            </View>
+            <Input
+              placeholder="Enter current password"
+              value={currentPassword}
+              onChangeText={(text) => {
+                setCurrentPassword(text);
+                setPasswordError(null);
+              }}
+              secureTextEntry={!showCurrentPassword}
+              autoCapitalize="none"
+              rightIcon={
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
+                  style={styles.eyeBtn}
+                  onPress={() => {
+                    haptics.select();
+                    setShowCurrentPassword(!showCurrentPassword);
+                  }}
+                  accessibilityLabel="Toggle current password visibility"
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff size={18} color={theme.colors.mute} />
+                  ) : (
+                    <Eye size={18} color={theme.colors.mute} />
+                  )}
+                </Pressable>
+              }
+            />
           </View>
 
           {/* New Password Field */}
@@ -250,32 +243,34 @@ export default function ChangePasswordScreen() {
             <Text variant="label" style={{ color: theme.colors.ink }}>
               New Password
             </Text>
-            <View style={styles.inputWrapper}>
-              <Input
-                placeholder="At least 8 characters"
-                value={newPassword}
-                onChangeText={(text) => {
-                  setNewPassword(text);
-                  setPasswordError(null);
-                }}
-                secureTextEntry={!showNewPassword}
-                autoCapitalize="none"
-                style={{ flex: 1 }}
-              />
-              <Pressable
-                variant="iconButton"
-                hitSlopToMin48
-                style={styles.eyeBtn}
-                onPress={() => setShowNewPassword(!showNewPassword)}
-                accessibilityLabel="Toggle new password visibility"
-              >
-                {showNewPassword ? (
-                  <EyeOff size={18} color={theme.colors.mute} />
-                ) : (
-                  <Eye size={18} color={theme.colors.mute} />
-                )}
-              </Pressable>
-            </View>
+            <Input
+              placeholder="At least 8 characters"
+              value={newPassword}
+              onChangeText={(text) => {
+                setNewPassword(text);
+                setPasswordError(null);
+              }}
+              secureTextEntry={!showNewPassword}
+              autoCapitalize="none"
+              rightIcon={
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
+                  style={styles.eyeBtn}
+                  onPress={() => {
+                    haptics.select();
+                    setShowNewPassword(!showNewPassword);
+                  }}
+                  accessibilityLabel="Toggle new password visibility"
+                >
+                  {showNewPassword ? (
+                    <EyeOff size={18} color={theme.colors.mute} />
+                  ) : (
+                    <Eye size={18} color={theme.colors.mute} />
+                  )}
+                </Pressable>
+              }
+            />
 
             {/* Complexity Strength Bar Indicator */}
             {newPassword.length > 0 ? (
@@ -363,32 +358,34 @@ export default function ChangePasswordScreen() {
             <Text variant="label" style={{ color: theme.colors.ink }}>
               Confirm New Password
             </Text>
-            <View style={styles.inputWrapper}>
-              <Input
-                placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setPasswordError(null);
-                }}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                style={{ flex: 1 }}
-              />
-              <Pressable
-                variant="iconButton"
-                hitSlopToMin48
-                style={styles.eyeBtn}
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                accessibilityLabel="Toggle confirm password visibility"
-              >
-                {showConfirmPassword ? (
-                  <EyeOff size={18} color={theme.colors.mute} />
-                ) : (
-                  <Eye size={18} color={theme.colors.mute} />
-                )}
-              </Pressable>
-            </View>
+            <Input
+              placeholder="Re-enter new password"
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setPasswordError(null);
+              }}
+              secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              rightIcon={
+                <Pressable
+                  variant="iconButton"
+                  hitSlopToMin48
+                  style={styles.eyeBtn}
+                  onPress={() => {
+                    haptics.select();
+                    setShowConfirmPassword(!showConfirmPassword);
+                  }}
+                  accessibilityLabel="Toggle confirm password visibility"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={18} color={theme.colors.mute} />
+                  ) : (
+                    <Eye size={18} color={theme.colors.mute} />
+                  )}
+                </Pressable>
+              }
+            />
 
             {confirmPassword.length > 0 ? (
               <Text
@@ -419,30 +416,6 @@ export default function ChangePasswordScreen() {
           />
         </View>
       </SettingsSection>
-
-      {/* Security Best Practices Card */}
-      <Card
-        variant="elevated"
-        style={[
-          styles.noticeCard,
-          {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f9fafb',
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        <View style={styles.noticeRow}>
-          <ShieldAlert size={16} color={theme.colors.mute} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="subheading" style={{ color: theme.colors.ink }}>
-              Security Invariant
-            </Text>
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
-              Changing your password updates your credentials directly in Supabase Auth. Any active sessions on other unauthorized devices will be invalidated.
-            </Text>
-          </View>
-        </View>
-      </Card>
     </SettingsScreenContainer>
   );
 }
@@ -463,14 +436,9 @@ const styles = StyleSheet.create({
   fieldGroup: {
     gap: 6,
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   eyeBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -501,15 +469,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     width: '45%',
-  },
-  noticeCard: {
-    padding: 14,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-  },
-  noticeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
   },
 });

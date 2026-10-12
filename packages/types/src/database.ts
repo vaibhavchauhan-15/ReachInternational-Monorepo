@@ -706,6 +706,7 @@ export interface TodayShiftMonitorRow {
   operator_id: string | null;
   operator_name: string | null;
   operator_phone?: string | null;
+  operator_employee_id?: string | null;
   machine_id: string;
   machine_code: string;
   machine_serial_number?: string | null;
@@ -713,6 +714,8 @@ export interface TodayShiftMonitorRow {
   client_id?: string | null;
   client_code?: string | null;
   client_name: string;
+  client_city?: string | null;
+  site_name?: string | null;
   current_meter?: number | null;
   shift_code: string;
   shift_name?: string | null;
@@ -729,6 +732,8 @@ export interface TodayShiftMonitorRow {
   end_meter: number | null;
   running_hours: number | null;
   remarks: string | null;
+  machine_status?: string | null;
+  machine_health_status?: "active" | "under_maintenance" | "breakdown" | "spare" | string | null;
 }
 
 export interface MachineComplaint {

@@ -373,8 +373,8 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderTopLeftRadius: radiusNumeric.xl,
-    borderTopRightRadius: radiusNumeric.xl,
+    borderTopLeftRadius: radiusNumeric.lg,
+    borderTopRightRadius: radiusNumeric.lg,
     borderTopWidth: 1,
     maxHeight: 560,
     width: '100%',

@@ -93,7 +93,7 @@ export default function NotificationSettingsScreen() {
     <SettingsScreenContainer
       title="Notifications"
       showBack={true}
-      onPressBack={() => router.push('/settings' as any)}
+      onPressBack={() => router.back()}
       contentContainerStyle={styles.containerContent}
     >
       {/* 1. Shift Reminders */}

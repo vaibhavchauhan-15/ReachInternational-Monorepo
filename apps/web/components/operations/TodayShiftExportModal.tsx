@@ -126,8 +126,12 @@ function TodayShiftsReportContent({
                     <div className="font-semibold text-xs text-neutral-900 truncate">
                       {isUnassigned ? "Unassigned Machine" : r.operator_name || "—"}
                     </div>
-                    {r.operator_phone && !isUnassigned && (
-                      <div className="text-[10px] text-neutral-500 font-mono">{r.operator_phone}</div>
+                    {!isUnassigned && (
+                      <div className="text-[10px] text-neutral-500 font-mono flex items-center gap-1.5 flex-wrap">
+                        {r.operator_employee_id && <span className="font-semibold text-sky-700">{r.operator_employee_id}</span>}
+                        {r.operator_employee_id && r.operator_phone && <span>·</span>}
+                        {r.operator_phone && <span>{r.operator_phone}</span>}
+                      </div>
                     )}
                   </td>
                   <td className="py-2 px-2 font-mono">
@@ -141,9 +145,11 @@ function TodayShiftsReportContent({
                   </td>
                   <td className="py-2 px-2">
                     <div className="text-xs text-neutral-900 font-medium truncate">{r.client_name || "—"}</div>
-                    {(r.client_code || r.client_id) && (
-                      <div className="text-[10px] text-neutral-500 font-mono">{r.client_code || r.client_id}</div>
-                    )}
+                    <div className="text-[10px] text-neutral-500 font-mono flex items-center gap-1 truncate">
+                      {(r.client_code || r.client_id) && <span>{r.client_code || r.client_id}</span>}
+                      {(r.client_code || r.client_id) && (r.client_city || r.site_name) && <span>·</span>}
+                      {(r.client_city || r.site_name) && <span className="font-sans font-medium text-neutral-800">{r.client_city || r.site_name}</span>}
+                    </div>
                   </td>
                   <td className="py-2 px-2">
                     <div className="text-xs font-semibold text-neutral-800">

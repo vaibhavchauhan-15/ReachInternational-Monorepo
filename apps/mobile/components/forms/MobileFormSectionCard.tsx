@@ -124,7 +124,7 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
               ]}
             >
               <Lock size={10} color={theme.colors.mute} />
-              <Text style={[styles.readOnlyBadgeText, { color: theme.colors.mute }]}>Read-only</Text>
+              <Text variant="caption" style={[styles.readOnlyBadgeText, { color: theme.colors.mute }]}>View Only</Text>
             </View>
           ) : isCompleted && !headerAction && !hideCompletedBadge ? (
             <View style={styles.completedBadge}>

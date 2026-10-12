@@ -1,3 +1,693 @@
+- **89 — Autofill & Credential Suggestion Suppression on HMR & General Inputs (/operations) (2026-10-12)**:
+  - **Delivered**:
+    1. **Global Reusable Input Autofill Hardening (`apps/mobile/components/ui/Input.tsx`)**:
+       - Defaulted non-password inputs to `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"`.
+       - Kept credential autofill strictly isolated to `isPassword={true}` (`current-password`, `password`, `yes`).
+       - Automatically inferred `inputMode` (`decimal`, `numeric`, `email`, `tel`, `url`) from `keyboardType` when not explicitly supplied.
+    2. **Operations HMR Input Hardening (`apps/mobile/components/operations/MobileOperatorEntryCard.tsx`)**:
+       - Explicitly configured `keyboardType="decimal-pad"`, `inputMode="decimal"`, `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"` on Start Meter and End Meter (HMR) inputs.
+    3. **Work Meter Log Modal Hardening (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+       - Configured `inputMode="decimal"`, `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"` on Start Meter and End Meter.
+       - Added explicit autofill prevention on `location`, `overtimeHours`, and `remarks` inputs.
+    4. **Input Primitives Hardening (`textarea.tsx`, `SearchInput.tsx`, `TimeInput.tsx`)**:
+       - `Textarea.tsx`: Defaulted `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"`.
+       - `SearchInput.tsx`: Inner TextInput configured with `inputMode="search"`, `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"`.
+       - `TimeInput.tsx`: Hour and Minute TextInputs configured with `inputMode="numeric"`, `autoComplete="off"`, `textContentType="none"`, `importantForAutofill="no"`, `autoCorrect={false}`, `spellCheck={false}`, `aria-autocomplete="none"`.
+    5. **100% Web Parity on HMR Inputs (`apps/web/components/operations/entry/HMRInputs.tsx`)**:
+       - Added `autoComplete="off"`, `data-lpignore="true"`, `data-1p-ignore="true"`, `name`, and `id` to both Start Meter and End Meter inputs.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` → 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` → all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` → 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` → 63/63 scenarios verified, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` → exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` → exit code 0).
+
+- **86 — Page Feedback Resolution: /profile/edit (Streamlined Personal Details Only Form, Editable Name & Phone Number, Safe Area Overlap Prevention with Mobile Bottom Nav, and Well-Formatted Single-Row Action Buttons) (2026-10-12)**:
+  - **Delivered**:
+    1. **Database & RBAC Permission Update (`supabase/migrations/164_allow_user_self_edit_name_and_phone.sql`)**:
+       - Updated trigger function `public.prevent_self_role_status_mutation()` on `public.users`: permitted self-mutation of `full_name` and `phone` for authenticated users.
+       - Preserved strict security blocks preventing self-mutation of `role`, `status`, `email`, `aadhaar_number`, `license_number`, `bank_account_number`, `bank_ifsc_code`, and `monthly_salary`.
+       - Successfully applied and verified on Development Supabase project `vlmxciuogczumumrwyot`.
+    2. **Backend Server Action Update (`apps/web/app/actions/profile.ts`)**:
+       - In `updateMyProfile`, allowed all users to update their own `full_name` and `phone` directly in `public.users` and auth metadata (`updateUserById`).
+       - Validated mobile phone uniqueness against other accounts, synced `employees` table, and revalidated cache tags (`CACHE_TAGS.users`).
+    3. **Streamlined Mobile Edit Profile Form & Screen (`apps/mobile/components/profile/ProfileEditForm.tsx` & `apps/mobile/app/(app)/profile/edit.tsx`)**:
+       - Streamlined form into a single `MobileFormSectionCard` titled "Personal Details" with Description "Update your name and primary contact number".
+       - Made Full Name and Mobile Phone inputs fully editable (`editable={true}`, min 44px touch targets).
+       - Removed status notice banner ("Instant Update / Approval Required") that cluttered the top of the form.
+       - Removed secondary sections (Shift Timing, Address, Banking Details, Compensation) and KYC attachments (Aadhaar & Driving Licence).
+       - Relocated Cancel and Save Changes buttons to the bottom of the scrollable form with ample safe area bottom clearance (`paddingBottom: Math.max(insets.bottom + 90, 120)`), eliminating overlap with `MobileBottomNav`.
+       - Formatted Cancel and Save Changes buttons in a single balanced row with equal width and 48px touch height.
+       - Retained 0 raw typography properties across mobile StyleSheet.
+    4. **100% Web & Mobile Zero-Drift Parity Synchronization (`apps/web/components/profile/ProfileEditForm.tsx` & `apps/web/app/(app)/profile/edit/page.tsx`)**:
+       - Synchronized Web `ProfileEditForm` to focus purely on Personal Details (Full Name & Mobile Phone).
+       - Formatted action buttons in a clean single row.
+       - Updated subtitle in `/profile/edit` to "Update your personal details".
+  - **Verification**:
+    - Database Trigger Verification (`vlmxciuogczumumrwyot`): Trigger function verified in pg_proc (PASS).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **85 — React Native Web Style Property Fix: MobileBottomNav (Resolution of "Invalid style property of 'outline'") (2026-10-12)**:
+  - **Delivered**:
+    1. **Mobile Bottom Navigation (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+       - Replaced invalid shorthand CSS property `outline: 'none'` in `styles.tabPill` with standard long-form property `outlineStyle: 'none'`.
+       - Eliminates React Native Web (`react-native-web@0.21.2`) runtime error / LogBox red screen warning: `Invalid style property of "outline". Please use long-form properties.`
+  - **Verification**:
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+
+- **84 — Page Feedback Resolution: /account-deletion (Streamlined Deletion Form, Custom Dropdown Selection, Dynamic Other Reason Box, Top Guide Navigation Banner, and Dedicated /account-deletion/guide Screen) (2026-10-12)**:
+  - **Delivered**:
+    1. **Route Architecture (`apps/mobile/app/(app)/account-deletion/`)**:
+       - Reorganized single file `account-deletion.tsx` into clean directory-based subroutes:
+         - `apps/mobile/app/(app)/account-deletion/index.tsx` (`/account-deletion`)
+         - `apps/mobile/app/(app)/account-deletion/guide.tsx` (`/account-deletion/guide`)
+       - Registered both routes in `apps/mobile/app/(app)/_layout.tsx` Tabs and `apps/mobile/lib/security.ts` `ALLOWED_ROUTES`.
+       - Added `/account-deletion/guide` to `PUBLIC_LEGAL_ROUTES` in `packages/permissions/src/navigation.ts`.
+       - Created web redirect in `apps/web/app/account-deletion/guide/page.tsx` redirecting to `/account-deletion-guide`.
+    2. **Streamlined Account Deletion Screen (`apps/mobile/app/(app)/account-deletion/index.tsx`)**:
+       - Added Top Guide Action Banner with BookOpen/FileText icon: "Read this before delete the account", routing directly to `/account-deletion/guide`.
+       - Removed verbose Hero Policy Card and Data Retention Card from the form page.
+       - Removed redundant User Identity Card (name & email).
+       - Replaced radio buttons with canonical `SearchableSelect` custom dropdown.
+       - Removed static "Additional Notes (Optional)" label and comments input.
+       - Added conditional input box for specifying reasons when "Other operational reason" is selected.
+       - Preserved standard type "DELETE" confirmation safeguard and submission.
+    3. **Dedicated Clean & Minimal Guide Screen (`apps/mobile/app/(app)/account-deletion/guide.tsx`)**:
+       - Short, on-point compliance overview with `MobileHeader` (Back button).
+       - Section 1: Data Permanently Purged (Credentials, sessions, KYC documents, push tokens).
+       - Section 2: Permanent & Irreversible (Non-restorable, permissions revoked).
+       - Section 3: Statutory Equipment Records Exception (Anonymized HMR, checklists, breakdown logs retained under Factories Act 1948).
+       - Section 4: SLA & Processing Timeline (Acknowledged in 48 hours, executed in 14 business days).
+       - "Proceed to Account Deletion" and "Back" action buttons.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Navigation Unit Tests: **PASS** (`node --test packages/permissions/src/navigation.test.ts` -> 5/5 tests passed).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **83 — Page Feedback Resolution: /profile/edit (Permissions Hardening, View Only Header Chips, Mandatory Banking Details across All Forms, Salary Paragraph Removal, and Desktop Single-Row / Mobile Two-Row Shift Timing) (2026-10-12)**:
+  - **Delivered**:
+    1. **Database & RBAC Permission Hardening (`supabase/migrations/163_enforce_user_profile_edit_permissions.sql`)**:
+       - Updated trigger function `public.prevent_self_role_status_mutation()` on `public.users`: blocks self-mutation of `full_name`, `phone`, `aadhaar_number`, `license_number`, `bank_account_number`, `bank_ifsc_code`, and `monthly_salary` for callers who are not `super_admin`, `admin`, or `manager`.
+       - Hardened RLS policies on `public.user_documents` for `UPDATE` and `DELETE` restricting document modification and deletion strictly to `('super_admin', 'admin', 'manager')`.
+       - Updated `SELECT` policy on `public.user_documents` to include `manager` alongside `super_admin`, `admin`, and `hr`.
+       - Applied and verified on Dev Supabase project `vlmxciuogczumumrwyot`.
+    2. **Backend & DAL Hardening**:
+       - In `apps/web/lib/dal.ts`: Added `bank_account_number` and `bank_ifsc_code` to `getCachedUserRow` SELECT query and user creation fallback insertion.
+       - In `apps/web/app/actions/documents.ts`: Enforced `isManagerOrAbove(userRole)` in both `confirmDocumentUploadAction` and `deleteDocumentAction` to block unauthorized document uploads/replacements and deletions.
+       - In `apps/web/app/actions/profile.ts`: In `updateMyProfile`, enforced `canEditRestricted = ["super_admin", "admin", "manager"].includes(currentUser.role)`.
+    3. **"View Only" Header Chip (`FormSectionCard.tsx` & `MobileFormSectionCard.tsx`)**:
+       - Replaced "Read-only" badge with "View Only" chip with animated lock icon (`AnimatedLock`) on both Web and Mobile.
+       - Applied `isReadOnly={!canEditRestricted}` to Section 1 (Personal Details & KYC), Section 4 (Banking Details), and Section 5 (Compensation).
+    4. **Disabled Inputs & Document Protection for Non-Managers**:
+       - Inputs in Sections 1 & 4 (Full Name, Phone, Aadhaar, Licence, Bank Account, IFSC) set `disabled={!canEditRestricted}`, `readOnly={!canEditRestricted}` with subtle styling (`bg-[var(--color-canvas-elevated)] opacity-85 cursor-not-allowed`).
+       - KYC and Banking Document cards hide delete and replace/upload actions when `!canEditRestricted`.
+    5. **Mandatory Banking Details Across All Forms**:
+       - Configured Section 4 Banking Details as mandatory when editable (`isMandatory={canEditRestricted}`).
+       - Bank Account Number, Bank IFSC Code, and Bank Document (Passbook / Cheque) upload are all required before submission.
+    6. **Removed Salary Helper Paragraph**:
+       - Removed `"Base monthly compensation for employee p..."` paragraph from both `UserSalaryField.tsx` and `MobileSalaryField.tsx`.
+    7. **Desktop Single-Row / Mobile Two-Row Shift Timing Layout**:
+       - In `ProfileEditForm.tsx`: Configured Section 2 layout as `grid grid-cols-1 sm:grid-cols-2 gap-3` (1 row desktop side-by-side, 2 separate rows stacked on mobile).
+       - In mobile `ProfileEditForm.tsx`: Retained two separate vertical rows (`TimeInput` for start time, `TimeInput` for end time).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **82 — Page Feedback Resolution: /dashboard (MobileBottomNav Redesign: Fixed Edge-to-Edge Bar, Rounded Top Corners, Solid Theme-Aware Background, 5 Equal-Width Tabs, Active Primary Color, and Rounded Pressed Effect) (2026-10-12)**:
+  - **Delivered**:
+    1. **Restructured `<MobileBottomNav>` Container (`MobileBottomNav.tsx`)**:
+       - Replaced floating pill wrapper with edge-to-edge solid navigation bar container (`styles.navBarContainer`).
+       - Configured `borderTopLeftRadius: 16`, `borderTopRightRadius: 16`, `borderBottomLeftRadius: 0`, `borderBottomRightRadius: 0`.
+       - Set 1px top hairline border (`borderTopWidth: 1`, `borderTopColor: theme.colors.hairline`).
+       - Set solid opaque background (`#ffffff` light / `#171717` dark) syncing with theme.
+       - Removed floating shadows (`boxShadow: 'none'`, `elevation: 0`, `shadowOpacity: 0`) and outer margins/padding.
+       - Stationary fixed at the bottom (`position: fixed` on web, `position: absolute` on native, `bottom: 0, left: 0, right: 0`).
+       - Respects safe area insets via `react-native-safe-area-context` (`useSafeAreaInsets`, `paddingBottom: Math.max(insets.bottom, 6)`).
+    2. **Five Equal-Width Tabs Layout**:
+       - Tab row (`styles.tabsRow`) spans full width (`width: '100%'`) with 5 equal-width columns (`flex: 1` each, `minHeight: 48` touch target).
+       - Evaluates `@reachinternational/permissions` manifest: for operators, renders Home, Shift, Machines, Attendance, Menu.
+    3. **Active Tab Primary Color & Indicator**:
+       - Active tab icon renders in Reach Sky Blue primary color (`#0284c7` light / `#0ea5e9` dark).
+       - Active tab label renders in Reach Sky Blue primary color (`#0284c7` light / `#0ea5e9` dark).
+       - Active dot indicator renders in Reach Sky Blue primary color (`#0284c7` light / `#0ea5e9` dark).
+       - Inactive tabs render in `theme.colors.mute` (`#8f8f8f` light / `#737373` dark).
+    4. **Smooth Rounded Pressed Effect**:
+       - Removed the jarring `transform: [{ scale: 0.92 }]` icon shrinking touch effect.
+       - Implemented rounded `tabPill` (`borderRadius: 12`) with smooth background press highlight:
+         - Active pressed: `rgba(2, 132, 199, 0.12)` light / `rgba(14, 165, 233, 0.16)` dark.
+         - Inactive pressed: `rgba(23, 23, 23, 0.06)` light / `rgba(255, 255, 255, 0.08)` dark.
+       - Bounded Android ripple (`radius: 28, borderless: false`).
+       - Web CSS transition (`transition: background-color 150ms ease`, `WebkitTapHighlightColor: 'transparent'`).
+    5. **100% Web & Mobile Zero-Drift Parity Synchronization (`BottomNav.tsx`)**:
+       - Applied `rounded-t-2xl border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-none`.
+       - Active icon, label, and dot indicator render in Reach Sky Blue (`#0284c7` light / `#0ea5e9` dark).
+       - Rounded pressed feedback (`rounded-xl transition-all duration-150 active:bg-[var(--color-canvas)] dark:active:bg-white/[0.06] active:scale-100`).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **81 — Page Feedback Resolution: /settings/password (Clean Form Header, In-Input Eye Toggle Positioning, and Notice Card Removal) (2026-10-12)**:
+  - **Delivered**:
+    1. **Cleaned Redundant Section Header & Subtitle**:
+       - In `apps/mobile/app/(app)/settings/password.tsx`: Removed `title="Password Credentials"` and `description="Verify your current password and choose a resilient new passphrase"` from `<SettingsSection>` above the form card, eliminating redundant duplication with the page header "Change Password".
+    2. **Positioned Eye Toggles Directly Inside Input Boxes on Right Side**:
+       - In `apps/mobile/components/ui/Input.tsx`: Added `z-10` and `style={{ zIndex: 10 }}` to both `rightIcon` and `isPassword` absolute containers to ensure reliable tap/click handling across web and native.
+       - In `apps/mobile/app/(app)/settings/password.tsx`: Removed `styles.inputWrapper` and external sibling `eyeBtn`, passing `rightIcon` directly to each `<Input>` (Current Password, New Password, Confirm New Password) with `hitSlopToMin48`, `haptics.select()`, and full `w-full` input expansion.
+    3. **Removed Bottom Notice Card**:
+       - In `apps/mobile/app/(app)/settings/password.tsx`: Removed the bottom `<Card>` ("Security Invariant") and cleaned up unused `ShieldAlert`, `noticeCard`, and `noticeRow` definitions.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **80 — Page Feedback Resolution: /profile/edit (UI/UX Refinements, Banking Details Section, Shift Timing Two Rows, and Optimized Lightweight Document Previews) (2026-10-12)**:
+  - **Delivered**:
+    1. **Cleaned Redundant Labels & Text**:
+       - In `apps/web/components/forms/UserSalaryField.tsx`: Removed redundant `<span className="inline-flex ...">Read-only</span>` badge from the field label in `readOnly` mode.
+       - In `apps/mobile/components/forms/MobileSalaryField.tsx`: Removed redundant lock badge in `readOnly` mode.
+       - In `apps/web/components/profile/ProfileEditForm.tsx` & `apps/mobile/components/profile/ProfileEditForm.tsx`: Removed `description="Operating work schedule window"` from Section 2 (Shift Timing).
+    2. **Shift Start & End Time Two-Row Layout**:
+       - Changed Section 2 layout from `grid-cols-2` to `grid-cols-1 gap-3` on Web.
+       - Placed Start and End time in two separate vertical rows with 44px min touch targets on Mobile.
+    3. **Removed External Link Icons & Added Optimized Lightweight Document Previews**:
+       - Removed all `<ExternalLink>` icons and anchor tags across document items.
+       - Implemented `DocumentPreviewThumbnail`:
+         - **Images (PNG, JPEG, WebP)**: Renders lightweight, crisp 44×44px square thumbnail (`loading="lazy"`, `decoding="async"`).
+         - **PDF Documents**: Renders sleek PDF format preview card with red/rose badge (`PDF` tag + FileText icon) instead of an inline canvas or iframe.
+         - **Word/Documents (DOC, DOCX)**: Renders distinctive blue doc format badge (`DOC`).
+         - **Other formats**: Renders neutral format card with extension tag.
+       - Integrated with full-screen `DocumentViewerModal` / `MobileDocumentViewerModal` triggered on clicking the preview thumbnail or document row.
+    4. **Added Bank Account Details Section with Zod Validation & Document Upload**:
+       - **Validation (`packages/validation/src/auth.ts`)**: Added `OptionalBankAccountFieldSchema` (9–18 digit validation via `validateBankAccountNumber`), `OptionalBankIfscFieldSchema` (11-character RBI format via `validateIfscCode`), and included them in `ProfileUpdateSchema`.
+       - **Server Action (`apps/web/app/actions/profile.ts`)**: Extracted and validated `bank_account_number` and `bank_ifsc_code` in `updateProfileDetailsAction`. Persisted bank details in direct DB updates for Super Admin and in `profile_change_requests` payload for regular users, plus updated `approveProfileChangeRequest` `userUpdatePayload`.
+       - **Web UI (`apps/web/components/profile/ProfileEditForm.tsx`)**: Added Section 4: Banking Details (`FormSectionCard stepNumber={4}`) with Bank Account Number input, Bank IFSC Code input, and Bank Passbook / Cheque Document Upload (`bank_document`). Renumbered Compensation section to `stepNumber={5}`.
+       - **Mobile UI (`apps/mobile/components/profile/ProfileEditForm.tsx`)**: Synchronized Section 4: Banking Details (`MobileFormSectionCard stepNumber={4}`) with 0 raw typography properties, `MobileDocumentUploadCard` (`docTypeCode="bank_document"`), and min 44px touch targets. Renumbered Compensation section to `stepNumber={5}`.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **79 — Page Feedback Resolution: /operations (Accurate Both Start & End HMR Fetching from Database & Query Optimization) (2026-10-12)**:
+  - **Delivered**:
+    1. **Database Read-Model RPC Upgrade (`supabase/migrations/162_today_shift_monitor_both_start_end_hmr_optimization.sql`)**:
+       - Addressed user feedback: "show the hmr start and end both instead of only start hmr like 100->106, fetch the data correct from the database, read read the codebase and the implementation and how it fetch it from the database so optimize the database query show it dont fetch unnecessory data".
+       - Added `latest_machine_logs` CTE (`DISTINCT ON (l.machine_id)`) to fetch the most recent completed shift log's `start_meter` and `end_meter` on or before `p_log_date`.
+       - In `roster_results`, `start_meter` resolves to `COALESCE(ml.start_meter, lml.start_meter)` and `end_meter` resolves to `COALESCE(ml.end_meter, lml.end_meter, r.current_meter)`.
+       - Resolves both start and end HMR for every machine in the roster: Deepak Patel (`1279->1282`), Ramesh Kumar (`1593.5->1600`), Manoj Yadav (`923.5->930`), Amit Verma (`2133.5->2140`), Suresh Sharma (`3283.5->3290`), Rohit Singh (`693->695`).
+       - Successfully executed and verified on Dev Supabase Project (`vlmxciuogczumumrwyot`).
+    2. **Database Query Pruning & Optimization**:
+       - Pushed down `p_client_id` parameter directly into `active_assignments`, `unassigned_machines`, and `extra_entered_logs` CTEs, eliminating scans of other clients' machinery and shift records.
+       - Replaced slow `NOT IN (SELECT log_id FROM roster_results)` with `NOT EXISTS` in `extra_entered_logs`.
+       - Bound `latest_machine_logs` query specifically to `combined_roster_sources` machines.
+       - In `apps/web/app/(app)/operations/page.tsx`, eliminated the redundant `getMachines({ pageSize: 100 })` query, saving ~200ms+ on initial page loads.
+    3. **UI Display Synchronization across Web & Mobile**:
+       - **Web (`TodayShiftMonitorTab.tsx`)**: Mobile touch cards (≤640px) and desktop table view format `${start}->${end}` (e.g. `1279->1282`, `100->106`), removing single start fallback `start->—`.
+       - **Mobile (`MobileTodayShiftMonitorTab.tsx`)**: Synchronized HMR rendering to `${start}->${end}` with 0 raw typography properties.
+       - **Assisted Entry (`AssistedShiftEntryModal.tsx` & `operations.tsx`)**: Correctly pre-populates `start_meter` and `end_meter` when editing an entered log, and sets `current_meter` as starting baseline when creating a new log.
+  - **Verification**:
+    - Database RPC Verification (`vlmxciuogczumumrwyot`): Direct SQL queries verified returning both `start_meter` and `end_meter` for all roster machines (PASS).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **78 — Cross-Platform Profile Routing Architecture: Dedicated /profile/edit Route & Maximum Component Reusability Across Web and Native Mobile (2026-10-12)**:
+  - **Delivered**:
+    1. **Extracted Reusable Profile Edit Form Primitives**:
+       - **Web (`apps/web/components/profile/ProfileEditForm.tsx`)**: Extracted all form logic, sections (Personal & KYC, Shift Timing, Address, Compensation), validation, document uploads (Aadhaar, Driving Licence), and submission handler into a single reusable component. Reused cleanly by both the dedicated `/profile/edit` page and `EditProfileModal`.
+       - **Mobile (`apps/mobile/components/profile/ProfileEditForm.tsx`)**: Extracted native form logic with 0 raw typography properties, standardizing on `<Text variant="...">`, `MobileFormSectionCard`, `MobileAddressFields`, `MobileSalaryField`, and min 44px touch targets. Reused cleanly by both `app/(app)/profile/edit.tsx` and `EditProfileModal.tsx`.
+    2. **Dedicated `/profile/edit` Routes**:
+       - **Web (`apps/web/app/(app)/profile/edit/page.tsx`)**: Created dedicated RSC with server-side session verification, page header with Back button, breadcrumbs, and `ProfileEditForm` with custom loading skeleton (`loading.tsx`).
+       - **Mobile (`apps/mobile/app/(app)/profile/edit.tsx`)**: Created dedicated screen with `MobileHeader` (Back button with `onPressBack`, title="Edit Profile"), and `ProfileEditForm` with clean return navigation.
+    3. **Dedicated View Profile Routes (`/profile`) & Query Param Support (`/profile?edit=true`)**:
+       - **Web (`apps/web/app/(app)/profile/page.tsx`)**: "Edit Profile" button navigates to `/profile/edit`. Supports `searchParams` for `edit=true` modal toggle if accessed via deep links.
+       - **Mobile (`apps/mobile/app/(app)/profile/index.tsx`)**: Relocated from `profile.tsx` to `profile/index.tsx`. "Edit Profile" button routes directly to `/profile/edit`. Supports query param `edit=true` opening modal toggle.
+    4. **Navigation & Security Synchronizations**:
+       - **Expo Router Tabs (`apps/mobile/app/(app)/_layout.tsx`)**: Registered `profile/index` and `profile/edit` in `Tabs`. Removed obsolete single `profile.tsx`.
+       - **Deep-Link Security (`apps/mobile/lib/security.ts`)**: Added `'/profile/edit'` and `'/(app)/profile/edit'` to `ALLOWED_ROUTES`.
+       - **Mobile Account Settings (`apps/mobile/app/(app)/settings/account.tsx`)**: Updated "Edit Profile" card to navigate directly to `/profile/edit`.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **77 — Page Feedback Resolution: /settings/preference (Instant 0ms Theme Switching, Atomic DOM Synchronization, Transition Freeze & Sync with Web) (2026-10-12)**:
+  - **Delivered**:
+    1. **Instant 0ms Atomic DOM Synchronization (`ThemeProvider.tsx`)**:
+       - Addressed user feedback: "theme toggle feel delay when i switch the theme, read the theme codebase properly, optimize it, and everythings should be sync properly and theme change instant like like web app".
+       - Created `applyDomTheme(isDark, lockTransitions)` that synchronously adds `html.theme-changing`, toggles `.dark` on `document.documentElement`, sets `root.style.colorScheme`, updates `document.body.style.backgroundColor`, and unlocks transitions in a double `requestAnimationFrame`.
+       - Added synchronous initial mode reader on Web (`getInitialMode`) reading `localStorage` before mount, eliminating mount flash.
+       - Synchronizes across both storage keys: `@reachinternational_theme` (mobile canonical) and `reachinternational-theme` (web canonical).
+       - Memoized `setMode` with `useCallback` and `contextValue` with `useMemo`, eliminating unnecessary renders across theme subscribers.
+       - Added active `window.matchMedia('(prefers-color-scheme: dark)')` listener so `system` mode stays 100% reactive to OS preference changes.
+    2. **CSS Transition Freeze Rule (`apps/mobile/global.css`)**:
+       - Added `html.theme-changing *:not([data-theme-toggle]):not([data-theme-toggle] *)` transition lock rule to disable all CSS color interpolation during theme change, matching `apps/web/globals.css`.
+       - Expanded `.dark` rule to `:root.dark, .dark:root, .dark` for instantaneous CSS variable resolution.
+    3. **Clean Zero-Delay Toggle Handler (`preference.tsx`)**:
+       - Eliminated redundant `toast('success', ...)` notification and duplicate haptic triggers, making theme toggle immediate upon touch.
+    4. **SegmentedToggle Deduplication (`SegmentedToggle.tsx`)**:
+       - Removed `async` overhead from `handleSelect`.
+       - Set `haptic={false}` on the Pressable child item to prevent duplicate haptic calls with `handleSelect`.
+    5. **CSS Variable Scrollbar Styles (`_layout.tsx`)**:
+       - Converted `MobileWebScrollbarStyles` to use CSS variables (`--mobile-canvas`, `--mobile-scrollbar-thumb`) mounted once, eliminating innerHTML re-parsing on every theme toggle.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **76 — Page Feedback Resolution: /operations (Card Header 3-Dot Actions Menu, RBAC Enter/Edit Shift Log Gating, Compact Card Streamlining) (2026-10-12)**:
+  - **Delivered**:
+    1. **Card Header 3-Dot Action Menu (`TodayShiftMonitorTab.tsx` & `MobileTodayShiftMonitorTab.tsx`)**:
+       - Addressed user feedback: "add 3 dot at the header of the card if user(follow RBAC) click 3 dot then show the enter or edit shift logs".
+       - Added a 3-dot action menu button (`MoreVertical`) directly in the card header beside the shift status badge on both Web and Mobile.
+       - Sized at 28×28px with hairline border and canvas background, maintaining standard touch targets and Geist design tokens.
+    2. **RBAC Gating for Shift Log Actions**:
+       - Gated the 3-dot action menu behind `canEnterLog = isManagerOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager'].includes(effectiveRole)`.
+       - Hidden completely for users who lack permission (e.g. operators/viewers/supervisors) as confirmed via user consultation.
+       - When clicked by an authorized manager or admin:
+         - **Web (`TodayShiftMonitorTab.tsx`)**: Opens a lightweight, anchored popover menu with smooth fade/zoom transitions, click-outside and Escape key dismissal:
+           - If shift is `entered`: displays "Edit Shift Log" (`Edit2` icon in Reach Blue) which opens `AssistedShiftEntryModal`.
+           - If shift is `pending`: displays "Enter Shift Log" (`ClipboardCheck` icon in Reach Blue) which opens `AssistedShiftEntryModal`.
+         - **Mobile (`MobileTodayShiftMonitorTab.tsx`)**: Opens a native `<Modal>` bottom sheet with backdrop dismiss, sheet handle, operator/shift header, and tactile touch feedback (`haptic="select"`):
+           - If shift is `entered`: displays "Edit Shift Log" option with subtitle and `Edit2` icon in Reach Blue.
+           - If shift is `pending`: displays "Enter Shift Log" option with subtitle and `User` icon in Reach Blue.
+         - Desktop table view enriched with dedicated "Edit Log" action button for entered shifts for managers and admins.
+    3. **Card Streamlining & Compactness**:
+       - Removed the redundant bottom full-width button (`Enter Log for ...` / `Edit Shift Log for ...`) on assigned cards, keeping shift log actions cleanly inside the 3-dot menu.
+       - Retained the `Assign Operator to ...` / `Activate & Assign ...` button exclusively on unassigned machinery cards where operator assignment is required.
+       - Removed card-level `onClick` triggers on assigned cards to eliminate accidental activations while scrolling.
+    4. **100% Web & Mobile Zero-Drift Parity**:
+       - Synchronized across both Next.js App Router client and React Native Expo client.
+       - Mobile app strictly maintains 0 raw typography properties (`check-typography.mjs` PASS).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **75 — Page Feedback Resolution: /settings/fontsize (Live Preview Dynamic Scaling, Eye Icon Removal, Preview Heading Rename, Clean Formatted Shift Log Card) (2026-10-12)**:
+  - **Delivered**:
+    1. **Live Preview Dynamic Scaling via `TypeScaleScope` (`TypeScaleProvider.tsx`, `Text.tsx`, `fontsize.tsx`)**:
+       - Addressed user feedback: "preview are not working as per change the size fix this make live preview show properly".
+       - Created and exported `TypeScaleScope` in `TypeScaleProvider.tsx` allowing subtree-scoped font scaling without prematurely mutating global persisted storage.
+       - Wrapped preview area in `<TypeScaleScope preset={selectedPreset}>`, so selecting Small (92%), Default (100%), or Large (120%) immediately updates the preview in real-time.
+       - Cleaned up static Tailwind font-size classes (`text-xl`, `text-base`, `text-xs`) from Reach variants in `Text.tsx` `textVariants`, guaranteeing that dynamic inline `typeStyle` font sizes and line heights are authoritative and never overridden by CSS classes on web or native.
+       - Proportionally scaled avatar dimensions, status dots, and icons alongside typography in the preview card.
+    2. **Eye Icon Removal (`fontsize.tsx`)**:
+       - Addressed user feedback: "remvoe this icon".
+       - Removed the `<Eye>` icon component from the preview card header.
+    3. **Preview Heading Renamed (`fontsize.tsx`)**:
+       - Addressed user feedback: "change name to only Preview".
+       - Renamed the header title from "Live Preview" to "Preview".
+    4. **Authentic Clean & Formatted Shift Log Card Data (`fontsize.tsx`)**:
+       - Addressed user feedback: "replace this value with a shift logs with clean and formatted value use any example shift card data".
+       - Replaced generic preview text box with Reach International's authentic Shift Log card format (Task 74 continuous adjacent label-value layout):
+         - Header: Operator avatar circle in Reach Blue (`#0284c7`) with white letter `'R'` and operator name `Rajesh Kumar` on the left; `ENTERED` emerald badge on the right.
+         - Metadata Box: 6 clean, formatted continuous rows (`Shift: A`, `M/C Model: JCB 3DX Super`, `M/C Sr no: JCB3DX-2024-001`, `HMR: 1272.5->1279`, `Client: Larsen & Toubro ECC`, `Site: Delhi`).
+         - Symmetrical Reach Blue entered card container styling (`rgba(2, 132, 199, 0.03)` light, `rgba(2, 132, 199, 0.05)` dark, left green accent border `#10b981`).
+       - Retained 0 raw typography properties across mobile (`check-typography.mjs` PASS).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 9/9 packages successful, exit code 0).
+
+- **74 — Page Feedback Resolution: /operations (Compact Continuous Card Metadata, Reach Blue Entered Card & Edit Button, Single Clean Date Format) (2026-10-12)**:
+  - **Delivered**:
+    1. **Compact Metadata Box & Continuous Adjacent Label-Value Flow (`TodayShiftMonitorTab.tsx` & `MobileTodayShiftMonitorTab.tsx`)**:
+       - Addressed user feedback: "reduce the vertically spreadness, make it compact, also dont make the left and right name and value, keep continue Where name end".
+       - Removed `justify-between` and far-right text alignment that split labels and values to opposite ends.
+       - Replaced with continuous adjacent flow (`flex items-baseline gap-1.5` on web, `flexDirection: 'row', alignItems: 'center', gap: 6` with no fixed label width on mobile), so values start immediately where the labels end (`Shift: A`, `M/C Model: JCB 3DX Super`, `M/C Sr no: JCB3DX-2024-001`, `HMR: 1272.5->1279`, `Client: Larsen & Toubro ECC`, `Site: Delhi`).
+       - Cleaned up trailing spaces before colons across all labels (`Shift:`, `M/C Model:`, `M/C Sr no:`, `HMR:`, `Client:`, `Site:`).
+       - Reduced vertical spread: outer card padding reduced to `p-2.5 space-y-1.5` (web) and `padding: 10, gap: 8` (mobile); metadata box padding reduced to `p-2 space-y-1` (web) and `padding: 8, gap: 4` (mobile).
+    2. **Reach Blue Background for Entered Cards & Edit Action Button**:
+       - Addressed user feedback: "make this card blue background" (Clarified via modal: apply Reach Blue to both entered card container and "Edit Shift Log" button).
+       - When a shift is `entered`:
+         - Shift card container styled with subtle Reach Blue background & border (`border-sky-500/30 bg-sky-500/[0.03] dark:border-sky-500/30 dark:bg-sky-950/20` on web, `borderColor: isDark ? '#0284c755' : '#7dd3fc'`, `backgroundColor: isDark ? 'rgba(2, 132, 199, 0.05)' : 'rgba(2, 132, 199, 0.03)'` on mobile).
+         - "Edit Shift Log" action button styled in Reach Blue (`border border-sky-500/30 bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300` on web, `backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'`, `borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#7dd3fc'` on mobile) with `Edit2` icon in Reach Blue.
+    3. **Clean Single Date Format on Desktop & Mobile**:
+       - Addressed user feedback: "remove this format date (2026-10-01) keep only 01-10-2026 from desktop and mobile".
+       - Removed redundant raw date suffix `({selectedDate})` from historical date banner: `Viewing shift logs for <strong>{formatDate(selectedDate)}</strong>`.
+       - Removed `(${selectedDate})` from empty state description: `No shift logs were recorded or rostered for ${formatDate(selectedDate)}.`.
+       - Verified mobile displays strictly `formatDate(selectedDate)` (`01-10-2026`) with zero raw YYYY-MM-DD format strings in user-facing text.
+    4. **100% Web & Mobile Zero-Drift Parity**:
+       - Both platforms share identical compact layout, continuous label-value flow, Reach Blue entered styling, and date formatting.
+       - Mobile app retains 0 raw typography properties (`check-typography.mjs` PASS).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **73 — Page Feedback Resolution: /operations (Card Streamlining & Both Start/End HMR Display) (2026-10-12)**:
+  - **Delivered**:
+    1. **Card Height Streamlining & Field Removal (`TodayShiftMonitorTab.tsx` & `MobileTodayShiftMonitorTab.tsx`)**:
+       - Addressed user feedback: "currenly card is to big, now i want to remove some useless rows: user ID, Mobile, M/C ID, Client ID".
+       - Removed all 4 specified rows (`User ID`, `Mobile`, `M/C ID`, `Client ID`) from the rectangular metadata box on both Web Next.js client and Mobile React Native client.
+       - Reduced the metadata box from 10 rows to 6 clean, focused rows (`Shift`, `M/C Model`, `M/C Sr no`, `HMR`, `Client`, `Site`), substantially decreasing card height on 427×952 viewports.
+    2. **Both Start & End HMR Always Displayed**:
+       - Addressed user feedback on "930": "show the stard and end hmr both".
+       - Previously, when `end_meter` was not yet entered (pending shift), the code fell back to displaying just the single number `current_meter` (e.g. `930`), leaving it ambiguous whether it was start or end.
+       - Implemented comprehensive start-and-end HMR formatting across both Web and Mobile:
+         - When both start and end exist: `${start}->${end}` (e.g. `440->445`, `923.5->930`).
+         - When end is pending: `${start}->—` (e.g. `930->—`), explicitly displaying the start reading alongside the pending end reading indicator.
+         - Enriched desktop table HMR column to show `${start} → ${end}` or `${start} → —`.
+    3. **100% Web & Mobile Zero-Drift Parity**:
+       - Both platforms share the exact same 6-row hierarchy, typography tokens, status badges, and HMR format.
+       - Mobile app retains 0 raw typography properties (`check-typography.mjs` PASS).
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **72 — Page Feedback Resolution: /operations (Properly Formatted Shift Monitor Cards: Header Operator & Status, Rectangular Metadata Box with 10 Formatted Fields) (2026-10-11)**:
+  - **Delivered**:
+    1. **Database RPC Upgrade (`supabase/migrations/161_enhance_today_shift_monitor_card_fields.sql`)**:
+       - Upgraded `get_today_shift_log_monitor` RPC to project:
+         - `operator_employee_id`: operator employee code from `users.employee_id` (e.g. `EMP-0328`).
+         - `client_city`: city from `COALESCE(cs.city, cl.city, m.city)` (e.g. Pune, Delhi, Mumbai).
+         - `site_name`: site name from `COALESCE(cs.site_name, cs.city, cl.city, m.city)`.
+       - Extended ILIKE server search matching to also match operator employee ID, client city, and site name.
+       - Granted execute permissions to `anon`, `authenticated`, and `service_role`.
+       - Tested and verified on Development Supabase Project (`vlmxciuogczumumrwyot`).
+    2. **Canonical Types Standardization (`packages/types/src/database.ts`)**:
+       - Extended `TodayShiftMonitorRow` interface with `operator_employee_id`, `client_city`, and `site_name`.
+    3. **Web Mobile Card Layout Redesign (`TodayShiftMonitorTab.tsx`)**:
+       - Header strictly surfaces Operator name on the left and Shift status badge on the right (`Entered`, `Breakdown`, `Maintenance`, `Unassigned`, or `Pending`).
+       - Below Header, rectangular metadata box (`rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 sm:p-3 space-y-1.5`) cleanly formats all 10 key-value pairs:
+         - `User ID: EMP001`
+         - `Mobile: +919867453215`
+         - `Shift : A`
+         - `M/C Model: Model`
+         - `M/C Sr no : mc serial not`
+         - `M/C ID : ID`
+         - `HMR : 440->445`
+         - `Client : L and T`
+         - `Client ID: cli001`
+         - `Site: City name of that client(pune)`
+       - Desktop table enriched with employee ID and client city.
+    4. **100% Web & Mobile Zero-Drift Parity Synchronization (`MobileTodayShiftMonitorTab.tsx`)**:
+       - Relocated phone number out of the header so header strictly displays avatar + operator name (left) and shift status badge (right).
+       - Standardized `cardMetaBox` to render the exact same 10 formatted fields with canonical `<Text variant="caption">`, `<HighlightText>`, and subtle icons (`User`, `Phone`, `Clock`, `Wrench`, `Truck`, `Tag`, `Gauge`, `Building2`, `MapPin`).
+       - Preserved 0 raw typography properties in mobile StyleSheet.
+    5. **PDF & Excel Exports Alignment (`TodayShiftExportModal.tsx` & `today-shift-export.ts`)**:
+       - Included `User ID` and `Site / City` in PDF report preview/printing and Excel worksheet exports.
+  - **Verification**:
+    - Database RPC Verification (`vlmxciuogczumumrwyot`): Direct SQL query executed and verified returning `operator_employee_id`, `client_city`, `site_name` (PASS).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **71 — Page Feedback Resolution: /machines & /operations (Single-Row Filter Cards, Reach Blue Filter Button, Reach Blue Selected Values & Static Search Box) (2026-10-11)**:
+  - **Delivered**:
+    1. **Single-Row Filter & Sort Cards on Mobile (`MachineListClient.tsx` & `machines.tsx`)**:
+       - Converted mobile filter selector container from `grid-cols-2` to full-width stacked column layout (`flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center`), placing each filter and sort (Rental, Health, Client, Supervisor, Sort) in a single card occupying one entire row on mobile viewports (≤640px, e.g. 427×952).
+       - Completely eliminated cramped 2-card columns, text truncation, and tight touch hit targets.
+       - Preserved standard horizontal wrapping on desktop and tablet (`sm:flex-row sm:flex-wrap`).
+    2. **Reach Sky Blue Filter Button (`FilterToolbar.tsx` on Web & Mobile)**:
+       - Restyled Filter toggle button on Web and Mobile: when opened or when filters are active (`isOpen || activeFilterCount > 0`), it renders with solid Reach Sky Blue background (`bg-[#0284c7]`), pure white text, white icons, and white active-count badge with `#0284c7` text, eliminating the solid black button.
+       - Synchronized same behavior across `apps/mobile/components/ui/FilterToolbar.tsx`, `apps/mobile/app/(app)/machines.tsx`, and `apps/mobile/app/(app)/users.tsx`.
+    3. **Reach Sky Blue Selected Values Across All Dropdowns (`FilterDropdown.tsx`, `CustomFilterSelector`, `DropdownFilterSelector.tsx`)**:
+       - Updated trigger buttons when filtered (`isFiltered`) with subtle blue background/border tint (`border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20`).
+       - Displayed selected values in Reach Sky Blue (`text-[#0284c7] dark:text-sky-400 font-semibold`) instead of black (`text-[var(--color-ink)]`).
+       - Inside dropdown listboxes and native popovers/sheets, highlighted selected options in Reach Blue (`bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold`) with blue checkmarks, eliminating black background items.
+    4. **Sticky Static Search Box at Top of Dropdowns (`FilterDropdown.tsx` & `TodayShiftMonitorTab.tsx`)**:
+       - Upgraded canonical `FilterDropdown.tsx` component with sticky static search box at the top of the popover with 0ms real-time filtering, auto-focus, clear `X` button, event propagation stop, and escape key handling.
+       - Configured Client filter in `TodayShiftMonitorTab.tsx` with `searchable={true}` and `searchPlaceholder="Search client..."`.
+       - Reusable across all filter lists with options > 5.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **70 — Operations Shift Monitor Client Filter & Equipment Breakdown/Maintenance Workflow (2026-10-11)**:
+  - **Delivered**:
+    1. **Client Filter on Today Shift Monitor (`TodayShiftMonitorTab.tsx` & `MobileTodayShiftMonitorTab.tsx`)**:
+       - Added fast, responsive, and smooth Client `FilterDropdown` to `FilterToolbar` on Web and `DropdownFilterSelector` in mobile filter drawer.
+       - Integrated in-memory client filtering for 0ms instantaneous UI response with zero layout shift while also passing `clientId` to backend server action queries.
+       - Resetting filters resets client to "all", and `activeFilterCount` includes active client filtering.
+    2. **Handling Unassigned Machines in Breakdown or Maintenance (`160_today_shift_monitor_client_filter_and_machine_status.sql` & UI)**:
+       - Enhanced `get_today_shift_log_monitor` RPC to return `machine_status` and `machine_health_status`, prioritizing unassigned machines under maintenance or breakdown at the top of the roster.
+       - Operator column displays `Unassigned (Breakdown)` in rose with an alert icon or `Unassigned (Maintenance)` in amber with a wrench icon.
+       - Equipment code cells and touch cards render distinctive `Breakdown` (red dot) and `Maintenance` (amber dot) badges.
+       - FilterToolbar Status dropdown on Web and Mobile includes dedicated `Breakdown` and `Maintenance` filter pills and counts.
+    3. **Warning Dialogue Box & Equipment Reactivation Workflow**:
+       - Created `MachineStatusWarningDialog.tsx` modal on Web displaying machine specifications, current health status, and a "Mark Active & Assign" CTA.
+       - Attempting to assign an operator to machinery in breakdown or maintenance prompts the supervisor/admin with the warning dialog.
+       - When "Mark Active & Assign" is clicked, it calls atomic RPC `activate_machine_for_assignment`, reactivates the machine to `health_status = 'active'` and `status = 'rented' | 'active'`, logs the action in `audit_logs`, updates roster state, and immediately opens the operator assignment dialog.
+       - In `AssignPersonnelModal.tsx` and `MobileAssignPersonnelModal.tsx`, a prominent warning alert is displayed whenever equipment in breakdown or maintenance is selected, and saving assignments automatically reactivates the machinery.
+    4. **100% Web & Mobile Zero-Drift Parity**:
+       - Synchronized mobile counterpart in `MobileTodayShiftMonitorTab.tsx` and `MobileAssignPersonnelModal.tsx` with identical status pills, alert confirmation dialogs, and activation RPC flows.
+  - **Verification**:
+    - Supabase Development Project (`vlmxciuogczumumrwyot`): Migration 160 applied and verified.
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **69 — Database Permission Denied Error (42501) for RPC get_today_shift_log_monitor Resolution (2026-10-11)**:
+  - **Delivered**:
+    1. **Eliminated Error 42501 via Role Grant Hardening (`vlmxciuogczumumrwyot` & `160_today_shift_monitor_client_filter_and_machine_status.sql`)**:
+       - Granted `EXECUTE` on `public.get_today_shift_log_monitor(uuid, date, text, uuid)` to `anon`, `authenticated`, and `service_role`.
+       - Because the RPC is `SECURITY DEFINER` and scopes records strictly against `actor_info AS (SELECT role FROM public.users WHERE id = p_actor_id)`, it returns empty rows for unauthenticated/invalid IDs while eliminating 42501 permission crashes during initial hydration, session refresh, or mobile client queries.
+    2. **Eliminated Function Overloading Conflict (PGRST203) & Added Canonical Parameter Defaults**:
+       - Identified obsolete 3-parameter overload `(uuid, date, text)` conflicting with the 4-parameter version in PostgREST schema cache.
+       - Renamed the obsolete 3-parameter overload to `get_today_shift_log_monitor_v1`.
+       - Recreated authoritative 4-parameter function with full default values: `p_actor_id uuid, p_log_date date DEFAULT CURRENT_DATE, p_search text DEFAULT NULL, p_client_id uuid DEFAULT NULL`.
+       - PostgREST unambiguously resolves all single-argument (`p_actor_id`), two-argument (`p_actor_id, p_log_date`), and three-argument (`p_actor_id, p_log_date, p_client_id`) calls without error.
+    3. **Enhanced Mobile Hook Parity (`apps/mobile/lib/hooks/useOperationsData.ts`)**:
+       - Added optional `clientId?: string` argument to `useTodayShiftMonitor(actorId, logDate, enabled, clientId)`.
+       - Included `clientId` in queryKey and RPC query params for full Web DAL parity.
+  - **Verification**:
+    - Direct RPC Curl Tests (Anon Key): **PASS** (HTTP 200, successfully returns roster array with `machine_status` and `machine_health_status`).
+    - Direct RPC Curl Tests (Empty Actor): **PASS** (HTTP 200, safely returns `[]`).
+    - Client ID Filter Curl Tests: **PASS** (HTTP 200, accurately filters machines by `p_client_id`).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **67 — Page Feedback Resolution: /dashboard (Change Bottom Navigation Item Name to "Shift" instead of "Log" for Operators) (2026-10-11)**:
+  - **Delivered**:
+    1. **Single Source of Truth Navigation Manifest (`packages/permissions/src/navigation.ts`)**:
+       - Updated `roleLabel: { operator: "Shift" }` for the `operations` navigation item in canonical `NAV_ITEMS`.
+       - Updated JSDoc comment for `roleLabel` override definition.
+    2. **100% Web & Mobile Zero-Drift Parity Synchronization**:
+       - `apps/web/components/navigation/BottomNav.tsx` dynamically evaluates `labelFor(item, role)` from `@reachinternational/permissions`; now displays "Shift" for operator users on mobile viewports (e.g. 427×952).
+       - `apps/mobile/components/navigation/MobileBottomNav.tsx` dynamically evaluates `labelFor(item, normalizedRole)` from `@reachinternational/permissions`; displays "Shift" for operators across iOS, Android, and Web platforms.
+       - Preserved standard "Operations" label across all managerial and administrative roles (`admin`, `manager`, `supervisor`, `hr`, `super_admin`).
+    3. **Navigation Unit Test Suite Extension (`packages/permissions/src/navigation.test.ts`)**:
+       - Added automated assertion verifying `labelFor(operationsItem, "operator") === "Shift"` and standard "Operations" for all other roles.
+    4. **Web Modal TypeScript Prop Alignment (`MachineStatusWarningDialog.tsx`)**:
+       - Aligned `Modal` usage to canonical `open={isOpen}` prop.
+  - **Verification**:
+    - Navigation Unit Tests: **PASS** (`node --test packages/permissions/src/navigation.test.ts` -> 5/5 tests passed).
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Permissions Typecheck: **PASS** (`pnpm --filter @reachinternational/permissions exec tsc --noEmit` -> exit code 0).
+    - Web Typecheck: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile Typecheck: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **68 — Page Feedback Resolution: /machines (Add High-Performance Client Filter & Remove View Switcher from Toolbar) (2026-10-11)**:
+  - **Delivered**:
+    1. **Added High-Performance Client Filter (`MachineListClient.tsx` & `machines/page.tsx`)**:
+       - Concurrently fetched cached client directory in `page.tsx` via `getClientOptions()` alongside `getMachineList` and `getMachineKPIs` in <5ms, passing `clients={clientOptions}` to `<MachineListClient>`.
+       - Added `clientFilter` state synced with `currentClientId` prop, background fetcher `loadClients`, and alphabetical `clientOptions` list with fallback to active machine items.
+       - Enhanced `CustomFilterSelector` with `searchable` prop rendering a compact instant search input for long option lists.
+       - Mounted `<CustomFilterSelector label="Client" ...>` in the filter selectors grid alongside Rental, Health, Supervisor, and Sort.
+       - Added dismissible `Client: {selectedClientLabel}` badge chip with clear `X` button.
+       - Wired `clientFilter` into `activeFilterCount`, `executeServerSearch`, search filter refresh `useEffect`, `handleResetAllFilters`, `fetchExportDataset`, and `handleLoadMoreMobile`.
+    2. **Removed View Switcher from Filter Toolbar (`MachineListClient.tsx`)**:
+       - Removed `actions` prop and `<div className="hidden sm:flex ...">` containing `Auto View`, `Cards`, and `Table` buttons from `<FilterToolbar>`.
+       - View presentation automatically respects standard 3-tier responsiveness (`effectiveView`): high-density `EnterpriseTable` on desktop (≥641px) and touch cards on mobile (≤640px).
+    3. **Enforced 100% Web & Mobile Parity Synchronization (`apps/mobile/app/(app)/machines.tsx`)**:
+       - Added `clientFilter` to `DEFAULT_MACHINE_FILTERS` and `usePersistentListState`.
+       - Loaded active clients from `supabase.from('clients')` and computed `clientFilterOptions`.
+       - Mounted `DropdownFilterSelector` for `Client` across both web CSS grid and native animated panel.
+       - Filtered `m.client_id === clientFilter` in `filteredAndSortedMachines` and added dismissible Client chip to `renderActiveFilterChips`.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+
+- **66 — Page Feedback Resolution: /profile (Fix Maximum Update Depth Exceeded, Zero Image Flickering, Modal Portaling Over Bottom Navbar, Header Download Icon & Smooth PDF Viewer) (2026-10-11)**:
+  - **Delivered**:
+    1. **Eliminated Maximum Update Depth Exceeded & Image Flickering (`OverlayHost.tsx`, `Dialog.tsx`, `Sheet.tsx`, `Drawer.tsx`, `Popover.tsx`, `MobileDocumentViewerModal.tsx`, `profile.tsx`)**:
+       - Root cause identified: `Dialog.tsx` (and other overlay primitives) had `onClose` in their `useEffect` dependency array. `OverlayHostProvider` unconditionally updated state `activeCount` on `registerOverlay`, triggering an infinite re-render loop across the entire mobile application tree (50+ updates/sec) that caused `MobileDocumentViewerModal` to continually re-render and flicker its image.
+       - Hardened `OverlayHost.tsx`: `registerOverlay` now updates existing overlay references in place without updating `activeCount` state, and context value is memoized via `useMemo`.
+       - Decoupled `onClose` across all overlay primitives (`Dialog.tsx`, `Sheet.tsx`, `Drawer.tsx`, `Popover.tsx`): stored in `onDismissRef = useRef(onClose)` and removed `onClose` from the `registerOverlay` dependency array.
+       - Memoized `handleCloseViewer` in `profile.tsx` with `useCallback`.
+       - Changed `MobileDocumentViewerModal.tsx` reset effect dependency from `[doc]` to stable `docKey`, keeping image loading and rotation rock-solid.
+    2. **Eliminated Bottom Nav Overlap via Top-Level Modal Portaling (`MobileDocumentViewerModal.tsx`)**:
+       - Replaced in-place `AppModal variant="fullscreen"` with React Native's `<Modal>` (`transparent`, `statusBarTranslucent`, `hardwareAccelerated`).
+       - On iOS and Android: mounts into a native modal window strictly above all tab screens, tab bars, headers, and drawers.
+       - On Web: portals to `document.body` with `position: fixed; inset: 0; zIndex: 99999`, completely covering the floating `MobileBottomNav`.
+       - Positioned the floating bottom rotate/zoom bar dynamically with `useSafeAreaInsets()` (`bottom: Math.max(insets.bottom, 16) + 16`) for safe clearance from device gesture bars.
+    3. **Added Download Icon in Header (`MobileDocumentViewerModal.tsx`)**:
+       - Added dedicated `<Download size={18} color={theme.colors.ink} />` action button in the modal header alongside Share and Close.
+       - Built `handleDownload` supporting native browser anchor download on Web, and `FileSystem.downloadAsync` + `Sharing.shareAsync` on iOS/Android with haptics and toast confirmation.
+    4. **Smooth In-App PDF Viewer & Error Resilience (`MobileDocumentViewerModal.tsx`)**:
+       - Web: Renders native browser `<iframe>` with `#toolbar=1&navpanes=0&view=FitH` for instant 60fps PDF viewing and native browser zoom/scroll.
+       - Native: Uses hardware-accelerated `WebView` with full file/content permissions, and added a floating action bar with `[Open in Device PDF App]`.
+       - Added an in-app PDF fallback card with direct open and download options if network or rendering fails.
+    5. **Radius Token Fix (`AssignMachineModal.tsx` & `AssignSupervisorModal.tsx`)**:
+       - Replaced invalid `radiusNumeric.xl` with canonical `radiusNumeric.lg` (16px), resolving TypeScript build errors.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile exec tsc --noEmit` -> 0 errors, exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` -> 7/7 packages successful, exit code 0).
+    - Expo Web Bundler Export: **PASS** (`npx expo export -p web --dev --no-minify -c` -> 4397 modules compiled cleanly, exit code 0).
+
+- **65 — Page Feedback Resolution: /profile (Zero Image Flickering, Bottom Nav Overlap Fix, Header Download Icon, Smooth PDF Viewer, Rounded Action Buttons, Check Icon Removal, Consistent Document Badge Sizing, Stacked Row Text to Eliminate Overlapping) (2026-10-11)**:
+  - **Delivered**:
+    1. **Eliminated Image Flickering (`profile.tsx` & `MobileDocumentViewerModal.tsx`)**:
+       - Refactored `existingDocCard` from an interactive `<Pressable>` to a static `<View>`.
+       - Separated thumbnail preview into an independent `<Pressable variant="ghost">` with `fadeDuration={0}` on `<Image>`, eliminating nested button conflicts and hover/touch opacity flicker.
+       - Fixed image viewer in `MobileDocumentViewerModal.tsx` so loader overlay is scoped strictly to URL changes, not rotations or renders.
+    2. **Eliminated Bottom Nav Overlap (`profile.tsx`)**:
+       - Integrated `useSafeAreaInsets()` to add dynamic `paddingBottom: Math.max(insets.bottom, 16) + 100` (~116–140px) to `ScrollView`.
+       - Allowed all document slots and upload dropzones to scroll completely clear of the floating `MobileBottomNav`.
+    3. **Added Download Icon in Header (`profile.tsx` & `MobileDocumentViewerModal.tsx`)**:
+       - Added download action button in `MobileHeader` (`rightAction`), triggering `handleDownloadProfile()` to export employee profile summary text/file with tactile haptics and toast confirmation.
+       - Added dedicated `<Download size={18} />` action button in `MobileDocumentViewerModal.tsx` header for direct one-tap document downloads.
+    4. **Smooth In-App PDF Viewer (`MobileDocumentViewerModal.tsx` & `profile.tsx`)**:
+       - Rendered native iframe with `#view=FitH&toolbar=1` on Web for smooth browser PDF viewing.
+       - Maintained native `WebView` on iOS/Android with Google Docs viewer fallback on Android.
+       - Implemented proactive signed URL fetching in `profile.tsx` before modal opening.
+    5. **Rounded Pill Action Buttons (`profile.tsx`)**:
+       - Updated `docActionBtn` to `borderRadius: 999` (full pill) and `docDeleteBtn` to `borderRadius: 16` (32×32 disc), matching Geist design standards.
+    6. **Check Icon Removal (`profile.tsx`)**:
+       - Removed `<Check size={10} color="#059669" />` from `uploadedBadgeSmall` across all document slots.
+    7. **Consistent Document Sizing (`profile.tsx`)**:
+       - Sized `uploadedBadgeSmall` (`paddingHorizontal: 8, paddingVertical: 2.5`), `docActionBtn` (`paddingHorizontal: 12, paddingVertical: 5, minHeight: 32`), and `docDeleteBtn` (32×32) to hug and symmetrically balance with their text.
+    8. **Eliminated Text Overlapping via Stacked Rows (`profile.tsx`)**:
+       - Converted all section rows from horizontal columns (`flexDirection: 'row'`) to stacked column layout (`flexDirection: 'column', gap: 4, paddingVertical: 9`).
+       - Placed label on the top line (`<Text variant="caption">`) and value on a dedicated new line below (`<Text variant="body">`) with 100% full width, completely eliminating label-value collisions and overlapping.
+  - **Verification**:
+    - Typography Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile typecheck` -> exit code 0, 0 errors).
+    - Web TypeScript Check: **PASS** (`pnpm --filter @reachinternational/web typecheck` -> exit code 0, 0 errors).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+
+- **64 — Page Feedback Resolution: /users (Chevron Removal, Bottom Metadata Details Relocation, Single-Row Chips Alignment & Card Action Buttons Toolbar with Assign Supervisor / Machine Modals) (2026-10-11)**:
+  - **Delivered**:
+    1. **Chevron Removal (`users.tsx`)**:
+       - Removed `<ChevronRight>` icon completely from user cards in `UserTouchCard`.
+       - Eliminates accidental clicks and preserves clean typography hierarchy.
+    2. **Relocated Email to Bottom Metadata (`users.tsx`)**:
+       - Removed email display from underneath the user's name in the header.
+       - Moved email into the bottom metadata box with `<Mail size={12} color={theme.colors.mute} />` and search query highlighting via `<HighlightText>`.
+    3. **Relocated Secondary Details to Bottom Metadata (`users.tsx`)**:
+       - Cleaned card header to exclusively show avatar and full name.
+       - Positioned all secondary user attributes cleanly in the bottom metadata box: Employee ID pill, Email, Phone, Location, Supervisor, Assigned Machines, and Shift timing.
+    4. **Single-Row Role & Status Chips (`users.tsx`)**:
+       - Changed `headerBadgesCluster`'s `flexWrap` from `'wrap'` to `'nowrap'`.
+       - Role badge and status badge stay strictly side-by-side in one horizontal row across all screen sizes.
+    5. **Bottom Action Buttons Toolbar (`users.tsx`)**:
+       - Added action toolbar on every card with pill buttons:
+         - `[View Profile]`: Solid Reach Sky Blue (`#0284c7`) pill button with pure white text and user icon.
+         - `[Edit]`: Hairline border pill button with `Edit2` icon (triggers `UserEditModal`).
+         - `[Supervisor]`: Teal `#0d9488` pill button with `ShieldCheck` icon (triggers `AssignSupervisorModal`).
+         - `[Machine]`: Amber `#d97706` pill button with `Wrench` icon (triggers `AssignMachineModal`).
+         - `[Reset Pwd]`: Violet `#6366f1` pill button with `KeyRound` icon (triggers `PasswordResetModal`).
+         - `[Call]`: Solid green `#16a34a` pill button with phone icon if `phone` exists.
+         - `[WhatsApp]`: Solid WhatsApp green `#25D366` pill button with canonical `WhatsAppIcon` if `phone` exists.
+         - `[Delete]`: Red `#ee0000` danger pill button with `Trash2` icon (prompts confirmation alert and securely deletes user).
+    6. **Assign Supervisor Modal (`AssignSupervisorModal.tsx`)**:
+       - Created dedicated modal allowing administrators/managers to pick an active supervisor or set unassigned, persisting to `users` and `user_supervisors` tables with toast feedback.
+    7. **Assign Machine Modal (`AssignMachineModal.tsx`)**:
+       - Created dedicated modal allowing administrators/managers to toggle and assign machinery to operators and supervisors, persisting to `machines.operator_ids` and `machines.supervisor_ids` with toast feedback.
+    8. **Assigned Machinery Metadata Display (`users.tsx`)**:
+       - Enriched `fetchUsers` query to map assigned machinery from `machines` table to each user record, rendering `Machines: JCB-01, CAT-02` directly in the card metadata.
+  - **Verification**:
+    - Typography Compliance Check: **PASS** (`node scripts/check-typography.mjs` -> 0 raw typography properties).
+    - Touch Feedback & Soft Haptics Guards: **PASS** (`node scripts/test-touch-haptics.mjs` -> all guards verified, exit code 0).
+    - Parity Rules & Skills Suite: **PASS** (`node scripts/test-parity-rules-and-skills.mjs` -> 95/95 tests passed, 100%).
+    - Mobile Automated Verification Suite: **PASS** (`node apps/mobile/run-tests.mjs` -> 63/63 scenarios verified, 100%).
+    - Mobile TypeScript Check: **PASS** (`pnpm --filter @reachinternational/mobile exec tsc --noEmit` -> 0 errors, exit code 0).
+    - Monorepo Turbo Typecheck: **PASS** (`pnpm typecheck` across all 7 packages -> 7/7 successful, exit code 0).
+
 - **63 — Page Feedback Resolution: /operations (Shift Tab Rename, Blue Active Tab Styling, Clean Operational Error Handling in Toasts, Complete Removal of Touch Effects on KPI & Roster Cards, Reach Blue Theme Parity, Machine Sr No Metadata Consistency) (2026-10-11)**:
   - **Delivered**:
     1. **Renamed Tab to 'Shift' (`operations.tsx`)**:

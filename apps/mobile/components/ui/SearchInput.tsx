@@ -138,6 +138,13 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
         autoFocus={autoFocus}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        autoComplete="off"
+        textContentType="none"
+        importantForAutofill="no"
+        autoCorrect={false}
+        spellCheck={false}
+        inputMode="search"
+        aria-autocomplete="none"
         style={[
           styles.input,
           useTypeStyle('body'),

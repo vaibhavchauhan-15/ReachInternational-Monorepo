@@ -78,9 +78,11 @@ export function CustomFilterSelector({
         aria-label={ariaLabel}
         aria-expanded={open}
         className={`w-full h-11 sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-xs select-none ${
-          open || value !== "all"
-            ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]/15 text-[var(--color-ink)]"
-            : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-ink)] hover:border-[var(--color-ink)]/40"
+          value !== "all"
+            ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
+            : open
+            ? "border-sky-500 bg-[var(--color-canvas)] text-[var(--color-ink)] ring-2 ring-sky-500/15"
+            : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-ink)] hover:border-[#0284c7]/40"
         }`}
       >
         <div className="flex items-center gap-1.5 min-w-0 truncate">
@@ -90,7 +92,13 @@ export function CustomFilterSelector({
           <span className="text-[10px] font-mono text-[var(--color-mute)] uppercase shrink-0">
             {label}:
           </span>
-          <span className="truncate font-semibold text-xs text-[var(--color-ink)]">
+          <span
+            className={`truncate font-semibold text-xs ${
+              value !== "all"
+                ? "text-[#0284c7] dark:text-sky-400"
+                : "text-[var(--color-ink)]"
+            }`}
+          >
             {selectedOpt?.label}
           </span>
         </div>
@@ -105,7 +113,7 @@ export function CustomFilterSelector({
               },
               size: (icon as any).props?.size ?? 13,
               className: `shrink-0 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
+                open ? "rotate-180 text-sky-500" : value !== "all" ? "text-sky-500" : ""
               } ${(icon as any).props?.className || ""}`,
             })
           ) : (
@@ -115,8 +123,8 @@ export function CustomFilterSelector({
           <ChevronDown
             ref={iconRef as any}
             size={13}
-            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
-              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            className={`shrink-0 transition-transform duration-200 ${
+              open ? "rotate-180 text-sky-500" : value !== "all" ? "text-sky-500" : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
             }`}
           />
         )}
@@ -151,21 +159,19 @@ export function CustomFilterSelector({
                   }}
                   className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
+                      ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold shadow-xs"
                       : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     {opt.dotColor && (
                       <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isSelected ? "bg-white" : opt.dotColor
-                        }`}
+                        className={`h-2 w-2 rounded-full shrink-0 ${opt.dotColor}`}
                       />
                     )}
                     <span className="truncate">{opt.label}</span>
                   </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  {isSelected && <Check className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />}
                 </button>
               );
             })}

@@ -73,7 +73,7 @@ export default function AccountSecurityScreen() {
     <SettingsScreenContainer
       title="Account Security"
       showBack={true}
-      onPressBack={() => router.push('/settings/account' as any)}
+      onPressBack={() => router.back()}
     >
       {/* Session Verification Status Card */}
       <Card

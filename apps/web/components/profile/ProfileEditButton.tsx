@@ -2,47 +2,50 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Edit } from "lucide-react";
 import { Button } from "@/components/ui";
+import { EditProfileModal } from "./EditProfileModal";
 import type { User } from "@/lib/types/database";
-
-const EditProfileModal = dynamic(
-  () =>
-    import("@/components/profile/EditProfileModal").then(
-      (mod) => mod.EditProfileModal
-    ),
-  { ssr: false }
-);
 
 interface ProfileEditButtonProps {
   user: User;
+  initialOpen?: boolean;
 }
 
-export function ProfileEditButton({ user }: ProfileEditButtonProps) {
-  const [open, setOpen] = useState(false);
+export function ProfileEditButton({ user, initialOpen = false }: ProfileEditButtonProps) {
+  const [open, setOpen] = useState(initialOpen);
   const router = useRouter();
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        icon={<Edit size={14} className="text-sky-500" />}
-        onClick={() => setOpen(true)}
-        className="w-full sm:w-auto font-semibold cursor-pointer"
-      >
-        Edit Profile
-      </Button>
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          icon={<Edit size={14} className="text-sky-500" />}
+          onClick={() => router.push("/profile/edit")}
+          className="w-full sm:w-auto font-semibold cursor-pointer"
+        >
+          Edit Profile
+        </Button>
+      </div>
 
       {open && (
         <EditProfileModal
           user={user}
           isOpen={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false);
+            // If opened via ?edit=true, clean up the query param
+            if (window.location.search.includes("edit=")) {
+              router.replace("/profile");
+            }
+          }}
           onSuccess={() => {
             setOpen(false);
+            router.replace("/profile");
             router.refresh();
           }}
         />

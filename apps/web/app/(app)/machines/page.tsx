@@ -5,6 +5,7 @@ import {
   getMachineKPIs,
   getOperatorAssignedMachine,
 } from "@/lib/data/machines";
+import { getClientOptions } from "@/lib/queries/clients";
 import { MachineListClient } from "@/components/machines/MachineListClient";
 import { MachinesSkeleton } from "@/components/ui";
 
@@ -56,9 +57,8 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
     sortOrder = "asc";
   }
 
-  // Fast initial page load: only load active machine slice and fleet KPI summary.
-  // Personnel rosters and client directories are lazily loaded on demand by modals and filters.
-  const [machineData, kpis] = await Promise.all([
+  // Fast initial page load: concurrently fetch machine slice, fleet KPIs, and cached client options
+  const [machineData, kpis, clientOptions] = await Promise.all([
     getMachineList({
       search,
       status,
@@ -75,6 +75,7 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
       operatorId: user.role === "operator" ? user.id : undefined,
       clientId: client_id !== "all" ? client_id : undefined,
     }),
+    getClientOptions(),
   ]);
 
   let finalMachines = machineData.machines;
@@ -98,6 +99,7 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
       page={machineData.page}
       pageSize={machineData.pageSize}
       totalPages={finalTotalPages}
+      clients={clientOptions}
       userRole={user.role}
       currentSearch={search}
       currentStatus={status}

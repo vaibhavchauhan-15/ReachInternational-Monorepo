@@ -25,7 +25,7 @@ export interface NavItem {
   match: string[];
   /** Roles that may see this item */
   roles: readonly UserRole[];
-  /** Per-role label overrides (e.g. "Log" for operators) */
+  /** Per-role label overrides (e.g. "Shift" for operators) */
   roleLabel?: Partial<Record<UserRole, string>>;
 }
 
@@ -86,7 +86,7 @@ export const NAV_ITEMS: NavItem[] = [
       "hr",
       "operator",
     ],
-    roleLabel: { operator: "Log" },
+    roleLabel: { operator: "Shift" },
   },
   {
     key: "running-logs",
@@ -248,6 +248,7 @@ export const PUBLIC_LEGAL_ROUTES: readonly string[] = [
   "/account-deletion",
   "/delete-account",
   "/account-deletion-guide",
+  "/account-deletion/guide",
 ];
 
 export const DEPRECATED_ROUTES: readonly string[] = [

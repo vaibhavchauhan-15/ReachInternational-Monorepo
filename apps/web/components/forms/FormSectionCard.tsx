@@ -81,14 +81,14 @@ export function FormSectionCard({
         <div className="flex items-center gap-1.5 shrink-0">
           {headerAction}
 
-          {/* Read-Only Badge with Lock Icon */}
+          {/* View Only Chip with Lock Icon */}
           {isReadOnly ? (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20"
-              title="Read-only Section"
+              title="View Only Section"
             >
               <AnimatedLock size={10} className="w-2.5 h-2.5 text-neutral-500 shrink-0" />
-              <span>Read-only</span>
+              <span>View Only</span>
             </span>
           ) : (
             <>

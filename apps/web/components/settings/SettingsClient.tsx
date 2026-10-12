@@ -402,19 +402,19 @@ export function SettingsClient({
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 6: DANGER ZONE & SESSION SIGN OUT */}
+      {/* SECTION 6: DANGER ZONE — Delete Account */}
       {/* ========================================================================= */}
       <div className="border border-rose-500/20 bg-rose-500/[0.03] rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-3.5">
         <div>
           <h3 className="text-sm font-bold text-rose-600 dark:text-rose-400">
-            Account Management & Danger Zone
+            Danger Zone
           </h3>
           <p className="text-[11px] text-[var(--color-mute)] mt-0.5">
-            Permanent account erasure and session sign out options.
+            Permanent account deletion — this action cannot be undone.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-rose-500/15">
+        <div className="pt-2 border-t border-rose-500/15">
           {isSuperAdmin ? (
             <div className="flex items-center gap-2 text-xs text-[var(--color-mute)]">
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
@@ -432,20 +432,24 @@ export function SettingsClient({
               <span>Delete Account</span>
             </Link>
           )}
-
-          {/* Prominent Red Sign Out */}
-          <form action={logout} className="w-full sm:w-auto">
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              icon={<LogOut className="h-4 w-4 text-rose-500" />}
-              className="w-full sm:w-auto h-11 sm:h-8.5 px-4 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 transition-all cursor-pointer shadow-2xs justify-center"
-            >
-              Sign Out of Session
-            </Button>
-          </form>
         </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECTION 7: SIGN OUT */}
+      {/* ========================================================================= */}
+      <div className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-3.5 sm:p-5 shadow-xs">
+        <form action={logout} className="w-full">
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            icon={<LogOut className="h-4 w-4" />}
+            className="w-full h-11 sm:h-9 px-4 text-xs font-bold cursor-pointer justify-center"
+          >
+            Sign Out of Session
+          </Button>
+        </form>
       </div>
 
       {/* ========================================================================= */}

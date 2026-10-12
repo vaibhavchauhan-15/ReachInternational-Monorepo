@@ -1205,6 +1205,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               placeholder="e.g. Jhajjar, Haryana"
               value={location}
               onChangeText={setLocation}
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
             />
 
             {/* Meter Inputs */}
@@ -1215,6 +1221,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   value={startMeter}
                   onChangeText={handleStartMeterChange}
                   keyboardType="numeric"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  textContentType="none"
+                  importantForAutofill="no"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  aria-autocomplete="none"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -1223,6 +1236,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   value={endMeter}
                   onChangeText={handleEndMeterChange}
                   keyboardType="numeric"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  textContentType="none"
+                  importantForAutofill="no"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  aria-autocomplete="none"
                 />
               </View>
             </View>
@@ -1430,6 +1450,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               value={overtimeHours}
               onChangeText={setOvertimeHours}
               keyboardType="numeric"
+              inputMode="decimal"
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
               containerStyle={{ maxWidth: 140 }}
               style={[monoTypeStyle, { textAlign: 'center' }]}
             />
@@ -1522,6 +1549,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                 value={remarks}
                 onChangeText={setRemarks}
                 multiline
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+                autoCorrect={false}
+                spellCheck={false}
+                aria-autocomplete="none"
               />
             )}
           </ScrollView>

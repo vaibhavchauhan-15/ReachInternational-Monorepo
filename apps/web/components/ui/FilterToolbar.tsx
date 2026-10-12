@@ -142,8 +142,8 @@ export function FilterToolbar({
             aria-controls="filter-panel-content"
             className={`flex items-center gap-1.5 px-3 h-11 sm:h-9 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
               isOpen || activeFilterCount > 0
-                ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)]"
+                ? "bg-[#0284c7] text-white border-[#0284c7] shadow-xs hover:bg-[#0369a1]"
+                : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[#0284c7]/40 hover:text-[#0284c7] hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
             <AnimatedSlidersHorizontal ref={filterIconRef as any} size={14} className="shrink-0" />
@@ -152,8 +152,8 @@ export function FilterToolbar({
               <span
                 className={`flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${
                   isOpen || activeFilterCount > 0
-                    ? "bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                    : "bg-[var(--color-ink)] text-[var(--color-canvas)]"
+                    ? "bg-white text-[#0284c7]"
+                    : "bg-[#0284c7] text-white"
                 }`}
               >
                 {activeFilterCount}
@@ -161,7 +161,7 @@ export function FilterToolbar({
             )}
             <ChevronDown
               size={12}
-              className={`transition-transform duration-300 ease-out ${isOpen ? "rotate-180" : ""}`}
+              className={`transition-transform duration-300 ease-out ${isOpen ? "rotate-180 text-white" : ""}`}
             />
           </button>
         )}

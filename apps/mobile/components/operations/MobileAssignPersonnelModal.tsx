@@ -205,7 +205,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       // 1. Fleet machines
       supabase
         .from('machines')
-        .select('id, machine_id, model, serial_number, client_id, supervisor_ids, current_supervisor_id, client:clients(id, company_name)')
+        .select('id, machine_id, model, serial_number, client_id, supervisor_ids, current_supervisor_id, health_status, status, client:clients(id, company_name)')
         .order('machine_id', { ascending: true }),
 
       // 2. Supervisors / Managers / Admins
@@ -534,15 +534,28 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       const currentUserId = userAuth?.user?.id || null;
 
       // 1. Update machines table with supervisor assignments
+      const isNeedsActivation = Boolean(
+        activeMachine?.health_status === 'breakdown' ||
+        activeMachine?.health_status === 'under_maintenance' ||
+        activeMachine?.status === 'under_maintenance'
+      );
+
+      const machineUpdatePayload: any = {
+        supervisor_ids: selectedSupervisorIds,
+        current_supervisor_id: selectedSupervisorIds[0] || null,
+        operator_ids: Array.from(new Set(machineOperators.map((o) => o.operatorId))),
+        current_operator_id: machineOperators[0]?.operatorId || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isNeedsActivation) {
+        machineUpdatePayload.health_status = 'active';
+        machineUpdatePayload.status = activeMachine.client_id ? 'rented' : 'active';
+      }
+
       const { error: machineUpdateError } = await supabase
         .from('machines')
-        .update({
-          supervisor_ids: selectedSupervisorIds,
-          current_supervisor_id: selectedSupervisorIds[0] || null,
-          operator_ids: Array.from(new Set(machineOperators.map((o) => o.operatorId))),
-          current_operator_id: machineOperators[0]?.operatorId || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(machineUpdatePayload)
         .eq('id', activeMachine.id);
 
       if (machineUpdateError) throw machineUpdateError;
@@ -832,6 +845,53 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   </View>
                 )}
               </View>
+
+              {/* Breakdown or Maintenance Warning Banner */}
+              {activeMachine &&
+                (activeMachine.health_status === 'breakdown' ||
+                  activeMachine.health_status === 'under_maintenance' ||
+                  activeMachine.status === 'under_maintenance') && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      padding: 12,
+                      borderRadius: 10,
+                      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fca5a5',
+                      marginBottom: 4,
+                    }}
+                  >
+                    <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        variant="label"
+                        style={{
+                          color: isDark ? '#fca5a5' : '#991b1b',
+                        }}
+                      >
+                        Equipment Status:{' '}
+                        {activeMachine.health_status === 'breakdown'
+                          ? 'Breakdown'
+                          : 'Under Maintenance'}
+                      </Text>
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: isDark ? '#fecaca' : '#b91c1c',
+                        }}
+                      >
+                        This machinery is currently flagged as{' '}
+                        {activeMachine.health_status === 'breakdown'
+                          ? 'Breakdown'
+                          : 'Under Maintenance'}
+                        . Saving assignments will automatically reactivate this equipment for active operational service.
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
               {/* ═══════════════════════════════════════════════════════ */}
               {/* SECTION 2: ASSIGNED SUPERVISORS (Screenshot 3 & 5)     */}

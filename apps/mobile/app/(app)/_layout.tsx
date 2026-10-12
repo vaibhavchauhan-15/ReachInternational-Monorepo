@@ -82,10 +82,12 @@ export default function AppLayout() {
         <Tabs.Screen name="running-logs" options={{ ...screenAnim.tab, title: 'Running Logs', href: null }} />
         <Tabs.Screen name="audit" options={{ title: 'Audit', href: null }} />
         <Tabs.Screen name="hr" options={{ ...screenAnim.tab, title: 'HR', href: null }} />
-        <Tabs.Screen name="profile" options={{ ...screenAnim.tab, title: 'Profile', href: null }} />
+        <Tabs.Screen name="profile/index" options={{ ...screenAnim.tab, title: 'Profile', href: null }} />
+        <Tabs.Screen name="profile/edit" options={{ ...screenAnim.tab, title: 'Edit Profile', href: null }} />
         <Tabs.Screen name="privacy" options={{ ...screenAnim.tab, title: 'Privacy Policy', href: null }} />
         <Tabs.Screen name="terms" options={{ ...screenAnim.tab, title: 'Terms of Service', href: null }} />
-        <Tabs.Screen name="account-deletion" options={{ ...navigationPresets.tabsFade, title: 'Account Deletion', href: null }} />
+        <Tabs.Screen name="account-deletion/index" options={{ ...navigationPresets.tabsFade, title: 'Account Deletion', href: null }} />
+        <Tabs.Screen name="account-deletion/guide" options={{ ...navigationPresets.tabsFade, title: 'Account Deletion Guide', href: null }} />
         <Tabs.Screen name="motion-lab" options={{ ...navigationPresets.tabsFade, title: 'Motion Lab', href: null }} />
       </Tabs>
 

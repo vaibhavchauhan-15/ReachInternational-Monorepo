@@ -779,6 +779,10 @@ export default function UsersScreen() {
   const [temporaryPassword, setTemporaryPassword] = useState('');
 
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [assignSupervisorUser, setAssignSupervisorUser] = useState<UserRecord | null>(null);
+  const [assignSupervisorModalVisible, setAssignSupervisorModalVisible] = useState(false);
+  const [assignMachineUser, setAssignMachineUser] = useState<UserRecord | null>(null);
+  const [assignMachineModalVisible, setAssignMachineModalVisible] = useState(false);
 
   // Profile Change Requests State
   const [profileRequests, setProfileRequests] = useState<any[]>([]);
@@ -1216,6 +1220,17 @@ export default function UsersScreen() {
       } else if (data) {
         const userMap = new Map((data as any[]).map((u) => [u.id, u]));
 
+        // Fetch fleet machines to associate assigned machinery
+        let machinesList: any[] = [];
+        try {
+          const { data: mData } = await supabase
+            .from('machines')
+            .select('id, machine_id, model, operator_ids, supervisor_ids');
+          if (mData) machinesList = mData;
+        } catch {
+          // ignore non-critical machine list enrichment failure
+        }
+
         const hydrated = (data as any[]).map((u) => {
           const supIds: string[] = Array.isArray(u.supervisor_ids) && u.supervisor_ids.length > 0
             ? u.supervisor_ids
@@ -1238,6 +1253,17 @@ export default function UsersScreen() {
               }
             : supervisorsList[0] || null;
 
+          const assignedMachines = machinesList
+            .filter((m: any) =>
+              (Array.isArray(m.operator_ids) && m.operator_ids.includes(u.id)) ||
+              (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(u.id))
+            )
+            .map((m: any) => ({
+              id: m.id,
+              machine_id: m.machine_id,
+              model: m.model,
+            }));
+
           return {
             ...u,
             address: u.street || u.address || null,
@@ -1246,6 +1272,7 @@ export default function UsersScreen() {
             supervisor_ids: supIds,
             supervisor: primarySup,
             supervisors: supervisorsList,
+            assigned_machines: assignedMachines,
           };
         });
 
@@ -1701,6 +1728,50 @@ export default function UsersScreen() {
     setDetailModalVisible(true);
   };
 
+  // Assign Supervisor Trigger
+  const handleTriggerAssignSupervisor = useCallback((targetUser: UserRecord) => {
+    setAssignSupervisorUser(targetUser);
+    setAssignSupervisorModalVisible(true);
+  }, []);
+
+  // Assign Machine Trigger
+  const handleTriggerAssignMachine = useCallback((targetUser: UserRecord) => {
+    setAssignMachineUser(targetUser);
+    setAssignMachineModalVisible(true);
+  }, []);
+
+  // Delete Single User
+  const handleDeleteSingleUser = useCallback((targetUser: UserRecord) => {
+    if (authUser?.id === targetUser.id) {
+      toast('error', 'Cannot Delete Self', 'You cannot delete your own account.');
+      return;
+    }
+    Alert.alert(
+      'Delete User Account',
+      `Are you sure you want to permanently delete the account for ${targetUser.full_name}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            const prevUsers = [...users];
+            setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+            try {
+              const { error } = await supabase.from('users').delete().eq('id', targetUser.id);
+              if (error) throw error;
+              toast('success', 'User Deleted', `Successfully deleted account for ${targetUser.full_name}.`);
+              fetchUsers(false, 1);
+            } catch (err: any) {
+              setUsers(prevUsers);
+              toast('error', 'Delete Failed', err?.message || 'Failed to delete user account.');
+            }
+          },
+        },
+      ]
+    );
+  }, [authUser?.id, toast, fetchUsers, users]);
+
   // Multi-Selection Logic
   const toggleSelectUser = (userId: string) => {
     setSelectedIds((prev) => {
@@ -1828,6 +1899,12 @@ export default function UsersScreen() {
     }
   }, [isSelectMode]);
 
+  const canEditUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
+  const canDeleteUsers = ['super_admin', 'admin'].includes(normalizedRole);
+  const canAssignSupervisorUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
+  const canAssignMachineUsers = ['super_admin', 'admin', 'manager', 'supervisor'].includes(normalizedRole);
+  const canResetPwdUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
+
   const renderUserCardItem: ListRenderItem<UserRecord> = useCallback(
     ({ item }) => (
       <UserTouchCard
@@ -1838,9 +1915,39 @@ export default function UsersScreen() {
         onPress={handleUserCardPress}
         onLongPress={handleUserCardLongPress}
         searchTerm={debouncedSearch}
+        onViewDetails={openUserDetail}
+        onEdit={handleTriggerEdit}
+        onDelete={handleDeleteSingleUser}
+        onAssignSupervisor={handleTriggerAssignSupervisor}
+        onAssignMachine={handleTriggerAssignMachine}
+        onResetPassword={handleTriggerResetPassword}
+        canEdit={canEditUsers}
+        canDelete={canDeleteUsers && authUser?.id !== item.id}
+        canAssignSupervisor={canAssignSupervisorUsers}
+        canAssignMachine={canAssignMachineUsers}
+        canResetPwd={canResetPwdUsers}
       />
     ),
-    [selectedIds, isSelectMode, theme, handleUserCardPress, handleUserCardLongPress, debouncedSearch]
+    [
+      selectedIds,
+      isSelectMode,
+      theme,
+      handleUserCardPress,
+      handleUserCardLongPress,
+      debouncedSearch,
+      openUserDetail,
+      handleTriggerEdit,
+      handleDeleteSingleUser,
+      handleTriggerAssignSupervisor,
+      handleTriggerAssignMachine,
+      handleTriggerResetPassword,
+      canEditUsers,
+      canDeleteUsers,
+      canAssignSupervisorUsers,
+      canAssignMachineUsers,
+      canResetPwdUsers,
+      authUser?.id,
+    ]
   );
 
   const keyExtractor = useCallback((item: UserRecord) => item.id, []);
@@ -2029,11 +2136,11 @@ export default function UsersScreen() {
                     {
                       backgroundColor:
                         filterPanelOpen || activeFilterCount > 0
-                          ? theme.colors.ink
+                          ? '#0284c7'
                           : theme.colors.canvas,
                       borderColor:
                         filterPanelOpen || activeFilterCount > 0
-                          ? theme.colors.ink
+                          ? '#0284c7'
                           : theme.colors.hairline,
                     },
                     isWeb && ({
@@ -2046,7 +2153,7 @@ export default function UsersScreen() {
                     size={13}
                     color={
                       filterPanelOpen || activeFilterCount > 0
-                        ? theme.colors.canvas
+                        ? '#ffffff'
                         : theme.colors.ink
                     }
                   />
@@ -2057,7 +2164,7 @@ export default function UsersScreen() {
                       {
                         color:
                           filterPanelOpen || activeFilterCount > 0
-                            ? theme.colors.canvas
+                            ? '#ffffff'
                             : theme.colors.ink,
                       },
                     ]}
@@ -2071,8 +2178,8 @@ export default function UsersScreen() {
                         {
                           backgroundColor:
                             filterPanelOpen || activeFilterCount > 0
-                              ? theme.colors.canvas
-                              : theme.colors.ink,
+                              ? '#ffffff'
+                              : '#0284c7',
                         },
                       ]}
                     >
@@ -2083,8 +2190,8 @@ export default function UsersScreen() {
                           {
                             color:
                               filterPanelOpen || activeFilterCount > 0
-                                ? theme.colors.ink
-                                : theme.colors.canvas,
+                                ? '#0284c7'
+                                : '#ffffff',
                           },
                         ]}
                       >
@@ -2103,7 +2210,7 @@ export default function UsersScreen() {
                         size={13}
                         color={
                           filterPanelOpen || activeFilterCount > 0
-                            ? theme.colors.canvas
+                            ? '#ffffff'
                             : theme.colors.mute
                         }
                       />
@@ -2125,7 +2232,7 @@ export default function UsersScreen() {
                         size={13}
                         color={
                           filterPanelOpen || activeFilterCount > 0
-                            ? theme.colors.canvas
+                            ? '#ffffff'
                             : theme.colors.mute
                         }
                       />
@@ -2584,6 +2691,28 @@ export default function UsersScreen() {
         isSuperAdmin={currentUserRole === 'super_admin'}
       />
 
+      {/* Assign Supervisor Modal */}
+      <AssignSupervisorModal
+        visible={assignSupervisorModalVisible}
+        onClose={() => {
+          setAssignSupervisorModalVisible(false);
+          setAssignSupervisorUser(null);
+        }}
+        user={assignSupervisorUser}
+        onSuccess={() => fetchUsers(false, 1)}
+      />
+
+      {/* Assign Machine Modal */}
+      <AssignMachineModal
+        visible={assignMachineModalVisible}
+        onClose={() => {
+          setAssignMachineModalVisible(false);
+          setAssignMachineUser(null);
+        }}
+        user={assignMachineUser}
+        onSuccess={() => fetchUsers(false, 1)}
+      />
+
       {/* Password Reset Modal */}
       <PasswordResetModal
         visible={passwordResetModalVisible}
@@ -2940,7 +3069,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     justifyContent: 'flex-end' },
   empIdBadge: {
     borderRadius: radiusNumeric.full,
@@ -2952,6 +3081,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1.5,
     borderWidth: 1 },
+  cardActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1 },
+  actionPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 34,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1 },
+  actionPillPrimary: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7' },
+  actionPillPrimaryText: {
+    color: '#ffffff' },
   filterBadge: {
     paddingHorizontal: 0,
     paddingVertical: 0,

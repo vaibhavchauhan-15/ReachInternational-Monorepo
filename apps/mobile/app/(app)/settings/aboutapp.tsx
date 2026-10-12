@@ -81,7 +81,7 @@ export default function AboutAppScreen() {
     <SettingsScreenContainer
       title="About App"
       showBack={true}
-      onPressBack={() => router.push('/settings' as any)}
+      onPressBack={() => router.back()}
       contentContainerStyle={styles.containerContent}
     >
       {/* 1. App Information Dedicated Page */}

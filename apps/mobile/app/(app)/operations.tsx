@@ -1240,7 +1240,7 @@ export default function OperationsScreen() {
           initialClientId={assistedRow.client_id || undefined}
           initialShiftCode={assistedRow.shift_code || undefined}
           initialAssignedShiftCodes={assistedRow.shift_code ? [assistedRow.shift_code] : undefined}
-          initialStartMeter={assistedRow.current_meter != null ? assistedRow.current_meter : (assistedRow.start_meter ?? undefined)}
+          initialStartMeter={assistedRow.status === 'entered' && assistedRow.start_meter != null ? assistedRow.start_meter : (assistedRow.current_meter != null ? assistedRow.current_meter : (assistedRow.start_meter ?? undefined))}
           initialLogDate={assistedRow.log_date || undefined}
           existingLog={assistedRow.log_id ? {
             id: assistedRow.log_id,

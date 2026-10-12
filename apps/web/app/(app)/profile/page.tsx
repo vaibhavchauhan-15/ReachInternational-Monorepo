@@ -34,7 +34,14 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; classNa
   user: AnimatedUser,
 };
 
-export default async function ProfilePage() {
+interface ProfilePageProps {
+  searchParams?: Promise<{ edit?: string }>;
+}
+
+export default async function ProfilePage({ searchParams }: ProfilePageProps) {
+  const resolvedParams = searchParams ? await searchParams : undefined;
+  const initialEditOpen = resolvedParams?.edit === "true" || resolvedParams?.edit === "1";
+
   const { userId } = await verifySession();
   const [user, pending, documents, documentTypes] = await Promise.all([
     getUserDetail(userId),
@@ -95,7 +102,7 @@ export default async function ProfilePage() {
           </div>
 
           <div className="shrink-0 flex items-center self-stretch sm:self-center sm:w-auto">
-            <ProfileEditButton user={user} />
+            <ProfileEditButton user={user} initialOpen={initialEditOpen} />
           </div>
         </div>
       </div>

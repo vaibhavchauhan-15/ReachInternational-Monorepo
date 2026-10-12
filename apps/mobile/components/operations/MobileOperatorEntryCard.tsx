@@ -1052,6 +1052,13 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
           <Input
             keyboardType="decimal-pad"
+            inputMode="decimal"
+            autoComplete="off"
+            textContentType="none"
+            importantForAutofill="no"
+            autoCorrect={false}
+            spellCheck={false}
+            aria-autocomplete="none"
             value={startMeter}
             onChangeText={handleStartMeterChange}
             editable={!isStartMeterLocked}
@@ -1085,6 +1092,13 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
           <Input
             keyboardType="decimal-pad"
+            inputMode="decimal"
+            autoComplete="off"
+            textContentType="none"
+            importantForAutofill="no"
+            autoCorrect={false}
+            spellCheck={false}
+            aria-autocomplete="none"
             value={endMeter}
             onChangeText={setEndMeter}
             style={[

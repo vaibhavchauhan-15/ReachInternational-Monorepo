@@ -48,20 +48,6 @@ export const MobileSalaryField: React.FC<MobileSalaryFieldProps> = ({
           <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
             {label}
           </Text>
-          <View
-            style={[
-              styles.lockBadge,
-              {
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f3f4f6',
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Lock size={10} color={theme.colors.mute} />
-            <Text style={[styles.lockBadgeText, { color: theme.colors.mute }]}>
-              Managed by HR / Admin
-            </Text>
-          </View>
         </View>
 
         <View
@@ -77,10 +63,6 @@ export const MobileSalaryField: React.FC<MobileSalaryFieldProps> = ({
             {formattedSalary}
           </Text>
         </View>
-
-        <Text style={[styles.helperText, { color: theme.colors.mute }]}>
-          Monthly salary compensation is determined and managed by administrative operations.
-        </Text>
       </View>
     );
   }
@@ -113,13 +95,6 @@ export const MobileSalaryField: React.FC<MobileSalaryFieldProps> = ({
           </Text>
         }
       />
-
-      <Text style={[styles.helperText, { color: theme.colors.mute }]}>
-        {helperText ||
-          (isOperator
-            ? 'Mandatory compensation rate for active machine operator deployment.'
-            : 'Configured monthly payroll compensation (Optional).')}
-      </Text>
     </View>
   );
 };

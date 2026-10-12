@@ -57,7 +57,8 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
   theme,
   isDark,
 }) => {
-  const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
+  const primaryColor = theme.colors.primary || (isDark ? '#0ea5e9' : '#0284c7');
+  const itemColor = isActive ? primaryColor : theme.colors.mute;
 
   const handlePress = () => {
     try {
@@ -73,9 +74,9 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
       onPress={handlePress}
       style={styles.navItemBtn}
       android_ripple={{
-        color: isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(23, 23, 23, 0.10)',
-        borderless: true,
-        radius: 22,
+        color: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(23, 23, 23, 0.08)',
+        borderless: false,
+        radius: 28,
         foreground: false,
       }}
       accessibilityRole="tab"
@@ -86,33 +87,30 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
         const isPressed = Boolean(pressed);
         const isHovered = Boolean(hovered && !pressed);
 
+        const pressedBg = isDark
+          ? (isActive ? 'rgba(14, 165, 233, 0.16)' : 'rgba(255, 255, 255, 0.08)')
+          : (isActive ? 'rgba(2, 132, 199, 0.12)' : 'rgba(23, 23, 23, 0.06)');
+
+        const hoveredBg = isDark
+          ? 'rgba(255, 255, 255, 0.05)'
+          : 'rgba(23, 23, 23, 0.04)';
+
         return (
-          <View style={styles.itemContent}>
-            <View
-              style={[
-                styles.iconCircle,
-                isHovered && {
-                  backgroundColor: isDark
-                    ? 'rgba(255, 255, 255, 0.08)'
-                    : 'rgba(23, 23, 23, 0.05)',
-                },
-                isPressed && {
-                  backgroundColor: isDark
-                    ? 'rgba(255, 255, 255, 0.16)'
-                    : 'rgba(23, 23, 23, 0.10)',
-                  transform: [{ scale: 0.92 }],
-                },
-              ]}
-            >
-              <CanonicalIcon
-                name={item.icon}
-                level="body"
-                color={itemColor}
-                pulseKey={isActive}
-                animate={isActive ? 'pulse' : 'auto'}
-                state={state}
-              />
-            </View>
+          <View
+            style={[
+              styles.tabPill,
+              isHovered && { backgroundColor: hoveredBg },
+              isPressed && { backgroundColor: pressedBg },
+            ]}
+          >
+            <CanonicalIcon
+              name={item.icon}
+              level="body"
+              color={itemColor}
+              pulseKey={isActive}
+              animate={isActive ? 'pulse' : 'auto'}
+              state={state}
+            />
             <Text
               variant="caption"
               numberOfLines={1}
@@ -130,7 +128,7 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
             <View
               style={[
                 styles.activeDot,
-                { backgroundColor: isActive ? theme.colors.ink : 'transparent' },
+                { backgroundColor: isActive ? primaryColor : 'transparent' },
               ]}
             />
           </View>
@@ -239,29 +237,31 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
         <Animated.View
           pointerEvents={keyboardVisible ? 'none' : 'auto'}
           style={[
-            styles.outerContainer,
+            styles.navBarContainer,
             {
-              paddingBottom: Math.max(insets.bottom, 10),
+              backgroundColor: isDark ? '#171717' : '#ffffff',
+              borderTopColor: theme.colors.hairline,
+              paddingBottom: Math.max(insets.bottom, 6),
             },
             navAnimatedStyle,
           ]}
         >
-          <View
-            style={[
-              styles.pillBar,
-              {
-                backgroundColor: isDark
-                  ? 'rgba(23, 23, 23, 0.94)'
-                  : 'rgba(255, 255, 255, 0.94)',
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
+          <View style={styles.tabsRow}>
             {tabs.map((item) => {
               // Compute active state
-              let isActive = item.match.some(
-                (p) => pathname.includes(p.replace('/', '')),
-              );
+              let isActive = item.match.some((p) => {
+                const cleanP = p.replace('/', '');
+                return cleanP ? pathname.includes(cleanP) : false;
+              });
+              if (
+                item.key === 'home' &&
+                (pathname === '/' ||
+                  pathname === '/(app)' ||
+                  pathname === '/(app)/dashboard' ||
+                  pathname === '/dashboard')
+              ) {
+                isActive = true;
+              }
               if (item.key === 'more' && menuOpen) {
                 isActive = true;
               }
@@ -307,61 +307,65 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
 );
 
 const styles = StyleSheet.create({
-  outerContainer: {
+  navBarContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 40,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingTop: 4,
-  },
-  pillBar: {
     width: '100%',
-    maxWidth: 580,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderRadius: 9999,
-    borderWidth: 1,
+    zIndex: 40,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderTopWidth: 1,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+        position: 'fixed' as any,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        boxShadow: 'none',
       },
       default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
-        elevation: 12,
+        elevation: 0,
+        shadowOpacity: 0,
       },
     }),
+  },
+  tabsRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    height: 56,
+    paddingHorizontal: 4,
   },
   navItemBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 48,
     paddingVertical: 2,
     paddingHorizontal: 1,
-    minHeight: 44,
   },
-  itemContent: {
+  tabPill: {
+    width: '100%',
+    maxWidth: 72,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 38,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    borderRadius: 12,
     ...Platform.select({
       web: {
-        transition: 'background-color 150ms ease, transform 150ms ease',
+        transition: 'background-color 150ms ease',
+        outlineStyle: 'none',
+        userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
       } as any,
       default: {},
     }),

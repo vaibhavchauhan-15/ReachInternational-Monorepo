@@ -201,6 +201,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   align = "left",
   className = "",
   icon,
+  searchable = false,
 }: {
   label: string;
   value: string;
@@ -210,15 +211,26 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   align?: "left" | "right";
   className?: string;
   icon?: React.ReactNode;
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [filterSearch, setFilterSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<any>(null);
 
   const selectedOption = options.find((opt) => opt.id === value) || options[0];
 
+  const displayedOptions = useMemo(() => {
+    if (!filterSearch.trim()) return options;
+    const term = filterSearch.toLowerCase().trim();
+    return options.filter((opt) => opt.label.toLowerCase().includes(term));
+  }, [options, filterSearch]);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setFilterSearch("");
+      return;
+    }
     const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -237,6 +249,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
     };
   }, [open]);
 
+  const isFiltered = value !== "all" && value !== "machine_id_asc" && value !== "";
+
   return (
     <div
       ref={containerRef}
@@ -249,7 +263,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
         onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
-        className="w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
+        className={`w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border text-xs flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs ${
+          isFiltered
+            ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
+            : open
+            ? "border-sky-500 bg-[var(--color-canvas)] text-[var(--color-ink)] ring-2 ring-sky-500/15"
+            : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)]"
+        }`}
       >
         <div className="flex items-center gap-2 truncate min-w-0">
           <span className="text-[var(--color-mute)] font-medium shrink-0">{label}:</span>
@@ -258,8 +278,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           )}
           <span
             className={`truncate font-semibold ${
-              selectedOption?.id !== "all"
-                ? selectedOption?.activeColor || "text-[var(--color-ink)]"
+              isFiltered
+                ? selectedOption?.activeColor || "text-[#0284c7] dark:text-sky-400"
                 : "text-[var(--color-ink)]"
             }`}
           >
@@ -277,7 +297,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
               },
               size: (icon as any).props?.size ?? 14,
               className: `shrink-0 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
+                open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : ""
               } ${(icon as any).props?.className || ""}`,
             })
           ) : (
@@ -287,8 +307,8 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
           <AnimatedChevronDown
             ref={iconRef as any}
             size={14}
-            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
-              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            className={`shrink-0 transition-transform duration-200 ${
+              open ? "rotate-180 text-sky-500" : isFiltered ? "text-sky-500" : "text-[var(--color-mute)] group-hover:text-[var(--color-ink)]"
             }`}
           />
         )}
@@ -309,38 +329,77 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
                 : "left-0 right-auto sm:left-0 sm:min-w-[220px]"
             }`}
           >
-            {options.map((opt) => {
-              const isSelected = opt.id === value;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    onChange(opt.id);
-                    setOpen(false);
-                  }}
-                  className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
-                    isSelected
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
-                      : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {opt.dotColor && (
-                      <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isSelected ? "bg-white" : opt.dotColor
-                        }`}
-                      />
-                    )}
-                    <span className="truncate">{opt.label}</span>
-                  </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
-                </button>
-              );
-            })}
+            {(searchable || options.length > 5) && (
+              <div
+                className="p-1 pb-1.5 mb-1 border-b border-[var(--color-hairline)] sticky top-0 bg-[var(--color-canvas-elevated)] z-20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="relative flex items-center">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-mute)] pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder={`Search ${label.toLowerCase()}...`}
+                    value={filterSearch}
+                    onChange={(e) => setFilterSearch(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Escape") setOpen(false);
+                    }}
+                    className="w-full h-8 pl-8 pr-7 text-xs rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/20 transition-all"
+                    autoFocus
+                  />
+                  {filterSearch && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilterSearch("");
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {displayedOptions.length === 0 ? (
+              <div className="py-4 px-2 text-center text-xs text-[var(--color-mute)] italic">
+                No matching {label.toLowerCase()} found
+              </div>
+            ) : (
+              displayedOptions.map((opt) => {
+                const isSelected = opt.id === value;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
+                      isSelected
+                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold shadow-xs"
+                        : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {opt.dotColor && (
+                        <span
+                          className={`h-2 w-2 rounded-full shrink-0 ${opt.dotColor}`}
+                        />
+                      )}
+                      <span className="truncate">{opt.label}</span>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -677,8 +736,6 @@ export function MachineListClient({
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const cardsIconRef = useRef<any>(null);
-  const tableIconRef = useRef<any>(null);
 
   const isSearchActive = localSearchTerm.trim().length > 0;
   const activeMachines = isSearchActive ? (searchResults ?? []) : machines;
@@ -733,6 +790,12 @@ export function MachineListClient({
       setLazySupervisors(supervisors);
     }
   }, [supervisors]);
+
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      setLazyClients(clients);
+    }
+  }, [clients]);
 
   // Quick-add trigger from the reusable MobilePageHeader (+ icon)
   useEffect(() => {
@@ -874,6 +937,7 @@ export function MachineListClient({
   const exportCacheRef = useRef<Map<string, Machine[]>>(new Map());
   const [healthStatusFilter, setHealthStatusFilter] = useState<string>(currentHealthStatus);
   const [supervisorFilter, setSupervisorFilter] = useState<string>(currentSupervisor);
+  const [clientFilter, setClientFilter] = useState<string>(currentClientId);
   const [sortBy, setSortBy] = useState<string>(currentSort);
 
   useEffect(() => {
@@ -883,6 +947,10 @@ export function MachineListClient({
   useEffect(() => {
     setSupervisorFilter(currentSupervisor);
   }, [currentSupervisor]);
+
+  useEffect(() => {
+    setClientFilter(currentClientId);
+  }, [currentClientId]);
 
   useEffect(() => {
     setSortBy(currentSort);
@@ -898,7 +966,6 @@ export function MachineListClient({
   const canCreateMachine = canManage;
   const canDelete = canManage;
 
-
   // Lazy-load complete supervisor directory in the background without blocking initial paint
   const loadSupervisors = useCallback(() => {
     if (lazySupervisors.length > 0) return;
@@ -913,6 +980,19 @@ export function MachineListClient({
     });
   }, [lazySupervisors.length]);
 
+  // Lazy-load complete client directory in background or seed from initial props
+  const loadClients = useCallback(() => {
+    if (lazyClients.length > 0) return;
+    import("@/app/actions/machines").then(({ getClientSelectOptionsAction }) => {
+      getClientSelectOptionsAction()
+        .then((cls) => {
+          if (cls && cls.length > 0) {
+            setLazyClients(cls);
+          }
+        })
+        .catch(() => {});
+    });
+  }, [lazyClients.length]);
 
   // Seed initial supervisors once if not provided by server
   useEffect(() => {
@@ -933,6 +1013,25 @@ export function MachineListClient({
     }
   }, []); // Run ONCE on mount only
 
+  // Seed initial clients once if not provided by server
+  useEffect(() => {
+    if (lazyClients.length === 0 && machines.length > 0) {
+      const initialMap = new Map<string, any>();
+      machines.forEach((m) => {
+        if (m.client?.company_name && m.client_id) {
+          initialMap.set(m.client_id, {
+            id: m.client_id,
+            label: m.client.company_name,
+            company_name: m.client.company_name,
+          });
+        }
+      });
+      if (initialMap.size > 0) {
+        setLazyClients((prev) => (prev.length === 0 ? Array.from(initialMap.values()) : prev));
+      }
+    }
+  }, []); // Run ONCE on mount only
+
   const supervisorOptions = useMemo(() => {
     const map = new Map<string, string>();
     lazySupervisors.forEach((s) => {
@@ -945,16 +1044,35 @@ export function MachineListClient({
     return [{ id: "all", label: "All Supervisors" }, ...list];
   }, [lazySupervisors]);
 
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    lazyClients.forEach((c) => {
+      const name = c.company_name || c.label || c.code;
+      if (c.id && name) map.set(c.id, name);
+    });
+    machines.forEach((m) => {
+      if (m.client_id && m.client?.company_name) {
+        map.set(m.client_id, m.client.company_name);
+      }
+    });
+    const list = Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      label: name,
+    }));
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ id: "all", label: "All Clients" }, ...list];
+  }, [lazyClients, machines]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (currentStatus !== "all") count++;
     if (healthStatusFilter !== "all") count++;
     if (supervisorFilter !== "all") count++;
-    if (currentClientId !== "all") count++;
+    if (clientFilter !== "all") count++;
     if (localSearchTerm.trim() !== "") count++;
     if (sortBy !== "machine_id_asc") count++;
     return count;
-  }, [currentStatus, healthStatusFilter, supervisorFilter, currentClientId, localSearchTerm, sortBy]);
+  }, [currentStatus, healthStatusFilter, supervisorFilter, clientFilter, localSearchTerm, sortBy]);
 
   const updateFilters = useCallback(
     (updates: Record<string, string | number | undefined>) => {
@@ -1026,7 +1144,7 @@ export function MachineListClient({
             status: currentStatus !== "all" ? currentStatus : undefined,
             health_status: healthStatusFilter !== "all" ? healthStatusFilter : undefined,
             current_supervisor_id: supervisorFilter !== "all" ? supervisorFilter : undefined,
-            client_id: currentClientId !== "all" ? currentClientId : undefined,
+            client_id: clientFilter !== "all" ? clientFilter : undefined,
             page: pageNum,
             pageSize: 50,
           });
@@ -1063,7 +1181,7 @@ export function MachineListClient({
         }
       }, 180);
     },
-    [currentStatus, healthStatusFilter, supervisorFilter, currentClientId, pathname]
+    [currentStatus, healthStatusFilter, supervisorFilter, clientFilter, pathname]
   );
 
   // Initial mount: execute server search if search parameter is present in URL
@@ -1131,6 +1249,7 @@ export function MachineListClient({
     setIsSearchLoading(false);
     setHealthStatusFilter("all");
     setSupervisorFilter("all");
+    setClientFilter("all");
     setSortBy("machine_id_asc");
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", pathname);
@@ -1146,7 +1265,7 @@ export function MachineListClient({
       executeServerSearch(localSearchTerm, 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStatus, healthStatusFilter, supervisorFilter, currentClientId]);
+  }, [currentStatus, healthStatusFilter, supervisorFilter, clientFilter]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!deletingMachine) return;
@@ -1187,7 +1306,7 @@ export function MachineListClient({
         if (selected.length > 0) return selected;
       }
       const trimmedSearch = localSearchTerm.trim();
-      const cacheKey = `${trimmedSearch}|${currentStatus}|${healthStatusFilter}|${supervisorFilter}|${sortBy}`;
+      const cacheKey = `${trimmedSearch}|${currentStatus}|${healthStatusFilter}|${supervisorFilter}|${clientFilter}|${sortBy}`;
       if (exportCacheRef.current.has(cacheKey)) {
         return exportCacheRef.current.get(cacheKey)!;
       }
@@ -1196,6 +1315,7 @@ export function MachineListClient({
         status: currentStatus !== "all" ? currentStatus : undefined,
         health_status: healthStatusFilter !== "all" ? healthStatusFilter : undefined,
         supervisor_id: supervisorFilter !== "all" ? supervisorFilter : undefined,
+        client_id: clientFilter !== "all" ? clientFilter : undefined,
         sort: sortBy,
       });
       const dataset = (res.data || []) as Machine[];
@@ -1204,7 +1324,7 @@ export function MachineListClient({
       }
       return dataset.length > 0 ? dataset : machines;
     },
-    [machines, localSearchTerm, currentStatus, healthStatusFilter, supervisorFilter, sortBy]
+    [machines, localSearchTerm, currentStatus, healthStatusFilter, supervisorFilter, clientFilter, sortBy]
   );
 
   const handleExportExcel = useCallback(
@@ -1284,7 +1404,7 @@ export function MachineListClient({
         status: currentStatus !== "all" ? currentStatus : undefined,
         health_status: healthStatusFilter !== "all" ? healthStatusFilter : undefined,
         current_supervisor_id: supervisorFilter !== "all" ? supervisorFilter : undefined,
-        client_id: currentClientId !== "all" ? currentClientId : undefined,
+        client_id: clientFilter !== "all" ? clientFilter : undefined,
         sortField: sortBy.includes("_") ? sortBy.slice(0, sortBy.lastIndexOf("_")) : sortBy,
         sortOrder: sortBy.endsWith("_desc") ? "desc" : "asc",
         page: nextPage,
@@ -1316,7 +1436,7 @@ export function MachineListClient({
     currentStatus,
     healthStatusFilter,
     supervisorFilter,
-    currentClientId,
+    clientFilter,
     sortBy,
   ]);
 
@@ -1750,229 +1870,215 @@ export function MachineListClient({
 
       {/* Search Bar & Filter Toolbar */}
       <FilterToolbar
-            searchQuery={localSearchTerm}
-            onSearchChange={handleSearchChange}
-            placeholder="Search Machine ID, Model, Serial Number..."
-            activeFilterCount={activeFilterCount}
-            onResetFilters={handleResetAllFilters}
-            onSubmitSearch={handleSearchSubmit}
-            isLoading={isPending || isSearchLoading}
-            actions={
-
-              <div className="flex items-center gap-2">
-                {/* View Switcher is strictly hidden on mobile viewports (≤640px) per feedback #1 */}
-                <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-lg border border-[var(--color-hairline)] text-xs h-9 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("auto")}
-                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
-                      viewMode === "auto"
-                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                    }`}
-                    title="Auto responsive view"
-                  >
-                    Auto View
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("cards")}
-                    onMouseEnter={() => cardsIconRef.current?.startAnimation?.()}
-                    onMouseLeave={() => cardsIconRef.current?.stopAnimation?.()}
-                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
-                      viewMode === "cards"
-                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                    }`}
-                    title="Cards view"
-                  >
-                    <AnimatedSlidersHorizontal ref={cardsIconRef as any} size={14} className="shrink-0" />
-                    <span>Cards</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("table")}
-                    onMouseEnter={() => tableIconRef.current?.startAnimation?.()}
-                    onMouseLeave={() => tableIconRef.current?.stopAnimation?.()}
-                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
-                      viewMode === "table"
-                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                    }`}
-                    title="Table view"
-                  >
-                    <AnimatedFileText ref={tableIconRef as any} size={14} className="shrink-0" />
-                    <span>Table</span>
-                  </button>
-                </div>
-              </div>
-            }
-          >
-            <div className="flex flex-col gap-3 w-full">
-              {/* Responsive Custom Dropdown Filter Selectors for Status, Health, Supervisor & Sort */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full">
-                {/* 1. Rental Status Selector */}
-                <div className="w-full sm:w-48 min-w-0">
-                  <CustomFilterSelector
-                    label="Rental"
-                    value={currentStatus}
-                    onChange={(val) => updateFilters({ status: val, page: 1 })}
-                    options={RENTAL_STATUS_OPTIONS}
-                    ariaLabel="Filter by rental status"
-                    align="left"
-                  />
-                </div>
-
-                {/* 2. Health Status Selector */}
-                <div className="w-full sm:w-52 min-w-0">
-                  <CustomFilterSelector
-                    label="Health"
-                    value={healthStatusFilter}
-                    onChange={(val) => {
-                      setHealthStatusFilter(val);
-                      updateFilters({ health_status: val, page: 1 });
-                    }}
-                    options={HEALTH_STATUS_OPTIONS}
-                    ariaLabel="Filter by health status"
-                    align="right"
-                  />
-                </div>
-
-                {/* 3. Supervisor Selector */}
-                <div className="w-full sm:w-56 min-w-0" onMouseEnter={loadSupervisors} onFocus={loadSupervisors}>
-                  <CustomFilterSelector
-                    label="Supervisor"
-                    value={supervisorFilter}
-                    onChange={(val) => {
-                      setSupervisorFilter(val);
-                      updateFilters({ supervisor: val, page: 1 });
-                    }}
-                    options={supervisorOptions}
-                    ariaLabel="Filter by supervisor"
-                    align="left"
-                  />
-                </div>
-
-                {/* 4. Sort By Selector */}
-                <div className="w-full sm:w-52 min-w-0">
-                  <CustomFilterSelector
-                    label="Sort"
-                    value={sortBy}
-                    onChange={(val) => {
-                      setSortBy(val);
-                      updateFilters({ sort: val, page: 1 });
-                    }}
-                    options={SORT_OPTIONS}
-                    ariaLabel="Sort machines"
-                    align="right"
-                    icon={
-                      <AnimatedArrowUpDown
-                        size={14}
-                        className="text-[var(--color-mute)] shrink-0 group-hover:text-[var(--color-ink)]"
-                      />
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Active Filter Badge Chips */}
-              {activeFilterCount > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--color-hairline)] text-xs">
-                  <span className="text-[11px] font-semibold text-[var(--color-mute)] mr-1">
-                    Active Filters:
-                  </span>
-                  {localSearchTerm.trim() !== "" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
-                      <span>Search: &quot;{localSearchTerm}&quot;</span>
-                      <button
-                        type="button"
-                        onClick={() => handleSearchChange("")}
-                        className="hover:text-rose-600 transition-colors cursor-pointer"
-                        title="Clear search"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  {currentStatus !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-medium">
-                      <span>Rental: {currentStatus === "available" ? "Available" : "Rented"}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateFilters({ status: "all", page: 1 })}
-                        className="hover:text-rose-600 transition-colors cursor-pointer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  {healthStatusFilter !== "all" && (
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-medium ${
-                        healthStatusFilter === "spare"
-                          ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20"
-                          : healthStatusFilter === "breakdown"
-                          ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20"
-                          : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
-                      }`}
-                    >
-                      <span>Health: {healthStatusFilter.replace(/_/g, " ")}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setHealthStatusFilter("all");
-                          updateFilters({ health_status: "all", page: 1 });
-                        }}
-                        className="hover:text-rose-600 transition-colors cursor-pointer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  {supervisorFilter !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-medium">
-                      <span>
-                        Supervisor:{" "}
-                        {supervisorOptions.find((s) => s.id === supervisorFilter)?.label || supervisorFilter}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSupervisorFilter("all");
-                          updateFilters({ supervisor: "all", page: 1 });
-                        }}
-                        className="hover:text-rose-600 transition-colors cursor-pointer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  {sortBy !== "machine_id_asc" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
-                      <span>Sort: {SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSortBy("machine_id_asc");
-                          updateFilters({ sort: "machine_id_asc", page: 1 });
-                        }}
-                        className="hover:text-rose-600 transition-colors cursor-pointer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleResetAllFilters}
-                    className="text-[11px] font-bold text-[var(--color-link)] hover:underline ml-1 cursor-pointer"
-                  >
-                    Clear All
-                  </button>
-                </div>
-              )}
+        searchQuery={localSearchTerm}
+        onSearchChange={handleSearchChange}
+        placeholder="Search Machine ID, Model, Serial Number..."
+        activeFilterCount={activeFilterCount}
+        onResetFilters={handleResetAllFilters}
+        onSubmitSearch={handleSearchSubmit}
+        isLoading={isPending || isSearchLoading}
+      >
+        <div className="flex flex-col gap-3 w-full">
+          {/* Responsive Custom Dropdown Filter Selectors for Status, Health, Client, Supervisor & Sort */}
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-2.5 w-full">
+            {/* 1. Rental Status Selector */}
+            <div className="w-full sm:w-44 min-w-0">
+              <CustomFilterSelector
+                label="Rental"
+                value={currentStatus}
+                onChange={(val) => updateFilters({ status: val, page: 1 })}
+                options={RENTAL_STATUS_OPTIONS}
+                ariaLabel="Filter by rental status"
+                align="left"
+              />
             </div>
-          </FilterToolbar>
+
+            {/* 2. Health Status Selector */}
+            <div className="w-full sm:w-48 min-w-0">
+              <CustomFilterSelector
+                label="Health"
+                value={healthStatusFilter}
+                onChange={(val) => {
+                  setHealthStatusFilter(val);
+                  updateFilters({ health_status: val, page: 1 });
+                }}
+                options={HEALTH_STATUS_OPTIONS}
+                ariaLabel="Filter by health status"
+                align="left"
+              />
+            </div>
+
+            {/* 3. Client Selector */}
+            <div className="w-full sm:w-56 min-w-0" onMouseEnter={loadClients} onFocus={loadClients}>
+              <CustomFilterSelector
+                label="Client"
+                value={clientFilter}
+                onChange={(val) => {
+                  setClientFilter(val);
+                  updateFilters({ client_id: val, page: 1 });
+                }}
+                options={clientOptions}
+                ariaLabel="Filter by client"
+                align="left"
+                searchable
+              />
+            </div>
+
+            {/* 4. Supervisor Selector */}
+            <div className="w-full sm:w-52 min-w-0" onMouseEnter={loadSupervisors} onFocus={loadSupervisors}>
+              <CustomFilterSelector
+                label="Supervisor"
+                value={supervisorFilter}
+                onChange={(val) => {
+                  setSupervisorFilter(val);
+                  updateFilters({ supervisor: val, page: 1 });
+                }}
+                options={supervisorOptions}
+                ariaLabel="Filter by supervisor"
+                align="left"
+                searchable
+              />
+            </div>
+
+            {/* 5. Sort By Selector */}
+            <div className="w-full sm:w-48 min-w-0">
+              <CustomFilterSelector
+                label="Sort"
+                value={sortBy}
+                onChange={(val) => {
+                  setSortBy(val);
+                  updateFilters({ sort: val, page: 1 });
+                }}
+                options={SORT_OPTIONS}
+                ariaLabel="Sort machines"
+                align="left"
+                icon={
+                  <AnimatedArrowUpDown
+                    size={14}
+                    className="text-[var(--color-mute)] shrink-0 group-hover:text-[var(--color-ink)]"
+                  />
+                }
+              />
+            </div>
+          </div>
+
+          {/* Active Filter Badge Chips */}
+          {activeFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--color-hairline)] text-xs">
+              <span className="text-[11px] font-semibold text-[var(--color-mute)] mr-1">
+                Active Filters:
+              </span>
+              {localSearchTerm.trim() !== "" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
+                  <span>Search: &quot;{localSearchTerm}&quot;</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSearchChange("")}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {currentStatus !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-medium">
+                  <span>Rental: {currentStatus === "available" ? "Available" : "Rented"}</span>
+                  <button
+                    type="button"
+                    onClick={() => updateFilters({ status: "all", page: 1 })}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {healthStatusFilter !== "all" && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-medium ${
+                    healthStatusFilter === "spare"
+                      ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20"
+                      : healthStatusFilter === "breakdown"
+                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20"
+                      : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+                  }`}
+                >
+                  <span>Health: {healthStatusFilter.replace(/_/g, " ")}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHealthStatusFilter("all");
+                      updateFilters({ health_status: "all", page: 1 });
+                    }}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {clientFilter !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-medium">
+                  <span>
+                    Client:{" "}
+                    {clientOptions.find((c) => c.id === clientFilter)?.label || clientFilter}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientFilter("all");
+                      updateFilters({ client_id: "all", page: 1 });
+                    }}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    title="Remove client filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {supervisorFilter !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-medium">
+                  <span>
+                    Supervisor:{" "}
+                    {supervisorOptions.find((s) => s.id === supervisorFilter)?.label || supervisorFilter}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupervisorFilter("all");
+                      updateFilters({ supervisor: "all", page: 1 });
+                    }}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {sortBy !== "machine_id_asc" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
+                  <span>Sort: {SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortBy("machine_id_asc");
+                      updateFilters({ sort: "machine_id_asc", page: 1 });
+                    }}
+                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleResetAllFilters}
+                className="text-[11px] font-bold text-[var(--color-link)] hover:underline ml-1 cursor-pointer"
+              >
+                Clear All
+              </button>
+            </div>
+          )}
+        </div>
+      </FilterToolbar>
 
           {/* Main Table / Grid Display — Mutually Exclusive View Rendering (M6) */}
           {effectiveView === "table" ? (

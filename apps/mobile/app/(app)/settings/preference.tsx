@@ -44,10 +44,7 @@ export default function PreferenceSettingsScreen() {
   const { toast } = useToast();
 
   const handleThemeChange = (newMode: string) => {
-    haptics.select();
     setMode(newMode as 'light' | 'dark' | 'system');
-    const label = newMode === 'system' ? 'System' : newMode === 'dark' ? 'Dark' : 'Light';
-    toast('success', `Theme set to ${label}`);
   };
 
   const handleToggleHaptics = (val: boolean) => {
@@ -62,7 +59,7 @@ export default function PreferenceSettingsScreen() {
     <SettingsScreenContainer
       title="Preferences"
       showBack={true}
-      onPressBack={() => router.push('/settings' as any)}
+      onPressBack={() => router.back()}
       contentContainerStyle={styles.containerContent}
     >
       {/* 1. Theme Card (Dark, Light, System toggle in one row) */}

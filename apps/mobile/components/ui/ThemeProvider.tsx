@@ -1,10 +1,11 @@
 /**
- * ServiceCentric Mobile — Theme Provider
+ * ReachInternational Mobile — Theme Provider
  * Provides reactive light/dark theme objects derived from @reachinternational/design-tokens.
+ * Synchronized with Web (apps/web) with 0ms transition lock and atomic DOM updates.
  */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useColorScheme, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRNTheme } from '@reachinternational/design-tokens';
 import { colorScheme } from 'nativewind';
@@ -20,6 +21,47 @@ export interface ThemeContextType {
 }
 
 const STORAGE_KEY = '@reachinternational_theme';
+const WEB_STORAGE_KEY = 'reachinternational-theme';
+
+// Synchronous initial mode reader on Web
+const getInitialMode = (): 'light' | 'dark' | 'system' => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(WEB_STORAGE_KEY);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        return stored;
+      }
+    } catch {
+      // Storage access blocked or unavailable
+    }
+  }
+  return 'system';
+};
+
+// Atomically apply theme to DOM on Web with transition lock
+const applyDomTheme = (isDark: boolean, lockTransitions = true) => {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+  const root = document.documentElement;
+
+  if (lockTransitions) {
+    root.classList.add('theme-changing');
+  }
+
+  root.classList.toggle('dark', isDark);
+  root.style.colorScheme = isDark ? 'dark' : 'light';
+  if (document.body) {
+    document.body.style.backgroundColor = isDark ? '#09090b' : '#fafafa';
+  }
+
+  if (lockTransitions) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('theme-changing');
+      });
+    });
+  }
+};
 
 const defaultTheme = getRNTheme(false);
 const ThemeContext = createContext<ThemeContextType>({
@@ -27,42 +69,101 @@ const ThemeContext = createContext<ThemeContextType>({
   colors: defaultTheme.colors,
   isDark: false,
   setMode: () => {},
-  mode: 'light',
+  mode: 'system',
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<'light' | 'dark' | 'system'>('light');
+  const [mode, setModeState] = useState<'light' | 'dark' | 'system'>(getInitialMode);
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch {}
+    }
+    return systemScheme === 'dark';
+  });
 
-  // Initial sync: Ensure NativeWind starts aligned with default 'light' mode
+  // Track system preference reactively on Web
   useEffect(() => {
-    colorScheme.set('light');
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((savedMode) => {
-        if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
-          setModeState(savedMode);
-          colorScheme.set(savedMode);
-        }
-      })
-      .catch(() => {});
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    try {
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleMediaChange = (e: MediaQueryListEvent) => {
+        setSystemIsDark(e.matches);
+      };
+      media.addEventListener('change', handleMediaChange);
+      return () => media.removeEventListener('change', handleMediaChange);
+    } catch {}
   }, []);
 
-  // Synchronize NativeWind whenever mode changes
+  // Update systemIsDark if RN systemScheme updates
   useEffect(() => {
-    colorScheme.set(mode);
-  }, [mode]);
+    if (systemScheme) {
+      setSystemIsDark(systemScheme === 'dark');
+    }
+  }, [systemScheme]);
 
-  const setMode = (newMode: 'light' | 'dark' | 'system') => {
+  const isDark = mode === 'system' ? systemIsDark : mode === 'dark';
+  const theme = useMemo(() => getRNTheme(isDark), [isDark]);
+
+  // Initial synchronization
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      applyDomTheme(isDark, false);
+      try {
+        colorScheme.set(mode);
+      } catch {}
+    } else {
+      AsyncStorage.getItem(STORAGE_KEY)
+        .then((savedMode) => {
+          if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
+            setModeState(savedMode);
+            try {
+              colorScheme.set(savedMode);
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  const setMode = useCallback((newMode: 'light' | 'dark' | 'system') => {
     setModeState(newMode);
-    colorScheme.set(newMode);
-    AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
-  };
 
-  const isDark = mode === 'system' ? systemScheme === 'dark' : mode === 'dark';
-  const theme = getRNTheme(isDark);
+    const nextIsDark = newMode === 'system' ? systemIsDark : newMode === 'dark';
+
+    // 1. Instant 0ms atomic DOM synchronization on Web
+    applyDomTheme(nextIsDark, true);
+
+    // 2. Synchronize NativeWind once
+    try {
+      colorScheme.set(newMode);
+    } catch {}
+
+    // 3. Persist asynchronously
+    AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, newMode);
+        localStorage.setItem(WEB_STORAGE_KEY, newMode);
+      } catch {}
+    }
+  }, [systemIsDark]);
+
+  const value = useMemo<ThemeContextType>(
+    () => ({
+      theme,
+      colors: theme.colors,
+      isDark,
+      setMode,
+      mode,
+    }),
+    [theme, isDark, setMode, mode]
+  );
 
   return (
-    <ThemeContext.Provider value={{ theme, colors: theme.colors, isDark, setMode, mode }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

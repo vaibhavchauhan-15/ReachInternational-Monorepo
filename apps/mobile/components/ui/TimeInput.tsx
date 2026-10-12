@@ -375,6 +375,13 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             <TextInput
               ref={hourInputRef}
               keyboardType="number-pad"
+              inputMode="numeric"
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
               maxLength={3}
               value={hour}
               onChangeText={(val) => {
@@ -404,6 +411,13 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             <TextInput
               ref={minuteInputRef}
               keyboardType="number-pad"
+              inputMode="numeric"
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
               maxLength={3}
               value={minute}
               onChangeText={handleMinuteChange}

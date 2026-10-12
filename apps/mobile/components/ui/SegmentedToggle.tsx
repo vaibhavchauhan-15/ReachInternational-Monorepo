@@ -180,7 +180,7 @@ export function SegmentedToggle<T extends string = string>({
     opacity: animOpacity.value,
   }));
 
-  const handleSelect = async (item: SegmentedToggleItem<T>) => {
+  const handleSelect = (item: SegmentedToggleItem<T>) => {
     if (item.disabled || item.id === value) return;
     try {
       haptics.select();
@@ -245,7 +245,7 @@ export function SegmentedToggle<T extends string = string>({
           <Pressable
             key={item.id}
             variant="segmentedOption"
-            haptic="select"
+            haptic={false}
             onLayout={(e) => {
               const { x, width } = e.nativeEvent.layout;
               setItemLayouts((prev) => {
