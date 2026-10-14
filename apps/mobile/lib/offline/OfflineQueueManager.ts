@@ -34,6 +34,31 @@ export function generateUUID(): string {
   });
 }
 
+/**
+ * Normalizes shift code to uppercase alphanumeric string (e.g. "Shift A" -> "A", "s1" -> "S1")
+ */
+export function normalizeShiftCode(code?: unknown): string {
+  if (!code || typeof code !== 'string') return '';
+  return code.trim().replace(/^shift\s*/i, '').toUpperCase();
+}
+
+/**
+ * Derives a canonical, deterministic idempotency key for machine shift logs.
+ * Guarantees exactly-once persistence and protects against duplicate offline submissions.
+ */
+export function buildShiftLogIdempotencyKey(params: {
+  machineId: string;
+  operatorId: string;
+  logDate: string;
+  shiftCode: string;
+}): string {
+  const normShift = normalizeShiftCode(params.shiftCode) || 'S1';
+  const cleanMachine = (params.machineId || 'unknown').trim();
+  const cleanOperator = (params.operatorId || 'unknown').trim();
+  const cleanDate = (params.logDate || 'today').trim();
+  return `ihl_${cleanMachine}_${cleanOperator}_${cleanDate}_${normShift}`;
+}
+
 export class OfflineQueueManager {
   private static instance: OfflineQueueManager | null = null;
   private queue: QueuedMutation[] = [];
@@ -257,7 +282,131 @@ export class OfflineQueueManager {
   }
 
   /**
+   * Finds an existing active/pending queued mutation that conflicts with or duplicates the given shift submission.
+   * Matches against:
+   * 1. Exact matching idempotency_key
+   * 2. Same machine, date, and shift_code (machine invariant)
+   * 3. Same operator, date, and shift_code (operator invariant)
+   */
+  public findDuplicateMutation(
+    mutation_type: MutationType,
+    payload: Record<string, unknown>
+  ): QueuedMutation | null {
+    if (mutation_type !== 'SUBMIT_HOUR_LOG') return null;
+
+    const targetKey = (payload?.idempotency_key as string) || '';
+    const targetMachineId = (payload?.machine_id as string) || '';
+    const targetOperatorId = ((payload?.operator_id || payload?.entered_by) as string) || '';
+    const targetLogDate = ((payload?.log_date || (payload?.start_datetime ? String(payload.start_datetime).split('T')[0] : '')) as string) || '';
+    const targetShiftCode = normalizeShiftCode(payload?.shift_code || payload?.shift);
+
+    for (const item of this.queue) {
+      if (item.status === 'synced') continue;
+      if (item.mutation_type !== 'SUBMIT_HOUR_LOG') continue;
+
+      const p = (item.payload || {}) as Record<string, any>;
+      const itemKey = (item.idempotency_key || p.idempotency_key || '') as string;
+
+      // 1. Exact idempotency key match
+      if (targetKey && itemKey && targetKey === itemKey) {
+        return item;
+      }
+
+      const itemMachineId = (p.machine_id || '') as string;
+      const itemOperatorId = ((p.operator_id || p.entered_by) || '') as string;
+      const itemLogDate = ((p.log_date || (p.start_datetime ? String(p.start_datetime).split('T')[0] : '')) || '') as string;
+      const itemShiftCode = normalizeShiftCode(p.shift_code || p.shift);
+
+      // Invariants check: require both records to have date and shift code
+      if (!targetLogDate || !targetShiftCode || !itemLogDate || !itemShiftCode) {
+        continue;
+      }
+
+      if (targetLogDate === itemLogDate && targetShiftCode === itemShiftCode) {
+        // 2. Same machine, date, and shift code
+        if (targetMachineId && itemMachineId && targetMachineId === itemMachineId) {
+          return item;
+        }
+
+        // 3. Same operator, date, and shift code across any machine
+        if (targetOperatorId && itemOperatorId && targetOperatorId === itemOperatorId) {
+          return item;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Public validation helper for UI forms to check against the offline queue
+   * and cached records before initiating a submission.
+   */
+  public checkDuplicateShiftLog(params: {
+    machineId?: string;
+    operatorId?: string;
+    logDate?: string;
+    shiftCode?: string;
+    existingLogs?: Array<{ machine_id?: string; operator_id?: string; log_date?: string; shift_code?: string; shift?: string }>;
+  }): { isDuplicate: boolean; reason?: string; existingItem?: QueuedMutation } {
+    const normShift = normalizeShiftCode(params.shiftCode);
+    const cleanDate = (params.logDate || '').trim();
+    const cleanMachine = (params.machineId || '').trim();
+    const cleanOp = (params.operatorId || '').trim();
+
+    // 1. Check offline queue
+    const queuedDup = this.findDuplicateMutation('SUBMIT_HOUR_LOG', {
+      machine_id: cleanMachine,
+      operator_id: cleanOp,
+      log_date: cleanDate,
+      shift_code: normShift,
+    });
+
+    if (queuedDup) {
+      const qp = (queuedDup.payload || {}) as Record<string, any>;
+      if (cleanMachine && qp.machine_id === cleanMachine) {
+        return {
+          isDuplicate: true,
+          reason: `A log for Shift ${normShift || 'selected'} on ${cleanDate || 'this date'} is already queued locally for this equipment.`,
+          existingItem: queuedDup,
+        };
+      }
+      return {
+        isDuplicate: true,
+        reason: `A log for Shift ${normShift || 'selected'} on ${cleanDate || 'this date'} is already queued locally for this operator.`,
+        existingItem: queuedDup,
+      };
+    }
+
+    // 2. Check cached server records if provided
+    if (params.existingLogs && Array.isArray(params.existingLogs) && cleanDate && normShift) {
+      for (const log of params.existingLogs) {
+        const logDateStr = (log.log_date ? String(log.log_date).split('T')[0] : '').trim();
+        const logShiftStr = normalizeShiftCode(log.shift_code || log.shift);
+
+        if (logDateStr === cleanDate && logShiftStr === normShift) {
+          if (cleanMachine && log.machine_id === cleanMachine) {
+            return {
+              isDuplicate: true,
+              reason: `A log for Shift ${normShift} on ${cleanDate} has already been recorded on the server for this equipment.`,
+            };
+          }
+          if (cleanOp && log.operator_id === cleanOp) {
+            return {
+              isDuplicate: true,
+              reason: `This operator already submitted a log for Shift ${normShift} on ${cleanDate}.`,
+            };
+          }
+        }
+      }
+    }
+
+    return { isDuplicate: false };
+  }
+
+  /**
    * Enqueues a new mutation with a client-generated UUID idempotency key (D-01, D-06)
+   * Guaranteed duplicate prevention: checks matching shift invariants before queue insertion.
    */
   public async enqueue(
     mutation_type: MutationType,
@@ -281,7 +430,54 @@ export class OfflineQueueManager {
       }
     }
 
-    const idempotency_key = generateUUID();
+    // Determine deterministic idempotency key for shift logs
+    let idempotency_key = (payload?.idempotency_key as string) || '';
+    if (!idempotency_key && mutation_type === 'SUBMIT_HOUR_LOG') {
+      const mId = (payload.machine_id as string) || '';
+      const opId = ((payload.operator_id || payload.entered_by) as string) || '';
+      const lDate = ((payload.log_date || (payload.start_datetime ? String(payload.start_datetime).split('T')[0] : '')) as string) || '';
+      const sCode = normalizeShiftCode(payload.shift_code || payload.shift) || 'S1';
+      if (mId && opId && lDate) {
+        idempotency_key = buildShiftLogIdempotencyKey({
+          machineId: mId,
+          operatorId: opId,
+          logDate: lDate,
+          shiftCode: sCode,
+        });
+        payload.idempotency_key = idempotency_key;
+      } else {
+        idempotency_key = generateUUID();
+      }
+    } else if (!idempotency_key) {
+      idempotency_key = generateUUID();
+    }
+
+    // ATOMIC DUPLICATE CHECK:
+    // If a matching mutation is already pending or queued, update its payload in place instead of creating a duplicate row!
+    if (mutation_type === 'SUBMIT_HOUR_LOG') {
+      const existing = this.findDuplicateMutation(mutation_type, {
+        ...payload,
+        idempotency_key,
+      });
+
+      if (existing) {
+        // Atomically update existing queued mutation with latest values
+        existing.payload = {
+          ...existing.payload,
+          ...payload,
+        };
+        // If it was in failed state, reset it to pending so it re-attempts with latest values
+        if (existing.status === 'failed') {
+          existing.status = 'pending';
+          existing.retry_count = 0;
+          existing.last_error = undefined;
+        }
+        await this.persistQueue();
+        this.notifyListeners();
+        return existing;
+      }
+    }
+
     const id = `mut_${Date.now()}_${generateUUID().substring(0, 8)}`;
 
     const newMutation: QueuedMutation = {
@@ -388,42 +584,38 @@ export class OfflineQueueManager {
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
 
+      const syncedItemIds = new Set<string>();
+
       for (const item of itemsToProcess) {
         // Refresh item reference in current queue
         const currentItem = this.queue.find((q) => q.id === item.id);
         if (!currentItem || currentItem.status === 'conflict') continue;
 
-        // Transition status to syncing
-        await this.updateMutation(item.id, { status: 'syncing' });
+        // Transition status to syncing in memory
+        currentItem.status = 'syncing';
 
         try {
           await this.executeMutation(currentItem);
 
-          // Success: mark as synced, then remove from queue
+          // Success: record synced item ID to prune
           totalSyncedInRun++;
-          await this.updateMutation(item.id, {
-            status: 'synced',
-            last_error: undefined,
-          });
-
-          // Prune synced item
-          await this.removeMutation(item.id);
+          syncedItemIds.add(item.id);
         } catch (error: any) {
-          // Check if error is due to idempotency duplicate key constraint (row already exists in DB!)
+          // Check if error is due to idempotency duplicate key or matching unique shift constraint (row already exists in DB!)
           const errorMsg = (error?.message || '').toLowerCase();
           const errorCode = error?.code || '';
           const isIdempotencyReplay =
-            (errorCode === '23505' || errorMsg.includes('unique constraint')) &&
-            (errorMsg.includes('idempotency_key') || error?.details?.toLowerCase?.().includes('idempotency_key'));
+            (errorCode === '23505' || errorMsg.includes('unique constraint') || errorMsg.includes('already been recorded') || errorMsg.includes('already has a log') || errorMsg.includes('uq_machine_hour_logs')) &&
+            (errorMsg.includes('idempotency_key') ||
+              error?.details?.toLowerCase?.().includes('idempotency_key') ||
+              errorMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
+              errorMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
+              errorMsg.includes('already been recorded for this equipment'));
 
           if (isIdempotencyReplay) {
-            // Already synced previously! Mark synced and remove from queue
+            // Already synced previously! Prune from queue without false conflict
             totalSyncedInRun++;
-            await this.updateMutation(item.id, {
-              status: 'synced',
-              last_error: undefined,
-            });
-            await this.removeMutation(item.id);
+            syncedItemIds.add(item.id);
             continue;
           }
 
@@ -438,36 +630,36 @@ export class OfflineQueueManager {
               conflicting_end_time: error.conflicting_end_time || error.end_time,
             };
 
-            await this.updateMutation(item.id, {
-              status: 'conflict',
-              last_error: error.message || 'Database validation conflict',
-              server_conflict: serverConflict,
-            });
+            currentItem.status = 'conflict';
+            currentItem.last_error = error.message || 'Database validation conflict';
+            currentItem.server_conflict = serverConflict;
           } else {
             // Transient network error: Exponential backoff retry (D-04)
             const nextRetryCount = (currentItem.retry_count || 0) + 1;
 
             if (nextRetryCount < 3) {
               const backoffMs = RETRY_BACKOFF_DELAYS_MS[nextRetryCount - 1] || 10000;
-              await this.updateMutation(item.id, {
-                status: 'pending',
-                retry_count: nextRetryCount,
-                last_error: `Network error: ${error.message || 'Request dropped'}. Retrying in ${backoffMs / 1000}s...`,
-              });
+              currentItem.status = 'pending';
+              currentItem.retry_count = nextRetryCount;
+              currentItem.last_error = `Network error: ${error.message || 'Request dropped'}. Retrying in ${backoffMs / 1000}s...`;
 
               // Wait backoff interval before next retry
               await new Promise((resolve) => setTimeout(resolve, backoffMs));
             } else {
               // Max retries reached: mark failed with manual retry CTA
-              await this.updateMutation(item.id, {
-                status: 'failed',
-                retry_count: nextRetryCount,
-                last_error: error.message || 'Sync failed after network attempts. Will retry when connection stabilizes.',
-              });
+              currentItem.status = 'failed';
+              currentItem.retry_count = nextRetryCount;
+              currentItem.last_error = error.message || 'Sync failed after network attempts. Will retry when connection stabilizes.';
             }
           }
         }
       }
+
+      // Batch prune synced items and persist queue in a single storage write
+      if (syncedItemIds.size > 0) {
+        this.queue = this.queue.filter((m) => !syncedItemIds.has(m.id));
+      }
+      await this.persistQueue();
     } finally {
       this.isSyncing = false;
       this.notifyListeners();
@@ -486,12 +678,23 @@ export class OfflineQueueManager {
     const code = error.code || '';
     const details = (error.details || '').toLowerCase();
 
-    // Idempotency key duplicate is NOT a business conflict (it's already synced!)
+    // Idempotency key or unique index duplicate is NOT a business conflict (it's already synced!)
     if (
-      (code === '23505' || msg.includes('unique constraint')) &&
-      (msg.includes('idempotency_key') || details.includes('idempotency_key'))
+      code === '23505' ||
+      msg.includes('unique constraint') ||
+      msg.includes('already been recorded') ||
+      msg.includes('already has a log') ||
+      msg.includes('uq_machine_hour_logs')
     ) {
-      return false;
+      if (
+        msg.includes('idempotency_key') ||
+        details.includes('idempotency_key') ||
+        msg.includes('uq_machine_hour_logs_machine_date_shift') ||
+        msg.includes('uq_machine_hour_logs_operator_date_shift') ||
+        msg.includes('already been recorded for this equipment')
+      ) {
+        return false;
+      }
     }
 
     return (
@@ -506,7 +709,7 @@ export class OfflineQueueManager {
       msg.includes('assigned to shift') ||
       msg.includes('cannot exceed 24 hours') ||
       code === '23514' || // check_violation
-      code === '23505' || // unique_violation
+      code === '23505' || // unique_violation (for conflicting data)
       code === 'P0001'    // raise_exception (trigger error)
     );
   }
@@ -572,11 +775,16 @@ export class OfflineQueueManager {
           rpcSucceeded = true;
           return;
         } else if (rpcErr) {
-          // If already inserted with this idempotency key, treat as success!
+          // If already inserted with this idempotency key or unique index, treat as success!
           const rpcErrMsg = (rpcErr.message || '').toLowerCase();
+          const rpcErrCode = rpcErr.code || '';
           if (
-            (rpcErr.code === '23505' || rpcErrMsg.includes('unique constraint')) &&
-            (rpcErrMsg.includes('idempotency_key') || rpcErr.details?.toLowerCase?.().includes('idempotency_key'))
+            (rpcErrCode === '23505' || rpcErrMsg.includes('unique constraint') || rpcErrMsg.includes('already been recorded') || rpcErrMsg.includes('already has a log') || rpcErrMsg.includes('uq_machine_hour_logs')) &&
+            (rpcErrMsg.includes('idempotency_key') ||
+              rpcErr.details?.toLowerCase?.().includes('idempotency_key') ||
+              rpcErrMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
+              rpcErrMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
+              rpcErrMsg.includes('already been recorded for this equipment'))
           ) {
             rpcSucceeded = true;
             return;
@@ -588,9 +796,14 @@ export class OfflineQueueManager {
         }
       } catch (rpcCatchErr: any) {
         const catchMsg = (rpcCatchErr?.message || '').toLowerCase();
+        const catchCode = rpcCatchErr?.code || '';
         if (
-          (rpcCatchErr?.code === '23505' || catchMsg.includes('unique constraint')) &&
-          (catchMsg.includes('idempotency_key') || rpcCatchErr?.details?.toLowerCase?.().includes('idempotency_key'))
+          (catchCode === '23505' || catchMsg.includes('unique constraint') || catchMsg.includes('already been recorded') || catchMsg.includes('already has a log') || catchMsg.includes('uq_machine_hour_logs')) &&
+          (catchMsg.includes('idempotency_key') ||
+            rpcCatchErr?.details?.toLowerCase?.().includes('idempotency_key') ||
+            catchMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
+            catchMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
+            catchMsg.includes('already been recorded for this equipment'))
         ) {
           return;
         }
@@ -643,9 +856,14 @@ export class OfflineQueueManager {
 
         if (insertErr) {
           const insertErrMsg = (insertErr.message || '').toLowerCase();
+          const insertErrCode = insertErr.code || '';
           if (
-            (insertErr.code === '23505' || insertErrMsg.includes('unique constraint')) &&
-            (insertErrMsg.includes('idempotency_key') || insertErr.details?.toLowerCase?.().includes('idempotency_key'))
+            (insertErrCode === '23505' || insertErrMsg.includes('unique constraint') || insertErrMsg.includes('already been recorded') || insertErrMsg.includes('already has a log') || insertErrMsg.includes('uq_machine_hour_logs')) &&
+            (insertErrMsg.includes('idempotency_key') ||
+              insertErr.details?.toLowerCase?.().includes('idempotency_key') ||
+              insertErrMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
+              insertErrMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
+              insertErrMsg.includes('already been recorded for this equipment'))
           ) {
             // Already saved!
             return;

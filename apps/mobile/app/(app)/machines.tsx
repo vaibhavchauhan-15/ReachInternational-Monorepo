@@ -11,10 +11,9 @@ import {
   type TextInput,
   Animated,
   Easing,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid, Text, SearchInput, useToast, Badge } from '../../components/ui';
+import { useTheme, MobileHeader, Skeleton, HeaderActionItem, KPICard, KPIGrid, Text, SearchInput, useToast, Badge, EmptyState, ErrorState, PermissionDeniedView, SlowNetworkBanner } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { Pressable } from '../../components/ui/touch/Pressable';
@@ -25,6 +24,7 @@ import {
   MachineImportModal,
   MachineExportModal,
   DeleteMachineDialog,
+  MachineCategoryModal,
   MobileMachineListSkeleton,
   MachineListSkeleton,
   type FilterOption,
@@ -53,6 +53,7 @@ import {
   CheckCircle2,
   Building2,
   AlertTriangle,
+  FolderTree,
 } from '../../components/ui/icon';
 
 export type RentalFilterType = 'all' | 'available' | 'rented';
@@ -136,14 +137,17 @@ export default function MachinesScreen() {
 
   const isHr = (role || '').toLowerCase() === 'hr';
 
-  useEffect(() => {
-    if (role && isHr) {
-      router.replace('/dashboard');
-    }
-  }, [role, isHr, router]);
-
   if (role && isHr) {
-    return null;
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader title="Fleet Machines" showBack={false} />
+        <PermissionDeniedView
+          featureName="Fleet Management"
+          currentRole={role}
+          requiredRoles={['super_admin', 'admin', 'manager', 'supervisor', 'operator']}
+        />
+      </View>
+    );
   }
 
   // Data states
@@ -153,6 +157,9 @@ export default function MachinesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDeletingRef = useRef(false);
 
   // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination to page 1)
   const {
@@ -227,6 +234,7 @@ export default function MachinesScreen() {
   const [deleteMachine, setDeleteMachine] = useState<any | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [meterMachine, setMeterMachine] = useState<any | null>(null);
 
   // Role permissions
@@ -242,6 +250,10 @@ export default function MachinesScreen() {
   const fetchMachines = useCallback(async (searchQuery?: string) => {
     try {
       setFetchError(null);
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      slowTimerRef.current = setTimeout(() => {
+        setIsSlowNetwork(true);
+      }, 7500);
 
       let query = supabase
         .from('machines')
@@ -525,6 +537,8 @@ export default function MachinesScreen() {
       console.error('Error fetching live machines:', err);
       setFetchError(err?.message || 'Network error occurred while fetching fleet machines.');
     } finally {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      setIsSlowNetwork(false);
       setIsLoading(false);
       setRefreshing(false);
     }
@@ -783,6 +797,13 @@ export default function MachinesScreen() {
           setMachineModalOpen(true);
         },
       });
+
+      list.push({
+        id: 'manage-categories',
+        label: 'Manage Categories',
+        icon: <FolderTree size={16} color={theme.colors.ink} />,
+        onPress: () => setCategoryModalOpen(true),
+      });
     }
 
     list.push({
@@ -1038,6 +1059,57 @@ export default function MachinesScreen() {
           />
         }
       >
+        {/* Slow Network Feedback Banner */}
+        <SlowNetworkBanner
+          visible={isSlowNetwork && (isLoading || refreshing)}
+          message="Slow network detected. Still communicating with server..."
+          onRetry={() => {
+            setIsLoading(true);
+            fetchMachines();
+          }}
+          onDismiss={() => setIsSlowNetwork(false)}
+        />
+
+        {/* Ambient Cached Data Warning when background refresh fails */}
+        {Boolean(fetchError) && machines.length > 0 && (
+          <View
+            style={[
+              styles.cachedErrorBanner,
+              {
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+              },
+            ]}
+          >
+            <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} />
+            <Text
+              variant="caption"
+              style={[styles.cachedErrorBannerText, { color: isDark ? '#f87171' : '#dc2626' }]}
+              numberOfLines={2}
+            >
+              Unable to refresh fleet ({fetchError}). Showing cached equipment.
+            </Text>
+            <Pressable
+              variant="chip"
+              haptic="select"
+              hitSlopToMin48
+              onPress={() => fetchMachines()}
+              style={[
+                styles.cachedErrorRetryBtn,
+                {
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)',
+                },
+              ]}
+              accessibilityLabel="Retry refreshing fleet"
+            >
+              <RotateCcw size={10} color={isDark ? '#f87171' : '#dc2626'} style={{ marginRight: 3 }} />
+              <Text variant="micro" style={{ color: isDark ? '#f87171' : '#dc2626' }}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {isLoading ? (
           <MachineListSkeleton count={3} />
         ) : (
@@ -1401,78 +1473,58 @@ export default function MachinesScreen() {
           <MobileMachineListSkeleton count={4} />
         ) : isSearching ? (
           <MobileMachineListSkeleton count={3} />
-        ) : fetchError ? (
-
-          <View
-            style={[
-              styles.emptyContainer,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <AlertCircle size={36} color={theme.colors.error} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-              Unable to load fleet machines
-            </Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-              {fetchError}
-            </Text>
-            <Pressable
-              variant="buttonPrimary"
-              onPress={() => {
-                setIsLoading(true);
-                fetchMachines();
-              }}
-              style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
-            >
-              <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
-                Retry Fetch
-              </Text>
-            </Pressable>
-          </View>
+        ) : fetchError && machines.length === 0 ? (
+          <ErrorState
+            error={fetchError}
+            onRetry={() => {
+              setIsLoading(true);
+              fetchMachines();
+            }}
+            retryLabel="Retry Fetch"
+            secondaryActionLabel={activeFilterCount > 0 ? 'Reset All Filters' : undefined}
+            onSecondaryAction={activeFilterCount > 0 ? handleResetAllFilters : undefined}
+          />
         ) : filteredAndSortedMachines.length === 0 ? (
-          <View
-            style={[
-              styles.emptyContainer,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Search size={36} color={theme.colors.mute} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-              {debouncedSearch.trim() ? `No machines matching "${debouncedSearch.trim()}"` : 'No machines found'}
-            </Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-              {debouncedSearch.trim()
-                ? 'No machine matches your search across Machine ID, Model, or Serial Number.'
-                : 'Try adjusting your search query or clear your active filter selections.'}
-            </Text>
-            {debouncedSearch.trim() ? (
-              <Pressable
-                variant="buttonPrimary"
-                onPress={handleClearSearch}
-                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
-              >
-                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
-                  Clear Search
-                </Text>
-              </Pressable>
-            ) : activeFilterCount > 0 ? (
-              <Pressable
-                variant="buttonPrimary"
-                onPress={handleResetAllFilters}
-                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
-              >
-                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
-                  Reset All Filters
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          debouncedSearch.trim() ? (
+            <EmptyState
+              variant="no-results"
+              title={`No machines matching "${debouncedSearch.trim()}"`}
+              description="No equipment matches your search query across Machine ID, Model, or Serial Number."
+              actionLabel="Clear Search"
+              onAction={handleClearSearch}
+            />
+          ) : activeFilterCount > 0 ? (
+            <EmptyState
+              variant="filtered"
+              title="No Machines for Selected Filters"
+              description="No fleet equipment assets match your active filter criteria."
+              actionLabel="Reset All Filters"
+              onAction={handleResetAllFilters}
+            />
+          ) : normalizedRole === 'operator' ? (
+            <EmptyState
+              variant="empty"
+              title="No Assigned Machinery"
+              description="You currently have no equipment assigned to your operator account. Contact your site supervisor."
+            />
+          ) : isSupervisor ? (
+            <EmptyState
+              variant="empty"
+              title="No Supervised Machinery"
+              description="No equipment assets are currently assigned to your supervisor account."
+            />
+          ) : (
+            <EmptyState
+              variant="empty"
+              title="Fleet Directory Empty"
+              description="Your equipment fleet is currently empty. Add your first boom lift, scissor lift, or telehandler to begin tracking operations."
+              actionLabel="+ Add New Machine"
+              onAction={() => {
+                setMachineToEdit(null);
+                setMachineModalOpen(true);
+              }}
+            />
+          )
         ) : (
           <View style={styles.cardsContainer}>
             {filteredAndSortedMachines.map((machine) => (
@@ -1559,7 +1611,8 @@ export default function MachinesScreen() {
         machine={deleteMachine}
         onClose={() => setDeleteMachine(null)}
         onConfirm={async () => {
-          if (!deleteMachine?.id) return;
+          if (!deleteMachine?.id || isDeletingRef.current) return;
+          isDeletingRef.current = true;
           const target = deleteMachine;
           const prevMachines = machines;
           // Optimistically remove immediately from local state and query cache
@@ -1588,8 +1641,16 @@ export default function MachinesScreen() {
             queryClient.setQueriesData({ queryKey: ['machines'] }, prevMachines);
             haptics.reject();
             toast('error', 'Delete Failed', err?.message || 'Failed to delete machine.');
+          } finally {
+            isDeletingRef.current = false;
           }
         }}
+      />
+
+      {/* Machine Categories Management Modal */}
+      <MachineCategoryModal
+        visible={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
       />
 
       {/* Bulk Excel Import Info Modal */}
@@ -1652,10 +1713,35 @@ const styles = StyleSheet.create({
   addBtnText: {
   },
   scrollContent: {
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
     paddingBottom: 90,
     gap: spacingNumeric.md,
+  },
+  cachedErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: -4,
+  },
+  cachedErrorBannerText: {
+    flex: 1,
+  },
+  cachedErrorRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
   },
   filterToolbar: {
     gap: spacingNumeric.sm,

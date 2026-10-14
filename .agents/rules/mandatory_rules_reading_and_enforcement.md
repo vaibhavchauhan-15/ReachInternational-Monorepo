@@ -35,6 +35,25 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
    - `web-mobile-parity\SKILL.md` (100% Web & Mobile parity across UI/UX, behavior, responsiveness, design, layout, color, theme, typography)
    - `native-backend-architecture\SKILL.md` (Native mobile backend, TanStack Query, SecureStore, touch ergonomics)
 
+4. **Authoritative Security Baseline (`security/`)**:
+   `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\security`
+   - `README.md` (Architecture, applicability matrix, & maintenance)
+   - `SECURITY-RULES.md` (Mandatory non-negotiable security requirements)
+   - `ATTACK-SURFACE.md` (Entry points, trust boundaries, & verification status)
+   - `THREAT-MODEL.md` (STRIDE threat matrix, severity, & mitigations)
+   - `SECRETS.md` (Secret storage, client/server boundaries, rotation)
+   - `SECURITY-CHECKLIST.md` (Pre-implementation & pre-release checklists)
+   - `AUTHENTICATION-AUTHORIZATION.md` (6 canonical roles, DAL, Server Actions, RLS)
+   - `DATA-PRIVACY.md` (Sensitive data inventory, PII masking, retention)
+   - `DEPENDENCY-SECURITY.md` (pnpm audit, lockfile locking, supply chain)
+   - `INCIDENT-RESPONSE.md` (Containment, token revocation, & post-mortem)
+   - `SECURITY-TESTING.md` (Test standards, negative tests, test accounts)
+
+5. **Scoped Application Security Policies**:
+   - Web: `apps/web/security/` (`README.md`, `SECURITY-RULES.md`, `ATTACK-SURFACE.md`, `THREAT-MODEL.md`, `SECURITY-CHECKLIST.md`)
+   - Mobile: `apps/mobile/security/` (`README.md`, `SECURITY-RULES.md`, `ATTACK-SURFACE.md`, `THREAT-MODEL.md`, `SECURITY-CHECKLIST.md`)
+
+
 ---
 
 ## 2. Mandatory Session & Task Execution Flow

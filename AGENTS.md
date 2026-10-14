@@ -19,8 +19,24 @@ This project uses a **two-level rule system**. Module-specific rules extend — 
 ```
 AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 │
-├── apps/web/AGENTS.md             ← Next.js / Web-specific rules
-├── apps/mobile/AGENTS.md          ← React Native / Expo-specific rules
+├── security/                      ← Monorepo-wide baseline security policies
+│   ├── README.md                  ← Security architecture & navigation
+│   ├── SECURITY-RULES.md          ← Mandatory non-negotiable security requirements
+│   ├── ATTACK-SURFACE.md          ← Entry points, trust boundaries, & verification
+│   ├── THREAT-MODEL.md            ← STRIDE threat matrix, severity, & mitigations
+│   ├── SECRETS.md                 ← Secret storage, client/server boundaries, rotation
+│   ├── SECURITY-CHECKLIST.md      ← Pre-implementation & pre-release checklists
+│   ├── AUTHENTICATION-AUTHORIZATION.md ← 6 canonical roles, DAL, Server Actions, RLS
+│   ├── DATA-PRIVACY.md            ← Sensitive data inventory, PII masking, retention
+│   ├── DEPENDENCY-SECURITY.md     ← pnpm audit, lockfile locking, supply chain
+│   ├── INCIDENT-RESPONSE.md       ← Containment, token revocation, & post-mortem
+│   └── SECURITY-TESTING.md        ← Test standards, negative tests, test accounts
+├── apps/web/
+│   ├── AGENTS.md                  ← Next.js / Web-specific rules
+│   └── security/                  ← Web-scoped security policies (Next.js 16 App Router)
+├── apps/mobile/
+│   ├── AGENTS.md                  ← React Native / Expo-specific rules
+│   └── security/                  ← Mobile-scoped security policies (Expo SDK 57)
 ├── packages/design-tokens/AGENTS.md ← Shared design tokens & Geist theme rules
 ├── packages/permissions/AGENTS.md   ← Canonical RBAC & permission matrices
 ├── packages/types/AGENTS.md         ← Shared TypeScript data models & schemas
@@ -32,6 +48,7 @@ AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 ```
 
 **When working in a module**, read BOTH this file AND the module's `AGENTS.md`.
+**When working on security-affected code**, also read the relevant documents in `security/` and `apps/*/security/`.
 **When a module rule conflicts with a global rule**, the STRICTER rule wins.
 
 ---
@@ -91,7 +108,22 @@ Before planning, editing, analyzing, or executing anything, every AI agent MUST 
 7. **Cross-Platform & Native Agent Skills (`.agents/skills/`)**:
    - `.agents/skills/web-mobile-parity/SKILL.md` (100% Web & Mobile parity workflow across all 8 dimensions)
    - `.agents/skills/native-backend-architecture/SKILL.md` (Native mobile backend, TanStack Query, SecureStore, touch ergonomics)
-8. **Module-specific `AGENTS.md`** for the affected module(s).
+8. **Authoritative Security Baseline (`security/`)**:
+   - `security/README.md`
+   - `security/SECURITY-RULES.md`
+   - `security/ATTACK-SURFACE.md`
+   - `security/THREAT-MODEL.md`
+   - `security/SECRETS.md`
+   - `security/SECURITY-CHECKLIST.md`
+   - `security/AUTHENTICATION-AUTHORIZATION.md`
+   - `security/DATA-PRIVACY.md`
+   - `security/DEPENDENCY-SECURITY.md`
+   - `security/INCIDENT-RESPONSE.md`
+   - `security/SECURITY-TESTING.md`
+9. **Module-specific `AGENTS.md` & Scoped Security Policies**:
+   - Web: `apps/web/AGENTS.md` and `apps/web/security/SECURITY-RULES.md`
+   - Mobile: `apps/mobile/AGENTS.md` and `apps/mobile/security/SECURITY-RULES.md`
+   - Database: `supabase/AGENTS.md`
 
 Never scan the entire repository unless these files explicitly instruct you to.
 
@@ -345,17 +377,34 @@ Web and Native Mobile are two views of **ONE SINGLE SYSTEM**. They must achieve 
 
 ---
 
-## 10. RBAC & SECURITY RULE
+## 10. SECURITY ENFORCEMENT & MANDATORY AI WORKFLOW RULE
 
-Every feature involving data or actions MUST verify:
+> **CRITICAL REQUIREMENT**: AI agents MUST consult and enforce the repository security baseline ([`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)) and application-scoped security rules for EVERY task they perform.
 
-- **Authentication**: Is the user authenticated?
-- **Authorization**: Is the user allowed to perform this action?
-- **Scope**: Can the user access all records? Assigned records? Own records only? Specific client/site/machine records?
+Every task involving code modification MUST follow this mandatory security workflow:
 
-Authorization must be enforced **server-side / database-side**. Never rely solely on hidden UI buttons.
+### Phase A: Before Changes (Discovery & Threat Assessment)
+1. **Read Security Baseline**: Consult [`security/README.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/README.md), [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md), and the target application's security policy:
+   - Web: [`apps/web/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-RULES.md)
+   - Mobile: [`apps/mobile/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-RULES.md)
+2. **Inspect Trust Boundaries & Attack Surface**: Review [`security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/ATTACK-SURFACE.md) and [`security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/THREAT-MODEL.md) for affected entry points.
+3. **Verify Applicable Checklist Items**: Identify specific controls required from [`security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-CHECKLIST.md).
+4. **Determine Scope & Roles**: Map required permissions against canonical 6 roles (`super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`) in `@reachinternational/permissions`.
 
-If a role cannot perform an action, enforce it in: **UI + Server + Database** where applicable.
+### Phase B: During Changes (Security Invariants)
+1. **Deny-by-Default & Least Privilege**: Deny access unless authenticated and authorized.
+2. **Trusted Boundary Enforcement**: Enforce authorization server-side (`lib/dal.ts`, Server Actions) and database-side (RLS). UI guards are usability aids, never security boundaries.
+3. **BOLA / IDOR Protection**: Verify record ownership or active assignment before mutating data.
+4. **Canonical Zod Validation**: Validate all inbound payloads using `@reachinternational/validation`.
+5. **Explicit Column Projections**: Never use `SELECT *`. Select only explicit required columns.
+6. **Zero Secret Exposure**: Never expose `SUPABASE_SECRET_KEY`, database credentials, or API tokens to client components or mobile binaries.
+7. **Synchronize Security Documentation**: If changes modify entry points, roles, permissions, data flows, or security boundaries, update the corresponding documents in `security/` and `apps/*/security/` in the same commit.
+
+### Phase C: After Changes (Verification & Reporting)
+1. **Run Verification Commands**: Execute static type checking (`pnpm typecheck`), targeted test suites (`pnpm --filter @reachinternational/permissions test`, `node apps/mobile/run-tests.mjs`), and typography/touch guards.
+2. **Validate Negative Scenarios**: Verify that unauthorized roles and invalid payloads are safely rejected.
+3. **Diff Hygiene Audit**: Inspect `git diff` to ensure zero exposed secrets, no debug `console.log` statements with user data, and no commented-out security checks.
+4. **Report Execution & Status**: Report executed checks, skipped checks, and any unresolved risks. Never claim tests passed unless they completed successfully.
 
 ---
 

@@ -128,7 +128,15 @@ export function TodayShiftMonitorTab({
             : undefined;
         const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache, clientParam);
         if (result.success && result.data) {
-          setRows(result.data);
+          // Robust deduplication: prevent any duplicate machine + shift combinations from rendering double cards
+          const seen = new Set<string>();
+          const dedupedRows = result.data.filter((r) => {
+            const key = `${r.machine_id}-${(r.shift_code || "S1").toUpperCase()}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setRows(dedupedRows);
         }
       } catch {
         // silent

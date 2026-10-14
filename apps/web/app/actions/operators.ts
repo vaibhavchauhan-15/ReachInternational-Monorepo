@@ -116,56 +116,105 @@ async function checkShiftOverlapServer(
     return { hasOverlap: true, errorMessage: timing.errorMessage || "Invalid shift date and time values." };
   }
 
-  // Query all logs on this machine to prevent any timeline collisions
+  // 1. Query all logs on this machine to prevent equipment timeline collisions
   const { data: existingLogs } = await supabase
     .from("machine_hour_logs")
     .select("id, shift, start_time, end_time, log_date, end_date, start_datetime, end_datetime")
     .eq("machine_id", params.machineId)
     .order("start_datetime", { ascending: true });
 
-  if (!existingLogs || existingLogs.length === 0) {
-    return { hasOverlap: false };
-  }
-
   const targetStart = timing.startDateTime;
   const targetEnd = timing.endDateTime;
 
-  for (const log of existingLogs) {
-    if (params.excludeLogId && log.id === params.excludeLogId) continue;
+  if (existingLogs && existingLogs.length > 0) {
+    for (const log of existingLogs) {
+      if (params.excludeLogId && log.id === params.excludeLogId) continue;
 
-    let exStart: Date | null = null;
-    let exEnd: Date | null = null;
-    let exRangeFormatted = "";
+      let exStart: Date | null = null;
+      let exEnd: Date | null = null;
+      let exRangeFormatted = "";
 
-    if (log.start_datetime && log.end_datetime) {
-      exStart = new Date(log.start_datetime);
-      exEnd = new Date(log.end_datetime);
-      const exTiming = computeShiftTiming({
-        startDate: log.log_date,
-        startTime: log.start_time,
-        endDate: log.end_date,
-        endTime: log.end_time,
-      });
-      exRangeFormatted = exTiming.resolvedRangeFormatted || `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
-    } else if (log.log_date && log.start_time && log.end_time) {
-      const exTiming = computeShiftTiming({
-        startDate: log.log_date,
-        startTime: log.start_time,
-        endDate: log.end_date,
-        endTime: log.end_time,
-      });
-      exStart = exTiming.startDateTime;
-      exEnd = exTiming.endDateTime;
-      exRangeFormatted = exTiming.resolvedRangeFormatted;
+      if (log.start_datetime && log.end_datetime) {
+        exStart = new Date(log.start_datetime);
+        exEnd = new Date(log.end_datetime);
+        const exTiming = computeShiftTiming({
+          startDate: log.log_date,
+          startTime: log.start_time,
+          endDate: log.end_date,
+          endTime: log.end_time,
+        });
+        exRangeFormatted = exTiming.resolvedRangeFormatted || `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
+      } else if (log.log_date && log.start_time && log.end_time) {
+        const exTiming = computeShiftTiming({
+          startDate: log.log_date,
+          startTime: log.start_time,
+          endDate: log.end_date,
+          endTime: log.end_time,
+        });
+        exStart = exTiming.startDateTime;
+        exEnd = exTiming.endDateTime;
+        exRangeFormatted = exTiming.resolvedRangeFormatted;
+      }
+
+      if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+        if (checkIntervalOverlap(targetStart, targetEnd, exStart, exEnd)) {
+          return {
+            hasOverlap: true,
+            errorMessage: `Shift time overlap detected: The requested shift (${timing.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine. A new log must start at or after the previous log's end time.`,
+          };
+        }
+      }
     }
+  }
 
-    if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
-      // Check half-open interval overlap [targetStart, targetEnd) && [exStart, exEnd)
-      if (checkIntervalOverlap(targetStart, targetEnd, exStart, exEnd)) {
-        return {
-          hasOverlap: true,
-          errorMessage: `Shift time overlap detected: The requested shift (${timing.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine. A new log must start at or after the previous log's end time.`,
-        };
+  // 2. Query logs for the same operator on other machines to prevent cross-machine overlap
+  if (params.operatorId) {
+    const { data: opLogs } = await supabase
+      .from("machine_hour_logs")
+      .select("id, shift, start_time, end_time, log_date, end_date, start_datetime, end_datetime, machine_id, machines(machine_id)")
+      .eq("operator_id", params.operatorId)
+      .neq("machine_id", params.machineId)
+      .order("start_datetime", { ascending: true });
+
+    if (opLogs && opLogs.length > 0) {
+      for (const log of opLogs) {
+        if (params.excludeLogId && log.id === params.excludeLogId) continue;
+
+        let exStart: Date | null = null;
+        let exEnd: Date | null = null;
+        let exRangeFormatted = "";
+
+        if (log.start_datetime && log.end_datetime) {
+          exStart = new Date(log.start_datetime);
+          exEnd = new Date(log.end_datetime);
+          const exTiming = computeShiftTiming({
+            startDate: log.log_date,
+            startTime: log.start_time,
+            endDate: log.end_date,
+            endTime: log.end_time,
+          });
+          exRangeFormatted = exTiming.resolvedRangeFormatted || `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
+        } else if (log.log_date && log.start_time && log.end_time) {
+          const exTiming = computeShiftTiming({
+            startDate: log.log_date,
+            startTime: log.start_time,
+            endDate: log.end_date,
+            endTime: log.end_time,
+          });
+          exStart = exTiming.startDateTime;
+          exEnd = exTiming.endDateTime;
+          exRangeFormatted = exTiming.resolvedRangeFormatted;
+        }
+
+        if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+          if (checkIntervalOverlap(targetStart, targetEnd, exStart, exEnd)) {
+            const machineName = (log.machines as any)?.machine_id || "another machine";
+            return {
+              hasOverlap: true,
+              errorMessage: `Operator shift overlap detected: The operator is already logged for a shift (${exRangeFormatted}) on equipment ${machineName}. An operator cannot operate multiple machines concurrently.`,
+            };
+          }
+        }
       }
     }
   }
@@ -212,6 +261,12 @@ function formatOperatorDatabaseError(error: any): string {
 
   // 2. Unique constraint violations (23505)
   if (code === "23505" || msg.includes("duplicate key value") || details.includes("Key already exists")) {
+    if (msg.includes("uq_machine_hour_logs_operator_date_shift")) {
+      return "Operator has already submitted a log for this shift today on another machine. An operator cannot operate two machines during the same shift.";
+    }
+    if (msg.includes("uq_machine_hour_logs_machine_date_shift")) {
+      return "A log has already been submitted for this machine and shift today. Duplicate shift entries are not permitted.";
+    }
     if (msg.includes("idempotency_key") || details.includes("idempotency_key")) {
       return "This shift log entry has already been recorded. Please refresh to view the latest logs.";
     }
@@ -412,6 +467,60 @@ export async function submitOperatorHourLogAction(payload: {
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
+  // Pre-check Shift Code Duplication & Cross-Machine Multi-Logging
+  const requestedShiftCode = (payload.shiftCode || payload.shift || "").replace(/^shift\s*/i, "").trim().toUpperCase();
+  if (requestedShiftCode) {
+    // A. Check duplicate shift on the same machine
+    const { data: existingMchLog } = await supabase
+      .from("machine_hour_logs")
+      .select("id, start_meter, end_meter, operator_id")
+      .eq("machine_id", payload.machineId)
+      .eq("log_date", timing.resolvedStartDate)
+      .eq("shift_code", requestedShiftCode)
+      .maybeSingle();
+
+    if (existingMchLog) {
+      if (
+        existingMchLog.operator_id === targetOperatorId &&
+        Number(existingMchLog.start_meter) === startMtr &&
+        Number(existingMchLog.end_meter) === endMtr
+      ) {
+        return {
+          success: true,
+          data: {
+            id: existingMchLog.id,
+            alreadyLogged: true,
+            message: "Shift log was already recorded.",
+          },
+        };
+      }
+      await failIdempotencyKey(currentIdempotencyKey);
+      return {
+        success: false,
+        error: `A log for Shift ${requestedShiftCode} on date ${timing.resolvedStartDate} has already been recorded for this equipment (Start: ${existingMchLog.start_meter}, End: ${existingMchLog.end_meter}). Duplicate entries are not permitted.`,
+      };
+    }
+
+    // B. Check cross-machine shift log for the same operator
+    const { data: existingOpShiftLog } = await supabase
+      .from("machine_hour_logs")
+      .select("id, machine_id, machines(machine_id)")
+      .eq("operator_id", targetOperatorId)
+      .eq("log_date", timing.resolvedStartDate)
+      .eq("shift_code", requestedShiftCode)
+      .neq("machine_id", payload.machineId)
+      .maybeSingle();
+
+    if (existingOpShiftLog) {
+      await failIdempotencyKey(currentIdempotencyKey);
+      const otherCode = (existingOpShiftLog.machines as any)?.machine_id || "another machine";
+      return {
+        success: false,
+        error: `Operator has already submitted a log for Shift ${requestedShiftCode} on machine ${otherCode} on ${timing.resolvedStartDate}. An operator cannot operate two machines during the same shift.`,
+      };
+    }
+  }
+
   // Compute and standardize breakdown timing & formatted duration string
   let effectiveBreakdownDuration = payload.breakdownDuration || null;
   let effectiveBreakdownHours = payload.breakdownHours || 0;
@@ -571,7 +680,7 @@ export async function submitOperatorHourLogAction(payload: {
       rpcSucceeded = true;
       resultData = rpcResult;
     } else if (rpcError) {
-      // Check if this is a genuine user validation error (e.g. meter regression, shift overlap trigger, future shift end, breakdown bounds, or unauthorized operator)
+      // Check if this is a genuine user validation error (e.g. meter regression, shift overlap trigger, future shift end, breakdown bounds, unique constraint, or unauthorized operator)
       if (
         rpcError.message?.includes("cannot be less than start meter reading") ||
         rpcError.message?.includes("cannot exceed 24 hours") ||
@@ -584,11 +693,16 @@ export async function submitOperatorHourLogAction(payload: {
         rpcError.message?.includes("Unauthorized operator") ||
         rpcError.message?.includes("Client ID does not match") ||
         rpcError.message?.includes("already submitted a log for Shift") ||
+        rpcError.message?.includes("already logged Shift") ||
+        rpcError.message?.includes("cannot operate two machines") ||
+        rpcError.message?.includes("Duplicate entries are not permitted") ||
+        rpcError.message?.includes("already been recorded") ||
         rpcError.message?.includes("Not authorized to submit shift log") ||
         rpcError.message?.includes("assigned to Shift") ||
         rpcError.message?.includes("unassigned shift") ||
         rpcError.message?.includes("previous 7 days") ||
         rpcError.code === "23514" ||
+        rpcError.code === "23505" ||
         rpcError.code === "42501" ||
         rpcError.code === "23503"
       ) {

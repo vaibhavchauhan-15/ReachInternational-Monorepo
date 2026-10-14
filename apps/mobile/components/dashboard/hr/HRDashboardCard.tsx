@@ -1,7 +1,9 @@
 import { Text } from '../../ui/Text';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { HRDashboardDTO } from '@reachinternational/types';
 import {
@@ -23,14 +25,31 @@ export interface HRDashboardCardProps {
 
 export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
 
   const totalEmployees = data?.totalEmployees ?? 0;
   const activeOperators = data?.activeOperators ?? 0;
   const pendingProfileChanges = data?.pendingProfileChanges ?? 0;
   const todayLogsCount = data?.todayLogsCount ?? 0;
 
+  const hasNoStaffData = totalEmployees === 0 && activeOperators === 0;
+
   return (
     <View style={styles.container}>
+      {/* Empty State when HR staff directory is empty */}
+      {hasNoStaffData && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="No Staff Records"
+            description="No employee directory records found. Add employees or wait for team members to register."
+            actionLabel="Manage Personnel"
+            onAction={() => router.push('/users')}
+            compact
+          />
+        </View>
+      )}
+
       {/* Personnel Overview */}
       <View style={styles.section}>
         <Text

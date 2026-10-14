@@ -17,6 +17,7 @@ import {
   type ViewStyle,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -123,29 +124,38 @@ export const Dialog: React.FC<DialogProps> = ({
   if (!mounted) return null;
 
   return (
-    <View style={styles.portalLayer} testID={testID} pointerEvents="box-none">
-      <Scrim visible={visible} onPress={persistent ? undefined : onClose} persistent={persistent} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.centerContainer}
-        pointerEvents="box-none"
-      >
-        <Animated.View
-          style={[
-            styles.dialogCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-            cardAnimatedStyle,
-            contentStyle,
-            style,
-          ]}
+    <Modal
+      visible={mounted}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      hardwareAccelerated
+      onRequestClose={onClose}
+    >
+      <View style={styles.portalLayer} testID={testID} pointerEvents="box-none">
+        <Scrim visible={visible} onPress={persistent ? undefined : onClose} persistent={persistent} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.centerContainer}
+          pointerEvents="box-none"
         >
-          {children}
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </View>
+          <Animated.View
+            style={[
+              styles.dialogCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+              cardAnimatedStyle,
+              contentStyle,
+              style,
+            ]}
+          >
+            {children}
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 };
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reach Ops",
     "slug": "reachinternational-monorepo",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "reachinternational",
@@ -20,7 +20,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.reachinternational.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": true,
@@ -31,18 +31,11 @@
         "VIBRATE"
       ],
       "blockedPermissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.READ_CONTACTS",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.USE_FINGERPRINT",
-        "android.permission.USE_BIOMETRIC",
-        "com.android.vending.CHECK_LICENSE"
+        "android.permission.USE_BIOMETRIC"
       ],
       "intentFilters": [
         {
@@ -74,7 +67,7 @@
       "enabled": false,
       "checkAutomatically": "NEVER"
     },
-    "runtimeVersion": "1.1.0",
+    "runtimeVersion": "1.2.0",
     "plugins": [
       "expo-router",
       [

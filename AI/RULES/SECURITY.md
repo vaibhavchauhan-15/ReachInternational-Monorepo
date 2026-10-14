@@ -19,7 +19,7 @@ ReachInternational adopts **OWASP ASVS 5.0 (Application Security Verification St
 * **V1 Architecture**: Enforce strict trust boundaries between client, edge proxy, server, and database.
 * **V2 Authentication**: Validate session cookies on every request using Supabase SSR Auth (`supabase.auth.getUser()`).
 * **V3 Session Management**: Use HttpOnly, Secure, SameSite cookies with strict session expiration and server-side revocation.
-* **V4 Access Control**: Enforce 13-role RBAC (`@reachinternational/permissions`), 3-tier scoping (`global`, `branch_scoped`, `assigned`, `client_own`), and PostgreSQL Row Level Security (RLS).
+* **V4 Access Control**: Enforce canonical 6-role RBAC (`@reachinternational/permissions`), 3-tier scoping (`global`, `branch_scoped`, `assigned`, `client_own`), and PostgreSQL Row Level Security (RLS).
 * **V5 Validation & Encoding**: Validate all incoming payloads via Zod schemas (`@reachinternational/validation`) and escape output via React JSX.
 * **V8 Data Protection**: Mask sensitive employee PII, financial data, and credentials.
 * **V10 Malicious Code & File Handling**: Validate MIME types, file extensions, and enforce 10MB limits on file uploads.
@@ -42,7 +42,7 @@ ReachInternational enforces a 5-tier security boundary model:
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Data Access Layer (lib/dal.ts): verifySession(), requirePermission(), audit log  │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Supabase PostgreSQL (TRUSTED): 35 migrations, 13-role RLS policies, pgcrypto     │
+│ Supabase PostgreSQL (TRUSTED): 154+ migrations, canonical 6-role RLS policies, pgcrypto │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,15 +94,17 @@ Layer 3 (Database):   PostgreSQL RLS policies evaluate auth.uid() against table-
 
 ## 8. Role-Based Access Control (RBAC Matrix)
 
-ReachInternational defines 13 explicit enterprise roles inside `@reachinternational/permissions`:
+ReachInternational defines strictly 6 canonical enterprise roles inside `@reachinternational/permissions`:
 
 ```text
-ROLE HIERARCHY TIER         ROLES INCLUDED
+ROLE CODE            ROLE DISPLAY NAME    HIERARCHY TIER & SCOPE
 ──────────────────────────────────────────────────────────────────────────────────────────
-• Executive / Admin Tier   → super_admin, company_admin, branch_manager
-• Financial & Business Tier→ finance_manager, rental_manager, sales_executive, hr_manager
-• Technical & Service Tier → service_manager, field_engineer, mechanic
-• Operational & Field Tier → supervisor, operator, client
+• super_admin        Super Admin          Platform-wide wildcard oversight
+• admin              System Admin         Organization-wide fleet & personnel management
+• manager            Manager              Operational fleet, client, and assignment oversight
+• supervisor         Site Supervisor      On-site machine log approvals & shift supervision
+• hr                 HR                   Human resources, employee KYC & directory management
+• operator           Machine Operator     Daily hour meter reading (HMR) entry & complaints
 ```
 
 ### RBAC Rule:

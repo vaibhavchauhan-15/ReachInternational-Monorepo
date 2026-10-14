@@ -161,13 +161,13 @@ Alternatively, in Google Play Console: navigate to **Release → Production → 
 
 ## Phase 5: Over-the-Air (OTA) Updates & Routing Rules
 
-With `expo-updates` configured with `"runtimeVersion": "1.1.0"` (matching `version`), you can deliver immediate bug fixes, UI enhancements, and operational logic updates without resubmitting to Google Play.
+With `expo-updates` configured with `"runtimeVersion": "1.2.0"` (matching `version`), you can deliver immediate bug fixes, UI enhancements, and operational logic updates without resubmitting to Google Play.
 
 ### 1. Deterministic Routing Rules
 - **Binary Releases (Phase B — `deploy-android.yml`)**:
   - Native dependency changes (e.g. adding native modules)
   - Native Android permissions or manifest changes (`app.json`)
-  - App Version bumps (`1.0.0` → `1.1.0`)
+  - App Version bumps (`1.1.0` → `1.2.0`)
   - Triggered via `release/*` branches, commit message tag `[build]`, or manual dispatch.
 - **OTA Updates (Phase C — `publish-update.yml`)**:
   - React Native JS/TS logic, styling, UI components, bug fixes
@@ -178,5 +178,5 @@ With `expo-updates` configured with `"runtimeVersion": "1.1.0"` (matching `versi
 
 ### 2. Version Governance
 - **`versionCode` Ownership**: `autoIncrement: true` and `appVersionSource: remote` in `eas.json` mean EAS automatically increments and owns `versionCode` in the cloud. Do not manually manipulate `versionCode` in `app.json`.
-- **`runtimeVersion` Alignment**: Set to explicit version string `"1.1.0"` (matching `version`). In bare workflow projects with native code, Expo requires an explicit runtime version string rather than dynamic policy objects, guaranteeing full compatibility across Expo Go, local development, and EAS Update.
+- **`runtimeVersion` Alignment**: Set to explicit version string `"1.2.0"` (matching `version`). In bare workflow projects with native code, Expo requires an explicit runtime version string rather than dynamic policy objects, guaranteeing full compatibility across Expo Go, local development, and EAS Update.
 

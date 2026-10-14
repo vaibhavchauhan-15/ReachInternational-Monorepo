@@ -1,7 +1,9 @@
 import { Text } from '../../ui/Text';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { ManagerDashboardDTO } from '@reachinternational/types';
 import {
@@ -27,6 +29,7 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
   data,
 }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
 
   const totalFleet = data?.machineUtilization?.total ?? 0;
   const rentedFleet = data?.machineUtilization?.rented ?? 0;
@@ -36,8 +39,24 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
   const todayLogs = data?.operationsToday?.totalLogs ?? 0;
   const todayHours = data?.operationsToday?.totalHours ?? 0;
 
+  const hasNoFleetData = totalFleet === 0 && activeAssignments === 0;
+
   return (
     <View style={styles.container}>
+      {/* Empty State when manager fleet is empty */}
+      {hasNoFleetData && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="Fleet Directory Empty"
+            description="No machinery fleet records found in your fleet roster. Add machines or contact your administrator."
+            actionLabel="View Fleet"
+            onAction={() => router.push('/machines')}
+            compact
+          />
+        </View>
+      )}
+
       {/* Fleet Utilization KPIs */}
       <View style={styles.section}>
         <Text

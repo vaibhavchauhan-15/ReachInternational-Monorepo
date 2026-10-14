@@ -1,0 +1,63 @@
+# =============================================================================
+# EAS Build Ignore File — Monorepo Root
+# Prevents machine-specific local files, web app, and tests from uploading to EAS
+# =============================================================================
+
+# Android local machine configuration & build artifacts
+**/local.properties
+local.properties
+*.local.properties
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/app/debug/
+**/android/app/release/
+
+# iOS local build artifacts
+ios/Pods/
+ios/build/
+**/ios/Pods/
+**/ios/build/
+
+# Build outputs & caches
+.next/
+out/
+.turbo/
+dist/
+web-build/
+
+# Web application (not part of mobile app binary)
+apps/web/
+
+# Tests, verification scripts, & test coverage
+run-tests.mjs
+**/__tests__/**
+**/*.test.*
+**/*.spec.*
+coverage/
+apps/mobile/test-*.mjs
+apps/mobile/run-tests.mjs
+
+# Store assets & documentation
+apps/mobile/store-assets/
+docs/
+
+# Local Environment & Logs
+.env*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Git & IDE Files
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI persistent memory & scratch
+scratch/
+AI/

@@ -220,7 +220,27 @@ export const Drawer: React.FC<DrawerProps> = ({
             persistent={persistent}
           />
           <View style={styles.rightAlignWrapper} pointerEvents="box-none">
-            <GestureDetector gesture={panGesture}>
+            {Platform.OS !== 'web' ? (
+              <GestureDetector gesture={panGesture}>
+                <Animated.View
+                  style={[
+                    styles.drawerPanel,
+                    {
+                      width: drawerWidth,
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                      paddingTop: insets.top,
+                      paddingBottom: insets.bottom,
+                    },
+                    drawerAnimatedStyle,
+                    contentStyle,
+                    style,
+                  ]}
+                >
+                  {children}
+                </Animated.View>
+              </GestureDetector>
+            ) : (
               <Animated.View
                 style={[
                   styles.drawerPanel,
@@ -238,7 +258,7 @@ export const Drawer: React.FC<DrawerProps> = ({
               >
                 {children}
               </Animated.View>
-            </GestureDetector>
+            )}
           </View>
           {overlay}
         </View>

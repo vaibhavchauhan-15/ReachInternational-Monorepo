@@ -156,34 +156,13 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       return { error: `User is not pending approval (current status: ${existingUser.status}).` };
     }
 
-    const empCode = `EMP-${crypto.randomInt(1000, 10000)}`;
-    const designationLabel = (updatedUser.role || "operator")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c: string) => c.toUpperCase());
-
-    // 2. Parallelize auth confirmation, employee directory sync, and audit logging
+    // 2. Parallelize auth confirmation and audit logging
     await Promise.all([
       // Confirm user email in Supabase auth so they can log in
       adminSupabase.auth.admin.updateUserById(userId, { email_confirm: true }).catch((confirmErr) => {
         console.error("Error confirming user email in auth:", confirmErr);
       }),
 
-      // Synchronize into public.employees directory table
-      (async () => {
-        try {
-          await adminSupabase.from("employees").insert({
-            employee_code: empCode,
-            full_name: updatedUser.full_name?.trim(),
-            user_id: updatedUser.id,
-            phone: updatedUser.phone || null,
-            email: updatedUser.email?.trim(),
-            designation: designationLabel,
-            status: "active",
-          });
-        } catch (empErr: any) {
-          console.warn("Note: employees directory sync on approval skipped or existing:", empErr?.message || empErr);
-        }
-      })(),
 
       // Structured audit logging
       logAudit({
@@ -502,24 +481,6 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       }
     }
 
-    // Synchronize user account into public.employees directory table
-    const empCode = `EMP-${crypto.randomInt(1000, 10000)}`;
-    const designationLabel = role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    try {
-      await adminSupabase
-        .from("employees")
-        .insert({
-          employee_code: empCode,
-          full_name: fullName.trim(),
-          user_id: data.user.id,
-          phone: phone || null,
-          email: email.trim(),
-          designation: designationLabel,
-          status: "active",
-        });
-    } catch (empErr: any) {
-      console.warn("Note: employees directory record sync skipped or existing:", empErr?.message || empErr);
-    }
 
 
 
@@ -622,85 +583,40 @@ export async function resetUserPassword(userId: string): Promise<{ formState: Us
   }
 }
 
-// Toggle user status (admin only)
+// Toggle user status (admin, super_admin, hr)
 export async function toggleUserStatus(userId: string): Promise<UserFormState> {
   if (!isValidUuid(userId)) {
     return { error: "Invalid user ID format." };
   }
   try {
-    const currentUser = await requireRole("admin", "super_admin");
+    const currentUser = await requireRole("admin", "super_admin", "hr");
     const supabase = await createSupabaseServerClient();
 
-    // Get current user details
-    const { data: targetUser, error: fetchError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    if (fetchError || !targetUser) {
-      return { error: "User not found." };
-    }
-
-    // Prevent admin from deactivating themselves
-    if (targetUser.id === currentUser.id) {
-      return { error: "You cannot change your own status." };
-    }
-
-    // Prevent admin from changing status of super_admins
-    if (currentUser.role === "admin" && targetUser.role === "super_admin") {
-      return { error: "Only Super Admins can modify Super Admin accounts." };
-    }
-
-    // Toggle status
-    const newStatus = targetUser.status === "active" ? "inactive" : "active";
-
-    const adminSupabase = createSupabaseAdminClient();
-    const { error: updateError } = await adminSupabase
-      .from("users")
-      .update({ status: newStatus })
-      .eq("id", userId);
-
-    if (updateError) {
-      console.error("Error toggling user status:", updateError);
-      return { error: "Failed to update user status. Please try again." };
-    }
-
-    // Sync status with public.employees directory table if linked
-    try {
-      await adminSupabase
-        .from("employees")
-        .update({ status: newStatus === "active" ? "active" : "inactive" })
-        .eq("user_id", userId);
-    } catch (empErr: any) {
-      console.warn("Note: employees directory status update skipped:", empErr?.message || empErr);
-    }
-
-    const action = newStatus === "active" ? "activated" : "deactivated";
-
-    await logAudit({
-      action: newStatus === "active" ? "user.activated" : "user.deactivated",
-      entity_type: "user",
-      entity_id: userId,
-      user_id: currentUser.id,
-      metadata: { 
-        user_email: targetUser.email,
-        user_name: targetUser.full_name,
-        performed_by_id: currentUser.id,
-        performed_by_name: currentUser.full_name,
-        performed_by_email: currentUser.email,
-        performed_by_role: currentUser.role,
-        new_status: newStatus
-      },
+    // Call atomic database RPC which enforces RBAC, self-mutation guards,
+    // assignment cleanup on deactivation, audit logging, and employee sync.
+    const { data: rpcData, error: rpcError } = await supabase.rpc("toggle_user_status_atomic", {
+      p_target_user_id: userId,
     });
 
+    if (rpcError) {
+      console.error("Error executing toggle_user_status_atomic RPC:", rpcError);
+      return { error: rpcError.message || "Failed to update user status." };
+    }
+
+    if (rpcData && rpcData.success === false) {
+      return { error: rpcData.error || "Failed to update user status." };
+    }
+
     revalidatePath("/users");
+    revalidatePath(`/users/${userId}`);
     revalidateTag(CACHE_TAGS.users, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
     revalidateTag(CACHE_TAGS.machineMeta, "max");
-    return { message: `User ${targetUser.full_name} has been ${action}.` };
-  } catch (error) {
+
+    return { message: rpcData?.message || `User status successfully updated to ${rpcData?.status || "updated"}.` };
+  } catch (error: any) {
     console.error("Error in toggleUserStatus:", error);
-    return { error: "Unauthorized or an error occurred." };
+    return { error: error?.message || "Unauthorized or an error occurred." };
   }
 }
 
@@ -931,33 +847,33 @@ export async function deleteUser(userId: string): Promise<UserFormState> {
       return { error: "Only Super Admins can delete Super Admin accounts." };
     }
 
-    // Delete from auth.users using admin client
-    const adminSupabase = createSupabaseAdminClient();
-    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId);
+    // Execute atomic safe deletion or deactivation preserving statutory operational records
+    const { data: rpcData, error: rpcError } = await supabase.rpc("delete_or_deactivate_user_atomic", {
+      p_target_user_id: userId,
+    });
 
-    if (deleteError) {
-      console.error("Error deleting user:", deleteError);
-      return { error: "Failed to delete user. Please try again." };
+    if (rpcError) {
+      console.error("Error in delete_or_deactivate_user_atomic:", rpcError);
+      return { error: rpcError.message || "Failed to delete user. Please try again." };
     }
 
-    await logAudit({
-      action: "user.deleted",
-      entity_type: "user",
-      entity_id: userId,
-      user_id: currentUser.id,
-      metadata: { 
-        user_email: targetUser.email,
-        user_name: targetUser.full_name,
-        role: targetUser.role,
-        deleted_by_name: currentUser.full_name,
-        deleted_by_email: currentUser.email,
-      },
-    });
+    // If permanent deletion occurred, also cleanup auth.users via admin client if applicable
+    if (rpcData?.action === "deleted") {
+      try {
+        const adminSupabase = createSupabaseAdminClient();
+        await adminSupabase.auth.admin.deleteUser(userId);
+      } catch (authErr) {
+        console.warn("auth.users deletion cleanup note:", authErr);
+      }
+    }
 
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
     revalidateTag(CACHE_TAGS.machineMeta, "max");
-    return { message: `User ${targetUser.full_name} has been deleted.` };
+
+    return {
+      message: rpcData?.message || `User ${targetUser.full_name} has been processed.`,
+    };
   } catch (error) {
     console.error("Error in deleteUser:", error);
     return { error: "Unauthorized or an error occurred." };
@@ -1182,22 +1098,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       }
     }
 
-    // Sync changes with public.employees directory table if linked
-    try {
-      const empUpdatePayload: Record<string, unknown> = {
-        full_name: fullName.trim(),
-        phone: phone || null,
-      };
-      if (role) {
-        empUpdatePayload.designation = role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-      }
-      await adminSupabase
-        .from("employees")
-        .update(empUpdatePayload)
-        .eq("user_id", userId);
-    } catch (empErr: any) {
-      console.warn("Note: employees directory edit sync skipped:", empErr?.message || empErr);
-    }
 
     await logAudit({
       action: "user.edited",
@@ -1293,17 +1193,6 @@ export async function bulkDeleteUsers(userIds: string[]): Promise<BulkDeleteResu
       }
     });
 
-    // Also cleanup any linked employee profiles
-    try {
-      if (deletableIds.length > 0) {
-        await adminSupabase
-          .from("employees")
-          .delete()
-          .in("user_id", deletableIds);
-      }
-    } catch (empErr) {
-      console.warn("Bulk employee cleanup warning:", empErr);
-    }
 
     // 5. Structured Audit Logging
     await logAudit({
@@ -1386,29 +1275,12 @@ export async function bulkApproveUsers(userIds: string[]): Promise<BulkActionRes
       return { error: "No pending users were found to approve." };
     }
 
-    // 2. Parallel secondary execution: Auth email confirmations, Employees sync, and Audit Log
-    const employeeInserts = updatedUsers.map((u) => ({
-      employee_code: `EMP-${crypto.randomInt(1000, 10000)}`,
-      full_name: u.full_name?.trim(),
-      user_id: u.id,
-      phone: u.phone || null,
-      email: u.email?.trim(),
-      designation: (u.role || "operator").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-      status: "active",
-    }));
+    // 2. Parallel secondary execution: Auth email confirmations and Audit Log
 
     await Promise.allSettled([
       // Confirm auth emails in parallel
       ...updatedUsers.map((u) => adminSupabase.auth.admin.updateUserById(u.id, { email_confirm: true })),
 
-      // Batch insert employee profiles
-      (async () => {
-        try {
-          await adminSupabase.from("employees").insert(employeeInserts);
-        } catch (err: any) {
-          console.warn("Employees bulk insert note:", err?.message || err);
-        }
-      })(),
 
       // Structured batch audit log
       logAudit({

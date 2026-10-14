@@ -12,7 +12,7 @@ import { Pressable } from '../../components/ui/touch/Pressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, HighlightText, KPICard, KPIGrid, type HeaderActionItem , Text, AppModal, SearchInput, useToast } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, ErrorState, PermissionDeniedView, HighlightText, KPICard, KPIGrid, type HeaderActionItem , Text, AppModal, SearchInput, useToast } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { AttendanceListSkeleton, AttendanceDetailSkeleton } from '../../components/attendance';
 import { supabase } from '../../lib/supabase';
@@ -140,13 +140,8 @@ export default function AttendanceScreen() {
   const isAllowed = ALLOWED_ROLES.includes(normalizedRole);
   const isOperator = normalizedRole === 'operator';
 
-  useEffect(() => {
-    if (role && !isAllowed) {
-      router.replace('/dashboard');
-    }
-  }, [role, isAllowed, router]);
-
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Persistent search and filter state
   const {
@@ -196,6 +191,7 @@ export default function AttendanceScreen() {
   const fetchAttendance = useCallback(async (y: number, m: number) => {
     try {
       setLoading(true);
+      setFetchError(null);
       if (normalizedRole === 'operator') {
         if (!user?.id) {
           setLoading(false);
@@ -214,6 +210,8 @@ export default function AttendanceScreen() {
 
         if (error) {
           console.error('[AttendanceScreen] Fetch error:', error);
+          const errObj = new Error(error.message || 'Failed to fetch attendance data');
+          setFetchError(errObj);
           toast('error', 'Error', error.message || 'Failed to fetch attendance data');
         } else if (data) {
           setEmployees(data.rows || []);
@@ -224,6 +222,7 @@ export default function AttendanceScreen() {
       }
     } catch (err: any) {
       console.error('[AttendanceScreen] Unexpected error:', err);
+      setFetchError(err instanceof Error ? err : new Error(err?.message || 'Failed to fetch attendance data'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -685,7 +684,18 @@ export default function AttendanceScreen() {
   }, [theme.colors.ink, onRefresh, refreshing]);
 
   if (!isAllowed) {
-    return null;
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader
+          title={isOperator ? 'My Attendance' : 'Attendance'}
+        />
+        <PermissionDeniedView
+          featureName="Attendance Roster"
+          currentRole={role}
+          requiredRoles={ALLOWED_ROLES}
+        />
+      </View>
+    );
   }
 
   return (
@@ -740,6 +750,12 @@ export default function AttendanceScreen() {
         {isOperator ? (
           loading ? (
             <AttendanceDetailSkeleton showMetaCard={false} />
+          ) : fetchError ? (
+            <ErrorState
+              error={fetchError}
+              onRetry={() => fetchAttendance(year, month)}
+              actionLabel="Retry Loading Attendance"
+            />
           ) : detailData ? (
             renderDetailBody(detailData)
           ) : (
@@ -750,6 +766,12 @@ export default function AttendanceScreen() {
           )
         ) : loading && !refreshing ? (
           <AttendanceListSkeleton count={4} showKpi={true} showSearch={true} showFilters={true} />
+        ) : fetchError ? (
+          <ErrorState
+            error={fetchError}
+            onRetry={() => fetchAttendance(year, month)}
+            actionLabel="Retry Loading Attendance"
+          />
         ) : (
           <>
             {/* KPI Strip */}
@@ -851,12 +873,29 @@ export default function AttendanceScreen() {
               })}
             </ScrollView>
 
-            {/* List Content */}
             {filteredEmployees.length === 0 ? (
-              <EmptyState
-                title="No Attendance Found"
-                description="No operator records match your filter criteria for this month."
-              />
+              searchQuery.trim().length > 0 ? (
+                <EmptyState
+                  variant="no-results"
+                  title="No Operators Found"
+                  description={`No operator attendance records matched "${searchQuery.trim()}".`}
+                  actionLabel="Clear Search"
+                  onAction={() => setSearchQuery('', true)}
+                />
+              ) : statusFilter !== 'all' ? (
+                <EmptyState
+                  variant="filtered"
+                  title="No Matching Records"
+                  description="No operators match the selected attendance filter."
+                  actionLabel="Show All Operators"
+                  onAction={() => setStatusFilter('all')}
+                />
+              ) : (
+                <EmptyState
+                  title="No Attendance Found"
+                  description="No operator records found for this month."
+                />
+              )
             ) : (
               <View style={styles.cardList}>
                 {filteredEmployees.map((emp) => {
@@ -1028,7 +1067,18 @@ export default function AttendanceScreen() {
               >
                 {renderDetailBody(detailData)}
               </ScrollView>
-            ) : null}
+            ) : (
+              <ErrorState
+                title="Failed to Load Detail"
+                message="Unable to load operator daily attendance detail."
+                retryLabel="Retry"
+                onRetry={() => {
+                  if (selectedEmployee) {
+                    void handleOpenDetail(selectedEmployee);
+                  }
+                }}
+              />
+            )}
           </View>
         </AppModal>
       )}

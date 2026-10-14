@@ -9,10 +9,9 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable, showToast } from '../ui';
+import { Button, Input, TimeInput, useTheme, Text, AppModal, Touchable, showToast, ConfirmDialog } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, AlertTriangle, Clock, RefreshCw, Trash2, ShieldAlert } from '../ui/icon';
@@ -131,30 +130,28 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
     }
   };
 
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+
   const handleDiscard = () => {
     haptics.warning();
-    Alert.alert(
-      'Discard Offline Draft?',
-      'Are you sure you want to discard this shift submission? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await offlineQueueManager.removeMutation(queuedMutation.id);
-              haptics.success();
-              showToast('success', 'Draft Discarded', 'Offline draft has been discarded.');
-              onClose();
-            } catch (err) {
-              haptics.error();
-              console.warn('[OfflineCollisionModal] Discard error:', err);
-            }
-          },
-        },
-      ]
-    );
+    setShowDiscardConfirm(true);
+  };
+
+  const handleConfirmDiscard = async () => {
+    setIsDiscarding(true);
+    try {
+      await offlineQueueManager.removeMutation(queuedMutation.id);
+      haptics.success();
+      showToast('success', 'Draft Discarded', 'Offline draft has been discarded.');
+      setShowDiscardConfirm(false);
+      onClose();
+    } catch (err) {
+      haptics.error();
+      console.warn('[OfflineCollisionModal] Discard error:', err);
+    } finally {
+      setIsDiscarding(false);
+    }
   };
 
   const alertBg = isDark ? '#450a0a' : '#fef2f2';
@@ -298,6 +295,18 @@ export const OfflineCollisionModal: React.FC<OfflineCollisionModalProps> = ({
             </View>
           </ScrollView>
       </View>
+
+      <ConfirmDialog
+        visible={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={handleConfirmDiscard}
+        title="Discard Offline Draft?"
+        message="Are you sure you want to discard this shift submission? This action cannot be undone."
+        confirmText="Discard"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDiscarding}
+      />
     </AppModal>
   );
 };

@@ -142,8 +142,8 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Dynamic logs state (if fetchParams provided, fetches complete unpaginated dataset)
   const [fetchedLogs, setFetchedLogs] = useState<HourLogRecord[]>(initialLogs);
@@ -549,25 +549,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     }
   };
 
-  // Handler 2: Direct Print
-  const handlePrintDirect = async () => {
-    try {
-      setIsPrinting(true);
-      haptics.select();
-      const html = generateReportHtml();
-      await Print.printAsync({ html });
-      await haptics.success();
-      onClose();
-    } catch (err: any) {
-      await haptics.error();
-      console.error('[OperationsExportModal] Direct print error:', err);
-      showToast('error', 'Print Error', err?.message || 'Failed to launch system print spooler.');
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
-  // Handler 3: Export CSV / Excel Spreadsheet (Web & Native Resilient)
+  // Handler 2: Export CSV Spreadsheet (Web & Native Resilient)
   const handleExportCsv = async () => {
     try {
       setIsExportingCsv(true);
@@ -580,123 +562,58 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
         return getShiftOrderWeight(a) - getShiftOrderWeight(b);
       });
 
-      let headers: string[];
-      let rows: string[];
+      const headers = [
+        'Shift Date',
+        'Machine Code',
+        'Machine Model',
+        'Serial Number',
+        'Client',
+        'Site Location',
+        'Shift',
+        'Operator Name',
+        'Start Meter',
+        'End Meter',
+        'Running Hours',
+        'Start Time',
+        'End Time',
+        'Overtime (h)',
+        'Breakdown',
+        'Breakdown Duration',
+        'Remarks',
+        'Logged At',
+      ];
 
-      if (viewMode === 'operator') {
-        headers = [
-          'Shift Date',
-          'Machine Code',
-          'Machine Model',
-          'Serial Number',
-          'Client',
-          'Site Location',
-          'Shift',
-          'Start Meter',
-          'End Meter',
-          'Running Hours',
-          'Start Time',
-          'End Time',
-          'Overtime (h)',
-          'Breakdown',
-          'Breakdown Duration',
-          'Remarks',
-          'Logged At',
-        ];
-
-        rows = sortedLogsForCsv.map((log) => [
-          `"${formatDate(log.log_date)}"`,
-          `"${log.machine_code || log.machine?.machine_id || ''}"`,
-          `"${log.machine?.model || ''}"`,
-          `"${log.machine?.serial_number || ''}"`,
-          `"${log.client?.company_name || 'Base Yard'}"`,
-          `"${log.location || log.client?.city || ''}"`,
-          `"${log.shift_code || log.shift || ''}"`,
-          Number(log.start_meter || 0).toFixed(1),
-          Number(log.end_meter || 0).toFixed(1),
-          Number(log.running_hours || 0).toFixed(1),
-          `"${formatTo12Hour(log.start_time) || ''}"`,
-          `"${formatTo12Hour(log.end_time) || ''}"`,
-          log.overtime_hours ? String(log.overtime_hours) : '0',
-          log.is_breakdown ? 'YES' : 'NO',
-          `"${(log as any).breakdown_duration || ''}"`,
-          `"${(log.remarks || '').replace(/"/g, '""')}"`,
-          `"${log.created_at ? formatDate(log.created_at) : ''}"`,
-        ].join(','));
-      } else {
-        headers = [
-          'Date',
-          viewMode === 'client' ? 'Machine' : 'Client',
-          'Shift',
-          'OPERATOR NAME',
-          'M/C RT',
-          'WH',
-          'B/D',
-        ];
-
-        const dateGroupsMap = new Map<string, HourLogRecord[]>();
-        sortedLogsForCsv.forEach((l) => {
-          const key = l.log_date ? l.log_date.split('T')[0] : 'unknown';
-          if (!dateGroupsMap.has(key)) {
-            dateGroupsMap.set(key, []);
-          }
-          dateGroupsMap.get(key)!.push(l);
-        });
-
-        rows = [];
-        dateGroupsMap.forEach((groupLogs, dateKey) => {
-          const formattedDate = formatExcelDate(dateKey);
-          let dayRT = 0;
-          let dayWork = 0;
-          let dayBkd = 0;
-
-          groupLogs.forEach((l) => {
-            const sMtr = l.start_meter ?? 0;
-            const eMtr = l.end_meter ?? sMtr;
-            dayRT += l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
-            dayWork += calculateShiftWorkHours(l);
-            dayBkd += calculateShiftBreakdownHours(l);
-          });
-
-          const firstLog = groupLogs[0];
-          const clientOrMachine =
-            viewMode === 'client'
-              ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number ? ` (${firstLog.machine.serial_number})` : ''}` : firstLog?.machine_code || 'Machine')
-              : (firstLog?.client?.company_name || selectedEntityName || 'Client');
-
-          const shiftsStr = groupLogs
-            .map((l) => l.shift_code || l.shift || 'S1')
-            .join('/');
-
-          const operatorsStr = groupLogs
-            .map((l) => l.operator?.full_name || 'Unassigned')
-            .join('/');
-
-          const totalBdMin = Math.round(dayBkd * 60);
-          const bdCsv = totalBdMin > 0 ? `${Math.floor(totalBdMin / 60)}h ${totalBdMin % 60}m` : '0h';
-
-          rows.push([
-            `"${formattedDate}"`,
-            `"${clientOrMachine}"`,
-            `"${shiftsStr}"`,
-            `"${operatorsStr}"`,
-            `"${formatHoursWithUnit(dayRT)}"`,
-            `"${formatHoursWithUnit(dayWork)}"`,
-            `"${bdCsv}"`,
-          ].join(','));
-        });
-      }
+      const rows = sortedLogsForCsv.map((log) => [
+        `"${formatDate(log.log_date)}"`,
+        `"${log.machine_code || log.machine?.machine_id || ''}"`,
+        `"${log.machine?.model || ''}"`,
+        `"${log.machine?.serial_number || ''}"`,
+        `"${log.client?.company_name || (viewMode === 'client' ? selectedEntityName : '') || 'Base Yard'}"`,
+        `"${log.location || log.client?.city || selectedLocationLabel || ''}"`,
+        `"${log.shift_code || log.shift || ''}"`,
+        `"${log.operator?.full_name || (log as any).operator_name || (viewMode === 'operator' ? selectedEntityName : 'Unassigned')}"`,
+        Number(log.start_meter || 0).toFixed(1),
+        Number(log.end_meter || 0).toFixed(1),
+        Number(log.running_hours || 0).toFixed(1),
+        `"${formatTo12Hour(log.start_time) || ''}"`,
+        `"${formatTo12Hour(log.end_time) || ''}"`,
+        log.overtime_hours ? String(log.overtime_hours) : '0',
+        log.is_breakdown ? 'YES' : 'NO',
+        `"${(log as any).breakdown_duration || ''}"`,
+        `"${(log.remarks || '').replace(/"/g, '""')}"`,
+        `"${log.created_at ? formatDate(log.created_at) : ''}"`,
+      ].join(','));
 
       const filename = getExportFilename('csv');
       const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
 
       if (Platform.OS === 'web') {
-        // Universal web download
         const downloaded = downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
         if (!downloaded) {
           showToast('error', 'Export Failed', 'Unable to initiate file download in browser.');
         } else {
           notifyLogsCsvExported(activeLogs.length);
+          showToast('success', 'Export Complete', `Successfully exported ${activeLogs.length} logs to CSV.`);
           await haptics.success();
           onClose();
         }
@@ -743,19 +660,9 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       >
         {/* Header */}
         <View style={[styles.headerRow, { borderBottomColor: theme.colors.hairline }]}>
-          <View style={styles.headerTitleWrap}>
-            <View style={[styles.iconWrap, { backgroundColor: theme.colors.link + '1a' }]}>
-              <Printer size={18} color={theme.colors.link} />
-            </View>
-            <View>
-              <Text variant="heading" style={{ color: theme.colors.ink }}>
-                Export & Print Logs
-              </Text>
-              <Text variant="caption" style={[styles.subTitle, { color: theme.colors.mute }]}>
-                {selectedEntityName} · {selectedMonthLabel}
-              </Text>
-            </View>
-          </View>
+          <Text variant="heading" style={{ color: theme.colors.ink }}>
+            Export Logs
+          </Text>
           <Touchable
             preset="icon"
             onPress={onClose}
@@ -775,132 +682,62 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
             </Text>
           </View>
         ) : (
-          <>
-            {/* Summary Stats Box */}
-            <View
+          /* Action Buttons */
+          <View style={styles.actionsWrap}>
+            {/* 1. PDF Document Export */}
+            <Touchable
+              preset="button"
+              onPress={handleExportPdf}
+              disabled={isExportingPdf || isExportingCsv || activeLogs.length === 0}
               style={[
-                styles.summaryBox,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+                styles.actionBtn,
+                {
+                  backgroundColor: theme.colors.primary,
+                  borderColor: theme.colors.primary,
+                  opacity: activeLogs.length === 0 ? 0.5 : 1,
+                },
               ]}
+              accessibilityLabel="Share or Save PDF Document"
             >
-              <View style={styles.summaryItem}>
-                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
-                  SHIFTS
-                </Text>
-                <Text variant="mono" style={{ color: theme.colors.ink }}>
-                  {activeLogs.length}
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
-                  RUN TIME
-                </Text>
-                <Text variant="mono" style={{ color: theme.colors.link }}>
-                  {activeMetrics.totalRunningHours}h
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
-                  OVERTIME
-                </Text>
-                <Text variant="mono" style={{ color: '#f59e0b' }}>
-                  {activeMetrics.totalOtHours}h
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text variant="caption" style={[styles.summaryLabel, { color: theme.colors.mute }]}>
-                  FAULTS
-                </Text>
-                <Text variant="mono" style={{ color: '#f43f5e' }}>
-                  {activeMetrics.totalBreakdowns}
-                </Text>
-              </View>
-            </View>
+              {isExportingPdf ? (
+                <ActivityIndicator size="small" color={theme.colors.onPrimary} />
+              ) : (
+                <>
+                  <Printer size={16} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
+                  <Text variant="label" style={{ color: theme.colors.onPrimary }}>
+                    {Platform.OS === 'web' ? 'Save as PDF Document' : 'Share / Save PDF Document'}
+                  </Text>
+                </>
+              )}
+            </Touchable>
 
-            {/* Action Buttons */}
-            <View style={styles.actionsWrap}>
-              {/* 1. PDF Document Export */}
-              <Touchable
-                preset="button"
-                onPress={handleExportPdf}
-                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
-                style={[
-                  styles.actionBtn,
-                  {
-                    backgroundColor: theme.colors.primary,
-                    borderColor: theme.colors.primary,
-                    opacity: activeLogs.length === 0 ? 0.5 : 1,
-                  },
-                ]}
-                accessibilityLabel="Share or Save PDF Document"
-              >
-                {isExportingPdf ? (
-                  <ActivityIndicator size="small" color={theme.colors.onPrimary} />
-                ) : (
-                  <>
-                    <Printer size={16} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
-                    <Text variant="label" style={{ color: theme.colors.onPrimary }}>
-                      {Platform.OS === 'web' ? 'Save as PDF Document' : 'Share / Save PDF Document'}
-                    </Text>
-                  </>
-                )}
-              </Touchable>
-
-              {/* 2. Direct AirPrint / Mopria / Browser Print */}
-              <Touchable
-                preset="button"
-                onPress={handlePrintDirect}
-                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
-                style={[
-                  styles.actionBtnSecondary,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                    opacity: activeLogs.length === 0 ? 0.5 : 1,
-                  },
-                ]}
-                accessibilityLabel="Send to Wireless Printer"
-              >
-                {isPrinting ? (
-                  <ActivityIndicator size="small" color={theme.colors.ink} />
-                ) : (
-                  <>
-                    <Printer size={16} color={theme.colors.ink} style={{ marginRight: 8 }} />
-                    <Text variant="label" style={{ color: theme.colors.ink }}>
-                      Send to Wireless Printer
-                    </Text>
-                  </>
-                )}
-              </Touchable>
-
-              {/* 3. CSV Spreadsheet Export */}
-              <Touchable
-                preset="button"
-                onPress={handleExportCsv}
-                disabled={isExportingPdf || isPrinting || isExportingCsv || activeLogs.length === 0}
-                style={[
-                  styles.actionBtnSecondary,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                    opacity: activeLogs.length === 0 ? 0.5 : 1,
-                  },
-                ]}
-                accessibilityLabel="Export Excel or CSV File"
-              >
-                {isExportingCsv ? (
-                  <ActivityIndicator size="small" color={theme.colors.ink} />
-                ) : (
-                  <>
-                    <FileSpreadsheet size={16} color="#10b981" style={{ marginRight: 8 }} />
-                    <Text variant="label" style={{ color: theme.colors.ink }}>
-                      Export Excel (.xlsx / CSV)
-                    </Text>
-                  </>
-                )}
-              </Touchable>
-            </View>
-          </>
+            {/* 2. CSV Spreadsheet Export */}
+            <Touchable
+              preset="button"
+              onPress={handleExportCsv}
+              disabled={isExportingPdf || isExportingCsv || activeLogs.length === 0}
+              style={[
+                styles.actionBtnSecondary,
+                {
+                  backgroundColor: theme.colors.canvas,
+                  borderColor: theme.colors.hairline,
+                  opacity: activeLogs.length === 0 ? 0.5 : 1,
+                },
+              ]}
+              accessibilityLabel="Export CSV File"
+            >
+              {isExportingCsv ? (
+                <ActivityIndicator size="small" color={theme.colors.ink} />
+              ) : (
+                <>
+                  <FileSpreadsheet size={16} color="#10b981" style={{ marginRight: 8 }} />
+                  <Text variant="label" style={{ color: theme.colors.ink }}>
+                    Export CSV (.csv)
+                  </Text>
+                </>
+              )}
+            </Touchable>
+          </View>
         )}
       </View>
     </AppModal>
@@ -927,21 +764,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacingNumeric.md,
     borderBottomWidth: 1,
   },
-  headerTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subTitle: {
-    marginTop: 2,
-  },
   closeBtn: {
     width: 28,
     height: 28,
@@ -958,30 +780,15 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 4,
   },
-  summaryBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    marginVertical: spacingNumeric.md,
-  },
-  summaryItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  summaryLabel: {
-    marginBottom: 4,
-  },
   actionsWrap: {
     gap: 10,
-    marginTop: spacingNumeric.xs,
+    marginTop: spacingNumeric.md,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
+    height: 46,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
   },
@@ -989,7 +796,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
+    height: 46,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
   },

@@ -1,16 +1,18 @@
 /**
  * ReachInternational Mobile — Mobile Command Palette
- * 100% Parity with Web CommandPalette (apps/web/components/ui/CommandPalette.tsx)
- * Provides instant search and 1-tap navigation to EVERY page, active module, and quick action.
+ * 100% Parity with Web CommandPalette & complete index of all native app destinations.
+ * Provides instant debounced search, hierarchical breadcrumbs, RBAC enforcement,
+ * and 1-tap direct navigation to every authorized page, nested settings screen,
+ * operations tab, and actionable system function.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../ui/ThemeProvider';
@@ -19,26 +21,24 @@ import { Icon as CanonicalIcon } from '../ui/icon';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
 import { SearchInput } from '../ui/SearchInput';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/overlay';
 import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
+import { usePreferences } from '../../lib/preferences/store';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  Wrench,
-  Gauge,
-  Activity,
-  Clock,
-  ClipboardList,
-  Users,
-  Building2,
-  User,
   ChevronRight,
+  Search,
+  X,
   LogOut,
-  Sun,
-  Moon,
-  Home,
-  Settings,
-  Banknote,
 } from '../ui/icon';
+import {
+  buildQuickAccessDestinations,
+  filterAndScoreDestinations,
+  type QuickAccessDestination,
+  type QuickAccessCategory,
+} from './quickAccessRegistry';
 
 export interface MobileCommandPaletteProps {
   isOpen: boolean;
@@ -46,17 +46,12 @@ export interface MobileCommandPaletteProps {
   userRole?: string;
 }
 
-interface CommandItem {
-  id: string;
-  title: string;
-  subtitle?: string;
-  category: 'Navigation' | 'Quick Actions' | 'System';
-  icon: React.ComponentType<{ size?: number; color?: string }>;
-  href?: string;
-  action?: () => void;
-  keywords?: string[];
-  roles?: string[];
-}
+const CATEGORY_ORDER: QuickAccessCategory[] = [
+  'Navigation',
+  'Settings',
+  'Quick Actions',
+  'System',
+];
 
 export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
   isOpen,
@@ -65,250 +60,202 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
 }) => {
   const { theme, isDark, setMode } = useTheme();
   const { signOut } = useAuth();
+  const { hapticsEnabled, setHapticsEnabled } = usePreferences();
+  const { toast } = useToast();
   const router = useRouter();
+
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // Debounce search query with 120ms delay for high-performance typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset selected index when query changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [debouncedSearch]);
+
+  // Reset search when modal opens or closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setDebouncedSearch('');
+      setSelectedIndex(0);
+    }
+  }, [isOpen]);
 
   const handleNavigate = (href: string) => {
     onClose();
     setSearch('');
-    router.push(href as any);
-  };
+    setDebouncedSearch('');
 
-  const handleSignOut = async () => {
-    onClose();
-    setSearch('');
-    await signOut();
-    router.replace('/(auth)/login');
+    const [pathname, queryString] = href.split('?');
+    if (queryString) {
+      const params: Record<string, string> = {};
+      const pairs = queryString.split('&');
+      for (const pair of pairs) {
+        const [k, v] = pair.split('=');
+        if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || '');
+      }
+      router.push({
+        pathname: pathname as any,
+        params,
+      });
+    } else {
+      router.push(href as any);
+    }
   };
 
   const handleToggleTheme = () => {
-    setMode(isDark ? 'light' : 'dark');
+    const nextMode = isDark ? 'light' : 'dark';
+    setMode(nextMode);
+    haptics.confirm();
+    toast('info', nextMode === 'dark' ? 'Switched to Dark Theme' : 'Switched to Light Theme');
     onClose();
   };
 
-  const allItems: CommandItem[] = useMemo(() => {
-    return [
-      // NAVIGATION ITEMS (All Monorepo Domain Pages)
-      {
-        id: 'nav-dashboard',
-        title: 'Home',
-        subtitle: 'Executive overview, fleet utilization KPIs & recent activities',
-        category: 'Navigation',
-        icon: Home,
-        href: '/dashboard',
-        keywords: ['home', 'dashboard', 'kpi', 'metrics', 'overview', 'analytics'],
-      },
-      {
-        id: 'nav-machines',
-        title: 'Machines Directory',
-        subtitle: 'Fleet inventory, specs, HMR running hours & status tracking',
-        category: 'Navigation',
-        icon: Wrench,
-        href: '/machines',
-        keywords: ['equipment', 'devices', 'inventory', 'assets', 'fleet', 'scissor lift'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor'],
-      },
-      {
-        id: 'nav-machines-operator',
-        title: 'My Assigned Machine',
-        subtitle: 'View specifications and worksite details for your assigned machine',
-        category: 'Navigation',
-        icon: Wrench,
-        href: '/machines',
-        keywords: ['equipment', 'machine', 'assigned machine', 'specs', 'details'],
-        roles: ['operator'],
-      },
-      {
-        id: 'nav-operations',
-        title: 'Operations Hub',
-        subtitle: 'Daily machine running logs, overtime & operator shift assignments',
-        category: 'Navigation',
-        icon: Gauge,
-        href: '/operations',
-        keywords: ['hours', 'duty', 'meter', 'shifts', 'assignments', 'logs', 'hmr'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
-      },
-      {
-        id: 'nav-operations-running-hours',
-        title: 'Daily Running Hours Logs',
-        subtitle: 'View and export daily equipment meter logs and overtime disputes',
-        category: 'Navigation',
-        icon: Activity,
-        href: '/running-logs',
-        keywords: ['running hours', 'meter log', 'log history', 'daily log', 'running logs'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr'],
-      },
-      {
-        id: 'nav-payroll',
-        title: 'Payroll',
-        subtitle: 'Calculate monthly operator compensation and client-lagged overtime wages',
-        category: 'Navigation',
-        icon: Banknote,
-        href: '/payroll',
-        keywords: ['payroll', 'salary', 'wages', 'rates', 'hr', 'operator pay', 'overtime pay', 'compensation'],
-        roles: ['super_admin', 'admin', 'hr'],
-      },
-      {
-        id: 'nav-clients',
-        title: 'Clients & Accounts Directory',
-        subtitle: 'Registered customer organizations, sites, billing & assigned equipment',
-        category: 'Navigation',
-        icon: Building2,
-        href: '/clients',
-        keywords: ['clients', 'customers', 'accounts', 'sites', 'locations'],
-        roles: ['super_admin', 'admin', 'manager'],
-      },
-      {
-        id: 'nav-users',
-        title: 'Users',
-        subtitle: 'Personnel directory, RBAC roles, KYC docs & account approvals',
-        category: 'Navigation',
-        icon: Users,
-        href: '/users',
-        keywords: ['users', 'user', 'employees', 'staff', 'operators', 'supervisors', 'hr', 'kyc', 'aadhaar'],
-        roles: ['super_admin', 'admin', 'manager', 'hr', 'supervisor'],
-      },
-      {
-        id: 'nav-profile',
-        title: 'User Profile & Identity',
-        subtitle: 'View account credentials, contact info, shift timing & Aadhaar card',
-        category: 'Navigation',
-        icon: User,
-        href: '/profile',
-        keywords: ['profile', 'account', 'identity', 'phone', 'address'],
-      },
-      {
-        id: 'nav-settings',
-        title: 'Settings & Preferences',
-        subtitle: 'Configure notifications, appearance theme, offline queue sync & password',
-        category: 'Navigation',
-        icon: Settings,
-        href: '/settings',
-        keywords: ['settings', 'preferences', 'theme', 'notifications', 'offline', 'sync', 'password', 'dark mode'],
-      },
+  const handleToggleHaptics = () => {
+    const next = !hapticsEnabled;
+    setHapticsEnabled(next);
+    if (next) haptics.confirm();
+    toast('info', next ? 'Haptic feedback enabled' : 'Haptic feedback disabled');
+    onClose();
+  };
 
-      // QUICK ACTIONS
-      {
-        id: 'action-add-machine',
-        title: 'Add New Machine Asset',
-        subtitle: 'Register industrial machine with serial number and initial HMR',
-        category: 'Quick Actions',
-        icon: Wrench,
-        href: '/machines',
-        keywords: ['add machine', 'create machine', 'new equipment'],
-        roles: ['super_admin', 'admin', 'manager'],
-      },
-      {
-        id: 'action-assign-operator',
-        title: 'Assign Operator to Machine',
-        subtitle: 'Schedule field operator to equipment shift roster',
-        category: 'Quick Actions',
-        icon: ClipboardList,
-        href: '/operations',
-        keywords: ['assign operator', 'assign machine', 'new assignment'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor'],
-      },
+  const handleConfirmSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      haptics.warning();
+      await signOut();
+      setShowSignOutConfirm(false);
+      onClose();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('[MobileCommandPalette] Sign out error:', err);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
-      // SYSTEM & PREFERENCES
-      {
-        id: 'sys-theme',
-        title: isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme',
-        subtitle: `Currently active: ${isDark ? 'Dark Mode (Canvas #0a0a0a)' : 'Light Mode (Canvas #fafafa)'}`,
-        category: 'System',
-        icon: isDark ? Sun : Moon,
-        action: handleToggleTheme,
-        keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'color'],
-      },
-      {
-        id: 'sys-logout',
-        title: 'Sign Out of Account',
-        subtitle: 'Securely terminate active session and return to login screen',
-        category: 'System',
-        icon: LogOut,
-        action: handleSignOut,
-        keywords: ['logout', 'sign out', 'exit', 'disconnect'],
-      },
-    ];
-  }, [isDark]);
+  const handleExecuteItem = (item: QuickAccessDestination) => {
+    haptics.select();
+    if (item.actionId === 'toggle-theme') {
+      handleToggleTheme();
+    } else if (item.actionId === 'toggle-haptics') {
+      handleToggleHaptics();
+    } else if (item.actionId === 'logout') {
+      setShowSignOutConfirm(true);
+    } else if (item.href) {
+      handleNavigate(item.href);
+    }
+  };
 
-  // Filter items by user role and search query
-  const filteredItems = useMemo(() => {
-    const normalizedRole = (userRole || 'operator').toLowerCase();
-    const query = search.trim().toLowerCase();
-
-    return allItems.filter((item) => {
-      // Role permission check
-      if (item.roles && item.roles.length > 0) {
-        const isPermitted =
-          normalizedRole === 'super_admin' ||
-          item.roles.some((r) => r.toLowerCase() === normalizedRole);
-        if (!isPermitted) return false;
-      }
-
-      // Search query matching
-      if (!query) return true;
-
-      const titleMatch = item.title.toLowerCase().includes(query);
-      const subtitleMatch = (item.subtitle || '').toLowerCase().includes(query);
-      const categoryMatch = item.category.toLowerCase().includes(query);
-      const keywordMatch = (item.keywords || []).some((kw) => kw.toLowerCase().includes(query));
-
-      return titleMatch || subtitleMatch || categoryMatch || keywordMatch;
+  // Build all destinations dynamically based on state
+  const allDestinations = useMemo(() => {
+    return buildQuickAccessDestinations({
+      userRole,
+      isDark,
+      hapticsEnabled,
     });
-  }, [allItems, userRole, search]);
+  }, [userRole, isDark, hapticsEnabled]);
+
+  // Filter and score matching destinations
+  const filteredItems = useMemo(() => {
+    return filterAndScoreDestinations(allDestinations, debouncedSearch, userRole);
+  }, [allDestinations, debouncedSearch, userRole]);
 
   // Group filtered results by category
   const groupedItems = useMemo(() => {
-    const categories: Record<string, CommandItem[]> = {
+    const groups: Record<QuickAccessCategory, QuickAccessDestination[]> = {
       Navigation: [],
+      Settings: [],
       'Quick Actions': [],
       System: [],
     };
 
     filteredItems.forEach((item) => {
-      if (!categories[item.category]) {
-        categories[item.category] = [];
+      if (!groups[item.category]) {
+        groups[item.category] = [];
       }
-      categories[item.category].push(item);
+      groups[item.category].push(item);
     });
 
-    return categories;
+    return groups;
   }, [filteredItems]);
+
+  const { width: screenWidth } = useWindowDimensions();
+  const isWide = screenWidth >= 640;
+
+  // Web keyboard navigation (ArrowDown, ArrowUp, Enter, Escape)
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (filteredItems.length > 0 ? (prev + 1) % filteredItems.length : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (filteredItems.length > 0 ? (prev - 1 + filteredItems.length) % filteredItems.length : 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filteredItems[selectedIndex]) {
+          handleExecuteItem(filteredItems[selectedIndex]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, filteredItems, selectedIndex]);
 
   if (!isOpen) return null;
 
   return (
-    <AppModal
-      visible={isOpen}
-      onClose={onClose}
-      variant="bottom"
-      testID="mobile-command-palette-modal"
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ width: '100%' }}
+    <>
+      <AppModal
+        visible={isOpen}
+        onClose={onClose}
+        variant={isWide ? 'center' : 'bottom'}
+        testID="mobile-command-palette-modal"
       >
         <View
           style={[
             styles.paletteCard,
+            isWide ? styles.paletteCardCenter : styles.paletteCardBottom,
             {
               backgroundColor: theme.colors.canvasElevated,
               borderColor: theme.colors.hairline,
             },
           ]}
         >
-          {/* Top Notch Bar */}
-          <View style={[styles.notchBar, { backgroundColor: theme.colors.mute }]} />
-
           {/* Search Header Bar */}
           <View style={styles.searchBarWrapper}>
             <SearchInput
               value={search}
               onChangeText={setSearch}
-              onClear={() => setSearch('')}
-              placeholder="Search all pages, modules, commands..."
+              onClear={() => {
+                setSearch('');
+                setDebouncedSearch('');
+              }}
+              placeholder="Search pages, settings, actions (e.g. theme, shift)..."
               autoFocus
               size="lg"
+              name="cmd_search_query"
+              id="cmd_search_query"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
             />
           </View>
 
@@ -316,20 +263,55 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            style={styles.resultsScroll}
             contentContainerStyle={styles.scrollContent}
           >
             {filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
+                <View
+                  style={[
+                    styles.emptyIconCircle,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <CanonicalIcon icon={Search} variant="subheading" color={theme.colors.mute} />
+                </View>
                 <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-                  No results found
+                  No matching destinations
                 </Text>
                 <Text variant="body" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
-                  No pages or actions matched "{search}". Try another keyword.
+                  No authorized pages or actions matched "{debouncedSearch || search}". Try searching for machines, theme, shift entry, or password.
                 </Text>
+                <View style={styles.emptyActionRow}>
+                  <Touchable
+                    preset="card"
+                    onPress={() => {
+                      haptics.select();
+                      setSearch('');
+                      setDebouncedSearch('');
+                    }}
+                    style={[
+                      styles.clearSearchBtn,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <CanonicalIcon icon={X} variant="caption" color={theme.colors.ink} />
+                    <Text variant="label" style={{ color: theme.colors.ink }}>
+                      Clear Search
+                    </Text>
+                  </Touchable>
+                </View>
               </View>
             ) : (
-              Object.entries(groupedItems).map(([category, items]) => {
-                if (items.length === 0) return null;
+              CATEGORY_ORDER.map((category) => {
+                const items = groupedItems[category];
+                if (!items || items.length === 0) return null;
 
                 return (
                   <View key={category} style={styles.categorySection}>
@@ -355,21 +337,18 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                       {items.map((item, idx) => {
                         const Icon = item.icon;
                         const isLast = idx === items.length - 1;
+                        const isSelected = filteredItems[selectedIndex]?.id === item.id;
 
                         return (
                           <Touchable
                             preset="row"
                             key={item.id}
-                            onPress={() => {
-                              haptics.select();
-                              if (item.action) {
-                                item.action();
-                              } else if (item.href) {
-                                handleNavigate(item.href);
-                              }
-                            }}
+                            onPress={() => handleExecuteItem(item)}
                             style={[
                               styles.itemRow,
+                              isSelected && {
+                                backgroundColor: theme.colors.hairlineSoft,
+                              },
                               !isLast && {
                                 borderBottomColor: theme.colors.hairlineSoft,
                                 borderBottomWidth: 1,
@@ -380,15 +359,36 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                               style={[
                                 styles.iconContainer,
                                 {
-                                  backgroundColor: theme.colors.hairlineSoft,
+                                  backgroundColor: isSelected
+                                    ? theme.colors.hairline
+                                    : theme.colors.hairlineSoft,
                                   borderColor: theme.colors.hairline,
                                 },
                               ]}
                             >
-                              <CanonicalIcon icon={Icon as any} variant="subheading" color={theme.colors.ink} />
+                              <CanonicalIcon
+                                icon={Icon as any}
+                                variant="subheading"
+                                color={theme.colors.ink}
+                              />
                             </View>
 
                             <View style={styles.itemTextCol}>
+                              {item.breadcrumb ? (
+                                <View style={styles.breadcrumbRow}>
+                                  <Text
+                                    variant="micro"
+                                    style={[
+                                      styles.breadcrumbText,
+                                      { color: theme.colors.mute },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {item.breadcrumb}
+                                  </Text>
+                                </View>
+                              ) : null}
+
                               <Text
                                 variant="subheading"
                                 style={[
@@ -399,7 +399,8 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                               >
                                 {item.title}
                               </Text>
-                              {item.subtitle && (
+
+                              {item.subtitle ? (
                                 <Text
                                   variant="caption"
                                   style={[
@@ -410,7 +411,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                                 >
                                   {item.subtitle}
                                 </Text>
-                              )}
+                              ) : null}
                             </View>
 
                             <CanonicalIcon
@@ -428,40 +429,60 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
             )}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
-    </AppModal>
+      </AppModal>
+
+      {/* Confirm Sign Out Dialog */}
+      <ConfirmDialog
+        visible={showSignOutConfirm}
+        onClose={() => {
+          if (!isSigningOut) setShowSignOutConfirm(false);
+        }}
+        onConfirm={handleConfirmSignOut}
+        title="Sign Out"
+        message="Are you sure you want to sign out of Reach International on this mobile device?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSigningOut}
+        icon={<LogOut size={22} color={theme.colors.error} />}
+      />
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
   paletteCard: {
-    maxHeight: '85%',
+    paddingTop: 14,
+    paddingBottom: 16,
+    width: '100%',
+  },
+  paletteCardBottom: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    paddingTop: 12,
-    paddingBottom: 24,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 20,
+    maxHeight: '88%',
   },
-  notchBar: {
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 12,
-    opacity: 0.4,
+  paletteCardCenter: {
+    maxWidth: 580,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    maxHeight: 540,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 48px -12px rgba(0, 0, 0, 0.35)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.28,
+        shadowRadius: 24,
+        elevation: 24,
+      },
+    }),
+  },
+  resultsScroll: {
+    maxHeight: 400,
   },
   searchBarWrapper: {
     marginHorizontal: spacingNumeric.md,
@@ -473,16 +494,38 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.md,
   },
   emptyState: {
-    paddingVertical: 36,
+    paddingVertical: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  emptyIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
-    marginBottom: 4,
+    textAlign: 'center',
   },
   emptySubtitle: {
     textAlign: 'center',
     paddingHorizontal: 24,
+  },
+  emptyActionRow: {
+    marginTop: 8,
+  },
+  clearSearchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+    gap: 6,
   },
   categorySection: {
     gap: 6,
@@ -498,13 +541,14 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 11,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     gap: 12,
+    minHeight: 54,
   },
   iconContainer: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
     alignItems: 'center',
@@ -512,9 +556,15 @@ const styles = StyleSheet.create({
   },
   itemTextCol: {
     flex: 1,
+    gap: 2,
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breadcrumbText: {
+    opacity: 0.85,
   },
   itemTitle: {},
-  itemSubtitle: {
-    marginTop: 1,
-  },
+  itemSubtitle: {},
 });

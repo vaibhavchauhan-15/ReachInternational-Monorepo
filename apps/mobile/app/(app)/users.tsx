@@ -14,9 +14,13 @@ import {
   FlatList,
   ListRenderItem,
   Linking,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
-import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle, SearchInput, useToast } from '../../components/ui';
+import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle, SearchInput, useToast, AppModal, EmptyState, ErrorState } from '../../components/ui';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
+import { DeleteUserConfirmDialog } from '../../components/users/DeleteUserConfirmDialog';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { UserEditModal } from '../../components/users/UserEditModal';
@@ -27,7 +31,8 @@ import { AssignSupervisorModal } from '../../components/users/AssignSupervisorMo
 import { AssignMachineModal } from '../../components/users/AssignMachineModal';
 import { UserListSkeleton } from '../../components/users/UserCardSkeleton';
 import { supabase } from '../../lib/supabase';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
@@ -67,7 +72,7 @@ import {
   Edit2,
   KeyRound,
   Eye,
-  WhatsAppIcon,
+  MoreVertical,
 } from '../../components/ui/icon';
 
 const ROLE_FILTER_OPTIONS: FilterOption[] = [
@@ -257,6 +262,13 @@ function applyOptimizedUserSearch(query: any, search?: string) {
   return query.or(conditions.join(','));
 }
 
+export interface AnchorCoords {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface UserTouchCardProps {
   user: UserRecord;
   isSelected: boolean;
@@ -271,6 +283,7 @@ interface UserTouchCardProps {
   onAssignSupervisor?: (user: UserRecord) => void;
   onAssignMachine?: (user: UserRecord) => void;
   onResetPassword?: (user: UserRecord) => void;
+  onOpenMoreActions?: (user: UserRecord, anchor?: AnchorCoords | null) => void;
   canEdit?: boolean;
   canDelete?: boolean;
   canAssignSupervisor?: boolean;
@@ -292,13 +305,40 @@ const UserTouchCard = React.memo(function UserTouchCard({
   onAssignSupervisor,
   onAssignMachine,
   onResetPassword,
+  onOpenMoreActions,
   canEdit = false,
   canDelete = false,
   canAssignSupervisor = false,
   canAssignMachine = false,
   canResetPwd = false,
 }: UserTouchCardProps) {
+  const { isDark } = useTheme();
   const accentColor = getRoleAccentColor(u.role);
+  const moreBtnRef = useRef<View>(null);
+
+  const handleMorePress = () => {
+    haptics.select();
+    if (Platform.OS === 'web' && moreBtnRef.current) {
+      const rect = (moreBtnRef.current as any)?.getBoundingClientRect?.();
+      if (rect) {
+        onOpenMoreActions?.(u, {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        });
+        return;
+      }
+    }
+    if (moreBtnRef.current?.measureInWindow) {
+      moreBtnRef.current.measureInWindow((x, y, width, height) => {
+        onOpenMoreActions?.(u, { x, y, width, height });
+      });
+    } else {
+      onOpenMoreActions?.(u, null);
+    }
+  };
+
   const hasMeta = Boolean(
     u.employee_id ||
     u.email ||
@@ -311,21 +351,6 @@ const UserTouchCard = React.memo(function UserTouchCard({
     (u.assigned_machines && u.assigned_machines.length > 0) ||
     u.shift_time
   );
-
-  const handleCall = () => {
-    if (!u.phone) return;
-    haptics.select();
-    const clean = u.phone.replace(/[^0-9+]/g, '');
-    Linking.openURL(`tel:${clean}`);
-  };
-
-  const handleWhatsApp = () => {
-    if (!u.phone) return;
-    haptics.select();
-    const clean = u.phone.replace(/[^0-9]/g, '');
-    const msg = `Hello ${u.full_name}, reaching out from Reach International.`;
-    Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`);
-  };
 
   return (
     <View
@@ -345,200 +370,240 @@ const UserTouchCard = React.memo(function UserTouchCard({
         },
       ]}
     >
-      {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side in one row on right */}
+      {/* Clickable Card Body: Tapping anywhere opens user profile details */}
       <Pressable
         variant="plain"
         haptic={false}
         onPress={() => (isSelectMode ? onPress(u) : onViewDetails(u))}
         onLongPress={() => onLongPress(u)}
-        style={styles.userCardHeader}
+        style={{ flex: 1 }}
       >
-        <View style={styles.userAvatarRow}>
-          {isSelectMode ? (
-            <View style={{ marginRight: 6 }}>
-              {isSelected ? (
-                <CheckSquare size={20} color={theme.colors.link} />
-              ) : (
-                <Square size={20} color={theme.colors.mute} />
-              )}
+        {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side on right */}
+        <View style={styles.userCardHeader}>
+          <View style={styles.userAvatarRow}>
+            {isSelectMode ? (
+              <View style={{ marginRight: 6 }}>
+                {isSelected ? (
+                  <CheckSquare size={20} color={theme.colors.link} />
+                ) : (
+                  <Square size={20} color={theme.colors.mute} />
+                )}
+              </View>
+            ) : (
+              <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
+                <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                  {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
+                </Text>
+              </View>
+            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <HighlightText
+                text={truncateText(u.full_name, 28)}
+                query={searchTerm}
+                variant="label"
+                style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
+                numberOfLines={1}
+              />
             </View>
-          ) : (
-            <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-              <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
-              </Text>
-            </View>
-          )}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <HighlightText
-              text={truncateText(u.full_name, 28)}
-              query={searchTerm}
-              variant="label"
-              style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
-              numberOfLines={1}
-            />
           </View>
-        </View>
 
-        {/* Header Right: Role Badge & Status Badge in ONE ROW (no Chevron) */}
-        <View style={styles.headerRightActions}>
-          <View style={styles.headerBadgesCluster}>
-            <Badge
-              variant="neutral"
-              size="sm"
-              style={[
-                styles.roleBadgePill,
-                {
-                  backgroundColor: accentColor + '18',
-                  borderColor: accentColor + '35',
-                },
-              ]}
-            >
-              <Text variant="caption" style={{ color: accentColor }}>
-                {formatRoleName(u.role)}
-              </Text>
-            </Badge>
-
-            <Badge
-              status={u.status}
-              size="sm"
-              dot
-            >
-              <Text variant="caption">
-                {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
-              </Text>
-            </Badge>
-          </View>
-        </View>
-      </Pressable>
-
-      {/* Card Metadata Section (organized and balanced at the bottom along with other details) */}
-      {hasMeta && (
-        <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-          {u.employee_id ? (
-            <View style={styles.metaChipRow}>
-              <Badge
-                variant="outline"
-                size="sm"
+          {/* Header Right: Standardized 24px Role Badge & Status Badge in ONE ROW */}
+          <View style={styles.headerRightActions}>
+            <View style={styles.headerBadgesCluster}>
+              {/* Role Chip (consistent 24px height, theme-aware colors) */}
+              <View
                 style={[
-                  styles.empIdBadge,
+                  styles.chipBadge,
                   {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
+                    backgroundColor: isDark ? accentColor + '25' : accentColor + '15',
+                    borderColor: isDark ? accentColor + '50' : accentColor + '35',
                   },
                 ]}
               >
+                <Text variant="caption" style={{ color: accentColor }}>
+                  {formatRoleName(u.role)}
+                </Text>
+              </View>
+
+              {/* Status Chip (consistent 24px height, theme-aware colors) */}
+              <View
+                style={[
+                  styles.chipBadge,
+                  {
+                    backgroundColor:
+                      u.status === 'active'
+                        ? isDark ? 'rgba(52, 211, 153, 0.16)' : 'rgba(16, 185, 129, 0.12)'
+                        : u.status === 'pending'
+                        ? isDark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)'
+                        : isDark ? 'rgba(161, 161, 170, 0.16)' : 'rgba(113, 113, 122, 0.12)',
+                    borderColor:
+                      u.status === 'active'
+                        ? isDark ? 'rgba(52, 211, 153, 0.4)' : 'rgba(16, 185, 129, 0.3)'
+                        : u.status === 'pending'
+                        ? isDark ? 'rgba(251, 191, 36, 0.4)' : 'rgba(245, 158, 11, 0.3)'
+                        : isDark ? 'rgba(161, 161, 170, 0.4)' : 'rgba(113, 113, 122, 0.3)',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor:
+                        u.status === 'active'
+                          ? isDark ? '#34d399' : '#10b981'
+                          : u.status === 'pending'
+                          ? isDark ? '#fbbf24' : '#f59e0b'
+                          : isDark ? '#a1a1aa' : '#94a3b8',
+                    },
+                  ]}
+                />
+                <Text
+                  variant="caption"
+                  style={{
+                    color:
+                      u.status === 'active'
+                        ? isDark ? '#34d399' : '#059669'
+                        : u.status === 'pending'
+                        ? isDark ? '#fbbf24' : '#d97706'
+                        : isDark ? '#a1a1aa' : '#71717a',
+                  }}
+                >
+                  {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Card Metadata Section */}
+        {hasMeta && (
+          <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+            {u.employee_id ? (
+              <View style={styles.metaChipRow}>
+                <Badge
+                  variant="outline"
+                  size="sm"
+                  style={[
+                    styles.empIdBadge,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <HighlightText
+                    text={u.employee_id}
+                    query={searchTerm}
+                    variant="mono"
+                    style={{ color: theme.colors.ink }}
+                  />
+                </Badge>
+              </View>
+            ) : null}
+
+            {u.email ? (
+              <View style={styles.metaChipRow}>
+                <Mail size={12} color={theme.colors.mute} />
                 <HighlightText
-                  text={u.employee_id}
+                  text={u.email}
+                  query={searchTerm}
+                  variant="caption"
+                  style={[styles.metaChipText, { color: theme.colors.ink }]}
+                  numberOfLines={1}
+                />
+              </View>
+            ) : null}
+
+            {u.phone ? (
+              <View style={styles.metaChipRow}>
+                <Phone size={12} color={theme.colors.mute} />
+                <HighlightText
+                  text={u.phone}
                   query={searchTerm}
                   variant="mono"
-                  style={{ color: theme.colors.ink }}
+                  style={[styles.metaChipText, { color: theme.colors.ink }]}
                 />
-              </Badge>
-            </View>
-          ) : null}
+              </View>
+            ) : null}
 
-          {u.email ? (
-            <View style={styles.metaChipRow}>
-              <Mail size={12} color={theme.colors.mute} />
-              <HighlightText
-                text={u.email}
-                query={searchTerm}
-                variant="caption"
-                style={[styles.metaChipText, { color: theme.colors.ink }]}
-                numberOfLines={1}
-              />
-            </View>
-          ) : null}
+            {(u.city || u.district || u.state) && (
+              <View style={styles.metaChipRow}>
+                <MapPin size={12} color={theme.colors.mute} />
+                <HighlightText
+                  text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                  query={searchTerm}
+                  variant="caption"
+                  style={[styles.metaChipText, { color: theme.colors.mute }]}
+                  numberOfLines={1}
+                />
+              </View>
+            )}
 
-          {u.phone ? (
-            <View style={styles.metaChipRow}>
-              <Phone size={12} color={theme.colors.mute} />
-              <HighlightText
-                text={u.phone}
-                query={searchTerm}
-                variant="mono"
-                style={[styles.metaChipText, { color: theme.colors.ink }]}
-              />
-            </View>
-          ) : null}
+            {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
+              <View style={styles.metaChipRow}>
+                <User size={12} color="#0d9488" />
+                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                  Supervisor: {u.supervisors && u.supervisors.length > 0
+                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                    : u.supervisor?.full_name}
+                </Text>
+              </View>
+            )}
 
-          {(u.city || u.district || u.state) && (
-            <View style={styles.metaChipRow}>
-              <MapPin size={12} color={theme.colors.mute} />
-              <HighlightText
-                text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                query={searchTerm}
-                variant="caption"
-                style={[styles.metaChipText, { color: theme.colors.mute }]}
-                numberOfLines={1}
-              />
-            </View>
-          )}
+            {u.assigned_machines && u.assigned_machines.length > 0 && (
+              <View style={styles.metaChipRow}>
+                <Wrench size={12} color="#d97706" />
+                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                  Machines: {u.assigned_machines.map((m) => m.machine_id).join(', ')}
+                </Text>
+              </View>
+            )}
 
-          {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
-            <View style={styles.metaChipRow}>
-              <User size={12} color="#0d9488" />
-              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                Supervisor: {u.supervisors && u.supervisors.length > 0
-                  ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                  : u.supervisor?.full_name}
-              </Text>
-            </View>
-          )}
+            {u.shift_time && (
+              <View style={styles.metaChipRow}>
+                <Clock size={12} color={theme.colors.mute} />
+                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
+                  Shift: {u.shift_time}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </Pressable>
 
-          {u.assigned_machines && u.assigned_machines.length > 0 && (
-            <View style={styles.metaChipRow}>
-              <Wrench size={12} color="#d97706" />
-              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                Machines: {u.assigned_machines.map((m) => m.machine_id).join(', ')}
-              </Text>
-            </View>
-          )}
-
-          {u.shift_time && (
-            <View style={styles.metaChipRow}>
-              <Clock size={12} color={theme.colors.mute} />
-              <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
-                Shift: {u.shift_time}
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Action Buttons Toolbar at the bottom of every card */}
+      {/* Action Buttons Toolbar at bottom: STRICTLY 3 actions (3-dot More, Assign Machine, Supervisor) */}
       <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
-        {/* 1. View Profile */}
-        <Pressable
-          variant="plain"
-          hitSlopToMin48
-          onPress={() => {
-            haptics.select();
-            onViewDetails(u);
-          }}
-          style={[styles.actionPillBtn, styles.actionPillPrimary]}
-        >
-          <User size={12} color="#ffffff" />
-          <Text variant="caption" style={styles.actionPillPrimaryText}>
-            View
-          </Text>
-        </Pressable>
-
-        {/* 2. Edit User */}
-        {canEdit && onEdit && (
+        {/* 1. 3-Dot More Actions Button */}
+        <View ref={moreBtnRef} collapsable={false}>
           <Pressable
             variant="plain"
             hitSlopToMin48
-            onPress={() => {
-              haptics.select();
-              onEdit(u);
-            }}
+            onPress={handleMorePress}
             style={[styles.actionPillBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
           >
-            <Edit2 size={12} color={theme.colors.ink} />
+            <MoreVertical size={13} color={theme.colors.ink} />
             <Text variant="caption" style={{ color: theme.colors.ink }}>
-              Edit
+              More
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 2. Assign Machine */}
+        {canAssignMachine && onAssignMachine && (
+          <Pressable
+            variant="plain"
+            hitSlopToMin48
+            onPress={(e?: any) => {
+              e?.stopPropagation?.();
+              haptics.select();
+              onAssignMachine(u);
+            }}
+            style={[styles.actionPillBtn, { borderColor: '#d9770640', backgroundColor: '#d9770612' }]}
+          >
+            <Wrench size={12} color="#d97706" />
+            <Text variant="caption" style={{ color: '#d97706' }}>
+              Assign Machine
             </Text>
           </Pressable>
         )}
@@ -560,88 +625,6 @@ const UserTouchCard = React.memo(function UserTouchCard({
             </Text>
           </Pressable>
         )}
-
-        {/* 4. Assign Machine */}
-        {canAssignMachine && onAssignMachine && (
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={() => {
-              haptics.select();
-              onAssignMachine(u);
-            }}
-            style={[styles.actionPillBtn, { borderColor: '#d9770640', backgroundColor: '#d9770612' }]}
-          >
-            <Wrench size={12} color="#d97706" />
-            <Text variant="caption" style={{ color: '#d97706' }}>
-              Machine
-            </Text>
-          </Pressable>
-        )}
-
-        {/* 5. Reset Password */}
-        {canResetPwd && onResetPassword && (
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={() => {
-              haptics.select();
-              onResetPassword(u);
-            }}
-            style={[styles.actionPillBtn, { borderColor: '#6366f140', backgroundColor: '#6366f112' }]}
-          >
-            <KeyRound size={12} color="#6366f1" />
-            <Text variant="caption" style={{ color: '#6366f1' }}>
-              Reset Pwd
-            </Text>
-          </Pressable>
-        )}
-
-        {/* 6. Contact: Call & WhatsApp */}
-        {u.phone ? (
-          <>
-            <Pressable
-              variant="plain"
-              hitSlopToMin48
-              onPress={handleCall}
-              style={[styles.actionPillBtn, { backgroundColor: '#16a34a', borderColor: '#16a34a' }]}
-            >
-              <Phone size={12} color="#ffffff" />
-              <Text variant="caption" style={{ color: '#ffffff' }}>
-                Call
-              </Text>
-            </Pressable>
-            <Pressable
-              variant="plain"
-              hitSlopToMin48
-              onPress={handleWhatsApp}
-              style={[styles.actionPillBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}
-            >
-              <WhatsAppIcon size={12} color="#ffffff" />
-              <Text variant="caption" style={{ color: '#ffffff' }}>
-                WhatsApp
-              </Text>
-            </Pressable>
-          </>
-        ) : null}
-
-        {/* 7. Delete User */}
-        {canDelete && onDelete && (
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={() => {
-              haptics.select();
-              onDelete(u);
-            }}
-            style={[styles.actionPillBtn, { borderColor: '#ee000040', backgroundColor: '#ee000012' }]}
-          >
-            <Trash2 size={12} color="#ee0000" />
-            <Text variant="caption" style={{ color: '#ee0000' }}>
-              Delete
-            </Text>
-          </Pressable>
-        )}
       </View>
     </View>
   );
@@ -657,6 +640,7 @@ const DEFAULT_USERS_FILTERS = {
 };
 
 export default function UsersScreen() {
+  const queryClient = useQueryClient();
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
   const { role: currentUserRole, user: authUser } = useAuth();
@@ -777,6 +761,12 @@ export default function UsersScreen() {
   const [passwordResetModalVisible, setPasswordResetModalVisible] = useState(false);
   const [resetPasswordUserName, setResetPasswordUserName] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [confirmResetUser, setConfirmResetUser] = useState<UserRecord | null>(null);
+  const [moreActionsUser, setMoreActionsUser] = useState<UserRecord | null>(null);
+  const [moreActionsAnchor, setMoreActionsAnchor] = useState<AnchorCoords | null>(null);
+  const [statusConfirmUser, setStatusConfirmUser] = useState<UserRecord | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const statusSubmittingRef = useRef(false);
 
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [assignSupervisorUser, setAssignSupervisorUser] = useState<UserRecord | null>(null);
@@ -796,11 +786,21 @@ export default function UsersScreen() {
   const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
   const [approvingDeletionId, setApprovingDeletionId] = useState<string | null>(null);
   const [rejectingDeletionId, setRejectingDeletionId] = useState<string | null>(null);
+  const [approveDeletionReqTarget, setApproveDeletionReqTarget] = useState<any | null>(null);
+  const [rejectDeletionReqTarget, setRejectDeletionReqTarget] = useState<any | null>(null);
 
   // Multi-Selection State
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+
+  // User Deletion States (Single & Bulk)
+  const [userToDelete, setUserToDelete] = useState<UserRecord | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
+  const deleteSubmittingRef = useRef(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
 
   // Get current filter label helpers
   const currentRoleLabel =
@@ -1266,7 +1266,7 @@ export default function UsersScreen() {
 
           return {
             ...u,
-            address: u.street || u.address || null,
+            address: u.street || (u as any).address || null,
             shift_time: (u.shift_start_time && u.shift_end_time) ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}` : null,
             supervisor_id: primarySup?.id || null,
             supervisor_ids: supIds,
@@ -1450,6 +1450,100 @@ export default function UsersScreen() {
     fetchUsers(false, 1);
   }, [fetchUsers]);
 
+  // Targeted Single User Fetcher & Cache Synchronizer (Preserves filters, pagination, scroll position)
+  const fetchSingleUser = useCallback(async (userId: string): Promise<UserRecord | null> => {
+    try {
+      const { data: u, error } = await supabase
+        .from('users')
+        .select(
+          'id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at'
+        )
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error || !u) return null;
+
+      let primarySup: any = null;
+      let supervisorsList: any[] = [];
+      if (u.supervisor_id) {
+        const { data: sUser } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .eq('id', u.supervisor_id)
+          .maybeSingle();
+        if (sUser) {
+          primarySup = {
+            id: sUser.id,
+            full_name: sUser.full_name || '',
+            email: sUser.email || null,
+          };
+          supervisorsList = [primarySup];
+        }
+      }
+
+      let assignedMachines: any[] = [];
+      try {
+        const { data: mData } = await supabase
+          .from('machines')
+          .select('id, machine_id, model, operator_ids, supervisor_ids');
+        if (mData) {
+          assignedMachines = mData
+            .filter((m: any) =>
+              (Array.isArray(m.operator_ids) && m.operator_ids.includes(u.id)) ||
+              (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(u.id))
+            )
+            .map((m: any) => ({
+              id: m.id,
+              machine_id: m.machine_id,
+              model: m.model,
+            }));
+        }
+      } catch {
+        // ignore
+      }
+
+      return {
+        ...u,
+        address: u.street || (u as any).address || null,
+        shift_time: (u.shift_start_time && u.shift_end_time) ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}` : null,
+        supervisor_id: primarySup?.id || null,
+        supervisor_ids: primarySup ? [primarySup.id] : [],
+        supervisor: primarySup,
+        supervisors: supervisorsList,
+        assigned_machines: assignedMachines,
+      };
+    } catch (err) {
+      console.warn('Error fetching single user:', err);
+      return null;
+    }
+  }, []);
+
+  const updateSingleUserInState = useCallback(
+    (userId: string, patch: Partial<UserRecord> | ((prev: UserRecord) => UserRecord)) => {
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== userId) return u;
+          return typeof patch === 'function' ? patch(u) : { ...u, ...patch };
+        })
+      );
+      setSelectedUser((prev) => {
+        if (!prev || prev.id !== userId) return prev;
+        return typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
+      });
+    },
+    []
+  );
+
+  const refreshSingleUser = useCallback(
+    async (userId: string) => {
+      const refreshed = await fetchSingleUser(userId);
+      if (refreshed) {
+        updateSingleUserInState(userId, refreshed);
+      }
+    },
+    [fetchSingleUser, updateSingleUserInState]
+  );
+
   // Profile Change Request Actions
   const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
     setApprovingProfileId(reqId);
@@ -1474,8 +1568,10 @@ export default function UsersScreen() {
 
       if (reqErr) throw reqErr;
 
+      setProfileRequests((prev) => prev.filter((r) => r.id !== reqId));
+      updateSingleUserInState(userId, reqData);
+      refreshSingleUser(userId);
       toast('success', 'Profile Approved', 'Profile changes have been approved and applied.');
-      fetchUsers(false, 1);
     } catch (e: any) {
       toast('error', 'Approval Failed', e?.message || 'Failed to approve profile changes.');
     } finally {
@@ -1496,9 +1592,9 @@ export default function UsersScreen() {
         .eq('id', rejectModalReq.id);
 
       if (error) throw error;
+      setProfileRequests((prev) => prev.filter((r) => r.id !== rejectModalReq.id));
       setRejectModalReq(null);
       toast('info', 'Profile Request Declined', 'Profile change request has been declined.');
-      fetchUsers(false, 1);
     } catch (e: any) {
       toast('error', 'Rejection Failed', e?.message || 'Failed to reject profile changes.');
     } finally {
@@ -1526,9 +1622,12 @@ export default function UsersScreen() {
             reviewed_at: new Date().toISOString(),
           })
           .eq('id', pr.id);
+
+        updateSingleUserInState(pr.user_id, pr.requested_data);
+        refreshSingleUser(pr.user_id);
       }
+      setProfileRequests([]);
       toast('success', 'Requests Approved', `Approved all ${profileRequests.length} profile requests.`);
-      fetchUsers(false, 1);
     } catch (e: any) {
       toast('error', 'Bulk Approval Failed', e?.message || 'Failed to bulk approve profile requests.');
     } finally {
@@ -1549,8 +1648,8 @@ export default function UsersScreen() {
         })
         .in('id', reqIds);
 
+      setProfileRequests([]);
       toast('info', 'Requests Declined', `Rejected all ${profileRequests.length} profile requests.`);
-      fetchUsers(false, 1);
     } catch (e: any) {
       toast('error', 'Bulk Rejection Failed', e?.message || 'Failed to bulk reject profile requests.');
     } finally {
@@ -1559,152 +1658,149 @@ export default function UsersScreen() {
   };
 
   // Account Deletion Approval and Rejection Handlers
-  const handleApproveDeletionReq = async (req: any) => {
-    const displayName = req.user?.full_name || req.email || 'this user';
-    Alert.alert(
-      'Approve Account Deletion',
-      `Are you sure you want to approve account deletion for ${displayName}? The account will be deactivated and KYC details purged. Statutory machine hour logs (HMR) are permanently retained.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve & Deactivate',
-          style: 'destructive',
-          onPress: async () => {
-            setApprovingDeletionId(req.id);
-            try {
-              // 1. Deactivate user and wipe KYC info
-              if (req.user_id) {
-                await supabase
-                  .from('users')
-                  .update({
-                    status: 'inactive',
-                    aadhaar_number: null,
-                    license_number: null,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', req.user_id);
-              } else if (req.email) {
-                await supabase
-                  .from('users')
-                  .update({
-                    status: 'inactive',
-                    aadhaar_number: null,
-                    license_number: null,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('email', req.email);
-              }
-
-              // 2. Mark request approved
-              if (req._isProfileChangeRequest) {
-                await supabase
-                  .from('profile_change_requests')
-                  .update({
-                    status: 'approved',
-                    reviewed_at: new Date().toISOString(),
-                  })
-                  .eq('id', req.id);
-              } else {
-                try {
-                  await supabase
-                    .from('account_deletion_requests')
-                    .update({
-                      status: 'approved',
-                      reviewed_at: new Date().toISOString(),
-                    })
-                    .eq('id', req.id);
-                } catch {
-                  await supabase
-                    .from('profile_change_requests')
-                    .update({
-                      status: 'approved',
-                      reviewed_at: new Date().toISOString(),
-                    })
-                    .eq('id', req.id);
-                }
-              }
-
-              // 3. Log audit event
-              try {
-                await supabase.from('audit_logs').insert({
-                  action: 'user.account_deleted',
-                  entity_type: 'user',
-                  entity_id: req.user_id || req.id,
-                  new_values: { reason: req.reason, source: req.source, email: req.email },
-                  user_id: authUser?.id || null,
-                });
-              } catch {
-                // non-blocking
-              }
-
-              toast('success', 'Account Deactivated', `Account for ${displayName} has been deactivated.`);
-              fetchUsers(false, 1);
-            } catch (err: any) {
-              toast('error', 'Deactivation Failed', err?.message || 'Failed to approve account deletion.');
-            } finally {
-              setApprovingDeletionId(null);
-            }
-          },
-        },
-      ]
-    );
+  const handleApproveDeletionReq = (req: any) => {
+    setApproveDeletionReqTarget(req);
   };
 
-  const handleRejectDeletionReq = async (req: any) => {
+  const handleConfirmApproveDeletion = async () => {
+    const req = approveDeletionReqTarget;
+    if (!req) return;
     const displayName = req.user?.full_name || req.email || 'this user';
-    Alert.alert(
-      'Decline Deletion Request',
-      `Are you sure you want to decline the account deletion request for ${displayName}? The account will remain active.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline Request',
-          onPress: async () => {
-            setRejectingDeletionId(req.id);
-            try {
-              if (req._isProfileChangeRequest) {
-                await supabase
-                  .from('profile_change_requests')
-                  .update({
-                    status: 'rejected',
-                    reviewed_at: new Date().toISOString(),
-                  })
-                  .eq('id', req.id);
-              } else {
-                try {
-                  await supabase
-                    .from('account_deletion_requests')
-                    .update({
-                      status: 'rejected',
-                      reviewed_at: new Date().toISOString(),
-                    })
-                    .eq('id', req.id);
-                } catch {
-                  await supabase
-                    .from('profile_change_requests')
-                    .update({
-                      status: 'rejected',
-                      reviewed_at: new Date().toISOString(),
-                    })
-                    .eq('id', req.id);
-                }
-              }
+    setApprovingDeletionId(req.id);
+    try {
+      // 1. Deactivate user and wipe KYC info
+      if (req.user_id) {
+        await supabase
+          .from('users')
+          .update({
+            status: 'inactive',
+            aadhaar_number: null,
+            license_number: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', req.user_id);
+      } else if (req.email) {
+        await supabase
+          .from('users')
+          .update({
+            status: 'inactive',
+            aadhaar_number: null,
+            license_number: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('email', req.email);
+      }
 
-              toast('info', 'Request Declined', `Deletion request for ${displayName} has been declined.`);
-              fetchUsers(false, 1);
-            } catch (err: any) {
-              toast('error', 'Action Failed', err?.message || 'Failed to decline deletion request.');
-            } finally {
-              setRejectingDeletionId(null);
-            }
-          },
-        },
-      ]
-    );
+      // 2. Mark request approved
+      if (req._isProfileChangeRequest) {
+        await supabase
+          .from('profile_change_requests')
+          .update({
+            status: 'approved',
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', req.id);
+      } else {
+        try {
+          await supabase
+            .from('account_deletion_requests')
+            .update({
+              status: 'approved',
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', req.id);
+        } catch {
+          await supabase
+            .from('profile_change_requests')
+            .update({
+              status: 'approved',
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', req.id);
+        }
+      }
+
+      // 3. Log audit event
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'user.account_deleted',
+          entity_type: 'user',
+          entity_id: req.user_id || req.id,
+          new_values: { reason: req.reason, source: req.source, email: req.email },
+          user_id: authUser?.id || null,
+        });
+      } catch {
+        // non-blocking
+      }
+
+      if (req.user_id) {
+        updateSingleUserInState(req.user_id, { status: 'inactive' });
+        refreshSingleUser(req.user_id);
+      }
+      setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
+      toast('success', 'Account Deactivated', `Account for ${displayName} has been deactivated.`);
+      setApproveDeletionReqTarget(null);
+    } catch (err: any) {
+      toast('error', 'Deactivation Failed', err?.message || 'Failed to approve account deletion.');
+    } finally {
+      setApprovingDeletionId(null);
+    }
   };
 
-  // Password Reset Trigger
+  const handleRejectDeletionReq = (req: any) => {
+    setRejectDeletionReqTarget(req);
+  };
+
+  const handleConfirmRejectDeletion = async () => {
+    const req = rejectDeletionReqTarget;
+    if (!req) return;
+    const displayName = req.user?.full_name || req.email || 'this user';
+    setRejectingDeletionId(req.id);
+    try {
+      if (req._isProfileChangeRequest) {
+        await supabase
+          .from('profile_change_requests')
+          .update({
+            status: 'rejected',
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', req.id);
+      } else {
+        try {
+          await supabase
+            .from('account_deletion_requests')
+            .update({
+              status: 'rejected',
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', req.id);
+        } catch {
+          await supabase
+            .from('profile_change_requests')
+            .update({
+              status: 'rejected',
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', req.id);
+        }
+      }
+
+      setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
+      toast('info', 'Request Declined', `Deletion request for ${displayName} has been declined.`);
+      setRejectDeletionReqTarget(null);
+    } catch (err: any) {
+      toast('error', 'Action Failed', err?.message || 'Failed to decline deletion request.');
+    } finally {
+      setRejectingDeletionId(null);
+    }
+  };
+
+  // Password Reset Trigger — opens confirmation dialog first (Feedback 5)
   const handleTriggerResetPassword = (userToReset: UserRecord) => {
+    setConfirmResetUser(userToReset);
+  };
+
+  const handleConfirmResetPassword = (userToReset: UserRecord) => {
     const rawFirst = (userToReset.full_name || '').trim().split(/\s+/)[0] || 'User';
     const cleaned = rawFirst.replace(/[^a-zA-Z0-9]/g, '');
     const firstName = cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'User';
@@ -1717,16 +1813,109 @@ export default function UsersScreen() {
     notifyUserPasswordReset(userToReset.full_name);
   };
 
+  // 3-Dot More Actions Contextual Menu
+  const closeMoreActions = useCallback(() => {
+    setMoreActionsUser(null);
+    setMoreActionsAnchor(null);
+  }, []);
+
+  const handleOpenMoreActions = useCallback((userToOpen: UserRecord, anchor?: AnchorCoords | null) => {
+    setMoreActionsUser(userToOpen);
+    setMoreActionsAnchor(anchor || null);
+  }, []);
+
+  // Close contextual popover on navigation away
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('blur', () => {
+      closeMoreActions();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [navigation, closeMoreActions]);
+
+  // Close contextual popover on Escape key, outside scroll, or resize (Web)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !moreActionsUser) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeMoreActions();
+      }
+    };
+
+    const handleWindowEvents = () => {
+      closeMoreActions();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleWindowEvents);
+    window.addEventListener('scroll', handleWindowEvents, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleWindowEvents);
+      window.removeEventListener('scroll', handleWindowEvents, true);
+    };
+  }, [moreActionsUser, closeMoreActions]);
+
+  // Dynamic anchored positioning for compact popover
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  const popoverPosition = useMemo(() => {
+    const popoverWidth = Math.min(240, windowWidth - 32);
+    const estimatedHeight = 200;
+
+    if (!moreActionsAnchor || (moreActionsAnchor.x === 0 && moreActionsAnchor.y === 0)) {
+      return {
+        top: Math.max(16, (windowHeight - estimatedHeight) / 2),
+        left: Math.max(16, (windowWidth - popoverWidth) / 2),
+        width: popoverWidth,
+        maxHeight: Math.min(windowHeight - 32, 440),
+      };
+    }
+
+    let left = moreActionsAnchor.x;
+    if (left + popoverWidth > windowWidth - 16) {
+      left = Math.max(16, windowWidth - popoverWidth - 16);
+    }
+    if (left < 16) left = 16;
+
+    const spaceBelow = windowHeight - (moreActionsAnchor.y + moreActionsAnchor.height);
+    const spaceAbove = moreActionsAnchor.y;
+
+    let top: number;
+    let maxHeight: number;
+
+    if (spaceBelow >= 200 || spaceBelow >= spaceAbove) {
+      top = moreActionsAnchor.y + moreActionsAnchor.height + 4;
+      maxHeight = Math.min(spaceBelow - 16, 440);
+    } else {
+      const actualHeight = Math.min(spaceAbove - 16, estimatedHeight);
+      top = Math.max(16, moreActionsAnchor.y - actualHeight - 4);
+      maxHeight = Math.min(spaceAbove - 16, 440);
+    }
+
+    return {
+      top,
+      left,
+      width: popoverWidth,
+      maxHeight: Math.max(180, maxHeight),
+    };
+  }, [moreActionsAnchor, windowWidth, windowHeight]);
+
   // Edit Account Info Trigger
   const handleTriggerEdit = (userToEditRecord: UserRecord) => {
     setUserToEdit(userToEditRecord);
     setEditModalVisible(true);
   };
 
-  const openUserDetail = (u: UserRecord) => {
+  const openUserDetail = useCallback((u: UserRecord) => {
+    if (!u) return;
     setSelectedUser(u);
     setDetailModalVisible(true);
-  };
+  }, []);
 
   // Assign Supervisor Trigger
   const handleTriggerAssignSupervisor = useCallback((targetUser: UserRecord) => {
@@ -1735,42 +1924,245 @@ export default function UsersScreen() {
   }, []);
 
   // Assign Machine Trigger
+  const assignMachineOpeningRef = useRef(false);
   const handleTriggerAssignMachine = useCallback((targetUser: UserRecord) => {
+    if (!targetUser || assignMachineOpeningRef.current) return;
+    assignMachineOpeningRef.current = true;
     setAssignMachineUser(targetUser);
     setAssignMachineModalVisible(true);
+    setTimeout(() => {
+      assignMachineOpeningRef.current = false;
+    }, 400);
   }, []);
 
-  // Delete Single User
+  // Activate / Deactivate Single User
+  const handleToggleUserStatus = useCallback((targetUser: UserRecord) => {
+    if (authUser?.id === targetUser.id) {
+      toast('error', 'Action Restricted', 'You cannot change your own account status.');
+      return;
+    }
+    if (normalizedRole === 'admin' && targetUser.role === 'super_admin') {
+      toast('error', 'Permission Denied', 'Only Super Admins can modify Super Admin accounts.');
+      return;
+    }
+    setStatusConfirmUser(targetUser);
+  }, [authUser?.id, normalizedRole, toast]);
+
+  const handleConfirmToggleStatus = useCallback(async () => {
+    if (!statusConfirmUser || statusSubmittingRef.current || isUpdatingStatus) return;
+
+    statusSubmittingRef.current = true;
+    setIsUpdatingStatus(true);
+    haptics.select();
+
+    const targetUser = statusConfirmUser;
+    const targetUserId = targetUser.id;
+    const previousStatus = targetUser.status;
+    const optimisticStatus = previousStatus === 'active' ? 'inactive' : 'active';
+    const previousAssignedMachines = targetUser.assigned_machines || [];
+
+    // Dismiss dialog immediately for instantaneous tactile feedback
+    setStatusConfirmUser(null);
+
+    // Optimistically update affected user in local state immediately
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === targetUserId
+          ? {
+              ...u,
+              status: optimisticStatus,
+              assigned_machines: optimisticStatus === 'inactive' ? [] : u.assigned_machines,
+            }
+          : u
+      )
+    );
+    if (selectedUser?.id === targetUserId) {
+      setSelectedUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: optimisticStatus,
+              assigned_machines: optimisticStatus === 'inactive' ? [] : prev.assigned_machines,
+            }
+          : null
+      );
+    }
+
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('toggle_user_status_atomic', {
+        p_target_user_id: targetUserId,
+      });
+
+      if (rpcErr) {
+        haptics.reject();
+        // Rollback to previous state on failure
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === targetUserId
+              ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
+              : u
+          )
+        );
+        if (selectedUser?.id === targetUserId) {
+          setSelectedUser((prev) =>
+            prev
+              ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
+              : null
+          );
+        }
+        toast('error', 'Status Update Failed', rpcErr.message || 'Failed to update user status.');
+        return;
+      }
+
+      if (rpcRes && rpcRes.success === false) {
+        haptics.reject();
+        // Rollback to previous state on failure
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === targetUserId
+              ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
+              : u
+          )
+        );
+        if (selectedUser?.id === targetUserId) {
+          setSelectedUser((prev) =>
+            prev
+              ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
+              : null
+          );
+        }
+        toast('error', 'Status Update Failed', rpcRes.error || 'Failed to update user status.');
+        return;
+      }
+
+      const updatedStatus = rpcRes?.status || optimisticStatus;
+
+      // Persist confirmed status in local state
+      setUsers((prev) =>
+        prev.map((u) => (u.id === statusConfirmUser.id ? { ...u, status: updatedStatus } : u))
+      );
+      if (selectedUser?.id === targetUserId) {
+        setSelectedUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: updatedStatus,
+                assigned_machines: updatedStatus === 'inactive' ? [] : prev.assigned_machines,
+              }
+            : null
+        );
+      }
+
+      haptics.confirm();
+      toast(
+        'success',
+        updatedStatus === 'active' ? 'Account Activated' : 'Account Deactivated',
+        rpcRes?.message || `User account for ${targetUser.full_name} is now ${updatedStatus}.`
+      );
+
+      // Invalidate query caches to maintain zero desync across all screens
+      try {
+        queryClient.invalidateQueries({ queryKey: ['machines'] });
+        queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+      } catch {
+        // QueryClient fallback
+      }
+
+      // Background targeted refresh of affected user record (Zero full list refetch)
+      refreshSingleUser(targetUserId);
+    } catch (err: any) {
+      // Rollback to previous state on error
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetUserId
+            ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
+            : u
+        )
+      );
+      if (selectedUser?.id === targetUserId) {
+        setSelectedUser((prev) =>
+          prev
+            ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
+            : null
+        );
+      }
+      haptics.reject();
+      toast('error', 'Status Update Failed', err?.message || 'An unexpected error occurred.');
+    } finally {
+      setIsUpdatingStatus(false);
+      statusSubmittingRef.current = false;
+    }
+  }, [statusConfirmUser, isUpdatingStatus, selectedUser?.id, toast, queryClient, refreshSingleUser]);
+
+  // Delete Single User Trigger (Opens confirmation dialog; never deletes immediately)
   const handleDeleteSingleUser = useCallback((targetUser: UserRecord) => {
     if (authUser?.id === targetUser.id) {
       toast('error', 'Cannot Delete Self', 'You cannot delete your own account.');
       return;
     }
-    Alert.alert(
-      'Delete User Account',
-      `Are you sure you want to permanently delete the account for ${targetUser.full_name}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: async () => {
-            const prevUsers = [...users];
-            setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
-            try {
-              const { error } = await supabase.from('users').delete().eq('id', targetUser.id);
-              if (error) throw error;
-              toast('success', 'User Deleted', `Successfully deleted account for ${targetUser.full_name}.`);
-              fetchUsers(false, 1);
-            } catch (err: any) {
-              setUsers(prevUsers);
-              toast('error', 'Delete Failed', err?.message || 'Failed to delete user account.');
-            }
-          },
-        },
-      ]
-    );
-  }, [authUser?.id, toast, fetchUsers, users]);
+    setDeleteUserError(null);
+    setUserToDelete(targetUser);
+  }, [authUser?.id, toast]);
+
+  // Execute Single User Deletion / Safe Deactivation
+  const handleExecuteDeleteSingleUser = useCallback(async () => {
+    if (!userToDelete) return;
+    if (deleteSubmittingRef.current || isDeletingUser) return;
+    deleteSubmittingRef.current = true;
+    setIsDeletingUser(true);
+    setDeleteUserError(null);
+
+    const deletedId = userToDelete.id;
+    const deletedName = userToDelete.full_name;
+
+    try {
+      const { data, error } = await supabase.rpc('delete_or_deactivate_user_atomic', {
+        p_target_user_id: deletedId,
+      });
+
+      if (error) throw error;
+
+      const isDeactivated = data?.action === 'deactivated';
+      const msg = data?.message || (isDeactivated
+        ? `Account for ${deletedName} has been safely deactivated to preserve operational history.`
+        : `Successfully deleted account for ${deletedName}.`);
+
+      toast('success', isDeactivated ? 'Account Deactivated' : 'User Deleted', msg);
+      setUserToDelete(null);
+
+      // Remove only the deleted user from local state
+      setUsers((prev) => prev.filter((u) => u.id !== deletedId));
+
+      // Update pagination count
+      setTotalUsersCount((prev) => Math.max(0, prev - 1));
+
+      // Deselect if selected
+      setSelectedIds((prev) => prev.filter((id) => id !== deletedId));
+
+      // Close detail view if this user was opened
+      if (selectedUser?.id === deletedId) {
+        setSelectedUser(null);
+        setDetailModalVisible(false);
+      }
+
+      try {
+        queryClient.invalidateQueries({ queryKey: ['machines'] });
+        queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+      } catch {
+        // QueryClient fallback
+      }
+      // Zero full list refetch preserves scroll position, page, and filters
+    } catch (err: any) {
+      // Do NOT lose dialog state! Retain userToDelete so user can inspect error and retry or cancel
+      setDeleteUserError(err?.message || 'Failed to delete user account.');
+      toast('error', 'Delete Failed', err?.message || 'Failed to delete user account.');
+    } finally {
+      setIsDeletingUser(false);
+      deleteSubmittingRef.current = false;
+    }
+  }, [userToDelete, isDeletingUser, selectedUser?.id, toast, queryClient]);
 
   // Multi-Selection Logic
   const toggleSelectUser = (userId: string) => {
@@ -1792,43 +2184,58 @@ export default function UsersScreen() {
     }
   };
 
+  // Bulk Delete Trigger (Opens confirmation dialog)
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
-    Alert.alert(
-      'Delete Users',
-      `Are you sure you want to delete ${selectedIds.length} user account${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Delete (${selectedIds.length})`,
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeletingBulk(true);
-            const prevUsers = [...users];
-            const toDelete = [...selectedIds];
-            setUsers((prev) => prev.filter((u) => !toDelete.includes(u.id)));
+    setBulkDeleteError(null);
+    setShowBulkDeleteModal(true);
+  };
 
-            try {
-              const { error } = await supabase
-                .from('users')
-                .delete()
-                .in('id', toDelete);
+  // Execute Bulk Delete / Safe Deactivation
+  const handleExecuteBulkDelete = async () => {
+    if (selectedIds.length === 0 || isDeletingBulk) return;
+    setIsDeletingBulk(true);
+    setBulkDeleteError(null);
+    const toDelete = [...selectedIds];
 
-              if (error) throw error;
-              setSelectedIds([]);
-              setIsSelectMode(false);
-              toast('success', 'Users Deleted', `Successfully deleted ${toDelete.length} user account${toDelete.length > 1 ? 's' : ''}.`);
-              fetchUsers(false, 1);
-            } catch (err: any) {
-              setUsers(prevUsers);
-              toast('error', 'Delete Failed', err?.message || 'Failed to delete selected users.');
-            } finally {
-              setIsDeletingBulk(false);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      const { data, error } = await supabase.rpc('bulk_delete_or_deactivate_users_atomic', {
+        p_user_ids: toDelete,
+      });
+
+      if (error) throw error;
+
+      // Remove only deleted users from local state
+      setUsers((prev) => prev.filter((u) => !toDelete.includes(u.id)));
+
+      // Update pagination count
+      setTotalUsersCount((prev) => Math.max(0, prev - toDelete.length));
+
+      setSelectedIds([]);
+      setIsSelectMode(false);
+      setShowBulkDeleteModal(false);
+
+      if (selectedUser && toDelete.includes(selectedUser.id)) {
+        setSelectedUser(null);
+        setDetailModalVisible(false);
+      }
+
+      const msg = data?.message || `Successfully processed ${toDelete.length} user account${toDelete.length > 1 ? 's' : ''}.`;
+      toast('success', 'Users Processed', msg);
+      try {
+        queryClient.invalidateQueries({ queryKey: ['machines'] });
+        queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+      } catch {
+        // QueryClient fallback
+      }
+      // Zero full list refetch preserves scroll position, page, and filters
+    } catch (err: any) {
+      setBulkDeleteError(err?.message || 'Failed to delete selected users.');
+      toast('error', 'Delete Failed', err?.message || 'Failed to delete selected users.');
+    } finally {
+      setIsDeletingBulk(false);
+    }
   };
 
   // Metric snapshot calculations
@@ -1890,7 +2297,7 @@ export default function UsersScreen() {
     } else {
       openUserDetail(u);
     }
-  }, [isSelectMode]);
+  }, [isSelectMode, openUserDetail]);
 
   const handleUserCardLongPress = useCallback((u: UserRecord) => {
     if (!isSelectMode) {
@@ -1901,6 +2308,7 @@ export default function UsersScreen() {
 
   const canEditUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
   const canDeleteUsers = ['super_admin', 'admin'].includes(normalizedRole);
+  const canActivateUsers = ['super_admin', 'admin', 'hr'].includes(normalizedRole);
   const canAssignSupervisorUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
   const canAssignMachineUsers = ['super_admin', 'admin', 'manager', 'supervisor'].includes(normalizedRole);
   const canResetPwdUsers = ['super_admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
@@ -1921,6 +2329,7 @@ export default function UsersScreen() {
         onAssignSupervisor={handleTriggerAssignSupervisor}
         onAssignMachine={handleTriggerAssignMachine}
         onResetPassword={handleTriggerResetPassword}
+        onOpenMoreActions={handleOpenMoreActions}
         canEdit={canEditUsers}
         canDelete={canDeleteUsers && authUser?.id !== item.id}
         canAssignSupervisor={canAssignSupervisorUsers}
@@ -1941,6 +2350,7 @@ export default function UsersScreen() {
       handleTriggerAssignSupervisor,
       handleTriggerAssignMachine,
       handleTriggerResetPassword,
+      handleOpenMoreActions,
       canEditUsers,
       canDeleteUsers,
       canAssignSupervisorUsers,
@@ -1959,45 +2369,43 @@ export default function UsersScreen() {
 
     if (initialError) {
       return (
-        <View style={[styles.initialErrorContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          <Users size={32} color={theme.colors.error} />
-          <Text variant="heading" style={[styles.initialErrorTitle, { color: theme.colors.ink }]}>Failed to load users</Text>
-          <Text variant="body" style={[styles.initialErrorSubtext, { color: theme.colors.mute }]}>
-            {initialError}
-          </Text>
-          <Pressable
-            variant="buttonPrimary"
-            onPress={handleRetryInitial}
-            style={[styles.retryInitialBtn, { backgroundColor: theme.colors.ink }]}
-          >
-            <RotateCcw size={13} color={theme.colors.canvas} />
-            <Text variant="label" style={[styles.retryInitialBtnText, { color: theme.colors.canvas }]}>Try Again</Text>
-          </Pressable>
-        </View>
+        <ErrorState
+          error={initialError}
+          onRetry={handleRetryInitial}
+          actionLabel="Retry Loading Staff"
+        />
       );
     }
 
     return (
-      <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-        <Users size={36} color={theme.colors.mute} />
-        <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
-        <Text variant="body" style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-          {search.trim() !== ''
-            ? `No users match "${search.trim()}". Try clearing search or changing filters.`
-            : 'No users in this directory scope.'}
-        </Text>
-        {(activeFilterCount > 0 || search.trim() !== '') && (
-          <Pressable
-            variant="buttonPrimary"
-            onPress={handleResetAllFilters}
-            style={[styles.resetEmptyBtn, { backgroundColor: theme.colors.ink }]}
-          >
-            <Text variant="label" style={styles.resetEmptyBtnText}>Reset Search & Filters</Text>
-          </Pressable>
-        )}
-      </View>
+      search.trim() !== '' ? (
+        <EmptyState
+          variant="no-results"
+          title="No Users Found"
+          description={`No user accounts matched "${search.trim()}".`}
+          action={{
+            label: 'Clear Search',
+            onPress: () => setSearch(''),
+          }}
+        />
+      ) : activeFilterCount > 0 ? (
+        <EmptyState
+          variant="filtered"
+          title="No Matching Users"
+          description="No user records match the selected directory filters."
+          action={{
+            label: 'Reset All Filters',
+            onPress: handleResetAllFilters,
+          }}
+        />
+      ) : (
+        <EmptyState
+          title="No User Accounts"
+          description="No users are currently registered in this directory scope."
+        />
+      )
     );
-  }, [showLoading, initialError, theme, handleRetryInitial, search, activeFilterCount, handleResetAllFilters]);
+  }, [showLoading, initialError, handleRetryInitial, search, activeFilterCount, handleResetAllFilters, setSearch]);
 
   const renderListFooter = useCallback(() => {
     if (isPaginating) {
@@ -2666,9 +3074,22 @@ export default function UsersScreen() {
         currentUserId={authUser?.id}
         onSuccess={(updatedUser?: any) => {
           if (updatedUser) {
-            setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? { ...u, ...updatedUser } : u)));
+            if (updatedUser.deleted) {
+              setUsers((prev) => prev.filter((u) => u.id !== updatedUser.id));
+              setTotalUsersCount((prev) => Math.max(0, prev - 1));
+              setSelectedUser(null);
+            } else {
+              updateSingleUserInState(updatedUser.id, updatedUser);
+              refreshSingleUser(updatedUser.id);
+            }
           }
-          fetchUsers(false, 1);
+          try {
+            queryClient.invalidateQueries({ queryKey: ['machines'] });
+            queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+            queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+          } catch {
+            // QueryClient fallback
+          }
         }}
         onEdit={handleTriggerEdit}
         onResetPassword={handleTriggerResetPassword}
@@ -2678,16 +3099,36 @@ export default function UsersScreen() {
       <CreateUserModal
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
-        onSuccess={() => fetchUsers(false, 1)}
+        onSuccess={() => {
+          setTotalUsersCount((prev) => prev + 1);
+          fetchUsers(false, 1);
+        }}
         isSuperAdmin={currentUserRole === 'super_admin'}
       />
 
       {/* User Edit Modal */}
       <UserEditModal
         visible={editModalVisible}
-        onClose={() => setEditModalVisible(false)}
+        onClose={() => {
+          setEditModalVisible(false);
+          setUserToEdit(null);
+        }}
         user={userToEdit}
-        onSuccess={() => fetchUsers(false, 1)}
+        onSuccess={(updatedPatch?: Partial<UserRecord>) => {
+          if (userToEdit) {
+            if (updatedPatch) {
+              updateSingleUserInState(userToEdit.id, updatedPatch);
+            }
+            refreshSingleUser(userToEdit.id);
+            try {
+              queryClient.invalidateQueries({ queryKey: ['machines'] });
+              queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+              queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+            } catch {
+              // QueryClient fallback
+            }
+          }
+        }}
         isSuperAdmin={currentUserRole === 'super_admin'}
       />
 
@@ -2699,7 +3140,19 @@ export default function UsersScreen() {
           setAssignSupervisorUser(null);
         }}
         user={assignSupervisorUser}
-        onSuccess={() => fetchUsers(false, 1)}
+        onSuccess={(patch?: Partial<UserRecord>) => {
+          if (assignSupervisorUser) {
+            if (patch) {
+              updateSingleUserInState(assignSupervisorUser.id, patch);
+            }
+            refreshSingleUser(assignSupervisorUser.id);
+            try {
+              queryClient.invalidateQueries({ queryKey: ['machines'] });
+            } catch {
+              // QueryClient fallback
+            }
+          }
+        }}
       />
 
       {/* Assign Machine Modal */}
@@ -2710,7 +3163,48 @@ export default function UsersScreen() {
           setAssignMachineUser(null);
         }}
         user={assignMachineUser}
-        onSuccess={() => fetchUsers(false, 1)}
+        userRole={currentUserRole || 'super_admin'}
+        onSuccess={(updatedAssignments?: any) => {
+          if (assignMachineUser) {
+            if (updatedAssignments && Array.isArray(updatedAssignments)) {
+              const machineTags = updatedAssignments.map((a: any) => ({
+                id: a.assignmentId || a.operatorId || 'temp',
+                machine_id: a.shiftCode ? `${a.shiftCode}` : 'M/C',
+                shift_code: a.shiftCode,
+              }));
+              updateSingleUserInState(assignMachineUser.id, {
+                assigned_machines: machineTags,
+              });
+            }
+            refreshSingleUser(assignMachineUser.id);
+            try {
+              queryClient.invalidateQueries({ queryKey: ['machines'] });
+              queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+              queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+            } catch {
+              // QueryClient fallback
+            }
+          }
+        }}
+      />
+
+      {/* Confirm Password Reset Dialog (Feedback 5) */}
+      <ConfirmDialog
+        visible={Boolean(confirmResetUser)}
+        onClose={() => setConfirmResetUser(null)}
+        onConfirm={() => {
+          const target = confirmResetUser;
+          setConfirmResetUser(null);
+          if (target) {
+            handleConfirmResetPassword(target);
+          }
+        }}
+        title="Reset Password"
+        message={`Are you sure you want to reset the password for ${confirmResetUser?.full_name || 'this user'}? A temporary password will be generated and displayed for sharing.`}
+        confirmText="Reset Password"
+        cancelText="Cancel"
+        variant="warning"
+        icon={<KeyRound size={22} color="#f59e0b" />}
       />
 
       {/* Password Reset Modal */}
@@ -2720,6 +3214,208 @@ export default function UsersScreen() {
         userName={resetPasswordUserName}
         temporaryPassword={temporaryPassword}
       />
+
+      {/* Activate / Deactivate Confirmation Dialog */}
+      <ConfirmDialog
+        visible={Boolean(statusConfirmUser)}
+        onClose={() => {
+          if (!isUpdatingStatus) setStatusConfirmUser(null);
+        }}
+        onConfirm={handleConfirmToggleStatus}
+        title={statusConfirmUser?.status === 'active' ? 'Deactivate User Account' : 'Activate User Account'}
+        message={
+          statusConfirmUser?.status === 'active'
+            ? `Are you sure you want to deactivate ${statusConfirmUser?.full_name}? The user will immediately lose access to the system and cannot log in. Any active machinery assignments will be ended to prevent scheduling conflicts, but all historical shift logs, attendance records, and data will remain preserved.`
+            : `Are you sure you want to activate ${statusConfirmUser?.full_name}? The user will regain system login access, be able to operate machinery, and be eligible for shift assignments.`
+        }
+        confirmText={statusConfirmUser?.status === 'active' ? 'Deactivate Account' : 'Activate Account'}
+        cancelText="Cancel"
+        variant={statusConfirmUser?.status === 'active' ? 'danger' : 'primary'}
+        icon={
+          statusConfirmUser?.status === 'active' ? (
+            <UserX size={22} color={theme.colors.error} />
+          ) : (
+            <UserCheck size={22} color="#10b981" />
+          )
+        }
+        isLoading={isUpdatingStatus}
+      />
+
+      {/* 3-Dot More Actions Contextual Popover (Anchored to clicked More button) */}
+      <Modal
+        visible={Boolean(moreActionsUser)}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMoreActions}
+      >
+        <Pressable
+          style={styles.popoverBackdrop}
+          onPress={closeMoreActions}
+          accessibilityLabel="Close contextual menu"
+          accessibilityRole="button"
+        >
+          {moreActionsUser && (
+            <Pressable
+              style={[
+                styles.popoverMenuCard,
+                {
+                  top: popoverPosition.top,
+                  left: popoverPosition.left,
+                  width: popoverPosition.width,
+                  maxHeight: popoverPosition.maxHeight,
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+              }}
+            >
+              {/* Header info */}
+              <View style={[styles.popoverUserHeader, { borderBottomColor: theme.colors.hairline }]}>
+                <View style={styles.popoverHeaderInfo}>
+                  <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink, width: 26, height: 26 }]}>
+                    <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                      {moreActionsUser.full_name ? moreActionsUser.full_name[0].toUpperCase() : 'U'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text variant="label" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                      {moreActionsUser.full_name}
+                    </Text>
+                    <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
+                      {formatRoleName(moreActionsUser.role)} {moreActionsUser.employee_id ? `• ${moreActionsUser.employee_id}` : ''}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  onPress={closeMoreActions}
+                  style={styles.popoverHeaderCloseBtn}
+                  accessibilityLabel="Close popover"
+                >
+                  <X size={15} color={theme.colors.mute} />
+                </Pressable>
+              </View>
+
+              {/* Scrollable Actions List */}
+              <ScrollView
+                style={{ flexGrow: 0 }}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+              {/* 1. Edit User Details */}
+              {canEditUsers && (
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  style={[styles.popoverActionItem, { borderBottomColor: theme.colors.hairline }]}
+                  onPress={() => {
+                    const u = moreActionsUser;
+                    closeMoreActions();
+                    handleTriggerEdit(u);
+                  }}
+                >
+                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.1)' }]}>
+                    <Edit2 size={14} color={theme.colors.link} />
+                  </View>
+                  <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Edit User Details</Text>
+                </Pressable>
+              )}
+
+              {/* 2. Reset Password */}
+              {canResetPwdUsers && (
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  style={[
+                    styles.popoverActionItem,
+                    (canActivateUsers || canDeleteUsers) && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin')
+                      ? { borderBottomColor: theme.colors.hairline }
+                      : { borderBottomWidth: 0 },
+                  ]}
+                  onPress={() => {
+                    const u = moreActionsUser;
+                    closeMoreActions();
+                    handleTriggerResetPassword(u);
+                  }}
+                >
+                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)' }]}>
+                    <KeyRound size={14} color="#f59e0b" />
+                  </View>
+                  <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Reset Password</Text>
+                </Pressable>
+              )}
+
+              {/* 3. Activate / Deactivate Account */}
+              {canActivateUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin') && (
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  style={[
+                    styles.popoverActionItem,
+                    canDeleteUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin')
+                      ? { borderBottomColor: theme.colors.hairline }
+                      : { borderBottomWidth: 0 },
+                  ]}
+                  onPress={() => {
+                    const u = moreActionsUser;
+                    closeMoreActions();
+                    handleToggleUserStatus(u);
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.popoverActionIconBox,
+                      moreActionsUser.status === 'active'
+                        ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }
+                        : { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)' },
+                    ]}
+                  >
+                    {moreActionsUser.status === 'active' ? (
+                      <UserX size={14} color={theme.colors.error} />
+                    ) : (
+                      <UserCheck size={14} color="#10b981" />
+                    )}
+                  </View>
+                  <Text
+                    variant="label"
+                    style={{
+                      flex: 1,
+                      color: moreActionsUser.status === 'active' ? theme.colors.error : '#10b981',
+                    }}
+                  >
+                    {moreActionsUser.status === 'active' ? 'Deactivate User Account' : 'Activate User Account'}
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* 4. Delete Account */}
+              {canDeleteUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin') && (
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  style={[styles.popoverActionItem, { borderBottomWidth: 0 }]}
+                  onPress={() => {
+                    const u = moreActionsUser;
+                    closeMoreActions();
+                    handleDeleteSingleUser(u);
+                  }}
+                >
+                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                    <Trash2 size={14} color={theme.colors.error} />
+                  </View>
+                  <Text variant="label" style={{ color: theme.colors.error, flex: 1 }}>
+                    Delete User Account
+                  </Text>
+                </Pressable>
+              )}
+            </ScrollView>
+          </Pressable>
+        )}
+      </Pressable>
+    </Modal>
 
       {/* Reject Reason Modal */}
       <RejectReasonModal
@@ -2743,6 +3439,68 @@ export default function UsersScreen() {
         onFetchAllMatchingUsers={handleFetchAllMatchingUsers}
       />
 
+      {/* Delete Single User Confirmation Dialog */}
+      <DeleteUserConfirmDialog
+        visible={Boolean(userToDelete)}
+        user={userToDelete}
+        onClose={() => {
+          setUserToDelete(null);
+          setDeleteUserError(null);
+        }}
+        onConfirm={handleExecuteDeleteSingleUser}
+        isDeleting={isDeletingUser}
+        errorMessage={deleteUserError}
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <ConfirmDialog
+        visible={showBulkDeleteModal}
+        onClose={() => {
+          setShowBulkDeleteModal(false);
+          setBulkDeleteError(null);
+        }}
+        onConfirm={handleExecuteBulkDelete}
+        title="Delete Selected Users"
+        message={
+          bulkDeleteError ||
+          `Are you sure you want to delete ${selectedIds.length} user account${selectedIds.length > 1 ? 's' : ''}? Employees with historical shift logs or payroll records will be safely deactivated to preserve statutory compliance.`
+        }
+        confirmText={isDeletingBulk ? 'Processing...' : `Delete (${selectedIds.length})`}
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingBulk}
+      />
+
+      {/* Approve Deletion Request Confirmation Dialog */}
+      <ConfirmDialog
+        visible={Boolean(approveDeletionReqTarget)}
+        onClose={() => {
+          if (!approvingDeletionId) setApproveDeletionReqTarget(null);
+        }}
+        onConfirm={handleConfirmApproveDeletion}
+        title="Approve Account Deletion"
+        message={`Are you sure you want to approve account deletion for ${approveDeletionReqTarget?.user?.full_name || approveDeletionReqTarget?.email || 'this user'}? The account will be deactivated and KYC details purged. Statutory machine hour logs (HMR) are permanently retained.`}
+        confirmText="Approve & Deactivate"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={Boolean(approvingDeletionId)}
+      />
+
+      {/* Decline Deletion Request Confirmation Dialog */}
+      <ConfirmDialog
+        visible={Boolean(rejectDeletionReqTarget)}
+        onClose={() => {
+          if (!rejectingDeletionId) setRejectDeletionReqTarget(null);
+        }}
+        onConfirm={handleConfirmRejectDeletion}
+        title="Decline Deletion Request"
+        message={`Are you sure you want to decline the account deletion request for ${rejectDeletionReqTarget?.user?.full_name || rejectDeletionReqTarget?.email || 'this user'}? The account will remain active.`}
+        confirmText="Decline Request"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={Boolean(rejectingDeletionId)}
+      />
+
     </View>
   );
 }
@@ -2754,7 +3512,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
     paddingBottom: 90,
-    gap: spacingNumeric.md },
+    gap: spacingNumeric.md,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+  },
   listHeaderWrapper: {
     gap: spacingNumeric.md,
     paddingBottom: spacingNumeric.xs },
@@ -3139,10 +3901,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
     borderWidth: 1 },
+  chipBadge: {
+    height: 24,
+    paddingHorizontal: 8,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4 },
   statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5 },
+    width: 6,
+    height: 6,
+    borderRadius: 3 },
   cardStatusText: {
     },
   cardMetaBox: {
@@ -3248,4 +4018,68 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radiusNumeric.full },
   bulkBtnDangerText: {
-    color: '#ffffff' } });
+    color: '#ffffff' },
+  moreActionsSheetContent: {
+    paddingHorizontal: spacingNumeric.lg,
+    paddingTop: spacingNumeric.sm,
+    paddingBottom: spacingNumeric.xl,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  popoverBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.18)',
+  },
+  popoverMenuCard: {
+    position: 'absolute',
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 10,
+    zIndex: 9999,
+  },
+  popoverUserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+  },
+  popoverHeaderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.sm,
+    flex: 1,
+    marginRight: spacingNumeric.xs,
+  },
+  popoverHeaderCloseBtn: {
+    padding: 6,
+    borderRadius: radiusNumeric.sm,
+  },
+  popoverActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: 8,
+    minHeight: 38,
+    borderBottomWidth: 1,
+  },
+  popoverActionIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popoverActionTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+});

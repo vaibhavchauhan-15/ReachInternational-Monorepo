@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
 import { useTheme } from '../ui/ThemeProvider';
@@ -22,7 +23,7 @@ export interface AssignSupervisorModalProps {
   visible: boolean;
   onClose: () => void;
   user: UserRecord | null;
-  onSuccess: () => void;
+  onSuccess: (patch?: Partial<UserRecord>) => void;
 }
 
 interface SupervisorItem {
@@ -40,6 +41,8 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
   onSuccess,
 }) => {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 640;
   const [supervisors, setSupervisors] = useState<SupervisorItem[]>([]);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -84,18 +87,28 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
   };
 
   const filteredSupervisors = useMemo(() => {
-    if (!search.trim()) return supervisors;
+    const list = supervisors.filter((s) => !user || s.id !== user.id);
+    if (!search.trim()) return list;
     const q = search.trim().toLowerCase();
-    return supervisors.filter(
+    return list.filter(
       (s) =>
         s.full_name?.toLowerCase().includes(q) ||
         s.email?.toLowerCase().includes(q) ||
         s.phone?.toLowerCase().includes(q)
     );
-  }, [supervisors, search]);
+  }, [supervisors, search, user]);
+
+  const savingRef = React.useRef(false);
 
   const handleSave = async () => {
     if (!user) return;
+    if (savingRef.current) return;
+    if (selectedId && selectedId === user.id) {
+      haptics.reject();
+      showToast('error', 'Invalid Assignment', 'A user cannot be assigned as their own reporting supervisor.');
+      return;
+    }
+    savingRef.current = true;
     setIsSaving(true);
     try {
       const { error: userErr } = await supabase
@@ -133,19 +146,34 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
 
       const assignedName = supervisors.find((s) => s.id === selectedId)?.full_name;
       haptics.confirm();
-      showToast(
-        'success',
-        'Supervisor Assigned',
-        selectedId
-          ? `Assigned ${assignedName || 'supervisor'} to ${user.full_name}.`
-          : `Removed supervisor from ${user.full_name}.`
-      );
-      onSuccess();
+      const assignedSupervisor = selectedId ? supervisors.find((s) => s.id === selectedId) : null;
+      const patch: Partial<UserRecord> = {
+        supervisor_id: selectedId,
+        supervisor_ids: selectedId ? [selectedId] : [],
+        supervisor: assignedSupervisor
+          ? {
+              id: assignedSupervisor.id,
+              full_name: assignedSupervisor.full_name,
+              email: assignedSupervisor.email || null,
+            }
+          : null,
+        supervisors: assignedSupervisor
+          ? [
+              {
+                id: assignedSupervisor.id,
+                full_name: assignedSupervisor.full_name,
+                email: assignedSupervisor.email || null,
+              },
+            ]
+          : [],
+      };
+      onSuccess(patch);
       onClose();
     } catch (err: any) {
       haptics.reject();
       showToast('error', 'Update Failed', err?.message || 'Failed to update supervisor assignment.');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -153,7 +181,24 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
   if (!visible) return null;
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom" testID="assign-supervisor-modal">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 520,
+              width: '100%',
+              maxHeight: '85%',
+              padding: 0,
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : undefined
+      }
+      testID="assign-supervisor-modal"
+    >
       <View
         style={[
           styles.container,
@@ -373,11 +418,10 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    borderTopWidth: 1,
+    borderRadius: radiusNumeric.lg,
     maxHeight: 560,
     width: '100%',
+    overflow: 'hidden',
   },
   notchWrapper: {
     alignItems: 'center',

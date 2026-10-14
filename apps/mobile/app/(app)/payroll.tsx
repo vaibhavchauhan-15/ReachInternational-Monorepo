@@ -9,12 +9,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
-import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal, Input, SearchInput, useToast } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, ErrorState, PermissionDeniedView, FormError, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal, Input, SearchInput, useToast } from '../../components/ui';
 import { PayrollSkeleton } from '../../components/payroll';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
+import { useAuth } from '../../lib/auth/useAuth';
 import { supabase } from '../../lib/supabase';
 import {
   Banknote,
@@ -51,13 +51,9 @@ export default function PayrollScreen() {
   const normalizedRole = (role || '').toLowerCase();
   const isAllowed = ALLOWED_ROLES.includes(normalizedRole);
 
-  useEffect(() => {
-    if (role && !isAllowed) {
-      router.replace('/dashboard');
-    }
-  }, [role, isAllowed, router]);
-
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
+  const [statementError, setStatementError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   
   const now = new Date();
@@ -114,6 +110,7 @@ export default function PayrollScreen() {
   const fetchPayroll = useCallback(async (monthStr: string) => {
     try {
       setLoading(true);
+      setFetchError(null);
       const targetDate = `${monthStr}-01`;
       const { data, error } = await supabase.rpc('get_hr_payroll_summary', {
         p_payroll_month: targetDate,
@@ -121,6 +118,8 @@ export default function PayrollScreen() {
 
       if (error) {
         console.error('[HRPayrollScreen] Fetch error:', error);
+        const errObj = new Error(error.message || 'Failed to fetch payroll data');
+        setFetchError(errObj);
         toast('error', 'Error', error.message || 'Failed to fetch payroll data');
       } else if (data) {
         const rawOperators: HRPayrollOperator[] = Array.isArray(data)
@@ -135,11 +134,12 @@ export default function PayrollScreen() {
       }
     } catch (err: any) {
       console.error('[HRPayrollScreen] Unexpected error:', err);
+      setFetchError(err instanceof Error ? err : new Error(err?.message || 'Failed to fetch payroll data'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (isAllowed) {
@@ -214,6 +214,7 @@ export default function PayrollScreen() {
   // Open edit modal
   const handleOpenEdit = (op: HRPayrollOperator) => {
     setEditingOperator(op);
+    setStatementError(null);
     setEditBasic(String(op.basic_salary || op.daily_rate * 30 || 28000));
     setEditAttendedDays(String(op.attended_days || op.work_days || 0));
     setEditWorkingDays(String(op.working_days || 30));
@@ -269,6 +270,7 @@ export default function PayrollScreen() {
 
     try {
       setSavingStatement(true);
+      setStatementError(null);
       const targetDate = `${selectedMonth}-01`;
       const payload = {
         basic_salary: Number(editBasic) || 0,
@@ -292,15 +294,18 @@ export default function PayrollScreen() {
 
       if (error) {
         haptics.reject();
+        setStatementError(error.message);
         toast('error', 'Update Failed', error.message);
       } else {
         haptics.confirm();
+        setStatementError(null);
         toast('success', 'Salary Statement Updated', 'Changes have been saved successfully.');
         // Refresh payroll list
         fetchPayroll(selectedMonth);
         setEditingOperator(null);
       }
     } catch (err: any) {
+      setStatementError(err?.message || 'Failed to save salary statement.');
       toast('error', 'Error', 'Failed to save salary statement.');
     } finally {
       setSavingStatement(false);
@@ -308,7 +313,16 @@ export default function PayrollScreen() {
   };
 
   if (!isAllowed) {
-    return null;
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader title="Salary Statement" showBack={false} />
+        <PermissionDeniedView
+          featureName="Workforce Payroll"
+          currentRole={role}
+          requiredRoles={ALLOWED_ROLES}
+        />
+      </View>
+    );
   }
 
   // Month selector options
@@ -355,6 +369,12 @@ export default function PayrollScreen() {
       >
         {loading && !payrollData ? (
           <PayrollSkeleton />
+        ) : fetchError && !payrollData ? (
+          <ErrorState
+            error={fetchError}
+            onRetry={() => fetchPayroll(selectedMonth)}
+            actionLabel="Retry Loading Statement"
+          />
         ) : (
           <>
             {/* Month Selector Pills */}
@@ -480,10 +500,28 @@ export default function PayrollScreen() {
           </Text>
 
           {operators.length === 0 ? (
-            <EmptyState
-              title="No Operators Found"
-              description="No operator records match the search criteria for this period."
-            />
+            searchQuery.trim().length > 0 ? (
+              <EmptyState
+                variant="no-results"
+                title="No Operators Found"
+                description={`No operator records matched "${searchQuery.trim()}".`}
+                actionLabel="Clear Search"
+                onAction={() => setSearchQuery('', true)}
+              />
+            ) : payoutFilter !== 'all' ? (
+              <EmptyState
+                variant="filtered"
+                title="No Matching Operators"
+                description="No operator records match the selected payout filter."
+                actionLabel="Show All Operators"
+                onAction={() => setPayoutFilter('all')}
+              />
+            ) : (
+              <EmptyState
+                title="No Operators Found"
+                description="No operator records found for this period."
+              />
+            )
           ) : (
             operators.map((op, idx) => {
               const isExpanded = expandedId === op.operator_id;
@@ -820,6 +858,7 @@ export default function PayrollScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={{ gap: 12, paddingVertical: 8 }}>
+                {statementError ? <FormError message={statementError} /> : null}
                 <View style={styles.formGroup}>
                   <Text style={[styles.inputLabel, { color: theme.colors.ink }]}>
                     Basic Monthly Salary (₹)

@@ -1,22 +1,30 @@
 /**
  * Reach International Mobile — Signup / Registration Screen
- * 95% identical replication of the Web Mobile Viewport Signup UI/UX,
- * with 5% native smart phone optimizations:
- * - Touch & haptic feedback on selectors, checkboxes, AM/PM, uploads, and submit
- * - Uses canonical reusable UI components (Input, TimeInput, SearchableSelect, MobileFormSectionCard, MobileAddressFields, MobileDocumentUploadCard, MobileSubmitButton)
- * - Safe areas and responsive theming (Light/Dark).
+ * Clean, minimal, responsive, enterprise-grade native sign-up screen matching
+ * Web & Mobile 100% parity across all 8 dimensions:
+ * - Enterprise branding with clean Reach International wordmark & tagline
+ * - Clear 6-section hierarchy (Account & Role, Work Shift Schedule, Address, Banking, Identity, Credentials)
+ * - TanStack Query caching for supervisor dropdown with graceful loading, empty, and retry states
+ * - Centralized form validation via @reachinternational/validation with instant error clearing on edit
+ * - Comprehensive shift schedule validation including overnight shift duration and duplicate start/end detection
+ * - Sanitized auth error mapping preventing raw database or internal disclosure
+ * - Mutex-guarded submissions preventing double-taps while preserving all entered form state on recoverable errors
+ * - Native keyboard awareness, accessible touch targets (min 44px), and tactile haptics
  */
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ScrollView} from 'react-native';
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
@@ -32,6 +40,8 @@ import {
   computeShiftTiming,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
+import { validateSignupFormData } from '@reachinternational/validation';
+import { mapSignupError } from '../../lib/auth/authErrors';
 import { MobilePickedDocument, uploadUserDocumentDirect } from '../../lib/documents';
 import { MobileDocumentUploadCard } from '../../components/documents/MobileDocumentUploadCard';
 import {
@@ -49,6 +59,7 @@ import {
   Building2,
   Check,
   Info,
+  RotateCw,
 } from '../../components/ui/icon';
 
 const SIGNUP_ROLES = [
@@ -62,87 +73,88 @@ export default function SignupScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
+  const { width: windowWidth } = useWindowDimensions();
 
+  // Section 1: Account & Role
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
 
+  // Section 2: Work Shift Schedule
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
 
+  // Section 3: Address Details
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
 
+  // Section 4: Banking Details
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankIfscCode, setBankIfscCode] = useState('');
   const [bankDoc, setBankDoc] = useState<MobilePickedDocument | null>(null);
   const [bankDocError, setBankDocError] = useState<string | null>(null);
 
+  // Section 5: Identity Verification
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
   const [aadhaarDocError, setAadhaarDocError] = useState<string | null>(null);
   const [licenseNumber, setLicenseNumber] = useState('');
   const [licenseDoc, setLicenseDoc] = useState<MobilePickedDocument | null>(null);
   const [licenseDocError, setLicenseDocError] = useState<string | null>(null);
+
+  // Section 6: Security Credentials
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Supervisor Selection State
-  const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
-  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
-  const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
-
+  // Validation & Mutex State
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const clearFieldError = (fieldName: string) => {
+  // Centralized inline field error dismissal
+  const clearFieldError = useCallback((fieldName: string) => {
     setFieldErrors((prev) => {
       if (!prev[fieldName]) return prev;
       const copy = { ...prev };
       delete copy[fieldName];
       return copy;
     });
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadSupervisors() {
-      setLoadingSupervisors(true);
-      try {
-        const { data, error } = await supabase.rpc('get_active_supervisors_public');
-        if (!error && data && isMounted) {
-          setSupervisors(data as Array<{ id: string; full_name: string }>);
-        } else if (error) {
-          console.warn('[Signup] RPC get_active_supervisors_public error:', error.message);
-          // Fallback query if RPC fails
-          const { data: directData } = await supabase
-            .from('users')
-            .select('id, full_name')
-            .eq('role', 'supervisor')
-            .in('status', ['active', 'approved']);
-          if (directData && isMounted && directData.length > 0) {
-            setSupervisors(directData as Array<{ id: string; full_name: string }>);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to load active supervisors for mobile signup:', err);
-      } finally {
-        if (isMounted) setLoadingSupervisors(false);
-      }
-    }
-
-    loadSupervisors();
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
+  // TanStack Query: Fetch active supervisors with background caching & stale handling
+  const {
+    data: supervisors = [],
+    isLoading: loadingSupervisors,
+    isError: supervisorError,
+    refetch: refetchSupervisors,
+  } = useQuery({
+    queryKey: ['active_supervisors_public'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_active_supervisors_public');
+      if (error) {
+        console.warn('[Signup] RPC get_active_supervisors_public error:', error.message);
+        throw error;
+      }
+      return (data || []) as Array<{ id: string; full_name: string }>;
+    },
+    staleTime: 60 * 1000,
+    retry: 2,
+  });
+
+  const supervisorOptions = useMemo(() => {
+    return supervisors.map((s) => ({
+      value: s.id,
+      label: s.full_name,
+    }));
+  }, [supervisors]);
+
+  // Real-time Shift Duration & Schedule Computation
   const shiftSummary = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
     return computeShiftTiming({
@@ -151,6 +163,78 @@ export default function SignupScreen() {
     });
   }, [shiftStartTime, shiftEndTime]);
 
+  // Section 1 Handlers
+  const handleFullNameChange = (val: string) => {
+    setFullName(val);
+    clearFieldError('full_name');
+  };
+
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    clearFieldError('email');
+  };
+
+  const handlePhoneChange = (val: string) => {
+    setPhone(val);
+    clearFieldError('phone');
+  };
+
+  const handleRoleChange = (val: string) => {
+    setSelectedRole(val);
+    clearFieldError('role');
+    if (!isSupervisedRole(val)) {
+      setSelectedSupervisorId('');
+      clearFieldError('supervisor_id');
+    }
+  };
+
+  const handleSupervisorChange = (val: string) => {
+    setSelectedSupervisorId(val);
+    clearFieldError('supervisor_id');
+  };
+
+  // Section 2 Handlers: Real-time Shift Timing Validation
+  const handleShiftStartChange = (val: string) => {
+    setShiftStartTime(val);
+    clearFieldError('shift_time');
+    clearFieldError('shift_start_time');
+    if (val && shiftEndTime) {
+      const res = computeShiftTiming({ startTime: val, endTime: shiftEndTime });
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          shift_time:
+            res.errorMessage === 'Start time and end time cannot be identical.'
+              ? 'End time must be after start time.'
+              : res.errorMessage || 'End time must be after start time.',
+        }));
+      } else {
+        clearFieldError('shift_time');
+      }
+    }
+  };
+
+  const handleShiftEndChange = (val: string) => {
+    setShiftEndTime(val);
+    clearFieldError('shift_time');
+    clearFieldError('shift_end_time');
+    if (shiftStartTime && val) {
+      const res = computeShiftTiming({ startTime: shiftStartTime, endTime: val });
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          shift_time:
+            res.errorMessage === 'Start time and end time cannot be identical.'
+              ? 'End time must be after start time.'
+              : res.errorMessage || 'End time must be after start time.',
+        }));
+      } else {
+        clearFieldError('shift_time');
+      }
+    }
+  };
+
+  // Section 4 Handlers
   const handleBankAccountChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 18);
     setBankAccountNumber(clean);
@@ -158,14 +242,14 @@ export default function SignupScreen() {
     if (clean.length > 0 && (clean.length < 9 || clean.length > 18)) {
       setFieldErrors((prev) => ({
         ...prev,
-        bank_account_number: 'Account number must be between 9 and 18 digits.',
+        bank_account_number: 'Enter a valid bank account number (9 to 18 digits).',
       }));
     } else if (clean.length >= 9) {
       const res = validateBankAccountNumber(clean);
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          bank_account_number: res.error || 'Invalid bank account number.',
+          bank_account_number: res.error || 'Enter a valid bank account number (9 to 18 digits).',
         }));
       }
     }
@@ -180,12 +264,13 @@ export default function SignupScreen() {
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          bank_ifsc_code: res.error || 'Invalid IFSC code format (e.g. SBIN0001234).',
+          bank_ifsc_code: res.error || 'Enter a valid 11-character IFSC code (e.g. SBIN0001234).',
         }));
       }
     }
   };
 
+  // Section 5 Handlers
   const handleAadhaarChange = (val: string) => {
     const formatted = formatAadhaar(val);
     setAadhaarNumber(formatted);
@@ -196,7 +281,7 @@ export default function SignupScreen() {
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          aadhaar_number: res.error || 'Invalid 12-digit Aadhaar number.',
+          aadhaar_number: res.error || 'Enter a valid 12-digit Aadhaar number.',
         }));
       }
     }
@@ -217,23 +302,35 @@ export default function SignupScreen() {
     }
   };
 
-  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+  // Section 6 Handlers
+  const handlePasswordChange = (val: string) => {
+    setPassword(val);
+    clearFieldError('password');
+  };
 
+  const handleConfirmPasswordChange = (val: string) => {
+    setConfirmPassword(val);
+    clearFieldError('confirm_password');
+  };
+
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
+  const cleanIfsc = bankIfscCode.trim().toUpperCase();
+
+  // Completion Criteria per Section
   const section1Complete = Boolean(
     fullName.trim().length >= 2 &&
     email.trim().length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase()) &&
     cleanPhone.length >= 10 &&
-    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId)
+    (!isSupervisedRole(selectedRole) || Boolean(selectedSupervisorId))
   );
 
   const section2Complete = Boolean(
     shiftStartTime.trim().length > 0 &&
-    shiftEndTime.trim().length > 0
+    shiftEndTime.trim().length > 0 &&
+    shiftSummary?.isValid
   );
-
-  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
-  const cleanIfsc = bankIfscCode.trim().toUpperCase();
 
   const section3Complete = Boolean(
     street.trim().length >= 2 &&
@@ -272,102 +369,83 @@ export default function SignupScreen() {
     section6Complete
   );
 
-  const missingFields: string[] = [];
-  if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
-  if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) missingFields.push('Email Address');
-  if (cleanPhone.length < 10) missingFields.push('Mobile Number');
-  if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
-  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Timing');
-  if (!street.trim()) missingFields.push('Street Address');
-  if (!city.trim() || city.trim().length < 2) missingFields.push('City');
-  if (!district.trim() || district.trim().length < 2) missingFields.push('District');
-  if (!stateVal.trim() && !stateId) missingFields.push('State');
-  if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) missingFields.push('Bank Account Number');
-  if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) missingFields.push('IFSC Code');
-  if (!bankDoc) missingFields.push('Bank Document');
-  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('Aadhaar Number');
-  if (!aadhaarDoc) missingFields.push('Aadhaar Document');
-  if (!password || password.length < 8) missingFields.push('Password');
-  if (password !== confirmPassword) missingFields.push('Confirm Password');
-  if (!agreedToTerms) missingFields.push('Terms of Service');
+  // Missing fields list for gated submit indicator
+  const missingFields = useMemo(() => {
+    const list: string[] = [];
+    if (!fullName.trim() || fullName.trim().length < 2) list.push('Full Name');
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) list.push('Email Address');
+    if (cleanPhone.length < 10) list.push('Mobile Number');
+    if (isSupervisedRole(selectedRole) && !selectedSupervisorId) list.push('Supervisor');
+    if (!shiftStartTime.trim() || !shiftEndTime.trim() || !shiftSummary?.isValid) list.push('Shift Schedule');
+    if (!street.trim()) list.push('Street Address');
+    if (!city.trim() || city.trim().length < 2) list.push('City');
+    if (!district.trim() || district.trim().length < 2) list.push('District');
+    if (!stateVal.trim() && !stateId) list.push('State');
+    if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) list.push('Bank Account Number');
+    if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) list.push('IFSC Code');
+    if (!bankDoc) list.push('Bank Document');
+    if (aadhaarNumber.replace(/\D/g, '').length !== 12) list.push('Aadhaar Number');
+    if (!aadhaarDoc) list.push('Aadhaar Document');
+    if (!password || password.length < 8) list.push('Password');
+    if (password !== confirmPassword) list.push('Confirm Password');
+    if (!agreedToTerms) list.push('Terms of Service');
+    return list;
+  }, [
+    fullName,
+    email,
+    cleanPhone,
+    selectedRole,
+    selectedSupervisorId,
+    shiftStartTime,
+    shiftEndTime,
+    shiftSummary?.isValid,
+    street,
+    city,
+    district,
+    stateVal,
+    stateId,
+    cleanBankAcc,
+    cleanIfsc,
+    bankDoc,
+    aadhaarNumber,
+    aadhaarDoc,
+    password,
+    confirmPassword,
+    agreedToTerms,
+  ]);
 
   const missingMandatoryCount = missingFields.length;
 
+  // Safe Account Creation Flow with Mutex & Error Mapping
   const handleSignup = async () => {
     if (isSubmittingRef.current || isLoading) return;
 
-    const errors: Record<string, string> = {};
+    // 1. Centralized Form Validation Check
+    const validationRes = validateSignupFormData({
+      fullName,
+      email,
+      phone,
+      role: selectedRole,
+      supervisorId: isSupervisedRole(selectedRole) ? selectedSupervisorId : null,
+      shiftStartTime,
+      shiftEndTime,
+      street,
+      city,
+      district,
+      state: stateVal,
+      bankAccountNumber,
+      bankIfscCode,
+      hasBankDoc: Boolean(bankDoc),
+      aadhaarNumber,
+      hasAadhaarDoc: Boolean(aadhaarDoc),
+      licenseNumber,
+      password,
+      confirmPassword,
+      agreedToTerms,
+    });
 
-    if (!fullName || fullName.trim().length < 2) {
-      errors.full_name = 'Full name must be at least 2 characters.';
-    }
-
-    if (!email || !email.includes('@')) {
-      errors.email = 'Please provide a valid email address.';
-    }
-
-    if (cleanPhone.length < 10) {
-      errors.phone = 'Mobile number must be at least 10 digits.';
-    }
-
-    if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) {
-      errors.supervisor_id = 'Please select a supervisor.';
-    }
-
-    if (!street || street.trim().length < 2) {
-      errors.street = 'Street address is required.';
-    }
-    if (!city || city.trim().length < 2) {
-      errors.city = 'City/town is required.';
-    }
-    if (!district || district.trim().length < 2) {
-      errors.district = 'District is required.';
-    }
-    if (!stateVal && !stateId) {
-      errors.state = 'State is required.';
-    }
-
-    if (!cleanBankAcc || cleanBankAcc.length < 9) {
-      errors.bank_account_number = 'Bank account number must be between 9 and 18 digits.';
-    }
-    if (!cleanIfsc || cleanIfsc.length !== 11) {
-      errors.bank_ifsc_code = 'IFSC code must be exactly 11 characters.';
-    }
-    if (!bankDoc) {
-      setBankDocError('Please upload your bank passbook/cheque/statement.');
-      errors.bank_doc = 'Bank document is required.';
-    }
-
-    const cleanAadhaar = aadhaarNumber.replace(/\D/g, '');
-    if (cleanAadhaar.length !== 12) {
-      errors.aadhaar_number = 'Aadhaar number must be exactly 12 digits.';
-    }
-    if (!aadhaarDoc) {
-      setAadhaarDocError('Please upload your Aadhaar document.');
-      errors.aadhaar_doc = 'Aadhaar document is required.';
-    }
-
-    if (licenseNumber.trim()) {
-      const licRes = validateLicenseNumber(licenseNumber);
-      if (!licRes.isValid) {
-        errors.license_number = licRes.error || 'Invalid driving licence format.';
-      }
-    }
-
-    if (!password || password.length < 8) {
-      errors.password = 'Password must be at least 8 characters long.';
-    }
-
-    if (password !== confirmPassword) {
-      errors.confirm_password = 'Passwords do not match.';
-    }
-
-    if (!agreedToTerms) {
-      errors.terms = 'You must agree to the Terms of Service and Privacy Policy.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    if (!validationRes.isValid) {
+      setFieldErrors(validationRes.errors);
       toast('warning', 'Missing Details', 'Please complete all required fields highlighted below.');
       haptics.reject();
       return;
@@ -415,60 +493,69 @@ export default function SignupScreen() {
       });
 
       if (error) {
-        toast('error', 'Registration Failed', error.message);
+        const mapped = mapSignupError(error);
+        toast(mapped.type, mapped.title, mapped.message);
+        if (mapped.fieldErrors) {
+          setFieldErrors((prev) => ({ ...prev, ...mapped.fieldErrors }));
+        }
         isSubmittingRef.current = false;
         setIsLoading(false);
         haptics.reject();
-      } else {
-        haptics.confirm();
-        if (data?.user?.id) {
-          const userId = data.user.id;
-          if (bankDoc) {
-            try {
-              await uploadUserDocumentDirect({
-                userId,
-                documentTypeCode: 'bank_document',
-                doc: bankDoc,
-              });
-            } catch (bErr) {
-              console.warn('[Signup] Bank document upload deferred:', bErr);
-            }
-          }
-          if (aadhaarDoc) {
-            try {
-              await uploadUserDocumentDirect({
-                userId,
-                documentTypeCode: 'aadhaar',
-                doc: aadhaarDoc,
-              });
-            } catch (uErr) {
-              console.warn('[Signup] Aadhaar upload deferred:', uErr);
-            }
-          }
-          if (licenseDoc) {
-            try {
-              await uploadUserDocumentDirect({
-                userId,
-                documentTypeCode: 'driving_license',
-                doc: licenseDoc,
-              });
-            } catch (uErr) {
-              console.warn('[Signup] Licence upload deferred:', uErr);
-            }
+        return;
+      }
+
+      haptics.confirm();
+      if (data?.user?.id) {
+        const userId = data.user.id;
+        if (bankDoc) {
+          try {
+            await uploadUserDocumentDirect({
+              userId,
+              documentTypeCode: 'bank_document',
+              doc: bankDoc,
+            });
+          } catch (bErr) {
+            console.warn('[Signup] Bank document upload deferred:', bErr);
           }
         }
-
-        toast(
-          'success',
-          'Registration Submitted',
-          'Your account is pending administrator approval. Once approved, you can log in.'
-        );
-        setTimeout(() => {
-          router.replace('/(auth)/login');
-        }, 1200);
+        if (aadhaarDoc) {
+          try {
+            await uploadUserDocumentDirect({
+              userId,
+              documentTypeCode: 'aadhaar',
+              doc: aadhaarDoc,
+            });
+          } catch (uErr) {
+            console.warn('[Signup] Aadhaar upload deferred:', uErr);
+          }
+        }
+        if (licenseDoc) {
+          try {
+            await uploadUserDocumentDirect({
+              userId,
+              documentTypeCode: 'driving_license',
+              doc: licenseDoc,
+            });
+          } catch (uErr) {
+            console.warn('[Signup] Licence upload deferred:', uErr);
+          }
+        }
       }
+
+      toast(
+        'success',
+        'Registration Submitted',
+        'Your account is pending administrator approval. Once approved, you can log in.'
+      );
+      setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 1200);
     } catch (err: any) {
-      toast('error', 'Registration Error', err?.message || 'An unexpected error occurred during signup.');
+      const mapped = mapSignupError(err);
+      toast(mapped.type, mapped.title, mapped.message);
+      if (mapped.fieldErrors) {
+        setFieldErrors((prev) => ({ ...prev, ...mapped.fieldErrors }));
+      }
       isSubmittingRef.current = false;
       setIsLoading(false);
       haptics.error();
@@ -480,16 +567,10 @@ export default function SignupScreen() {
   const cardBorder = isDark ? '#262626' : '#ebebeb';
   const iconColor = isDark ? '#737373' : '#9ca3af';
 
-  const supervisorOptions = useMemo(() => {
-    return supervisors.map((s) => ({
-      value: s.id,
-      label: s.full_name,
-    }));
-  }, [supervisors]);
+  const cardMaxWidth = Math.min(520, windowWidth - 24);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: canvasBackground }]}>
-      {/* Dynamic Status Bar */}
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <KeyboardAvoidingView
@@ -501,26 +582,32 @@ export default function SignupScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Main Card Container matching web mobile viewport */}
+          {/* Main Elevated Card Container */}
           <View style={styles.centerContainer}>
             <View
               style={[
                 styles.card,
                 {
+                  maxWidth: cardMaxWidth,
                   backgroundColor: cardBackground,
                   borderColor: cardBorder,
                 },
               ]}
             >
-              {/* Brand Logo Centered (clean wordmark without scissor lift SVG icon) */}
+              {/* Reach International Brand Wordmark & Official Tagline */}
               <View style={styles.logoContainer}>
                 <ReachInternationalLogo variant="full" size={26} showIcon={false} />
               </View>
 
-              {/* Card Title */}
-              <Text style={[styles.title, { color: isDark ? '#ffffff' : '#0f172a' }]}>
-                Create an account
-              </Text>
+              {/* Card Title & Brief Context */}
+              <View style={styles.titleWrapper}>
+                <Text variant="heading" style={[styles.title, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+                  Create an account
+                </Text>
+                <Text variant="caption" style={[styles.subtitle, { color: isDark ? '#a1a1aa' : '#64748b' }]}>
+                  Enter your details to request platform access
+                </Text>
+              </View>
 
               {/* Section 1: Account & Role */}
               <MobileFormSectionCard
@@ -535,13 +622,15 @@ export default function SignupScreen() {
                   required
                   placeholder="Rahul Sharma"
                   value={fullName}
-                  onChangeText={(val) => {
-                    setFullName(val);
-                    clearFieldError('full_name');
+                  onChangeText={handleFullNameChange}
+                  onBlur={() => {
+                    if (!fullName.trim() || fullName.trim().length < 2) {
+                      setFieldErrors((prev) => ({ ...prev, full_name: 'Enter your full name.' }));
+                    }
                   }}
                   autoCapitalize="words"
-                  autoComplete="off"
-                  importantForAutofill="no"
+                  autoComplete="name"
+                  importantForAutofill="yes"
                   error={fieldErrors.full_name}
                   leftIcon={<User size={15} color={iconColor} />}
                 />
@@ -551,14 +640,17 @@ export default function SignupScreen() {
                   required
                   placeholder="rahul@domain.com"
                   value={email}
-                  onChangeText={(val) => {
-                    setEmail(val);
-                    clearFieldError('email');
+                  onChangeText={handleEmailChange}
+                  onBlur={() => {
+                    const clean = email.trim().toLowerCase();
+                    if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+                      setFieldErrors((prev) => ({ ...prev, email: 'Enter a valid email address.' }));
+                    }
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  autoComplete="off"
-                  importantForAutofill="no"
+                  autoComplete="email"
+                  importantForAutofill="yes"
                   error={fieldErrors.email}
                   leftIcon={<Mail size={15} color={iconColor} />}
                 />
@@ -568,29 +660,27 @@ export default function SignupScreen() {
                   required
                   placeholder="+91 98765 43210"
                   value={phone}
-                  onChangeText={(val) => {
-                    setPhone(val);
-                    clearFieldError('phone');
+                  onChangeText={handlePhoneChange}
+                  onBlur={() => {
+                    const clean = phone.replace(/\D/g, '');
+                    if (!clean || clean.length < 10) {
+                      setFieldErrors((prev) => ({ ...prev, phone: 'Enter a valid mobile number.' }));
+                    }
                   }}
                   keyboardType="phone-pad"
-                  autoComplete="off"
-                  importantForAutofill="no"
+                  autoComplete="tel"
+                  importantForAutofill="yes"
                   error={fieldErrors.phone}
                   leftIcon={<Phone size={15} color={iconColor} />}
                 />
 
-                {/* Role Selector using Reusable SearchableSelect with role names only */}
+                {/* Role Selector */}
                 <SearchableSelect
                   label="Role Requested"
                   required
                   options={SIGNUP_ROLES}
                   value={selectedRole}
-                  onChange={(val) => {
-                    setSelectedRole(val);
-                    if (!isSupervisedRole(val)) {
-                      setSelectedSupervisorId('');
-                    }
-                  }}
+                  onChange={handleRoleChange}
                   placeholder="Select role..."
                   leftIcon={<User size={15} color={iconColor} />}
                   error={fieldErrors.role}
@@ -599,7 +689,7 @@ export default function SignupScreen() {
                   containerStyle={{ zIndex: 20 }}
                 />
 
-                {/* Conditional Supervisor Selector using Reusable SearchableSelect */}
+                {/* Supervisor Selector (required for Operator) */}
                 {isSupervisedRole(selectedRole) && (
                   <View style={[styles.supervisorWrapper, { zIndex: 10 }]}>
                     <SearchableSelect
@@ -607,15 +697,14 @@ export default function SignupScreen() {
                       required
                       options={supervisorOptions}
                       value={selectedSupervisorId}
-                      onChange={(val) => {
-                        setSelectedSupervisorId(val);
-                        clearFieldError('supervisor_id');
-                      }}
+                      onChange={handleSupervisorChange}
                       placeholder={
                         loadingSupervisors
                           ? 'Loading supervisors...'
                           : supervisorOptions.length === 0
-                          ? 'No active supervisors found'
+                          ? supervisorError
+                            ? 'Failed to load supervisors'
+                            : 'No active supervisors found'
                           : 'Select supervisor...'
                       }
                       leftIcon={<ShieldCheck size={15} color={iconColor} />}
@@ -625,6 +714,20 @@ export default function SignupScreen() {
                       searchPlaceholder="Search supervisor..."
                       presentation="dropdown"
                     />
+                    {supervisorError && (
+                      <Pressable
+                        variant="plain"
+                        haptic="select"
+                        onPress={() => refetchSupervisors()}
+                        style={styles.retrySupervisorBtn}
+                        hitSlopToMin48
+                      >
+                        <RotateCw size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+                        <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                          Unable to load supervisors. Tap to retry.
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                 )}
               </MobileFormSectionCard>
@@ -638,28 +741,45 @@ export default function SignupScreen() {
                 style={{ zIndex: 50 }}
                 headerAction={
                   shiftSummary?.isValid ? (
-                    <Text style={[styles.durationSmallText, { color: isDark ? '#38bdf8' : '#0284c7' }]}>
-                      {shiftSummary.durationMinutes % 60 === 0
-                        ? `${shiftSummary.durationMinutes / 60} hrs`
-                        : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}
-                    </Text>
+                    <View
+                      style={[
+                        styles.durationBadge,
+                        {
+                          backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.1)',
+                          borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.25)',
+                        },
+                      ]}
+                    >
+                      <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                        {shiftSummary.durationMinutes % 60 === 0
+                          ? `${shiftSummary.durationMinutes / 60} hrs`
+                          : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}
+                        {shiftSummary.isOvernight ? ' • Overnight' : ''}
+                      </Text>
+                    </View>
                   ) : null
                 }
               >
                 <TimeInput
                   label="Shift Start Time"
                   value={shiftStartTime}
-                  onChange={setShiftStartTime}
+                  onChange={handleShiftStartChange}
                   required
                   toggleLayout="side-by-side"
                 />
                 <TimeInput
                   label="Shift End Time"
                   value={shiftEndTime}
-                  onChange={setShiftEndTime}
+                  onChange={handleShiftEndChange}
                   required
                   toggleLayout="side-by-side"
                 />
+
+                {(fieldErrors.shift_time || fieldErrors.shift_end_time) && (
+                  <Text variant="caption" style={styles.inlineSectionError}>
+                    {fieldErrors.shift_time || fieldErrors.shift_end_time}
+                  </Text>
+                )}
               </MobileFormSectionCard>
 
               {/* Section 3: Address Details */}
@@ -810,7 +930,7 @@ export default function SignupScreen() {
                 />
 
                 <MobileDocumentUploadCard
-                  title="Licence Document"
+                  title="Licence Document (Optional)"
                   docTypeCode="driving_license"
                   selectedDoc={licenseDoc}
                   onDocSelected={(doc) => {
@@ -838,14 +958,11 @@ export default function SignupScreen() {
                   required
                   placeholder="••••••••••••"
                   value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    clearFieldError('password');
-                  }}
+                  onChangeText={handlePasswordChange}
                   isPassword
                   autoCapitalize="none"
-                  autoComplete="off"
-                  importantForAutofill="no"
+                  autoComplete="new-password"
+                  importantForAutofill="yes"
                   error={fieldErrors.password}
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
@@ -855,20 +972,17 @@ export default function SignupScreen() {
                   required
                   placeholder="••••••••••••"
                   value={confirmPassword}
-                  onChangeText={(val) => {
-                    setConfirmPassword(val);
-                    clearFieldError('confirm_password');
-                  }}
+                  onChangeText={handleConfirmPasswordChange}
                   isPassword
                   autoCapitalize="none"
-                  autoComplete="off"
-                  importantForAutofill="no"
+                  autoComplete="new-password"
+                  importantForAutofill="yes"
                   error={fieldErrors.confirm_password}
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
               </MobileFormSectionCard>
 
-              {/* Note Banner */}
+              {/* Account Status Info Note Banner */}
               <View
                 style={[
                   styles.noteBox,
@@ -880,22 +994,23 @@ export default function SignupScreen() {
               >
                 <Info size={15} color="#0284c7" style={{ marginTop: 2 }} />
                 <Text
+                  variant="caption"
                   style={[
                     styles.noteText,
                     { color: isDark ? '#7dd3fc' : '#0369a1' },
                   ]}
                 >
-                  <Text variant="label" style={{ }}>Note: </Text>
+                  <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0369a1' }}>Note: </Text>
                   Account status will be “pending” until approved by an administrator.
                 </Text>
               </View>
 
               {/* Terms and Privacy Agreement Checkbox */}
-              <View style={{ marginTop: 10, marginBottom: 8 }}>
+              <View style={styles.termsWrapper}>
                 <Pressable
                   variant="toggle"
                   haptic="toggle"
-                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
+                  style={styles.termsRow}
                   onPress={() => {
                     setAgreedToTerms((prev) => {
                       const next = !prev;
@@ -904,24 +1019,25 @@ export default function SignupScreen() {
                     });
                   }}
                   hitSlopToMin48={true}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: agreedToTerms }}
+                  accessibilityLabel="Agree to Terms of Service and Privacy Policy"
                 >
                   <View
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 5,
-                      borderWidth: 1.5,
-                      borderColor: agreedToTerms ? '#0284c7' : isDark ? '#404040' : '#d1d5db',
-                      backgroundColor: agreedToTerms ? '#0284c7' : 'transparent',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginTop: 1 }}
-                    >
+                    style={[
+                      styles.checkboxBox,
+                      {
+                        borderColor: agreedToTerms ? '#0284c7' : isDark ? '#404040' : '#d1d5db',
+                        backgroundColor: agreedToTerms ? '#0284c7' : 'transparent',
+                      },
+                    ]}
+                  >
                     {agreedToTerms && <Check size={12} color="#ffffff" strokeWidth={3} />}
                   </View>
-                  <Text style={{ flex: 1, color: isDark ? '#9ca3af' : '#6b7280' }}>
+                  <Text variant="caption" style={{ flex: 1, color: isDark ? '#9ca3af' : '#6b7280' }}>
                     I have read and agree to the{' '}
                     <Text
+                      variant="caption"
                       style={{ color: '#0284c7' }}
                       onPress={() => router.push('/terms')}
                     >
@@ -929,6 +1045,7 @@ export default function SignupScreen() {
                     </Text>{' '}
                     and{' '}
                     <Text
+                      variant="caption"
                       style={{ color: '#0284c7' }}
                       onPress={() => router.push('/privacy')}
                     >
@@ -938,13 +1055,13 @@ export default function SignupScreen() {
                   </Text>
                 </Pressable>
                 {fieldErrors.terms && (
-                  <Text variant="caption" style={{ color: '#ef4444', marginTop: 4, marginLeft: 28 }}>
+                  <Text variant="caption" style={styles.termsErrorText}>
                     {fieldErrors.terms}
                   </Text>
                 )}
               </View>
 
-              {/* Gated Submit Button matching web mobile view */}
+              {/* Gated Submit Button */}
               <MobileSubmitButton
                 isReady={isAllMandatoryFilled}
                 isLoading={isLoading}
@@ -955,9 +1072,9 @@ export default function SignupScreen() {
                 missingFields={missingFields}
               />
 
-              {/* Card Footer */}
+              {/* Card Footer: Sign In Link */}
               <View style={[styles.cardFooter, { borderTopColor: isDark ? '#262626' : '#ebebeb' }]}>
-                <Text style={[styles.cardFooterText, { color: isDark ? '#71717a' : '#888888' }]}>
+                <Text variant="body" style={[styles.cardFooterText, { color: isDark ? '#71717a' : '#888888' }]}>
                   Already have an account?
                 </Text>
                 <Pressable
@@ -967,8 +1084,10 @@ export default function SignupScreen() {
                     router.push('/(auth)/login');
                   }}
                   hitSlopToMin48={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign in"
                 >
-                  <Text style={[styles.signInLinkText, { color: '#0284c7' }]}>
+                  <Text variant="label" style={[styles.signInLinkText, { color: '#0284c7' }]}>
                     Sign in
                   </Text>
                 </Pressable>
@@ -976,10 +1095,10 @@ export default function SignupScreen() {
             </View>
           </View>
 
-          {/* Bottom Screen Footer & Theme Toggle */}
-          {/* Footer Copyright */}
+          {/* Screen Footer & Copyright */}
           <View style={styles.screenFooter}>
             <Text
+              variant="micro"
               style={[
                 styles.copyrightText,
                 { color: isDark ? '#737373' : '#8f8f8f' },
@@ -1017,7 +1136,6 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 520,
     borderRadius: 20,
     borderWidth: 1,
     paddingHorizontal: 16,
@@ -1040,19 +1158,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  title: {
+  titleWrapper: {
     marginBottom: 14,
   },
-  bannerContainer: {
-    marginBottom: 12,
+  title: {
   },
-  durationSmallText: {
+  subtitle: {
+    marginTop: 2,
+  },
+  durationBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   supervisorWrapper: {
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(150, 150, 150, 0.15)',
     marginTop: 2,
+  },
+  retrySupervisorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  inlineSectionError: {
+    color: '#ef4444',
+    marginTop: 4,
+    marginBottom: 2,
   },
   noteBox: {
     flexDirection: 'row',
@@ -1061,11 +1199,34 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: 6,
+    marginBottom: 6,
   },
   noteText: {
     flex: 1,
+  },
+  termsWrapper: {
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  termsErrorText: {
+    color: '#ef4444',
+    marginTop: 4,
+    marginLeft: 28,
   },
   cardFooter: {
     marginTop: 14,

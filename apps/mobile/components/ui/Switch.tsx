@@ -1,54 +1,217 @@
 /**
- * ReachInternational Mobile — React Native Reusables Switch Component
- * Official RNR Switch primitive powered by @rn-primitives/switch.
+ * ReachInternational Mobile — Canonical Switch Component
+ * High-performance, butter-smooth enable/disable toggle switch with
+ * fluid spring physics, hardware haptics, and Geist design tokens.
  */
 
-import * as SwitchPrimitives from '@rn-primitives/switch';
-import * as React from 'react';
-import { Platform } from 'react-native';
-import { cn } from '@/lib/utils';
+import React, { useEffect } from 'react';
+import {
+  Pressable,
+  View,
+  StyleSheet,
+  Platform,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useTheme } from './ThemeProvider';
+import { haptics } from '../../lib/haptics';
+import { useReducedMotion } from '../../lib/preferences/useReducedMotion';
 
-export interface SwitchProps
-  extends Omit<React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>, 'checked' | 'onCheckedChange'> {
-  checked?: boolean;
+export interface SwitchProps {
   value?: boolean;
-  onCheckedChange?: (checked: boolean) => void;
+  checked?: boolean;
   onValueChange?: (value: boolean) => void;
+  onCheckedChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
   trackColor?: { false?: string; true?: string };
   thumbColor?: string;
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+  className?: string;
+  testID?: string;
+  haptic?: boolean;
 }
 
-const Switch = React.forwardRef<
-  React.ElementRef<typeof SwitchPrimitives.Root>,
-  SwitchProps
->(({ className, checked, value, onCheckedChange, onValueChange, ...props }, ref) => {
-  const isChecked = checked ?? value ?? false;
+const SPRING_CONFIG = {
+  damping: 18,
+  stiffness: 180,
+  mass: 0.8,
+};
 
-  const handleCheckedChange = (val: boolean) => {
-    onCheckedChange?.(val);
-    onValueChange?.(val);
+export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
+  {
+    value,
+    checked,
+    onValueChange,
+    onCheckedChange,
+    disabled = false,
+    size = 'md',
+    trackColor,
+    thumbColor,
+    accessibilityLabel,
+    style,
+    className: _className,
+    testID,
+    haptic = true,
+  },
+  ref
+) {
+  const { isDark } = useTheme();
+  const prefersReducedMotion = useReducedMotion();
+
+  const isChecked = Boolean(checked ?? value ?? false);
+
+  const isSmall = size === 'sm';
+  const trackWidth = isSmall ? 40 : 50;
+  const trackHeight = isSmall ? 22 : 28;
+  const trackRadius = trackHeight / 2;
+  const thumbSize = isSmall ? 18 : 24;
+  const thumbRadius = thumbSize / 2;
+  const padding = 2;
+  const travelDistance = trackWidth - thumbSize - padding * 2;
+
+  // Authoritative Reach sky blue tokens (#0284c7 light / #0ea5e9 dark)
+  const defaultActiveTrack = isDark ? '#0ea5e9' : '#0284c7';
+  const defaultInactiveTrack = isDark ? '#27272a' : '#e4e4e7';
+  const defaultInactiveBorder = isDark ? '#3f3f46' : '#d4d4d8';
+
+  const activeTrackColor = trackColor?.true || defaultActiveTrack;
+  const inactiveTrackColor = trackColor?.false || defaultInactiveTrack;
+  const resolvedThumbColor = thumbColor || '#ffffff';
+
+  const progress = useSharedValue(isChecked ? 1 : 0);
+
+  useEffect(() => {
+    const target = isChecked ? 1 : 0;
+    if (prefersReducedMotion) {
+      progress.value = withTiming(target, { duration: 100 });
+    } else {
+      progress.value = withSpring(target, SPRING_CONFIG);
+    }
+  }, [isChecked, prefersReducedMotion, progress]);
+
+  const thumbAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progress.value * travelDistance }],
+  }));
+
+  const activeTrackAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+
+  const borderAnimatedStyle = useAnimatedStyle(() => ({
+    borderColor: progress.value > 0.4 ? activeTrackColor : defaultInactiveBorder,
+  }));
+
+  const handlePress = () => {
+    if (disabled) return;
+    const nextVal = !isChecked;
+    if (haptic) {
+      haptics.select();
+    }
+    onValueChange?.(nextVal);
+    onCheckedChange?.(nextVal);
   };
 
   return (
-    <SwitchPrimitives.Root
-      className={cn(
-        'peer flex-row h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input p-0.5',
-        className
-      )}
-      checked={isChecked}
-      onCheckedChange={handleCheckedChange}
-      {...props}
+    <Pressable
       ref={ref}
+      role="switch"
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: isChecked, disabled }}
+      aria-checked={isChecked}
+      disabled={disabled}
+      onPress={handlePress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={[
+        styles.pressable,
+        {
+          width: trackWidth,
+          height: trackHeight,
+          opacity: disabled ? 0.45 : 1,
+        },
+        Platform.OS === 'web' && ({ cursor: disabled ? 'not-allowed' : 'pointer', outlineStyle: 'none' } as any),
+        style,
+      ]}
+      testID={testID}
     >
-      <SwitchPrimitives.Thumb
-        className={cn(
-          'pointer-events-none block h-5 w-5 rounded-full bg-background shadow-md ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0'
-        )}
-      />
-    </SwitchPrimitives.Root>
+      <Animated.View
+        style={[
+          styles.track,
+          {
+            width: trackWidth,
+            height: trackHeight,
+            borderRadius: trackRadius,
+            backgroundColor: inactiveTrackColor,
+          },
+          borderAnimatedStyle,
+        ]}
+      >
+        {/* Active Blue Layer */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: activeTrackColor,
+              borderRadius: trackRadius,
+            },
+            activeTrackAnimatedStyle,
+          ]}
+        />
+
+        {/* White Circular Thumb Knob */}
+        <Animated.View
+          style={[
+            styles.thumb,
+            {
+              width: thumbSize,
+              height: thumbSize,
+              borderRadius: thumbRadius,
+              backgroundColor: resolvedThumbColor,
+              top: padding - 1,
+              left: padding - 1,
+            },
+            thumbAnimatedStyle,
+          ]}
+        />
+      </Animated.View>
+    </Pressable>
   );
 });
-Switch.displayName = SwitchPrimitives.Root.displayName;
 
-export { Switch };
+Switch.displayName = 'Switch';
+
+const styles = StyleSheet.create({
+  pressable: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  track: {
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  thumb: {
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2.5,
+    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.18)',
+        } as any)
+      : {}),
+  },
+});
+
 export default Switch;

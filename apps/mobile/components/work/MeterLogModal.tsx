@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -399,6 +399,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   } | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef<boolean>(false);
 
   const reportError = (msg: string) => {
     if (msg) {
@@ -566,6 +567,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const runningHours = Math.max(0, endVal - startVal);
 
   const handleSubmit = async () => {
+    if (submittingRef.current || isSubmitting) return;
+
     if (!startMeter.trim()) {
       reportError('Start meter reading is required.');
       return;
@@ -601,6 +604,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
     let userId = currentUserId;
     if (!userId) {
       const { data: userData } = await supabase.auth.getUser();
@@ -613,32 +619,40 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     const isUnassigned = assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode);
     if (isUnassigned && !isAssisted) {
       reportError(`Operator is assigned to Shift ${assignedShiftCodes.join(', ')} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`);
+      submittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
 
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
       reportError(shiftStats.errorMessage || 'Shift is in progress. Logs can be submitted after shift ends.');
+      submittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
 
     if (sequencingError?.isInvalid) {
       reportError(sequencingError.message);
+      submittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
 
     if (isBreakdown) {
       if (!breakdownStats?.isValid) {
         reportError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
+        submittingRef.current = false;
+        setIsSubmitting(false);
         return;
       }
       const maxAllowedDuration = shiftStats.durationHours > 0 ? shiftStats.durationHours : 24;
       if (shiftStats.isValid && breakdownStats.durationDecimalHours > maxAllowedDuration) {
         reportError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`);
+        submittingRef.current = false;
+        setIsSubmitting(false);
         return;
       }
     }
-
-    setIsSubmitting(true);
 
     let logPayload: Record<string, any> | null = null;
 
@@ -647,6 +661,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         const callerRole = currentUserRole || (await supabase.from('users').select('role').eq('id', userId).single()).data?.role;
         if (callerRole && !['super_admin', 'admin', 'manager'].includes(callerRole)) {
           reportError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
+          submittingRef.current = false;
           setIsSubmitting(false);
           return;
         }
@@ -670,6 +685,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (isUnassigned && isAssisted) {
         remarksPayload = `[Assisted Override: Shift ${selectedShiftCode}] ${remarksPayload}`.trim();
       }
+
+      const effectiveDate = shiftStats.resolvedStartDate || logDate;
+      const effectiveShift = selectedShiftCode || 'S1';
+      const idempotencyKey = `ihl_m_${machineId || 'unknown'}_${effectiveOperatorId || 'unknown'}_${effectiveDate}_${effectiveShift}`;
 
       logPayload = {
         machine_id: machineId || null,
@@ -701,7 +720,24 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         end_date: shiftStats.resolvedEndDate,
         start_datetime: shiftStats.startDateTime?.toISOString(),
         end_datetime: shiftStats.endDateTime?.toISOString(),
+        idempotency_key: idempotencyKey,
       };
+
+      // Pre-queue duplicate validation against local offline queue and cached logs
+      const dupCheck = offlineQueueManager.checkDuplicateShiftLog({
+        machineId,
+        operatorId: effectiveOperatorId,
+        logDate: effectiveDate,
+        shiftCode: effectiveShift,
+        existingLogs: todayLogs,
+      });
+
+      if (dupCheck.isDuplicate && !existingLog?.id) {
+        reportError(dupCheck.reason || `A log for Shift ${effectiveShift} on ${effectiveDate} has already been recorded or queued.`);
+        submittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
 
       if (isOffline) {
         const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
@@ -785,8 +821,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         return;
       }
 
-      const idempotencyKey = `ihl_m_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
       // 1. Try atomic PostgreSQL RPC execution first (syncs machines.current_operator_id, health_status, and audit_logs in 1 transaction)
       let rpcSucceeded = false;
       try {
@@ -820,22 +854,32 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
           rpcSucceeded = true;
+          if ((rpcRes as any).already_logged) {
+            showToast('info', 'Shift Already Recorded', 'This shift log was already recorded with identical meter readings.');
+          }
         } else if (rpcErr) {
+          const rpcMsg = (rpcErr.message || '').toLowerCase();
           if (
-            rpcErr.message?.includes('cannot be less than start meter') ||
-            rpcErr.message?.includes('cannot exceed 24 hours') ||
-            rpcErr.message?.includes('Shift end timestamp') ||
-            rpcErr.message?.includes('overlap') ||
-            rpcErr.message?.includes('Cannot log before shift end') ||
-            rpcErr.message?.includes('Breakdown duration') ||
-            rpcErr.message?.includes('maintenance or') ||
-            rpcErr.message?.includes('inactive') ||
-            rpcErr.message?.includes('Unauthorized operator') ||
-            rpcErr.message?.includes('Client ID does not match') ||
-            rpcErr.message?.includes('previous 7 days') ||
-            rpcErr.message?.includes('assigned to Shift') ||
-            rpcErr.message?.includes('unassigned shift') ||
-            rpcErr.message?.includes('Please select your assigned shift') ||
+            rpcErr.code === '23505' ||
+            rpcMsg.includes('duplicate') ||
+            rpcMsg.includes('already has a log') ||
+            rpcMsg.includes('already been logged') ||
+            rpcMsg.includes('another machine') ||
+            rpcMsg.includes('uq_machine_hour_logs') ||
+            rpcMsg.includes('cannot be less than start meter') ||
+            rpcMsg.includes('cannot exceed 24 hours') ||
+            rpcMsg.includes('shift end timestamp') ||
+            rpcMsg.includes('overlap') ||
+            rpcMsg.includes('cannot log before shift end') ||
+            rpcMsg.includes('breakdown duration') ||
+            rpcMsg.includes('maintenance or') ||
+            rpcMsg.includes('inactive') ||
+            rpcMsg.includes('unauthorized operator') ||
+            rpcMsg.includes('client id does not match') ||
+            rpcMsg.includes('previous 7 days') ||
+            rpcMsg.includes('assigned to shift') ||
+            rpcMsg.includes('unassigned shift') ||
+            rpcMsg.includes('please select your assigned shift') ||
             rpcErr.code === '23514' ||
             rpcErr.code === '42501' ||
             rpcErr.code === '23503'
@@ -844,21 +888,28 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           }
         }
       } catch (rpcCatchErr: any) {
+        const catchMsg = (rpcCatchErr?.message || '').toLowerCase();
         if (
-          rpcCatchErr.message?.includes('cannot be less than start meter') ||
-          rpcCatchErr.message?.includes('cannot exceed 24 hours') ||
-          rpcCatchErr.message?.includes('Shift end timestamp') ||
-          rpcCatchErr.message?.includes('overlap') ||
-          rpcCatchErr.message?.includes('Cannot log before shift end') ||
-          rpcCatchErr.message?.includes('Breakdown duration') ||
-          rpcCatchErr.message?.includes('maintenance or') ||
-          rpcCatchErr.message?.includes('inactive') ||
-          rpcCatchErr.message?.includes('Unauthorized operator') ||
-          rpcCatchErr.message?.includes('Client ID does not match') ||
-          rpcCatchErr.message?.includes('previous 7 days') ||
-          rpcCatchErr.message?.includes('assigned to Shift') ||
-          rpcCatchErr.message?.includes('unassigned shift') ||
-          rpcCatchErr.message?.includes('Please select your assigned shift') ||
+          rpcCatchErr.code === '23505' ||
+          catchMsg.includes('duplicate') ||
+          catchMsg.includes('already has a log') ||
+          catchMsg.includes('already been logged') ||
+          catchMsg.includes('another machine') ||
+          catchMsg.includes('uq_machine_hour_logs') ||
+          catchMsg.includes('cannot be less than start meter') ||
+          catchMsg.includes('cannot exceed 24 hours') ||
+          catchMsg.includes('shift end timestamp') ||
+          catchMsg.includes('overlap') ||
+          catchMsg.includes('cannot log before shift end') ||
+          catchMsg.includes('breakdown duration') ||
+          catchMsg.includes('maintenance or') ||
+          catchMsg.includes('inactive') ||
+          catchMsg.includes('unauthorized operator') ||
+          catchMsg.includes('client id does not match') ||
+          catchMsg.includes('previous 7 days') ||
+          catchMsg.includes('assigned to shift') ||
+          catchMsg.includes('unassigned shift') ||
+          catchMsg.includes('please select your assigned shift') ||
           rpcCatchErr.code === '23514' ||
           rpcCatchErr.code === '42501' ||
           rpcCatchErr.code === '23503'
@@ -1083,6 +1134,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       haptics.reject();
       showToast('error', parsedErr.title, parsedErr.message);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -1091,13 +1143,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
   return (
     <AppModal visible={visible} onClose={onClose} variant="bottom">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.sheetWrapper}
-      >
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+      {/* Header */}
+      <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
                 <Clock size={18} color={theme.colors.link} />
@@ -1205,7 +1252,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               placeholder="e.g. Jhajjar, Haryana"
               value={location}
               onChangeText={setLocation}
-              autoComplete="off"
+              name="site_location_input"
+              id="site_location_input"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
               textContentType="none"
               importantForAutofill="no"
               autoCorrect={false}
@@ -1222,7 +1271,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   onChangeText={handleStartMeterChange}
                   keyboardType="numeric"
                   inputMode="decimal"
-                  autoComplete="off"
+                  name="start_meter_val"
+                  id="start_meter_val"
+                  autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
                   textContentType="none"
                   importantForAutofill="no"
                   autoCorrect={false}
@@ -1237,7 +1288,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   onChangeText={handleEndMeterChange}
                   keyboardType="numeric"
                   inputMode="decimal"
-                  autoComplete="off"
+                  name="end_meter_val"
+                  id="end_meter_val"
+                  autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
                   textContentType="none"
                   importantForAutofill="no"
                   autoCorrect={false}
@@ -1451,7 +1504,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               onChangeText={setOvertimeHours}
               keyboardType="numeric"
               inputMode="decimal"
-              autoComplete="off"
+              name="overtime_hours_input"
+              id="overtime_hours_input"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
               textContentType="none"
               importantForAutofill="no"
               autoCorrect={false}
@@ -1549,7 +1604,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                 value={remarks}
                 onChangeText={setRemarks}
                 multiline
-                autoComplete="off"
+                name="shift_remarks_input"
+                id="shift_remarks_input"
+                autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
                 textContentType="none"
                 importantForAutofill="no"
                 autoCorrect={false}
@@ -1560,18 +1617,23 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
+          <View style={[styles.footer, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
+            <Button
+              label="Cancel"
+              onPress={onClose}
+              variant="outline"
+              size="md"
+              style={{ flex: 1, minHeight: 44 }}
+            />
             <Button
               label={existingLog ? 'Save Changes' : 'Submit'}
               onPress={handleSubmit}
               isLoading={isSubmitting}
               variant="primary"
               size="md"
+              style={{ flex: 1, minHeight: 44 }}
             />
           </View>
-        </View>
-      </KeyboardAvoidingView>
     </AppModal>
   );
 };
@@ -1682,9 +1744,10 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    padding: spacingNumeric.lg,
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: spacingNumeric.lg,
+    paddingVertical: spacingNumeric.md,
     borderTopWidth: 1,
   },
   modalOverlay: {

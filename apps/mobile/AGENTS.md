@@ -156,3 +156,22 @@ pnpm typecheck
 - **NEVER** use `console.log` in production builds — use proper logging.
 - **NEVER** store sensitive tokens in `AsyncStorage` without encryption considerations.
 - **NEVER** bypass the EAS build pipeline for release builds.
+
+### 10. Mobile Security Enforcement & Mandatory Pre-Change Protocol
+
+> **CRITICAL REQUIREMENT**: Every native mobile engineering task MUST consult and enforce the scoped mobile security policy and monorepo baseline.
+
+Before modifying any mobile code, every AI agent MUST:
+1. **Read Scoped Security Policy**:
+   - Mobile rules: [`apps/mobile/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-RULES.md)
+   - Mobile attack surface: [`apps/mobile/security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/ATTACK-SURFACE.md)
+   - Mobile threat model: [`apps/mobile/security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/THREAT-MODEL.md)
+   - Root baseline rules: [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)
+2. **Execute Compliance Checklist**: Check all implementation steps against [`apps/mobile/security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-CHECKLIST.md).
+3. **Mandatory Invariants**:
+   - Hardware-backed keystore exclusively for auth tokens via `mobileSecureStorage` (`expo-secure-store`). Zero plaintext `AsyncStorage` fallback.
+   - Zero server secrets in mobile bundles or environment (`verifyClientSecurityEnvironment`).
+   - Deep link route sanitization through whitelist before navigation (`sanitizeDeepLinkRoute`).
+   - Offline shift queue idempotency keys (`buildShiftLogIdempotencyKey`) and capacity limits (`MAX_QUEUE_CAPACITY: 50`).
+   - Android backup disabled (`android.allowBackup: false`) and unnecessary permissions stripped in `app.json` and `app.config.js`.
+

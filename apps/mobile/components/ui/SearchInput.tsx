@@ -42,6 +42,8 @@ export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   inputStyle?: StyleProp<TextStyle>;
   variant?: 'default' | 'pill' | 'rounded';
   size?: 'sm' | 'md' | 'lg';
+  name?: string;
+  id?: string;
 }
 
 export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
@@ -138,13 +140,26 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
         autoFocus={autoFocus}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        autoComplete="off"
+        {...restProps}
+        autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
         textContentType="none"
         importantForAutofill="no"
         autoCorrect={false}
         spellCheck={false}
         inputMode="search"
         aria-autocomplete="none"
+        {...(Platform.OS === 'web'
+          ? {
+              name: (restProps as any).name || 'search_filter_query',
+              id: (restProps as any).id || (restProps as any).name || 'search_filter_query',
+              dataSet: {
+                lpignore: 'true',
+                '1p-ignore': 'true',
+                formType: 'other',
+                ...((restProps as any).dataSet || {}),
+              },
+            }
+          : {})}
         style={[
           styles.input,
           useTypeStyle('body'),
@@ -153,7 +168,6 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
           },
           inputStyle,
         ]}
-        {...restProps}
       />
 
       {/* Clear Button or Custom Right Icon */}

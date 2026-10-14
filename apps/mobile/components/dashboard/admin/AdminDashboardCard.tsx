@@ -1,7 +1,9 @@
 import { Text } from '../../ui/Text';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { AdminDashboardDTO } from '@reachinternational/types';
 import {
@@ -27,6 +29,7 @@ export interface AdminDashboardCardProps {
 
 export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
 
   const totalMachines = data?.totalMachines ?? 0;
   const activeUsers = data?.activeUsers ?? 0;
@@ -37,8 +40,24 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
   const overtime = data?.operationalKpis?.overtimeEntries ?? 0;
   const overlappingLogs = data?.operationalKpis?.overlappingLogs ?? 0;
 
+  const hasNoOrgData = totalMachines === 0 && activeUsers === 0 && totalClients === 0;
+
   return (
     <View style={styles.container}>
+      {/* Empty State when organization has no machines or users initialized */}
+      {hasNoOrgData && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="Organization Fleet & Users Empty"
+            description="Platform setup in progress. Start by adding equipment or inviting team members."
+            actionLabel="Manage Personnel"
+            onAction={() => router.push('/users')}
+            compact
+          />
+        </View>
+      )}
+
       {/* Core Fleet & Organization KPIs */}
       <View style={styles.section}>
         <Text

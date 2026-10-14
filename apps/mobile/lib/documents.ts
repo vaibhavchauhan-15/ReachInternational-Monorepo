@@ -213,6 +213,66 @@ export async function uploadUserDocumentDirect(params: {
 }
 
 /**
+ * Upload a pending replacement document to storage only without touching user_documents table.
+ * Used for change requests where the document awaits management review.
+ */
+export async function uploadPendingDocumentToStorage(params: {
+  userId: string;
+  documentTypeCode: string;
+  doc: MobilePickedDocument;
+  onProgress?: (progressPercent: number) => void;
+}): Promise<{
+  success: boolean;
+  docInfo?: {
+    storage_path: string;
+    file_name: string;
+    file_size_bytes: number;
+    mime_type: string;
+  };
+  error?: string;
+}> {
+  const { userId, documentTypeCode, doc, onProgress } = params;
+
+  try {
+    if (onProgress) onProgress(20);
+
+    const binaryData = await getDocumentBinary(doc);
+    if (onProgress) onProgress(40);
+
+    const extMatch = doc.name.match(/\.([a-zA-Z0-9]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : doc.mimeType === 'application/pdf' ? 'pdf' : 'jpg';
+    const filePath = `documents/${userId}/${documentTypeCode}_pending_${Date.now()}.${ext}`;
+
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('user_files')
+      .upload(filePath, binaryData, {
+        contentType: doc.mimeType,
+        upsert: true,
+      });
+
+    if (uploadErr) {
+      console.error('[Pending Document Upload] Storage error:', uploadErr);
+      return { success: false, error: uploadErr.message };
+    }
+
+    if (onProgress) onProgress(100);
+
+    return {
+      success: true,
+      docInfo: {
+        storage_path: uploadData?.path || filePath,
+        file_name: doc.name,
+        file_size_bytes: doc.size,
+        mime_type: doc.mimeType,
+      },
+    };
+  } catch (err: any) {
+    console.error('[Pending Document Upload] Exception:', err);
+    return { success: false, error: err?.message || 'Failed to upload document' };
+  }
+}
+
+/**
  * Fetch existing documents for a user with signed URLs
  */
 export async function fetchUserDocuments(

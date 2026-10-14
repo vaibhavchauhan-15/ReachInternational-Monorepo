@@ -20,6 +20,7 @@ import { SyncState } from './syncState';
 import { generateUUID, offlineQueueManager } from '../offline/OfflineQueueManager';
 import type { MutationType } from '../offline/types';
 import { postNotification } from '../notifications/postNotification';
+import { showToast } from '../../components/ui';
 
 export interface OptimisticQueryKeys {
   list?: QueryKey;
@@ -202,6 +203,8 @@ export function useOptimisticMutation<TData, TVars, TRow = any>(
 
       const formatFn = options.errorMessage || defaultFormatErrorMessage;
       const errorMsg = formatFn(error);
+
+      showToast('error', 'Action Failed', errorMsg);
 
       postNotification({
         category: 'system',

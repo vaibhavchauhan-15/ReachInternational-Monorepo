@@ -183,6 +183,11 @@ export function useOperationsMasterData(enabled: boolean = true) {
           .order('company_name'),
       ]);
 
+      if (mchRes.error) throw mchRes.error;
+      if (assRes.error) throw assRes.error;
+      if (opsRes.error) throw opsRes.error;
+      if (clientsRes.error) throw clientsRes.error;
+
       const activeAssList = (assRes.data || []).filter((a: any) => a.is_active) as unknown as ActiveShiftAssignment[];
       const machinesList: MachineWithAssignments[] = (mchRes.data || []).map((m: any) => ({
         ...m,
@@ -367,7 +372,7 @@ export function useOperatorEntryContext(operatorId?: string) {
 
       if (error) {
         console.error('[useOperatorEntryContext] RPC Error:', error);
-        return null;
+        throw error;
       }
 
       const res = data as any;
@@ -410,7 +415,7 @@ export function useTodayShiftMonitor(
 
       if (error) {
         console.error('[useTodayShiftMonitor] RPC Error:', error);
-        return [];
+        throw error;
       }
 
       return (data as TodayShiftMonitorRow[]) || [];

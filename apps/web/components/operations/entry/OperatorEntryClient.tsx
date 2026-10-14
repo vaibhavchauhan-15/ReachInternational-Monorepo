@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Send } from "lucide-react";
@@ -307,6 +307,7 @@ export function OperatorEntryClient({
 
   // Submission & Draft State
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
   const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
 
   // Restore draft from localStorage if available (deferred to avoid cascading render)
@@ -408,7 +409,7 @@ export function OperatorEntryClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
 
     if (!initialContext.machine?.id) {
       toast("error", "No Machine Assigned", "You cannot submit a log without an assigned machine.");
@@ -462,6 +463,7 @@ export function OperatorEntryClient({
       }
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
 
     let bkdDurationStr: string | undefined;
@@ -473,6 +475,9 @@ export function OperatorEntryClient({
 
     const finalRemarks =
       isBreakdown && breakdownReason.trim() ? `[Breakdown: ${breakdownReason.trim()}]` : undefined;
+
+    const effectiveShift = (selectedShiftCode || "").replace(/^shift\s*/i, "").trim().toUpperCase();
+    const deterministicKey = `ihl_web_${initialContext.machine.id}_${user.id}_${logDate}_${effectiveShift || "S1"}`;
 
     try {
       const res = await submitOperatorHourLogAction({
@@ -490,9 +495,10 @@ export function OperatorEntryClient({
         breakdownEndTime: isBreakdown ? breakdownEndTime : undefined,
         breakdownDuration: bkdDurationStr,
         breakdownHours: bkdHours,
-        shiftCode: selectedShiftCode || undefined,
+        shiftCode: effectiveShift || undefined,
         machineCondition: isBreakdown ? "breakdown" : "good",
         remarks: finalRemarks,
+        idempotencyKey: deterministicKey,
       });
 
       if (res.success) {
@@ -580,6 +586,7 @@ export function OperatorEntryClient({
       const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
       toast("error", "Submission Error", msg);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

@@ -9,6 +9,7 @@ import { Text } from '../../ui/Text';
 import { Card } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { OperatorDashboardDTO } from '@reachinternational/types';
 import { StatusCard } from '../shared/StatusCard';
@@ -37,9 +38,13 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
   const isSubmitted = data?.today?.entryStatus === 'submitted';
   const isPartial = data?.today?.entryStatus === 'partial';
   const submittedCount = data?.today?.submittedCount ?? 0;
+  const hasShifts = Boolean(data?.assigned_shifts && data.assigned_shifts.length > 0);
   const totalAssignedCount =
-    data?.today?.totalAssignedCount ?? (data?.assigned_shifts?.length || 1);
+    data?.today?.totalAssignedCount ?? (data?.assigned_shifts ? data.assigned_shifts.length : 0);
   const totalRunningHoursToday = data?.today?.totalRunningHoursToday ?? 0;
+  const hasMachine = Boolean(data?.machine);
+  const hasClient = Boolean(data?.client);
+  const hasNoAssignments = !hasShifts && !hasMachine && !hasClient;
 
   const handleNavigate = (route: string) => {
     router.push(route as any);
@@ -47,6 +52,20 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
 
   return (
     <View style={styles.container}>
+      {/* Informative Guidance when Operator has no assignments configured */}
+      {hasNoAssignments && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="No Shifts or Equipment Assigned"
+            description="You do not have an active machine or shift assigned for today. Contact your site supervisor to receive your daily deployment."
+            actionLabel="View Operations"
+            onAction={() => handleNavigate('/operations')}
+            compact
+          />
+        </View>
+      )}
+
       {/* 1. Today's Shift Status & Meter Readings */}
       <View style={styles.section}>
         <Text
@@ -58,7 +77,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
         <View style={styles.oneColCol}>
           <StatusCard
             title="LOG SUBMISSION STATUS"
-            status={isSubmitted ? 'success' : isPartial ? 'warning' : 'pending'}
+            status={isSubmitted ? 'success' : isPartial ? 'warning' : totalAssignedCount === 0 ? 'default' : 'pending'}
             label={
               isSubmitted
                 ? totalAssignedCount > 1
@@ -66,6 +85,8 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
                   : 'Submitted Today'
                 : isPartial
                 ? `${submittedCount}/${totalAssignedCount} Shifts Logged`
+                : totalAssignedCount === 0
+                ? 'No Shifts Assigned'
                 : 'Pending Submission'
             }
             description={
@@ -73,6 +94,8 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
                 ? `${totalRunningHoursToday}h recorded across assigned shift(s) today.`
                 : isPartial
                 ? `${submittedCount} of ${totalAssignedCount} shifts recorded (${totalRunningHoursToday}h). Ready to log remaining shift.`
+                : totalAssignedCount === 0
+                ? 'No shift schedule registered for today. Contact your supervisor if you are on duty.'
                 : 'Remember to submit before the end of your shift.'
             }
           />

@@ -14,12 +14,11 @@
  * - Local draft persistence via AsyncStorage, TanStack cache invalidation, and Offline Queue support
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Platform,
 } from 'react-native';
@@ -59,7 +58,7 @@ import {
   parseOperationalErrorMessage,
   type ShiftMatchTarget,
 } from '@reachinternational/utils';
-import { useToast } from '../ui';
+import { useToast, EmptyState, ErrorState, FormError } from '../ui';
 import type { OperatorEntryContext, ClientShiftCode } from '@reachinternational/types';
 import { supabase } from '../../lib/supabase';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
@@ -127,6 +126,9 @@ export const DEFAULT_CLIENT_SHIFTS: ClientShiftCode[] = [
 export interface MobileOperatorEntryCardProps {
   entryContext: OperatorEntryContext | null | undefined;
   isLoading?: boolean;
+  isError?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   onSuccess?: () => void | Promise<void>;
   initialShift?: string;
 }
@@ -134,6 +136,9 @@ export interface MobileOperatorEntryCardProps {
 export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = ({
   entryContext,
   isLoading = false,
+  isError = false,
+  error,
+  onRetry,
   onSuccess,
   initialShift,
 }) => {
@@ -213,6 +218,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   // Modals & Submission State
   const [isDatePickerModalOpen, setIsDatePickerModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
 
   // Sync with entryContext when loaded
   useEffect(() => {
@@ -382,6 +388,18 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     });
   }, [startTime, endTime, activeShift, overtimeHours]);
 
+  const shiftTiming = useMemo(() => {
+    return computeShiftTiming({
+      logDate,
+      startTime,
+      endTime,
+    });
+  }, [logDate, startTime, endTime]);
+
+  const isFutureShift = Boolean(
+    shiftTiming?.endDateTime && shiftTiming.endDateTime.getTime() > Date.now() + 60 * 1000
+  );
+
   // Unassigned shift warning check
   const isCurrentShiftUnassigned = Boolean(
     activeShift &&
@@ -435,7 +453,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
   // Submit Handler
   const handleSubmit = async () => {
-    if (isSubmitting) return;
+    if (submittingRef.current || isSubmitting) return;
 
     if (!entryContext?.operator?.id && !user?.id) {
       haptics.reject();
@@ -508,6 +526,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     let logPayload: any = null;
 
     try {
+      submittingRef.current = true;
       setIsSubmitting(true);
 
       if (effectiveOperatorId) {
@@ -536,11 +555,40 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           severity: 'error',
         });
         toast('error', errTitle, errMessage);
+        submittingRef.current = false;
         setIsSubmitting(false);
         return;
       }
 
-      const idempotencyKey = `ihl_op_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const effectiveDate = shiftTiming?.resolvedStartDate || logDate;
+      const effectiveShift = selectedShiftCode || 'S1';
+      const idempotencyKey = `ihl_op_${entryContext.machine.id}_${effectiveOperatorId}_${effectiveDate}_${effectiveShift}`;
+
+      // Pre-queue duplicate validation against local offline queue and cached server records
+      const cachedOperatorLogs = queryClient.getQueryData<any[]>(['operator', 'history-logs', effectiveOperatorId]) || [];
+      const dupCheck = offlineQueueManager.checkDuplicateShiftLog({
+        machineId: entryContext.machine.id,
+        operatorId: effectiveOperatorId,
+        logDate: effectiveDate,
+        shiftCode: effectiveShift,
+        existingLogs: cachedOperatorLogs,
+      });
+
+      if (dupCheck.isDuplicate) {
+        haptics.reject();
+        const dupTitle = 'Shift Already Logged';
+        const dupMessage = dupCheck.reason || `A log for Shift ${effectiveShift} on ${effectiveDate} has already been recorded or queued.`;
+        postNotification({
+          category: 'log_entry',
+          title: dupTitle,
+          body: dupMessage,
+          severity: 'warning',
+        });
+        toast('warning', dupTitle, dupMessage);
+        submittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
 
       const rpcParams = {
         p_machine_id: entryContext.machine.id,
@@ -656,22 +704,32 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_operator_hour_log_atomic', rpcParams);
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
           rpcSucceeded = true;
+          if ((rpcRes as any).already_logged) {
+            toast('info', 'Shift Already Recorded', 'This shift log was already recorded with identical meter readings.');
+          }
         } else if (rpcErr) {
+          const rpcMsg = (rpcErr.message || '').toLowerCase();
           if (
-            rpcErr.message?.includes('cannot be less than start meter') ||
-            rpcErr.message?.includes('cannot exceed 24 hours') ||
-            rpcErr.message?.includes('Shift end timestamp') ||
-            rpcErr.message?.includes('overlap') ||
-            rpcErr.message?.includes('Cannot log before shift end') ||
-            rpcErr.message?.includes('Breakdown duration') ||
-            rpcErr.message?.includes('maintenance or') ||
-            rpcErr.message?.includes('inactive') ||
-            rpcErr.message?.includes('Unauthorized operator') ||
-            rpcErr.message?.includes('Client ID does not match') ||
-            rpcErr.message?.includes('previous 7 days') ||
-            rpcErr.message?.includes('assigned to Shift') ||
-            rpcErr.message?.includes('unassigned shift') ||
-            rpcErr.message?.includes('Please select your assigned shift') ||
+            rpcErr.code === '23505' ||
+            rpcMsg.includes('duplicate') ||
+            rpcMsg.includes('already has a log') ||
+            rpcMsg.includes('already been logged') ||
+            rpcMsg.includes('another machine') ||
+            rpcMsg.includes('uq_machine_hour_logs') ||
+            rpcMsg.includes('cannot be less than start meter') ||
+            rpcMsg.includes('cannot exceed 24 hours') ||
+            rpcMsg.includes('shift end timestamp') ||
+            rpcMsg.includes('overlap') ||
+            rpcMsg.includes('cannot log before shift end') ||
+            rpcMsg.includes('breakdown duration') ||
+            rpcMsg.includes('maintenance or') ||
+            rpcMsg.includes('inactive') ||
+            rpcMsg.includes('unauthorized operator') ||
+            rpcMsg.includes('client id does not match') ||
+            rpcMsg.includes('previous 7 days') ||
+            rpcMsg.includes('assigned to shift') ||
+            rpcMsg.includes('unassigned shift') ||
+            rpcMsg.includes('please select your assigned shift') ||
             rpcErr.code === '23514' ||
             rpcErr.code === '42501' ||
             rpcErr.code === '23503'
@@ -680,21 +738,28 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           }
         }
       } catch (rpcCatchErr: any) {
+        const catchMsg = (rpcCatchErr?.message || '').toLowerCase();
         if (
-          rpcCatchErr.message?.includes('cannot be less than start meter') ||
-          rpcCatchErr.message?.includes('cannot exceed 24 hours') ||
-          rpcCatchErr.message?.includes('Shift end timestamp') ||
-          rpcCatchErr.message?.includes('overlap') ||
-          rpcCatchErr.message?.includes('Cannot log before shift end') ||
-          rpcCatchErr.message?.includes('Breakdown duration') ||
-          rpcCatchErr.message?.includes('maintenance or') ||
-          rpcCatchErr.message?.includes('inactive') ||
-          rpcCatchErr.message?.includes('Unauthorized operator') ||
-          rpcCatchErr.message?.includes('Client ID does not match') ||
-          rpcCatchErr.message?.includes('previous 7 days') ||
-          rpcCatchErr.message?.includes('assigned to Shift') ||
-          rpcCatchErr.message?.includes('unassigned shift') ||
-          rpcCatchErr.message?.includes('Please select your assigned shift') ||
+          rpcCatchErr.code === '23505' ||
+          catchMsg.includes('duplicate') ||
+          catchMsg.includes('already has a log') ||
+          catchMsg.includes('already been logged') ||
+          catchMsg.includes('another machine') ||
+          catchMsg.includes('uq_machine_hour_logs') ||
+          catchMsg.includes('cannot be less than start meter') ||
+          catchMsg.includes('cannot exceed 24 hours') ||
+          catchMsg.includes('shift end timestamp') ||
+          catchMsg.includes('overlap') ||
+          catchMsg.includes('cannot log before shift end') ||
+          catchMsg.includes('breakdown duration') ||
+          catchMsg.includes('maintenance or') ||
+          catchMsg.includes('inactive') ||
+          catchMsg.includes('unauthorized operator') ||
+          catchMsg.includes('client id does not match') ||
+          catchMsg.includes('previous 7 days') ||
+          catchMsg.includes('assigned to shift') ||
+          catchMsg.includes('unassigned shift') ||
+          catchMsg.includes('please select your assigned shift') ||
           rpcCatchErr.code === '23514' ||
           rpcCatchErr.code === '42501' ||
           rpcCatchErr.code === '23503'
@@ -822,6 +887,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       });
       toast('error', parsedErr.title, parsedErr.message);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -844,6 +910,62 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
   if (isLoading) {
     return <OperatorEntrySkeleton />;
+  }
+
+  if (isError && !entryContext) {
+    return (
+      <View
+        style={[
+          styles.outerCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <ErrorState
+          error={error}
+          onRetry={onRetry || onSuccess}
+          title="Failed to Load Shift Context"
+          message="Could not retrieve your operator assignments or machine settings. Check your network and try again."
+          retryLabel="Retry Loading"
+        />
+      </View>
+    );
+  }
+
+  if (!entryContext?.machine || !entryContext.machine.id) {
+    return (
+      <View
+        style={[
+          styles.outerCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View style={styles.titleBlock}>
+          <Text variant="heading" style={[styles.mainHeading, { color: theme.colors.ink }]}>
+            Daily Machine Log Entry
+          </Text>
+          <Text variant="caption" style={[styles.mainSubtitle, { color: theme.colors.mute }]}>
+            Fill in your shift meters and operational status
+          </Text>
+        </View>
+
+        <View style={[styles.titleDivider, { backgroundColor: theme.colors.hairline }]} />
+
+        <EmptyState
+          variant="empty"
+          title="No Equipment Assigned"
+          description="You do not have any machine assigned to your account for today's shift. Please contact your site supervisor to assign equipment."
+          actionLabel="Refresh Assignment"
+          onAction={onSuccess || onRetry}
+          icon={<Truck size={28} color={theme.colors.mute} />}
+        />
+      </View>
+    );
   }
 
   const { machine, client, last_log } = entryContext || {};
@@ -1051,9 +1173,11 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           </View>
 
           <Input
+            name="start_meter_val"
+            id="start_meter_val"
             keyboardType="decimal-pad"
             inputMode="decimal"
-            autoComplete="off"
+            autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
             textContentType="none"
             importantForAutofill="no"
             autoCorrect={false}
@@ -1091,9 +1215,11 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           </View>
 
           <Input
+            name="end_meter_val"
+            id="end_meter_val"
             keyboardType="decimal-pad"
             inputMode="decimal"
-            autoComplete="off"
+            autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
             textContentType="none"
             importantForAutofill="no"
             autoCorrect={false}
@@ -1112,14 +1238,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             ]}
           />
           {isMeterRegressed && (
-            <Text variant="micro" style={{ color: '#ef4444', marginTop: 3 }}>
-              End meter must be ≥ {startNum.toFixed(1)}.
-            </Text>
+            <FormError message={`End meter must be ≥ ${startNum.toFixed(1)}.`} />
           )}
           {isOver24Hours && (
-            <Text variant="micro" style={{ color: '#d97706', marginTop: 3 }}>
-              Running hours cannot exceed 24h.
-            </Text>
+            <FormError message="Running hours cannot exceed 24 hours per shift." />
           )}
         </View>
       </View>
@@ -1318,6 +1440,31 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 </Text>
               </View>
             )}
+
+            {/* In-progress shift advisory banner */}
+            {isFutureShift && (
+              <View
+                style={[
+                  styles.unassignedWarningBanner,
+                  {
+                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
+                    borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                    marginTop: 8,
+                  },
+                ]}
+              >
+                <Clock size={11} color={isDark ? '#38bdf8' : '#0284c7'} />
+                <Text
+                  variant="micro"
+                  style={{
+                    color: isDark ? '#38bdf8' : '#0369a1',
+                    flex: 1,
+                  }}
+                >
+                  Shift in progress: logs can be submitted once your shift concludes after {formatTo12Hour(endTime) || endTime}.
+                </Text>
+              </View>
+            )}
           </View>
         ) : (
           <View style={{ marginTop: 12, gap: 10 }}>
@@ -1451,6 +1598,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                   },
                 ]}
               />
+              {isBreakdown && !breakdownReason.trim() && (
+                <FormError message="Breakdown reason & action taken is required when reporting a breakdown." />
+              )}
             </View>
           </View>
         )}

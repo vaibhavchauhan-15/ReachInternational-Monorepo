@@ -8,3 +8,4 @@ export * from './CustomFilterSelectorModal';
 export * from './AssignSupervisorModal';
 export * from './AssignMachineModal';
 export * from './UserCardSkeleton';
+export * from './DeleteUserConfirmDialog';

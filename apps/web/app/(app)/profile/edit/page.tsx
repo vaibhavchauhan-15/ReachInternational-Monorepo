@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, User } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { verifySession } from "@/lib/dal";
 import { getUserDetail } from "@/lib/data/users";
+import { getMyPendingProfileChangeRequest } from "@/app/actions/profile";
+import { getUserDocumentsAction, getDocumentTypesAction } from "@/app/actions/documents";
 import { ProfileEditForm } from "@/components/profile/ProfileEditForm";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +12,7 @@ export const revalidate = 0;
 
 export const metadata = {
   title: "Edit Profile | Reach International",
-  description: "Update personal details, shift timings, and official identity documents",
+  description: "Update personal details, banking information, and statutory identification documents",
   robots: {
     index: false,
     follow: false,
@@ -19,7 +21,12 @@ export const metadata = {
 
 export default async function ProfileEditPage() {
   const { userId } = await verifySession();
-  const user = await getUserDetail(userId);
+  const [user, pendingRequest, existingDocuments, documentTypes] = await Promise.all([
+    getUserDetail(userId),
+    getMyPendingProfileChangeRequest(),
+    getUserDocumentsAction(userId),
+    getDocumentTypesAction(),
+  ]);
 
   if (!user) {
     redirect("/login");
@@ -52,7 +59,7 @@ export default async function ProfileEditPage() {
                 )}
               </h1>
               <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                Update your personal details.
+                Update your personal information, banking details, and identity documents.
               </p>
             </div>
           </div>
@@ -61,7 +68,13 @@ export default async function ProfileEditPage() {
 
       {/* ─── Reusable Profile Edit Form ─── */}
       <div className="p-4 sm:p-6 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl shadow-xs">
-        <ProfileEditForm user={user} isModal={false} />
+        <ProfileEditForm
+          user={user}
+          existingDocuments={existingDocuments}
+          documentTypes={documentTypes}
+          pendingRequest={pendingRequest}
+          isModal={false}
+        />
       </div>
     </div>
   );

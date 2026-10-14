@@ -65,20 +65,13 @@ const withAndroidLargeScreenAndPermissions = (config) => {
       androidManifest.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
     }
 
-    // 4. Blocked permissions to strip from final merged manifest
+    // 4. Strip sensitive permissions introduced by legacy/bundled libraries from final merged manifest
     const blockedList = [
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',
-      'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.ACCESS_WIFI_STATE',
       'android.permission.USE_FINGERPRINT',
       'android.permission.USE_BIOMETRIC',
-      'com.android.vending.CHECK_LICENSE',
-      'android.permission.CAMERA',
-      'android.permission.RECORD_AUDIO',
-      'android.permission.ACCESS_FINE_LOCATION',
-      'android.permission.ACCESS_COARSE_LOCATION',
-      'android.permission.READ_CONTACTS',
     ];
 
     if (!Array.isArray(androidManifest.manifest['uses-permission'])) {
@@ -222,7 +215,7 @@ module.exports = ({ config }) => {
     runtimeVersion:
       typeof config.runtimeVersion === 'string'
         ? config.runtimeVersion
-        : (config.version || '1.1.0'),
+        : (config.version || '1.2.0'),
     plugins,
     updates: isEASBuild
       ? {

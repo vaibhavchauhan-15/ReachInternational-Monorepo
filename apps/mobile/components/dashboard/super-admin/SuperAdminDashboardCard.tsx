@@ -1,7 +1,9 @@
 import { Text } from '../../ui/Text';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { SuperAdminDashboardDTO } from '@reachinternational/types';
 import {
@@ -28,6 +30,7 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
   data,
 }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
 
   const totalUsers = data?.totalUsers ?? 0;
   const activeMachines = data?.activeMachines ?? 0;
@@ -36,8 +39,24 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
   const todayLogs = data?.todayLogs ?? 0;
   const recentAuditActions = data?.recentAuditActions ?? 0;
 
+  const hasNoPlatformData = totalUsers === 0 && activeMachines === 0 && totalClients === 0;
+
   return (
     <View style={styles.container}>
+      {/* Empty State when platform directory is empty */}
+      {hasNoPlatformData && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="Platform Fleet & Directory Empty"
+            description="No system records discovered. Initialize users and fleet assets to view global telemetry."
+            actionLabel="Users Directory"
+            onAction={() => router.push('/users')}
+            compact
+          />
+        </View>
+      )}
+
       {/* Primary KPI Grid (6 metrics in 2-column cards matching web mobile portview) */}
       <View style={styles.section}>
         <Text

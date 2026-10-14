@@ -21,14 +21,19 @@ dist/
 web-build/
 *.orig.*
 
-# Android / iOS Native Builds
-android/app/debug
-android/app/release
-android/app/build
-android/.gradle
-android/build
-ios/Pods
-ios/build
+# Android / iOS Native Builds & Local Machine Configs
+**/local.properties
+local.properties
+*.local.properties
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/app/debug/
+**/android/app/release/
+ios/Pods/
+ios/build/
+**/ios/Pods/
+**/ios/build/
 
 # Supabase Local CLI Temp Files
 supabase/.temp/

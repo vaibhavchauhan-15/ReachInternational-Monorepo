@@ -10,6 +10,7 @@
       "node": "22.22.3",
       "pnpm": "11.21.0",
       "env": {
+        "NODE_ENV": "development",
         "EXPO_PUBLIC_APP_ENV": "development",
         "EXPO_PUBLIC_SHELL_MODE": "native",
         "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",
@@ -29,6 +30,7 @@
       "node": "22.22.3",
       "pnpm": "11.21.0",
       "env": {
+        "NODE_ENV": "production",
         "EXPO_PUBLIC_APP_ENV": "preview",
         "EXPO_PUBLIC_SHELL_MODE": "native",
         "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",
@@ -51,6 +53,7 @@
       "node": "22.22.3",
       "pnpm": "11.21.0",
       "env": {
+        "NODE_ENV": "production",
         "EXPO_PUBLIC_APP_ENV": "production",
         "EXPO_PUBLIC_SHELL_MODE": "native",
         "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",

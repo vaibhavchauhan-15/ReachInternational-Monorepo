@@ -7,12 +7,11 @@ import {
   Platform,
   Dimensions,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../lib/auth/useAuth';
-import { useTheme, MobileHeader , Text, useToast } from '../../../components/ui';
+import { useTheme, MobileHeader , Text, useToast, ConfirmDialog } from '../../../components/ui';
 import { Pressable } from '../../../components/ui/touch/Pressable';
 import {
   toProfileView,
@@ -176,6 +175,9 @@ export default function ProfileScreen() {
   const [dbUser, setDbUser] = useState<any>(authProfile || null);
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   const [isCancellingRequest, setIsCancellingRequest] = useState(false);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<{ doc: UserDocumentInfo; label: string } | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [userDocuments, setUserDocuments] = useState<UserDocumentInfo[]>([]);
@@ -263,43 +265,35 @@ export default function ProfileScreen() {
   // Withdraw pending change request
   const handleCancelPendingRequest = () => {
     if (!pendingRequest?.id) return;
-    const executeWithdraw = async () => {
-      const prevReq = pendingRequest;
-      setPendingRequest(null);
-      setIsCancellingRequest(true);
-      try {
-        const { error } = await supabase
-          .from('profile_change_requests')
-          .delete()
-          .eq('id', prevReq.id);
-        if (error) {
-          setPendingRequest(prevReq);
-          throw error;
-        }
-        notifyProfileRequestCancelled();
-        toast('success', 'Request Withdrawn', 'Your profile change request has been cancelled.');
-        await fetchProfileData();
-      } catch (err: any) {
-        setPendingRequest(prevReq);
-        toast('error', 'Withdraw Failed', err?.message || 'Failed to cancel the change request.');
-      } finally {
-        setIsCancellingRequest(false);
-      }
-    };
+    haptics.warning();
+    setShowWithdrawConfirm(true);
+  };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('Withdraw Profile Change Request?\n\nThis will remove your pending submission.')) {
-        executeWithdraw();
+  const handleConfirmWithdrawRequest = async () => {
+    if (!pendingRequest?.id) return;
+    const prevReq = pendingRequest;
+    setPendingRequest(null);
+    setIsCancellingRequest(true);
+    try {
+      const { error } = await supabase
+        .from('profile_change_requests')
+        .delete()
+        .eq('id', prevReq.id);
+      if (error) {
+        setPendingRequest(prevReq);
+        throw error;
       }
-    } else {
-      Alert.alert(
-        'Withdraw Profile Change Request',
-        'Are you sure you want to withdraw this change request? It will be permanently removed.',
-        [
-          { text: 'Keep Request', style: 'cancel' },
-          { text: 'Withdraw', style: 'destructive', onPress: executeWithdraw },
-        ]
-      );
+      haptics.confirm();
+      notifyProfileRequestCancelled();
+      toast('success', 'Request Withdrawn', 'Your profile change request has been cancelled.');
+      setShowWithdrawConfirm(false);
+      await fetchProfileData();
+    } catch (err: any) {
+      setPendingRequest(prevReq);
+      haptics.reject();
+      toast('error', 'Withdraw Failed', err?.message || 'Failed to cancel the change request.');
+    } finally {
+      setIsCancellingRequest(false);
     }
   };
 
@@ -337,35 +331,30 @@ export default function ProfileScreen() {
   // Document delete handler
   const handleDeleteDocument = (doc: UserDocumentInfo, label: string) => {
     if (!user?.id) return;
-    const executeDelete = async () => {
-      try {
-        const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
-        if (!res.success) {
-          haptics.reject();
-          toast('error', 'Delete Failed', res.error || 'Could not delete document.');
-        } else {
-          haptics.confirm();
-          toast('success', 'Document Removed', `${label} removed successfully.`);
-          await fetchProfileData();
-        }
-      } catch (err: any) {
-        toast('error', 'Delete Error', err?.message || 'Failed to remove document.');
-      }
-    };
+    haptics.warning();
+    setDocToDelete({ doc, label });
+  };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Delete ${label}?\n\nAre you sure you want to remove this document?`)) {
-        executeDelete();
+  const handleConfirmDeleteDocument = async () => {
+    if (!user?.id || !docToDelete) return;
+    const { doc, label } = docToDelete;
+    setIsDeletingDoc(true);
+    try {
+      const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
+      if (!res.success) {
+        haptics.reject();
+        toast('error', 'Delete Failed', res.error || 'Could not delete document.');
+      } else {
+        haptics.confirm();
+        toast('success', 'Document Removed', `${label} removed successfully.`);
+        setDocToDelete(null);
+        await fetchProfileData();
       }
-    } else {
-      Alert.alert(
-        `Delete ${label}`,
-        'Are you sure you want to remove this document?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: executeDelete },
-        ]
-      );
+    } catch (err: any) {
+      haptics.reject();
+      toast('error', 'Delete Error', err?.message || 'Failed to remove document.');
+    } finally {
+      setIsDeletingDoc(false);
     }
   };
 
@@ -1110,6 +1099,30 @@ export default function ProfileScreen() {
       <MobileDocumentViewerModal
         document={activeViewerDoc}
         onClose={handleCloseViewer}
+      />
+
+      <ConfirmDialog
+        visible={Boolean(docToDelete)}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={handleConfirmDeleteDocument}
+        title={`Remove ${docToDelete?.label || 'Document'}?`}
+        message="Are you sure you want to remove this document? This action cannot be undone."
+        confirmText="Remove Document"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingDoc}
+      />
+
+      <ConfirmDialog
+        visible={showWithdrawConfirm}
+        onClose={() => setShowWithdrawConfirm(false)}
+        onConfirm={handleConfirmWithdrawRequest}
+        title="Withdraw Profile Change Request"
+        message="Are you sure you want to withdraw this change request? It will be permanently removed."
+        confirmText="Withdraw Request"
+        cancelText="Keep Request"
+        variant="danger"
+        isLoading={isCancellingRequest}
       />
     </View>
   );

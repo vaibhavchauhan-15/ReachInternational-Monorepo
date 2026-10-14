@@ -125,24 +125,36 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
 
     const fullNameRaw = (formData.get("full_name") as string)?.trim();
     const phoneRaw = (formData.get("phone") as string)?.trim();
+    const emailRaw = (formData.get("email") as string)?.trim();
+
+    let pendingDocuments: Record<string, any> = {};
+    const pendingDocsRaw = formData.get("pending_documents") as string | null;
+    if (pendingDocsRaw) {
+      try {
+        pendingDocuments = JSON.parse(pendingDocsRaw);
+      } catch {
+        pendingDocuments = {};
+      }
+    }
 
     const rawData = {
       full_name: fullNameRaw !== undefined && fullNameRaw !== "" ? fullNameRaw : currentUser.full_name,
       phone: phoneRaw !== undefined && phoneRaw !== "" ? phoneRaw : (currentUser.phone || ""),
+      email: emailRaw !== undefined && emailRaw !== "" ? emailRaw : (currentUser.email || ""),
       shift_time: shiftTimeRaw,
       shift_start_time: shiftStartRaw,
       shift_end_time: shiftEndRaw,
       street: (formData.get("street") as string)?.trim() || (formData.get("address") as string)?.trim() || "",
       address: (formData.get("address") as string)?.trim() || (formData.get("street") as string)?.trim() || "",
-      city: (formData.get("city") as string)?.trim() || "",
-      district: (formData.get("district") as string)?.trim() || "",
-      state: (formData.get("state") as string)?.trim() || "",
-      state_id: formData.get("state_id") ? Number(formData.get("state_id")) : null,
-      aadhaar_number: canEditRestricted ? ((formData.get("aadhaar_number") as string)?.trim() || null) : (currentUser.aadhaar_number || null),
-      license_number: canEditRestricted ? ((formData.get("license_number") as string)?.trim() || null) : (currentUser.license_number || null),
-      bank_account_number: canEditRestricted ? ((formData.get("bank_account_number") as string)?.trim() || null) : (currentUser.bank_account_number || null),
-      bank_ifsc_code: canEditRestricted ? ((formData.get("bank_ifsc_code") as string)?.trim()?.toUpperCase() || null) : (currentUser.bank_ifsc_code || null),
-      monthly_salary: canEditRestricted ? monthly_salary : (currentUser.monthly_salary ?? null),
+      city: (formData.get("city") as string)?.trim() || currentUser.city || "",
+      district: (formData.get("district") as string)?.trim() || currentUser.district || "",
+      state: (formData.get("state") as string)?.trim() || currentUser.state || "",
+      state_id: formData.get("state_id") ? Number(formData.get("state_id")) : currentUser.state_id,
+      aadhaar_number: (formData.get("aadhaar_number") as string)?.trim() || currentUser.aadhaar_number || null,
+      license_number: (formData.get("license_number") as string)?.trim() || currentUser.license_number || null,
+      bank_account_number: (formData.get("bank_account_number") as string)?.trim() || currentUser.bank_account_number || null,
+      bank_ifsc_code: (formData.get("bank_ifsc_code") as string)?.trim()?.toUpperCase() || currentUser.bank_ifsc_code || null,
+      monthly_salary: currentUser.role === "super_admin" ? monthly_salary : (currentUser.monthly_salary ?? null),
     };
 
     const parsed = ProfileUpdateSchema.safeParse(rawData);
@@ -173,6 +185,20 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
 
       if (hasDuplicatePhone) {
         return { error: "Another user account with this mobile number already exists." };
+      }
+    }
+
+    // Validate unique email against other users if email provided and changed
+    if (parsed.data.email && parsed.data.email.toLowerCase() !== (currentUser.email || "").toLowerCase()) {
+      const { data: existingEmailUser } = await adminSupabase
+        .from("users")
+        .select("id")
+        .neq("id", currentUser.id)
+        .ilike("email", parsed.data.email.toLowerCase())
+        .maybeSingle();
+
+      if (existingEmailUser) {
+        return { error: "Another user account with this email address already exists." };
       }
     }
 
@@ -239,10 +265,34 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       cleanIfsc = ifscResult.clean || parsed.data.bank_ifsc_code.trim().toUpperCase();
     }
 
-    const stateInfo = await resolveStateInfo(adminSupabase, parsed.data.state, parsed.data.state_id);
+    // Enforce supporting document requirement for changes to banking information
+    const isBankDetailsModified =
+      (Boolean(cleanBankAccount) && cleanBankAccount !== (currentUser.bank_account_number || null)) ||
+      (Boolean(cleanIfsc) && cleanIfsc !== (currentUser.bank_ifsc_code || null));
 
+    if (isBankDetailsModified) {
+      const hasBankDocInRequest = Boolean(
+        pendingDocuments?.bank_document || pendingDocuments?.bank_passbook
+      );
+      const { data: existingBankDoc } = await adminSupabase
+        .from("user_documents")
+        .select("id")
+        .eq("user_id", currentUser.id)
+        .in("document_type_code", ["bank_document", "bank_passbook"])
+        .maybeSingle();
+
+      if (!hasBankDocInRequest && !existingBankDoc) {
+        return {
+          error: "Supporting document (Bank passbook or cancelled cheque) is required when updating banking details.",
+        };
+      }
+    }
+
+    const stateInfo = await resolveStateInfo(adminSupabase, parsed.data.state, parsed.data.state_id);
     const resolvedStreet = (parsed.data.street || parsed.data.address || "").trim() || null;
-    const payload = {
+
+    // 1. Always update Personal Information directly on public.users
+    const personalUpdateData: Record<string, any> = {
       full_name: parsed.data.full_name,
       phone: parsed.data.phone,
       street: resolvedStreet,
@@ -251,72 +301,94 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       district: parsed.data.district,
       state: stateInfo.state,
       state_id: stateInfo.state_id,
-      aadhaar_number: cleanAadhaar,
-      license_number: formattedLicense,
-      bank_account_number: cleanBankAccount,
-      bank_ifsc_code: cleanIfsc,
-      ...(parsed.data.shift_start_time ? { shift_start_time: parsed.data.shift_start_time } : {}),
-      ...(parsed.data.shift_end_time ? { shift_end_time: parsed.data.shift_end_time } : {}),
-      ...(currentUser.role === "super_admin" && parsed.data.monthly_salary !== undefined && parsed.data.monthly_salary !== null
-        ? { monthly_salary: parsed.data.monthly_salary }
-        : {}),
+      updated_at: new Date().toISOString(),
     };
+    if (parsed.data.email) {
+      personalUpdateData.email = parsed.data.email.toLowerCase();
+    }
 
-    // 1. Direct update for Super Admin or personal details updates (full_name and phone)
-    const isPersonalDetailsOnly =
-      !payload.aadhaar_number &&
-      !payload.license_number &&
-      !payload.bank_account_number &&
-      !payload.bank_ifsc_code &&
-      (payload.monthly_salary === undefined || payload.monthly_salary === null);
+    const { error: personalUpdateError } = await adminSupabase
+      .from("users")
+      .update(personalUpdateData)
+      .eq("id", currentUser.id);
 
-    if (currentUser.role === "super_admin" || isPersonalDetailsOnly) {
-      const updateData: Record<string, any> = {
-        full_name: payload.full_name,
-        phone: payload.phone,
+    if (personalUpdateError) {
+      console.error("Error updating personal details on user profile:", personalUpdateError);
+      return { error: "Failed to update personal details. Please try again." };
+    }
+
+    // Update auth metadata & email in auth.users
+    const authUpdatePayload: Record<string, any> = {
+      user_metadata: {
+        full_name: parsed.data.full_name,
+        phone: parsed.data.phone,
+        location: `${parsed.data.city || currentUser.city || ""}, ${parsed.data.district || currentUser.district || ""}, ${stateInfo.state || currentUser.state || ""}`,
+      },
+    };
+    if (parsed.data.email && parsed.data.email.toLowerCase() !== (currentUser.email || "").toLowerCase()) {
+      authUpdatePayload.email = parsed.data.email.toLowerCase();
+    }
+
+    await adminSupabase.auth.admin.updateUserById(currentUser.id, authUpdatePayload);
+
+    // Sync employees directory if present
+    try {
+      await adminSupabase
+        .from("employees")
+        .update({
+          full_name: parsed.data.full_name,
+          phone: parsed.data.phone,
+          ...(parsed.data.email ? { email: parsed.data.email.toLowerCase() } : {}),
+        })
+        .eq("user_id", currentUser.id);
+    } catch (empErr) {
+      console.warn("Employee record sync note:", empErr);
+    }
+
+    // Check if user also provided banking or identity changes or replacement documents
+    const hasIdentityChanges =
+      (Boolean(cleanAadhaar) && cleanAadhaar !== (currentUser.aadhaar_number || null)) ||
+      (Boolean(formattedLicense) && formattedLicense !== (currentUser.license_number || null)) ||
+      Boolean(pendingDocuments?.aadhaar) ||
+      Boolean(pendingDocuments?.driving_license);
+
+    const hasBankChanges =
+      isBankDetailsModified ||
+      Boolean(pendingDocuments?.bank_document) ||
+      Boolean(pendingDocuments?.bank_passbook);
+
+    // Case A: Super Admin can apply banking and identity updates directly
+    if (currentUser.role === "super_admin") {
+      const superAdminUpdate: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
-      if (currentUser.role === "super_admin") {
-        Object.assign(updateData, payload);
-      } else if (payload.street) {
-        updateData.street = payload.street;
-        updateData.address = payload.address;
-        updateData.city = payload.city;
-        updateData.district = payload.district;
-        updateData.state = payload.state;
-        updateData.state_id = payload.state_id;
+      if (cleanAadhaar) superAdminUpdate.aadhaar_number = cleanAadhaar;
+      if (formattedLicense) superAdminUpdate.license_number = formattedLicense;
+      if (cleanBankAccount) superAdminUpdate.bank_account_number = cleanBankAccount;
+      if (cleanIfsc) superAdminUpdate.bank_ifsc_code = cleanIfsc;
+
+      if (Object.keys(superAdminUpdate).length > 1) {
+        await adminSupabase.from("users").update(superAdminUpdate).eq("id", currentUser.id);
       }
 
-      const { error: updateError } = await adminSupabase
-        .from("users")
-        .update(updateData)
-        .eq("id", currentUser.id);
-
-      if (updateError) {
-        console.error("Error updating user profile:", updateError);
-        return { error: "Failed to update profile. Please try again." };
-      }
-
-      // Update auth metadata
-      await adminSupabase.auth.admin.updateUserById(currentUser.id, {
-        user_metadata: {
-          full_name: payload.full_name,
-          phone: payload.phone,
-          location: `${payload.city || currentUser.city || ""}, ${payload.district || currentUser.district || ""}, ${payload.state || currentUser.state || ""}`,
-        },
-      });
-
-      // Sync employees if present
-      try {
-        await adminSupabase
-          .from("employees")
-          .update({
-            full_name: payload.full_name,
-            phone: payload.phone,
-          })
-          .eq("user_id", currentUser.id);
-      } catch (empErr) {
-        console.warn("Employee record sync note:", empErr);
+      // Directly promote any uploaded documents
+      for (const [docCode, docInfo] of Object.entries(pendingDocuments)) {
+        if (docInfo && docInfo.storage_path) {
+          await adminSupabase.from("user_documents").upsert(
+            {
+              user_id: currentUser.id,
+              document_type_code: docCode,
+              storage_path: docInfo.storage_path,
+              mime_type: docInfo.mime_type || "application/octet-stream",
+              file_size_bytes: docInfo.file_size_bytes || 0,
+              file_name: docInfo.file_name || docInfo.storage_path.split("/").pop(),
+              status: "verified",
+              uploaded_by: currentUser.id,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,document_type_code" }
+          );
+        }
       }
 
       await logAudit({
@@ -325,8 +397,9 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
         entity_id: currentUser.id,
         user_id: currentUser.id,
         metadata: {
-          full_name: payload.full_name,
-          phone: payload.phone,
+          full_name: parsed.data.full_name,
+          phone: parsed.data.phone,
+          email: parsed.data.email,
           updated_by: currentUser.email,
         },
       });
@@ -344,93 +417,115 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       };
     }
 
-    // 2. Non-Super Admin: Create or update pending profile change request
-    const targetApproverRole = getTargetApproverRole(currentUser.role);
+    // Case B: Non-Super Admin submitting Banking, Identity, or Document changes
+    // These require approval. Keep existing approved documents active until approved.
+    if (hasBankChanges || hasIdentityChanges) {
+      const targetApproverRole = getTargetApproverRole(currentUser.role);
+      const requestPayload = {
+        bank_account_number: cleanBankAccount || currentUser.bank_account_number || null,
+        bank_ifsc_code: cleanIfsc || currentUser.bank_ifsc_code || null,
+        aadhaar_number: cleanAadhaar || currentUser.aadhaar_number || null,
+        license_number: formattedLicense || currentUser.license_number || null,
+        documents: pendingDocuments,
+      };
 
-    const currentSnapshot: Partial<User> = {
-      full_name: currentUser.full_name,
-      phone: currentUser.phone,
-      shift_time: currentUser.shift_time,
-      address: currentUser.address,
-      city: currentUser.city,
-      district: currentUser.district,
-      state: currentUser.state,
-      state_id: currentUser.state_id,
-      aadhaar_number: currentUser.aadhaar_number,
-      license_number: currentUser.license_number,
-      bank_account_number: currentUser.bank_account_number,
-      bank_ifsc_code: currentUser.bank_ifsc_code,
-    };
+      const currentSnapshot: Partial<User> = {
+        full_name: currentUser.full_name,
+        phone: currentUser.phone,
+        email: currentUser.email,
+        aadhaar_number: currentUser.aadhaar_number,
+        license_number: currentUser.license_number,
+        bank_account_number: currentUser.bank_account_number,
+        bank_ifsc_code: currentUser.bank_ifsc_code,
+      };
 
-    // Check if there is already an active pending request
-    const { data: existingRequest } = await adminSupabase
-      .from("profile_change_requests")
-      .select("id")
-      .eq("user_id", currentUser.id)
-      .eq("status", "pending")
-      .maybeSingle();
-
-    if (existingRequest) {
-      const { error: reqUpdateErr } = await adminSupabase
+      const { data: existingRequest } = await adminSupabase
         .from("profile_change_requests")
-        .update({
-          requested_data: payload,
-          target_approver_role: targetApproverRole,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingRequest.id);
+        .select("id")
+        .eq("user_id", currentUser.id)
+        .eq("status", "pending")
+        .maybeSingle();
 
-      if (reqUpdateErr) {
-        console.error("Error updating pending profile request:", reqUpdateErr);
-        return { error: "Failed to submit profile change request." };
+      if (existingRequest) {
+        await adminSupabase
+          .from("profile_change_requests")
+          .update({
+            requested_data: requestPayload,
+            target_approver_role: targetApproverRole,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingRequest.id);
+      } else {
+        await adminSupabase
+          .from("profile_change_requests")
+          .insert({
+            user_id: currentUser.id,
+            requester_role: currentUser.role,
+            current_data: currentSnapshot,
+            requested_data: requestPayload,
+            target_approver_role: targetApproverRole,
+            status: "pending",
+          });
       }
-    } else {
-      const { error: reqInsertErr } = await adminSupabase
-        .from("profile_change_requests")
-        .insert({
-          user_id: currentUser.id,
+
+      const approverLabel =
+        targetApproverRole === "super_admin"
+          ? "Super Admin"
+          : targetApproverRole === "admin"
+          ? "Administrator"
+          : "Manager";
+
+      await logAudit({
+        action: "user.profile_change_requested",
+        entity_type: "profile_change_request",
+        entity_id: currentUser.id,
+        user_id: currentUser.id,
+        metadata: {
+          requested_fields: requestPayload,
+          target_approver_role: targetApproverRole,
+          requester_name: currentUser.full_name,
+          requester_email: currentUser.email,
           requester_role: currentUser.role,
-          current_data: currentSnapshot,
-          requested_data: payload,
-          target_approver_role: targetApproverRole,
-          status: "pending",
-        });
+        },
+      });
 
-      if (reqInsertErr) {
-        console.error("Error creating profile change request:", reqInsertErr);
-        return { error: "Failed to submit profile change request." };
-      }
+      revalidatePath("/");
+      revalidatePath("/profile");
+      revalidatePath("/profile/edit");
+      revalidatePath("/users");
+      revalidateTag(CACHE_TAGS.users, "max");
+
+      return {
+        success: true,
+        pendingApproval: true,
+        message: `Personal details saved. Banking and identity updates submitted for management approval by ${approverLabel}. Existing approved documents remain active until approved.`,
+      };
     }
 
-    const approverLabel =
-      targetApproverRole === "super_admin"
-        ? "Super Admin"
-        : targetApproverRole === "admin"
-        ? "Administrator"
-        : "Manager";
-
+    // Case C: Personal information only was updated
     await logAudit({
-      action: "user.profile_change_requested",
-      entity_type: "profile_change_request",
+      action: "user.profile_updated",
+      entity_type: "user",
       entity_id: currentUser.id,
       user_id: currentUser.id,
       metadata: {
-        requested_fields: payload,
-        target_approver_role: targetApproverRole,
-        requester_name: currentUser.full_name,
-        requester_email: currentUser.email,
-        requester_role: currentUser.role,
+        full_name: parsed.data.full_name,
+        phone: parsed.data.phone,
+        email: parsed.data.email,
+        updated_by: currentUser.email,
       },
     });
 
+    revalidatePath("/");
     revalidatePath("/profile");
+    revalidatePath("/profile/edit");
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
 
     return {
       success: true,
-      pendingApproval: true,
-      message: `Your profile update request has been submitted for approval to the ${approverLabel}.`,
+      instant: true,
+      message: "Your personal details have been updated successfully.",
     };
   } catch (error) {
     console.error("Error in updateMyProfile:", error);
@@ -538,56 +633,97 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
     const requestedData = request.requested_data || {};
     const targetUserId = request.user_id;
 
-    // 3. Apply changes to public.users
+    // 3. Apply changes to public.users selectively
     const userUpdatePayload: Record<string, unknown> = {
-      full_name: requestedData.full_name,
-      phone: requestedData.phone || null,
-      street: (requestedData.street || requestedData.address || null),
-      city: requestedData.city,
-      district: requestedData.district,
-      state: requestedData.state,
-      state_id: requestedData.state_id || null,
-      aadhaar_number: requestedData.aadhaar_number || null,
-      license_number: requestedData.license_number || null,
-      bank_account_number: requestedData.bank_account_number || null,
-      bank_ifsc_code: requestedData.bank_ifsc_code || null,
       updated_at: new Date().toISOString(),
     };
+    if (requestedData.full_name !== undefined && requestedData.full_name !== null) {
+      userUpdatePayload.full_name = requestedData.full_name;
+    }
+    if (requestedData.phone !== undefined) {
+      userUpdatePayload.phone = requestedData.phone || null;
+    }
+    if (requestedData.street !== undefined || requestedData.address !== undefined) {
+      userUpdatePayload.street = requestedData.street || requestedData.address || null;
+    }
+    if (requestedData.city !== undefined) userUpdatePayload.city = requestedData.city;
+    if (requestedData.district !== undefined) userUpdatePayload.district = requestedData.district;
+    if (requestedData.state !== undefined) userUpdatePayload.state = requestedData.state;
+    if (requestedData.state_id !== undefined) userUpdatePayload.state_id = requestedData.state_id || null;
+    if (requestedData.aadhaar_number !== undefined) userUpdatePayload.aadhaar_number = requestedData.aadhaar_number || null;
+    if (requestedData.license_number !== undefined) userUpdatePayload.license_number = requestedData.license_number || null;
+    if (requestedData.bank_account_number !== undefined) userUpdatePayload.bank_account_number = requestedData.bank_account_number || null;
+    if (requestedData.bank_ifsc_code !== undefined) userUpdatePayload.bank_ifsc_code = requestedData.bank_ifsc_code || null;
     if (requestedData.shift_start_time) userUpdatePayload.shift_start_time = requestedData.shift_start_time;
     if (requestedData.shift_end_time) userUpdatePayload.shift_end_time = requestedData.shift_end_time;
 
-    const { error: userUpdateErr } = await adminSupabase
-      .from("users")
-      .update(userUpdatePayload)
-      .eq("id", targetUserId);
+    if (Object.keys(userUpdatePayload).length > 1) {
+      const { error: userUpdateErr } = await adminSupabase
+        .from("users")
+        .update(userUpdatePayload)
+        .eq("id", targetUserId);
 
-    if (userUpdateErr) {
-      console.error("Error updating user table upon profile approval:", userUpdateErr);
-      return { error: "Failed to apply profile changes to user account." };
+      if (userUpdateErr) {
+        console.error("Error updating user table upon profile approval:", userUpdateErr);
+        return { error: "Failed to apply profile changes to user account." };
+      }
     }
 
-    // 4. Update auth user metadata
-    await adminSupabase.auth.admin.updateUserById(targetUserId, {
-      user_metadata: {
-        ...userUpdatePayload,
-        location: `${requestedData.city}, ${requestedData.district}, ${requestedData.state}`,
-      },
-    });
+    // 4. Promote any approved pending replacement documents to user_documents with verified status
+    if (requestedData.documents && typeof requestedData.documents === "object") {
+      for (const [docCode, docInfo] of Object.entries(requestedData.documents as Record<string, any>)) {
+        if (docInfo && docInfo.storage_path) {
+          const docUpsertPayload = {
+            user_id: targetUserId,
+            document_type_code: docCode,
+            storage_path: docInfo.storage_path,
+            mime_type: docInfo.mime_type || "application/octet-stream",
+            file_size_bytes: docInfo.file_size_bytes || 0,
+            file_name: docInfo.file_name || docInfo.storage_path.split("/").pop(),
+            status: "verified",
+            uploaded_by: targetUserId,
+            verified_by: currentUser.id,
+            verified_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
 
-    // 5. Sync employees table if linked
-    try {
-      await adminSupabase
-        .from("employees")
-        .update({
-          full_name: requestedData.full_name?.trim(),
-          phone: requestedData.phone || null,
-        })
-        .eq("user_id", targetUserId);
-    } catch (empErr) {
-      console.warn("Employee directory sync note:", empErr);
+          const { error: docUpsertErr } = await adminSupabase
+            .from("user_documents")
+            .upsert(docUpsertPayload, { onConflict: "user_id,document_type_code" });
+
+          if (docUpsertErr) {
+            console.error(`Error promoting document ${docCode} upon approval:`, docUpsertErr);
+          }
+        }
+      }
     }
 
-    // 6. Mark request as approved
+    // 5. Update auth user metadata if personal data changed
+    if (requestedData.full_name || requestedData.phone || requestedData.city) {
+      await adminSupabase.auth.admin.updateUserById(targetUserId, {
+        user_metadata: {
+          ...userUpdatePayload,
+          location: `${requestedData.city || ""}, ${requestedData.district || ""}, ${requestedData.state || ""}`,
+        },
+      });
+    }
+
+    // 6. Sync employees table if linked
+    if (requestedData.full_name || requestedData.phone) {
+      try {
+        await adminSupabase
+          .from("employees")
+          .update({
+            ...(requestedData.full_name ? { full_name: requestedData.full_name.trim() } : {}),
+            ...(requestedData.phone ? { phone: requestedData.phone } : {}),
+          })
+          .eq("user_id", targetUserId);
+      } catch (empErr) {
+        console.warn("Employee directory sync note:", empErr);
+      }
+    }
+
+    // 7. Mark request as approved
     const { error: reqApproveErr } = await adminSupabase
       .from("profile_change_requests")
       .update({

@@ -4,13 +4,12 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
   Platform,
   StatusBar,
   LayoutAnimation} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast, EmptyState, ErrorState, PermissionDeniedView } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -103,12 +102,20 @@ export default function RunningLogsScreen() {
   const { toast } = useToast();
 
   // Guard: Restrict operator role from accessing Daily Running Logs
-  useEffect(() => {
-    if (role && role.toLowerCase() === 'operator') {
-      toast('error', 'Access Denied', 'You do not have permission to view Daily Running Logs.');
-      router.replace('/operations');
-    }
-  }, [role, router, toast]);
+  const isOperator = (role || '').toLowerCase() === 'operator';
+
+  if (role && isOperator) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader title="Daily Running Logs" showBack={false} />
+        <PermissionDeniedView
+          featureName="Daily Running Logs"
+          currentRole={role}
+          requiredRoles={['super_admin', 'admin', 'manager', 'supervisor']}
+        />
+      </View>
+    );
+  }
 
   // Master Data State
   const [logs, setLogs] = useState<HourLogRecord[]>([]);
@@ -159,8 +166,8 @@ export default function RunningLogsScreen() {
   }, []);
 
   // TanStack Query Data Fetching
-  const { data: masterData, refetch: refetchMaster } = useOperationsMasterData();
-  const { data: logsData, isLoading: isLogsLoading, refetch: refetchLogs } = useOperationsLogs();
+  const { data: masterData, isError: isMasterError, error: masterError, refetch: refetchMaster } = useOperationsMasterData();
+  const { data: logsData, isLoading: isLogsLoading, isError: isLogsError, error: logsError, refetch: refetchLogs } = useOperationsLogs();
 
   useEffect(() => {
     if (!masterData) return;
@@ -392,17 +399,42 @@ export default function RunningLogsScreen() {
           </Pressable>
         </View>
 
-        {/* Loading State */}
+        {/* Loading / Error / Empty State */}
         {isLogsLoading && logs.length === 0 ? (
           <OperationLogListSkeleton count={4} />
+        ) : (isLogsError || isMasterError) && logs.length === 0 ? (
+          <ErrorState
+            error={logsError || masterError}
+            onRetry={onRefresh}
+            actionLabel="Retry Loading Logs"
+          />
         ) : groupedLogs.length === 0 ? (
-          <View style={[styles.emptyContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
-            <FileText size={32} color={theme.colors.mute} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No Running Logs Found</Text>
-            <Text style={[styles.emptySub, { color: theme.colors.mute }]}>
-              No running hour logs match the selected filter criteria.
-            </Text>
-          </View>
+          debouncedSearch.trim() ? (
+            <EmptyState
+              variant="no-results"
+              title="No Running Logs Found"
+              description={`No daily logs matched "${debouncedSearch.trim()}".`}
+              action={{
+                label: 'Clear Search',
+                onPress: () => setSearch(''),
+              }}
+            />
+          ) : selectedMonth !== 'all' ? (
+            <EmptyState
+              variant="filtered"
+              title="No Logs for Selected Period"
+              description="No running hour logs match the selected month."
+              action={{
+                label: 'Show All Months',
+                onPress: () => setSelectedMonth('all'),
+              }}
+            />
+          ) : (
+            <EmptyState
+              title="No Running Logs Found"
+              description="No running hour logs have been recorded for this entity."
+            />
+          )
         ) : (
           /* Date Grouped Log Cards */
           groupedLogs.map(([dateKey, dayLogs]) => {

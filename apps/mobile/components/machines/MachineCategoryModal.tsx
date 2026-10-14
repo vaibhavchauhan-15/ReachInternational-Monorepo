@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +13,7 @@ import { Input } from '../ui/Input';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { showToast } from '../ui';
+import { showToast, ConfirmDialog, EmptyState } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
@@ -57,6 +56,7 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<MachineCategory | null>(null);
 
   const fetchCategories = useCallback(async () => {
     setIsLoading(true);
@@ -125,38 +125,32 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
 
   const handleDeleteCategory = (cat: MachineCategory) => {
     haptics.warning();
-    Alert.alert(
-      'Delete Category',
-      `Are you sure you want to delete "${cat.name}"? Machines assigned to this category may lose their classification.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingId(cat.id);
-            try {
-              const { error } = await supabase
-                .from('machine_categories')
-                .delete()
-                .eq('id', cat.id);
+    setCategoryToDelete(cat);
+  };
 
-              if (error) throw error;
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    const cat = categoryToDelete;
+    setDeletingId(cat.id);
+    try {
+      const { error } = await supabase
+        .from('machine_categories')
+        .delete()
+        .eq('id', cat.id);
 
-              haptics.success();
-              showToast('success', 'Category Deleted', `Category "${cat.name}" has been deleted.`);
-              await fetchCategories();
-              onCategoriesChanged?.();
-            } catch (err: any) {
-              haptics.error();
-              showToast('error', 'Error', err?.message || 'Failed to delete category.');
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ]
-    );
+      if (error) throw error;
+
+      haptics.success();
+      showToast('success', 'Category Deleted', `Category "${cat.name}" has been deleted.`);
+      setCategoryToDelete(null);
+      await fetchCategories();
+      onCategoriesChanged?.();
+    } catch (err: any) {
+      haptics.error();
+      showToast('error', 'Error', err?.message || 'Failed to delete category.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -264,13 +258,15 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
               <Text variant="caption" style={{ color: theme.colors.mute }}>Loading categories...</Text>
             </View>
           ) : categories.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Tag size={32} color={theme.colors.mute} style={{ opacity: 0.5, marginBottom: 8 }} />
-              <Text variant="heading" style={{ color: theme.colors.ink }}>No Categories Found</Text>
-              <Text variant="caption" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
-                Add machine classifications to organize your fleet.
-              </Text>
-            </View>
+            <EmptyState
+              compact
+              variant="empty"
+              title="No Categories Configured"
+              description="Add machine classifications to organize your fleet equipment."
+              actionLabel="+ Add New Category"
+              onAction={() => setShowAddForm(true)}
+              style={{ marginVertical: 16 }}
+            />
           ) : (
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
               {categories.map((cat) => (
@@ -317,6 +313,19 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
           )}
         </View>
       </KeyboardAvoidingView>
+
+      <ConfirmDialog
+        visible={Boolean(categoryToDelete)}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={handleConfirmDeleteCategory}
+        title={`Delete Category "${categoryToDelete?.name || ''}"?`}
+        message={`Are you sure you want to delete "${categoryToDelete?.name || 'this category'}"? Machines assigned to this category may lose their classification.`}
+        confirmText="Delete Category"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={Boolean(deletingId)}
+        icon={<Trash2 size={22} color="#ef4444" />}
+      />
     </AppModal>
   );
 };

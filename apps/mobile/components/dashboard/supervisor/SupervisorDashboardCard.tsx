@@ -1,7 +1,9 @@
-import { Text } from '../../ui/Text';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
+import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { SupervisorDashboardDTO } from '@reachinternational/types';
 import {
@@ -24,6 +26,7 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
   data,
 }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
 
   const submitted = data?.todayLogs?.submitted ?? 0;
   const pending = data?.todayLogs?.pending ?? 0;
@@ -32,8 +35,24 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
   const breakdowns = data?.breakdowns ?? 0;
   const overtimeEntries = data?.overtimeEntries ?? 0;
 
+  const hasNoSupervisedFleet = assignedMachines === 0 && assignedOperators === 0;
+
   return (
     <View style={styles.container}>
+      {/* Empty State when supervisor has no assigned fleet or operators */}
+      {hasNoSupervisedFleet && (
+        <View style={styles.section}>
+          <EmptyState
+            variant="empty"
+            title="No Supervised Fleet or Team Assigned"
+            description="You have not been assigned any machinery or field operators yet. Please contact your operations manager to configure your site fleet."
+            actionLabel="View Fleet"
+            onAction={() => router.push('/machines')}
+            compact
+          />
+        </View>
+      )}
+
       {/* Team Scope & Shift Submissions */}
       <View style={styles.section}>
         <Text

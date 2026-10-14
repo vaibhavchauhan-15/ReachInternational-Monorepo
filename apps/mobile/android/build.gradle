@@ -22,3 +22,39 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+subprojects { subproject ->
+  if (subproject != rootProject && subproject.name != 'app') {
+    def baseDir = System.getProperty("os.name", "").toLowerCase().contains("windows") ?
+      new File("C:/cxx/b") :
+      new File(rootProject.buildDir, "subprojects")
+    def targetBuildDir = new File(baseDir, subproject.name)
+    subproject.layout.buildDirectory.set(targetBuildDir)
+    subproject.buildDir = targetBuildDir
+  }
+
+  def configureCxx = {
+    if (subproject.hasProperty("android")) {
+      try {
+        def cmake = subproject.android.externalNativeBuild?.cmake
+        if (cmake != null && cmake.path != null) {
+          def baseDir = System.getProperty("os.name", "").toLowerCase().contains("windows") ?
+            new File("C:/cxx/s") :
+            new File(rootProject.buildDir, "cxx")
+          def targetDir = new File(baseDir, subproject.name)
+          targetDir.mkdirs()
+          cmake.buildStagingDirectory = targetDir
+          println "[CXX Relocate] Relocated ${subproject.name} CXX buildStagingDirectory to ${targetDir.absolutePath}"
+        }
+      } catch (Throwable t) {
+        // Ignored
+      }
+    }
+  }
+
+  if (subproject.state.executed) {
+    configureCxx()
+  } else {
+    subproject.afterEvaluate { configureCxx() }
+  }
+}

@@ -20,6 +20,7 @@ import {
   type ViewStyle,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -29,7 +30,7 @@ import Animated, {
   runOnJS,
   ReduceMotion,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scrim } from './Scrim';
 import { useOverlayHost } from './OverlayHost';
@@ -204,51 +205,80 @@ export const Sheet: React.FC<SheetProps> = ({
   if (!mounted) return null;
 
   return (
-    <View style={styles.portalLayer} testID={testID} pointerEvents="box-none">
-      <Scrim visible={visible} onPress={persistent ? undefined : onClose} persistent={persistent} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetWrapper}
-        pointerEvents="box-none"
-      >
-        <GestureDetector gesture={panGesture}>
-          <Animated.View
-            style={[
-              styles.sheetPanel,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                maxHeight: maxSheetHeight,
-                paddingBottom: Math.max(insets.bottom, 16),
-              },
-              sheetAnimatedStyle,
-              contentStyle,
-              style,
-            ]}
+    <Modal
+      visible={mounted}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      hardwareAccelerated
+      onRequestClose={onClose}
+    >
+      <GestureHandlerRootView style={styles.modalRoot}>
+        <View style={styles.portalLayer} testID={testID} pointerEvents="box-none">
+          <Scrim visible={visible} onPress={persistent ? undefined : onClose} persistent={persistent} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.sheetWrapper}
+            pointerEvents="box-none"
           >
-            {showHandle && (
-              <View style={styles.handleWrapper}>
-                <View
-                  style={[
-                    styles.dragHandle,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(255, 255, 255, 0.24)'
-                        : 'rgba(0, 0, 0, 0.18)',
-                    },
-                  ]}
-                />
-              </View>
-            )}
-            {children}
-          </Animated.View>
-        </GestureDetector>
-      </KeyboardAvoidingView>
-    </View>
+            <Animated.View
+              style={[
+                styles.sheetPanel,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                  maxHeight: maxSheetHeight,
+                  paddingBottom: Math.max(insets.bottom, 16),
+                },
+                sheetAnimatedStyle,
+                contentStyle,
+                style,
+              ]}
+            >
+              {showHandle && (
+                Platform.OS !== 'web' ? (
+                  <GestureDetector gesture={panGesture}>
+                    <View style={styles.handleWrapper}>
+                      <View
+                        style={[
+                          styles.dragHandle,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(255, 255, 255, 0.24)'
+                              : 'rgba(0, 0, 0, 0.18)',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </GestureDetector>
+                ) : (
+                  <View style={styles.handleWrapper}>
+                    <View
+                      style={[
+                        styles.dragHandle,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255, 255, 255, 0.24)'
+                            : 'rgba(0, 0, 0, 0.18)',
+                        },
+                      ]}
+                    />
+                  </View>
+                )
+              )}
+              {children}
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+  },
   portalLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 9980,
@@ -256,9 +286,12 @@ const styles = StyleSheet.create({
   sheetWrapper: {
     flex: 1,
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   sheetPanel: {
     width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,

@@ -148,3 +148,23 @@ pnpm typecheck
 - **NEVER** create a new page without adding it to `AI/ROUTING_MAP.md`.
 - **NEVER** skip middleware auth checks for protected routes.
 - **NEVER** import from `apps/mobile` into `apps/web`.
+
+### 10. Web Security Enforcement & Mandatory Pre-Change Protocol
+
+> **CRITICAL REQUIREMENT**: Every web engineering task MUST consult and enforce the scoped web security policy and monorepo baseline.
+
+Before modifying any web code, every AI agent MUST:
+1. **Read Scoped Security Policy**:
+   - Web rules: [`apps/web/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-RULES.md)
+   - Web attack surface: [`apps/web/security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/ATTACK-SURFACE.md)
+   - Web threat model: [`apps/web/security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/THREAT-MODEL.md)
+   - Root baseline rules: [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)
+2. **Execute Compliance Checklist**: Check all implementation steps against [`apps/web/security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-CHECKLIST.md).
+3. **Mandatory Invariants**:
+   - Server Components by default; client components strictly leaf nodes.
+   - All mutations in Server Actions (`app/actions/*`) with `requireRole()` / `requirePermission()`.
+   - All server-side data reads via `lib/dal.ts` or `lib/queries/*` with explicit column projections (no `SELECT *`).
+   - All payloads validated with `@reachinternational/validation` Zod schemas.
+   - Structured audit logging via `logAudit()` in `lib/audit.ts` for elevated mutations.
+   - Secrets isolated via `import "server-only"` in `lib/env/server.ts`.
+

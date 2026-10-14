@@ -21,7 +21,7 @@ export const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24 hours
 export const appBuster =
   Constants.expoConfig?.version ||
   Constants.manifest2?.extra?.expoClient?.version ||
-  '1.0.0';
+  '1.2.0';
 
 /**
  * Strips temporary optimistic rows (`tmp_*`) from cached collections before dehydration.

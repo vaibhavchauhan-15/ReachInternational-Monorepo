@@ -135,7 +135,9 @@ config.resolver = {
       moduleName === '@sentry/react-native' ||
       moduleName.startsWith('@sentry/react-native/') ||
       moduleName === '@supabase/supabase-js' ||
-      moduleName.startsWith('@supabase/supabase-js/')
+      moduleName.startsWith('@supabase/supabase-js/') ||
+      moduleName === 'react-native-css-interop' ||
+      moduleName.startsWith('react-native-css-interop/')
     ) {
       try {
         const resolved = require.resolve(moduleName, {
@@ -146,7 +148,20 @@ config.resolver = {
           type: 'sourceFile',
         };
       } catch {
-        // Fall through to default resolver
+        try {
+          const nwPkg = require.resolve('nativewind/package.json', {
+            paths: [projectRoot, monorepoRoot],
+          });
+          const resolved = require.resolve(moduleName, {
+            paths: [path.dirname(nwPkg), projectRoot, monorepoRoot],
+          });
+          return {
+            filePath: resolved,
+            type: 'sourceFile',
+          };
+        } catch {
+          // Fall through to default resolver
+        }
       }
     }
 
@@ -159,9 +174,23 @@ config.resolver = {
     } catch (resolutionError) {
       try {
         const originDir = context.originModulePath ? path.dirname(context.originModulePath) : projectRoot;
-        const resolved = require.resolve(moduleName, {
-          paths: [originDir, projectRoot, monorepoRoot],
-        });
+        let resolved;
+        try {
+          resolved = require.resolve(moduleName, {
+            paths: [originDir, projectRoot, monorepoRoot],
+          });
+        } catch (innerErr) {
+          if (moduleName === 'react-native-css-interop' || moduleName.startsWith('react-native-css-interop/')) {
+            const nwPkg = require.resolve('nativewind/package.json', {
+              paths: [originDir, projectRoot, monorepoRoot],
+            });
+            resolved = require.resolve(moduleName, {
+              paths: [path.dirname(nwPkg), originDir, projectRoot, monorepoRoot],
+            });
+          } else {
+            throw innerErr;
+          }
+        }
         return {
           filePath: resolved,
           type: 'sourceFile',

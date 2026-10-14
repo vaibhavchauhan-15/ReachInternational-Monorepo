@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,7 +8,16 @@ import {
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme, MobileHeader, type HeaderActionItem } from '../../components/ui';
+import {
+  useTheme,
+  MobileHeader,
+  ErrorState,
+  classifyError,
+  PermissionDeniedView,
+  SlowNetworkBanner,
+  showToast,
+  type HeaderActionItem,
+} from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import {
   RefreshCw,
@@ -47,20 +56,35 @@ import type {
 import { haptics } from '../../lib/haptics';
 import { useScreenSync } from '../../lib/offline';
 
+const CANONICAL_ROLES: readonly DashboardRole[] = [
+  'super_admin',
+  'admin',
+  'manager',
+  'supervisor',
+  'hr',
+  'operator',
+];
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, role, userProfile } = useAuth();
   const { theme, isDark, setMode } = useTheme();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+  const [isSlowDismissed, setIsSlowDismissed] = useState(false);
 
   const activeRole = (role as DashboardRole) || 'operator';
   const userName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'User');
+  const isRecognizedRole = CANONICAL_ROLES.includes(activeRole);
 
   // Optimistic & Cached server state using TanStack Query
   const {
     data: dashboardData,
     isLoading,
+    isError,
+    error,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey: ['dashboard', activeRole, user?.id],
@@ -105,9 +129,27 @@ export default function DashboardScreen() {
         }
       }
     },
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id && isRecognizedRole),
     staleTime: 1000 * 60 * 5, // 5 minutes fresh cache
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
+
+  // Telemetry: detect slow network if initial or refetch takes > 7 seconds
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if ((isLoading || isFetching) && !dashboardData) {
+      timer = setTimeout(() => {
+        setIsSlowNetwork(true);
+      }, 7000);
+    } else {
+      setIsSlowNetwork(false);
+      setIsSlowDismissed(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading, isFetching, dashboardData]);
 
   const superAdminData = activeRole === 'super_admin' ? (dashboardData as SuperAdminDashboardDTO | null) : null;
   const adminData = activeRole === 'admin' ? (dashboardData as AdminDashboardDTO | null) : null;
@@ -126,12 +168,27 @@ export default function DashboardScreen() {
       // ignore
     }
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      const res = await refetch();
+      if (res.isError) {
+        const classified = classifyError(res.error);
+        showToast('warning', 'Unable to Refresh', classified.message);
+      } else {
+        showToast('success', 'Dashboard Updated', 'Latest metrics and shift logs loaded.');
+      }
+    } catch {
+      showToast('warning', 'Connection Issue', 'Could not refresh data. Displaying cached information.');
+    } finally {
+      setRefreshing(false);
+    }
   }, [refetch]);
 
   const handleScreenSyncRefresh = useCallback(async () => {
-    await refetch();
+    try {
+      await refetch();
+    } catch {
+      // Screen sync background refetch fails silently to avoid interrupting the user
+    }
   }, [refetch]);
 
   useScreenSync({
@@ -388,12 +445,66 @@ export default function DashboardScreen() {
         actions={headerActions}
       />
 
-      {isLoading && !dashboardData ? (
-        <DashboardSkeleton
-          role={activeRole}
-          kpiCount={activeRole === 'super_admin' ? 6 : activeRole === 'admin' ? 5 : 4}
+      {/* Case 1: Unrecognized Role Access Gate */}
+      {!isRecognizedRole ? (
+        <PermissionDeniedView
+          currentRole={activeRole}
+          featureName="Operational Dashboard"
+          title="Dashboard Access Restricted"
+          description="Your current user role does not have authorization to access this operational dashboard."
+          onBack={() => router.replace('/login')}
         />
+      ) : isLoading && !dashboardData ? (
+        /* Case 2: Initial Loading Skeleton with Ambient Slow Network Banner */
+        <View style={styles.container}>
+          {isSlowNetwork && !isSlowDismissed && (
+            <SlowNetworkBanner
+              visible={true}
+              message="Connecting to database is taking longer than usual. Still loading your dashboard..."
+              onRetry={onRefresh}
+              onDismiss={() => setIsSlowDismissed(true)}
+              style={styles.slowBanner}
+            />
+          )}
+          <DashboardSkeleton
+            role={activeRole}
+            kpiCount={activeRole === 'super_admin' ? 6 : activeRole === 'admin' ? 5 : 4}
+          />
+        </View>
+      ) : isError && !dashboardData ? (
+        /* Case 3: Initial Load Failed (Network, Timeout, Server, or 403 Forbidden) */
+        classifyError(error).classification === 'permission' ? (
+          <PermissionDeniedView
+            currentRole={activeRole}
+            featureName="Operational Dashboard"
+            title="Dashboard Access Restricted"
+            description="You do not have required permissions to view this operational dashboard."
+            onBack={() => router.replace('/login')}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.content}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.colors.link}
+                colors={[theme.colors.link]}
+              />
+            }
+            showsVerticalScrollIndicator={true}
+          >
+            <DashboardHeader userName={userName} />
+            <ErrorState
+              error={error}
+              onRetry={onRefresh}
+              retryLabel="Retry Dashboard"
+              style={{ marginTop: spacingNumeric.lg }}
+            />
+          </ScrollView>
+        )
       ) : (
+        /* Case 4: Dashboard Active (Cached or Live Server State) */
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
@@ -410,6 +521,17 @@ export default function DashboardScreen() {
           bounces={true}
           overScrollMode="always"
         >
+          {/* Ambient Slow Network Feedback during background refetch */}
+          {isSlowNetwork && !isSlowDismissed && (
+            <SlowNetworkBanner
+              visible={true}
+              message="Network latency detected. Displaying cached dashboard data while updating..."
+              onRetry={onRefresh}
+              onDismiss={() => setIsSlowDismissed(true)}
+              style={styles.slowBannerContent}
+            />
+          )}
+
           {/* Greeting Header */}
           <DashboardHeader userName={userName} />
 
@@ -452,5 +574,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 960,
     alignSelf: 'center',
+  },
+  slowBanner: {
+    marginHorizontal: spacingNumeric.md,
+    marginTop: spacingNumeric.xs,
+    marginBottom: spacingNumeric.xs,
+  },
+  slowBannerContent: {
+    marginBottom: spacingNumeric.sm,
   },
 });

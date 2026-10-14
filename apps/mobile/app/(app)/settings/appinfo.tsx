@@ -9,6 +9,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import {
   Card,
   useTheme,
@@ -114,7 +115,7 @@ export default function AppInfoScreen() {
           icon={<Tag size={18} color={isDark ? '#38bdf8' : '#0284c7'} />}
           iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
           label="Version"
-          value="v1.1.0 (Build 42)"
+          value={`v${Constants.expoConfig?.version || '1.2.0'} (Build 43)`}
         />
 
         <SpecRow

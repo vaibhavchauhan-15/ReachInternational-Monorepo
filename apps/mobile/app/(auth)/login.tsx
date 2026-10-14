@@ -5,9 +5,16 @@
  * - Tablet (641px-1023px): Centered elevated card with generous touch padding and balanced spacing
  * - Desktop (>=1024px, e.g. 1536x695): Split two-column layout with industrial fleet showcase stage,
  *   brand machinery asset pedestal, and dedicated authentication workspace matching Web app 100%.
+ *
+ * ENTERPRISE-GRADE AUTHENTICATION & SECURITY:
+ * - Atomic signIn lifecycle with in-flight deduplication and profile caching
+ * - Non-sensitive email suggestions for fast autofill; NEVER exposes or stores passwords
+ * - Android Autofill / iOS Keychain integration for secure credentials
+ * - Generic error messaging preventing account enumeration attacks
+ * - Resilient persistent session restoration with zero UI flicker
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -16,18 +23,23 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
-  useWindowDimensions} from 'react-native';
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Mail, Lock, Check } from '../../components/ui/icon';
-import { supabase } from '../../lib/supabase';
+import { Mail, Lock, Check, X } from '../../components/ui/icon';
 import { Input, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 import { haptics } from '../../lib/haptics';
+import {
+  getSavedEmails,
+  getRememberedEmail,
+  removeSavedEmail,
+} from '../../lib/auth/savedEmails';
 
 const loginPageImage = require('../../assets/loginpageimage.png');
 
@@ -36,7 +48,7 @@ export default function LoginScreen() {
   const localParams = useLocalSearchParams<{ message?: string }>();
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
-  const { session, isLoading: authLoading, isProfileComplete, role } = useAuth();
+  const { session, isLoading: authLoading, isProfileComplete, role, signIn } = useAuth();
   const { width: rawWidth, height: rawHeight } = useWindowDimensions();
 
   // Safe fallback dimensions on web to prevent 0x0 initial mount layout collapse
@@ -67,9 +79,37 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const isSubmittingRef = useRef(false);
+  const [savedEmailSuggestions, setSavedEmailSuggestions] = useState<string[]>([]);
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const isSubmittingRef = useRef(false);
 
+  // Load remembered email and saved suggestions on mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const [remembered, suggestions] = await Promise.all([
+          getRememberedEmail(),
+          getSavedEmails(),
+        ]);
+        if (isMounted) {
+          if (remembered.email) {
+            setEmail(remembered.email);
+            setRememberMe(remembered.rememberMe);
+          }
+          setSavedEmailSuggestions(suggestions);
+        }
+      } catch {
+        // Non-fatal
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Display URL query notices if redirected with message
   useEffect(() => {
     if (localParams.message) {
       toast('info', 'Notice', localParams.message);
@@ -87,35 +127,49 @@ export default function LoginScreen() {
     }
   }, [authLoading, session, isProfileComplete, role, router]);
 
-  const handleEmailChange = (val: string) => {
+  const handleEmailChange = useCallback((val: string) => {
     setEmail(val);
     if (fieldErrors.email) {
       setFieldErrors((prev) => ({ ...prev, email: undefined }));
     }
-  };
+  }, [fieldErrors.email]);
 
-  const handlePasswordChange = (val: string) => {
+  const handlePasswordChange = useCallback((val: string) => {
     setPassword(val);
     if (fieldErrors.password) {
       setFieldErrors((prev) => ({ ...prev, password: undefined }));
     }
-  };
+  }, [fieldErrors.password]);
 
-  const handleToggleRememberMe = () => {
+  const handleSelectEmailSuggestion = useCallback((selectedEmail: string) => {
+    haptics.select();
+    setEmail(selectedEmail);
+    setFieldErrors((prev) => ({ ...prev, email: undefined }));
+  }, []);
+
+  const handleRemoveEmailSuggestion = useCallback(async (targetEmail: string) => {
     haptics.light();
-    setRememberMe((prev) => !prev);
-  };
+    const updated = await removeSavedEmail(targetEmail);
+    setSavedEmailSuggestions(updated);
+  }, []);
 
-  const handleNavigateForgotPassword = () => {
+  const handleToggleRememberMe = useCallback(() => {
+    setRememberMe((prev) => {
+      const next = !prev;
+      haptics.toggle(next);
+      return next;
+    });
+  }, []);
+
+  const handleNavigateForgotPassword = useCallback(() => {
     haptics.select();
     router.push('/(auth)/forgot-password');
-  };
+  }, [router]);
 
-  const handleNavigateSignup = () => {
+  const handleNavigateSignup = useCallback(() => {
     haptics.select();
     router.push('/(auth)/signup');
-  };
-
+  }, [router]);
 
   const handleLogin = async () => {
     if (isSubmittingRef.current || isLoading) return;
@@ -150,93 +204,42 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password,
-      });
+      const result = await signIn(trimmedEmail, password, rememberMe);
 
-      if (error) {
+      if (!result.success) {
         haptics.reject();
-        const errorLower = error.message.toLowerCase();
-        let errorMsg = error.message || 'An error occurred while signing in.';
-        if (errorLower.includes('email not confirmed')) {
-          errorMsg = 'Your email is not confirmed yet. Please wait for an administrator to approve your account.';
-          toast('warning', 'Email Unconfirmed', errorMsg);
-        } else if (
-          errorLower.includes('invalid login credentials') ||
-          errorLower.includes('invalid_grant') ||
-          errorLower.includes('invalid credentials')
-        ) {
-          errorMsg = 'Invalid email or password.';
-          setFieldErrors({
-            email: 'Invalid email or password.',
-            password: 'Invalid email or password.',
-          });
-          toast('error', 'Login Failed', errorMsg);
-        } else if (errorLower.includes('network') || errorLower.includes('fetch')) {
-          errorMsg = 'Network connection error. Please check your internet connection.';
-          toast('error', 'Network Error', errorMsg);
+        const errorMsg = result.error || 'Invalid email or password.';
+
+        if (result.status === 'inactive') {
+          toast('error', 'Account Deactivated', errorMsg);
+        } else if (result.status === 'pending') {
+          toast('info', 'Pending Approval', errorMsg);
         } else {
-          toast('error', 'Login Failed', errorMsg);
+          setFieldErrors({
+            email: errorMsg,
+            password: errorMsg,
+          });
+          toast('error', 'Sign In Failed', errorMsg);
         }
-        isSubmittingRef.current = false;
-        setIsLoading(false);
         return;
       }
 
-      if (data?.session && data.user) {
-        // Check user profile from database matching Web auth.ts logic
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('role, status, complete_profile')
-          .eq('id', data.user.id)
-          .single();
+      haptics.confirm();
 
-        if (profileError || !profile) {
-          haptics.reject();
-          await supabase.auth.signOut();
-          toast('error', 'Profile Not Found', 'User profile not found. Contact your administrator.');
-          isSubmittingRef.current = false;
-          setIsLoading(false);
-          return;
-        }
+      // Refresh local suggestions list
+      const updatedSuggestions = await getSavedEmails();
+      setSavedEmailSuggestions(updatedSuggestions);
 
-        if (profile.status === 'inactive') {
-          haptics.reject();
-          await supabase.auth.signOut();
-          toast('error', 'Account Deactivated', 'Your account has been deactivated. Contact your administrator.');
-          isSubmittingRef.current = false;
-          setIsLoading(false);
-          return;
-        }
-
-        if (profile.status === 'pending') {
-          haptics.reject();
-          await supabase.auth.signOut();
-          toast(
-            'info',
-            'Pending Approval',
-            'Your account is pending approval. Please wait for an administrator to approve your account.'
-          );
-          isSubmittingRef.current = false;
-          setIsLoading(false);
-          return;
-        }
-
-        haptics.confirm();
-
-        // Routing based on onboarding and role
-        const isProfileComplete = profile.complete_profile === true || profile.complete_profile === 'yes';
-        if (!isProfileComplete) {
-          router.replace('/(auth)/onboarding');
-        } else {
-          router.replace(getMobileRoleHomeRoute(profile.role) as any);
-        }
+      // Route based on profile completion status and canonical role
+      if (!result.isProfileComplete) {
+        router.replace('/(auth)/onboarding');
+      } else {
+        router.replace(getMobileRoleHomeRoute(result.role) as any);
       }
-
-    } catch (err: unknown) {
+    } catch {
       haptics.reject();
-      toast('error', 'Login Error', 'An unexpected error occurred during login. Please try again.');
+      toast('error', 'Sign In Error', 'An unexpected error occurred during sign in. Please try again.');
+    } finally {
       isSubmittingRef.current = false;
       setIsLoading(false);
     }
@@ -247,6 +250,12 @@ export default function LoginScreen() {
   const cardBorder = isDark ? '#262626' : '#ebebeb';
   const primarySkyBlue = isDark ? '#0ea5e9' : '#0284c7';
   const showcaseBg = isDark ? '#111111' : '#ffffff';
+
+  // Filter suggestion pills: show when email is empty or partially matches
+  const visibleEmailSuggestions = savedEmailSuggestions.filter((s) => {
+    if (!email.trim()) return true;
+    return s.toLowerCase().includes(email.trim().toLowerCase()) && s.toLowerCase() !== email.trim().toLowerCase();
+  });
 
   return (
     <SafeAreaView
@@ -426,20 +435,80 @@ export default function LoginScreen() {
 
                 {/* Form Controls */}
                 <View style={[styles.form, { gap: isShortScreen ? 10 : 14 }]}>
-                  {/* Email Address Field */}
-                  <Input
-                    label="Email address"
-                    required
-                    placeholder="superadmin@reachinternational.co.in"
-                    value={email}
-                    onChangeText={handleEmailChange}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    autoComplete="off"
-                    importantForAutofill="no"
-                    error={fieldErrors.email}
-                    leftIcon={<Mail size={16} color={isDark ? '#9ca3af' : '#626970'} />}
-                  />
+                  {/* Email Address Field with Autofill & Suggestions */}
+                  <View style={styles.inputWrapper}>
+                    <Input
+                      label="Email address"
+                      required
+                      placeholder="superadmin@reachinternational.co.in"
+                      value={email}
+                      onChangeText={handleEmailChange}
+                      onFocus={() => setIsEmailFocused(true)}
+                      onBlur={() => setIsEmailFocused(false)}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      textContentType="emailAddress"
+                      importantForAutofill="yes"
+                      autoCorrect={false}
+                      error={fieldErrors.email}
+                      leftIcon={<Mail size={16} color={isDark ? '#9ca3af' : '#626970'} />}
+                    />
+
+                    {/* Non-sensitive Saved Email Autofill Suggestion Chips */}
+                    {(isEmailFocused || !email) && visibleEmailSuggestions.length > 0 && (
+                      <View style={styles.suggestionsContainer}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.suggestionsScroll}
+                          keyboardShouldPersistTaps="handled"
+                        >
+                          {visibleEmailSuggestions.map((item) => (
+                            <View
+                              key={item}
+                              style={[
+                                styles.suggestionChip,
+                                {
+                                  backgroundColor: isDark ? '#0284c722' : '#0284c712',
+                                  borderColor: isDark ? '#0284c744' : '#0284c728',
+                                },
+                              ]}
+                            >
+                              <Pressable
+                                variant="plain"
+                                haptic="select"
+                                style={styles.suggestionSelectPressable}
+                                onPress={() => handleSelectEmailSuggestion(item)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Autofill ${item}`}
+                              >
+                                <Mail size={12} color={primarySkyBlue} />
+                                <Text
+                                  variant="caption"
+                                  style={[styles.suggestionText, { color: primarySkyBlue }]}
+                                  numberOfLines={1}
+                                >
+                                  {item}
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                variant="plain"
+                                haptic="light"
+                                style={styles.suggestionRemovePressable}
+                                onPress={() => handleRemoveEmailSuggestion(item)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Remove ${item} suggestion`}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <X size={11} color={isDark ? '#a1a1aa' : '#888888'} />
+                              </Pressable>
+                            </View>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
 
                   {/* Password Field */}
                   <Input
@@ -450,8 +519,9 @@ export default function LoginScreen() {
                     onChangeText={handlePasswordChange}
                     isPassword
                     autoCapitalize="none"
-                    autoComplete="off"
-                    importantForAutofill="no"
+                    autoComplete="current-password"
+                    textContentType="password"
+                    importantForAutofill="yes"
                     error={fieldErrors.password}
                     leftIcon={<Lock size={16} color={isDark ? '#9ca3af' : '#626970'} />}
                   />
@@ -465,10 +535,13 @@ export default function LoginScreen() {
                   >
                     <Pressable
                       variant="toggle"
-                      haptic="toggle"
+                      haptic={false}
                       style={styles.rememberMeContainer}
                       onPress={handleToggleRememberMe}
                       hitSlopToMin48={true}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: rememberMe }}
+                      accessibilityLabel="Remember me"
                     >
                       <View
                         style={[
@@ -526,6 +599,8 @@ export default function LoginScreen() {
                     ]}
                     onPress={handleLogin}
                     disabled={isLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign in"
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
@@ -587,7 +662,6 @@ export default function LoginScreen() {
               </Text>
             </View>
           </ScrollView>
-
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
@@ -645,10 +719,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 2,
   },
-  showcaseTitle: {
-  },
-  showcaseSubtitle: {
-  },
+  showcaseTitle: {},
+  showcaseSubtitle: {},
   machineStageContainer: {
     width: '100%',
     alignItems: 'center',
@@ -729,11 +801,42 @@ const styles = StyleSheet.create({
   title: {
     textAlign: 'left',
   },
-  bannerContainer: {
-    marginBottom: 16,
-  },
   form: {
     width: '100%',
+  },
+  inputWrapper: {
+    width: '100%',
+  },
+  suggestionsContainer: {
+    marginTop: -4,
+    marginBottom: 6,
+    width: '100%',
+  },
+  suggestionsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 6,
+  },
+  suggestionSelectPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  suggestionText: {
+    maxWidth: 220,
+  },
+  suggestionRemovePressable: {
+    padding: 2,
+    marginLeft: 2,
   },
   optionsRow: {
     flexDirection: 'row',
@@ -755,10 +858,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rememberMeText: {
-  },
-  forgotPasswordText: {
-  },
+  rememberMeText: {},
+  forgotPasswordText: {},
   signInButton: {
     height: 48,
     minHeight: 48,
@@ -785,10 +886,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  cardFooterText: {
-  },
-  requestAccessText: {
-  },
+  cardFooterText: {},
+  requestAccessText: {},
   screenFooter: {
     width: '100%',
     paddingTop: 16,
@@ -799,5 +898,4 @@ const styles = StyleSheet.create({
   copyrightText: {
     textAlign: 'center',
   },
-
 });

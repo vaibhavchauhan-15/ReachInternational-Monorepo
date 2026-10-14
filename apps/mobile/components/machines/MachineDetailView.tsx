@@ -282,6 +282,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   // Modals
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
+  const [assignPersonnelModalVisible, setAssignPersonnelModalVisible] = useState(false);
   const [heroMenuVisible, setHeroMenuVisible] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -1005,8 +1006,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         label: 'Manage Shift Personnel',
         icon: <Shield size={16} color={theme.colors.ink} />,
         onPress: () => {
-          setEditSection('personnel');
-          setEditModalVisible(true);
+          setAssignPersonnelModalVisible(true);
         },
       });
       list.push({
@@ -1024,8 +1024,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         label: 'Assign Operators',
         icon: <UserCheck size={16} color={theme.colors.ink} />,
         onPress: () => {
-          setEditSection('personnel');
-          setEditModalVisible(true);
+          setAssignPersonnelModalVisible(true);
         },
       });
     }
@@ -1149,8 +1148,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 ) : isSupervisor ? (
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => {
-                      setEditSection('personnel');
-                      setEditModalVisible(true);
+                      setAssignPersonnelModalVisible(true);
                     }}
                     style={[
                       styles.heroEditBtn,
@@ -1490,8 +1488,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Pressable variant="outline" haptic="tap"
                       onPress={() => {
-                        setEditSection('personnel');
-                        setEditModalVisible(true);
+                        setAssignPersonnelModalVisible(true);
                       }}
                       style={[
                         styles.headerActionBtnSm,
@@ -2996,8 +2993,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               style={styles.heroMenuItem}
               onPress={() => {
                 setHeroMenuVisible(false);
-                setEditSection('personnel');
-                setEditModalVisible(true);
+                setAssignPersonnelModalVisible(true);
               }}
             >
               <View style={[styles.heroMenuIconBox, { backgroundColor: '#0d948818' }]}>
@@ -3044,6 +3040,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         url={`https://www.reachinternational.co.in/machines?id=${machine.id}`}
         title={`${machine.machine_id} — ${machine.model || 'Equipment'}`}
         description={`Serial No: ${machine.serial_number || 'N/A'} • Status: ${machine.health_status || 'Active'} • Operational Fleet Asset`}
+      />
+
+      {/* Assign Personnel Modal */}
+      <MobileAssignPersonnelModal
+        visible={assignPersonnelModalVisible}
+        onClose={() => setAssignPersonnelModalVisible(false)}
+        initialMachineId={machine.id}
+        userRole={userRole || undefined}
+        onSuccess={() => {
+          handleRefresh();
+          if (onMachineUpdated) onMachineUpdated(machine);
+        }}
       />
     </View>
   );

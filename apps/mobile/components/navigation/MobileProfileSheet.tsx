@@ -574,7 +574,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
               <View style={styles.brandFooter}>
                 <ReachInternationalLogo size={18} showTagline={false} />
                 <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-                  Reach International v1.0.0 • www.reachinternational.co.in
+                  Reach International v1.2.0 • www.reachinternational.co.in
                 </Text>
               </View>
             </ScrollView>

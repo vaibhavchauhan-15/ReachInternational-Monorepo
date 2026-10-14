@@ -4,6 +4,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Text, useTheme, Button, Touchable, AppModal, Input } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Check, Copy, X, KeyRound } from '../ui/icon';
 import * as Clipboard from 'expo-clipboard';
@@ -44,23 +45,16 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
       visible={visible}
       onClose={onClose}
       variant="center"
+      panelStyle={{ padding: 0, overflow: 'hidden', maxWidth: 400 }}
     >
-      <View
-        style={[
-          styles.dialog,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
+      <View style={{ width: '100%' }}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
           <View style={styles.titleRow}>
             <View style={[styles.keyIconWrap, { backgroundColor: theme.colors.warning + '18' }]}>
               <KeyRound size={16} color={theme.colors.warning} />
             </View>
-            <Text style={[styles.title, { color: theme.colors.ink }]}>
+            <Text variant="heading" style={[styles.title, { color: theme.colors.ink }]}>
               Password Reset Successful
             </Text>
           </View>
@@ -69,119 +63,89 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
           </Touchable>
         </View>
 
-              {/* Body */}
-              <View style={styles.body}>
-                {/* Notice Banner */}
-                <View
-                  style={[
-                    styles.noticeBanner,
-                    {
-                      backgroundColor: theme.colors.success + '14',
-                      borderColor: theme.colors.success + '33',
-                    },
-                  ]}
-                >
-                  <View style={[styles.checkCircle, { backgroundColor: theme.colors.success + '26' }]}>
-                    <Check size={14} color={theme.colors.success} strokeWidth={2.5} animate="mount" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.noticeTitle, { color: theme.colors.success }]}>
-                      New Password Generated
-                    </Text>
-                    <Text style={[styles.noticeSub, { color: theme.colors.mute }]}>
-                      Password updated for <Text style={{ color: theme.colors.ink }}>{userName}</Text>. Share these credentials securely with the user.
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Password Box */}
-                <View
-                  style={[
-                    styles.pwdWell,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.pwdLabel, { color: theme.colors.mute }]}>
-                    TEMPORARY PASSWORD
-                  </Text>
-                  <View style={styles.pwdRow}>
-                    <Input
-                      value={temporaryPassword}
-                      editable={false}
-                      selectTextOnFocus
-                      style={[
-                        styles.pwdInput,
-                        {
-                          color: theme.colors.ink,
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    />
-                    <Touchable
-                      preset="button"
-                      onPress={handleCopy}
-                      style={[
-                        styles.copyBtn,
-                        {
-                          backgroundColor: copied ? theme.colors.success : theme.colors.link,
-                        },
-                      ]}
-                    >
-                      {copied ? (
-                        <>
-                          <Check size={14} color="#ffffff" strokeWidth={2.5} animate="mount" />
-                          <Text style={styles.copyBtnText}>Copied!</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} color="#ffffff" />
-                          <Text style={styles.copyBtnText}>Copy</Text>
-                        </>
-                      )}
-                    </Touchable>
-                  </View>
-                </View>
-              </View>
-
-              {/* Footer */}
-              <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-                <Button
-                  label="Done"
-                  onPress={onClose}
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                />
-              </View>
+        {/* Body */}
+        <View style={styles.body}>
+          {/* Notice Banner */}
+          <View
+            style={[
+              styles.noticeBanner,
+              {
+                backgroundColor: theme.colors.success + '14',
+                borderColor: theme.colors.success + '33',
+              },
+            ]}
+          >
+            <View style={[styles.checkCircle, { backgroundColor: theme.colors.success + '26' }]}>
+              <Check size={14} color={theme.colors.success} strokeWidth={2.5} animate="mount" />
             </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="label" style={[styles.noticeTitle, { color: theme.colors.success }]}>
+                New Password Generated
+              </Text>
+              <Text variant="caption" style={[styles.noticeSub, { color: theme.colors.mute }]}>
+                Password updated for <Text variant="label" style={{ color: theme.colors.ink }}>{userName}</Text>. Share these credentials securely with the user.
+              </Text>
+            </View>
+          </View>
+
+          {/* Password Box */}
+          <View
+            style={[
+              styles.pwdWell,
+              {
+                backgroundColor: theme.colors.canvas,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text variant="caption" style={[styles.pwdLabel, { color: theme.colors.mute }]}>
+              TEMPORARY PASSWORD
+            </Text>
+            <Input
+              value={temporaryPassword}
+              editable={false}
+              selectTextOnFocus
+              style={{
+                color: theme.colors.ink,
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              }}
+              rightIcon={
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  onPress={handleCopy}
+                  accessibilityRole="button"
+                  accessibilityLabel={copied ? 'Password copied' : 'Copy temporary password'}
+                  style={{ padding: 4 }}
+                >
+                  {copied ? (
+                    <Check size={16} color={theme.colors.success} strokeWidth={2.5} animate="mount" />
+                  ) : (
+                    <Copy size={16} color={theme.colors.mute} />
+                  )}
+                </Pressable>
+              }
+            />
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
+          <Button
+            label="Done"
+            onPress={onClose}
+            variant="primary"
+            size="md"
+            fullWidth
+          />
+        </View>
+      </View>
     </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacingNumeric.md,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -241,32 +205,9 @@ const styles = StyleSheet.create({
   },
   pwdLabel: {
   },
-  pwdRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pwdInput: {
-    flex: 1,
-    height: 40,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-  },
-  copyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: radiusNumeric.sm,
-    justifyContent: 'center',
-  },
-  copyBtnText: {
-    color: '#ffffff',
-  },
   footer: {
     padding: spacingNumeric.md,
     borderTopWidth: 1,
   },
 });
+

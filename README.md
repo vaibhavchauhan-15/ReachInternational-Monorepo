@@ -741,6 +741,26 @@ ReachInternational enforces a multi-layered security architecture conforming to 
     - `/terms`: Official Terms of Service and Heavy Equipment Custody conditions.
     - `/account-deletion`: Dedicated Google Play compliant account erasure request portal with 14-day SLA.
 
+### 📚 Canonical Security Documentation Tree
+
+ReachInternational maintains an authoritative, repository-wide security documentation and enforcement system:
+
+- **Vulnerability Reporting Policy**: [`SECURITY.md`](./SECURITY.md)
+- **Monorepo Security Baseline**: [`security/README.md`](./security/README.md)
+  - [`SECURITY-RULES.md`](./security/SECURITY-RULES.md) — Mandatory non-negotiable security requirements
+  - [`ATTACK-SURFACE.md`](./security/ATTACK-SURFACE.md) — Entry points, trust boundaries, & verification matrix
+  - [`THREAT-MODEL.md`](./security/THREAT-MODEL.md) — STRIDE threat model, severity matrix, & mitigations
+  - [`SECRETS.md`](./security/SECRETS.md) — Secrets classification, server isolation, & rotation protocol
+  - [`SECURITY-CHECKLIST.md`](./security/SECURITY-CHECKLIST.md) — Actionable pre-implementation and release gate
+  - [`AUTHENTICATION-AUTHORIZATION.md`](./security/AUTHENTICATION-AUTHORIZATION.md) — Canonical 6-role RBAC, DAL, & RLS
+  - [`DATA-PRIVACY.md`](./security/DATA-PRIVACY.md) — Sensitive data inventory, PII masking, & retention
+  - [`DEPENDENCY-SECURITY.md`](./security/DEPENDENCY-SECURITY.md) — pnpm audit, lockfile integrity, & supply chain
+  - [`INCIDENT-RESPONSE.md`](./security/INCIDENT-RESPONSE.md) — Secret exposure containment & post-mortem steps
+  - [`SECURITY-TESTING.md`](./security/SECURITY-TESTING.md) — Negative test standards & test accounts
+- **Web-Specific Security Policies**: [`apps/web/security/README.md`](./apps/web/security/README.md)
+- **Native Mobile Security Policies**: [`apps/mobile/security/README.md`](./apps/mobile/security/README.md)
+- **Mandatory AI Agent Enforcement**: [`AGENTS.md`](./AGENTS.md) (Section 10)
+
 ---
 
 ## 🧪 Verification & Quality Gate

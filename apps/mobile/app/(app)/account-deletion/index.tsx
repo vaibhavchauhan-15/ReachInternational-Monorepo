@@ -9,9 +9,9 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../../../components/ui/touch/Pressable';
@@ -26,6 +26,8 @@ import {
   Text,
   useToast,
   SearchableSelect,
+  ConfirmDialog,
+  FormError,
 } from '../../../components/ui';
 import { supabase } from '../../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -55,9 +57,11 @@ export default function AccountDeletionScreen() {
   const [customReason, setCustomReason] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   const [isLoadingCheck, setIsLoadingCheck] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const userEmail = user?.email || userProfile?.email || '';
   const userName = userProfile?.full_name || 'Field Personnel';
@@ -120,116 +124,100 @@ export default function AccountDeletionScreen() {
       return;
     }
 
-    Alert.alert(
-      'Confirm Account Deletion Request',
-      `Are you sure you want to submit a deletion request for ${userEmail}? This will be reviewed by the compliance desk to de-provision your account.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm & Submit',
-          style: 'destructive',
-          onPress: async () => {
-            setIsSubmitting(true);
-            try {
-              const fullReason =
-                selectedReason === 'Other operational reason'
-                  ? customReason.trim()
-                    ? `Other operational reason: ${customReason.trim()}`
-                    : 'Other operational reason'
-                  : selectedReason;
+    setShowSubmitConfirm(true);
+  };
 
-              // Try inserting into account_deletion_requests
-              const { error: directErr } = await supabase
-                .from('account_deletion_requests')
-                .insert({
-                  user_id: user?.id,
-                  email: userEmail,
-                  full_name: userName,
-                  phone: userProfile?.phone,
-                  role: role || userProfile?.role,
-                  reason: fullReason,
-                  source: 'mobile',
-                  status: 'pending',
-                });
+  const handleConfirmSubmitDeletion = async () => {
+    setIsSubmitting(true);
+    try {
+      const fullReason =
+        selectedReason === 'Other operational reason'
+          ? customReason.trim()
+            ? `Other operational reason: ${customReason.trim()}`
+            : 'Other operational reason'
+          : selectedReason;
 
-              if (directErr) {
-                // Fallback to profile_change_requests
-                const { error: fallbackErr } = await supabase
-                  .from('profile_change_requests')
-                  .insert({
-                    user_id: user?.id,
-                    requester_role: role || 'operator',
-                    current_data: { email: userEmail },
-                    requested_data: {
-                      type: 'account_deletion',
-                      email: userEmail,
-                      full_name: userName,
-                      phone: userProfile?.phone,
-                      role: role || userProfile?.role,
-                      reason: fullReason,
-                      source: 'mobile',
-                      requested_at: new Date().toISOString(),
-                    },
-                    target_approver_role: 'admin',
-                    status: 'pending',
-                  });
+      // Try inserting into account_deletion_requests
+      const { error: directErr } = await supabase
+        .from('account_deletion_requests')
+        .insert({
+          user_id: user?.id,
+          email: userEmail,
+          full_name: userName,
+          phone: userProfile?.phone,
+          role: role || userProfile?.role,
+          reason: fullReason,
+          source: 'mobile',
+          status: 'pending',
+        });
 
-                if (fallbackErr) throw fallbackErr;
-              }
+      if (directErr) {
+        // Fallback to profile_change_requests
+        const { error: fallbackErr } = await supabase
+          .from('profile_change_requests')
+          .insert({
+            user_id: user?.id,
+            requester_role: role || 'operator',
+            current_data: { email: userEmail },
+            requested_data: {
+              type: 'account_deletion',
+              email: userEmail,
+              full_name: userName,
+              phone: userProfile?.phone,
+              role: role || userProfile?.role,
+              reason: fullReason,
+              source: 'mobile',
+              requested_at: new Date().toISOString(),
+            },
+            target_approver_role: 'admin',
+            status: 'pending',
+          });
 
-              toast(
-                'success',
-                'Request Submitted',
-                'Your account deletion request has been sent to our administrator and compliance desk. It will be reviewed and processed within 14 business days.'
-              );
-              checkPendingDeletion();
-            } catch (err: any) {
-              toast('error', 'Submission Failed', err?.message || 'Failed to submit account deletion request. Please try again.');
-            } finally {
-              setIsSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+        if (fallbackErr) throw fallbackErr;
+      }
+
+      toast(
+        'success',
+        'Request Submitted',
+        'Your account deletion request has been sent to our administrator and compliance desk. It will be reviewed and processed within 14 business days.'
+      );
+      setShowSubmitConfirm(false);
+      checkPendingDeletion();
+    } catch (err: any) {
+      toast('error', 'Submission Failed', err?.message || 'Failed to submit account deletion request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Withdraw / Cancel pending request
   const handleCancelRequest = async () => {
     if (!pendingRequest?.id) return;
+    setShowCancelConfirm(true);
+  };
 
-    Alert.alert(
-      'Withdraw Deletion Request',
-      'Do you want to cancel your pending account deletion request and keep your account active?',
-      [
-        { text: 'Keep Request', style: 'cancel' },
-        {
-          text: 'Withdraw Request',
-          style: 'default',
-          onPress: async () => {
-            setIsCancelling(true);
-            try {
-              await supabase
-                .from('account_deletion_requests')
-                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                .eq('id', pendingRequest.id);
+  const handleConfirmCancelRequest = async () => {
+    if (!pendingRequest?.id) return;
+    setIsCancelling(true);
+    try {
+      await supabase
+        .from('account_deletion_requests')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', pendingRequest.id);
 
-              await supabase
-                .from('profile_change_requests')
-                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                .eq('id', pendingRequest.id);
+      await supabase
+        .from('profile_change_requests')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', pendingRequest.id);
 
-              toast('success', 'Request Withdrawn', 'Your account deletion request has been cancelled.');
-              setPendingRequest(null);
-            } catch (err: any) {
-              toast('error', 'Error', err?.message || 'Failed to withdraw deletion request.');
-            } finally {
-              setIsCancelling(false);
-            }
-          },
-        },
-      ]
-    );
+      toast('success', 'Request Withdrawn', 'Your account deletion request has been cancelled.');
+      setShowCancelConfirm(false);
+      setPendingRequest(null);
+    } catch (err: any) {
+      toast('error', 'Error', err?.message || 'Failed to withdraw deletion request.');
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const isDeleteDisabled =
@@ -384,6 +372,9 @@ export default function AccountDeletionScreen() {
                   autoCapitalize="characters"
                   containerStyle={{ marginVertical: 0 }}
                 />
+                {confirmText.length > 0 && confirmText.trim().toUpperCase() !== 'DELETE' ? (
+                  <FormError message="Please type DELETE in capital letters to confirm" style={{ marginTop: 6 }} />
+                ) : null}
               </View>
 
               {/* Submit Button */}
@@ -410,6 +401,30 @@ export default function AccountDeletionScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmDialog
+        visible={showSubmitConfirm}
+        onClose={() => setShowSubmitConfirm(false)}
+        onConfirm={handleConfirmSubmitDeletion}
+        title="Confirm Account Deletion Request"
+        message={`Are you sure you want to submit an account deletion request for ${userEmail}? This will be reviewed by the compliance desk to de-provision your account.`}
+        confirmText="Confirm & Submit"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      <ConfirmDialog
+        visible={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmCancelRequest}
+        title="Withdraw Deletion Request"
+        message="Do you want to cancel your pending account deletion request and keep your account active?"
+        confirmText="Withdraw Request"
+        cancelText="Keep Request"
+        variant="primary"
+        isLoading={isCancelling}
+      />
     </View>
   );
 }

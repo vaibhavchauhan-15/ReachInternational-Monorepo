@@ -4,7 +4,9 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Platform,
+  useWindowDimensions,
+} from 'react-native';
 import { Text, Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable, showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
@@ -61,6 +63,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   isSuperAdmin = true,
 }) => {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 640;
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -279,7 +283,19 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     <AppModal
       visible={visible}
       onClose={onClose}
-      variant="bottom"
+      variant={isDesktop ? 'center' : 'bottom'}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              maxHeight: '90%',
+              padding: 0,
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : undefined
+      }
       persistent={isLoading}
       testID="create-user-modal"
     >
@@ -493,10 +509,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
+    borderRadius: radiusNumeric.lg,
     maxHeight: '92%',
     display: 'flex',
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',

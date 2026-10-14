@@ -225,12 +225,14 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       typeof (menuTriggerRef.current as any).getBoundingClientRect === 'function'
     ) {
       const rect = (menuTriggerRef.current as any).getBoundingClientRect();
-      setMenuCoords({
-        top: Math.max(44, Math.round(rect.bottom + 6)),
-        right: Math.max(12, Math.round(windowWidth - rect.right)),
-      });
-      setMenuOpen(true);
-      return;
+      if (rect && typeof rect.bottom === 'number' && rect.bottom > 0) {
+        setMenuCoords({
+          top: Math.max(44, Math.round(rect.bottom + 6)),
+          right: Math.max(12, Math.round(windowWidth - rect.right)),
+        });
+        setMenuOpen(true);
+        return;
+      }
     }
 
     if (menuTriggerRef.current && typeof menuTriggerRef.current.measureInWindow === 'function') {
@@ -247,14 +249,19 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
     }
   };
 
-  // Close 3-Dot Menu on Escape on Web
+  // Close 3-Dot Menu on Escape or Scroll on Web
   useEffect(() => {
     if (!menuOpen || Platform.OS !== 'web' || typeof document === 'undefined') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMenuOpen(false);
     };
+    const handleScroll = () => setMenuOpen(false);
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [menuOpen]);
 
   // Handle Quick Access Trigger Press
@@ -645,159 +652,79 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           <View
             style={[
               StyleSheet.absoluteFill,
-              !isWide ? { backgroundColor: 'rgba(0, 0, 0, 0.45)' } : undefined,
+              { backgroundColor: 'rgba(0, 0, 0, 0.12)' },
             ]}
           />
         </Pressable>
 
-        {isWide ? (
-          /* Desktop & Tablet: Anchored Popover Box beneath 3-dot trigger */
-          <View
-            style={[
-              styles.popoverMenu,
-              {
-                top: menuCoords.top,
-                right: menuCoords.right,
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
+        {/* Anchored Popover Box beneath 3-dot trigger (Unified across all screen widths) */}
+        <View
+          style={[
+            styles.popoverMenu,
+            {
+              top: menuCoords.top,
+              right: Math.max(8, menuCoords.right),
+              maxWidth: Math.min(290, screenWidth - 24),
+              minWidth: Math.min(220, screenWidth - 24),
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          <View style={styles.menuHeader}>
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              ACTIONS
+            </Text>
+          </View>
+
+          <ScrollView
+            style={styles.menuScrollView}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={styles.menuHeader}>
-              <Text variant="caption" style={{ color: theme.colors.mute }}>
-                ACTIONS
-              </Text>
-            </View>
-
-            <ScrollView
-              style={styles.menuScrollView}
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-            >
-              {menuActions.map((action, idx) => (
-                <Touchable
-                  key={action.id || idx}
-                  preset="row"
-                  disabled={action.disabled}
-                  onPress={() => handleActionPress(action)}
-                  style={[
-                    styles.menuItem,
-                    idx < menuActions.length - 1 && {
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.hairline,
-                    },
-                    action.disabled && { opacity: 0.4 },
-                  ]}
-                >
-                  {action.icon && (
-                    <View style={styles.menuItemIcon}>
-                      {action.icon}
-                    </View>
-                  )}
-
-                  <Text
-                    variant="label"
-                    style={{
-                      color: action.destructive ? '#ef4444' : theme.colors.ink,
-                      flex: 1,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {action.label}
-                  </Text>
-
-                  {action.badge !== undefined && (
-                    <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
-                      <Text variant="caption" style={{ color: theme.colors.body }}>
-                        {action.badge}
-                      </Text>
-                    </View>
-                  )}
-                </Touchable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : (
-          /* Mobile (< 640px): Bottom Sheet Presentation */
-          <View style={styles.mobileSheetWrapper} pointerEvents="box-none">
-            <View
-              style={[
-                styles.mobileSheetPanel,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <View style={styles.handleWrapper}>
-                <View
-                  style={[
-                    styles.dragHandle,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(255, 255, 255, 0.24)'
-                        : 'rgba(0, 0, 0, 0.18)',
-                    },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.menuHeader}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  ACTIONS
-                </Text>
-              </View>
-
-              <ScrollView
-                style={styles.menuScrollView}
-                bounces={false}
-                showsVerticalScrollIndicator={false}
+            {menuActions.map((action, idx) => (
+              <Touchable
+                key={action.id || idx}
+                preset="row"
+                disabled={action.disabled}
+                onPress={() => handleActionPress(action)}
+                style={[
+                  styles.menuItem,
+                  idx < menuActions.length - 1 && {
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.hairline,
+                  },
+                  action.disabled && { opacity: 0.4 },
+                ]}
               >
-                {menuActions.map((action, idx) => (
-                  <Touchable
-                    key={action.id || idx}
-                    preset="row"
-                    disabled={action.disabled}
-                    onPress={() => handleActionPress(action)}
-                    style={[
-                      styles.menuItem,
-                      idx < menuActions.length - 1 && {
-                        borderBottomWidth: 1,
-                        borderBottomColor: theme.colors.hairline,
-                      },
-                      action.disabled && { opacity: 0.4 },
-                    ]}
-                  >
-                    {action.icon && (
-                      <View style={styles.menuItemIcon}>
-                        {action.icon}
-                      </View>
-                    )}
+                {action.icon && (
+                  <View style={styles.menuItemIcon}>
+                    {action.icon}
+                  </View>
+                )}
 
-                    <Text
-                      variant="label"
-                      style={{
-                        color: action.destructive ? '#ef4444' : theme.colors.ink,
-                        flex: 1,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {action.label}
+                <Text
+                  variant="label"
+                  style={{
+                    color: action.destructive ? '#ef4444' : theme.colors.ink,
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {action.label}
+                </Text>
+
+                {action.badge !== undefined && (
+                  <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
+                    <Text variant="caption" style={{ color: theme.colors.body }}>
+                      {action.badge}
                     </Text>
-
-                    {action.badge !== undefined && (
-                      <View style={[styles.menuItemBadge, { backgroundColor: theme.colors.hairline }]}>
-                        <Text variant="caption" style={{ color: theme.colors.body }}>
-                          {action.badge}
-                        </Text>
-                      </View>
-                    )}
-                  </Touchable>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        )}
+                  </View>
+                )}
+              </Touchable>
+            ))}
+          </ScrollView>
+        </View>
       </Modal>
 
       {/* Integrated Global Command Palette (when search is clicked without direct query) */}
@@ -921,13 +848,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     minWidth: 230,
     maxWidth: 290,
-    borderRadius: radiusNumeric.md,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     paddingVertical: 4,
     overflow: 'hidden',
+    zIndex: 100,
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.26)',
+        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.22)',
       },
       default: {
         shadowColor: '#000',
@@ -937,44 +865,6 @@ const styles = StyleSheet.create({
         elevation: 20,
       },
     }),
-  },
-  mobileSheetWrapper: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-  },
-  mobileSheetPanel: {
-    width: '100%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingBottom: 24,
-    overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.28)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.24,
-        shadowRadius: 18,
-        elevation: 20,
-      },
-    }),
-  },
-  handleWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  dragHandle: {
-    width: 38,
-    height: 4.5,
-    borderRadius: radiusNumeric.full,
   },
   menuScrollView: {
     maxHeight: 380,

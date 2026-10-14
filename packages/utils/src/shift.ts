@@ -435,9 +435,39 @@ export function parseOperationalErrorMessage(
 
   // 4. Overlapping / Conflict
   if (lower.includes('overlap') || lower.includes('overlapping') || lower.includes('tstzrange')) {
+    if (lower.includes('operator') || lower.includes('another equipment') || lower.includes('another machine')) {
+      return {
+        title: 'Operator Timeline Conflict',
+        message: 'Operator timeline overlaps with another machine shift during this operational window.',
+      };
+    }
     return {
       title: 'Shift Time Conflict',
       message: 'This equipment already has a log recorded for this time window.',
+    };
+  }
+
+  // 4b. Operator Cross-Machine Conflict
+  if (
+    lower.includes('uq_machine_hour_logs_operator_date_shift') ||
+    lower.includes('already has a log recorded for shift') ||
+    lower.includes('another machine')
+  ) {
+    return {
+      title: 'Operator Shift Conflict',
+      message: 'Operator already has a shift log recorded on another machine for this date and shift.',
+    };
+  }
+
+  // 4c. Machine Shift Duplicate
+  if (
+    lower.includes('uq_machine_hour_logs_machine_date_shift') ||
+    lower.includes('already has an active log for shift') ||
+    lower.includes('already been logged')
+  ) {
+    return {
+      title: 'Shift Already Recorded',
+      message: 'This equipment already has an active log recorded for this date and shift.',
     };
   }
 

@@ -21,8 +21,16 @@ export function downloadFileOnWeb(
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      try {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore cleanup error
+      }
+    }, 1500);
     return true;
   } catch (err) {
     console.error('[fileExport] Failed to trigger web download:', err);

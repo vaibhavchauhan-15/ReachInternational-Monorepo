@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Modal, Button, useToast, Badge } from "@/components/ui";
 import { HMRInputs } from "@/components/operations/entry/HMRInputs";
 import { ShiftInputs } from "@/components/operations/entry/ShiftInputs";
@@ -74,6 +74,7 @@ export function AssistedShiftEntryModal({
 
   const [remarks, setRemarks] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
 
   const activeShift = useMemo(() => {
     if (!clientShifts || clientShifts.length === 0) return null;
@@ -276,7 +277,7 @@ export function AssistedShiftEntryModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!row || submitting) return;
+    if (!row || submitting || submittingRef.current) return;
 
     if (userRole && !["super_admin", "admin", "manager"].includes(userRole)) {
       toast("error", "Unauthorized Action", "Only roles above supervisor (manager, admin, super_admin) can enter shift logs.");
@@ -314,6 +315,7 @@ export function AssistedShiftEntryModal({
       }
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
 
     let bkdDurationStr: string | undefined;
@@ -329,6 +331,9 @@ export function AssistedShiftEntryModal({
     ]
       .filter(Boolean)
       .join(" ");
+
+    const effectiveShift = (selectedShiftCode || row.shift_code || "S1").replace(/^shift\s*/i, "").trim().toUpperCase();
+    const deterministicKey = `ihl_assisted_${row.machine_id}_${row.operator_id || "no_op"}_${logDate}_${effectiveShift}`;
 
     try {
       const res = await submitOperatorHourLogAction({
@@ -346,9 +351,10 @@ export function AssistedShiftEntryModal({
         breakdownEndTime: isBreakdown ? breakdownEndTime : undefined,
         breakdownDuration: bkdDurationStr,
         breakdownHours: bkdHours,
-        shiftCode: selectedShiftCode || row.shift_code || undefined,
+        shiftCode: effectiveShift,
         machineCondition: isBreakdown ? "breakdown" : "good",
         remarks: finalRemarks || undefined,
+        idempotencyKey: deterministicKey,
       });
 
       if (res.success) {
@@ -421,6 +427,7 @@ export function AssistedShiftEntryModal({
       const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
       toast("error", "Submission Error", msg);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

@@ -16,7 +16,6 @@ import {
   Animated,
   Easing,
   Platform,
-  Alert,
   Modal,
 } from 'react-native';
 import {
@@ -27,6 +26,11 @@ import {
   type FilterOption,
   HighlightText,
   Text,
+  ConfirmDialog,
+  showToast,
+  EmptyState,
+  ErrorState,
+  SlowNetworkBanner,
 } from '../ui';
 import { SearchInput } from '../ui/SearchInput';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
@@ -116,7 +120,31 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     }
   }, [initialDate]);
 
-  const { data: rows = [], isLoading, refetch } = useTodayShiftMonitor(actorId, selectedDate);
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useTodayShiftMonitor(actorId, selectedDate);
+
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+  const [isSlowDismissed, setIsSlowDismissed] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setIsSlowNetwork(true);
+      }, 7000);
+    } else {
+      setIsSlowNetwork(false);
+      setIsSlowDismissed(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading]);
 
   // Search & Filter State (reusing User Page canonical architecture)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'entered' | 'unassigned' | 'breakdown' | 'maintenance'>('all');
@@ -135,6 +163,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
   const [internalAssignModalOpen, setInternalAssignModalOpen] = useState(false);
   const [assignMachineId, setAssignMachineId] = useState<string | undefined>();
+  const [rowToReactivate, setRowToReactivate] = useState<TodayShiftMonitorRow | null>(null);
+  const [isReactivating, setIsReactivating] = useState(false);
 
   const isAssignModalOpen = isAssignModalOpenProp !== undefined ? isAssignModalOpenProp : internalAssignModalOpen;
 
@@ -181,27 +211,42 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     };
   }, [refetch]);
 
-  const summary = useMemo(() => {
-    const total = rows.length;
-    const entered = rows.filter((r) => r.status === 'entered').length;
-    const pending = rows.filter((r) => r.status === 'pending').length;
-    const unassigned = rows.filter((r) => r.status === 'unassigned').length;
-    return { total, entered, pending, unassigned };
+  // Defensive deduplication by machine_id + shift_code to eliminate duplicate cards on stale cache
+  const deduplicatedRows = useMemo(() => {
+    const seen = new Set<string>();
+    const res: TodayShiftMonitorRow[] = [];
+    for (const item of rows) {
+      const key = `${item.machine_id || item.machine_code || ''}-${item.shift_code || ''}`;
+      if (item.status === 'entered') {
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      res.push(item);
+    }
+    return res;
   }, [rows]);
+
+  const summary = useMemo(() => {
+    const total = deduplicatedRows.length;
+    const entered = deduplicatedRows.filter((r) => r.status === 'entered').length;
+    const pending = deduplicatedRows.filter((r) => r.status === 'pending').length;
+    const unassigned = deduplicatedRows.filter((r) => r.status === 'unassigned').length;
+    return { total, entered, pending, unassigned };
+  }, [deduplicatedRows]);
 
   // Dynamic Shift filter options derived from live roster rows
   const shiftOptions = useMemo<FilterOption[]>(() => {
     const list: FilterOption[] = [{ id: 'all', label: 'All Shifts' }];
-    const shiftCodes = Array.from(new Set(rows.map((r) => r.shift_code).filter(Boolean)));
+    const shiftCodes = Array.from(new Set(deduplicatedRows.map((r) => r.shift_code).filter(Boolean)));
     shiftCodes.sort().forEach((code) => {
-      const sample = rows.find((r) => r.shift_code === code);
+      const sample = deduplicatedRows.find((r) => r.shift_code === code);
       list.push({
         id: code as string,
         label: sample?.shift_name || `Shift ${code}`,
       });
     });
     return list;
-  }, [rows]);
+  }, [deduplicatedRows]);
 
   const dateOptions = useMemo<FilterOption[]>(() => {
     const options: FilterOption[] = [];
@@ -247,7 +292,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const clientOptions = useMemo<FilterOption[]>(() => {
     const list: FilterOption[] = [{ id: 'all', label: 'All Clients' }];
     const clientMap = new Map<string, string>();
-    rows.forEach((r) => {
+    deduplicatedRows.forEach((r) => {
       const key = r.client_id || (r.client_name ? `name:${r.client_name}` : 'unassigned');
       const name = r.client_name || (r.client_id ? 'Client' : 'Available / Unassigned');
       if (!clientMap.has(key)) {
@@ -260,7 +305,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         list.push({ id, label: name });
       });
     return list;
-  }, [rows]);
+  }, [deduplicatedRows]);
 
   const currentStatusLabel =
     STATUS_FILTER_OPTIONS.find((opt) => opt.id === statusFilter)?.label || 'Status';
@@ -309,44 +354,41 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         row.machine_status === 'under_maintenance';
 
       if (isBreakdown || isMaintenance) {
-        const statusLabel = isBreakdown ? 'Breakdown' : 'Under Maintenance';
-        Alert.alert(
-          `Equipment in ${statusLabel}`,
-          `Machine ${row.machine_code} is currently flagged as ${statusLabel}. Reactivating this machinery will set it to Active status and allow assigning an operator. Proceed?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Mark Active & Assign',
-              onPress: async () => {
-                try {
-                  const { error } = await supabase.rpc('activate_machine_for_assignment', {
-                    p_machine_id: row.machine_id,
-                    p_actor_id: actorId || null,
-                  });
-                  if (error) {
-                    Alert.alert('Activation Failed', error.message);
-                    return;
-                  }
-                  haptics.confirm();
-                  refetch();
-                  handleOpenAssignModal(row.machine_id);
-                } catch (err: any) {
-                  Alert.alert('Activation Error', err?.message || 'Could not reactivate machine');
-                }
-              },
-            },
-          ]
-        );
+        setRowToReactivate(row);
         return;
       }
 
       handleOpenAssignModal(row.machine_id);
     },
-    [actorId, refetch]
+    [handleOpenAssignModal]
   );
 
+  const handleConfirmReactivation = useCallback(async () => {
+    if (!rowToReactivate) return;
+    const row = rowToReactivate;
+    setIsReactivating(true);
+    try {
+      const { error } = await supabase.rpc('activate_machine_for_assignment', {
+        p_machine_id: row.machine_id,
+        p_actor_id: actorId || null,
+      });
+      if (error) {
+        showToast('error', 'Activation Failed', error.message);
+        return;
+      }
+      haptics.confirm();
+      refetch();
+      setRowToReactivate(null);
+      handleOpenAssignModal(row.machine_id);
+    } catch (err: any) {
+      showToast('error', 'Activation Error', err?.message || 'Could not reactivate machine');
+    } finally {
+      setIsReactivating(false);
+    }
+  }, [rowToReactivate, actorId, refetch, handleOpenAssignModal]);
+
   const filtered = useMemo(() => {
-    let r = [...rows];
+    let r = [...deduplicatedRows];
 
     // 1. Status Filter
     if (statusFilter !== 'all') {
@@ -414,7 +456,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     }
 
     return r;
-  }, [rows, statusFilter, shiftFilter, searchQuery, sortBy]);
+  }, [deduplicatedRows, statusFilter, clientFilter, shiftFilter, searchQuery, sortBy]);
 
   const renderFilterPanelContent = () => (
     <View
@@ -611,8 +653,73 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     );
   }
 
+  if (isError && rows.length === 0) {
+    return (
+      <View style={styles.container}>
+        <ErrorState
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+          title="Failed to Load Shift Roster"
+          message="Unable to retrieve today's shift roster from the server. Check your connection and try again."
+          retryLabel="Retry Shift Roster"
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      {/* Slow Network Telemetry Banner */}
+      <SlowNetworkBanner
+        visible={isSlowNetwork && !isSlowDismissed && isLoading}
+        message="Slow network detected. Still retrieving today's shift roster..."
+        onRetry={() => {
+          void refetch();
+        }}
+        onDismiss={() => setIsSlowDismissed(true)}
+        style={{ marginBottom: spacingNumeric.sm }}
+      />
+
+      {/* Ambient Cached Data Warning when background refresh fails */}
+      {isError && rows.length > 0 && (
+        <View
+          style={[
+            styles.cachedErrorBanner,
+            {
+              backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+              borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+            },
+          ]}
+        >
+          <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} />
+          <Text
+            variant="caption"
+            style={[styles.cachedErrorText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}
+          >
+            Displaying cached shift roster. Unable to refresh live status.
+          </Text>
+          <Pressable
+            variant="chip"
+            haptic="tap"
+            hitSlopToMin48
+            onPress={() => {
+              void refetch();
+            }}
+            style={styles.cachedRetryChip}
+          >
+            <RotateCcw size={12} color={isDark ? '#f87171' : '#dc2626'} />
+            <Text
+              variant="caption"
+              style={{ color: isDark ? '#f87171' : '#dc2626' }}
+            >
+              Retry
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Historical Date Notice Banner */}
       {selectedDate !== todayStr && (
         <View
@@ -803,25 +910,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           )}
         </View>
 
-        {/* Expandable Animated Filter Selectors Section */}
+        {/* Expandable Filter Selectors Section */}
         {isWeb ? (
-          <View
-            style={[
-              styles.filterPanelWebContainer,
-              {
-                display: 'grid',
-                gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
-                opacity: filterPanelOpen ? 1 : 0,
-                transition:
-                  'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1)',
-                pointerEvents: filterPanelOpen ? 'auto' : 'none',
-              } as any,
-            ]}
-          >
-            <View style={{ minHeight: 0, overflow: 'hidden' } as any}>
+          filterPanelOpen ? (
+            <View style={styles.filterPanelWebContainer}>
               {renderFilterPanelContent()}
             </View>
-          </View>
+          ) : null
         ) : (
           <Animated.View
             style={[
@@ -842,49 +937,35 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
       {/* 3. ROSTER SHIFT LOG CARDS */}
       {filtered.length === 0 ? (
-        <View
-          style={[
-            styles.emptyCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <AlertCircle size={28} color={theme.colors.mute} />
-          <Text variant="heading" style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-            No Shifts Found
-          </Text>
-          <Text variant="body" style={[styles.emptySubtitle, { color: theme.colors.mute }]}>
-            {searchQuery
-              ? `No matching shifts found for "${searchQuery}". Try changing search or filters.`
-              : statusFilter === 'pending'
-              ? (selectedDate !== todayStr ? `All shifts for ${formatDate(selectedDate)} have been entered!` : 'All operators have submitted their shift logs today!')
-              : (selectedDate !== todayStr ? `No shift records found for ${formatDate(selectedDate)}.` : 'No active shift assignments found for today.')}
-          </Text>
-          {selectedDate !== todayStr ? (
-            <Pressable
-              variant="outline"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setSelectedDate(todayStr)}
-              style={[
-                styles.emptyReturnBtn,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-              ]}
-            >
-              <RotateCcw size={13} color={theme.colors.link} />
-              <Text variant="label" style={{ color: theme.colors.link }}>
-                Return to Today
-              </Text>
-            </Pressable>
-          ) : !searchQuery ? (
-            <Pressable variant="primary" haptic="tap" hitSlopToMin48 onPress={() => handleOpenAssignModal(undefined)} style={[styles.emptyAssignButton, { backgroundColor: theme.colors.link }]}>
-              <UserPlus size={14} color="#ffffff" />
-              <Text variant="label" style={styles.emptyAssignButtonText}>Assign Operator</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        searchQuery.trim() !== '' ? (
+          <EmptyState
+            variant="no-results"
+            title="No Matching Shifts"
+            description={`No shift assignments found matching "${searchQuery}". Try adjusting your keywords or clearing the search.`}
+            actionLabel="Clear Search"
+            onAction={() => setSearchQuery('')}
+          />
+        ) : activeFilterCount > 0 ? (
+          <EmptyState
+            variant="filtered"
+            title="No Shifts for Active Filters"
+            description="No shift assignments match your selected filter criteria. Reset filters to see all shifts."
+            actionLabel="Reset Filters"
+            onAction={handleResetAllFilters}
+          />
+        ) : (
+          <EmptyState
+            variant="empty"
+            title={selectedDate !== todayStr ? `No Shifts on ${formatDate(selectedDate)}` : 'No Shifts Assigned Today'}
+            description={
+              selectedDate !== todayStr
+                ? `No shift records found for ${formatDate(selectedDate)}.`
+                : 'No equipment shifts have been assigned for today.'
+            }
+            actionLabel={selectedDate !== todayStr ? 'Return to Today' : (canEnterLog ? 'Assign Operator' : undefined)}
+            onAction={selectedDate !== todayStr ? () => setSelectedDate(todayStr) : (canEnterLog ? () => handleOpenAssignModal(undefined) : undefined)}
+          />
+        )
       ) : (
         <View style={styles.cardsList}>
           {filtered.map((row, idx) => {
@@ -1286,6 +1367,29 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         }}
       />
 
+      {/* Equipment Reactivation Confirmation Dialog */}
+      <ConfirmDialog
+        visible={Boolean(rowToReactivate)}
+        onClose={() => setRowToReactivate(null)}
+        onConfirm={handleConfirmReactivation}
+        title={
+          rowToReactivate
+            ? `Equipment in ${rowToReactivate.machine_health_status === 'breakdown' ? 'Breakdown' : 'Under Maintenance'}`
+            : 'Equipment Alert'
+        }
+        message={
+          rowToReactivate
+            ? `Machine ${rowToReactivate.machine_code} is currently flagged as ${
+                rowToReactivate.machine_health_status === 'breakdown' ? 'Breakdown' : 'Under Maintenance'
+              }. Reactivating this machinery will set it to Active status and allow assigning an operator. Proceed?`
+            : ''
+        }
+        confirmText="Mark Active & Assign"
+        cancelText="Cancel"
+        variant="warning"
+        isLoading={isReactivating}
+      />
+
       {/* 3-DOT ACTION BOTTOM SHEET MODAL */}
       <Modal
         visible={Boolean(menuRow)}
@@ -1473,9 +1577,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 42,
-    paddingHorizontal: 13,
-    borderRadius: radiusNumeric.full,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
   },
   filterToggleBtnText: {},
@@ -1492,9 +1596,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 42,
-    paddingHorizontal: 11,
-    borderRadius: radiusNumeric.full,
+    height: 38,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
   },
   quickResetBtnText: {},
@@ -1536,7 +1640,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
   badgeChipText: {},
@@ -1764,5 +1868,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+  },
+  cachedErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    marginBottom: spacingNumeric.sm,
+  },
+  cachedErrorText: {
+    flex: 1,
+  },
+  cachedRetryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
   },
 });

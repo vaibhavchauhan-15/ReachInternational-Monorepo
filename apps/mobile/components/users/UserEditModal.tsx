@@ -5,6 +5,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Text, Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable, showToast } from '../ui';
 import { haptics } from '../../lib/haptics';
@@ -42,7 +43,7 @@ export interface UserEditModalProps {
   visible: boolean;
   onClose: () => void;
   user: UserRecord | null;
-  onSuccess: () => void;
+  onSuccess: (updatedFields?: Partial<UserRecord>) => void;
   isSuperAdmin?: boolean;
 }
 
@@ -63,6 +64,8 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   isSuperAdmin = false,
 }) => {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 640;
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -247,25 +250,33 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         }
       }
 
-      // Sync employees directory record if present
-      try {
-        const designation = ALL_ROLES.find((r) => r.value === role)?.label || role;
-        await supabase
-          .from('employees')
-          .update({
-            full_name: fullName.trim(),
-            phone: cleanPhone,
-            designation,
-          })
-          .eq('user_id', user.id);
-      } catch {
-        // ignore
-      }
+      // Note: public.users is the canonical single source of truth for all staff records.
 
       haptics.success();
       notifyUserUpdated(fullName.trim(), role);
       showToast('success', 'Account Updated', `Account details for ${fullName} have been saved successfully.`);
-      onSuccess();
+      const updatedFields: Partial<UserRecord> = {
+        full_name: fullName.trim(),
+        phone: cleanPhone,
+        role,
+        shift_start_time: parsedShift?.startTime || null,
+        shift_end_time: parsedShift?.endTime || null,
+        shift_time: shiftTime.trim() || null,
+        street: street.trim() || null,
+        address: street.trim() || null,
+        monthly_salary: sal,
+        city: city.trim(),
+        district: district.trim(),
+        state: stateName.trim(),
+        state_id: stateId || null,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLic,
+        supervisor_id: primarySupervisorId,
+        supervisor: primarySupervisorId
+          ? supervisors.find((s) => s.id === primarySupervisorId) || user.supervisor
+          : null,
+      };
+      onSuccess(updatedFields);
       onClose();
     } catch (err: any) {
       haptics.error();
@@ -279,7 +290,19 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     <AppModal
       visible={visible}
       onClose={onClose}
-      variant="bottom"
+      variant={isDesktop ? 'center' : 'bottom'}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              maxHeight: '90%',
+              padding: 0,
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : undefined
+      }
       persistent={isLoading}
       testID="user-edit-modal"
     >
@@ -468,10 +491,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
+    borderRadius: radiusNumeric.lg,
     maxHeight: '92%',
     display: 'flex',
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',

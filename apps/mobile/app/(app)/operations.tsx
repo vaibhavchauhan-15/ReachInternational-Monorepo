@@ -4,14 +4,13 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
   Linking,
   Platform,
   StatusBar,
   LayoutAnimation} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle, useToast } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, SearchableSelect, type SelectOption, KPICard, KPIGrid, Text, useTypeStyle, SegmentedToggle, useToast, ConfirmDialog, ErrorState, PermissionDeniedView } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
@@ -30,6 +29,7 @@ import {
 import { MobileOperatorEntryCard } from '../../components/operations/MobileOperatorEntryCard';
 import { MobileOperatorHistoryTab } from '../../components/operations/MobileOperatorHistoryTab';
 import { MobileTodayShiftMonitorTab } from '../../components/operations/MobileTodayShiftMonitorTab';
+import { MobileAssignPersonnelModal } from '../../components/operations/MobileAssignPersonnelModal';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -52,7 +52,6 @@ import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
 import { useScreenSync } from '../../lib/offline';
 import { SyncStatusBadge } from '../../components/offline/SyncStatusBadge';
-import { OfflineCollisionModal } from '../../components/offline/OfflineCollisionModal';
 import { QueuedMutation, MutationStatus } from '../../lib/offline/types';
 import {
   Clock,
@@ -150,7 +149,13 @@ export default function OperationsScreen() {
 
   const isHr = (role || '').toLowerCase() === 'hr';
   const isOperator = (role || '').toLowerCase() === 'operator';
-  const { data: entryContext, isLoading: isEntryLoading } = useOperatorEntryContext(isOperator ? user?.id : undefined);
+  const {
+    data: entryContext,
+    isLoading: isEntryLoading,
+    isError: isEntryError,
+    error: entryError,
+    refetch: refetchEntryContext,
+  } = useOperatorEntryContext(isOperator ? user?.id : undefined);
   // Operator logs count query for history tab badge (100% Web Parity)
   const { data: operatorHistoryLogs } = useOperatorHistoryLogs(
     isOperator ? user?.id : undefined,
@@ -229,8 +234,8 @@ export default function OperationsScreen() {
 
   // Offline Sync State
   const { queue, isSyncing } = useOfflineQueue();
-  const [collisionModalVisible, setCollisionModalVisible] = useState(false);
-  const [collidedLog, setCollidedLog] = useState<HourLogRecord | null>(null);
+  const [logToDelete, setLogToDelete] = useState<HourLogRecord | null>(null);
+  const [isDeletingLog, setIsDeletingLog] = useState(false);
 
   // Operator Fast Entry Modal State
   const [meterModalVisible, setMeterModalVisible] = useState(false);
@@ -269,12 +274,16 @@ export default function OperationsScreen() {
   const {
     data: masterData,
     isLoading: isMasterLoading,
+    isError: isMasterError,
+    error: masterError,
     refetch: refetchMaster,
   } = useOperationsMasterData();
 
   const {
     data: logsData,
     isLoading: isLogsLoading,
+    isError: isLogsError,
+    error: logsError,
     refetch: refetchLogs,
   } = useOperationsLogs();
 
@@ -359,73 +368,73 @@ export default function OperationsScreen() {
     setEditingLogRecord(log);
   }, []);
 
-  const handleDeleteLog = useCallback((log: HourLogRecord) => {
-    if (!isSuperAdmin) {
-      toast('error', 'Permission Denied', 'Only Super Admin is authorized to delete daily running hour logs.');
-      return;
-    }
-    Alert.alert(
-      'Delete Daily Running Hour Log',
-      `Are you sure you want to permanently delete the ${formatDate(log.log_date)} running hour log for ${log.machine?.model || log.machine_code || 'equipment'}? The machine hour meter will be recalculated.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const previousLogs = logs;
-            // 1. Optimistic Cache Patch
-            setLogs((prev) => prev.filter((l) => l.id !== log.id));
-            queryClient.setQueriesData<HourLogRecord[]>(
-              { queryKey: ['operations', 'logs'] },
-              (old) => (old ? old.filter((l) => l.id !== log.id) : [])
-            );
-            if (log.operator_id) {
-              queryClient.setQueriesData<HourLogRecord[]>(
-                { queryKey: ['operator', 'history-logs', log.operator_id] },
-                (old) => (old ? old.filter((l) => l.id !== log.id) : [])
-              );
-            }
-            try {
-              const { error } = await supabase
-                .from('machine_hour_logs')
-                .delete()
-                .eq('id', log.id);
-              if (error) {
-                // Rollback
-                setLogs(previousLogs);
-                queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
-                toast('error', 'Delete Failed', error.message || 'Failed to delete log.');
-                return;
-              }
-              if (log.machine_id) {
-                const { data: latest } = await supabase
-                  .from('machine_hour_logs')
-                  .select('end_meter')
-                  .eq('machine_id', log.machine_id)
-                  .order('log_date', { ascending: false })
-                  .order('end_meter', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (latest && typeof latest.end_meter === 'number') {
-                  await supabase
-                    .from('machines')
-                    .update({ hour_meter: latest.end_meter, updated_at: new Date().toISOString() })
-                    .eq('id', log.machine_id);
-                }
-              }
-              toast('success', 'Daily Log Deleted', `The running hour log for ${log.machine?.model || log.machine_code || 'equipment'} has been deleted.`);
-              refetchLogs();
-            } catch (err: any) {
-              setLogs(previousLogs);
-              queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
-              toast('error', 'Delete Failed', err?.message || 'Failed to delete log.');
-            }
-          },
-        },
-      ]
+  const handleDeleteLog = useCallback(
+    (log: HourLogRecord) => {
+      if (!isSuperAdmin) {
+        toast('error', 'Permission Denied', 'Only Super Admin is authorized to delete daily running hour logs.');
+        return;
+      }
+      setLogToDelete(log);
+    },
+    [isSuperAdmin, toast]
+  );
+
+  const handleConfirmDeleteLog = useCallback(async () => {
+    if (!logToDelete) return;
+    const log = logToDelete;
+    setIsDeletingLog(true);
+    const previousLogs = logs;
+    // 1. Optimistic Cache Patch
+    setLogs((prev) => prev.filter((l) => l.id !== log.id));
+    queryClient.setQueriesData<HourLogRecord[]>(
+      { queryKey: ['operations', 'logs'] },
+      (old) => (old ? old.filter((l) => l.id !== log.id) : [])
     );
-  }, [refetchLogs, isSuperAdmin, logs, queryClient]);
+    if (log.operator_id) {
+      queryClient.setQueriesData<HourLogRecord[]>(
+        { queryKey: ['operator', 'history-logs', log.operator_id] },
+        (old) => (old ? old.filter((l) => l.id !== log.id) : [])
+      );
+    }
+    try {
+      const { error } = await supabase
+        .from('machine_hour_logs')
+        .delete()
+        .eq('id', log.id);
+      if (error) {
+        // Rollback
+        setLogs(previousLogs);
+        queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
+        toast('error', 'Delete Failed', error.message || 'Failed to delete log.');
+        return;
+      }
+      if (log.machine_id) {
+        const { data: latest } = await supabase
+          .from('machine_hour_logs')
+          .select('end_meter')
+          .eq('machine_id', log.machine_id)
+          .order('log_date', { ascending: false })
+          .order('end_meter', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latest && typeof latest.end_meter === 'number') {
+          await supabase
+            .from('machines')
+            .update({ hour_meter: latest.end_meter, updated_at: new Date().toISOString() })
+            .eq('id', log.machine_id);
+        }
+      }
+      toast('success', 'Daily Log Deleted', `The running hour log for ${log.machine?.model || log.machine_code || 'equipment'} has been deleted.`);
+      setLogToDelete(null);
+      refetchLogs();
+    } catch (err: any) {
+      setLogs(previousLogs);
+      queryClient.setQueriesData({ queryKey: ['operations', 'logs'] }, previousLogs);
+      toast('error', 'Delete Failed', err?.message || 'Failed to delete log.');
+    } finally {
+      setIsDeletingLog(false);
+    }
+  }, [logToDelete, logs, queryClient, refetchLogs, toast]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -822,6 +831,9 @@ export default function OperationsScreen() {
           <MobileOperatorEntryCard
             entryContext={entryContext}
             isLoading={isEntryLoading}
+            isError={isEntryError}
+            error={entryError}
+            onRetry={refetchEntryContext}
             onSuccess={handleDataRefresh}
             initialShift={typeof params.shift === 'string' ? params.shift : undefined}
           />
@@ -848,8 +860,6 @@ export default function OperationsScreen() {
             }}
             refreshing={refreshing}
             onRefresh={onRefresh}
-            isAssignModalOpen={isAssignModalOpen}
-            onCloseAssignModal={() => setIsAssignModalOpen(false)}
           />
         </ScrollView>
       )}
@@ -1283,6 +1293,36 @@ export default function OperationsScreen() {
           }}
         />
       )}
+
+      {/* 5. GLOBAL ASSIGN PERSONNEL MODAL (ACCESSIBLE FROM 3-DOT MENU ACROSS ALL TABS) */}
+      <MobileAssignPersonnelModal
+        visible={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['operations-today-shift-monitor'] });
+          refetchMaster();
+          refetchLogs();
+        }}
+      />
+
+      {/* Delete Daily Running Hour Log Confirmation Dialog */}
+      <ConfirmDialog
+        visible={Boolean(logToDelete)}
+        onClose={() => setLogToDelete(null)}
+        onConfirm={handleConfirmDeleteLog}
+        title="Delete Daily Running Hour Log"
+        message={
+          logToDelete
+            ? `Are you sure you want to permanently delete the ${formatDate(logToDelete.log_date)} running hour log for ${
+                logToDelete.machine?.model || logToDelete.machine_code || 'equipment'
+              }? The machine hour meter will be recalculated.`
+            : ''
+        }
+        confirmText="Yes, Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingLog}
+      />
     </View>
   );
 }
@@ -1326,7 +1366,11 @@ const styles = StyleSheet.create({
     flex: 1 },
   contentContainer: {
     padding: spacingNumeric.md,
-    paddingBottom: 110 },
+    paddingBottom: 110,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+  },
   conflictBanner: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,

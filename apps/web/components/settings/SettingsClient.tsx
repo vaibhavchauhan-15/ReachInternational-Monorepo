@@ -29,6 +29,7 @@ interface NotificationPreferences {
   shiftReminders: boolean;
   breakdownAlerts: boolean;
   assignmentAlerts: boolean;
+  overtimeAlerts: boolean;
   logSubmissions: boolean;
 }
 
@@ -36,6 +37,7 @@ const DEFAULT_NOTIFS: NotificationPreferences = {
   shiftReminders: true,
   breakdownAlerts: true,
   assignmentAlerts: true,
+  overtimeAlerts: true,
   logSubmissions: true,
 };
 
@@ -277,6 +279,14 @@ export function SettingsClient({
                   description="Notifications when machines or operators are updated in your roster"
                   checked={notifs.assignmentAlerts}
                   onChange={(e) => handleNotifToggle("assignmentAlerts", e.target.checked)}
+                />
+              </div>
+              <div className="border-t border-[var(--color-hairline)] pt-3">
+                <Switch
+                  label="Overtime Authorization Alerts"
+                  description="Instant alerts for overtime authorizations and approval deadlines"
+                  checked={notifs.overtimeAlerts}
+                  onChange={(e) => handleNotifToggle("overtimeAlerts", e.target.checked)}
                 />
               </div>
               <div className="border-t border-[var(--color-hairline)] pt-3">

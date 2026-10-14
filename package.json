@@ -24,7 +24,8 @@
     "image-size": ">=2.0.3",
     "postcss": ">=8.5.23",
     "uuid": ">=11.1.1",
-    "@xmldom/xmldom": ">=0.9.12"
+    "@xmldom/xmldom": ">=0.9.12",
+    "@babel/generator": "^7.29.8"
   },
   "packageManager": "pnpm@11.21.0"
 }

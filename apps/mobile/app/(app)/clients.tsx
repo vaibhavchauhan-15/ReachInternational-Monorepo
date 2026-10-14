@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast } from '../../components/ui';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from '../../components/ui/icon';
 import { haptics } from '../../lib/haptics';
@@ -68,48 +68,6 @@ interface ClientItem {
   site_count?: number;
 }
 
-const INITIAL_CLIENTS: ClientItem[] = [
-  {
-    id: 'cli-001',
-    code: 'CLI-0001',
-    company_name: 'Metro Construction Corp',
-    contact_person: 'Rajesh Sharma',
-    phone: '+91 98765 43210',
-    gstin: '07AAAAA0000A1Z5',
-    pan_number: 'ABCDE1234F',
-    address: 'Plot 12, Industrial Area Phase 2',
-    city: 'Delhi',
-    district: 'New Delhi',
-    state: 'Delhi',
-    status: 'active',
-  },
-  {
-    id: 'cli-002',
-    code: 'CLI-0002',
-    company_name: 'ABC Infrastructure Ltd',
-    contact_person: 'Suresh Kumar',
-    phone: '+91 98123 45678',
-    gstin: '06BBBBB0000B1Z6',
-    address: 'Sector 34, Cyber City Phase 1',
-    city: 'Gurgaon',
-    district: 'Gurugram',
-    state: 'Haryana',
-    status: 'active',
-  },
-  {
-    id: 'cli-003',
-    code: 'CLI-0003',
-    company_name: 'Global Logistics Hub',
-    contact_person: 'Anil Patel',
-    phone: '+91 99887 76655',
-    address: 'Plot 9, Logistics Park, Ecotech 3',
-    city: 'Noida',
-    district: 'Gautam Buddha Nagar',
-    state: 'Uttar Pradesh',
-    status: 'inactive',
-  },
-];
-
 interface MobileQueryCacheEntry {
   clients: ClientItem[];
   total: number;
@@ -130,19 +88,25 @@ export default function ClientsScreen() {
   const normalizedRole = (role || '').toLowerCase();
   const canAccessClients = ['super_admin', 'admin', 'manager'].includes(normalizedRole);
 
-  useEffect(() => {
-    if (role && !canAccessClients) {
-      router.replace('/dashboard');
-    }
-  }, [role, canAccessClients, router]);
-
   if (role && !canAccessClients) {
-    return null;
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader title="Client Accounts" showBack={false} />
+        <PermissionDeniedView
+          featureName="Client Management"
+          currentRole={role}
+          requiredRoles={['super_admin', 'admin', 'manager']}
+        />
+      </View>
+    );
   }
 
-  const [clients, setClients] = useState<ClientItem[]>(INITIAL_CLIENTS);
-  const [totalCount, setTotalCount] = useState<number>(INITIAL_CLIENTS.length);
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<ClientItem | null>(null);
+  const [isDeletingClient, setIsDeletingClient] = useState<boolean>(false);
   // Persistent search, filters, and sorting (auto-resets page to 1 on initial mount)
   const {
     search: debouncedSearch,
@@ -277,11 +241,11 @@ export default function ClientsScreen() {
     cities: number;
     locationsCovered: number;
   }>({
-    total: INITIAL_CLIENTS.length,
-    active: INITIAL_CLIENTS.filter((c) => c.status === 'active').length,
-    inactive: INITIAL_CLIENTS.filter((c) => c.status === 'inactive').length,
-    cities: 3,
-    locationsCovered: 3,
+    total: 0,
+    active: 0,
+    inactive: 0,
+    cities: 0,
+    locationsCovered: 0,
   });
 
 
@@ -363,6 +327,7 @@ export default function ClientsScreen() {
       const seq = ++querySeqRef.current;
       try {
         setIsLoading(true);
+        setFetchError(null);
         // C10 Lean projection: strictly returns CODE, COMPANY & TAX, CONTACT PERSON, PHONE, SITE LOCATION, STATUS
         // Absolutely zero relations (machines, logs, assignments, audits)
         const CLIENT_PROJECTION =
@@ -456,11 +421,12 @@ export default function ClientsScreen() {
           setClients([]);
           setTotalCount(0);
         }
-      } catch (err) {
+      } catch (err: any) {
         if (seq !== querySeqRef.current) return;
-        console.warn('Clients server query error, falling back to mock:', err);
-        setClients(INITIAL_CLIENTS);
-        setTotalCount(INITIAL_CLIENTS.length);
+        console.warn('Clients server query error:', err);
+        setFetchError(err instanceof Error ? err : new Error(err?.message || 'Failed to fetch client records.'));
+        setClients([]);
+        setTotalCount(0);
       } finally {
         if (seq === querySeqRef.current) {
           setIsLoading(false);
@@ -803,39 +769,40 @@ export default function ClientsScreen() {
   };
 
   const handleSoftDelete = (client: ClientItem) => {
-    Alert.alert(
-      'Soft Delete Client?',
-      `Are you sure you want to soft delete "${client.company_name}"? Historical logs will remain 100% intact.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Soft Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const prevClients = clients;
-            mobileQueryCacheRef.current.clear();
-            setClients((prev) =>
-              prev.map((c) => (c.id === client.id ? { ...c, status: 'inactive', deleted_at: new Date().toISOString() } : c))
-            );
-            try {
-              const { error } = await supabase
-                .from('clients')
-                .update({ status: 'inactive', deleted_at: new Date().toISOString() })
-                .eq('id', client.id);
-              if (error) {
-                setClients(prevClients);
-                toast('error', 'Error', error.message || 'Failed to soft delete client.');
-              } else {
-                toast('success', 'Client Archived', `"${client.company_name}" has been soft deleted.`);
-              }
-            } catch (err: any) {
-              setClients(prevClients);
-              toast('error', 'Error', err?.message || 'Failed to soft delete client.');
-            }
-          },
-        },
-      ]
+    haptics.warning();
+    setClientToDelete(client);
+  };
+
+  const handleConfirmSoftDelete = async () => {
+    if (!clientToDelete) return;
+    const client = clientToDelete;
+    setIsDeletingClient(true);
+    const prevClients = clients;
+    mobileQueryCacheRef.current.clear();
+    setClients((prev) =>
+      prev.map((c) => (c.id === client.id ? { ...c, status: 'inactive', deleted_at: new Date().toISOString() } : c))
     );
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({ status: 'inactive', deleted_at: new Date().toISOString() })
+        .eq('id', client.id);
+      if (error) {
+        setClients(prevClients);
+        haptics.reject();
+        toast('error', 'Error', error.message || 'Failed to soft delete client.');
+      } else {
+        haptics.confirm();
+        toast('success', 'Client Archived', `"${client.company_name}" has been soft deleted.`);
+        setClientToDelete(null);
+      }
+    } catch (err: any) {
+      setClients(prevClients);
+      haptics.reject();
+      toast('error', 'Error', err?.message || 'Failed to soft delete client.');
+    } finally {
+      setIsDeletingClient(false);
+    }
   };
 
   // C11 Client Detail Handlers
@@ -1280,11 +1247,39 @@ export default function ClientsScreen() {
         <View style={styles.listContainer}>
           {isLoading || isSearching ? (
             <ClientListSkeleton count={4} />
+          ) : fetchError ? (
+            <ErrorState
+              error={fetchError}
+              onRetry={onRefresh}
+              retryLabel="Retry Loading Clients"
+            />
           ) : paginatedClients.length === 0 ? (
-            <Card style={styles.emptyCard}>
-              <Building2 size={32} color={theme.colors.mute} style={{ marginBottom: 8 }} />
-              <Text style={[styles.emptyText, { color: theme.colors.mute }]}>No client records found.</Text>
-            </Card>
+            debouncedSearch.trim() ? (
+              <EmptyState
+                variant="no-results"
+                title="No Clients Found"
+                description={`No client records matched "${debouncedSearch.trim()}".`}
+                actionLabel="Clear Search"
+                onAction={() => handleSearchChange('')}
+              />
+            ) : activeFilter !== 'all' ? (
+              <EmptyState
+                variant="filtered"
+                title="No Matching Clients"
+                description="No clients found matching the selected status filter."
+                actionLabel="Show All Clients"
+                onAction={() => handleFilterChange('all')}
+              />
+            ) : (
+              <EmptyState
+                title="No Clients Registered"
+                description="No clients are currently registered in your organization."
+                actionLabel="Refresh Directory"
+                onAction={() => {
+                  void onRefresh();
+                }}
+              />
+            )
           ) : (
             paginatedClients.map((item) => (
               <MobileClientCard
@@ -2276,6 +2271,18 @@ export default function ClientsScreen() {
             </View>
         </View>
       </AppModal>
+
+      <ConfirmDialog
+        visible={Boolean(clientToDelete)}
+        onClose={() => setClientToDelete(null)}
+        onConfirm={handleConfirmSoftDelete}
+        title={`Soft Delete "${clientToDelete?.company_name || 'Client'}"?`}
+        message={`Are you sure you want to archive "${clientToDelete?.company_name || 'this client'}"? Historical logs will remain 100% intact.`}
+        confirmText="Soft Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingClient}
+      />
     </View>
   );
 }

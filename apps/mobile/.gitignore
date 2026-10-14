@@ -1,0 +1,23 @@
+# Android local machine configuration & build artifacts
+local.properties
+**/local.properties
+*.local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/debug/
+android/app/release/
+
+# iOS local build artifacts
+ios/Pods/
+ios/build/
+**/ios/Pods/
+**/ios/build/
+
+# Local Environment & Logs
+.env*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

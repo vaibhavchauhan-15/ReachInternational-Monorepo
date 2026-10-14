@@ -1806,7 +1806,11 @@ export function UserDetailClient({
         isOpen={confirmToggleOpen}
         onClose={() => setConfirmToggleOpen(false)}
         title={user.status === "active" ? "Deactivate User Account" : "Activate User Account"}
-        description={`Are you sure you want to mark ${user.full_name} as ${user.status === "active" ? "inactive" : "active"}?`}
+        description={
+          user.status === "active"
+            ? `Are you sure you want to deactivate ${user.full_name}? The user will immediately lose access to the system and cannot log in. Any active machinery assignments will be ended to prevent scheduling conflicts, but all historical shift logs, attendance records, and data will remain preserved.`
+            : `Are you sure you want to activate ${user.full_name}? The user will regain system login access, be able to operate machinery, and be eligible for shift assignments.`
+        }
         confirmLabel={user.status === "active" ? "Yes, Deactivate" : "Yes, Activate"}
         cancelLabel="Cancel"
         onConfirm={handleExecuteToggleStatus}

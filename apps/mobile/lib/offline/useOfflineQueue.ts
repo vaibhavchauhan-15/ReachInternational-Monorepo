@@ -23,6 +23,13 @@ export interface UseOfflineQueueResult {
   removeMutation: (id: string) => Promise<void>;
   updateMutation: (id: string, updates: Partial<QueuedMutation>) => Promise<void>;
   clearQueue: () => Promise<void>;
+  checkDuplicateShiftLog: (params: {
+    machineId?: string;
+    operatorId?: string;
+    logDate?: string;
+    shiftCode?: string;
+    existingLogs?: Array<{ machine_id?: string; operator_id?: string; log_date?: string; shift_code?: string; shift?: string }>;
+  }) => { isDuplicate: boolean; reason?: string; existingItem?: QueuedMutation };
 }
 
 export function useOfflineQueue(): UseOfflineQueueResult {
@@ -62,6 +69,19 @@ export function useOfflineQueue(): UseOfflineQueueResult {
     await offlineQueueManager.clearQueue();
   }, []);
 
+  const checkDuplicateShiftLog = useCallback(
+    (params: {
+      machineId?: string;
+      operatorId?: string;
+      logDate?: string;
+      shiftCode?: string;
+      existingLogs?: Array<{ machine_id?: string; operator_id?: string; log_date?: string; shift_code?: string; shift?: string }>;
+    }) => {
+      return offlineQueueManager.checkDuplicateShiftLog(params);
+    },
+    []
+  );
+
   return {
     queue: state.queue,
     pendingCount: state.pendingCount,
@@ -74,5 +94,6 @@ export function useOfflineQueue(): UseOfflineQueueResult {
     removeMutation,
     updateMutation,
     clearQueue,
+    checkDuplicateShiftLog,
   };
 }

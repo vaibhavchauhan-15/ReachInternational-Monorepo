@@ -22,13 +22,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  } from 'react-native';
+  useWindowDimensions,
+} from 'react-native';
 import { useTheme, ShiftCardSelector, SearchInput, Text, AppModal } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
 import { supabase } from '../../lib/supabase';
 import { broadcastMobileAssignmentChanged } from '../../lib/realtime-roster';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { useAuth } from '../../lib/auth/useAuth';
+import { isManagerOrAbove } from '@reachinternational/permissions';
 import {
   X,
   Check,
@@ -43,6 +46,8 @@ import {
   Search,
   Phone,
   Mail,
+  Shield,
+  Lock,
 } from '../ui/icon';
 import {
   formatTo12Hour,
@@ -54,8 +59,16 @@ export interface MobileAssignPersonnelModalProps {
   onClose: () => void;
   initialMachineId?: string;
   initialOperatorId?: string;
+  initialSupervisorId?: string;
+  targetUser?: {
+    id: string;
+    full_name?: string;
+    role?: string;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
   userRole?: string;
-  onSuccess?: () => void;
+  onSuccess?: (assignedOperators?: OperatorAssignmentRow[]) => void;
 }
 
 export interface ClientShiftItem {
@@ -116,14 +129,38 @@ function doRangesOverlap(rangesA: Array<[number, number]>, rangesB: Array<[numbe
   return false;
 }
 
+function to24HourTime(str?: string | null): string {
+  if (!str) return '06:00:00';
+  const mins = parseTimeToMinutes(str);
+  if (mins === null) {
+    const trimmed = str.trim();
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      return trimmed.length === 5 ? `${trimmed}:00` : trimmed;
+    }
+    return str;
+  }
+  const h = Math.floor(mins / 60).toString().padStart(2, '0');
+  const m = (mins % 60).toString().padStart(2, '0');
+  return `${h}:${m}:00`;
+}
+
 export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProps> = ({
   visible,
   onClose,
   initialMachineId,
   initialOperatorId,
+  initialSupervisorId,
+  targetUser,
+  userRole,
   onSuccess,
 }) => {
   const { theme, isDark } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 640;
+  const { user: authUser, role: authRole } = useAuth();
+  const effectiveRole = (userRole || authRole || '').toLowerCase();
+  const isSupervisorRole = effectiveRole === 'supervisor';
+  const canEditSupervisor = (!effectiveRole || isManagerOrAbove(effectiveRole as any)) && !isSupervisorRole;
 
   // Data pools
   const [machines, setMachines] = useState<any[]>([]);
@@ -148,6 +185,40 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const [machineSearchQuery, setMachineSearchQuery] = useState('');
   const [supervisorSearchQuery, setSupervisorSearchQuery] = useState('');
   const [operatorSearchQuery, setOperatorSearchQuery] = useState('');
+
+  // Debounced search queries for smooth typing & zero stutter
+  const [debouncedMachineSearch, setDebouncedMachineSearch] = useState('');
+  const [debouncedSupervisorSearch, setDebouncedSupervisorSearch] = useState('');
+  const [debouncedOperatorSearch, setDebouncedOperatorSearch] = useState('');
+
+  // Pagination / lazy display slice limits
+  const [visibleMachineLimit, setVisibleMachineLimit] = useState(25);
+  const [visibleSupervisorLimit, setVisibleSupervisorLimit] = useState(25);
+  const [visibleOperatorLimit, setVisibleOperatorLimit] = useState(25);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedMachineSearch(machineSearchQuery);
+      setVisibleMachineLimit(25);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [machineSearchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSupervisorSearch(supervisorSearchQuery);
+      setVisibleSupervisorLimit(25);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [supervisorSearchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedOperatorSearch(operatorSearchQuery);
+      setVisibleOperatorLimit(25);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [operatorSearchQuery]);
 
   // Submission state
   const [isSaving, setIsSaving] = useState(false);
@@ -201,12 +272,19 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     setLoadingData(true);
     setSubmitError(null);
 
+    // Build machines query respecting supervisor role scope
+    let machQuery = supabase
+      .from('machines')
+      .select('id, machine_id, model, serial_number, client_id, supervisor_ids, current_supervisor_id, health_status, status, client:clients(id, company_name)')
+      .order('machine_id', { ascending: true });
+
+    if (isSupervisorRole && authUser?.id) {
+      machQuery = machQuery.or(`current_supervisor_id.eq.${authUser.id},supervisor_ids.cs.{${authUser.id}}`);
+    }
+
     Promise.all([
-      // 1. Fleet machines
-      supabase
-        .from('machines')
-        .select('id, machine_id, model, serial_number, client_id, supervisor_ids, current_supervisor_id, health_status, status, client:clients(id, company_name)')
-        .order('machine_id', { ascending: true }),
+      // 1. Fleet machines (scoped if supervisor)
+      machQuery,
 
       // 2. Supervisors / Managers / Admins
       supabase
@@ -224,21 +302,33 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         .neq('status', 'inactive')
         .order('full_name', { ascending: true }),
 
-      // 4. Fleet active assignments
+      // 4. Fleet active assignments (including machine info for descriptive conflict banners)
       supabase
         .from('operator_machine_assignments')
-        .select('id, operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, operator:users(id, full_name, phone, email)')
+        .select('id, operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, operator:users(id, full_name, phone, email), machine:machines(id, machine_id, model)')
         .eq('is_active', true),
     ])
       .then(([mRes, sRes, oRes, assRes]) => {
         if (!active) return;
         const machList = mRes.data || [];
+        const flAssignments = assRes.data || [];
         setMachines(machList);
         setAllSupervisors((sRes.data as SupervisorItem[]) || []);
         setAllOperators(oRes.data || []);
-        setFleetAssignments(assRes.data || []);
+        setFleetAssignments(flAssignments);
 
-        const targetMachId = initialMachineId || selectedMachineId || machList[0]?.id || '';
+        // Resolve target machine ID:
+        // Priority: initialMachineId -> machine where targetUser is already assigned -> selectedMachineId -> first fleet machine
+        let targetMachId = initialMachineId;
+        if (!targetMachId && targetUser?.id) {
+          const targetAss = flAssignments.find((a: any) => a.operator_id === targetUser.id);
+          if (targetAss?.machine_id && machList.some((m) => m.id === targetAss.machine_id)) {
+            targetMachId = targetAss.machine_id;
+          }
+        }
+        if (!targetMachId) {
+          targetMachId = selectedMachineId || machList[0]?.id || '';
+        }
         if (targetMachId) {
           setSelectedMachineId(targetMachId);
         }
@@ -253,7 +343,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     return () => {
       active = false;
     };
-  }, [visible, initialMachineId]);
+  }, [visible, initialMachineId, isSupervisorRole, authUser?.id, targetUser?.id]);
 
   // Active Machine resolution
   const activeMachine = useMemo(() => {
@@ -310,10 +400,14 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
     // 1. Sync supervisor IDs from machine
     const supIds: string[] = Array.isArray(activeMachine.supervisor_ids)
-      ? activeMachine.supervisor_ids
+      ? [...activeMachine.supervisor_ids]
       : activeMachine.current_supervisor_id
       ? [activeMachine.current_supervisor_id]
       : [];
+    const effectiveSupId = targetUser?.role === 'supervisor' ? targetUser.id : initialSupervisorId;
+    if (effectiveSupId && !supIds.includes(effectiveSupId)) {
+      supIds.push(effectiveSupId);
+    }
     setSelectedSupervisorIds(supIds);
 
     // 2. Sync active operator assignments for this machine
@@ -342,15 +436,16 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           shiftEndTime: formatTo12Hour(r.shift_end_time) || r.shift_end_time || '02:00 PM',
         }));
 
-        // If an initialOperatorId was passed and is not already in the list, pre-add if capacity permits
-        if (initialOperatorId && !mapped.some((m) => m.operatorId === initialOperatorId) && mapped.length < 3) {
-          const opObj = allOperators.find((u) => u.id === initialOperatorId);
+        // If targetUser or initialOperatorId was passed and is not already in the list, pre-add if capacity permits
+        const effectiveOpId = targetUser?.role === 'operator' ? targetUser.id : initialOperatorId;
+        if (effectiveOpId && !mapped.some((m) => m.operatorId === effectiveOpId) && mapped.length < 3) {
+          const opObj = allOperators.find((u) => u.id === effectiveOpId) || (targetUser?.id === effectiveOpId ? targetUser : null);
           if (opObj) {
             const usedCodes = new Set(mapped.map((m) => m.shiftCode.toUpperCase()));
             const nextShift = clientShifts.find((s) => !usedCodes.has(s.code.toUpperCase())) || clientShifts[0] || DEFAULT_SHIFTS[0];
             mapped.push({
               operatorId: opObj.id,
-              operatorName: opObj.full_name,
+              operatorName: opObj.full_name || 'Operator',
               phone: opObj.phone || null,
               email: opObj.email || null,
               shiftCode: nextShift.code.toUpperCase(),
@@ -371,7 +466,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     return () => {
       active = false;
     };
-  }, [visible, activeMachine?.id, allOperators, initialOperatorId, clientShifts]);
+  }, [visible, activeMachine?.id, allOperators, initialOperatorId, initialSupervisorId, targetUser, clientShifts]);
 
   // Compute next available shift code
   const nextAvailableShift = useMemo((): ClientShiftItem => {
@@ -381,7 +476,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
   // Filtered Machines for Machinery Dropdown
   const filteredMachines = useMemo(() => {
-    const q = machineSearchQuery.trim().toLowerCase();
+    const q = debouncedMachineSearch.trim().toLowerCase();
     if (!q) return machines;
     return machines.filter((m) => {
       const codeMatch = (m.machine_id || '').toLowerCase().includes(q);
@@ -390,11 +485,15 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       const clientMatch = (m.client?.company_name || '').toLowerCase().includes(q);
       return codeMatch || modelMatch || serialMatch || clientMatch;
     });
-  }, [machines, machineSearchQuery]);
+  }, [machines, debouncedMachineSearch]);
+
+  const displayedMachines = useMemo(() => {
+    return filteredMachines.slice(0, visibleMachineLimit);
+  }, [filteredMachines, visibleMachineLimit]);
 
   // Filtered Supervisors for Supervisor Dropdown
   const filteredSupervisors = useMemo(() => {
-    const q = supervisorSearchQuery.trim().toLowerCase();
+    const q = debouncedSupervisorSearch.trim().toLowerCase();
     if (!q) return allSupervisors;
     return allSupervisors.filter((s) => {
       const nameMatch = (s.full_name || '').toLowerCase().includes(q);
@@ -403,11 +502,15 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       const roleMatch = (s.role || '').toLowerCase().includes(q);
       return nameMatch || phoneMatch || emailMatch || roleMatch;
     });
-  }, [allSupervisors, supervisorSearchQuery]);
+  }, [allSupervisors, debouncedSupervisorSearch]);
+
+  const displayedSupervisors = useMemo(() => {
+    return filteredSupervisors.slice(0, visibleSupervisorLimit);
+  }, [filteredSupervisors, visibleSupervisorLimit]);
 
   // Filtered Operators for "+ Assign Operator" list
   const availableOperators = useMemo(() => {
-    const q = operatorSearchQuery.trim().toLowerCase();
+    const q = debouncedOperatorSearch.trim().toLowerCase();
     return allOperators.filter((op) => {
       // Exclude if already assigned to all 3 shifts or maximum fleet capacity
       const opFleetAssignments = fleetAssignments.filter((a) => a.operator_id === op.id);
@@ -419,11 +522,16 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       const phoneMatch = (op.phone || '').toLowerCase().includes(q);
       return nameMatch || phoneMatch;
     });
-  }, [allOperators, fleetAssignments, machineOperators, operatorSearchQuery]);
+  }, [allOperators, fleetAssignments, machineOperators, debouncedOperatorSearch]);
+
+  const displayedOperators = useMemo(() => {
+    return availableOperators.slice(0, visibleOperatorLimit);
+  }, [availableOperators, visibleOperatorLimit]);
 
   // Handlers for Supervisor Selection
   const toggleSupervisor = (supId: string) => {
     triggerHaptic('selection');
+    setSubmitError(null);
     setSelectedSupervisorIds((prev) =>
       prev.includes(supId) ? prev.filter((id) => id !== supId) : [...prev, supId]
     );
@@ -431,22 +539,26 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
   const removeSupervisor = (supId: string) => {
     triggerHaptic('impact');
+    setSubmitError(null);
     setSelectedSupervisorIds((prev) => prev.filter((id) => id !== supId));
   };
 
   const clearAllSupervisors = () => {
     triggerHaptic('impact');
+    setSubmitError(null);
     setSelectedSupervisorIds([]);
   };
 
   const deselectAllSupervisors = () => {
     triggerHaptic('selection');
+    setSubmitError(null);
     setSelectedSupervisorIds([]);
   };
 
   // Handlers for Operator Roster
   const handleAddOperator = (op: any) => {
     triggerHaptic('selection');
+    setSubmitError(null);
     if (machineOperators.length >= 3) return;
 
     const shift = nextAvailableShift;
@@ -471,6 +583,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 
   const handleRemoveOperator = (index: number) => {
     triggerHaptic('impact');
+    setSubmitError(null);
     setMachineOperators((prev) => prev.filter((_, idx) => idx !== index));
   };
 
@@ -479,21 +592,25 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     shift: { code: string; start_time?: string; end_time?: string }
   ) => {
     triggerHaptic('selection');
+    setSubmitError(null);
     setMachineOperators((prev) => {
       const copy = [...prev];
       copy[index] = {
         ...copy[index],
         shiftCode: shift.code.toUpperCase(),
-        shiftStartTime: shift.start_time || '06:00:00',
-        shiftEndTime: shift.end_time || '14:00:00',
+        shiftStartTime: shift.start_time || '06:00 AM',
+        shiftEndTime: shift.end_time || '02:00 PM',
       };
       return copy;
     });
   };
 
   // Save Assignments
+  const savingRef = useRef(false);
   const handleSaveAssignments = async () => {
     if (!activeMachine?.id) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     triggerHaptic('selection');
     setSubmitError(null);
 
@@ -502,7 +619,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     const duplicateShifts = shiftCodes.filter((item, index) => shiftCodes.indexOf(item) !== index);
     if (duplicateShifts.length > 0) {
       triggerHaptic('error');
-      setSubmitError(`Shift ${duplicateShifts[0]} is assigned to multiple operators. Each operator must have a distinct shift.`);
+      setSubmitError(`Shift ${duplicateShifts[0]} is assigned to multiple operators on this equipment. Each operator must have a distinct shift.`);
+      savingRef.current = false;
       return;
     }
 
@@ -514,6 +632,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       if (otherActive.length >= 3) {
         triggerHaptic('error');
         setSubmitError(`${op.operatorName} has already reached the maximum limit of 3 active shifts (24h) across the fleet.`);
+        savingRef.current = false;
         return;
       }
       const opRanges = shiftToMinuteRanges(op.shiftStartTime, op.shiftEndTime);
@@ -521,7 +640,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         const otherRanges = shiftToMinuteRanges(other.shift_start_time, other.shift_end_time);
         if (doRangesOverlap(opRanges, otherRanges)) {
           triggerHaptic('error');
-          setSubmitError(`${op.operatorName} is already assigned to another equipment during Shift ${op.shiftCode} (${formatTo12Hour(op.shiftStartTime) || op.shiftStartTime} – ${formatTo12Hour(op.shiftEndTime) || op.shiftEndTime}).`);
+          const otherMachCode = other.machine?.machine_id || 'another equipment';
+          const opTimes = `${formatTo12Hour(op.shiftStartTime) || op.shiftStartTime} – ${formatTo12Hour(op.shiftEndTime) || op.shiftEndTime}`;
+          const otherTimes = `${formatTo12Hour(other.shift_start_time) || other.shift_start_time} – ${formatTo12Hour(other.shift_end_time) || other.shift_end_time}`;
+          setSubmitError(`${op.operatorName}'s Shift ${op.shiftCode} (${opTimes}) collides with active shift on ${otherMachCode} (${otherTimes}). An operator cannot work overlapping shifts.`);
+          savingRef.current = false;
           return;
         }
       }
@@ -541,12 +664,15 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       );
 
       const machineUpdatePayload: any = {
-        supervisor_ids: selectedSupervisorIds,
-        current_supervisor_id: selectedSupervisorIds[0] || null,
         operator_ids: Array.from(new Set(machineOperators.map((o) => o.operatorId))),
         current_operator_id: machineOperators[0]?.operatorId || null,
         updated_at: new Date().toISOString(),
       };
+
+      if (canEditSupervisor) {
+        machineUpdatePayload.supervisor_ids = selectedSupervisorIds;
+        machineUpdatePayload.current_supervisor_id = selectedSupervisorIds[0] || null;
+      }
 
       if (isNeedsActivation) {
         machineUpdatePayload.health_status = 'active';
@@ -591,8 +717,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           const { error: rpcErr } = await supabase.rpc('assign_operator_machine_atomic', {
             p_machine_id: activeMachine.id,
             p_operator_id: opItem.operatorId,
-            p_shift_start_time: opItem.shiftStartTime,
-            p_shift_end_time: opItem.shiftEndTime,
+            p_shift_start_time: to24HourTime(opItem.shiftStartTime),
+            p_shift_end_time: to24HourTime(opItem.shiftEndTime),
             p_shift_code: opItem.shiftCode,
             p_assigned_by: currentUserId,
             p_notes: 'Assigned via mobile personnel dialog',
@@ -602,6 +728,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
             let msg = rpcErr.message;
             if (rpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
               msg = `${opItem.operatorName} has reached the maximum of 3 active shifts (24h) across the fleet.`;
+            } else if (msg.includes('OVERLAPPING_SHIFT_FOR_OPERATOR') || msg.includes('overlap')) {
+              msg = `${opItem.operatorName}'s shift collides with an existing active assignment across the fleet.`;
             }
             throw new Error(msg);
           }
@@ -617,51 +745,103 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       });
 
       triggerHaptic('success');
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(machineOperators);
       onClose();
     } catch (err: any) {
       triggerHaptic('error');
       let msg = err?.message || 'Failed to save assignments.';
       if (err?.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('3 active shifts')) {
         msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
-      } else if (msg.includes('overlap') || msg.includes('conflict')) {
+      } else if (msg.includes('OVERLAPPING_SHIFT_FOR_OPERATOR') || msg.includes('overlap') || msg.includes('conflict')) {
         msg = 'Shift schedule conflicts with another active assignment for this operator.';
       }
       setSubmitError(msg);
     } finally {
       setIsSaving(false);
+      savingRef.current = false;
     }
   };
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetWrapper}
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
+    >
+      <View
+        style={[
+          styles.drawerContainer,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+          },
+          isDesktop && {
+            borderRadius: radiusNumeric.lg,
+            borderWidth: 1,
+            borderColor: theme.colors.hairline,
+            maxWidth: 580,
+            width: '100%',
+            alignSelf: 'center',
+            overflow: 'hidden',
+          },
+        ]}
       >
-        <View
-          style={[
-            styles.modalCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* HEADER (Screenshot 3 Match)                            */}
-          {/* ═══════════════════════════════════════════════════════ */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-            <View style={styles.headerTitleWrap}>
-              <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
-                Assign Machine Operator
-              </Text>
-            </View>
-
-            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]} accessibilityLabel="Close dialog">
-              <X size={16} color={theme.colors.mute} />
-            </Pressable>
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* HEADER (Clean & Compact)                                */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={styles.headerTitleWrap}>
+            <Text variant="heading" style={[styles.headerTitle, { color: theme.colors.ink }]}>
+              {targetUser
+                ? targetUser.role === 'operator'
+                  ? 'Assign Machine Operator'
+                  : 'Assign Machinery'
+                : 'Assign Machine Operator'}
+            </Text>
+            <Text
+              variant="caption"
+              style={[styles.headerSubtitle, { color: theme.colors.mute }]}
+              numberOfLines={1}
+            >
+              {targetUser?.full_name
+                ? `${targetUser.full_name} • ${(targetUser.role || 'operator').toUpperCase()}`
+                : 'Configure equipment shifts and operators'}
+            </Text>
           </View>
+
+          <Pressable
+            variant="iconButton"
+            haptic="tap"
+            hitSlopToMin48
+            onPress={onClose}
+            style={[
+              styles.closeBtn,
+              {
+                backgroundColor: theme.colors.canvas,
+                borderColor: theme.colors.hairline,
+                borderWidth: 1,
+              },
+            ]}
+            accessibilityLabel="Close dialog"
+          >
+            <X size={16} color={theme.colors.mute} />
+          </Pressable>
+        </View>
 
           {loadingData ? (
             <View style={styles.loadingWrap}>
@@ -781,65 +961,101 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     >
                       {filteredMachines.length === 0 ? (
                         <View style={styles.dropdownEmptyRow}>
-                          <Text style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
-                            No matching machines found
+                          <Search size={16} color={theme.colors.mute} style={{ opacity: 0.6 }} />
+                          <Text variant="caption" style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
+                            {machineSearchQuery ? `No equipment matching "${machineSearchQuery}"` : 'No equipment available'}
                           </Text>
+                          {Boolean(machineSearchQuery) && (
+                            <Pressable
+                              variant="ghost"
+                              haptic="tap"
+                              onPress={() => setMachineSearchQuery('')}
+                              style={{ marginTop: 4, paddingVertical: 4, paddingHorizontal: 8 }}
+                            >
+                              <Text variant="caption" style={{ color: '#0284c7' }}>Clear search</Text>
+                            </Pressable>
+                          )}
                         </View>
                       ) : (
-                        filteredMachines.map((m) => {
-                          const isSelected = m.id === activeMachine?.id;
-                          return (
-                            <Pressable key={m.id} variant="listRow" haptic="select" onPress={() => { setSelectedMachineId(m.id); setIsMachineDropdownOpen(false); setMachineSearchQuery(''); }} style={[styles.machineDropdownItem,
-                                {
-                                  backgroundColor: isSelected
-                                    ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff')
-                                    : theme.colors.canvas,
-                                  borderColor: isSelected
-                                    ? (isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd')
-                                    : theme.colors.hairline,
-                                },
-                              ]}
-                            >
-                              <View style={{ flex: 1, minWidth: 0 }}>
-                                <View style={styles.machineItemTopRow}>
+                        <>
+                          {displayedMachines.map((m) => {
+                            const isSelected = m.id === activeMachine?.id;
+                            return (
+                              <Pressable
+                                key={m.id}
+                                variant="listRow"
+                                haptic="select"
+                                onPress={() => {
+                                  setSelectedMachineId(m.id);
+                                  setIsMachineDropdownOpen(false);
+                                  setMachineSearchQuery('');
+                                  setSubmitError(null);
+                                }}
+                                style={[
+                                  styles.machineDropdownItem,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff')
+                                      : theme.colors.canvas,
+                                    borderColor: isSelected
+                                      ? (isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd')
+                                      : theme.colors.hairline,
+                                  },
+                                ]}
+                              >
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                  <View style={styles.machineItemTopRow}>
+                                    <Text
+                                      style={[
+                                        styles.machineItemModel,
+                                        {
+                                          color: isSelected
+                                            ? '#0284c7'
+                                            : theme.colors.ink,
+                                        },
+                                      ]}
+                                      numberOfLines={1}
+                                    >
+                                      {m.model || 'Equipment'}
+                                    </Text>
+                                    <View style={styles.machineItemCodeBadge}>
+                                      <Text style={styles.machineItemCodeText}>
+                                        {m.machine_id}
+                                      </Text>
+                                    </View>
+                                  </View>
                                   <Text
                                     style={[
-                                      styles.machineItemModel,
-                                      {
-                                        color: isSelected
-                                          ? '#0284c7'
-                                          : theme.colors.ink,
-                                      },
+                                      styles.machineItemSerial,
+                                      { color: theme.colors.mute },
                                     ]}
                                     numberOfLines={1}
                                   >
-                                    {m.model || 'Equipment'}
+                                    S/N: {m.serial_number || 'N/A'}
                                   </Text>
-                                  <View style={styles.machineItemCodeBadge}>
-                                    <Text style={styles.machineItemCodeText}>
-                                      {m.machine_id}
-                                    </Text>
-                                  </View>
                                 </View>
-                                <Text
-                                  style={[
-                                    styles.machineItemSerial,
-                                    { color: theme.colors.mute },
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  S/N: {m.serial_number || 'N/A'}
-                                </Text>
-                              </View>
 
-                              {isSelected && (
-                                <View style={styles.checkIconWrap}>
-                                  <Check size={13} color="#ffffff" />
-                                </View>
-                              )}
+                                {isSelected && (
+                                  <View style={styles.checkIconWrap}>
+                                    <Check size={13} color="#ffffff" />
+                                  </View>
+                                )}
+                              </Pressable>
+                            );
+                          })}
+                          {filteredMachines.length > visibleMachineLimit && (
+                            <Pressable
+                              variant="ghost"
+                              haptic="tap"
+                              onPress={() => setVisibleMachineLimit((prev) => prev + 25)}
+                              style={styles.showMoreRow}
+                            >
+                              <Text variant="caption" style={{ color: '#0284c7' }}>
+                                Show more ({filteredMachines.length - visibleMachineLimit} remaining)
+                              </Text>
                             </Pressable>
-                          );
-                        })
+                          )}
+                        </>
                       )}
                     </ScrollView>
                   </View>
@@ -910,14 +1126,72 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
                     ASSIGNED SUPERVISORS
                   </Text>
+                  {!canEditSupervisor && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 7,
+                        paddingVertical: 2,
+                        borderRadius: 4,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
+                      }}
+                    >
+                      <Lock size={10} color={theme.colors.mute} />
+                      <Text variant="micro" style={{ color: theme.colors.mute }}>
+                        Read Only
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
+                {!canEditSupervisor && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Shield size={12} color={theme.colors.mute} />
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      Supervisors cannot reassign machine supervisors.
+                    </Text>
+                  </View>
+                )}
+
                 {/* Supervisor Multi-Select Trigger */}
-                <Pressable variant="card" haptic="select" onPress={() => { setIsSupervisorDropdownOpen((prev) => !prev); setIsMachineDropdownOpen(false); setSupervisorSearchQuery(''); }} style={[styles.supervisorTriggerBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: isSupervisorDropdownOpen ? '#0284c7' : theme.colors.hairline }]} accessibilityRole="button" accessibilityLabel="Select supervisors">
+                <Pressable
+                  variant="card"
+                  haptic="select"
+                  disabled={!canEditSupervisor}
+                  onPress={() => {
+                    if (!canEditSupervisor) return;
+                    setIsSupervisorDropdownOpen((prev) => !prev);
+                    setIsMachineDropdownOpen(false);
+                    setSupervisorSearchQuery('');
+                  }}
+                  style={[
+                    styles.supervisorTriggerBtn,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: isSupervisorDropdownOpen ? '#0284c7' : theme.colors.hairline,
+                      opacity: !canEditSupervisor ? 0.85 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select supervisors"
+                >
                   <View style={styles.supervisorChipsContainer}>
                     {selectedSupervisorIds.length === 0 ? (
                       <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                        Search & assign supervisors...
+                        {canEditSupervisor ? 'Search & assign supervisors...' : 'No supervisors assigned'}
                       </Text>
                     ) : (
                       selectedSupervisorIds.map((sId) => {
@@ -937,10 +1211,22 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                             <Text style={[styles.supervisorChipText, { color: theme.colors.ink }]}>
                               {name}
                             </Text>
-                            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
-                                e?.stopPropagation?.(); removeSupervisor(sId); }} style={styles.chipRemoveBtn} accessibilityLabel={`Remove ${name}`}>
-                              <X size={11} color={theme.colors.mute} />
-                            </Pressable>
+                            {canEditSupervisor && (
+                              <Pressable
+                                variant="iconButton"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={(e) => {
+                                  // @ts-ignore
+                                  e?.stopPropagation?.();
+                                  removeSupervisor(sId);
+                                }}
+                                style={styles.chipRemoveBtn}
+                                accessibilityLabel={`Remove ${name}`}
+                              >
+                                <X size={11} color={theme.colors.mute} />
+                              </Pressable>
+                            )}
                           </View>
                         );
                       })
@@ -948,21 +1234,33 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   </View>
 
                   <View style={styles.supervisorTriggerRightActions}>
-                    {selectedSupervisorIds.length > 0 && (
-                      <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
-                          e?.stopPropagation?.(); clearAllSupervisors(); }}>
+                    {canEditSupervisor && selectedSupervisorIds.length > 0 && (
+                      <Pressable
+                        variant="ghost"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={(e) => {
+                          // @ts-ignore
+                          e?.stopPropagation?.();
+                          clearAllSupervisors();
+                        }}
+                      >
                         <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
                           Clear
                         </Text>
                       </Pressable>
                     )}
-                    <ChevronDown
-                      size={15}
-                      color={isSupervisorDropdownOpen ? '#0284c7' : theme.colors.mute}
-                      style={{
-                        transform: [{ rotate: isSupervisorDropdownOpen ? '180deg' : '0deg' }],
-                      }}
-                    />
+                    {canEditSupervisor ? (
+                      <ChevronDown
+                        size={15}
+                        color={isSupervisorDropdownOpen ? '#0284c7' : theme.colors.mute}
+                        style={{
+                          transform: [{ rotate: isSupervisorDropdownOpen ? '180deg' : '0deg' }],
+                        }}
+                      />
+                    ) : (
+                      <Lock size={13} color={theme.colors.mute} />
+                    )}
                   </View>
                 </Pressable>
 
@@ -1012,109 +1310,140 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     >
                       {filteredSupervisors.length === 0 ? (
                         <View style={styles.dropdownEmptyRow}>
-                          <Text style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
-                            No supervisors matching search
+                          <Search size={16} color={theme.colors.mute} style={{ opacity: 0.6 }} />
+                          <Text variant="caption" style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
+                            {supervisorSearchQuery ? `No supervisors matching "${supervisorSearchQuery}"` : 'No supervisors available'}
                           </Text>
+                          {Boolean(supervisorSearchQuery) && (
+                            <Pressable
+                              variant="ghost"
+                              haptic="tap"
+                              onPress={() => setSupervisorSearchQuery('')}
+                              style={{ marginTop: 4, paddingVertical: 4, paddingHorizontal: 8 }}
+                            >
+                              <Text variant="caption" style={{ color: '#0284c7' }}>Clear search</Text>
+                            </Pressable>
+                          )}
                         </View>
                       ) : (
-                        filteredSupervisors.map((staff) => {
-                          const isSelected = selectedSupervisorIds.includes(staff.id);
-                          const roleUpper = (staff.role || 'SUPERVISOR').toUpperCase();
+                        <>
+                          {displayedSupervisors.map((staff) => {
+                            const isSelected = selectedSupervisorIds.includes(staff.id);
+                            const roleUpper = (staff.role || 'SUPERVISOR').toUpperCase();
 
-                          // Role badge theme colors
-                          let badgeBg = isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe';
-                          let badgeText = '#0284c7';
-                          if (roleUpper.includes('ADMIN')) {
-                            badgeBg = isDark ? 'rgba(244, 63, 94, 0.15)' : '#ffe4e6';
-                            badgeText = '#e11d48';
-                          } else if (roleUpper.includes('MANAGER')) {
-                            badgeBg = isDark ? 'rgba(168, 85, 247, 0.15)' : '#f3e8ff';
-                            badgeText = '#9333ea';
-                          }
+                            // Role badge theme colors
+                            let badgeBg = isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe';
+                            let badgeText = '#0284c7';
+                            if (roleUpper.includes('ADMIN')) {
+                              badgeBg = isDark ? 'rgba(244, 63, 94, 0.15)' : '#ffe4e6';
+                              badgeText = '#e11d48';
+                            } else if (roleUpper.includes('MANAGER')) {
+                              badgeBg = isDark ? 'rgba(168, 85, 247, 0.15)' : '#f3e8ff';
+                              badgeText = '#9333ea';
+                            }
 
-                          return (
-                            <Pressable key={staff.id} variant="listRow" haptic="select" onPress={() => toggleSupervisor(staff.id)} style={[styles.staffCardItem,
-                                {
-                                  backgroundColor: theme.colors.canvas,
-                                  borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
-                                },
-                              ]}
-                            >
-                              <View style={{ flex: 1, minWidth: 0 }}>
-                                {/* Line 1: Name + Role Badge */}
-                                <View style={styles.staffCardTopRow}>
-                                  <Text
-                                    style={[styles.staffCardName, { color: theme.colors.ink }]}
-                                    numberOfLines={1}
-                                  >
-                                    {staff.full_name}
-                                  </Text>
-                                  <View
-                                    style={[
-                                      styles.staffRoleBadge,
-                                      { backgroundColor: badgeBg },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[styles.staffRoleBadgeText, { color: badgeText }]}
-                                    >
-                                      {roleUpper}
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                {/* Line 2: Shift timing */}
-                                <View style={styles.staffMetaRow}>
-                                  <Clock size={11} color="#10b981" />
-                                  <Text style={styles.staffShiftTimeText}>
-                                    {staff.shift_start_time && staff.shift_end_time
-                                      ? `${formatTo12Hour(staff.shift_start_time)} - ${formatTo12Hour(staff.shift_end_time)}`
-                                      : '09:00 - 18:00'}
-                                  </Text>
-                                </View>
-
-                                {/* Line 3: Phone */}
-                                {staff.phone ? (
-                                  <View style={styles.staffMetaRow}>
-                                    <Phone size={11} color="#f43f5e" />
-                                    <Text
-                                      style={[styles.staffContactText, { color: theme.colors.mute }]}
-                                      numberOfLines={1}
-                                    >
-                                      {staff.phone}
-                                    </Text>
-                                  </View>
-                                ) : null}
-
-                                {/* Line 4: Email */}
-                                {staff.email ? (
-                                  <View style={styles.staffMetaRow}>
-                                    <Mail size={11} color="#a855f7" />
-                                    <Text
-                                      style={[styles.staffContactText, { color: theme.colors.mute }]}
-                                      numberOfLines={1}
-                                    >
-                                      {staff.email}
-                                    </Text>
-                                  </View>
-                                ) : null}
-                              </View>
-
-                              {/* Circular Radio / Checkbox Indicator */}
-                              <View
+                            return (
+                              <Pressable
+                                key={staff.id}
+                                variant="listRow"
+                                haptic="select"
+                                onPress={() => toggleSupervisor(staff.id)}
                                 style={[
-                                  styles.radioCircle,
+                                  styles.staffCardItem,
                                   {
+                                    backgroundColor: theme.colors.canvas,
                                     borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
-                                    backgroundColor: isSelected ? '#0284c7' : 'transparent',
                                   },
                                 ]}
                               >
-                                {isSelected && <Check size={12} color="#ffffff" />}
-                              </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                  {/* Line 1: Name + Role Badge */}
+                                  <View style={styles.staffCardTopRow}>
+                                    <Text
+                                      style={[styles.staffCardName, { color: theme.colors.ink }]}
+                                      numberOfLines={1}
+                                    >
+                                      {staff.full_name}
+                                    </Text>
+                                    <View
+                                      style={[
+                                        styles.staffRoleBadge,
+                                        { backgroundColor: badgeBg },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[styles.staffRoleBadgeText, { color: badgeText }]}
+                                      >
+                                        {roleUpper}
+                                      </Text>
+                                    </View>
+                                  </View>
+
+                                  {/* Line 2: Shift timing */}
+                                  <View style={styles.staffMetaRow}>
+                                    <Clock size={11} color="#10b981" />
+                                    <Text style={styles.staffShiftTimeText}>
+                                      {staff.shift_start_time && staff.shift_end_time
+                                        ? `${formatTo12Hour(staff.shift_start_time)} - ${formatTo12Hour(staff.shift_end_time)}`
+                                        : '09:00 - 18:00'}
+                                    </Text>
+                                  </View>
+
+                                  {/* Line 3: Phone */}
+                                  {staff.phone ? (
+                                    <View style={styles.staffMetaRow}>
+                                      <Phone size={11} color="#f43f5e" />
+                                      <Text
+                                        style={[styles.staffContactText, { color: theme.colors.mute }]}
+                                        numberOfLines={1}
+                                      >
+                                        {staff.phone}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+
+                                  {/* Line 4: Email */}
+                                  {staff.email ? (
+                                    <View style={styles.staffMetaRow}>
+                                      <Mail size={11} color="#a855f7" />
+                                      <Text
+                                        style={[styles.staffContactText, { color: theme.colors.mute }]}
+                                        numberOfLines={1}
+                                      >
+                                        {staff.email}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+
+                                {/* Circular Radio / Checkbox Indicator */}
+                                <View
+                                  style={[
+                                    styles.radioCircle,
+                                    {
+                                      borderColor: isSelected ? '#0284c7' : theme.colors.hairline,
+                                      backgroundColor: isSelected ? '#0284c7' : 'transparent',
+                                    },
+                                  ]}
+                                >
+                                  {isSelected && <Check size={12} color="#ffffff" />}
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                          {filteredSupervisors.length > visibleSupervisorLimit && (
+                            <Pressable
+                              variant="ghost"
+                              haptic="tap"
+                              onPress={() => setVisibleSupervisorLimit((prev) => prev + 25)}
+                              style={styles.showMoreRow}
+                            >
+                              <Text variant="caption" style={{ color: '#0284c7' }}>
+                                Show more ({filteredSupervisors.length - visibleSupervisorLimit} remaining)
+                              </Text>
                             </Pressable>
-                          );
-                        })
+                          )}
+                        </>
                       )}
                     </ScrollView>
                   </View>
@@ -1299,74 +1628,99 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                         >
                           {availableOperators.length === 0 ? (
                             <View style={styles.dropdownEmptyRow}>
-                              <Text style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
+                              <Search size={16} color={theme.colors.mute} style={{ opacity: 0.6 }} />
+                              <Text variant="caption" style={[styles.dropdownEmptyText, { color: theme.colors.mute }]}>
                                 {operatorSearchQuery
-                                  ? 'No matching operators found'
+                                  ? `No operators matching "${operatorSearchQuery}"`
                                   : 'All operators currently assigned'}
                               </Text>
+                              {Boolean(operatorSearchQuery) && (
+                                <Pressable
+                                  variant="ghost"
+                                  haptic="tap"
+                                  onPress={() => setOperatorSearchQuery('')}
+                                  style={{ marginTop: 4, paddingVertical: 4, paddingHorizontal: 8 }}
+                                >
+                                  <Text variant="caption" style={{ color: '#0284c7' }}>Clear search</Text>
+                                </Pressable>
+                              )}
                             </View>
                           ) : (
-                            availableOperators.map((op) => {
-                              const alreadyOnMach = machineOperators.filter(
-                                (m) => m.operatorId === op.id
-                              ).length;
-                              const fleetCount = fleetAssignments.filter(
-                                (a) => a.operator_id === op.id
-                              ).length;
+                            <>
+                              {displayedOperators.map((op) => {
+                                const alreadyOnMach = machineOperators.filter(
+                                  (m) => m.operatorId === op.id
+                                ).length;
+                                const fleetCount = fleetAssignments.filter(
+                                  (a) => a.operator_id === op.id
+                                ).length;
 
-                              return (
-                                <Pressable key={op.id} variant="listRow" haptic="select" onPress={() => handleAddOperator(op)} style={[styles.operatorCandidateItem, { borderBottomColor: theme.colors.hairline }]}>
-                                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                                    <View style={styles.candidateNameRow}>
-                                      <Text
-                                        style={[
-                                          styles.candidateNameText,
-                                          { color: theme.colors.ink },
-                                        ]}
-                                        numberOfLines={1}
-                                      >
-                                        {op.full_name}
-                                      </Text>
-                                      {alreadyOnMach > 0 ? (
-                                        <View style={styles.alreadyOnMachinePill}>
-                                          <Text style={styles.alreadyOnMachineText}>
-                                            Already on machine ({alreadyOnMach}/3)
-                                          </Text>
-                                        </View>
-                                      ) : fleetCount > 0 ? (
-                                        <View style={styles.shiftsAssignedPill}>
-                                          <Text style={styles.shiftsAssignedText}>
-                                            {fleetCount}/3 Shifts
-                                          </Text>
-                                        </View>
-                                      ) : (
-                                        <View style={styles.availablePill}>
-                                          <Text style={styles.availableText}>Available</Text>
-                                        </View>
-                                      )}
+                                return (
+                                  <Pressable key={op.id} variant="listRow" haptic="select" onPress={() => handleAddOperator(op)} style={[styles.operatorCandidateItem, { borderBottomColor: theme.colors.hairline }]}>
+                                    <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                                      <View style={styles.candidateNameRow}>
+                                        <Text
+                                          style={[
+                                            styles.candidateNameText,
+                                            { color: theme.colors.ink },
+                                          ]}
+                                          numberOfLines={1}
+                                        >
+                                          {op.full_name}
+                                        </Text>
+                                        {alreadyOnMach > 0 ? (
+                                          <View style={styles.alreadyOnMachinePill}>
+                                            <Text style={styles.alreadyOnMachineText}>
+                                              Already on machine ({alreadyOnMach}/3)
+                                            </Text>
+                                          </View>
+                                        ) : fleetCount > 0 ? (
+                                          <View style={styles.shiftsAssignedPill}>
+                                            <Text style={styles.shiftsAssignedText}>
+                                              {fleetCount}/3 Shifts
+                                            </Text>
+                                          </View>
+                                        ) : (
+                                          <View style={styles.availablePill}>
+                                            <Text style={styles.availableText}>Available</Text>
+                                          </View>
+                                        )}
+                                      </View>
+
+                                      {op.phone ? (
+                                        <Text
+                                          style={[
+                                            styles.candidatePhoneText,
+                                            { color: theme.colors.mute },
+                                          ]}
+                                          numberOfLines={1}
+                                        >
+                                          {op.phone}
+                                        </Text>
+                                      ) : null}
                                     </View>
 
-                                    {op.phone ? (
-                                      <Text
-                                        style={[
-                                          styles.candidatePhoneText,
-                                          { color: theme.colors.mute },
-                                        ]}
-                                        numberOfLines={1}
-                                      >
-                                        {op.phone}
+                                    <View style={styles.addNextShiftBadge}>
+                                      <Text style={styles.addNextShiftBadgeText}>
+                                        + Shift {nextAvailableShift.code}
                                       </Text>
-                                    ) : null}
-                                  </View>
-
-                                  <View style={styles.addNextShiftBadge}>
-                                    <Text style={styles.addNextShiftBadgeText}>
-                                      + Shift {nextAvailableShift.code}
-                                    </Text>
-                                  </View>
+                                    </View>
+                                  </Pressable>
+                                );
+                              })}
+                              {availableOperators.length > visibleOperatorLimit && (
+                                <Pressable
+                                  variant="ghost"
+                                  haptic="tap"
+                                  onPress={() => setVisibleOperatorLimit((prev) => prev + 25)}
+                                  style={styles.showMoreRow}
+                                >
+                                  <Text variant="caption" style={{ color: '#0284c7' }}>
+                                    Show more ({availableOperators.length - visibleOperatorLimit} remaining)
+                                  </Text>
                                 </Pressable>
-                              );
-                            })
+                              )}
+                            </>
                           )}
                         </ScrollView>
                       </View>
@@ -1413,37 +1767,16 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
             </Pressable>
           </View>
         </View>
-      </KeyboardAvoidingView>
     </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
-  sheetWrapper: {
+  drawerContainer: {
     width: '100%',
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
-  modalCard: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    maxHeight: '94%',
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -8px 24px rgba(0, 0, 0, 0.35)',
-      },
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 24,
-        elevation: 16,
-      },
-    }),
+    flexShrink: 1,
+    display: 'flex',
+    flexDirection: 'column',
   },
 
   /* Header */
@@ -1568,7 +1901,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284c718',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 5,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: '#0284c733',
   },
   machineTriggerCodeText: {
     color: '#0284c7',
@@ -1697,9 +2032,11 @@ const styles = StyleSheet.create({
   },
   machineItemCodeBadge: {
     backgroundColor: '#0284c718',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: '#0284c733',
   },
   machineItemCodeText: {
     color: '#0284c7',
@@ -1830,9 +2167,11 @@ const styles = StyleSheet.create({
   },
   shiftCodeBadge: {
     backgroundColor: '#0284c718',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: '#0284c733',
   },
   shiftCodeBadgeText: {
     color: '#0284c7',
@@ -1882,9 +2221,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   shiftCodeMiniPill: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: '#0284c733',
   },
   shiftCodeMiniText: {
   },
@@ -1953,27 +2294,33 @@ const styles = StyleSheet.create({
   },
   availablePill: {
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   availableText: {
     color: '#059669',
   },
   alreadyOnMachinePill: {
     backgroundColor: '#0284c718',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: '#0284c733',
   },
   alreadyOnMachineText: {
     color: '#0284c7',
   },
   shiftsAssignedPill: {
     backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   shiftsAssignedText: {
     color: '#d97706',
@@ -1983,11 +2330,16 @@ const styles = StyleSheet.create({
   },
   addNextShiftBadge: {
     backgroundColor: '#0284c718',
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 3.5,
-    borderRadius: 6,
+    borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-    borderColor: '#0284c730',
+    borderColor: '#0284c740',
+  },
+  showMoreRow: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addNextShiftBadgeText: {
     color: '#0284c7',

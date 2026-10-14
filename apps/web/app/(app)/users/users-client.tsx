@@ -158,6 +158,8 @@ export function UsersPageClient({
   const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [deletionLoading, setDeletionLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [userToToggleStatus, setUserToToggleStatus] = useState<User | null>(null);
 
   const currentRoleOptions = readOnly ? SUPERVISOR_ROLE_OPTIONS : ROLE_OPTIONS;
 
@@ -761,42 +763,40 @@ export function UsersPageClient({
     }
   };
 
-  const handleToggleStatus = useCallback(
-    async (userId: string, currentStatus: "active" | "inactive" | "pending") => {
-      const prevUsers = usersList;
-      const prevSearch = searchResults;
-      const source = searchResults ?? usersList;
-      const targetUser = source.find((u: User) => u.id === userId);
-      const newStatus = currentStatus === "active" ? "inactive" : "active";
+  const handleConfirmToggleStatus = useCallback(async () => {
+    if (!userToToggleStatus) return;
+    const userId = userToToggleStatus.id;
+    const currentStatus = userToToggleStatus.status;
+    const newStatus = currentStatus === "active" ? "inactive" : "active";
+    const userName = userToToggleStatus.full_name;
 
-      setUsersList((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: newStatus as any } : u))
-      );
-      setSearchResults((prev) =>
-        prev ? prev.map((u) => (u.id === userId ? { ...u, status: newStatus as any } : u)) : null
-      );
-      setLoading({ type: "toggle", id: userId });
+    setLoading({ type: "toggle", id: userId });
 
-      try {
-        const result = await toggleUserStatus(userId);
-        setLoading(null);
-        if (result.error) {
-          setUsersList(prevUsers);
-          setSearchResults(prevSearch);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || `User ${targetUser?.full_name || ""} ${newStatus === "active" ? "activated" : "deactivated"}`);
-          router.refresh();
-        }
-      } catch (err: any) {
-        setLoading(null);
-        setUsersList(prevUsers);
-        setSearchResults(prevSearch);
-        toast("error", err?.message || "Failed to update status.");
+    try {
+      const result = await toggleUserStatus(userId);
+      setLoading(null);
+      if (result.error) {
+        toast("error", result.error);
+      } else {
+        // Persist the new status and update the UI only after the server confirms success
+        setUsersList((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, status: newStatus as any } : u))
+        );
+        setSearchResults((prev) =>
+          prev ? prev.map((u) => (u.id === userId ? { ...u, status: newStatus as any } : u)) : null
+        );
+        toast(
+          "success",
+          result.message || `User ${userName || ""} ${newStatus === "active" ? "activated" : "deactivated"} successfully`
+        );
+        setUserToToggleStatus(null);
+        router.refresh();
       }
-    },
-    [usersList, searchResults, router, toast]
-  );
+    } catch (err: any) {
+      setLoading(null);
+      toast("error", err?.message || "Failed to update status.");
+    }
+  }, [userToToggleStatus, router, toast]);
 
   const handleRoleChange = useCallback(
     async (userId: string, newRole: UserRole) => {
@@ -863,32 +863,27 @@ export function UsersPageClient({
 
   const handleDeleteUser = useCallback(
     async (user: User) => {
-      const prevUsers = usersList;
-      const prevSearch = searchResults;
-      setUsersList((prev) => prev.filter((u) => u.id !== user.id));
-      setSearchResults((prev) => (prev ? prev.filter((u) => u.id !== user.id) : null));
-      setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
       setLoading({ type: "delete", id: user.id });
 
       try {
         const result = await deleteUser(user.id);
         setLoading(null);
         if (result.error) {
-          setUsersList(prevUsers);
-          setSearchResults(prevSearch);
           toast("error", result.error);
         } else {
-          toast("success", result.message || `User ${user.full_name} deleted`);
+          setUsersList((prev) => prev.filter((u) => u.id !== user.id));
+          setSearchResults((prev) => (prev ? prev.filter((u) => u.id !== user.id) : null));
+          setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
+          setUserToDelete(null);
+          toast("success", result.message || `User ${user.full_name} processed`);
           router.refresh();
         }
       } catch (err: any) {
         setLoading(null);
-        setUsersList(prevUsers);
-        setSearchResults(prevSearch);
         toast("error", err?.message || "Failed to delete user.");
       }
     },
-    [usersList, searchResults, router, toast]
+    [router, toast]
   );
 
   // Profile and Account Deletion Request Handlers
@@ -1411,14 +1406,14 @@ export function UsersPageClient({
         onToggleStatus={(userId) => {
           const source = searchResults ?? usersList;
           const u = source.find((x: User) => x.id === userId);
-          if (u) handleToggleStatus(userId, u.status as any);
+          if (u) setUserToToggleStatus(u);
         }}
         onRoleChange={handleRoleChange}
         onSupervisorChange={handleSupervisorChange}
         onDeleteUser={(userId) => {
           const source = searchResults ?? usersList;
           const u = source.find((x: User) => x.id === userId);
-          if (u) handleDeleteUser(u);
+          if (u) setUserToDelete(u);
         }}
         supervisors={supervisorOptions}
         searchTerm={localSearchTerm}
@@ -1567,6 +1562,95 @@ export function UsersPageClient({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Single User Deletion Confirmation Dialog */}
+      {userToDelete && (
+        <ConfirmationDialog
+          isOpen={!!userToDelete}
+          onClose={() => {
+            if (loading?.type !== "delete") setUserToDelete(null);
+          }}
+          onConfirm={() => handleDeleteUser(userToDelete)}
+          title="Delete User Account"
+          description={
+            <div className="space-y-3">
+              <p>
+                Are you sure you want to delete the account for{" "}
+                <strong className="text-[var(--color-ink)] font-semibold">
+                  {userToDelete.full_name}
+                </strong>{" "}
+                ({userToDelete.employee_id || userToDelete.id})?
+              </p>
+              <div className="p-2.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs text-[var(--color-mute)] space-y-1">
+                <p className="font-medium text-[var(--color-warning-deep)]">
+                  ⚠ Consequences &amp; Statutory Compliance Notice:
+                </p>
+                <p>• Account access and authentication credentials will be revoked immediately.</p>
+                <p>• Active machinery allocations and supervisor links will be detached.</p>
+                <p>• Under the Factories Act (1948), historical machinery running logs (HMR), breakdown records, and payroll data are preserved. If historical records exist, the account will be safely deactivated to preserve referential integrity.</p>
+              </div>
+            </div>
+          }
+          confirmLabel={loading?.type === "delete" ? "Deleting..." : "Delete User"}
+          cancelLabel="Cancel"
+          variant="danger"
+          loading={loading?.type === "delete" && loading?.id === userToDelete.id}
+        />
+      )}
+
+      {/* User Status Toggle Confirmation Dialog */}
+      {userToToggleStatus && (
+        <ConfirmationDialog
+          isOpen={!!userToToggleStatus}
+          onClose={() => {
+            if (loading?.type !== "toggle") setUserToToggleStatus(null);
+          }}
+          onConfirm={handleConfirmToggleStatus}
+          title={userToToggleStatus.status === "active" ? "Deactivate User Account" : "Activate User Account"}
+          description={
+            <div className="space-y-3">
+              <p>
+                Are you sure you want to {userToToggleStatus.status === "active" ? "deactivate" : "activate"} the account for{" "}
+                <strong className="text-[var(--color-ink)] font-semibold">
+                  {userToToggleStatus.full_name}
+                </strong>{" "}
+                ({userToToggleStatus.employee_id || userToToggleStatus.id})?
+              </p>
+              {userToToggleStatus.status === "active" ? (
+                <div className="p-2.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs text-[var(--color-mute)] space-y-1">
+                  <p className="font-medium text-[var(--color-warning-deep)]">
+                    ⚠ Consequences of Deactivation:
+                  </p>
+                  <p>• Immediate Revocation: User will be prevented from accessing protected functionality and active sessions will be terminated.</p>
+                  <p>• Machinery Assignments: Active machinery allocations and supervisor assignments will be safely released.</p>
+                  <p>• Pending Requests: Any pending profile change requests will be automatically cancelled.</p>
+                  <p>• Data Preservation: Under the Factories Act (1948), all shift logs (HMR), attendance records, and audit trails remain permanently preserved. Zero records are deleted.</p>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs text-[var(--color-mute)] space-y-1">
+                  <p className="font-medium text-emerald-600 dark:text-emerald-400">
+                    ✓ Consequences of Activation:
+                  </p>
+                  <p>• Access Restored: User will be immediately permitted to log in and access system functions based on their assigned role.</p>
+                  <p>• Operational Readiness: User will be eligible for machinery assignments, shift rosters, and supervisor duties.</p>
+                </div>
+              )}
+            </div>
+          }
+          confirmLabel={
+            loading?.type === "toggle" && loading?.id === userToToggleStatus.id
+              ? userToToggleStatus.status === "active"
+                ? "Deactivating..."
+                : "Activating..."
+              : userToToggleStatus.status === "active"
+              ? "Deactivate Account"
+              : "Activate Account"
+          }
+          cancelLabel="Cancel"
+          variant={userToToggleStatus.status === "active" ? "warning" : "info"}
+          loading={loading?.type === "toggle" && loading?.id === userToToggleStatus.id}
+        />
+      )}
 
       {showBulkDeleteModal && (
         <ConfirmationDialog
