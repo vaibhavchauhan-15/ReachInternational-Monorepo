@@ -34,7 +34,13 @@ import {
 import { AnimatedCounter } from "@/components/ui/Motion";
 import { getAttendanceSummaryAction, getAttendanceExportAction } from "@/app/actions/attendance";
 import type { AttendanceSummaryResult, AttendanceEmployee, AttendanceKpis } from "@/lib/data/attendance/attendance-summary";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { UserRole } from "@reachinternational/types";
+import {
+  AttendanceKPIStrip,
+  AttendanceDesktopTable,
+  AttendanceMobileCard,
+} from "@/components/attendance";
 
 interface AttendanceClientProps {
   initialData: AttendanceSummaryResult;
@@ -572,6 +578,16 @@ export function AttendanceClient({
     }
   }, [activeMonth, searchQuery, statusFilter, overtimeFilter, stateFilter, sortByFilter, displayedRows, toast]);
 
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        onExportCSV: handleExportCSV,
+        onRefresh: () => router.refresh(),
+      }),
+      [handleExportCSV, router]
+    )
+  );
+
   return (
     <div className="flex flex-col gap-5 sm:gap-6 pb-24 md:pb-6">
       {/* 1. Canonical Desktop Page Header */}
@@ -625,123 +641,11 @@ export function AttendanceClient({
       </div>
 
       {/* 2. Interactive KPI Cards Row (Click to filter) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
-        {/* Total Employees */}
-        <motion.div
-          data-hover-parent
-          role="button"
-          tabIndex={0}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleStatusFilterChange("all")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleStatusFilterChange("all");
-            }
-          }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "all" || !statusFilter
-              ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
-            }`}
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
-              Total Staff
-            </span>
-            <AnimatedUsers size={16} className="w-4 h-4 shrink-0 text-[var(--color-ink)]" />
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-[var(--color-ink)]">
-            <AnimatedCounter value={currentKpis.totalEmployees} />
-          </div>
-        </motion.div>
-
-        {/* Present */}
-        <motion.div
-          data-hover-parent
-          role="button"
-          tabIndex={0}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleStatusFilterChange(statusFilter === "present" ? "all" : "present")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleStatusFilterChange(statusFilter === "present" ? "all" : "present");
-            }
-          }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "present"
-              ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
-            }`}
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-              Present
-            </span>
-            <AnimatedUserCheck size={16} className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">
-            <AnimatedCounter value={currentKpis.presentCount} />
-          </div>
-        </motion.div>
-
-        {/* Absent */}
-        <motion.div
-          data-hover-parent
-          role="button"
-          tabIndex={0}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleStatusFilterChange(statusFilter === "absent" ? "all" : "absent")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleStatusFilterChange(statusFilter === "absent" ? "all" : "absent");
-            }
-          }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "absent"
-              ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
-            }`}
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400 truncate">
-              Absent
-            </span>
-            <AnimatedUserX size={16} className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300">
-            <AnimatedCounter value={currentKpis.absentCount} />
-          </div>
-        </motion.div>
-
-        {/* Half Day */}
-        <motion.div
-          data-hover-parent
-          role="button"
-          tabIndex={0}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleStatusFilterChange(statusFilter === "half_day" ? "all" : "half_day")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleStatusFilterChange(statusFilter === "half_day" ? "all" : "half_day");
-            }
-          }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "half_day"
-              ? "bg-amber-50/40 border-amber-500 shadow-xs ring-1 ring-amber-500/20 dark:bg-amber-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-amber-500/40"
-            }`}
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">
-              Half Day
-            </span>
-            <AnimatedClock size={16} className="w-4 h-4 shrink-0 text-amber-500" />
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-extrabold text-amber-700 dark:text-amber-300">
-            <AnimatedCounter value={currentKpis.halfDayCount} />
-          </div>
-        </motion.div>
-      </div>
+      <AttendanceKPIStrip
+        kpis={currentKpis}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
+      />
 
       {/* 3. Scheduled Working Days Info Banner */}
       <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-3.5 shadow-xs text-xs sm:text-sm text-[var(--color-body)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -808,187 +712,24 @@ export function AttendanceClient({
         )}
       </div>
 
-      {/* 5. Desktop High-Density Table (Hidden on mobile < md) */}
-      <div className="hidden md:block rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 text-[var(--color-mute)] uppercase tracking-wider font-semibold text-[11px]">
-                <th className="py-3 px-3.5">Employee</th>
-                <th className="py-3 px-3.5">Location</th>
-                <th className="py-3 px-3.5 text-center">Scheduled</th>
-                <th className="py-3 px-3.5 text-center">Present</th>
-                <th className="py-3 px-3.5 text-center">Absent</th>
-                <th className="py-3 px-3.5 text-center">Half Day</th>
-                <th className="py-3 px-3.5 text-right">Worked</th>
-                <th className="py-3 px-3.5 text-right">OT Hours</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-hairline)]">
-              {isQueryLoading ? (
-                <AttendanceTableSkeletonRows count={8} />
-              ) : displayedRows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12">
-                    <EmptyState
-                      icon={<AnimatedCalendarCheck size={28} />}
-                      title="No attendance records found"
-                      description={
-                        searchQuery || statusFilter !== "all" || overtimeFilter !== "all" || stateFilter !== "all"
-                          ? "No records match your active search and filter criteria."
-                          : "No attendance recorded for this month."
-                      }
-                      action={
-                        activeFilterCount > 0 ? (
-                          <Button variant="secondary" size="sm" onClick={resetFilters}>
-                            Clear Filters
-                          </Button>
-                        ) : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {displayedRows.map((emp) => (
-                    <tr
-                      key={emp.employee_id}
-                      role="link"
-                      tabIndex={0}
-                      onClick={() => router.push(`/attendance/${emp.employee_id}?month=${activeMonth}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          router.push(`/attendance/${emp.employee_id}?month=${activeMonth}`);
-                        }
-                      }}
-                      aria-label={`View attendance detail for ${emp.full_name}`}
-                      className="hover:bg-[var(--color-canvas)]/60 cursor-pointer transition-colors group focus:outline-none focus:bg-[var(--color-canvas)]/80"
-                    >
-                      <td className="py-2.5 px-3.5">
-                        <Link
-                          href={`/attendance/${emp.employee_id}?month=${activeMonth}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-semibold text-[var(--color-ink)] group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors inline-block"
-                        >
-                          <span className="group-hover:underline">{highlightText(emp.full_name, searchQuery)}</span>
-                        </Link>
-                        <div className="text-[11px] text-[var(--color-mute)] font-mono">
-                          {emp.phone ? highlightText(emp.phone, searchQuery) : "No phone"}
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-[var(--color-body)]">
-                        {emp.city || emp.state ? (
-                          <span>
-                            {emp.city ? <span>{highlightText(emp.city, searchQuery)}, </span> : null}
-                            {emp.state ? <span>{highlightText(emp.state, searchQuery)}</span> : null}
-                          </span>
-                        ) : (
-                          <span className="italic text-[var(--color-mute)]">—</span>
-                        )}
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-center font-mono font-medium text-[var(--color-body)]">
-                        {emp.scheduled_days}
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-center">
-                        <span
-                          className={
-                            emp.present_days > 0
-                              ? "font-mono font-bold text-emerald-600 dark:text-emerald-400"
-                              : "font-mono text-[var(--color-mute)]"
-                          }
-                        >
-                          {Math.min(emp.present_days, emp.scheduled_days)}
-                        </span>
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-center">
-                        <span
-                          className={
-                            emp.absent_days > 0
-                              ? "font-mono font-bold text-rose-600 dark:text-rose-400"
-                              : "font-mono text-[var(--color-mute)]"
-                          }
-                        >
-                          {emp.absent_days}
-                        </span>
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-center">
-                        <span
-                          className={
-                            emp.half_days > 0
-                              ? "font-mono font-bold text-amber-600 dark:text-amber-400"
-                              : "font-mono text-[var(--color-mute)]"
-                          }
-                        >
-                          {emp.half_days}
-                        </span>
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-right font-mono font-medium text-[var(--color-ink)]">
-                        {formatMinutes(emp.worked_minutes)}
-                      </td>
-
-                      <td className="py-2.5 px-3.5 text-right font-mono font-medium">
-                        <span
-                          className={
-                            emp.overtime_minutes > 0
-                              ? "text-amber-600 dark:text-amber-400"
-                              : "text-[var(--color-mute)]"
-                          }
-                        >
-                          {formatMinutes(emp.overtime_minutes)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {/* Infinite Scroll Desktop Sentinel */}
-                  {hasMore && (
-                    <tr ref={desktopSentinelRef} className="border-t border-[var(--color-hairline)]/40">
-                      <td colSpan={8} className="p-0">
-                        {isLoadingMore && (
-                          <div className="py-3 px-4 text-center">
-                            <div className="inline-flex items-center gap-2 text-xs text-[var(--color-mute)] font-medium">
-                              <div className="w-3.5 h-3.5 border-2 border-[var(--color-ink)] border-t-transparent rounded-full animate-spin" />
-                              <span>Loading more attendance records...</span>
-                            </div>
-                          </div>
-                        )}
-                        {loadMoreError && (
-                          <div className="py-3 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={handleLoadMore}
-                              className="inline-flex items-center gap-1.5 text-xs text-rose-500 hover:underline font-medium cursor-pointer"
-                            >
-                              <RotateCcw size={12} />
-                              <span>{loadMoreError}</span>
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* End of list indicator */}
-        {!isQueryLoading && !hasMore && displayedRows.length > 0 && (
-          <div className="px-4 py-3 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 text-xs text-[var(--color-mute)] flex items-center justify-center gap-3 select-none">
-            <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
-            <span className="font-medium">All {totalCount} attendance records loaded</span>
-            <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
-          </div>
-        )}
-      </div>
+      {/* 5. Desktop High-Density Table */}
+      <AttendanceDesktopTable
+        displayedRows={displayedRows}
+        isQueryLoading={isQueryLoading}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        loadMoreError={loadMoreError}
+        totalCount={totalCount}
+        activeMonth={activeMonth}
+        searchQuery={searchQuery}
+        statusFilter={statusFilter}
+        overtimeFilter={overtimeFilter}
+        stateFilter={stateFilter}
+        activeFilterCount={activeFilterCount}
+        onResetFilters={resetFilters}
+        onLoadMore={handleLoadMore}
+        desktopSentinelRef={desktopSentinelRef}
+      />
 
       {/* 6. Mobile Touch Cards View (≤640px) */}
       <div className="block md:hidden space-y-3">
@@ -1011,110 +752,14 @@ export function AttendanceClient({
           </div>
         ) : (
           <>
-            {displayedRows.map((emp) => {
-              const initials = getInitials(emp.full_name);
-              return (
-                <div
-                  key={emp.employee_id}
-                  className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 shadow-xs space-y-3.5 hover:border-[var(--color-ink)]/20 transition-all"
-                >
-                  {/* Operator Header: Avatar, Name, Role badge, and Location */}
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-[var(--color-hairline)] flex items-center justify-center text-xs font-bold text-[var(--color-ink)] shrink-0 select-none">
-                      {initials}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <Link
-                          href={`/attendance/${emp.employee_id}?month=${activeMonth}`}
-                          className="font-semibold text-sm text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors truncate"
-                        >
-                          {highlightText(emp.full_name, searchQuery)}
-                        </Link>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 text-[var(--color-mute)] border border-[var(--color-hairline)] shrink-0">
-                          {emp.role || "Operator"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-[var(--color-mute)] font-mono">
-                        {emp.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone size={11} className="shrink-0" />
-                            {highlightText(emp.phone, searchQuery)}
-                          </span>
-                        )}
-                        {(emp.city || emp.state) && (
-                          <span className="flex items-center gap-1">
-                            <MapPin size={11} className="shrink-0" />
-                            {emp.city ? <span>{highlightText(emp.city, searchQuery)}, </span> : null}
-                            {emp.state ? <span>{highlightText(emp.state, searchQuery)}</span> : null}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4-Stat Metric Box: Scheduled, Present, Absent, Half Day */}
-                  <div className="grid grid-cols-4 gap-1.5 p-2.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-center">
-                    <div>
-                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
-                        Sched
-                      </span>
-                      <span className="font-mono font-bold text-sm text-[var(--color-ink)]">
-                        {emp.scheduled_days}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                        Present
-                      </span>
-                      <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
-                        {Math.min(emp.present_days, emp.scheduled_days)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                        Absent
-                      </span>
-                      <span className="font-mono font-bold text-sm text-rose-600 dark:text-rose-400">
-                        {emp.absent_days}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                        Half Day
-                      </span>
-                      <span className="font-mono font-bold text-sm text-amber-600 dark:text-amber-400">
-                        {emp.half_days}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Hours and Navigation Footer */}
-                  <div className="flex items-center justify-between pt-1 text-xs">
-                    <div className="flex items-center gap-2 font-mono text-[var(--color-mute)]">
-                      <span>
-                        Worked:{" "}
-                        <strong className="text-[var(--color-ink)]">
-                          {formatMinutes(emp.worked_minutes)}
-                        </strong>
-                      </span>
-                      {emp.overtime_minutes > 0 && (
-                        <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                          +{formatMinutes(emp.overtime_minutes)} OT
-                        </span>
-                      )}
-                    </div>
-                    <Link
-                      href={`/attendance/${emp.employee_id}?month=${activeMonth}`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline min-h-[44px] px-2 -mr-2"
-                    >
-                      <span>Ledger</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+            {displayedRows.map((emp) => (
+              <AttendanceMobileCard
+                key={emp.employee_id}
+                emp={emp}
+                activeMonth={activeMonth}
+                searchQuery={searchQuery}
+              />
+            ))}
 
             {/* Infinite Scroll Mobile Sentinel */}
             {hasMore && (

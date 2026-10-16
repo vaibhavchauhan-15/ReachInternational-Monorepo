@@ -19,18 +19,6 @@ import {
   type HeaderActionItem,
 } from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
-import {
-  RefreshCw,
-  FileSpreadsheet,
-  Wrench,
-  CalendarCheck,
-  Clock,
-  Users,
-  Building2,
-  Settings,
-  Sun,
-  Moon,
-} from '../../components/ui/icon';
 import { supabase } from '../../lib/supabase';
 import {
   DashboardHeader,
@@ -42,6 +30,7 @@ import {
   AdminDashboardCard,
   SuperAdminDashboardCard,
   HRDashboardCard,
+  getDashboardHeaderActions,
 } from '../../components/dashboard';
 import type {
   DashboardRole,
@@ -55,6 +44,7 @@ import type {
 } from '@reachinternational/types';
 import { haptics } from '../../lib/haptics';
 import { useScreenSync } from '../../lib/offline';
+import { checkAndNotifyShiftEnded } from '../../lib/notifications';
 
 const CANONICAL_ROLES: readonly DashboardRole[] = [
   'super_admin',
@@ -131,6 +121,7 @@ export default function DashboardScreen() {
     },
     enabled: Boolean(user?.id && isRecognizedRole),
     staleTime: 1000 * 60 * 5, // 5 minutes fresh cache
+    placeholderData: (previousData) => previousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
@@ -198,192 +189,15 @@ export default function DashboardScreen() {
 
   // Extra functions for 3-dot more menu on Home screen
   const headerActions: HeaderActionItem[] = useMemo(() => {
-    const actions: HeaderActionItem[] = [
-      {
-        id: 'refresh-data',
-        label: refreshing ? 'Refreshing...' : 'Refresh Dashboard',
-        icon: <RefreshCw size={15} color={theme.colors.ink} />,
-        onPress: onRefresh,
-        disabled: refreshing,
-      },
-    ];
-
-    // Role-specific operational shortcuts
-    switch (activeRole) {
-      case 'supervisor':
-        actions.push(
-          {
-            id: 'op-logs',
-            label: 'Review Shift Logs',
-            icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/operations'),
-          },
-          {
-            id: 'op-fleet',
-            label: 'Supervised Machinery',
-            icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/machines'),
-          },
-          {
-            id: 'op-attendance',
-            label: 'Shift Attendance',
-            icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/attendance'),
-          }
-        );
-        break;
-
-      case 'operator':
-        actions.push(
-          {
-            id: 'op-entry',
-            label: 'Record Running Hours',
-            icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/operations'),
-          },
-          {
-            id: 'op-machine',
-            label: 'Assigned Equipment',
-            icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/machines'),
-          },
-          {
-            id: 'op-history',
-            label: 'Shift History & Logs',
-            icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/operations'),
-          },
-          {
-            id: 'op-attendance',
-            label: 'My Attendance',
-            icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/attendance'),
-          }
-        );
-        break;
-
-      case 'manager':
-        actions.push(
-          {
-            id: 'mgr-ops',
-            label: 'Operations Review',
-            icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/operations'),
-          },
-          {
-            id: 'mgr-fleet',
-            label: 'Fleet Utilization',
-            icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/machines'),
-          },
-          {
-            id: 'mgr-attendance',
-            label: 'Attendance Roster',
-            icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/attendance'),
-          },
-          {
-            id: 'mgr-payroll',
-            label: 'Running Hours & Payroll',
-            icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/payroll'),
-          }
-        );
-        break;
-
-      case 'admin':
-        actions.push(
-          {
-            id: 'adm-ops',
-            label: 'Operations & Running Logs',
-            icon: <FileSpreadsheet size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/operations'),
-          },
-          {
-            id: 'adm-fleet',
-            label: 'Machinery Fleet',
-            icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/machines'),
-          },
-          {
-            id: 'adm-users',
-            label: 'Personnel & Directory',
-            icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/users'),
-          },
-          {
-            id: 'adm-clients',
-            label: 'Client Worksites',
-            icon: <Building2 size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/clients'),
-          }
-        );
-        break;
-
-      case 'super_admin':
-        actions.push(
-          {
-            id: 'sa-fleet',
-            label: 'Machinery Fleet Matrix',
-            icon: <Wrench size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/machines'),
-          },
-          {
-            id: 'sa-users',
-            label: 'User Directory & Access',
-            icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/users'),
-          },
-          {
-            id: 'sa-clients',
-            label: 'Client Directory',
-            icon: <Building2 size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/clients'),
-          }
-        );
-        break;
-
-      case 'hr':
-        actions.push(
-          {
-            id: 'hr-staff',
-            label: 'Employee Directory',
-            icon: <Users size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/users'),
-          },
-          {
-            id: 'hr-attendance',
-            label: 'Attendance Records',
-            icon: <CalendarCheck size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/attendance'),
-          },
-          {
-            id: 'hr-payroll',
-            label: 'Payroll Overview',
-            icon: <Clock size={15} color={theme.colors.ink} />,
-            onPress: () => router.push('/payroll'),
-          }
-        );
-        break;
-    }
-
-    // Common system shortcuts
-    actions.push(
-      {
-        id: 'app-settings',
-        label: 'Settings & Preferences',
-        icon: <Settings size={15} color={theme.colors.ink} />,
-        onPress: () => router.push('/settings' as any),
-      },
-      {
-        id: 'theme-toggle',
-        label: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-        icon: isDark ? <Sun size={15} color={theme.colors.ink} /> : <Moon size={15} color={theme.colors.ink} />,
-        onPress: () => setMode(isDark ? 'light' : 'dark'),
-      }
-    );
-
-    return actions;
+    return getDashboardHeaderActions({
+      activeRole,
+      refreshing,
+      onRefresh,
+      router,
+      isDark,
+      setMode,
+      inkColor: theme.colors.ink,
+    });
   }, [activeRole, isDark, onRefresh, refreshing, router, setMode, theme.colors.ink]);
 
   // Extract alerts for the active role matching web AlertWidget
@@ -394,44 +208,24 @@ export default function DashboardScreen() {
     if (activeRole === 'supervisor') return supervisorData?.alerts || [];
     if (activeRole === 'hr') return hrData?.alerts || [];
     if (activeRole === 'operator') {
-      if (operatorData?.alerts && operatorData.alerts.length > 0) {
-        return operatorData.alerts;
-      }
-      const isSubmitted = operatorData?.today?.entryStatus === 'submitted';
-      const isPartial = operatorData?.today?.entryStatus === 'partial';
-      const submittedCount = operatorData?.today?.submittedCount ?? 0;
-      const totalAssignedCount =
-        operatorData?.today?.totalAssignedCount ?? (operatorData?.assigned_shifts?.length || 1);
-      const totalHours = operatorData?.today?.totalRunningHoursToday ?? 0;
-
-      return [
-        isSubmitted
-          ? {
-              id: 'entry-submitted',
-              severity: 'success' as const,
-              title: "Today's Shift Logs Submitted",
-              description: `All assigned shifts (${totalHours}h total) are recorded for today.`,
-              actionUrl: '/operations?tab=history',
-            }
-          : isPartial
-          ? {
-              id: 'entry-partial',
-              severity: 'warning' as const,
-              title: `${submittedCount} of ${totalAssignedCount} Shifts Logged`,
-              description: `Recorded ${totalHours}h so far. Remember to submit remaining assigned shift(s).`,
-              actionUrl: '/operations',
-            }
-          : {
-              id: 'entry-pending',
-              severity: 'warning' as const,
-              title: 'Shift Logs Pending',
-              description: `You have ${totalAssignedCount} assigned shifts pending submission today.`,
-              actionUrl: '/operations',
-            },
-      ];
+      // Feedback 3: Alert card removed for operator; mobile notification pushed after shift end
+      return [];
     }
     return [];
-  }, [activeRole, superAdminData, adminData, managerData, supervisorData, hrData, operatorData]);
+  }, [activeRole, superAdminData, adminData, managerData, supervisorData, hrData]);
+
+  // Push notification when an assigned shift ends and remains unlogged (Feedback 3)
+  useEffect(() => {
+    if (activeRole === 'operator' && operatorData?.assigned_shifts) {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      checkAndNotifyShiftEnded(operatorData.assigned_shifts).then((scheduledTimer) => {
+        timer = scheduledTimer;
+      });
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }
+  }, [activeRole, operatorData?.assigned_shifts]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -454,7 +248,7 @@ export default function DashboardScreen() {
           description="Your current user role does not have authorization to access this operational dashboard."
           onBack={() => router.replace('/login')}
         />
-      ) : isLoading && !dashboardData ? (
+      ) : isLoading && !dashboardData && activeRole !== 'operator' ? (
         /* Case 2: Initial Loading Skeleton with Ambient Slow Network Banner */
         <View style={styles.container}>
           {isSlowNetwork && !isSlowDismissed && (
@@ -555,7 +349,10 @@ export default function DashboardScreen() {
             <HRDashboardCard data={hrData} />
           )}
           {activeRole === 'operator' && (
-            <OperatorDashboardCard data={operatorData} />
+            <OperatorDashboardCard
+              data={operatorData}
+              isLoading={isLoading && !dashboardData}
+            />
           )}
         </ScrollView>
       )}

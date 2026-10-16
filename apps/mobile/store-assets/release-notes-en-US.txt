@@ -1,6 +1,6 @@
-What's New in v1.2.0:
-• Offline Shift Logging: Prevents duplicate shift entries with seamless cloud auto-sync.
-• Security & Auth: Hardware keystore encryption (SecureStore) and fast enterprise registration.
-• Operations & Fleet: Live shift advisories, meter regression checks, and advanced fleet filters.
-• Quick Access Search: Fast search across 38 platform screens and operations tabs.
-• Performance & UI: Unified dialogs, tactile haptics, and faster cold starts.
+What's New in v1.3.0:
+• Performance: Instant launch experience with redesigned splash screen and 60fps GPU animations.
+• Operations: Eradicated shift list freezes with fast keyset pagination and real-time shift monitoring.
+• User Directory: Instant directory KPIs, targeted fleet assignment views, and infinite scrolling.
+• Attendance: Fast month-by-month navigation, monthly work hour summaries, and interactive filters.
+• Navigation: Re-engineered tabs with high contrast and instant tactile haptics.

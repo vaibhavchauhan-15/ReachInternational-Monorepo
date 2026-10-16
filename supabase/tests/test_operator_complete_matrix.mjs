@@ -46,9 +46,10 @@ function loadEnv(filePath) {
 loadEnv(path.resolve(__dirname, '../../.env'));
 loadEnv(path.resolve(__dirname, '../../.env.local'));
 loadEnv(path.resolve(__dirname, '../../apps/web/.env.local'));
+loadEnv(path.resolve(__dirname, '../../apps/web/.env'));
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SECRET_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vlmxciuogczumumrwyot.supabase.co';
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Error: Missing Supabase credentials in environment.');

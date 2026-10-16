@@ -20,19 +20,8 @@ export const QUEUE_STORAGE_KEY = '@reach:offline_queue_v1';
 export const MAX_QUEUE_CAPACITY = 50; // T-14-03 DoS mitigation
 export const RETRY_BACKOFF_DELAYS_MS = [2000, 5000, 10000]; // 2s, 5s, 10s per D-04
 
-/**
- * Universal RFC4122 compliant UUID v4 generator
- */
-export function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+import { generateUUID } from '../optimistic/tempId';
+export { generateUUID };
 
 /**
  * Normalizes shift code to uppercase alphanumeric string (e.g. "Shift A" -> "A", "s1" -> "S1")

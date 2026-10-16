@@ -229,7 +229,7 @@ A dedicated operational feature for Supervisors, Managers, and Admins to monitor
     - Web operator client (`OperatorEntryClient.tsx`) performs identical offline sync on mount.
 - **Mobile UI (`apps/mobile`)**:
   - Sub-navigation above navbar in `operations.tsx` for non-operators ("Daily Running Hours" vs "Today's Shift Logs").
-  - `MobileTodayShiftMonitorTab.tsx`: KPI summary cards, filter pills, search input, and responsive touch cards with min 44px "Enter Shift Log" button.
+  - `MobileTodayShiftMonitorTab.tsx`: KPI summary cards, filter pills, search input, canonical `<CustomDatePicker>` calendar picker, refined dropdown filters (`DropdownFilterSelector`), and responsive touch cards with min 44px "Enter Shift Log" button.
   - `MeterLogModal.tsx`: Supports `showManualTimes` toggle; displays client shift touch cards by default and hides manual time pickers until toggled.
 
 ## 0. Operator Landing Page Architecture (`Entry / History`) (2026-09-19)

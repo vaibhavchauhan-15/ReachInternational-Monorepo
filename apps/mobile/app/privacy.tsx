@@ -6,8 +6,8 @@
  * and statutory KYC data protection policy.
  */
 
-import React from 'react';
-import { View, StyleSheet, ScrollView, Linking } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Linking, BackHandler, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../components/ui/touch/Pressable';
 import {
@@ -31,7 +31,12 @@ import {
   ExternalLink,
 } from '../components/ui/icon';
 
-export default function PrivacyPolicyScreen() {
+export interface PrivacyPolicyScreenProps {
+  onPressBack?: () => void;
+  backRoute?: string;
+}
+
+export default function PrivacyPolicyScreen({ onPressBack, backRoute }: PrivacyPolicyScreenProps = {}) {
   const router = useRouter();
   const { theme } = useTheme();
 
@@ -39,13 +44,31 @@ export default function PrivacyPolicyScreen() {
     Linking.openURL(`mailto:${BRAND_EMAIL}?subject=Privacy%20Policy%20Inquiry`);
   };
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
+  const handleBack = useCallback(() => {
+    if (onPressBack) {
+      onPressBack();
+      return;
+    }
+    if (backRoute) {
+      router.replace(backRoute as any);
+      return;
+    }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/settings');
+      router.replace('/settings' as any);
     }
-  };
+  }, [onPressBack, backRoute, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!backRoute && !onPressBack) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [backRoute, onPressBack, handleBack]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -53,6 +76,7 @@ export default function PrivacyPolicyScreen() {
       <MobileHeader
         title="Privacy Policy"
         showBack={true}
+        backRoute={backRoute}
         onPressBack={handleBack}
         showQuickAccess={false}
       />

@@ -13,6 +13,8 @@ export type LucideProps = React.SVGProps<SVGSVGElement> & {
 
 // Aliases ensuring 100% backward-compatibility for direct "lucide-react" imports
 export const Shield = Icons.ShieldCheck;
+export const ShieldAlert = Icons.ShieldCheck;
+export const ClipboardList = Icons.ClipboardCheck;
 export const LogOut = Icons.LogOut;
 export const Logout = Icons.LogOut;
 export const SignOut = Icons.LogOut;
@@ -89,6 +91,27 @@ export const ArrowLeftRight: LucideIcon = (props: LucideProps) => (
     <path d="M4 7h16" />
     <path d="m16 21 4-4-4-4" />
     <path d="M20 17H4" />
+  </svg>
+);
+
+export const WifiOff: LucideIcon = (props: LucideProps) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={props.size || 24}
+    height={props.size || 24}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={props.color || "currentColor"}
+    strokeWidth={props.strokeWidth || 2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <line x1="2" y1="2" x2="22" y2="22" />
+    <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+    <path d="M2 8.82a15 15 0 0 1 4.17-2.65" />
+    <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.82" />
+    <line x1="12" y1="20" x2="12.01" y2="20" />
   </svg>
 );
 

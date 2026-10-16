@@ -75,6 +75,7 @@ type Banned = 'fontSize' | 'fontFamily' | 'fontWeight' | 'fontStyle' | 'lineHeig
 
 export type TextProps = SlottableTextProps & {
   className?: string;
+  weight?: 'normal' | 'medium' | 'semibold' | 'bold' | string;
   variant?:
     | 'default'
     | 'h1'
@@ -91,7 +92,7 @@ export type TextProps = SlottableTextProps & {
 };
 
 const Text = React.forwardRef<TextRef, TextProps>(
-  ({ className, asChild = false, variant = 'default', style, ...props }, ref) => {
+  ({ className, asChild = false, variant = 'default', weight, style, ...props }, ref) => {
     const textClass = React.useContext(TextClassContext);
     const Component = asChild ? Slot.Text : RNText;
 
@@ -99,10 +100,22 @@ const Text = React.forwardRef<TextRef, TextProps>(
     if (variant && variant in TYPE_VARIANTS) {
       try {
         const { scale } = useTypeScale();
-        dynamicTypeStyle = typeStyle(variant as TypeVariant, scale);
+        dynamicTypeStyle = { ...typeStyle(variant as TypeVariant, scale) };
       } catch {
-        dynamicTypeStyle = typeStyle(variant as TypeVariant, 1);
+        dynamicTypeStyle = { ...typeStyle(variant as TypeVariant, 1) };
       }
+    }
+
+    if (weight) {
+      const weightFont =
+        weight === 'bold'
+          ? 'Geist-Bold'
+          : weight === 'semibold'
+          ? 'Geist-SemiBold'
+          : weight === 'medium'
+          ? 'Geist-Medium'
+          : 'Geist-Regular';
+      dynamicTypeStyle = { ...dynamicTypeStyle, fontFamily: weightFont };
     }
 
     const matchedVariant =

@@ -23,3 +23,5 @@ overrides:
   "@xmldom/xmldom": ">=0.9.12"
   "@babel/generator": "^7.29.8"
 
+patchedDependencies:
+  expo-router@57.0.28: patches/expo-router@57.0.28.patch

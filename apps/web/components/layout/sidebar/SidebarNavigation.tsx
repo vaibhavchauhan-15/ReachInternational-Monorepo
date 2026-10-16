@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarMenu } from "@/components/ui/sidebar";
+import { SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarMenu } from "@/components/ui/Sidebar";
 import { NavigationItem } from "./NavigationItem";
 import type { NavItem } from "./types";
 

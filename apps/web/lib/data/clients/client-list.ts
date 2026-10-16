@@ -175,7 +175,7 @@ function getCachedClientList(filter?: ClientDirectoryFilter) {
         const { data, error } = await query.limit(pageSize + 1);
         if (error) {
           console.error("Error in getClientList cursor query:", error.message || error);
-          return { clients: [], total: 0, page: 1, pageSize, totalPages: 0, hasMore: false };
+          throw new Error(`Failed to fetch clients: ${error.message || "Database error"}`);
         }
         const rows = (data as any[]) ?? [];
         if (rows.length > pageSize) {
@@ -194,7 +194,7 @@ function getCachedClientList(filter?: ClientDirectoryFilter) {
 
         if (error) {
           console.error("Error in getClientList query:", error.message || error);
-          return { clients: [], total: 0, page, pageSize, totalPages: 0, hasMore: false };
+          throw new Error(`Failed to fetch clients: ${error.message || "Database error"}`);
         }
 
         records = (data as any[]) ?? [];

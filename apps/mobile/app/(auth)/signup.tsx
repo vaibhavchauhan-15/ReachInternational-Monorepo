@@ -620,7 +620,7 @@ export default function SignupScreen() {
                 <Input
                   label="Full Name"
                   required
-                  placeholder="Rahul Sharma"
+                  placeholder="Vaibhav Chauhan"
                   value={fullName}
                   onChangeText={handleFullNameChange}
                   onBlur={() => {
@@ -638,7 +638,7 @@ export default function SignupScreen() {
                 <Input
                   label="Email Address"
                   required
-                  placeholder="rahul@domain.com"
+                  placeholder="vaibhav@domain.com"
                   value={email}
                   onChangeText={handleEmailChange}
                   onBlur={() => {
@@ -702,10 +702,10 @@ export default function SignupScreen() {
                         loadingSupervisors
                           ? 'Loading supervisors...'
                           : supervisorOptions.length === 0
-                          ? supervisorError
-                            ? 'Failed to load supervisors'
-                            : 'No active supervisors found'
-                          : 'Select supervisor...'
+                            ? supervisorError
+                              ? 'Failed to load supervisors'
+                              : 'No active supervisors found'
+                            : 'Select supervisor...'
                       }
                       leftIcon={<ShieldCheck size={15} color={iconColor} />}
                       error={fieldErrors.supervisor_id}

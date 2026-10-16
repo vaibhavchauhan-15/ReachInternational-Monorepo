@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatedRefresh } from "./animated-icons";
 import { Button, type ButtonVariant } from "./Button";
 import { useToast } from "./Toast";
-import { InfoTooltip } from "./tooltip";
+import { InfoTooltip } from "./Tooltip";
 import { refreshPageDataAction } from "@/app/actions/refresh";
 
 export interface RefreshButtonProps {

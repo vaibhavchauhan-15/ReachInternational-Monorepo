@@ -21,8 +21,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  LayoutAnimation,
 } from 'react-native';
-import { AppModal } from '../ui/AppModal';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,7 +59,7 @@ import {
   parseOperationalErrorMessage,
   type ShiftMatchTarget,
 } from '@reachinternational/utils';
-import { useToast, EmptyState, ErrorState, FormError } from '../ui';
+import { useToast, EmptyState, ErrorState, FormError, Skeleton, SearchableSelect, type SelectOption } from '../ui';
 import type { OperatorEntryContext, ClientShiftCode } from '@reachinternational/types';
 import { supabase } from '../../lib/supabase';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
@@ -68,10 +69,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Text, useTypeStyle } from '../ui/Text';
 import { Input } from '../ui/Input';
-import { Textarea } from '../ui/textarea';
+import { Textarea } from '../ui/Textarea';
 import { TimeInput } from '../ui/TimeInput';
 import { ShiftCardSelector, formatCompactShiftRange, getShiftDisplayTitle, type ShiftCardItem } from '../ui/ShiftCardSelector';
 import { OperatorEntrySkeleton } from './OperationsSkeleton';
+import {
+  useOperationsMachinesLazy,
+  useOperationsClientsLazy,
+  useOperationsClientShifts,
+  type LazyMachineOption,
+  type LazyClientOption,
+} from '../../lib/hooks/useOperationsData';
 
 const DRAFT_STORAGE_KEY = '@reach_operator_log_draft';
 
@@ -79,8 +87,8 @@ export const DEFAULT_CLIENT_SHIFTS: ClientShiftCode[] = [
   {
     id: 'default-s1',
     client_id: '',
-    code: 'S1',
-    name: 'Shift S1',
+    code: 'Shift A',
+    name: 'Shift A',
     start_time: '06:00 AM',
     end_time: '02:00 PM',
     raw_start_time: '06:00 AM',
@@ -94,8 +102,8 @@ export const DEFAULT_CLIENT_SHIFTS: ClientShiftCode[] = [
   {
     id: 'default-s2',
     client_id: '',
-    code: 'S2',
-    name: 'Shift S2',
+    code: 'Shift B',
+    name: 'Shift B',
     start_time: '02:00 PM',
     end_time: '10:00 PM',
     raw_start_time: '02:00 PM',
@@ -109,8 +117,8 @@ export const DEFAULT_CLIENT_SHIFTS: ClientShiftCode[] = [
   {
     id: 'default-s3',
     client_id: '',
-    code: 'S3',
-    name: 'Shift S3',
+    code: 'Shift C',
+    name: 'Shift C',
     start_time: '10:00 PM',
     end_time: '06:00 AM',
     raw_start_time: '10:00 PM',
@@ -133,15 +141,16 @@ export interface MobileOperatorEntryCardProps {
   initialShift?: string;
 }
 
-export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = ({
-  entryContext,
-  isLoading = false,
-  isError = false,
-  error,
-  onRetry,
-  onSuccess,
-  initialShift,
-}) => {
+export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = React.memo(
+  function MobileOperatorEntryCard({
+    entryContext,
+    isLoading = false,
+    isError = false,
+    error,
+    onRetry,
+    onSuccess,
+    initialShift,
+  }) {
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
   const { isOffline } = useNetworkStatus();
@@ -159,14 +168,73 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   const [logDate, setLogDate] = useState<string>(() => getISTDateString());
   const [startMeter, setStartMeter] = useState<string>(() => initialHmrStr);
   const [endMeter, setEndMeter] = useState<string>(() => initialHmrStr);
-  const [isStartMeterLocked, setIsStartMeterLocked] = useState<boolean>(true);
 
-  // Available shifts for this machine
+  // Machine and Client Selection State (Interactive Dropdown with Lazy Loading per user feedback)
+  const [selectedMachineId, setSelectedMachineId] = useState<string>(() => entryContext?.machine?.id || '');
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => entryContext?.client?.id || '');
+  const [hasOpenedMachineSelect, setHasOpenedMachineSelect] = useState<boolean>(false);
+  const [hasOpenedClientSelect, setHasOpenedClientSelect] = useState<boolean>(false);
+
+  // Lazy loading queries: ONLY fetch all fleet machines/clients on-demand when user opens dropdown or if unassigned
+  const shouldFetchMachines = !entryContext?.machine?.id || hasOpenedMachineSelect;
+  const shouldFetchClients = !entryContext?.client?.id || hasOpenedClientSelect;
+  const { data: lazyMachines, isLoading: isLoadingMachines } = useOperationsMachinesLazy(shouldFetchMachines);
+  const { data: lazyClients, isLoading: isLoadingClients } = useOperationsClientsLazy(shouldFetchClients);
+
+  // Active machine & active client resolution
+  const activeMachine = useMemo(() => {
+    if (selectedMachineId) {
+      const match = (lazyMachines || []).find((m) => m.id === selectedMachineId);
+      if (match) return match;
+    }
+    return entryContext?.machine || null;
+  }, [selectedMachineId, lazyMachines, entryContext?.machine]);
+
+  const activeClient = useMemo(() => {
+    if (selectedClientId) {
+      const match = (lazyClients || []).find((c) => c.id === selectedClientId);
+      if (match) return match;
+    }
+    return entryContext?.client || null;
+  }, [selectedClientId, lazyClients, entryContext?.client]);
+
+  // Effective rented client ID from client selector, machine's client link, or entry context
+  const effectiveClientId =
+    selectedClientId ||
+    (activeMachine as any)?.client_id ||
+    entryContext?.client?.id ||
+    '';
+
+  // Fetch canonical shift times directly from the rented client's shift configuration
+  const { data: clientShiftsData } = useOperationsClientShifts(effectiveClientId);
+
+  // Available shifts for this rented client (Cleanly normalized to Shift A / Shift B / Shift C)
   const availableShifts = useMemo<ClientShiftCode[]>(() => {
-    return entryContext?.shift_codes && entryContext.shift_codes.length > 0
-      ? entryContext.shift_codes
-      : DEFAULT_CLIENT_SHIFTS;
-  }, [entryContext?.shift_codes]);
+    let list: ClientShiftCode[] = [];
+    if (clientShiftsData && clientShiftsData.length > 0) {
+      list = clientShiftsData;
+    } else if (entryContext?.shift_codes && entryContext.shift_codes.length > 0) {
+      list = entryContext.shift_codes;
+    } else {
+      list = DEFAULT_CLIENT_SHIFTS;
+    }
+
+    return list.map((sc, idx) => {
+      let codeLabel = sc.code;
+      const cUpper = sc.code.trim().toUpperCase();
+      if (cUpper === 'S1' || cUpper === 'A' || cUpper === 'SHIFT 1') codeLabel = 'Shift A';
+      else if (cUpper === 'S2' || cUpper === 'B' || cUpper === 'SHIFT 2') codeLabel = 'Shift B';
+      else if (cUpper === 'S3' || cUpper === 'C' || cUpper === 'SHIFT 3') codeLabel = 'Shift C';
+      else if (!/^shift/i.test(sc.code)) {
+        const letter = String.fromCharCode(65 + (idx % 26));
+        codeLabel = `Shift ${letter}`;
+      }
+      return {
+        ...sc,
+        name: codeLabel,
+      };
+    });
+  }, [clientShiftsData, entryContext?.shift_codes]);
 
   // Assigned shifts for this operator
   const assignedShiftCodes = useMemo<string[]>(() => {
@@ -188,7 +256,6 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     resolvedInitialShift?.code || entryContext?.assigned_shift_code || 'S1'
   );
 
-  const [showManualTimes, setShowManualTimes] = useState<boolean>(false);
   const [startTime, setStartTime] = useState<string>(() => {
     const raw =
       resolvedInitialShift?.start_time ||
@@ -215,14 +282,19 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
   const [breakdownEndTime, setBreakdownEndTime] = useState<string>('03:00 PM');
   const [breakdownReason, setBreakdownReason] = useState<string>('');
 
-  // Modals & Submission State
-  const [isDatePickerModalOpen, setIsDatePickerModalOpen] = useState<boolean>(false);
+  // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const submittingRef = useRef<boolean>(false);
 
   // Sync with entryContext when loaded
   useEffect(() => {
     if (entryContext) {
+      if (entryContext.machine?.id && !selectedMachineId) {
+        setSelectedMachineId(entryContext.machine.id);
+      }
+      if (entryContext.client?.id && !selectedClientId) {
+        setSelectedClientId(entryContext.client.id);
+      }
       if (entryContext.last_hmr !== undefined && entryContext.last_hmr !== null) {
         const hmrStr = String(entryContext.last_hmr);
         setStartMeter(hmrStr);
@@ -240,7 +312,122 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         }
       }
     }
-  }, [entryContext, resolvedInitialShift]);
+  }, [entryContext, resolvedInitialShift, selectedMachineId, selectedClientId]);
+
+  // Auto-sync start and end times whenever available shifts change (e.g. rented client shifts loaded)
+  useEffect(() => {
+    if (availableShifts && availableShifts.length > 0) {
+      const match =
+        availableShifts.find((s) => {
+          const sNorm = s.code.replace(/^shift\s*/i, '').trim().toUpperCase();
+          const selNorm = selectedShiftCode.replace(/^shift\s*/i, '').trim().toUpperCase();
+          return s.code.toUpperCase() === selectedShiftCode.toUpperCase() || (selNorm !== '' && sNorm === selNorm);
+        }) || availableShifts[0];
+
+      if (match) {
+        if (match.code !== selectedShiftCode) {
+          setSelectedShiftCode(match.code);
+        }
+        const s = formatTo12Hour(match.start_time || (match as any).raw_start_time);
+        if (s) setStartTime(s);
+        const e = formatTo12Hour(match.end_time || (match as any).raw_end_time);
+        if (e) setEndTime(e);
+        if ((match as any).default_ot_minutes && (match as any).default_ot_minutes > 0) {
+          setOvertimeHours(((match as any).default_ot_minutes / 60).toString());
+        }
+      }
+    }
+  }, [availableShifts]);
+
+  const handleSelectMachine = useCallback((machineId: string) => {
+    setSelectedMachineId(machineId);
+    const m = (lazyMachines || []).find((x) => x.id === machineId) || (entryContext?.machine?.id === machineId ? (entryContext.machine as any) : null);
+    if (m) {
+      if (typeof (m as any).hour_meter === 'number') {
+        const hmrStr = String((m as any).hour_meter);
+        setStartMeter(hmrStr);
+        setEndMeter(hmrStr);
+      }
+      if ((m as any).client_id) {
+        setSelectedClientId((m as any).client_id);
+      }
+    }
+  }, [lazyMachines, entryContext?.machine]);
+
+  const handleSelectClient = useCallback((clientId: string) => {
+    setSelectedClientId(clientId);
+  }, []);
+
+  const handleToggleBreakdown = useCallback(() => {
+    haptics.toggle(!isBreakdown);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsBreakdown((prev) => !prev);
+  }, [isBreakdown]);
+
+  const machineSelectOptions = useMemo<SelectOption[]>(() => {
+    const list: SelectOption[] = [];
+    const seenIds = new Set<string>();
+
+    const formatMachineOption = (m: any, isAssigned: boolean): SelectOption => {
+      const model = m.model || m.machine_id;
+      const serial = m.serial_number ? `S/N: ${m.serial_number}` : undefined;
+      const isRented = m.status === 'rented';
+
+      return {
+        value: m.id,
+        label: model,
+        code: m.machine_id,
+        description: serial,
+        badge: isAssigned ? 'ASSIGNED' : isRented ? 'RENTED' : undefined,
+        badgeVariant: isAssigned ? 'success' : isRented ? 'info' : 'neutral',
+      };
+    };
+
+    if (entryContext?.machine?.id) {
+      seenIds.add(entryContext.machine.id);
+      list.push(formatMachineOption(entryContext.machine, true));
+    }
+
+    (lazyMachines || []).forEach((m) => {
+      if (!seenIds.has(m.id)) {
+        seenIds.add(m.id);
+        list.push(formatMachineOption(m, false));
+      }
+    });
+
+    return list;
+  }, [entryContext?.machine, lazyMachines]);
+
+  const clientSelectOptions = useMemo<SelectOption[]>(() => {
+    const list: SelectOption[] = [];
+    const seenIds = new Set<string>();
+
+    const formatClientOption = (c: any, isAssigned: boolean): SelectOption => {
+      const city = c.city || c.site || undefined;
+      return {
+        value: c.id,
+        label: c.company_name,
+        code: c.code || undefined,
+        description: city,
+        badge: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        badgeVariant: isAssigned ? 'success' : 'neutral',
+      };
+    };
+
+    if (entryContext?.client?.id) {
+      seenIds.add(entryContext.client.id);
+      list.push(formatClientOption(entryContext.client, true));
+    }
+
+    (lazyClients || []).forEach((c) => {
+      if (!seenIds.has(c.id)) {
+        seenIds.add(c.id);
+        list.push(formatClientOption(c, false));
+      }
+    });
+
+    return list;
+  }, [entryContext?.client, lazyClients]);
 
   // Load auto-saved draft from AsyncStorage on mount
   useEffect(() => {
@@ -313,12 +500,6 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     if (endMeter === startMeter || endMeter === '') {
       setEndMeter(val);
     }
-  };
-
-  // Toggle Start Meter Lock
-  const handleToggleLock = () => {
-    haptics.select();
-    setIsStartMeterLocked((prev) => !prev);
   };
 
   // Switch Shift
@@ -463,7 +644,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       return;
     }
 
-    if (!entryContext?.machine?.id) {
+    const effectiveMachine = activeMachine || entryContext?.machine;
+    if (!effectiveMachine?.id) {
       haptics.reject();
       const err = { title: 'No Machine Assigned', message: 'No machine assigned to your account.' };
       postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
@@ -560,14 +742,16 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         return;
       }
 
+      const effectiveClient = activeClient || entryContext?.client;
+      const effectiveLocation = (effectiveClient as any)?.site || (effectiveClient as any)?.city || (effectiveClient as any)?.address || null;
       const effectiveDate = shiftTiming?.resolvedStartDate || logDate;
       const effectiveShift = selectedShiftCode || 'S1';
-      const idempotencyKey = `ihl_op_${entryContext.machine.id}_${effectiveOperatorId}_${effectiveDate}_${effectiveShift}`;
+      const idempotencyKey = `ihl_op_${effectiveMachine.id}_${effectiveOperatorId}_${effectiveDate}_${effectiveShift}`;
 
       // Pre-queue duplicate validation against local offline queue and cached server records
       const cachedOperatorLogs = queryClient.getQueryData<any[]>(['operator', 'history-logs', effectiveOperatorId]) || [];
       const dupCheck = offlineQueueManager.checkDuplicateShiftLog({
-        machineId: entryContext.machine.id,
+        machineId: effectiveMachine.id,
         operatorId: effectiveOperatorId,
         logDate: effectiveDate,
         shiftCode: effectiveShift,
@@ -591,9 +775,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       }
 
       const rpcParams = {
-        p_machine_id: entryContext.machine.id,
+        p_machine_id: effectiveMachine.id,
         p_operator_id: effectiveOperatorId,
-        p_client_id: entryContext.client?.id || null,
+        p_client_id: effectiveClient?.id || null,
         p_shift_code: selectedShiftCode || null,
         p_log_date: shiftTiming.resolvedStartDate || logDate,
         p_end_date: shiftTiming.resolvedEndDate || logDate,
@@ -612,17 +796,17 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         p_breakdown_hours: isBreakdown && breakdownStats ? breakdownStats.durationDecimalHours : 0,
         p_shift: selectedShiftCode ? `Shift ${selectedShiftCode}` : null,
         p_machine_condition: isBreakdown ? 'breakdown' : 'good',
-        p_location: entryContext.client?.site || null,
+        p_location: effectiveLocation,
         p_remarks: breakdownReason.trim() || null,
         p_idempotency_key: idempotencyKey,
         p_entered_by: user?.id || effectiveOperatorId,
       };
 
       logPayload = {
-        machine_id: entryContext.machine.id,
+        machine_id: effectiveMachine.id,
         shift_code: selectedShiftCode,
-        client_id: entryContext.client?.id || null,
-        location: entryContext.client?.site || null,
+        client_id: effectiveClient?.id || null,
+        location: effectiveLocation,
         start_meter: startNum,
         end_meter: endNum,
         start_time: startTime.trim(),
@@ -650,7 +834,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       const optimisticHistoryRow = {
         id: idempotencyKey,
         client_mutation_id: idempotencyKey,
-        machine_id: entryContext.machine.id,
+        machine_id: effectiveMachine.id,
         log_date: shiftTiming.resolvedStartDate || logDate,
         start_meter: startNum,
         end_meter: endNum,
@@ -660,7 +844,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         is_breakdown: isBreakdown,
         sync_status: isOffline ? 'queued' : 'pending',
         syncState: isOffline ? 'queued' : 'pending',
-        machine: entryContext.machine,
+        machine: effectiveMachine,
       };
 
       if (effectiveOperatorId) {
@@ -679,9 +863,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
       if (isOffline) {
         await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
-        notifyLogEntryCreated(entryContext.machine.machine_id || 'Machine', runningHours, shiftTiming.overtimeHours);
+        notifyLogEntryCreated(effectiveMachine.machine_id || 'Machine', runningHours, shiftTiming.overtimeHours);
         if (isBreakdown) {
-          notifyMachineStatusChanged(entryContext.machine.machine_id || 'Machine', 'breakdown');
+          notifyMachineStatusChanged(effectiveMachine.machine_id || 'Machine', 'breakdown');
         }
         await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
         haptics.confirm();
@@ -782,8 +966,38 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             health_status: isBreakdown ? 'breakdown' : 'active',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', entryContext.machine.id);
+          .eq('id', effectiveMachine.id);
       }
+
+      // Optimistic update for operator dashboard
+      queryClient.setQueriesData({ queryKey: ['dashboard'] }, (old: any) => {
+        if (!old || !old.today) return old;
+        const newSubmittedCount = (old.today.submittedCount || 0) + 1;
+        const totalAssigned = old.today.totalAssignedCount || (old.assigned_shifts?.length || 1);
+        const updatedShifts = (old.assigned_shifts || []).map((s: any) => {
+          if (s.code === selectedShiftCode || (!selectedShiftCode && !s.is_logged_today)) {
+            return {
+              ...s,
+              is_logged_today: true,
+              running_hours_today: runningHours,
+              end_meter_today: endNum,
+            };
+          }
+          return s;
+        });
+
+        return {
+          ...old,
+          today: {
+            ...old.today,
+            submittedCount: newSubmittedCount,
+            totalRunningHoursToday: Number(((old.today.totalRunningHoursToday || 0) + runningHours).toFixed(1)),
+            entryStatus: newSubmittedCount >= totalAssigned ? 'submitted' : 'partial',
+            lastHmr: endNum,
+          },
+          assigned_shifts: updatedShifts,
+        };
+      });
 
       // Invalidate relevant queries
       queryClient.invalidateQueries({
@@ -800,6 +1014,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       });
       queryClient.invalidateQueries({
         queryKey: ['machines'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['dashboard'],
       });
 
       await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
@@ -839,9 +1056,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
       if (isNetworkDrop && logPayload) {
         try {
           await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
-          notifyLogEntryCreated(entryContext?.machine?.machine_id || 'Machine', runningHours, shiftTiming?.overtimeHours || 0);
+          notifyLogEntryCreated(effectiveMachine?.machine_id || 'Machine', runningHours, shiftTiming?.overtimeHours || 0);
           if (isBreakdown) {
-            notifyMachineStatusChanged(entryContext?.machine?.machine_id || 'Machine', 'breakdown');
+            notifyMachineStatusChanged(effectiveMachine?.machine_id || 'Machine', 'breakdown');
           }
           await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
           haptics.confirm();
@@ -908,9 +1125,16 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     return dates;
   }, []);
 
-  if (isLoading) {
-    return <OperatorEntrySkeleton />;
-  }
+  // Popover date select options for SearchableSelect
+  const dateSelectOptions = useMemo<SelectOption[]>(() => {
+    return selectableDates.map((item) => ({
+      value: item.date,
+      label: item.label,
+      badge: item.badge || undefined,
+      badgeVariant: item.isToday ? 'success' : 'neutral',
+      icon: <Calendar size={14} color="#0284c7" />,
+    }));
+  }, [selectableDates]);
 
   if (isError && !entryContext) {
     return (
@@ -934,7 +1158,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
     );
   }
 
-  if (!entryContext?.machine || !entryContext.machine.id) {
+  // Progressive skeleton gate: show "No Equipment" state only once we know for certain
+  // there is no assignment (context loaded, no machine). While loading, fall through to the
+  // full form so the static shell is instantly visible with inline skeleton placeholders.
+  if (!isLoading && (!entryContext?.machine || !entryContext.machine.id)) {
     return (
       <View
         style={[
@@ -1006,80 +1233,36 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           ASSIGNED MACHINE & SITE
         </Text>
 
-        {/* Machine Card */}
-        <View
-          style={[
-            styles.infoCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.iconCircle,
-              {
-                backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : '#e0f2fe',
-                borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#bae6fd',
-              },
-            ]}
-          >
-            <Truck size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-          </View>
-          <View style={styles.infoContent}>
-            <Text variant="subheading" style={[styles.infoTitle, { color: theme.colors.ink }]}>
-              {machine?.model ? `${machine.model} (${machine.machine_id})` : machine?.machine_id || 'Unassigned Equipment'}
-            </Text>
-            <View
-              style={[
-                styles.serialBadge,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f5',
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              <Text variant="mono" style={[styles.serialBadgeText, { color: theme.colors.mute }]}>
-                S/N: {machine?.serial_number || '—'}
-              </Text>
-            </View>
-          </View>
-        </View>
+        {/* Machine Dropdown Selection with Lazy Loading */}
+        <SearchableSelect
+          label="Assigned Machine"
+          required
+          options={machineSelectOptions}
+          value={selectedMachineId}
+          onChange={(val) => handleSelectMachine(val)}
+          onDropdownOpen={() => setHasOpenedMachineSelect(true)}
+          placeholder={isLoadingMachines ? 'Loading machinery...' : 'Select machine...'}
+          leftIcon={<Truck size={16} color={isDark ? '#38bdf8' : '#0284c7'} />}
+          presentation="dropdown"
+          searchable={true}
+          searchPlaceholder="Search machine ID, model, serial..."
+        />
 
-        {/* Site & Client Card */}
-        <View
-          style={[
-            styles.infoCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-              marginTop: 8,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.iconCircle,
-              {
-                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#dcfce7',
-                borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#bbf7d0',
-              },
-            ]}
-          >
-            <Building2 size={16} color={isDark ? '#4ade80' : '#16a34a'} />
-          </View>
-          <View style={styles.infoContent}>
-            <Text variant="subheading" style={[styles.infoTitle, { color: theme.colors.ink }]}>
-              {client?.company_name || 'Internal Yard / Unassigned'}
-            </Text>
-            <View style={styles.locationRow}>
-              <MapPin size={13} color="#f43f5e" style={{ marginTop: 1, marginRight: 3 }} />
-              <Text variant="caption" style={[styles.locationText, { color: theme.colors.mute }]}>
-                {client?.site || (client as any)?.address || 'Barakhamba Road, Connaught Place, Delhi, New Delhi, Delhi'}
-              </Text>
-            </View>
-          </View>
+        {/* Client & Site Dropdown Selection with Lazy Loading */}
+        <View style={{ marginTop: 12 }}>
+          <SearchableSelect
+            label="Client & Site Location"
+            required
+            options={clientSelectOptions}
+            value={selectedClientId}
+            onChange={(val) => handleSelectClient(val)}
+            onDropdownOpen={() => setHasOpenedClientSelect(true)}
+            placeholder={isLoadingClients ? 'Loading clients...' : 'Select client & site...'}
+            leftIcon={<Building2 size={16} color={isDark ? '#4ade80' : '#16a34a'} />}
+            presentation="dropdown"
+            searchable={true}
+            searchPlaceholder="Search client name or site..."
+          />
         </View>
       </View>
 
@@ -1147,59 +1330,39 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink }]}>
               Start Meter (HMR) <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
-            <Pressable
-              variant="iconButton"
-              haptic="toggle"
-              onPress={handleToggleLock}
-              style={styles.lockToggleBtn}
-              accessibilityLabel={isStartMeterLocked ? 'Start meter locked to last reading' : 'Start meter unlocked for manual edit'}
-            >
-              {isStartMeterLocked ? (
-                <View style={styles.lockRow}>
-                  <Lock size={12} color="#10b981" />
-                  <Text variant="caption" style={{ color: '#10b981', marginLeft: 3 }}>
-                    Synced
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.lockRow}>
-                  <Unlock size={12} color="#f59e0b" />
-                  <Text variant="caption" style={{ color: '#f59e0b', marginLeft: 3 }}>
-                    Manual
-                  </Text>
-                </View>
-              )}
-            </Pressable>
           </View>
 
-          <Input
-            name="start_meter_val"
-            id="start_meter_val"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-            textContentType="none"
-            importantForAutofill="no"
-            autoCorrect={false}
-            spellCheck={false}
-            aria-autocomplete="none"
-            value={startMeter}
-            onChangeText={handleStartMeterChange}
-            editable={!isStartMeterLocked}
-            style={[
-              styles.meterInput,
-              monoTypeStyle,
-              {
-                backgroundColor: isStartMeterLocked
-                  ? (isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb')
-                  : theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                color: isStartMeterLocked ? theme.colors.mute : theme.colors.ink,
-              },
-            ]}
-          />
+          {/* Progressive: skeleton while HMR value is fetching, real input once ready */}
+          {isLoading ? (
+            <Skeleton width="100%" height={48} borderRadius={12} animate style={{ marginTop: 2 }} />
+          ) : (
+            <Input
+              name="start_meter_val"
+              id="start_meter_val"
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
+              value={startMeter}
+              onChangeText={handleStartMeterChange}
+              editable={true}
+              style={[
+                styles.meterInput,
+                monoTypeStyle,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                  color: theme.colors.ink,
+                },
+              ]}
+            />
+          )}
           <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>
-            {isStartMeterLocked ? 'Locked to last recorded meter reading.' : 'Manually adjusted starting meter.'}
+            Auto-filled from last recorded data. Tap to change.
           </Text>
         </View>
 
@@ -1227,6 +1390,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             aria-autocomplete="none"
             value={endMeter}
             onChangeText={setEndMeter}
+            error={isMeterRegressed}
             style={[
               styles.meterInput,
               monoTypeStyle,
@@ -1270,7 +1434,32 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           )}
         </View>
 
-        {last_log ? (
+        {/* Progressive skeleton rows while last_log fetches, real values once resolved */}
+        {isLoading ? (
+          <View style={[styles.lastShiftRows, { gap: 8 }]}>
+            {/* Row 1: Last Recorded Date */}
+            <View style={styles.lastShiftRow}>
+              <Text variant="caption" style={[styles.lastShiftRowLabel, { color: isDark ? '#a7f3d0' : '#065f46' }]}>
+                Last Recorded Date
+              </Text>
+              <Skeleton width={100} height={14} borderRadius={4} animate />
+            </View>
+            {/* Row 2: Shift End Time */}
+            <View style={styles.lastShiftRow}>
+              <Text variant="caption" style={[styles.lastShiftRowLabel, { color: isDark ? '#a7f3d0' : '#065f46' }]}>
+                Shift End Time
+              </Text>
+              <Skeleton width={80} height={14} borderRadius={4} animate />
+            </View>
+            {/* Row 3: Last Entry By */}
+            <View style={styles.lastShiftRow}>
+              <Text variant="caption" style={[styles.lastShiftRowLabel, { color: isDark ? '#a7f3d0' : '#065f46' }]}>
+                Last Entry By
+              </Text>
+              <Skeleton width={90} height={14} borderRadius={4} animate />
+            </View>
+          </View>
+        ) : last_log ? (
           <View style={styles.lastShiftRows}>
             <View style={styles.lastShiftRow}>
               <Text variant="caption" style={[styles.lastShiftRowLabel, { color: isDark ? '#a7f3d0' : '#065f46' }]}>
@@ -1323,170 +1512,96 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
             SHIFT
           </Text>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {/* Manual Toggle */}
-            <Pressable
-              variant="chip"
-              haptic="select"
-              onPress={() => setShowManualTimes(!showManualTimes)}
+          {/* Duration Badge */}
+          {shiftDurationHours > 0 && (
+            <Text variant="mono" style={[styles.durationBadge, { color: theme.colors.ink }]}>
+              {shiftDurationHours.toFixed(1)} hrs
+            </Text>
+          )}
+        </View>
+
+        {/* Date Selector Popover (SearchableSelect Dropdown) */}
+        <View style={{ marginTop: 10 }}>
+          <SearchableSelect
+            label="Select Date"
+            required
+            options={dateSelectOptions}
+            value={logDate}
+            onChange={(val) => setLogDate(val)}
+            placeholder="Select shift date..."
+            leftIcon={<Calendar size={15} color="#0284c7" />}
+            presentation="dropdown"
+            searchable={false}
+          />
+        </View>
+
+        {/* Shift Card Selector (Shift A / B / C badges) */}
+        <View style={{ marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <Clock size={15} color="#0284c7" />
+            <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink }]}>
+              Select Shift <Text style={{ color: '#ef4444' }}>*</Text>
+            </Text>
+          </View>
+
+          <ShiftCardSelector
+            shiftCodes={availableShifts as unknown as ShiftCardItem[]}
+            selectedCode={selectedShiftCode}
+            onSelect={handleSelectShift}
+          />
+
+          {/* Warning if unassigned shift selected */}
+          {isCurrentShiftUnassigned && (
+            <View
               style={[
-                styles.manualToggleBtn,
+                styles.unassignedWarningBanner,
                 {
-                  backgroundColor: showManualTimes
-                    ? '#0284c7'
-                    : (isDark ? 'rgba(255,255,255,0.05)' : '#ffffff'),
-                  borderColor: showManualTimes ? '#0284c7' : theme.colors.hairline,
+                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                  borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
                 },
               ]}
             >
-              <SlidersHorizontal size={12} color={showManualTimes ? '#ffffff' : theme.colors.mute} />
+              <AlertTriangle size={11} color={isDark ? '#fbbf24' : '#d97706'} />
               <Text
-                variant="mono"
+                variant="micro"
                 style={{
-                  color: showManualTimes ? '#ffffff' : theme.colors.mute,
+                  color: isDark ? '#fbbf24' : '#92400e',
+                  flex: 1,
                 }}
               >
-                {showManualTimes ? 'Shift' : 'Manual'}
-              </Text>
-            </Pressable>
-
-            {/* Duration Badge */}
-            {shiftDurationHours > 0 && (
-              <Text variant="mono" style={[styles.durationBadge, { color: theme.colors.ink }]}>
-                {shiftDurationHours.toFixed(1)} hrs
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {/* Date Selector Dropdown Button (Screenshot 2) */}
-        <View style={{ marginTop: 10 }}>
-          <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink, marginBottom: 6 }]}>
-            Select Date <Text style={{ color: '#ef4444' }}>*</Text>
-          </Text>
-
-          <Pressable
-            variant="card"
-            haptic="select"
-            onPress={() => setIsDatePickerModalOpen(true)}
-            style={[
-              styles.datePickerBtn,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Calendar size={16} color="#0284c7" />
-              <Text variant="mono" style={[styles.datePickerText, { color: theme.colors.ink }]}>
-                {formatDate(logDate)}
-              </Text>
-              {logDate === getISTDateString() && (
-                <View
-                  style={[
-                    styles.todayBadge,
-                    {
-                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7',
-                      borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0',
-                    },
-                  ]}
-                >
-                  <Text variant="caption" style={{ color: isDark ? '#4ade80' : '#15803d' }}>
-                    Today
-                  </Text>
-                </View>
-              )}
-            </View>
-            <ChevronDown size={15} color={theme.colors.mute} />
-          </Pressable>
-        </View>
-
-        {/* Shift Card Selector / Manual Pickers (Screenshot 2 & 3) */}
-        {!showManualTimes ? (
-          <View style={{ marginTop: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <Clock size={15} color="#0284c7" />
-              <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink }]}>
-                Select Shift <Text style={{ color: '#ef4444' }}>*</Text>
+                Assigned to Shift {assignedShiftCodes.join(', ')} only.
               </Text>
             </View>
+          )}
 
-            <ShiftCardSelector
-              shiftCodes={availableShifts as unknown as ShiftCardItem[]}
-              selectedCode={selectedShiftCode}
-              onSelect={handleSelectShift}
-            />
-
-            {/* Warning if unassigned shift selected (Screenshot 3) */}
-            {isCurrentShiftUnassigned && (
-              <View
-                style={[
-                  styles.unassignedWarningBanner,
-                  {
-                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-                    borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
-                  },
-                ]}
+          {/* In-progress shift advisory banner */}
+          {isFutureShift && (
+            <View
+              style={[
+                styles.unassignedWarningBanner,
+                {
+                  backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
+                  borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                  marginTop: 8,
+                },
+              ]}
+            >
+              <Clock size={11} color={isDark ? '#38bdf8' : '#0284c7'} />
+              <Text
+                variant="micro"
+                style={{
+                  color: isDark ? '#38bdf8' : '#0369a1',
+                  flex: 1,
+                }}
               >
-                <AlertTriangle size={11} color={isDark ? '#fbbf24' : '#d97706'} />
-                <Text
-                  variant="micro"
-                  style={{
-                    color: isDark ? '#fbbf24' : '#92400e',
-                    flex: 1 }}
-                >
-                  Assigned to Shift {assignedShiftCodes.join(', ')} only.
-                </Text>
-              </View>
-            )}
-
-            {/* In-progress shift advisory banner */}
-            {isFutureShift && (
-              <View
-                style={[
-                  styles.unassignedWarningBanner,
-                  {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
-                    borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
-                    marginTop: 8,
-                  },
-                ]}
-              >
-                <Clock size={11} color={isDark ? '#38bdf8' : '#0284c7'} />
-                <Text
-                  variant="micro"
-                  style={{
-                    color: isDark ? '#38bdf8' : '#0369a1',
-                    flex: 1,
-                  }}
-                >
-                  Shift in progress: logs can be submitted once your shift concludes after {formatTo12Hour(endTime) || endTime}.
-                </Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={{ marginTop: 12, gap: 10 }}>
-            <TimeInput
-              label="Shift Start"
-              value={startTime}
-              onChangeText={setStartTime}
-              toggleLayout="side-by-side"
-              required
-            />
-            <TimeInput
-              label="Shift End"
-              value={endTime}
-              onChangeText={setEndTime}
-              toggleLayout="side-by-side"
-              required
-            />
-          </View>
-        )}
+                Shift in progress · Submit logs after {formatTo12Hour(endTime) || endTime}.
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* 5. MACHINE BREAKDOWN SECTION (Screenshot 2 & 3) */}
+      {/* 5. MACHINE BREAKDOWN SECTION (Smooth Transition, White Button Text) */}
       <View
         style={[
           styles.breakdownCard,
@@ -1512,30 +1627,29 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           <Pressable
             variant="buttonDanger"
             haptic="toggle"
-            onPress={() => {
-              setIsBreakdown(!isBreakdown);
-            }}
+            onPress={handleToggleBreakdown}
             style={[
               styles.breakdownToggleBtn,
               {
-                backgroundColor: isBreakdown ? '#e11d48' : (isDark ? 'rgba(255,255,255,0.05)' : '#ffffff'),
-                borderColor: isBreakdown ? '#e11d48' : theme.colors.hairline,
+                backgroundColor: isBreakdown ? '#e11d48' : '#0284c7',
+                borderColor: isBreakdown ? '#e11d48' : '#0284c7',
               },
             ]}
           >
             <Text
               variant="label"
               style={{
-                color: isBreakdown ? '#ffffff' : theme.colors.mute }}
+                color: '#ffffff',
+              }}
             >
               {isBreakdown ? 'Remove' : '+ Add'}
             </Text>
           </Pressable>
         </View>
 
-        {/* Expanded Breakdown Fields (Screenshot 3) */}
+        {/* Expanded Breakdown Fields with Smooth Animation */}
         {isBreakdown && (
-          <View style={styles.breakdownExpandedContent}>
+          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={styles.breakdownExpandedContent}>
             {/* Breakdown Start */}
             <TimeInput
               label="Breakdown Start"
@@ -1556,7 +1670,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
               />
             </View>
 
-            {/* Duration Window Pink Badge (Screenshot 3) */}
+            {/* Duration Window Pink Badge */}
             {breakdownStats && (
               <View
                 style={[
@@ -1570,14 +1684,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 <Text
                   variant="mono"
                   style={{
-                    color: isDark ? '#fb7185' : '#e11d48' }}
+                    color: isDark ? '#fb7185' : '#e11d48',
+                  }}
                 >
                   Duration Window: {breakdownStartTime} - {breakdownEndTime} ({breakdownStats.durationDecimalHours} hrs)
                 </Text>
               </View>
             )}
 
-            {/* Reason Textarea (Screenshot 3) */}
+            {/* Reason Textarea */}
             <View style={{ marginTop: 8 }}>
               <Text variant="label" style={[styles.inputLabel, { color: theme.colors.ink, marginBottom: 4 }]}>
                 Breakdown Reason & Action Taken
@@ -1602,7 +1717,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
                 <FormError message="Breakdown reason & action taken is required when reporting a breakdown." />
               )}
             </View>
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -1650,98 +1765,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
           )}
         </Pressable>
       </View>
-
-      {/* Date Picker Modal */}
-      <AppModal
-        visible={isDatePickerModalOpen}
-        onClose={() => setIsDatePickerModalOpen(false)}
-        variant="bottom"
-      >
-        <View
-          style={[
-            styles.modalCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Text variant="heading" style={{ color: theme.colors.ink }}>
-                Select Shift Date
-              </Text>
-              <Pressable
-                variant="iconButton"
-                haptic="select"
-                hitSlopToMin48={true}
-                onPress={() => setIsDatePickerModalOpen(false)}
-              >
-                <X size={18} color={theme.colors.mute} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 340 }}>
-              {selectableDates.map((item) => {
-                const isSelected = logDate === item.date;
-                return (
-                  <Pressable
-                    key={item.date}
-                    variant="listRow"
-                    haptic="select"
-                    onPress={() => {
-                      setLogDate(item.date);
-                      setIsDatePickerModalOpen(false);
-                    }}
-                    style={[
-                      styles.dateSelectItem,
-                      {
-                        backgroundColor: isSelected
-                          ? (isDark ? 'rgba(0, 112, 243, 0.15)' : '#eff6ff')
-                          : 'transparent',
-                        borderBottomColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Calendar size={15} color={isSelected ? '#0070f3' : theme.colors.mute} />
-                      <Text
-                        variant="mono"
-                        style={{
-                          color: isSelected ? theme.colors.link : theme.colors.ink }}
-                      >
-                        {item.label}
-                      </Text>
-                      {item.badge && (
-                        <View
-                          style={[
-                            styles.dateBadgePill,
-                            {
-                              backgroundColor: item.isToday
-                                ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7')
-                                : (isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'),
-                            },
-                          ]}
-                        >
-                          <Text
-                            variant="caption"
-                            style={{
-                              color: item.isToday ? '#15803d' : theme.colors.mute }}
-                          >
-                            {item.badge}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {isSelected && <Check size={16} color="#0070f3" />}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-        </View>
-      </AppModal>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   outerCard: {
@@ -1807,10 +1833,10 @@ const styles = StyleSheet.create({
   },
   serialBadge: {
     marginTop: 4,
-    borderRadius: 4,
+    borderRadius: 9999,
     borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
     alignSelf: 'flex-start',
   },
   serialBadgeText: {
@@ -1830,10 +1856,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rtChip: {
-    borderRadius: 6,
+    borderRadius: 9999,
     borderWidth: 1,
     paddingHorizontal: 8,
-    paddingVertical: 2.5,
+    paddingVertical: 2,
   },
   meterField: {
     marginTop: 2,
@@ -2019,6 +2045,18 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     color: '#ffffff',
+  },
+  selectionMetaRow: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  metaBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   modalOverlay: {
     flex: 1,

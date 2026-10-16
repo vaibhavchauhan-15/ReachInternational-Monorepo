@@ -72,30 +72,35 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
             value={totalMachines}
             icon={Wrench}
             variant="info"
+            href="/machines"
           />
           <KPICard
             label="Active Users"
             value={activeUsers}
             icon={Users}
             variant="default"
+            href="/users"
           />
           <KPICard
             label="Clients"
             value={totalClients}
             icon={Building2}
             variant="default"
+            href="/clients"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
             icon={CalendarCheck}
             variant="warning"
+            href="/operations"
           />
           <KPICard
             label="Logs Today"
             value={todayLogs}
             icon={Clock}
             variant={todayLogs > 0 ? 'success' : 'default'}
+            href="/running-logs"
           />
         </KPIGrid>
       </View>
@@ -114,18 +119,21 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
             value={breakdowns}
             icon={AlertTriangle}
             variant={breakdowns > 0 ? 'error' : 'default'}
+            href="/operations"
           />
           <KPICard
             label="Overtime Entries"
             value={overtime}
             icon={Timer}
             variant={overtime > 0 ? 'warning' : 'default'}
+            href="/operations"
           />
           <KPICard
             label="Schedule Conflicts"
             value={overlappingLogs}
             icon={Layers}
             variant={overlappingLogs > 0 ? 'error' : 'default'}
+            href="/operations"
           />
         </KPIGrid>
       </View>

@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { LoginFormClient } from "./login-form";
+import { LoginFormClient } from "./LoginForm";
 import { ReachInternationalLogo } from "@/components/ui";
 import { getCurrentUserOrNull } from "@/lib/dal";
 import { getRoleHomeRoute } from "@reachinternational/permissions";

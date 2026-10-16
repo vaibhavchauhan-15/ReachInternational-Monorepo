@@ -19,6 +19,8 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 import { Drawer } from '../ui/overlay/Drawer';
 import { haptics } from '../../lib/haptics';
@@ -46,6 +48,9 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
+  Truck,
+  Building2,
+  ArrowRight,
 } from '../ui/icon';
 import {
   formatDate,
@@ -56,9 +61,11 @@ import {
   getISTDateString,
 } from '@reachinternational/utils';
 import { Text } from '../ui/Text';
-import { useOperatorHistoryLogs, type HourLogRecord } from '../../lib/hooks/useOperationsData';
+import { useOperatorHistoryLogs, useOperatorHistoryInfiniteQuery, type HourLogRecord } from '../../lib/hooks/useOperationsData';
+import { fetchOperationsExportLogs } from '../../lib/queries/operationsExport';
 import { OperationsExportModal } from './OperationsExportModal';
 import { downloadFileOnWeb } from '../../lib/utils/fileExport';
+import { OperationsConflictBanner } from './OperationsConflictBanner';
 
 export interface MobileOperatorHistoryTabProps {
   user: any;
@@ -66,6 +73,10 @@ export interface MobileOperatorHistoryTabProps {
   onEditLog?: (log: HourLogRecord) => void;
   refreshing?: boolean;
   onRefresh?: () => void;
+  pendingConflicts?: HourLogRecord[];
+  showAllConflicts?: boolean;
+  setShowAllConflicts?: (show: boolean | ((prev: boolean) => boolean)) => void;
+  onOpenConflictModal?: (log: HourLogRecord) => void;
 }
 
 export type DateFilterPreset = 'all' | 'today' | 'yesterday' | 'week' | 'month';
@@ -168,759 +179,1028 @@ function isLogWithin7Days(logDate?: string | null): boolean {
   return false;
 }
 
-export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> = ({
-  user,
-  assignedMachine,
-  onEditLog,
-  refreshing = false,
-  onRefresh,
-}) => {
-  const { theme, isDark } = useTheme();
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('all');
-  const [conditionFilter, setConditionFilter] = useState<ConditionFilterPreset>('all');
-  const [sortBy, setSortBy] = useState<SortPreset>('date_desc');
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [isExportingExcel, setIsExportingExcel] = useState(false);
+/**
+ * Memoized Individual History Log Card Component
+ * Isolates rendering per log item for maximum scroll performance & zero unnecessary re-renders.
+ */
+interface HistoryLogCardProps {
+  log: HourLogRecord;
+  theme: any;
+  isDark: boolean;
+  onEditLog?: (log: HourLogRecord) => void;
+}
 
-  // Fetch operator logs directly for authenticated operator
-  const {
-    data: logs = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useOperatorHistoryLogs(user?.id, assignedMachine);
+const HistoryLogCard = React.memo<HistoryLogCardProps>(
+  function HistoryLogCard({ log, theme, isDark, onEditLog }) {
+    const startM = Number(log.start_meter) || 0;
+    const endM = Number(log.end_meter) || startM;
+    const rt = log.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
 
-  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
-  const [isSlowDismissed, setIsSlowDismissed] = useState(false);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    if (isLoading) {
-      timer = setTimeout(() => {
-        setIsSlowNetwork(true);
-      }, 7000);
-    } else {
-      setIsSlowNetwork(false);
-      setIsSlowDismissed(false);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading]);
-
-  const { queue } = useOfflineQueue();
-
-  const queuedShiftLogs = useMemo(() => {
-    return queue
-      .filter((m) => m.mutation_type === 'SUBMIT_HOUR_LOG')
-      .filter((m) => {
-        const payload = (m.payload || {}) as Record<string, any>;
-        if (user?.id && payload.operator_id && payload.operator_id !== user.id) return false;
-        if (assignedMachine?.id && payload.machine_id && payload.machine_id !== assignedMachine.id) return false;
-        return true;
-      })
-      .map((m): HourLogRecord => {
-        const payload = (m.payload || {}) as Record<string, any>;
-        const startM = Number(payload.start_meter) || 0;
-        const endM = Number(payload.end_meter) || startM;
-        const runningHrs = payload.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
-        return {
-          id: m.id,
-          machine_id: payload.machine_id || assignedMachine?.id || '',
-          machine_code: payload.machine_code || assignedMachine?.machine_id || 'Equipment',
-          operator_id: payload.operator_id || user?.id || '',
-          log_date: payload.log_date || new Date().toISOString().split('T')[0],
-          start_time: payload.start_time || '',
-          end_time: payload.end_time || '',
-          start_meter: startM,
-          end_meter: endM,
-          running_hours: runningHrs,
-          overtime_hours: Number(payload.overtime_hours) || 0,
-          client_id: payload.client_id || null,
-          location: payload.location || null,
-          remarks: payload.remarks || null,
-          is_breakdown: Boolean(payload.is_breakdown),
-          breakdown_reason: payload.breakdown_reason || null,
-          shift_code: payload.shift_code || null,
-          machine: assignedMachine || {
-            id: payload.machine_id || '',
-            machine_id: payload.machine_code || 'Equipment',
-            model: assignedMachine?.model || 'Equipment',
-            serial_number: assignedMachine?.serial_number || '',
-            status: 'active',
-          },
-          client: payload.client_id
-            ? {
-                id: payload.client_id,
-                company_name: payload.client_name || 'Client Site',
-                city: '',
-              }
-            : null,
-          sync_status: m.status,
-          created_at: new Date(m.created_at).toISOString(),
-        } as HourLogRecord;
-      });
-  }, [queue, user?.id, assignedMachine]);
-
-  const combinedLogs = useMemo(() => {
-    if (!queuedShiftLogs.length) return logs;
-    const existingKeys = new Set(
-      logs.map((l) => `${l.machine_id}_${l.log_date}_${(l.shift_code || '').toLowerCase()}`)
-    );
-    const pendingNonDuplicates = queuedShiftLogs.filter(
-      (q) => !existingKeys.has(`${q.machine_id}_${q.log_date}_${(q.shift_code || '').toLowerCase()}`)
-    );
-    return [...pendingNonDuplicates, ...logs];
-  }, [queuedShiftLogs, logs]);
-
-  // Calculate active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (search.trim() !== '') count++;
-    if (dateFilter !== 'all') count++;
-    if (conditionFilter !== 'all') count++;
-    if (sortBy !== 'date_desc') count++;
-    return count;
-  }, [search, dateFilter, conditionFilter, sortBy]);
-
-  const handleResetFilters = useCallback(() => {
-    haptics.success();
-    setSearch('');
-    setDateFilter('all');
-    setConditionFilter('all');
-    setSortBy('date_desc');
-  }, []);
-
-  // Filter and sort logs
-  const filteredLogs = useMemo(() => {
-    let result = [...combinedLogs];
-
-    // 1. Search Query (Intelligent Date & Machine matching)
-    if (search.trim() !== '') {
-      result = result.filter(
-        (log) =>
-          matchesDateSearch(log, search) ||
-          (log.machine?.model && log.machine.model.toLowerCase().includes(search.toLowerCase())) ||
-          (log.machine_code && log.machine_code.toLowerCase().includes(search.toLowerCase())) ||
-          (log.machine?.serial_number && log.machine.serial_number.toLowerCase().includes(search.toLowerCase())) ||
-          (log.client?.company_name && log.client.company_name.toLowerCase().includes(search.toLowerCase()))
-      );
-    }
-
-    // 2. Date Filter
-    if (dateFilter !== 'all') {
-      const todayStr = getISTDateString();
-      const yesterdayStr = addDaysToDateStr(todayStr, -1);
-      const sevenDaysAgoStr = addDaysToDateStr(todayStr, -7);
-
-      result = result.filter((log) => {
-        if (!log.log_date) return false;
-        const d = log.log_date.split('T')[0];
-        if (dateFilter === 'today') return d === todayStr;
-        if (dateFilter === 'yesterday') return d === yesterdayStr;
-        if (dateFilter === 'week') return d >= sevenDaysAgoStr && d <= todayStr;
-        if (dateFilter === 'month') {
-          const currentMonth = todayStr.slice(0, 7);
-          return d.startsWith(currentMonth);
-        }
-        return true;
-      });
-    }
-
-    // 3. Condition Filter
-    if (conditionFilter !== 'all') {
-      result = result.filter((log) => {
-        if (conditionFilter === 'breakdown') return Boolean(log.is_breakdown);
-        if (conditionFilter === 'normal') return !log.is_breakdown;
-        return true;
-      });
-    }
-
-    // 4. Sort
-    result.sort((a, b) => {
-      const aDate = new Date(a.log_date || '').getTime();
-      const bDate = new Date(b.log_date || '').getTime();
-      const aHours = Number(a.running_hours) || 0;
-      const bHours = Number(b.running_hours) || 0;
-      const aMeter = Number(a.end_meter) || 0;
-      const bMeter = Number(b.end_meter) || 0;
-
-      switch (sortBy) {
-        case 'date_asc':
-          return aDate - bDate;
-        case 'hours_desc':
-          return bHours - aHours;
-        case 'hours_asc':
-          return aHours - bHours;
-        case 'meter_desc':
-          return bMeter - aMeter;
-        case 'meter_asc':
-          return aMeter - bMeter;
-        case 'date_desc':
-        default:
-          return bDate - aDate;
+    // Shift display name (e.g. "Shift A", "Shift B")
+    const shiftName = useMemo(() => {
+      const raw = (log.shift_code || log.shift || '').trim();
+      if (!raw) return 'Shift A';
+      if (/^shift/i.test(raw)) {
+        return raw.replace(/^shift\s*/i, 'Shift ');
       }
-    });
+      return `Shift ${raw}`;
+    }, [log.shift_code, log.shift]);
 
-    return result;
-  }, [combinedLogs, search, dateFilter, conditionFilter, sortBy]);
+    const model = log.machine?.model || 'Equipment';
+    const serial = log.machine?.serial_number || '';
+    const machineIdCode = log.machine?.machine_id || log.machine_code || '';
+    const clientName = log.client?.company_name || 'Base Yard';
+    const clientCode = (log.client as any)?.code || '';
+    const clientCity = log.client?.city || (log.location && log.location.includes(',') ? log.location.split(',')[1]?.trim() : '');
 
-  // Summary Metrics computed from filtered logs
-  const summaryMetrics = useMemo(() => {
-    let totalRunningHours = 0;
-    let totalOtHours = 0;
-    let totalBreakdowns = 0;
+    const timestampStr = log.created_at
+      ? formatExactTimestamp(log.created_at, false)
+      : formatDate(log.log_date);
 
-    filteredLogs.forEach((l) => {
-      const sMtr = l.start_meter ?? 0;
-      const eMtr = l.end_meter ?? sMtr;
-      totalRunningHours += l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
-      totalOtHours += l.overtime_hours ?? 0;
-      if (l.is_breakdown) totalBreakdowns++;
-    });
+    const breakdownInfo = log.is_breakdown ? parseBreakdownDetails(log) : null;
+    const canEdit = isLogWithin7Days(log.log_date);
+    const breakdownNote = (log.remarks || '').trim();
 
-    return {
-      totalRunningHours: Math.round(totalRunningHours * 10) / 10,
-      totalOtHours: Math.round(totalOtHours * 10) / 10,
-      totalBreakdowns,
-    };
-  }, [filteredLogs]);
-
-  // Handler: Export filtered logs to CSV / Excel directly (Screenshot 4)
-  const handleExportExcel = useCallback(async () => {
-    try {
-      setIsExportingExcel(true);
-      haptics.select();
-
-      if (!filteredLogs || filteredLogs.length === 0) {
-        showToast('info', 'No Logs', 'No machine logs found to export for the selected filters.');
-        return;
-      }
-
-      const headers = [
-        'Shift Date',
-        'Machine Code',
-        'Machine Model',
-        'Serial Number',
-        'Client',
-        'Site Location',
-        'Shift',
-        'Start Meter',
-        'End Meter',
-        'Running Hours',
-        'Start Time',
-        'End Time',
-        'Overtime (h)',
-        'Breakdown',
-        'Breakdown Duration',
-        'Remarks',
-        'Logged At',
-      ];
-
-      const rows = filteredLogs.map((log) => [
-        `"${formatDate(log.log_date)}"`,
-        `"${log.machine_code || log.machine?.machine_id || ''}"`,
-        `"${log.machine?.model || ''}"`,
-        `"${log.machine?.serial_number || ''}"`,
-        `"${log.client?.company_name || 'Base Yard'}"`,
-        `"${log.location || log.client?.city || ''}"`,
-        `"${log.shift_code || log.shift || ''}"`,
-        Number(log.start_meter || 0).toFixed(1),
-        Number(log.end_meter || 0).toFixed(1),
-        Number(log.running_hours || 0).toFixed(1),
-        `"${formatTo12Hour(log.start_time) || ''}"`,
-        `"${formatTo12Hour(log.end_time) || ''}"`,
-        log.overtime_hours ? String(log.overtime_hours) : '0',
-        log.is_breakdown ? 'YES' : 'NO',
-        `"${(log as any).breakdown_duration || ''}"`,
-        `"${(log.remarks || '').replace(/"/g, '""')}"`,
-        `"${log.created_at ? formatExactTimestamp(log.created_at, false) : ''}"`,
-      ].join(','));
-
-      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-      const filename = `Machine_Logs_${getISTDateString()}.csv`;
-
-      if (Platform.OS === 'web') {
-        downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
-      } else {
-        const fileUri = `${FileSystem.documentDirectory}${filename}`;
-        await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Export Machine Logs (CSV/Excel)',
-            UTI: 'public.comma-separated-values-text',
-          });
-        } else {
-          showToast('success', 'Export Complete', `Saved to ${fileUri}`);
-        }
-      }
-      haptics.success();
-    } catch (err: any) {
-      console.error('[MobileOperatorHistoryTab] Export Excel error:', err);
-      showToast('error', 'Export Error', err?.message || 'Failed to export logs.');
-    } finally {
-      setIsExportingExcel(false);
-    }
-  }, [filteredLogs]);
-
-  return (
-    <View style={styles.container}>
-      {/* Slow Network Feedback Banner */}
-      <SlowNetworkBanner
-        visible={isSlowNetwork && !isSlowDismissed && isLoading}
-        message="Slow network detected. Still loading historical shift logs..."
-        onRetry={() => {
-          void refetch();
-        }}
-        onDismiss={() => setIsSlowDismissed(true)}
-        style={{ marginBottom: spacingNumeric.sm }}
-      />
-
-      {/* Ambient Cached Data Warning when background refresh fails */}
-      {isError && filteredLogs.length > 0 && (
-        <View
-          style={[
-            styles.cachedErrorBanner,
-            {
-              backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
-              borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
-            },
-          ]}
-        >
-          <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} />
-          <Text
-            variant="caption"
-            style={[styles.cachedErrorText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}
-          >
-            Displaying cached shift logs. Unable to refresh records.
-          </Text>
-          <Pressable
-            variant="chip"
-            haptic="tap"
-            hitSlopToMin48
-            onPress={() => {
-              void refetch();
-            }}
-            style={styles.cachedRetryChip}
-          >
-            <RotateCcw size={12} color={isDark ? '#f87171' : '#dc2626'} />
-            <Text
-              variant="caption"
-              style={{ color: isDark ? '#f87171' : '#dc2626' }}
-            >
-              Retry
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* 1. Header Card Container (Screenshot 4) */}
+    return (
       <View
         style={[
-          styles.headerCard,
+          styles.historyCard,
           {
             backgroundColor: theme.colors.canvasElevated,
             borderColor: theme.colors.hairline,
           },
         ]}
       >
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerTitleWrap}>
-            <Text variant="heading" style={[styles.headerTitle, { color: theme.colors.ink }]}>
-              Historical Machine Logs
+        {/* Row 1: Top Header — Exact timestamp date & time (left) + Sync Status Pill + Operating Hours badge & Edit/Lock Action (right) */}
+        <View style={[styles.cardHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8, flexWrap: 'wrap' }}>
+            <Text variant="mono" style={[styles.timestampText, { color: theme.colors.mute }]}>
+              {timestampStr}
             </Text>
-            <Text variant="caption" style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
-              Showing {filteredLogs.length} total logged shifts
-            </Text>
+            {log.sync_status && log.sync_status !== 'synced' && (
+              <SyncStatusBadge status={log.sync_status} />
+            )}
           </View>
-
-          {/* Action CTAs: Export to Excel and Print/PDF Buttons (Screenshot 4) */}
-          <View style={styles.headerActionsWrap}>
-            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={handleExportExcel} disabled={isExportingExcel} style={[styles.iconCtaBtn, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5", borderColor: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0" }]} accessibilityLabel="Export Shift Logs to Excel">
-              {isExportingExcel ? (
-                <ActivityIndicator size="small" color={isDark ? '#34d399' : '#059669'} />
-              ) : (
-                <FileSpreadsheet size={16} color={isDark ? '#34d399' : '#059669'} />
-              )}
-            </Pressable>
-
-            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setShowExportModal(true)} style={[styles.iconCtaBtn, { backgroundColor: isDark ? "rgba(2, 132, 199, 0.15)" : "#e0f2fe", borderColor: isDark ? "rgba(2, 132, 199, 0.3)" : "#bae6fd" }]} accessibilityLabel="Print or Export Shift Logs to PDF">
-              <Printer size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* 2. Search & Filter Bar (Screenshot 4) */}
-        <View style={styles.searchFilterRow}>
-          <SearchInput
-            value={search}
-            onChangeText={setSearch}
-            onClear={() => setSearch('')}
-            placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
-            containerStyle={{ flex: 1 }}
-          />
-
-          {/* Filter Dropdown Toggle Button */}
-          <Pressable
-            variant="outline"
-            haptic="select"
-            hitSlopToMin48
-            onPress={() => setIsFilterModalOpen(true)}
-            style={[
-              styles.filterBtn,
-              {
-                backgroundColor:
-                  activeFilterCount > 0
-                    ? isDark ? 'rgba(2, 132, 199, 0.15)' : '#eff6ff'
-                    : isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-                borderColor:
-                  activeFilterCount > 0
-                    ? isDark ? 'rgba(2, 132, 199, 0.4)' : '#0284c7'
-                    : theme.colors.hairline,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Filter shift logs"
-          >
-            <SlidersHorizontal
-              size={13}
-              color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
-            />
-            <Text
-              variant="label"
+          <View style={styles.headerRightActions}>
+            <View
               style={[
-                styles.filterBtnText,
-                { color: activeFilterCount > 0 ? '#0284c7' : theme.colors.ink },
+                styles.hoursBadge,
+                {
+                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)',
+                  borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.20)',
+                },
               ]}
             >
-              Filter
-            </Text>
-            {activeFilterCount > 0 && (
-              <View
-                style={{
-                  backgroundColor: '#0284c7',
-                  borderRadius: 9,
-                  minWidth: 18,
-                  height: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingHorizontal: 4,
-                }}
+              <Text
+                variant="micro"
+                style={[
+                  styles.hoursBadgeText,
+                  { color: isDark ? '#4ade80' : '#15803d' },
+                ]}
               >
-                <Text variant="caption" style={{ color: '#ffffff' }}>
-                  {activeFilterCount}
-                </Text>
+                +{rt.toFixed(1)} hrs
+              </Text>
+            </View>
+
+            {canEdit && (!log.sync_status || log.sync_status === 'synced') ? (
+              <Pressable
+                variant="iconButton"
+                haptic="tap"
+                hitSlopToMin48
+                onPress={() => onEditLog?.(log)}
+                style={styles.headerEditBtn}
+                accessibilityLabel="Edit machine log within 7 days"
+              >
+                <Pencil size={13} color={theme.colors.link} />
+              </Pressable>
+            ) : (
+              <View style={styles.headerLockBtn} accessibilityLabel="Locked (archived)">
+                <Lock size={12} color={theme.colors.mute} />
               </View>
             )}
-            <ChevronDown
-              size={13}
-              color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
-            />
-          </Pressable>
+          </View>
         </View>
 
-        {/* 3. Active Filter Chips Row (Screenshot 4) */}
-        {activeFilterCount > 0 && (
-          <View style={[styles.activeFilterChipsRow, { borderTopColor: theme.colors.hairline }]}>
-            <Text variant="mono" style={[styles.activeFilterLabel, { color: theme.colors.mute }]}>
-              ACTIVE ({activeFilterCount}):
-            </Text>
-
-            {/* Date Search Chip */}
-            {search.trim() !== '' && (
-              <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                  Date: "{search}"
-                </Text>
-                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')}>
-                  <X size={11} color={theme.colors.mute} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Date Preset Chip */}
-            {dateFilter !== 'all' && (
-              <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                  {DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
-                </Text>
-                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setDateFilter('all')}>
-                  <X size={11} color={theme.colors.mute} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Condition Chip */}
-            {conditionFilter !== 'all' && (
-              <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                  {CONDITION_FILTER_OPTIONS.find((o) => o.value === conditionFilter)?.label}
-                </Text>
-                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setConditionFilter('all')}>
-                  <X size={11} color={theme.colors.mute} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Sort Chip */}
-            {sortBy !== 'date_desc' && (
-              <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                  Sort: {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
-                </Text>
-                <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSortBy('date_desc')}>
-                  <X size={11} color={theme.colors.mute} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Reset All */}
-            <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={handleResetFilters} style={styles.resetAllBtn} accessibilityRole="button">
-              <RotateCcw size={11} color={theme.colors.link} />
-              <Text variant="caption" style={{ color: theme.colors.link }}>
-                Reset
+        {/* Row 2: Equipment Model + Machine ID Pill + Serial Number Pill */}
+        <View style={styles.cardMachineRow}>
+          <Truck size={14} color="#0284c7" style={{ marginRight: 4 }} />
+          <Text variant="subheading" style={[styles.machineTitle, { color: theme.colors.ink }]}>
+            {model}
+          </Text>
+          {machineIdCode ? (
+            <View
+              style={[
+                styles.codePillSmall,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)',
+                },
+              ]}
+            >
+              <Text variant="micro" style={[styles.codePillSmallText, { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' }]}>
+                {machineIdCode}
               </Text>
-            </Pressable>
+            </View>
+          ) : null}
+          {serial ? (
+            <View
+              style={[
+                styles.serialPill,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                },
+              ]}
+            >
+              <Text variant="micro" style={[styles.machineSerial, { color: theme.colors.mute }]}>
+                S/N: {serial}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Row 3: Client & Location */}
+        <View style={styles.cardClientRow}>
+          <Building2 size={13} color="#10b981" style={{ marginRight: 4 }} />
+          <Text variant="body" style={[styles.clientName, { color: theme.colors.ink }]} numberOfLines={1}>
+            {clientName}
+          </Text>
+          {clientCode ? (
+            <View
+              style={[
+                styles.codePillSmall,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)',
+                },
+              ]}
+            >
+              <Text variant="micro" style={[styles.codePillSmallText, { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' }]}>
+                {clientCode}
+              </Text>
+            </View>
+          ) : null}
+          {clientCity ? (
+            <Text variant="caption" style={[styles.clientCity, { color: theme.colors.mute }]}>
+              {' '}({clientCity})
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Row 4: Metrics Box (Clean Formatted Grid) */}
+        <View
+          style={[
+            styles.metricsBox,
+            {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.015)',
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          {/* Shift Date & Shift Badge */}
+          <View style={styles.metricItemRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
+              <Calendar size={13} color="#0284c7" />
+              <Text variant="mono" style={[styles.dateValueBold, { color: theme.colors.ink }]}>
+                {formatDate(log.log_date)}
+              </Text>
+
+              {/* Shift Badge with ONLY shift name (e.g. Shift A, Shift B) */}
+              <View
+                style={[
+                  styles.shiftBadge,
+                  {
+                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.10)' : 'rgba(2, 132, 199, 0.07)',
+                    borderColor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.18)',
+                  },
+                ]}
+              >
+                <Text
+                  variant="micro"
+                  style={[
+                    styles.shiftBadgeText,
+                    { color: isDark ? '#38bdf8' : '#0284c7' },
+                  ]}
+                >
+                  {shiftName}
+                </Text>
+              </View>
+            </View>
+
+            {log.overtime_hours ? (
+              <View
+                style={[
+                  styles.otPill,
+                  {
+                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+                    borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(245, 158, 11, 0.18)',
+                  },
+                ]}
+              >
+                <Text variant="micro" style={[styles.otPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                  +{log.overtime_hours}h OT
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* HMR Progression (Tight inline row with ArrowRight icon) */}
+          <View style={styles.hmrInlineRow}>
+            <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
+              HMR:
+            </Text>
+            <Text variant="mono" style={[styles.hmrValue, { color: theme.colors.ink }]}>
+              {Number.isInteger(startM) ? startM.toFixed(0) : startM.toFixed(1)}
+            </Text>
+            <ArrowRight size={12} color={theme.colors.mute} style={{ marginHorizontal: 4 }} />
+            <Text variant="mono" style={[styles.hmrValueBold, { color: theme.colors.ink }]}>
+              {Number.isInteger(endM) ? endM.toFixed(0) : endM.toFixed(1)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Row 5: Breakdown Details & Notes */}
+        {log.is_breakdown ? (
+          <View style={styles.breakdownSection}>
+            <View style={styles.breakdownBadgeRow}>
+              <AlertTriangle size={13} color="#e11d48" style={{ marginRight: 4 }} />
+              <Text variant="mono" style={{ color: '#e11d48' }}>
+                Breakdown:
+              </Text>
+              <Text
+                variant="caption"
+                style={{ color: '#e11d48', flex: 1, marginLeft: 4 }}
+                numberOfLines={1}
+              >
+                {breakdownInfo?.displayText || (log as any).breakdown_duration || 'Reported'}
+              </Text>
+            </View>
+
+            {/* Breakdown Notes (Only rendered if breakdown note is non-empty/non-null) */}
+            {breakdownNote ? (
+              <View
+                style={[
+                  styles.breakdownNoteBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : '#fff1f2',
+                    borderColor: isDark ? 'rgba(244, 63, 94, 0.25)' : '#fecdd3',
+                  },
+                ]}
+              >
+                <AlertCircle size={13} color="#e11d48" style={{ marginTop: 2, marginRight: 6 }} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="caption" style={{ color: isDark ? '#fb7185' : '#be123c' }}>
+                    Breakdown Notes:
+                  </Text>
+                  <Text variant="caption" style={{ color: theme.colors.ink, marginTop: 1 }}>
+                    {breakdownNote}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.normalBadgeRow}>
+            <Text variant="micro" style={[styles.metaLabel, { color: theme.colors.mute }]}>
+              Breakdown: 0 (Normal)
+            </Text>
           </View>
         )}
       </View>
+    );
+  },
+  (prev, next) =>
+    prev.log.id === next.log.id &&
+    prev.log.sync_status === next.log.sync_status &&
+    prev.log.end_meter === next.log.end_meter &&
+    prev.log.running_hours === next.log.running_hours &&
+    prev.log.shift === next.log.shift &&
+    prev.log.shift_code === next.log.shift_code &&
+    prev.isDark === next.isDark
+);
 
-      {/* 4. Logs List (Screenshot 4) */}
-      {isLoading ? (
-        <OperationLogListSkeleton count={4} />
-      ) : isError && filteredLogs.length === 0 ? (
-        <ErrorState
-          error={error}
-          onRetry={() => {
-            void refetch();
-          }}
-          title="Failed to Load Shift History"
-          message="Unable to retrieve historical shift logs from the server. Check your connection and try again."
-          retryLabel="Retry Shift Logs"
+export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> = React.memo(
+  function MobileOperatorHistoryTab({
+    user,
+    assignedMachine,
+    onEditLog,
+    refreshing = false,
+    onRefresh,
+    pendingConflicts,
+    showAllConflicts,
+    setShowAllConflicts,
+    onOpenConflictModal,
+  }) {
+    const { theme, isDark } = useTheme();
+    const [search, setSearch] = useState('');
+    const [dateFilter, setDateFilter] = useState<DateFilterPreset>('all');
+    const [conditionFilter, setConditionFilter] = useState<ConditionFilterPreset>('all');
+    const [sortBy, setSortBy] = useState<SortPreset>('date_desc');
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+    // Debounced search input (280ms) to eliminate per-keystroke querying and UI thread hitching
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedSearch(search);
+      }, 280);
+      return () => clearTimeout(timer);
+    }, [search]);
+
+    // Server-side virtualized infinite query (12 items/chunk)
+    const {
+      data: infiniteData,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      isLoading,
+      isError,
+      error,
+      refetch,
+    } = useOperatorHistoryInfiniteQuery({
+      operatorId: user?.id,
+      fallbackMachine: assignedMachine,
+      searchQuery: debouncedSearch,
+      dateFilter,
+      conditionFilter,
+      sortBy,
+      pageSize: 12,
+    });
+
+    const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+    const [isSlowDismissed, setIsSlowDismissed] = useState(false);
+
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      if (isLoading) {
+        timer = setTimeout(() => {
+          setIsSlowNetwork(true);
+        }, 7000);
+      } else {
+        setIsSlowNetwork(false);
+        setIsSlowDismissed(false);
+      }
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }, [isLoading]);
+
+    const { queue } = useOfflineQueue();
+
+    const queuedShiftLogs = useMemo(() => {
+      return queue
+        .filter((m) => m.mutation_type === 'SUBMIT_HOUR_LOG')
+        .filter((m) => {
+          const payload = (m.payload || {}) as Record<string, any>;
+          if (user?.id && payload.operator_id && payload.operator_id !== user.id) return false;
+          if (assignedMachine?.id && payload.machine_id && payload.machine_id !== assignedMachine.id) return false;
+          return true;
+        })
+        .map((m): HourLogRecord => {
+          const payload = (m.payload || {}) as Record<string, any>;
+          const startM = Number(payload.start_meter) || 0;
+          const endM = Number(payload.end_meter) || startM;
+          const runningHrs = payload.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
+          return {
+            id: m.id,
+            machine_id: payload.machine_id || assignedMachine?.id || '',
+            machine_code: payload.machine_code || assignedMachine?.machine_id || 'Equipment',
+            operator_id: payload.operator_id || user?.id || '',
+            log_date: payload.log_date || new Date().toISOString().split('T')[0],
+            start_time: payload.start_time || '',
+            end_time: payload.end_time || '',
+            start_meter: startM,
+            end_meter: endM,
+            running_hours: runningHrs,
+            overtime_hours: Number(payload.overtime_hours) || 0,
+            client_id: payload.client_id || null,
+            location: payload.location || null,
+            remarks: payload.remarks || null,
+            is_breakdown: Boolean(payload.is_breakdown),
+            breakdown_reason: payload.breakdown_reason || null,
+            shift_code: payload.shift_code || null,
+            machine: assignedMachine || {
+              id: payload.machine_id || '',
+              machine_id: payload.machine_code || 'Equipment',
+              model: assignedMachine?.model || 'Equipment',
+              serial_number: assignedMachine?.serial_number || '',
+              status: 'active',
+            },
+            client: payload.client_id
+              ? {
+                  id: payload.client_id,
+                  company_name: payload.client_name || 'Client Site',
+                  city: '',
+                }
+              : null,
+            sync_status: m.status,
+            created_at: new Date(m.created_at).toISOString(),
+          } as HourLogRecord;
+        });
+    }, [queue, user?.id, assignedMachine]);
+
+    // Flatten pages into linear array
+    const serverLogs = useMemo(() => {
+      if (!infiniteData?.pages) return [];
+      return infiniteData.pages.flatMap((page) => page.logs);
+    }, [infiniteData?.pages]);
+
+    // Prepend queued offline shift logs seamlessly
+    const combinedLogs = useMemo(() => {
+      if (!queuedShiftLogs.length) return serverLogs;
+      const existingKeys = new Set(
+        serverLogs.map((l) => `${l.machine_id}_${l.log_date}_${(l.shift_code || '').toLowerCase()}`)
+      );
+      const pendingNonDuplicates = queuedShiftLogs.filter(
+        (q) => !existingKeys.has(`${q.machine_id}_${q.log_date}_${(q.shift_code || '').toLowerCase()}`)
+      );
+      return [...pendingNonDuplicates, ...serverLogs];
+    }, [queuedShiftLogs, serverLogs]);
+
+    const filteredLogs = combinedLogs;
+    const totalCount = (infiniteData?.pages[0]?.totalCount ?? 0) + queuedShiftLogs.length;
+
+    // Calculate active filter count
+    const activeFilterCount = useMemo(() => {
+      let count = 0;
+      if (search.trim() !== '') count++;
+      if (dateFilter !== 'all') count++;
+      if (conditionFilter !== 'all') count++;
+      if (sortBy !== 'date_desc') count++;
+      return count;
+    }, [search, dateFilter, conditionFilter, sortBy]);
+
+    const handleResetFilters = useCallback(() => {
+      haptics.success();
+      setSearch('');
+      setDateFilter('all');
+      setConditionFilter('all');
+      setSortBy('date_desc');
+    }, []);
+
+    // Summary metrics for export modal and reporting
+    const summaryMetrics = useMemo(() => {
+      let totalRunningHours = 0;
+      let totalOtHours = 0;
+      let totalBreakdowns = 0;
+
+      filteredLogs.forEach((log) => {
+        totalRunningHours += Number(log.running_hours) || 0;
+        totalOtHours += Number(log.overtime_hours) || 0;
+        if (log.is_breakdown) totalBreakdowns += 1;
+      });
+
+      return {
+        totalRunningHours: Math.round(totalRunningHours * 10) / 10,
+        totalOtHours: Math.round(totalOtHours * 10) / 10,
+        totalBreakdowns,
+      };
+    }, [filteredLogs]);
+
+    const handleEndReached = useCallback(() => {
+      if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    // Handler: Export filtered logs to CSV / Excel directly with on-demand server fetch
+    const handleExportExcel = useCallback(async () => {
+      try {
+        setIsExportingExcel(true);
+        haptics.select();
+
+        // 1. Fetch entire matching dataset from server without loading it into UI list memory
+        const exportResult = await fetchOperationsExportLogs({
+          viewMode: 'operator',
+          operatorId: user?.id,
+          search: debouncedSearch.trim() || undefined,
+          month: dateFilter,
+          condition: conditionFilter,
+          sort: sortBy.startsWith('date_asc') ? 'date-asc' : 'date-desc',
+        });
+
+        const logsToExport = exportResult.success && exportResult.logs.length > 0
+          ? exportResult.logs
+          : filteredLogs;
+
+        if (!logsToExport || logsToExport.length === 0) {
+          showToast('info', 'No Logs', 'No machine logs found to export for the selected filters.');
+          return;
+        }
+
+        const headers = [
+          'Shift Date',
+          'Machine Code',
+          'Machine Model',
+          'Serial Number',
+          'Client',
+          'Site Location',
+          'Shift',
+          'Start Meter',
+          'End Meter',
+          'Running Hours',
+          'Start Time',
+          'End Time',
+          'Overtime (h)',
+          'Breakdown',
+          'Breakdown Duration',
+          'Remarks',
+          'Logged At',
+        ];
+
+        const rows = logsToExport.map((log) => [
+          `"${formatDate(log.log_date)}"`,
+          `"${log.machine_code || log.machine?.machine_id || ''}"`,
+          `"${log.machine?.model || ''}"`,
+          `"${log.machine?.serial_number || ''}"`,
+          `"${log.client?.company_name || 'Base Yard'}"`,
+          `"${log.location || log.client?.city || ''}"`,
+          `"${log.shift_code || log.shift || ''}"`,
+          Number(log.start_meter || 0).toFixed(1),
+          Number(log.end_meter || 0).toFixed(1),
+          Number(log.running_hours || 0).toFixed(1),
+          `"${formatTo12Hour(log.start_time) || ''}"`,
+          `"${formatTo12Hour(log.end_time) || ''}"`,
+          log.overtime_hours ? String(log.overtime_hours) : '0',
+          log.is_breakdown ? 'YES' : 'NO',
+          `"${(log as any).breakdown_duration || ''}"`,
+          `"${(log.remarks || '').replace(/"/g, '""')}"`,
+          `"${log.created_at ? formatExactTimestamp(log.created_at, false) : ''}"`,
+        ].join(','));
+
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+        const filename = `Machine_Logs_${getISTDateString()}.csv`;
+
+        if (Platform.OS === 'web') {
+          downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
+        } else {
+          const fileUri = `${FileSystem.documentDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Export Machine Logs (CSV/Excel)',
+              UTI: 'public.comma-separated-values-text',
+            });
+          } else {
+            showToast('success', 'Export Complete', `Saved to ${fileUri}`);
+          }
+        }
+        haptics.success();
+      } catch (err: any) {
+        console.error('[MobileOperatorHistoryTab] Export Excel error:', err);
+        showToast('error', 'Export Error', err?.message || 'Failed to export logs.');
+      } finally {
+        setIsExportingExcel(false);
+      }
+    }, [user?.id, debouncedSearch, dateFilter, conditionFilter, sortBy, filteredLogs]);
+
+    const keyExtractor = useCallback((item: HourLogRecord) => item.id, []);
+
+    const renderLogItem = useCallback(
+      ({ item }: { item: HourLogRecord }) => (
+        <HistoryLogCard
+          log={item}
+          theme={theme}
+          isDark={isDark}
+          onEditLog={onEditLog}
         />
-      ) : filteredLogs.length === 0 ? (
-        search.trim() !== '' ? (
-          <EmptyState
-            variant="no-results"
-            title="No Matching Shift Logs"
-            description={`No shift logs match "${search}". Try clearing or modifying your search query.`}
-            actionLabel="Clear Search"
-            onAction={() => setSearch('')}
+      ),
+      [theme, isDark, onEditLog]
+    );
+
+    const listHeaderElement = useMemo(() => {
+      return (
+        <View style={styles.headerContainer}>
+          {/* Overtime Conflict Alert Banner */}
+          {pendingConflicts && pendingConflicts.length > 0 && setShowAllConflicts && onOpenConflictModal && (
+            <OperationsConflictBanner
+              pendingConflicts={pendingConflicts}
+              showAllConflicts={Boolean(showAllConflicts)}
+              setShowAllConflicts={setShowAllConflicts}
+              onOpenConflictModal={onOpenConflictModal}
+            />
+          )}
+
+          {/* Slow Network Feedback Banner */}
+          <SlowNetworkBanner
+            visible={isSlowNetwork && !isSlowDismissed && isLoading}
+            message="Slow network detected. Still loading historical shift logs..."
+            onRetry={() => {
+              void refetch();
+            }}
+            onDismiss={() => setIsSlowDismissed(true)}
+            style={{ marginBottom: spacingNumeric.sm }}
           />
-        ) : activeFilterCount > 0 ? (
-          <EmptyState
-            variant="filtered"
-            title="No Logs for Active Filters"
-            description="No shift logs match your active filter criteria. Reset filters to see all recorded logs."
-            actionLabel="Reset Filters"
-            onAction={handleResetFilters}
+
+          {/* Ambient Cached Data Warning when background refresh fails */}
+          {isError && filteredLogs.length > 0 && (
+            <View
+              style={[
+                styles.cachedErrorBanner,
+                {
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+                },
+              ]}
+            >
+              <AlertCircle size={15} color={isDark ? '#f87171' : '#dc2626'} />
+              <Text
+                variant="caption"
+                style={[styles.cachedErrorText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}
+              >
+                Displaying cached shift logs. Unable to refresh records.
+              </Text>
+              <Pressable
+                variant="chip"
+                haptic="tap"
+                hitSlopToMin48
+                onPress={() => {
+                  void refetch();
+                }}
+                style={styles.cachedRetryChip}
+              >
+                <RotateCcw size={12} color={isDark ? '#f87171' : '#dc2626'} />
+                <Text
+                  variant="caption"
+                  style={{ color: isDark ? '#f87171' : '#dc2626' }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* 1. Header Card Container (Screenshot 4) */}
+          <View
+            style={[
+              styles.headerCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <View style={styles.headerTopRow}>
+              <View style={styles.headerTitleWrap}>
+                <Text variant="heading" style={[styles.headerTitle, { color: theme.colors.ink }]}>
+                  Historical Machine Logs
+                </Text>
+                <Text variant="caption" style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
+                  {filteredLogs.length >= totalCount
+                    ? `Showing ${totalCount} total logged shifts`
+                    : `Showing ${filteredLogs.length} of ${totalCount} logged shifts`}
+                </Text>
+              </View>
+
+              {/* Action CTAs: Export to Excel and Print/PDF Buttons (Screenshot 4) */}
+              <View style={styles.headerActionsWrap}>
+                <Pressable
+                  variant="iconButton"
+                  haptic="tap"
+                  hitSlopToMin48
+                  onPress={handleExportExcel}
+                  disabled={isExportingExcel}
+                  style={[
+                    styles.iconCtaBtn,
+                    {
+                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
+                      borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0',
+                    },
+                  ]}
+                  accessibilityLabel="Export Shift Logs to Excel"
+                >
+                  {isExportingExcel ? (
+                    <ActivityIndicator size="small" color={isDark ? '#34d399' : '#059669'} />
+                  ) : (
+                    <FileSpreadsheet size={16} color={isDark ? '#34d399' : '#059669'} />
+                  )}
+                </Pressable>
+
+                <Pressable
+                  variant="iconButton"
+                  haptic="tap"
+                  hitSlopToMin48
+                  onPress={() => setShowExportModal(true)}
+                  style={[
+                    styles.iconCtaBtn,
+                    {
+                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+                      borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                    },
+                  ]}
+                  accessibilityLabel="Print or Export Shift Logs to PDF"
+                >
+                  <Printer size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* 2. Search & Filter Bar (Screenshot 4) */}
+            <View style={styles.searchFilterRow}>
+              <SearchInput
+                value={search}
+                onChangeText={setSearch}
+                onClear={() => setSearch('')}
+                placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
+                containerStyle={{ flex: 1 }}
+              />
+
+              {/* Filter Dropdown Toggle Button */}
+              <Pressable
+                variant="outline"
+                haptic="select"
+                hitSlopToMin48
+                onPress={() => setIsFilterModalOpen(true)}
+                style={[
+                  styles.filterBtn,
+                  {
+                    backgroundColor:
+                      activeFilterCount > 0
+                        ? isDark ? 'rgba(2, 132, 199, 0.15)' : '#eff6ff'
+                        : isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                    borderColor:
+                      activeFilterCount > 0
+                        ? isDark ? 'rgba(2, 132, 199, 0.4)' : '#0284c7'
+                        : theme.colors.hairline,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Filter shift logs"
+              >
+                <SlidersHorizontal
+                  size={13}
+                  color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
+                />
+                <Text
+                  variant="label"
+                  style={[
+                    styles.filterBtnText,
+                    { color: activeFilterCount > 0 ? '#0284c7' : theme.colors.ink },
+                  ]}
+                >
+                  Filter
+                </Text>
+                {activeFilterCount > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: '#0284c7',
+                      borderRadius: 9,
+                      minWidth: 18,
+                      height: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text variant="caption" style={{ color: '#ffffff' }}>
+                      {activeFilterCount}
+                    </Text>
+                  </View>
+                )}
+                <ChevronDown
+                  size={13}
+                  color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
+                />
+              </Pressable>
+            </View>
+
+            {/* 3. Active Filter Chips Row (Screenshot 4) */}
+            {activeFilterCount > 0 && (
+              <View style={[styles.activeFilterChipsRow, { borderTopColor: theme.colors.hairline }]}>
+                <Text variant="mono" style={[styles.activeFilterLabel, { color: theme.colors.mute }]}>
+                  ACTIVE ({activeFilterCount}):
+                </Text>
+
+                {/* Date Search Chip */}
+                {search.trim() !== '' && (
+                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                      Date: "{search}"
+                    </Text>
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')}>
+                      <X size={11} color={theme.colors.mute} />
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Date Preset Chip */}
+                {dateFilter !== 'all' && (
+                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                      {DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
+                    </Text>
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setDateFilter('all')}>
+                      <X size={11} color={theme.colors.mute} />
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Condition Chip */}
+                {conditionFilter !== 'all' && (
+                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                      {CONDITION_FILTER_OPTIONS.find((o) => o.value === conditionFilter)?.label}
+                    </Text>
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setConditionFilter('all')}>
+                      <X size={11} color={theme.colors.mute} />
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Sort Chip */}
+                {sortBy !== 'date_desc' && (
+                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                      Sort: {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
+                    </Text>
+                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSortBy('date_desc')}>
+                      <X size={11} color={theme.colors.mute} />
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Reset All */}
+                <Pressable variant="chip" haptic="tap" hitSlopToMin48 onPress={handleResetFilters} style={styles.resetAllBtn} accessibilityRole="button">
+                  <RotateCcw size={11} color={theme.colors.link} />
+                  <Text variant="caption" style={{ color: theme.colors.link }}>
+                    Reset
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }, [
+      pendingConflicts,
+      showAllConflicts,
+      setShowAllConflicts,
+      onOpenConflictModal,
+      isSlowNetwork,
+      isSlowDismissed,
+      isLoading,
+      refetch,
+      isError,
+      filteredLogs.length,
+      totalCount,
+      isDark,
+      theme.colors.canvasElevated,
+      theme.colors.hairline,
+      theme.colors.ink,
+      theme.colors.mute,
+      theme.colors.link,
+      theme.colors.canvas,
+      handleExportExcel,
+      isExportingExcel,
+      search,
+      activeFilterCount,
+      dateFilter,
+      conditionFilter,
+      sortBy,
+      handleResetFilters,
+    ]);
+
+    const listEmptyElement = useMemo(() => {
+      if (isLoading) {
+        return <OperationLogListSkeleton count={4} />;
+      }
+
+      if (isError && filteredLogs.length === 0) {
+        return (
+          <ErrorState
+            error={error}
+            onRetry={() => {
+              void refetch();
+            }}
+            title="Failed to Load Shift History"
+            message="Unable to retrieve historical shift logs from the server. Check your connection and try again."
+            retryLabel="Retry Shift Logs"
           />
-        ) : (
+        );
+      }
+
+      if (filteredLogs.length === 0) {
+        if (search.trim() !== '') {
+          return (
+            <EmptyState
+              variant="no-results"
+              title="No Matching Shift Logs"
+              description={`No shift logs match "${search}". Try clearing or modifying your search query.`}
+              actionLabel="Clear Search"
+              onAction={() => setSearch('')}
+            />
+          );
+        }
+        if (activeFilterCount > 0) {
+          return (
+            <EmptyState
+              variant="filtered"
+              title="No Logs for Active Filters"
+              description="No shift logs match your active filter criteria. Reset filters to see all recorded logs."
+              actionLabel="Reset Filters"
+              onAction={handleResetFilters}
+            />
+          );
+        }
+        return (
           <EmptyState
             variant="empty"
             title="No Shift Logs Recorded"
             description="No shift logs have been recorded for this equipment yet."
           />
-        )
-      ) : (
-        <View style={styles.logsList}>
-          {filteredLogs.map((log) => {
-            const startM = Number(log.start_meter) || 0;
-            const endM = Number(log.end_meter) || startM;
-            const rt = log.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
+        );
+      }
 
-            const sTime = formatTo12Hour(log.start_time);
-            const eTime = formatTo12Hour(log.end_time);
-            const shiftTimingStr = sTime && eTime ? `${sTime} – ${eTime}` : sTime || eTime || '—';
+      return null;
+    }, [
+      isLoading,
+      isError,
+      filteredLogs.length,
+      search,
+      activeFilterCount,
+      error,
+      refetch,
+      handleResetFilters,
+    ]);
 
-            const model = log.machine?.model || 'Equipment';
-            const serial = log.machine?.serial_number || log.machine_code || '';
-            const clientName = log.client?.company_name || 'Base Yard';
-            const clientCity = log.client?.city || (log.location && log.location.includes(',') ? log.location.split(',')[1]?.trim() : '');
+    const listFooterElement = useMemo(() => {
+      if (filteredLogs.length === 0 || isLoading) return null;
 
-            const timestampStr = log.created_at
-              ? formatExactTimestamp(log.created_at, false)
-              : formatDate(log.log_date);
+      if (isFetchingNextPage) {
+        return (
+          <View style={styles.listFooter}>
+            <ActivityIndicator size="small" color={theme.colors.link} />
+            <Text variant="caption" style={[styles.listFooterText, { color: theme.colors.mute }]}>
+              Loading more logs... ({filteredLogs.length} of {totalCount})
+            </Text>
+          </View>
+        );
+      }
 
-            const breakdownInfo = parseBreakdownDetails(log);
-            const canEdit = isLogWithin7Days(log.log_date);
+      if (!hasNextPage && filteredLogs.length > 0) {
+        return (
+          <View style={styles.listEndDivider}>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.hairline }]} />
+            <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+              All {totalCount} logs loaded
+            </Text>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.hairline }]} />
+          </View>
+        );
+      }
 
-            return (
-              <View
-                key={log.id}
-                style={[
-                  styles.historyCard,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                {/* Row 1: Top Header — Exact timestamp date & time (left) + Sync Status Pill + Operating Hours badge (right) */}
-                <View style={[styles.cardHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8, flexWrap: 'wrap' }}>
-                    <Text variant="mono" style={[styles.timestampText, { color: theme.colors.mute }]}>
-                      {timestampStr}
-                    </Text>
-                    {log.sync_status && log.sync_status !== 'synced' && (
-                      <SyncStatusBadge status={log.sync_status} />
-                    )}
-                  </View>
-                  <View
-                    style={[
-                      styles.hoursBadge,
-                      {
-                        backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7',
-                        borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0',
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="mono"
-                      style={[
-                        styles.hoursBadgeText,
-                        { color: isDark ? '#4ade80' : '#15803d' },
-                      ]}
-                    >
-                      +{rt.toFixed(1)} hrs
-                    </Text>
-                  </View>
-                </View>
+      return null;
+    }, [
+      filteredLogs.length,
+      isLoading,
+      isFetchingNextPage,
+      hasNextPage,
+      totalCount,
+      theme.colors.link,
+      theme.colors.mute,
+      theme.colors.hairline,
+    ]);
 
-                {/* Row 2: Machine Model + Serial Number (Screenshot 4) */}
-                <View style={styles.cardMachineRow}>
-                  <Text variant="subheading" style={[styles.machineTitle, { color: theme.colors.ink }]}>
-                    {model}
-                  </Text>
-                  {serial ? (
-                    <Text variant="mono" style={[styles.machineSerial, { color: theme.colors.mute }]}>
-                      {' '}({serial})
-                    </Text>
-                  ) : null}
-                </View>
+    return (
+      <View style={{ flex: 1 }}>
+        <FlatList<HourLogRecord>
+          data={filteredLogs}
+          renderItem={renderLogItem}
+          keyExtractor={keyExtractor}
+          ListHeaderComponent={listHeaderElement}
+          ListEmptyComponent={listEmptyElement}
+          ListFooterComponent={listFooterElement}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
+          initialNumToRender={6}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          contentContainerStyle={[styles.container, { paddingBottom: 120 }]}
+          showsVerticalScrollIndicator={true}
+          indicatorStyle={isDark ? 'white' : 'black'}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh || (() => void refetch())}
+              tintColor={theme.colors.link}
+            />
+          }
+        />
 
-                {/* Row 3: Client : Client name (bold) + city name with small text (Screenshot 4) */}
-                <View style={styles.cardClientRow}>
-                  <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-                    Client :{' '}
-                  </Text>
-                  <Text variant="body" style={[styles.clientName, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {clientName}
-                  </Text>
-                  {clientCity ? (
-                    <Text variant="caption" style={[styles.clientCity, { color: theme.colors.mute }]}>
-                      {' '}({clientCity})
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Row 4: HMR: 673.5 -> 680.0 (Screenshot 4) */}
-                <View style={styles.cardHmrRow}>
-                  <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-                    HMR:{' '}
-                  </Text>
-                  <Text variant="mono" style={[styles.hmrValue, { color: theme.colors.ink }]}>
-                    {startM.toFixed(1)}
-                  </Text>
-                  <Text variant="mono" style={{ color: theme.colors.mute, marginHorizontal: 4 }}>
-                    {' \u2192 '}
-                  </Text>
-                  <Text variant="mono" style={[styles.hmrValueBold, { color: theme.colors.ink }]}>
-                    {endM.toFixed(1)}
-                  </Text>
-                </View>
-
-                {/* Row 5: Shift Date : 01-10-2026 (Screenshot 4) */}
-                <View style={styles.cardDateRow}>
-                  <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-                    Shift Date :{' '}
-                  </Text>
-                  <Text variant="mono" style={[styles.dateValueBold, { color: theme.colors.ink }]}>
-                    {formatDate(log.log_date)}
-                  </Text>
-                </View>
-
-                {/* Row 6: Shift Time : 06:00 AM - 02:00 PM (Screenshot 4) */}
-                <View style={styles.cardTimeRow}>
-                  <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-                    Shift Time :{' '}
-                  </Text>
-                  <Text variant="mono" style={[styles.timeValueBold, { color: theme.colors.ink }]}>
-                    {shiftTimingStr}
-                  </Text>
-                  {log.overtime_hours ? (
-                    <View
-                      style={[
-                        styles.otPill,
-                        {
-                          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7',
-                          borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
-                        },
-                      ]}
-                    >
-                      <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#b45309' }}>
-                        +{log.overtime_hours}h OT
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* Row 7: Breakdown (small text) & Edit Icon at the end (Screenshot 4) */}
-                <View style={styles.cardFooterRow}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    {log.is_breakdown ? (
-                      <View style={styles.breakdownBadgeRow}>
-                        <Text variant="mono" style={{ color: '#e11d48' }}>
-                          Breakdown:{' '}
-                        </Text>
-                        <Text
-                          variant="caption"
-                          style={{ color: '#e11d48', flex: 1 }}
-                          numberOfLines={1}
-                        >
-                          {breakdownInfo.displayText || (log as any).breakdown_duration || 'Yes'}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-                        Breakdown: 0
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* Edit Pencil Icon (Only within 7 days and once synced, else locked) */}
-                  <View style={styles.editActionWrap}>
-                    {canEdit && (!log.sync_status || log.sync_status === 'synced') ? (
-                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => onEditLog?.(log)} style={styles.editBtn} accessibilityLabel="Edit machine log within 7 days">
-                        <Pencil size={15} color={theme.colors.mute} />
-                      </Pressable>
-                    ) : (
-                      <View style={styles.lockBtn}>
-                        <Lock size={13} color={theme.colors.mute} />
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {/* 5. Filter Modal */}
-      {/* 5. Filter Drawer (Clean, Smooth Single-Container Drawer with 100% Native Design Parity) */}
-      <Drawer
-        visible={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        maxPixelWidth={380}
-        widthRatio={0.88}
-      >
+      {/* 5. Filter Drawer (Lazy mounted only when opened, zero background footprint) */}
+      {isFilterModalOpen && (
+        <Drawer
+          visible={isFilterModalOpen}
+          onClose={() => setIsFilterModalOpen(false)}
+          maxPixelWidth={380}
+          widthRatio={0.88}
+        >
         <View style={styles.drawerContainer}>
           {/* Drawer Header */}
           <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.hairline }]}>
@@ -1114,6 +1394,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
           </View>
         </View>
       </Drawer>
+      )}
 
       {/* 4. Full-Featured Export & Print Modal (Web & Native Resilient) */}
       {showExportModal && (
@@ -1164,12 +1445,36 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     paddingBottom: 110,
   },
+  headerContainer: {
+    marginBottom: 4,
+  },
+  listFooter: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listFooterText: {
+    marginTop: 6,
+  },
+  listEndDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 24,
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  endOfListText: {},
   headerCard: {
     marginHorizontal: 16,
     marginBottom: 12,
@@ -1297,88 +1602,123 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     marginBottom: 8,
   },
-  timestampText: {
+  timestampText: {},
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerEditBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLockBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.5,
   },
   hoursBadge: {
     paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
+    paddingVertical: 1.5,
+    borderRadius: 9999,
     borderWidth: 1,
   },
-  hoursBadgeText: {
-  },
+  hoursBadgeText: {},
   cardMachineRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  machineTitle: {
+  machineTitle: {},
+  machineSerial: {},
+  codePillSmall: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9999,
+    borderWidth: 1,
   },
-  machineSerial: {
-  },
+  codePillSmallText: {},
   cardClientRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  metaLabel: {
-  },
-  clientName: {
-  },
-  clientCity: {
-  },
+  metaLabel: {},
+  clientName: {},
+  clientCity: {},
   cardHmrRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: 4,
   },
-  hmrValue: {
-  },
-  hmrValueBold: {
-  },
-  cardDateRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 4,
-  },
-  dateValueBold: {
-  },
-  cardTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  timeValueBold: {
-  },
-  otPill: {
-    marginLeft: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: radiusNumeric.full,
+  hmrValue: {},
+  hmrValueBold: {},
+  dateValueBold: {},
+  shiftBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9999,
     borderWidth: 1,
   },
-  cardFooterRow: {
+  shiftBadgeText: {},
+  otPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9999,
+    borderWidth: 1,
+  },
+  otPillText: {},
+  serialPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9999,
+    borderWidth: 1,
+  },
+  metricsBox: {
+    padding: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginVertical: 4,
+  },
+  metricItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
+  },
+  hmrInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  breakdownSection: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  normalBadgeRow: {
+    paddingVertical: 4,
+  },
+  breakdownNoteBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 6,
   },
   breakdownBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  editActionWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 8,
-  },
-  editBtn: {
-    padding: 4,
-  },
-  lockBtn: {
-    padding: 4,
-    opacity: 0.5,
   },
   drawerContainer: {
     flex: 1,

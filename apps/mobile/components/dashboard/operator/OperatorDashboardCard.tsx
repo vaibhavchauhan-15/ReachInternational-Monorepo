@@ -10,7 +10,8 @@ import { Card } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
-import { spacingNumeric } from '@reachinternational/design-tokens';
+import { Skeleton } from '../../ui/Skeleton';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import type { OperatorDashboardDTO } from '@reachinternational/types';
 import { StatusCard } from '../shared/StatusCard';
 import {
@@ -27,10 +28,12 @@ import { formatTo12Hour } from '@reachinternational/utils';
 
 export interface OperatorDashboardCardProps {
   data: OperatorDashboardDTO | null;
+  isLoading?: boolean;
 }
 
 export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
   data,
+  isLoading = false,
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -44,7 +47,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
   const totalRunningHoursToday = data?.today?.totalRunningHoursToday ?? 0;
   const hasMachine = Boolean(data?.machine);
   const hasClient = Boolean(data?.client);
-  const hasNoAssignments = !hasShifts && !hasMachine && !hasClient;
+  const hasNoAssignments = !isLoading && !hasShifts && !hasMachine && !hasClient;
 
   const handleNavigate = (route: string) => {
     router.push(route as any);
@@ -66,7 +69,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
         </View>
       )}
 
-      {/* 1. Today's Shift Status & Meter Readings */}
+      {/* 1. Today's Shift Status */}
       <View style={styles.section}>
         <Text
           variant="caption"
@@ -77,43 +80,51 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
         <View style={styles.oneColCol}>
           <StatusCard
             title="LOG SUBMISSION STATUS"
-            status={isSubmitted ? 'success' : isPartial ? 'warning' : totalAssignedCount === 0 ? 'default' : 'pending'}
+            status={
+              isLoading && !data
+                ? 'pending'
+                : isSubmitted
+                ? 'success'
+                : isPartial
+                ? 'warning'
+                : totalAssignedCount === 0
+                ? 'default'
+                : 'pending'
+            }
             label={
-              isSubmitted
-                ? totalAssignedCount > 1
+              isLoading && !data ? (
+                'Loading status...'
+              ) : isSubmitted ? (
+                totalAssignedCount > 1
                   ? `All ${totalAssignedCount} Shifts Submitted`
                   : 'Submitted Today'
-                : isPartial
-                ? `${submittedCount}/${totalAssignedCount} Shifts Logged`
-                : totalAssignedCount === 0
-                ? 'No Shifts Assigned'
-                : 'Pending Submission'
+              ) : isPartial ? (
+                `${submittedCount}/${totalAssignedCount} Shifts Logged`
+              ) : totalAssignedCount === 0 ? (
+                'No Shifts Assigned'
+              ) : (
+                'Pending Submission'
+              )
             }
             description={
-              isSubmitted
-                ? `${totalRunningHoursToday}h recorded across assigned shift(s) today.`
-                : isPartial
-                ? `${submittedCount} of ${totalAssignedCount} shifts recorded (${totalRunningHoursToday}h). Ready to log remaining shift.`
-                : totalAssignedCount === 0
-                ? 'No shift schedule registered for today. Contact your supervisor if you are on duty.'
-                : 'Remember to submit before the end of your shift.'
+              isLoading && !data ? (
+                'Fetching today’s operational status...'
+              ) : isSubmitted ? (
+                `${totalRunningHoursToday}h recorded across assigned shift(s) today.`
+              ) : isPartial ? (
+                `${submittedCount} of ${totalAssignedCount} shifts recorded (${totalRunningHoursToday}h). Ready to log remaining shift.`
+              ) : totalAssignedCount === 0 ? (
+                'No shift schedule registered for today. Contact your supervisor if you are on duty.'
+              ) : (
+                'Remember to submit before the end of your shift.'
+              )
             }
-          />
-
-          {/* Last Recorded Meter (HMR) Card */}
-          <StatusCard
-            title="LAST RECORDED METER (HMR)"
-            status="default"
-            icon={Gauge}
-            label={data?.today?.lastHmr != null ? `${data.today.lastHmr.toFixed(1)} hrs` : 'No prior logs'}
-            description="Use as starting meter for your next log"
-            monoValue
           />
         </View>
       </View>
 
       {/* 2. Continuous Shift Coverage Tracker (Up to 3 Shifts / 24h) */}
-      {data?.assigned_shifts && data.assigned_shifts.length > 0 && (
+      {hasShifts ? (
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Layers size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
@@ -129,7 +140,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
           </View>
 
           <View style={styles.oneColCol}>
-            {data.assigned_shifts.map((s) => {
+            {(data?.assigned_shifts || []).map((s) => {
               const isLogged = s.is_logged_today;
               const shiftClean = s.code.replace(/^shift\s*/i, '').trim();
               const shiftCodeName = shiftClean ? `Shift ${shiftClean}` : s.code;
@@ -253,14 +264,14 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
                       <Button
                         variant="default"
                         size="default"
+                        fullWidth
                         onPress={() =>
                           handleNavigate(
                             `/operations?tab=entry&shift=${encodeURIComponent(s.code)}`
                           )
                         }
-                        className="w-full"
                         label={`Log ${shiftCodeName}`}
-                        rightIcon={<ArrowRight size={15} color={theme.colors.canvas} />}
+                        rightIcon={<ArrowRight size={15} color="#ffffff" />}
                       />
                     )}
                   </View>
@@ -269,7 +280,36 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
             })}
           </View>
         </View>
-      )}
+      ) : isLoading && !data ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Layers size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
+            <Text
+              variant="caption"
+              style={[
+                styles.eyebrowHeader,
+                { color: isDark ? '#94a3b8' : theme.colors.mute, marginBottom: 0 },
+              ]}
+            >
+              SHIFT COVERAGE
+            </Text>
+          </View>
+          <View style={styles.oneColCol}>
+            <Card className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+              <View style={styles.shiftCardTopRow}>
+                <Skeleton width={80} height={20} borderRadius={radiusNumeric.xs} />
+                <Skeleton width={90} height={20} borderRadius={radiusNumeric.xs} />
+              </View>
+              <View style={styles.shiftMetadataStack}>
+                <Skeleton width="65%" height={14} borderRadius={radiusNumeric.xs} />
+              </View>
+              <View style={[styles.shiftCardActionRow, { borderTopColor: theme.colors.hairline }]}>
+                <Skeleton width="100%" height={38} borderRadius={radiusNumeric.sm} />
+              </View>
+            </Card>
+          </View>
+        </View>
+      ) : null}
 
       {/* 3. Assigned Equipment & Client Worksite */}
       <View style={styles.section}>
@@ -306,7 +346,22 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
               </Text>
             </View>
 
-            {data?.machine ? (
+            {isLoading && !data ? (
+              <View style={styles.assignmentDetailsStack}>
+                <View style={styles.detailRow}>
+                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                  <Skeleton width={130} height={16} borderRadius={radiusNumeric.xs} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={70} height={13} borderRadius={radiusNumeric.xs} />
+                  <Skeleton width={90} height={14} borderRadius={radiusNumeric.xs} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={80} height={13} borderRadius={radiusNumeric.xs} />
+                  <Skeleton width={110} height={14} borderRadius={radiusNumeric.xs} />
+                </View>
+              </View>
+            ) : data?.machine ? (
               <View style={styles.assignmentDetailsStack}>
                 <View style={styles.detailRow}>
                   <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
@@ -378,7 +433,18 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
               </Text>
             </View>
 
-            {data?.client ? (
+            {isLoading && !data ? (
+              <View style={styles.assignmentDetailsStack}>
+                <View style={styles.detailRow}>
+                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                  <Skeleton width={140} height={16} borderRadius={radiusNumeric.xs} />
+                </View>
+                <View style={styles.detailRowStart}>
+                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                  <Skeleton width={160} height={14} borderRadius={radiusNumeric.xs} />
+                </View>
+              </View>
+            ) : data?.client ? (
               <View style={styles.assignmentDetailsStack}>
                 <View style={styles.detailRow}>
                   <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
@@ -440,48 +506,24 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacingNumeric.lg,
+    gap: spacingNumeric.md,
   },
   section: {
-    marginBottom: spacingNumeric.xs,
+    marginBottom: 0,
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 3,
+    marginBottom: 6,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: spacingNumeric.xs + 3,
+    marginBottom: 6,
   },
   oneColCol: {
     flexDirection: 'column',
     gap: spacingNumeric.sm,
-  },
-  statCardContent: {
-    gap: spacingNumeric.xs,
-  },
-  statCardEyebrow: {
-    textTransform: 'uppercase',
-  },
-  meterValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: 2,
-  },
-  meterIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  meterValueText: {},
-  statCardSubtext: {
-    marginTop: 1,
   },
   shiftCardTopRow: {
     flexDirection: 'row',

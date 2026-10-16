@@ -62,7 +62,7 @@ import * as Clipboard from 'expo-clipboard';
 export interface UserRecord {
   id: string;
   employee_id?: string | null;
-  email: string;
+  email?: string | null;
   full_name: string;
   phone?: string | null;
   role: string;
@@ -812,7 +812,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 <Touchable
                   preset="icon"
                   style={styles.fieldCopyBtn}
-                  onPress={() => copyToClipboard(user.email, 'Email')}
+                  onPress={() => copyToClipboard(user.email || '', 'Email')}
                 >
                   {copiedField === 'Email' ? (
                     <Check size={13} color="#10b981" />

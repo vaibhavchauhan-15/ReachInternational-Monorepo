@@ -369,10 +369,10 @@ export default function LoginScreen() {
                 paddingHorizontal: isDesktop
                   ? 32
                   : isTablet
-                  ? 32
-                  : isTinyScreen
-                  ? 12
-                  : 16,
+                    ? 32
+                    : isTinyScreen
+                      ? 12
+                      : 16,
                 paddingVertical: isShortScreen ? 14 : 24,
               },
             ]}
@@ -399,10 +399,10 @@ export default function LoginScreen() {
                     paddingHorizontal: isDesktop
                       ? 28
                       : isTablet
-                      ? 32
-                      : isTinyScreen
-                      ? 16
-                      : 22,
+                        ? 32
+                        : isTinyScreen
+                          ? 16
+                          : 22,
                     paddingTop: isShortScreen ? 20 : 28,
                     paddingBottom: isShortScreen ? 18 : 24,
                   },
@@ -440,7 +440,7 @@ export default function LoginScreen() {
                     <Input
                       label="Email address"
                       required
-                      placeholder="superadmin@reachinternational.co.in"
+                      placeholder="Enter your email"
                       value={email}
                       onChangeText={handleEmailChange}
                       onFocus={() => setIsEmailFocused(true)}
@@ -550,13 +550,13 @@ export default function LoginScreen() {
                             borderColor: rememberMe
                               ? primarySkyBlue
                               : isDark
-                              ? '#3f3f46'
-                              : '#cbd5e1',
+                                ? '#3f3f46'
+                                : '#cbd5e1',
                             backgroundColor: rememberMe
                               ? primarySkyBlue
                               : isDark
-                              ? '#141414'
-                              : '#ffffff',
+                                ? '#141414'
+                                : '#ffffff',
                           },
                         ]}
                       >

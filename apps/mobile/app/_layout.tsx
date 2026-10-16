@@ -18,7 +18,8 @@ configureReanimatedLogger({
 
 import React from 'react';
 import { View, StyleSheet, Platform, AppState, type AppStateStatus, useWindowDimensions } from 'react-native';
-import { Slot, usePathname } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
+import { useNavigationMotion } from '../lib/motion';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -43,24 +44,17 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OverlayHostProvider, ToastProvider } from '../components/ui/overlay';
 import { Pressable } from '../components/ui/touch/Pressable';
+import { isAgentationEnabled, getSentryDsn } from '../lib/env';
 
-// Immediately allow native splash screen to hide so the app opens directly
-SplashScreen.hideAsync().catch(() => {});
+// Prevent native splash screen from autohiding until fonts, type scale, and core resources load
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function MobileAgentation() {
   if (Platform.OS !== 'web') {
     return null;
   }
 
-  // Allow explicit opt-out
-  if (process.env.EXPO_PUBLIC_ENABLE_AGENTATION === 'false') {
-    return null;
-  }
-
-  // Render in development mode (or if explicitly enabled via EXPO_PUBLIC_ENABLE_AGENTATION=true)
-  const isDev = __DEV__ || process.env.NODE_ENV === 'development';
-  const isExplicitlyEnabled = process.env.EXPO_PUBLIC_ENABLE_AGENTATION === 'true';
-  if (!isDev && !isExplicitlyEnabled) {
+  if (!isAgentationEnabled()) {
     return null;
   }
 
@@ -207,7 +201,7 @@ function MobileWebScrollbarStyles() {
         }
         .reach-agentation-toolbar:not([style*="top"]),
         [data-agentation-toolbar]:not([style*="top"]) {
-          bottom: 16px !important;
+          bottom: 80px !important;
           right: 14px !important;
         }
       }
@@ -391,6 +385,7 @@ function MobileScreenSyncWatcher() {
 
 function ThemedAppContainer() {
   const { theme, isDark } = useTheme();
+  const motion = useNavigationMotion();
 
   React.useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
@@ -422,7 +417,36 @@ function ThemedAppContainer() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Slot />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: theme.colors.canvas },
+          ...motion.stackDefault,
+        }}
+      >
+        <Stack.Screen name="index" options={{ animation: motion.stackModalTransparent.animation }} />
+        <Stack.Screen name="(auth)" options={{ animation: motion.stackModalTransparent.animation }} />
+        <Stack.Screen name="(app)" options={{ animation: motion.stackModalTransparent.animation }} />
+        <Stack.Screen
+          name="privacy"
+          options={{
+            ...motion.stackModalSheet,
+          }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{
+            ...motion.stackModalSheet,
+          }}
+        />
+        <Stack.Screen
+          name="+not-found"
+          options={{
+            title: 'Oops!',
+            animation: motion.stackModalTransparent.animation,
+          }}
+        />
+      </Stack>
       <PortalHost />
       <PostNotificationBanner />
       <MobileOperatorAlertsListener />
@@ -442,12 +466,12 @@ function ThemedAppContainer() {
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return (
     <View style={styles.errorContainer}>
-      <Text style={styles.errorTitle}>Application Encountered an Error</Text>
-      <Text style={styles.errorMessage}>
+      <Text variant="title" style={styles.errorTitle}>Application Encountered an Error</Text>
+      <Text variant="body" style={styles.errorMessage}>
         {error?.message || 'An unexpected operational issue occurred.'}
       </Text>
       <Pressable variant="buttonPrimary" haptic="tap" style={styles.retryButton} onPress={retry}>
-        <Text style={styles.retryButtonText}>Reload Application</Text>
+        <Text variant="label" style={styles.retryButtonText}>Reload Application</Text>
       </Pressable>
     </View>
   );
@@ -456,7 +480,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  dsn: getSentryDsn(),
   // Only capture traces in production to save quota
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 0,
   integrations: [
@@ -484,6 +508,14 @@ function TypographyGate({ children }: { children: React.ReactNode }) {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [done]);
+
+  // Safety fallback: ensure splash screen hides within 3 seconds regardless of font or storage latency
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!done) return null;
 
@@ -545,7 +577,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#09090b',
+    backgroundColor: '#0a0a0a',
   },
   errorTitle: {
     color: '#ffffff',
@@ -558,10 +590,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#0070f3',
+    backgroundColor: '#0284c7',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   retryButtonText: {
     color: '#ffffff',

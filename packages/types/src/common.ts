@@ -37,3 +37,35 @@ export interface ApiError {
   details?: Record<string, unknown> | null;
   statusCode?: number;
 }
+
+export type ErrorClassification =
+  | "network"
+  | "timeout"
+  | "server"
+  | "permission"
+  | "validation"
+  | "conflict"
+  | "not_found"
+  | "generic";
+
+export interface AppError {
+  code: string;
+  message: string;
+  details?: unknown;
+  status: number;
+}
+
+export type ActionResponse<T = unknown> =
+  | {
+      success: true;
+      data?: T;
+      message?: string;
+    }
+  | {
+      success: false;
+      error: string;
+      code?: string;
+      fieldErrors?: Record<string, string>;
+      statusCode?: number;
+    };
+

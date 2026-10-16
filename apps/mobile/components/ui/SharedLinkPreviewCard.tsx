@@ -78,7 +78,13 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
     }
   };
 
-  const domain = 'www.reachinternational.co.in';
+  const domain = React.useMemo(() => {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return 'www.reachinternational.co.in';
+    }
+  }, [url]);
 
   const cardContent = (
     <View

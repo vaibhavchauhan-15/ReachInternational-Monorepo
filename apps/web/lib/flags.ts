@@ -12,7 +12,8 @@ export const FEATURES: FeatureFlags = {
   // Global kill-switch controllable via environment variable (default: true)
   enablePullToRefresh:
     typeof process !== "undefined" &&
-    process.env.NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH !== "false",
+    process.env.NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH !== "false" &&
+    process.env.NEXT_PUBLIC_DISABLE_PULL_TO_REFRESH !== "true",
 
   // Route-specific opt-outs (e.g. routes with drag-and-drop, full-screen editors, or canvas interactions)
   pullToRefreshDisabledRoutes: [

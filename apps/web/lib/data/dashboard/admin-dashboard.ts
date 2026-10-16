@@ -25,20 +25,15 @@ export const getAdminDashboard = cache(
   async (userId: string): Promise<AdminDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<AdminDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_admin_dashboard");
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_admin_dashboard");
 
-          if (error) {
-            console.error("[DAL] getAdminDashboard RPC error:", error.message);
-            return DEFAULT_ADMIN_DASHBOARD;
-          }
-
-          return (data as AdminDashboardDTO) || DEFAULT_ADMIN_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getAdminDashboard fatal error:", err);
-          return DEFAULT_ADMIN_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getAdminDashboard RPC error:", error.message);
+          throw new Error(`Failed to load admin dashboard: ${error.message}`);
         }
+
+        return (data as AdminDashboardDTO) || DEFAULT_ADMIN_DASHBOARD;
       },
       [`dashboard-admin-${userId}`],
       {

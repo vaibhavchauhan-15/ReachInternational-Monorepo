@@ -119,7 +119,9 @@ export function OperatorShiftRosterEditor({
           setInternalOtherAssignments(res.data);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[OperatorShiftRosterEditor] Failed to load active operator assignments:", err);
+      });
     return () => {
       active = false;
     };
@@ -164,7 +166,8 @@ export function OperatorShiftRosterEditor({
               onShiftsLoaded?.(DEFAULT_CLIENT_SHIFTS);
             }
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error("[OperatorShiftRosterEditor] Error loading client shifts, falling back to defaults:", err);
             if (active) {
               setInternalShifts(DEFAULT_CLIENT_SHIFTS);
               onShiftsLoaded?.(DEFAULT_CLIENT_SHIFTS);

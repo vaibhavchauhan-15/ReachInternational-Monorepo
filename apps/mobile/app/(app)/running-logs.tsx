@@ -4,35 +4,30 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Platform,
   StatusBar,
-  LayoutAnimation} from 'react-native';
+  LayoutAnimation,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast, EmptyState, ErrorState, PermissionDeniedView } from '../../components/ui';
+import { useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast, EmptyState, ErrorState, PermissionDeniedView } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
-import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
-import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
-import { OperationLogListSkeleton } from '../../components/operations/OperationsSkeleton';
+import {
+  MobileConflictResolutionModal,
+  OperationsExportModal,
+  OperationLogListSkeleton,
+  RunningLogDayGroup,
+} from '../../components/operations';
 import { useOperationsMasterData, useOperationsLogs } from '../../lib/hooks/useOperationsData';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
-  formatShiftTimingRange,
   formatDate,
 } from '@reachinternational/utils';
 import {
   Clock,
-  User,
   AlertTriangle,
-  Calendar,
-  Truck,
-  ShieldAlert,
-  ChevronDown,
-  ChevronUp,
   RefreshCw,
   Printer,
-  FileText,
   Gauge,
   Zap,
   Icon,
@@ -443,115 +438,22 @@ export default function RunningLogsScreen() {
             const dayOtHours = Math.round(dayLogs.reduce((acc, cur) => acc + (Number(cur.overtime_hours) || 0), 0) * 10) / 10;
             const startMeter = Math.min(...dayLogs.map((l) => l.start_meter));
             const endMeter = Math.max(...dayLogs.map((l) => l.end_meter));
+            const hasBreakdown = dayLogs.some((l) => Boolean(l.is_breakdown));
 
             return (
-              <View
+              <RunningLogDayGroup
                 key={dateKey}
-                style={[
-                  styles.dayGroupCard,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                {/* Header (1-tap to expand/collapse) */}
-                <Pressable
-                  variant="listRow"
-                  haptic="select"
-                  onPress={() => toggleDateExpanded(dateKey)}
-                  style={styles.dayGroupHeader}
-                >
-                  <View style={styles.dayGroupHeaderLeft}>
-                    <Text style={[styles.dayGroupDate, { color: theme.colors.ink }]}>
-                      {formatDate(dateKey)}
-                    </Text>
-                    <View style={styles.dayGroupBadges}>
-                      <View style={[styles.countBadge, { backgroundColor: isDark ? '#262626' : '#f5f5f5' }]}>
-                        <Text style={[styles.countBadgeText, { color: theme.colors.body }]}>
-                          {dayLogs.length} shift{dayLogs.length > 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                      {dayOtHours > 0 && (
-                        <View style={[styles.otBadge, { backgroundColor: '#0070f318' }]}>
-                          <Text style={styles.otBadgeText}>+{dayOtHours}h OT</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.dayGroupHeaderRight}>
-                    <View style={styles.dayGroupTotals}>
-                      <Text style={[styles.dayHmrTotal, { color: theme.colors.mute }]}>
-                        HMR: {startMeter} → {endMeter}
-                      </Text>
-                      <Text style={[styles.dayRunningTotal, { color: theme.colors.ink }]}>
-                        {dayRunningHours}h M/C RT
-                      </Text>
-                    </View>
-                    <Icon
-                      name="chevron-down"
-                      size={16}
-                      color={theme.colors.mute}
-                      state={isExpanded ? 'open' : 'closed'}
-                    />
-                  </View>
-                </Pressable>
-
-                {/* Expanded Shifts Mini Table */}
-                {isExpanded && (
-                  <View style={[styles.dayShiftsList, { borderTopColor: theme.colors.hairline }]}>
-                    {dayLogs.map((log) => (
-                      <View
-                        key={log.id}
-                        style={[
-                          styles.shiftItemCard,
-                          {
-                            borderBottomColor: theme.colors.hairline,
-                          },
-                        ]}
-                      >
-                        <View style={styles.shiftItemTop}>
-                          <View style={styles.shiftCodeBadge}>
-                            <Text style={styles.shiftCodeText}>
-                              {log.shift_code ? `Shift ${log.shift_code}` : log.shift || 'Shift'}
-                            </Text>
-                          </View>
-                          <Text style={[styles.shiftTimingText, { color: theme.colors.mute }]}>
-                            {formatShiftTimingRange(log.start_time, log.end_time)}
-                          </Text>
-                          <View style={styles.shiftHmrPill}>
-                            <Text style={[styles.shiftHmrText, { color: theme.colors.ink }]}>
-                              {log.start_meter} → {log.end_meter} ({log.running_hours}h)
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.shiftItemBottom}>
-                          <HighlightText
-                            text={`${log.operator?.full_name || 'Unassigned'} • ${log.machine?.model || log.machine_code}`}
-                            query={debouncedSearch}
-                            style={[styles.shiftOperatorText, { color: theme.colors.body }]}
-                          />
-                          {log.overtime_hours ? (
-                            <Text style={[styles.shiftOtText, { color: '#0070f3' }]}>
-                              +{log.overtime_hours}h OT
-                            </Text>
-                          ) : null}
-                        </View>
-
-                        {log.remarks && (
-                          <HighlightText
-                            text={log.remarks}
-                            query={debouncedSearch}
-                            style={[styles.shiftRemarksText, { color: theme.colors.mute }]}
-                          />
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
+                date={dateKey}
+                dayLogs={dayLogs}
+                dayRunningHours={dayRunningHours}
+                dayOtHours={dayOtHours}
+                startMeter={startMeter}
+                endMeter={endMeter}
+                hasBreakdown={hasBreakdown}
+                isExpanded={isExpanded}
+                onToggle={() => toggleDateExpanded(dateKey)}
+                searchTerm={debouncedSearch}
+              />
             );
           })
         )}
@@ -670,92 +572,5 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     textAlign: 'center',
-  },
-  dayGroupCard: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  dayGroupHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacingNumeric.md,
-  },
-  dayGroupHeaderLeft: {
-    gap: 4,
-  },
-  dayGroupDate: {
-  },
-  dayGroupBadges: {
-    flexDirection: 'row',
-    gap: spacingNumeric.xs,
-  },
-  countBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.sm,
-  },
-  countBadgeText: {
-  },
-  otBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.sm,
-  },
-  otBadgeText: {
-    color: '#0070f3',
-  },
-  dayGroupHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.sm,
-  },
-  dayGroupTotals: {
-    alignItems: 'flex-end',
-  },
-  dayHmrTotal: {
-  },
-  dayRunningTotal: {
-  },
-  dayShiftsList: {
-    borderTopWidth: 1,
-    paddingHorizontal: spacingNumeric.md,
-  },
-  shiftItemCard: {
-    borderBottomWidth: 1,
-    paddingVertical: spacingNumeric.sm,
-    gap: 4,
-  },
-  shiftItemTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.xs,
-  },
-  shiftCodeBadge: {
-    backgroundColor: '#0070f315',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.sm,
-  },
-  shiftCodeText: {
-    color: '#0070f3',
-  },
-  shiftTimingText: {
-    flex: 1,
-  },
-  shiftHmrPill: {},
-  shiftHmrText: {
-  },
-  shiftItemBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  shiftOperatorText: {
-  },
-  shiftOtText: {
-  },
-  shiftRemarksText: {
   },
 });

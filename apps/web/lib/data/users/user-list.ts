@@ -327,13 +327,7 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
 
   if (error) {
     console.error("[DAL] Error fetching user list:", error.message || error);
-    return {
-      users: [],
-      total: 0,
-      page,
-      pageSize,
-      totalPages: 0,
-    };
+    throw new Error(`Failed to fetch users: ${error.message || "Database error"}`);
   }
 
   const rawUsers = (data as unknown as User[]) || [];

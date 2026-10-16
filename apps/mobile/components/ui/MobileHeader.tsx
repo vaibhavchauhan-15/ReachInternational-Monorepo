@@ -58,6 +58,7 @@ export interface MobileHeaderProps {
   subtitle?: string;
   eyebrow?: string;
   showBack?: boolean;
+  backRoute?: string;
   showRoleBadge?: boolean;
   showLogo?: boolean;
   showQuickAccess?: boolean;
@@ -83,6 +84,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   subtitle,
   eyebrow,
   showBack = false,
+  backRoute,
   showRoleBadge = false,
   showLogo = false,
   showQuickAccess = true,
@@ -176,6 +178,10 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const handleBackPress =
     onPressBack ||
     (() => {
+      if (backRoute) {
+        router.replace(backRoute as any);
+        return;
+      }
       if (typeof router.canGoBack === 'function' && router.canGoBack()) {
         router.back();
       } else {

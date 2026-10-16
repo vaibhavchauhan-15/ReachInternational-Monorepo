@@ -64,24 +64,28 @@ export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
             value={totalEmployees}
             icon={Users}
             variant="default"
+            href="/users"
           />
           <KPICard
             label="Active Operators"
             value={activeOperators}
             icon={UserCheck}
             variant="info"
+            href="/users"
           />
           <KPICard
             label="Profile Requests"
             value={pendingProfileChanges}
             icon={FileEdit}
             variant={pendingProfileChanges > 0 ? 'warning' : 'default'}
+            href="/users"
           />
           <KPICard
             label="Logs Today"
             value={todayLogsCount}
             icon={Clock}
             variant={todayLogsCount > 0 ? 'success' : 'default'}
+            href="/running-logs"
           />
         </KPIGrid>
       </View>

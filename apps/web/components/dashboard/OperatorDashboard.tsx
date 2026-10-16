@@ -122,6 +122,7 @@ export interface OperatorHourLog {
   breakdown_hours?: number | null;
   running_hours?: number;
   shift?: string;
+  shift_code?: string;
   machine_condition?: string;
   location?: string;
   remarks?: string;

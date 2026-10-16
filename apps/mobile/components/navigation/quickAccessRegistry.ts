@@ -280,7 +280,7 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → Preferences → Font Size',
       icon: Type,
-      href: '/settings/font-size',
+      href: '/settings/preferences/font-size',
       keywords: ['font size', 'text size', 'font scaling', 'display scaling', 'large text', 'typography'],
     },
     {
@@ -290,7 +290,7 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → Notifications',
       icon: Bell,
-      href: '/settings/notification',
+      href: '/settings/notifications',
       keywords: ['notifications', 'alerts', 'reminders', 'push notifications', 'shift alerts', 'breakdown alerts'],
     },
     {
@@ -300,7 +300,7 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → Account → Password',
       icon: KeyRound,
-      href: '/settings/password',
+      href: '/settings/account/change-password',
       keywords: ['change password', 'reset password', 'password', 'credentials', 'security password'],
     },
     {
@@ -310,8 +310,18 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → Account → Security',
       icon: Shield,
-      href: '/settings/security',
+      href: '/settings/account',
       keywords: ['security', 'hardware keystore', 'secure store', 'encryption', 'sessions', 'telemetry'],
+    },
+    {
+      id: 'nav-settings-whats-new',
+      title: "What's New & Release Notes",
+      subtitle: 'Latest updates, performance enhancements, and version changelog',
+      category: 'Settings',
+      breadcrumb: "Settings → What's New",
+      icon: Sparkles,
+      href: '/settings/about/whats-new',
+      keywords: ['whats new', 'release notes', 'changelog', 'version', 'new features', 'updates', 'recent changes'],
     },
     {
       id: 'nav-settings-app-info',
@@ -320,7 +330,7 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → App Info',
       icon: Info,
-      href: '/settings/app-info',
+      href: '/settings/about/app-info',
       keywords: ['about app', 'app info', 'version', 'build', 'hermes', 'specs', 'system info'],
     },
     {
@@ -330,7 +340,7 @@ export function buildQuickAccessDestinations(
       category: 'Settings',
       breadcrumb: 'Settings → Support',
       icon: Mail,
-      href: '/settings/support',
+      href: '/settings/about/support',
       keywords: ['support', 'help', 'contact', 'customer care', 'email support', 'assistance'],
     },
     {

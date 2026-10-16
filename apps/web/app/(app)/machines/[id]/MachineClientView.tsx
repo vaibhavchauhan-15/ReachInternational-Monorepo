@@ -47,6 +47,8 @@ import {
   useToast,
   ConfirmationDialog,
   type ClientSelectItem,
+  KPICard,
+  KPIGrid,
 } from "@/components/ui";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User } from "@reachinternational/types";
@@ -730,6 +732,44 @@ export function MachineClientView({
       {/* ═══════════ TAB 1: BASIC INFO & CLIENT (ALL LIGHT DATA ON SAME SCREEN) ═══════════ */}
       {activeTab === "overview" && (
         <div className="flex flex-col gap-4 sm:gap-5">
+          {/* Executive Machine KPIs */}
+          <KPIGrid columns={4}>
+            <KPICard
+              label="Hours Meter"
+              value={`${machineData.hour_meter ?? 0} hrs`}
+              icon="hours"
+              variant="default"
+              subtitle="Total logged runtime"
+            />
+            <KPICard
+              label="Health Status"
+              value={machineData.health_status?.replace(/_/g, " ").toUpperCase() || "ACTIVE"}
+              icon="maintenance"
+              variant={
+                machineData.health_status === "breakdown"
+                  ? "error"
+                  : machineData.health_status === "under_maintenance"
+                  ? "warning"
+                  : "success"
+              }
+              subtitle="Asset equipment condition"
+            />
+            <KPICard
+              label="Rental Status"
+              value={machineData.status?.replace(/_/g, " ").toUpperCase() || "AVAILABLE"}
+              icon="machines"
+              variant={machineData.status === "on_rent" || machineData.status === "rented" ? "info" : "default"}
+              subtitle={hasLinkedClient ? clientCompanyName : "Fleet Inventory"}
+            />
+            <KPICard
+              label="Assigned Crew"
+              value={assignedOperators.length + assignedSupervisors.length}
+              icon="users"
+              variant="purple"
+              subtitle={`${assignedOperators.length} op • ${assignedSupervisors.length} sup`}
+            />
+          </KPIGrid>
+
           {/* ═══════════ SECTION 1: BASIC INFO ═══════════ */}
           <FadeIn delay={0.1}>
         <Card padding="md" className="card-hover-system sm:p-6" data-hover-parent>

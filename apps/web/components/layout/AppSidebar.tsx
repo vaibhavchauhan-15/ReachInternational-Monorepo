@@ -20,7 +20,7 @@ import {
   SIDEBAR_WIDTH_EXPANDED,
   SIDEBAR_WIDTH_COLLAPSED,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@/components/ui/Sidebar";
 
 import type { NavItem, AppSidebarProps } from "./sidebar/types";
 import { SidebarHeader } from "./sidebar/SidebarHeader";

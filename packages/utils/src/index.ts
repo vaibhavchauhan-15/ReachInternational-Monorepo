@@ -19,5 +19,10 @@ export * from './shift';
 export * from './maintenance';
 export * from './address';
 export * from './profile-view';
+export * from './payroll';
+export * from './shift-overlap';
+export * from './errors';
+export * from './domain-keys';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";
+

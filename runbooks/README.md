@@ -107,6 +107,6 @@ The following high-risk operations **MUST NOT** be executed autonomously by any 
 - **Incident Postmortem Standard**: [`performance/monitoring/incidents.md`](../performance/monitoring/incidents.md)
 - **Monitoring & Metrics Reference**: [`performance/monitoring/metrics.md`](../performance/monitoring/metrics.md)
 - **Production Alert Policies**: [`performance/monitoring/alerts.md`](../performance/monitoring/alerts.md)
-- **Authoritative Deployment Policy**: [`brain/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`](../brain/RULES/DEPLOYMENT-DEVOPS-RELEASE.md)
-- **Observability & Audit Rules**: [`brain/RULES/OBSERVABILITY-MONITORING-LOGGING.md`](../brain/RULES/OBSERVABILITY-MONITORING-LOGGING.md)
+- **Authoritative Deployment Policy**: [`AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`](../AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md)
+- **Observability & Audit Rules**: [`AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`](../AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md)
 - **Database Seed Verifier**: Run `pnpm verify:seed` (`node supabase/verify_seed.mjs`)

@@ -9,6 +9,7 @@ import {
   View,
   TextInput,
   StyleSheet,
+  Platform,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
@@ -142,7 +143,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
     if (!trimmedH) {
       if (required || touched) {
-        hourErr = 'Hour required (1–12)';
+        hourErr = 'Hour is required';
       }
     } else {
       const hNum = parseInt(trimmedH, 10);
@@ -153,8 +154,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
     if (trimmedM !== '') {
       const mNum = parseInt(trimmedM, 10);
-      if (isNaN(mNum) || mNum < 0 || mNum > 60) {
-        minuteErr = 'Minutes must be 0–60';
+      if (isNaN(mNum) || mNum < 0 || mNum > 59) {
+        minuteErr = 'Minute must be 0–59';
       }
     }
 
@@ -193,7 +194,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       let mNum = 0;
       if (trimmedM !== '') {
         mNum = parseInt(trimmedM, 10);
-        if (isNaN(mNum) || mNum < 0 || mNum > 60) {
+        if (isNaN(mNum) || mNum < 0 || mNum > 59) {
           return;
         }
       }
@@ -268,7 +269,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       sanitized = isNaN(parsedNum) ? '' : String(parsedNum);
     } else if (digits.length > 2) {
       const parsedNum = parseInt(digits, 10);
-      if (!isNaN(parsedNum) && parsedNum >= 0 && parsedNum <= 60) {
+      if (!isNaN(parsedNum) && parsedNum >= 0 && parsedNum <= 59) {
         sanitized = String(parsedNum);
       } else {
         sanitized = digits.slice(-2);
@@ -288,7 +289,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     } else {
       const mNum = parseInt(trimmedM, 10);
       if (!isNaN(mNum)) {
-        if (mNum >= 0 && mNum <= 60) {
+        if (mNum >= 0 && mNum <= 59) {
           const padded = String(mNum).padStart(2, '0');
           setMinute(padded);
           emitFormattedTime(hour, padded, period);
@@ -594,6 +595,11 @@ const styles = StyleSheet.create({
     height: 38,
     padding: 0,
     fontVariant: ['tabular-nums'],
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      } as any,
+    }),
   },
   clockIconBtn: {
     width: 32,

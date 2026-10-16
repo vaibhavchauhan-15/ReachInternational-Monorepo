@@ -12,11 +12,12 @@ import * as Clipboard from 'expo-clipboard';
 import { AppModal } from '../ui/AppModal';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
-import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem, KPICard, KPIGrid, Pagination } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate } from '@reachinternational/utils';
+import { getWebAppUrl } from '../../lib/env';
 import {
   ChevronLeft,
   Edit2,
@@ -239,7 +240,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     }
     supabase
       .from('clients')
-      .select('*')
+      .select(`
+        id,
+        code,
+        company_name,
+        city,
+        district,
+        state,
+        pincode,
+        phone,
+        contact_person,
+        street,
+        gstin,
+        pan_number,
+        is_billing_address_different,
+        billing_address,
+        billing_city,
+        billing_district,
+        billing_state,
+        billing_pincode,
+        status
+      `)
       .eq('id', machine.client_id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -309,6 +330,31 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [selectedMobileAuditLog, setSelectedMobileAuditLog] = useState<any | null>(null);
   const [copiedLogIdMobile, setCopiedLogIdMobile] = useState(false);
 
+  const handleTabChange = useCallback((val: string) => {
+    setActiveTab(val as 'overview' | 'running_hours' | 'audit_trail');
+  }, []);
+
+  const segmentedTabItems = useMemo(
+    () => [
+      { id: 'overview' as const, label: 'Basic Info' },
+      {
+        id: 'running_hours' as const,
+        label: 'HMR',
+        count: hasLoadedLogs && hourLogs && hourLogs.length > 0 ? hourLogs.length : undefined,
+      },
+      ...(normalizedRole !== 'operator'
+        ? [
+            {
+              id: 'audit_trail' as const,
+              label: 'Audit',
+              count: hasLoadedAudit && auditLogs && auditLogs.length > 0 ? auditLogs.length : undefined,
+            },
+          ]
+        : []),
+    ],
+    [hasLoadedLogs, hourLogs, normalizedRole, hasLoadedAudit, auditLogs]
+  );
+
   // Logs Filter / Sort State
   const [logSearch, setLogSearch] = useState('');
   const [logDatePreset, setLogDatePreset] = useState<'all' | '7d' | '30d' | 'month'>('all');
@@ -316,7 +362,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [logSortBy, setLogSortBy] = useState<'date_desc' | 'date_asc' | 'hours_desc' | 'hours_asc'>('date_desc');
   const [showFilterSort, setShowFilterSort] = useState(false);
   const [logPage, setLogPage] = useState(1);
-  const logPageSize = 10;
+  const [logPageSize, setLogPageSize] = useState<number>(10);
 
   // Modals for filter selectors in logs tab
   const [dateModalOpen, setDateModalOpen] = useState(false);
@@ -421,7 +467,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email)
         `)
         .eq('machine_id', machine.id)
-        .order('log_date', { ascending: false });
+        .order('log_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setHourLogs(data || []);
@@ -885,9 +934,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
   // Log calculation & filtering
   const totalHoursRun = useMemo(() => {
-    if (!hourLogs) return 0;
+    if (machine.hour_meter !== null && machine.hour_meter !== undefined && Number(machine.hour_meter) > 0) {
+      return Number(machine.hour_meter);
+    }
+    if (!hourLogs || hourLogs.length === 0) return 0;
     return hourLogs.reduce((acc, log) => acc + (Number(log.running_hours) || 0), 0);
-  }, [hourLogs]);
+  }, [machine.hour_meter, hourLogs]);
 
   const filteredLogs = useMemo(() => {
     if (!hourLogs) return [];
@@ -941,7 +993,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const paginatedLogs = useMemo(() => {
     const start = (logPage - 1) * logPageSize;
     return filteredLogs.slice(start, start + logPageSize);
-  }, [filteredLogs, logPage]);
+  }, [filteredLogs, logPage, logPageSize]);
 
   // Delete Action
   const handleDeleteMachine = async () => {
@@ -1138,7 +1190,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         borderColor: theme.colors.hairline,
                       },
                     ]}
-                    activeOpacity={0.7}
                     accessibilityLabel="Edit Machine Options"
                   >
                     <Edit2 size={13} color={theme.colors.ink} />
@@ -1157,7 +1208,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         borderColor: theme.colors.hairline,
                       },
                     ]}
-                    activeOpacity={0.7}
                     accessibilityLabel="Assign Operator"
                   >
                     <UserCheck size={13} color="#0d9488" />
@@ -1169,7 +1219,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setDeleteDialogVisible(true)}
                     style={styles.circleDeleteBtn}
-                    activeOpacity={0.7}
                     accessibilityLabel="Delete Machine"
                   >
                     <Trash2 size={14} color="#ffffff" />
@@ -1212,13 +1261,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
           {/* TAB NAVIGATION TOGGLE / NAVBAR */}
           <SegmentedToggle
-            items={[
-              { id: 'overview', label: 'Basic Info' },
-              { id: 'running_hours', label: 'HMR', count: hasLoadedLogs && hourLogs && hourLogs.length > 0 ? hourLogs.length : undefined },
-              ...(normalizedRole !== 'operator' ? [{ id: 'audit_trail', label: 'Audit', count: hasLoadedAudit && auditLogs && auditLogs.length > 0 ? auditLogs.length : undefined }] : []),
-            ]}
+            items={segmentedTabItems}
             value={activeTab}
-            onChange={(val) => setActiveTab(val as any)}
+            onChange={handleTabChange}
             size="sm"
           />
         </View>
@@ -1256,7 +1301,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         borderColor: theme.colors.hairline,
                       },
                     ]}
-                    activeOpacity={0.7}
                     accessibilityLabel="Edit Basic Info"
                   >
                     <Edit2 size={12} color={theme.colors.ink} />
@@ -1497,7 +1541,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           borderColor: theme.colors.hairline,
                         },
                       ]}
-                      activeOpacity={0.7}
                       accessibilityLabel="Manage Staff"
                     >
                       <Edit2 size={12} color={theme.colors.ink} />
@@ -1695,7 +1738,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           borderColor: theme.colors.hairline,
                         },
                       ]}
-                      activeOpacity={0.7}
                       accessibilityLabel="Open Map Location"
                     >
                       <MapPin size={12} color="#0284c7" />
@@ -1715,7 +1757,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           borderColor: theme.colors.hairline,
                         },
                       ]}
-                      activeOpacity={0.7}
                       accessibilityLabel="Edit Client Details"
                     >
                       <Edit2 size={12} color={theme.colors.ink} />
@@ -1836,7 +1877,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Pressable variant="outline" haptic="tap"
                         onPress={() => handleCall(clientPhone)}
                         style={[styles.touchActionBtn, { backgroundColor: '#16a34a', borderColor: '#16a34a' }]}
-                        activeOpacity={0.7}
                         accessibilityLabel="Call"
                       >
                         <Phone size={14} color="#ffffff" />
@@ -1848,7 +1888,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Pressable variant="outline" haptic="tap"
                         onPress={() => handleWhatsApp(clientPhone)}
                         style={[styles.touchActionBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}
-                        activeOpacity={0.7}
                         accessibilityLabel="WhatsApp"
                       >
                         <WhatsAppIcon size={14} color="#ffffff" />
@@ -1937,6 +1976,20 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {/* Filter & Data Feed */}
               {!isLoadingLogs && !logsError && hourLogs && hourLogs.length > 0 && (
                 <View style={styles.logsBody}>
+                  {/* Executive Metric Cards Strip */}
+                  <KPIGrid columns={2} style={{ marginBottom: 12 }}>
+                    <KPICard
+                      label="HOURS RUN"
+                      value={`${totalHoursRun} hrs`}
+                      variant="success"
+                    />
+                    <KPICard
+                      label="RECORDED SHIFTS"
+                      value={hourLogs.length}
+                      variant="info"
+                    />
+                  </KPIGrid>
+
                   {/* Search Bar & Filter Toggle */}
                   <View style={[styles.logSearchRow, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                     <Search size={14} color={theme.colors.mute} />
@@ -2082,22 +2135,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     ))
                   )}
 
-                  {/* Pagination Controls */}
+                  {/* Clean touch-friendly Pagination */}
                   {totalLogPages > 1 && (
-                    <View style={[styles.paginationRow, { borderTopColor: theme.colors.hairline }]}>
-                      <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={() => setLogPage((p) => Math.max(1, p - 1))} disabled={logPage === 1} style={[ { borderColor: theme.colors.hairline }, logPage === 1 && { opacity: 0.4 }]}
-                      >
-                        <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Prev</Text>
-                      </Pressable>
-
-                      <Text style={[styles.pageIndicatorText, { color: theme.colors.mute }]}>
-                        Page {logPage} of {totalLogPages}
-                      </Text>
-
-                      <Pressable variant="outline" haptic="tap" hitSlopToMin48 onPress={() => setLogPage((p) => Math.min(totalLogPages, p + 1))} disabled={logPage === totalLogPages} style={[ { borderColor: theme.colors.hairline }, logPage === totalLogPages && { opacity: 0.4 }]}
-                      >
-                        <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
-                      </Pressable>
+                    <View style={{ marginTop: 12, marginBottom: 8 }}>
+                      <Pagination
+                        page={logPage}
+                        totalPages={totalLogPages}
+                        totalItems={filteredLogs.length}
+                        pageSize={logPageSize}
+                        pageSizeOptions={[10, 25, 50]}
+                        onPageChange={setLogPage}
+                        onPageSizeChange={(newSize) => {
+                          setLogPageSize(newSize);
+                          setLogPage(1);
+                        }}
+                      />
                     </View>
                   )}
                 </View>
@@ -2142,7 +2194,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <Pressable variant="outline" haptic="tap"
                     onPress={fetchAuditLogs}
                     disabled={isLoadingAudit}
-                    activeOpacity={0.7}
                     style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
                   >
                     <RefreshCw size={13} color={theme.colors.ink} />
@@ -2156,7 +2207,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditFilterStrip}>
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('all')}
-                    activeOpacity={0.7}
                     style={[
                       styles.auditFilterChip,
                       {
@@ -2177,7 +2227,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('hour_logs')}
-                    activeOpacity={0.7}
                     style={[
                       styles.auditFilterChip,
                       {
@@ -2198,7 +2247,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('breakdowns')}
-                    activeOpacity={0.7}
                     style={[
                       styles.auditFilterChip,
                       {
@@ -2219,7 +2267,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('assignments')}
-                    activeOpacity={0.7}
                     style={[
                       styles.auditFilterChip,
                       {
@@ -2240,7 +2287,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => setAuditCategory('updates')}
-                    activeOpacity={0.7}
                     style={[
                       styles.auditFilterChip,
                       {
@@ -2276,7 +2322,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                   <Pressable variant="outline" haptic="tap"
                     onPress={fetchAuditLogs}
-                    activeOpacity={0.7}
                     style={[styles.pageBtn, { borderColor: theme.colors.hairline, marginTop: 8 }]}
                   >
                     <Text style={[styles.pageBtnText, { color: theme.colors.link }]}>Retry</Text>
@@ -2595,7 +2640,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                               {/* Mobile View Details Trigger Button (Min 44px hit target) */}
                               <Pressable variant="outline" haptic="tap"
                                 onPress={() => setSelectedMobileAuditLog(log)}
-                                activeOpacity={0.7}
                                 style={[
                                   styles.viewDetailsBtnMobile,
                                   {
@@ -3037,7 +3081,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         asModal={true}
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
-        url={`https://www.reachinternational.co.in/machines?id=${machine.id}`}
+        url={`${getWebAppUrl()}/machines?id=${machine.id}`}
         title={`${machine.machine_id} — ${machine.model || 'Equipment'}`}
         description={`Serial No: ${machine.serial_number || 'N/A'} • Status: ${machine.health_status || 'Active'} • Operational Fleet Asset`}
       />

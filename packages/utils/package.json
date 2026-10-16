@@ -12,6 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/payroll.test.ts src/shift-overlap.test.ts src/errors.test.ts",
     "build": "echo \"@reachinternational/utils built\""
   },
   "dependencies": {

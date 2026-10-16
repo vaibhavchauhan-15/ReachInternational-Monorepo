@@ -5,7 +5,9 @@ import type { User } from "@/lib/types/database";
 import { AppSidebar, SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED } from "@/components/layout/AppSidebar";
 import { BottomNav } from "@/components/navigation/BottomNav";
 import { MobilePageHeader } from "@/components/layout/MobilePageHeader";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/Sidebar";
+import { CurrentUserProvider } from "@/components/auth/CurrentUserContext";
+import { PageActionProvider } from "@/components/layout/PageActionContext";
 import { cn } from "@/lib/utils";
 
 export function AppShellClient({
@@ -74,12 +76,14 @@ export function AppShellClient({
   }, [saveSidebarState]);
 
   return (
-    <SidebarProvider
-      defaultCollapsed={defaultCollapsed}
-      collapsed={collapsed}
-      onCollapsedChange={setCollapsedState}
-      isInteractive={isInteractive}
-    >
+    <CurrentUserProvider user={user}>
+      <PageActionProvider>
+        <SidebarProvider
+          defaultCollapsed={defaultCollapsed}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsedState}
+          isInteractive={isInteractive}
+        >
       <div
         className="min-h-screen flex flex-col bg-[var(--color-canvas)]"
         style={
@@ -122,6 +126,8 @@ export function AppShellClient({
           </main>
         </div>
       </div>
-    </SidebarProvider>
+        </SidebarProvider>
+      </PageActionProvider>
+    </CurrentUserProvider>
   );
 }

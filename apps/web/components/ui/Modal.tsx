@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
   type DialogFrom,
-} from "./dialog";
+} from "./Dialog";
 import { cn } from "@/lib/utils";
 
 export interface ModalProps {

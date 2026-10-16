@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reach Ops",
     "slug": "reachinternational-monorepo",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "reachinternational",
@@ -20,7 +20,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.reachinternational.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": true,
@@ -67,7 +67,7 @@
       "enabled": false,
       "checkAutomatically": "NEVER"
     },
-    "runtimeVersion": "1.2.0",
+    "runtimeVersion": "1.3.0",
     "plugins": [
       "expo-router",
       [

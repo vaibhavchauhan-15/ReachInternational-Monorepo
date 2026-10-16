@@ -71,36 +71,42 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
             value={totalUsers}
             icon={Users}
             variant="default"
+            href="/users"
           />
           <KPICard
             label="Active Fleet"
             value={activeMachines}
             icon={Wrench}
             variant="info"
+            href="/machines"
           />
           <KPICard
             label="Active Clients"
             value={totalClients}
             icon={Building2}
             variant="default"
+            href="/clients"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
             icon={CalendarCheck}
             variant="warning"
+            href="/operations"
           />
           <KPICard
             label="Logs Today"
             value={todayLogs}
             icon={Clock}
             variant={todayLogs > 0 ? 'success' : 'default'}
+            href="/running-logs"
           />
           <KPICard
             label="Audit Events"
             value={recentAuditActions}
             icon={ShieldCheck}
             variant="default"
+            href="/audit"
           />
         </KPIGrid>
       </View>

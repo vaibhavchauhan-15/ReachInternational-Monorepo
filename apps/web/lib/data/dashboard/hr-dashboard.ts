@@ -18,20 +18,15 @@ export const getHRDashboard = cache(
   async (userId: string): Promise<HRDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<HRDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_hr_dashboard");
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_hr_dashboard");
 
-          if (error) {
-            console.error("[DAL] getHRDashboard RPC error:", error.message);
-            return DEFAULT_HR_DASHBOARD;
-          }
-
-          return (data as HRDashboardDTO) || DEFAULT_HR_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getHRDashboard fatal error:", err);
-          return DEFAULT_HR_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getHRDashboard RPC error:", error.message);
+          throw new Error(`Failed to load HR dashboard: ${error.message}`);
         }
+
+        return (data as HRDashboardDTO) || DEFAULT_HR_DASHBOARD;
       },
       [`dashboard-hr-${userId}`],
       {

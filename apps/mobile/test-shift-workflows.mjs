@@ -13,6 +13,10 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let passCount = 0;
 let failCount = 0;
@@ -28,7 +32,7 @@ function assert(condition, message) {
 }
 
 console.log('\n--- 1. Testing useOperationsData RPC Error Propagation & Hook Invariants ---');
-const hooksPath = path.resolve('apps/mobile/lib/hooks/useOperationsData.ts');
+const hooksPath = path.join(__dirname, 'lib/hooks/useOperationsData.ts');
 const hooksContent = fs.readFileSync(hooksPath, 'utf8');
 
 assert(
@@ -54,7 +58,7 @@ assert(
 );
 
 console.log('\n--- 2. Testing MobileOperatorEntryCard UI States, Empty States & Form Validation ---');
-const entryCardPath = path.resolve('apps/mobile/components/operations/MobileOperatorEntryCard.tsx');
+const entryCardPath = path.join(__dirname, 'components/operations/MobileOperatorEntryCard.tsx');
 const entryCardContent = fs.readFileSync(entryCardPath, 'utf8');
 
 assert(
@@ -88,8 +92,23 @@ assert(
 
 assert(
   entryCardContent.includes('isFutureShift') &&
-  entryCardContent.includes('Shift in progress: logs can be submitted once your shift concludes'),
-  'MobileOperatorEntryCard displays in-progress shift advisory banner for future shift end'
+  entryCardContent.includes('Shift in progress · Submit logs after'),
+  'MobileOperatorEntryCard displays short & informative in-progress shift advisory banner'
+);
+
+assert(
+  entryCardContent.includes('useOperationsClientShifts(effectiveClientId)') &&
+  hooksContent.includes('export function useOperationsClientShifts'),
+  'MobileOperatorEntryCard fetches shift codes and timings directly for rented client'
+);
+
+const shiftCardPath = path.join(__dirname, 'components/ui/ShiftCardSelector.tsx');
+const shiftCardContent = fs.readFileSync(shiftCardPath, 'utf8');
+
+assert(
+  shiftCardContent.includes('{isSelected && timeRange ? (') &&
+  shiftCardContent.includes("color: 'rgba(255, 255, 255, 0.72)'"),
+  'ShiftCardSelector displays shift time only on selected shift with low opacity'
 );
 
 assert(
@@ -110,7 +129,7 @@ assert(
 );
 
 console.log('\n--- 3. Testing MobileTodayShiftMonitorTab UI States & Error Resilience ---');
-const todayTabPath = path.resolve('apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx');
+const todayTabPath = path.join(__dirname, 'components/operations/MobileTodayShiftMonitorTab.tsx');
 const todayTabContent = fs.readFileSync(todayTabPath, 'utf8');
 
 assert(
@@ -151,7 +170,7 @@ assert(
 );
 
 console.log('\n--- 4. Testing MobileOperatorHistoryTab UI States & Error Resilience ---');
-const historyTabPath = path.resolve('apps/mobile/components/operations/MobileOperatorHistoryTab.tsx');
+const historyTabPath = path.join(__dirname, 'components/operations/MobileOperatorHistoryTab.tsx');
 const historyTabContent = fs.readFileSync(historyTabPath, 'utf8');
 
 assert(
@@ -187,7 +206,7 @@ assert(
 );
 
 console.log('\n--- 5. Testing operations.tsx Integration, Responsive Layout & Wide Viewports ---');
-const opsPath = path.resolve('apps/mobile/app/(app)/operations.tsx');
+const opsPath = path.join(__dirname, 'app/(app)/operations.tsx');
 const opsContent = fs.readFileSync(opsPath, 'utf8');
 
 assert(

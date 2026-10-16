@@ -24,6 +24,7 @@ import {
   Button,
   Card,
   Badge,
+  Pressable,
 } from '../../components/ui';
 import {
   Sheet,
@@ -43,7 +44,6 @@ import {
   Menu,
   Icon,
 } from '../../components/ui/icon';
-import { Touchable } from '../../components/ui/Touchable';
 import { postNotification } from '../../lib/notifications/postNotification';
 
 export default function MotionLabScreen() {
@@ -182,8 +182,9 @@ export default function MotionLabScreen() {
 
           <View style={styles.iconGrid}>
             {/* rotateToggle */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setIconToggle((prev) => !prev)}
               style={styles.iconTestItem}
             >
@@ -192,11 +193,12 @@ export default function MotionLabScreen() {
                 <Icon name="plus" size={20} state={iconToggle ? 'open' : 'closed'} color={theme.colors.ink} degrees={45} />
               </View>
               <Text variant="caption" style={{ color: theme.colors.mute }}>rotateToggle</Text>
-            </Touchable>
+            </Pressable>
 
             {/* morphPair */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setEyeState((prev) => !prev)}
               style={styles.iconTestItem}
             >
@@ -205,11 +207,12 @@ export default function MotionLabScreen() {
                 <Icon name="eye" size={20} state={eyeState ? 'off' : 'on'} color={theme.colors.ink} />
               </View>
               <Text variant="caption" style={{ color: theme.colors.mute }}>morphPair</Text>
-            </Touchable>
+            </Pressable>
 
             {/* drawStroke */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setCheckKey((k) => k + 1)}
               style={styles.iconTestItem}
             >
@@ -218,41 +221,45 @@ export default function MotionLabScreen() {
                 <Icon key={`chkc-${checkKey}`} name="check-circle" size={20} animate="mount" color="#10b981" />
               </View>
               <Text variant="caption" style={{ color: theme.colors.mute }}>drawStroke</Text>
-            </Touchable>
+            </Pressable>
 
             {/* ring */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setRingCount((c) => c + 1)}
               style={styles.iconTestItem}
             >
               <Icon name="bell" size={20} pulseKey={ringCount} color="#f59e0b" />
               <Text variant="caption" style={{ color: theme.colors.mute }}>ring (bell)</Text>
-            </Touchable>
+            </Pressable>
 
             {/* spin */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setIsSpinning((s) => !s)}
               style={styles.iconTestItem}
             >
               <Icon name="refresh-cw" size={20} loading={isSpinning} color="#0284c7" />
               <Text variant="caption" style={{ color: theme.colors.mute }}>{isSpinning ? 'spin (ON)' : 'spin (OFF)'}</Text>
-            </Touchable>
+            </Pressable>
 
             {/* pulse */}
-            <Touchable
-              preset="card"
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => setPulseCount((c) => c + 1)}
               style={styles.iconTestItem}
             >
               <Icon name="alert-triangle" size={20} pulseKey={pulseCount} color="#ef4444" />
               <Text variant="caption" style={{ color: theme.colors.mute }}>pulse</Text>
-            </Touchable>
+            </Pressable>
 
-            {/* slideNudge & pressNudge */}
-            <Touchable
-              preset="card"
+            {/* static icons */}
+            <Pressable
+              variant="card"
+              haptic={false}
               onPress={() => {}}
               style={styles.iconTestItem}
             >
@@ -260,8 +267,8 @@ export default function MotionLabScreen() {
                 <Icon name="arrow-right" size={20} color={theme.colors.link} />
                 <Icon name="search" size={20} color={theme.colors.link} />
               </View>
-              <Text variant="caption" style={{ color: theme.colors.mute }}>slide/press</Text>
-            </Touchable>
+              <Text variant="caption" style={{ color: theme.colors.mute }}>icons</Text>
+            </Pressable>
           </View>
         </Card>
       </ScrollView>

@@ -11,8 +11,8 @@ import {
   StyleSheet,
   Keyboard,
   Platform,
-  Pressable,
 } from 'react-native';
+import { Pressable } from '../ui/touch/Pressable';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -61,56 +61,44 @@ const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
   const itemColor = isActive ? primaryColor : theme.colors.mute;
 
   const handlePress = () => {
-    try {
+    if (!isActive) {
       haptics.tap();
-    } catch {
-      // ignore
     }
     onPress();
   };
 
   return (
     <Pressable
+      variant="navTab"
+      haptic={false}
       onPress={handlePress}
       style={styles.navItemBtn}
-      android_ripple={{
-        color: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(23, 23, 23, 0.08)',
-        borderless: false,
-        radius: 28,
-        foreground: false,
-      }}
       accessibilityRole="tab"
       accessibilityState={{ selected: isActive }}
       accessibilityLabel={item.label}
     >
-      {({ pressed, hovered }: any) => {
-        const isPressed = Boolean(pressed);
-        const isHovered = Boolean(hovered && !pressed);
-
-        const pressedBg = isDark
-          ? (isActive ? 'rgba(14, 165, 233, 0.16)' : 'rgba(255, 255, 255, 0.08)')
-          : (isActive ? 'rgba(2, 132, 199, 0.12)' : 'rgba(23, 23, 23, 0.06)');
-
-        const hoveredBg = isDark
-          ? 'rgba(255, 255, 255, 0.05)'
-          : 'rgba(23, 23, 23, 0.04)';
-
+      {({ pressed }) => {
         return (
-          <View
-            style={[
-              styles.tabPill,
-              isHovered && { backgroundColor: hoveredBg },
-              isPressed && { backgroundColor: pressedBg },
-            ]}
-          >
-            <CanonicalIcon
-              name={item.icon}
-              level="body"
-              color={itemColor}
-              pulseKey={isActive}
-              animate={isActive ? 'pulse' : 'auto'}
-              state={state}
-            />
+          <View style={styles.tabPill}>
+            <View
+              style={[
+                styles.iconContainer,
+                pressed && {
+                  backgroundColor: isDark
+                    ? 'rgba(14, 165, 233, 0.18)'
+                    : 'rgba(2, 132, 199, 0.12)',
+                },
+              ]}
+            >
+              <CanonicalIcon
+                name={item.icon}
+                level="body"
+                color={itemColor}
+                pulseKey={isActive}
+                animate={isActive ? 'pulse' : 'auto'}
+                state={state}
+              />
+            </View>
             <Text
               variant="caption"
               numberOfLines={1}
@@ -278,7 +266,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
                       return;
                     }
                     if (isActive) return;
-                    router.push(item.href as any);
+                    router.navigate(item.href as any);
                   }}
                   theme={theme}
                   isDark={isDark}
@@ -351,6 +339,14 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingVertical: 2,
     paddingHorizontal: 1,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
+      } as any,
+      default: {},
+    }),
   },
   tabPill: {
     width: '100%',
@@ -362,7 +358,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     ...Platform.select({
       web: {
-        transition: 'background-color 150ms ease',
         outlineStyle: 'none',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
@@ -372,6 +367,19 @@ const styles = StyleSheet.create({
   },
   itemLabel: {
     marginTop: 2,
+  },
+  iconContainer: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        transition: 'background-color 150ms ease',
+      } as any,
+      default: {},
+    }),
   },
   activeDot: {
     width: 4,

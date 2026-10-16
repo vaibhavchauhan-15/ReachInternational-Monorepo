@@ -22,22 +22,17 @@ export const getSupervisorDashboard = cache(
   async (supervisorId: string): Promise<SupervisorDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<SupervisorDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_supervisor_dashboard", {
-            p_supervisor_id: supervisorId,
-          });
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_supervisor_dashboard", {
+          p_supervisor_id: supervisorId,
+        });
 
-          if (error) {
-            console.error("[DAL] getSupervisorDashboard RPC error:", error.message);
-            return DEFAULT_SUPERVISOR_DASHBOARD;
-          }
-
-          return (data as SupervisorDashboardDTO) || DEFAULT_SUPERVISOR_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getSupervisorDashboard fatal error:", err);
-          return DEFAULT_SUPERVISOR_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getSupervisorDashboard RPC error:", error.message);
+          throw new Error(`Failed to load supervisor dashboard: ${error.message}`);
         }
+
+        return (data as SupervisorDashboardDTO) || DEFAULT_SUPERVISOR_DASHBOARD;
       },
       [`dashboard-supervisor-v2-${supervisorId}`],
       {

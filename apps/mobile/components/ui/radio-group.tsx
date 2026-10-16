@@ -33,7 +33,7 @@ const RadioGroupItem = React.forwardRef<
       className={cn(
         'border-input dark:bg-input/20 aspect-square size-5 shrink-0 items-center justify-center rounded-full border shadow-sm shadow-black/5 min-h-[44px] min-w-[44px]',
         Platform.select({
-          web: 'focus-visible:border-ring focus-visible:ring-ring/50 outline-none transition-all focus-visible:ring-[2px] disabled:cursor-not-allowed',
+          web: 'outline-none disabled:cursor-not-allowed',
         }),
         props.disabled && 'opacity-50',
         className

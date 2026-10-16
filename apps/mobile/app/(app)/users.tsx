@@ -2,10 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   type TextInput,
   Animated,
   Easing,
@@ -13,14 +11,35 @@ import {
   StatusBar,
   FlatList,
   ListRenderItem,
-  Linking,
-  Modal,
   useWindowDimensions,
 } from 'react-native';
-import { Card, Badge, useTheme, MobileHeader, HeaderActionItem, DropdownFilterSelector, type FilterOption, KPICard, KPIGrid, HighlightText, Text, useTypeStyle, SearchInput, useToast, AppModal, EmptyState, ErrorState } from '../../components/ui';
+import {
+  Card,
+  Badge,
+  useTheme,
+  MobileHeader,
+  HeaderActionItem,
+  DropdownFilterSelector,
+  type FilterOption,
+  KPICard,
+  KPIGrid,
+  HighlightText,
+  Text,
+  SearchInput,
+  useToast,
+  EmptyState,
+  ErrorState,
+} from '../../components/ui';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { DeleteUserConfirmDialog } from '../../components/users/DeleteUserConfirmDialog';
+import {
+  UserTouchCard,
+  UserActionsPopover,
+  ProfileChangeRequestsSection,
+  AccountDeletionRequestsSection,
+  UserFiltersPanel,
+} from '../../components/users';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { UserEditModal } from '../../components/users/UserEditModal';
@@ -37,43 +56,37 @@ import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
 import { haptics } from '../../lib/haptics';
+import { useScreenSync } from '../../lib/offline';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatTinyRelativeTime, INDIAN_STATES } from '@reachinternational/utils';
+import { INDIAN_STATES, sanitizeDatabaseError } from '@reachinternational/utils';
 import {
   Users,
-  User,
   UserCheck,
   UserX,
-  ShieldCheck,
-  ShieldAlert,
-  Shield,
-  Search,
-  Plus,
   UserPlus,
   RefreshCw,
-  Phone,
-  MapPin,
   Check,
   X,
   Trash2,
   CheckSquare,
-  Square,
-  Mail,
   Clock,
-  Filter,
   FileSpreadsheet,
   RotateCcw,
   SlidersHorizontal,
-  ChevronDown,
-  AlertTriangle,
-  Globe,
-  Smartphone,
   Wrench,
-  Edit2,
   KeyRound,
-  Eye,
-  MoreVertical,
 } from '../../components/ui/icon';
+import {
+  useUsersSummaryKPIs,
+  useActiveSupervisors,
+  useUsersInfiniteQuery,
+  usePendingApprovalRequests,
+  fetchSingleUserRecord,
+  invalidateUserMachinesCache,
+  buildOptimizedUserSearchQuery,
+  USER_SELECT_COLUMNS,
+  USERS_PAGE_SIZE,
+} from '../../lib/hooks/useUsersData';
 
 const ROLE_FILTER_OPTIONS: FilterOption[] = [
   { id: 'all', label: 'All Roles' },
@@ -122,513 +135,12 @@ const STATE_FILTER_OPTIONS: FilterOption[] = [
   })),
 ];
 
-function formatRoleName(role: string): string {
-  switch (role) {
-    case 'super_admin':
-      return 'Super Admin';
-    case 'admin':
-      return 'Admin';
-    case 'manager':
-      return 'Manager';
-    case 'supervisor':
-      return 'Supervisor';
-    case 'hr':
-      return 'HR';
-    case 'operator':
-      return 'Operator';
-    default:
-      return role ? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
-  }
-}
-
-function getRoleAccentColor(role: string): string {
-  switch (role) {
-    case 'super_admin':
-      return '#ef4444';
-    case 'admin':
-      return '#f59e0b';
-    case 'manager':
-      return '#6366f1';
-    case 'supervisor':
-      return '#0d9488';
-    case 'hr':
-      return '#059669';
-    case 'operator':
-      return '#d97706';
-    default:
-      return '#64748b';
-  }
-}
-
-function truncateText(str?: string | null, maxChars: number = 22): string {
-  if (!str) return '';
-  return str.length > maxChars ? `${str.slice(0, maxChars)}…` : str;
-}
-
-function sanitizeSearchToken(token: string): string {
-  return token
-    .replace(/[,()"]/g, '')
-    .replace(/[\\%_]/g, '\\$&')
-    .trim();
-}
-
-function applyOptimizedUserSearch(query: any, search?: string) {
-  if (!search) return query;
-  const trimmed = search.trim();
-  if (trimmed.length === 0) return query;
-
-  const sanitized = sanitizeSearchToken(trimmed);
-  if (!sanitized) return query;
-
-  if (/^emp/i.test(trimmed)) {
-    return query.or(`employee_id.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
-  }
-
-  const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
-  const digits = trimmed.replace(/\D/g, '');
-
-  if (isDigitsOnly && digits.length >= 1) {
-    let phoneDigits = digits;
-    if (digits.length === 12 && digits.startsWith('91')) {
-      phoneDigits = digits.slice(2);
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      phoneDigits = digits.slice(1);
-    }
-
-    const conditions: string[] = [];
-    conditions.push(`employee_id.ilike.%${digits}%`);
-    if (phoneDigits.length >= 3) {
-      conditions.push(`phone.ilike.%${phoneDigits}%`);
-    }
-    if (digits.length >= 4) {
-      conditions.push(`aadhaar_number.ilike.%${digits}%`);
-    }
-    conditions.push(`license_number.ilike.%${sanitized}%`);
-    conditions.push(`full_name.ilike.%${sanitized}%`);
-
-    return query.or(conditions.join(','));
-  }
-
-  if (trimmed.includes('@') || trimmed.endsWith('.com') || trimmed.endsWith('.in')) {
-    return query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
-  }
-
-  const words = trimmed.split(/\s+/).map(sanitizeSearchToken).filter((w) => w.length >= 2);
-  const roleSlug = sanitized.toLowerCase().replace(/\s+/g, '_');
-  const isKnownRole = [
-    'super_admin',
-    'admin',
-    'manager',
-    'supervisor',
-    'hr',
-    'operator',
-  ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
-
-  if (words.length > 1) {
-    if (isKnownRole) {
-      return query.or(`role.ilike.%${roleSlug}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
-    }
-
-    for (const word of words) {
-      const wRole = word.toLowerCase().replace(/s$/, '');
-      query = query.or(
-        `employee_id.ilike.%${word}%,full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
-      );
-    }
-    return query;
-  }
-
-  const roleVariant = sanitized.toLowerCase().replace(/s$/, '');
-  const conditions = [
-    `employee_id.ilike.%${sanitized}%`,
-    `full_name.ilike.%${sanitized}%`,
-    `email.ilike.%${sanitized}%`,
-    `role.ilike.%${sanitized}%`,
-    `city.ilike.%${sanitized}%`,
-    `district.ilike.%${sanitized}%`,
-    `state.ilike.%${sanitized}%`,
-    `license_number.ilike.%${sanitized}%`,
-  ];
-
-  if (roleVariant !== sanitized.toLowerCase()) {
-    conditions.push(`role.ilike.%${roleVariant}%`);
-  }
-
-  if (digits.length >= 3) {
-    conditions.push(`phone.ilike.%${digits}%`);
-    conditions.push(`aadhaar_number.ilike.%${digits}%`);
-  }
-
-  return query.or(conditions.join(','));
-}
-
 export interface AnchorCoords {
   x: number;
   y: number;
   width: number;
   height: number;
 }
-
-interface UserTouchCardProps {
-  user: UserRecord;
-  isSelected: boolean;
-  isSelectMode: boolean;
-  theme: any;
-  onPress: (user: UserRecord) => void;
-  onLongPress: (user: UserRecord) => void;
-  searchTerm?: string;
-  onViewDetails: (user: UserRecord) => void;
-  onEdit?: (user: UserRecord) => void;
-  onDelete?: (user: UserRecord) => void;
-  onAssignSupervisor?: (user: UserRecord) => void;
-  onAssignMachine?: (user: UserRecord) => void;
-  onResetPassword?: (user: UserRecord) => void;
-  onOpenMoreActions?: (user: UserRecord, anchor?: AnchorCoords | null) => void;
-  canEdit?: boolean;
-  canDelete?: boolean;
-  canAssignSupervisor?: boolean;
-  canAssignMachine?: boolean;
-  canResetPwd?: boolean;
-}
-
-const UserTouchCard = React.memo(function UserTouchCard({
-  user: u,
-  isSelected,
-  isSelectMode,
-  theme,
-  onPress,
-  onLongPress,
-  searchTerm,
-  onViewDetails,
-  onEdit,
-  onDelete,
-  onAssignSupervisor,
-  onAssignMachine,
-  onResetPassword,
-  onOpenMoreActions,
-  canEdit = false,
-  canDelete = false,
-  canAssignSupervisor = false,
-  canAssignMachine = false,
-  canResetPwd = false,
-}: UserTouchCardProps) {
-  const { isDark } = useTheme();
-  const accentColor = getRoleAccentColor(u.role);
-  const moreBtnRef = useRef<View>(null);
-
-  const handleMorePress = () => {
-    haptics.select();
-    if (Platform.OS === 'web' && moreBtnRef.current) {
-      const rect = (moreBtnRef.current as any)?.getBoundingClientRect?.();
-      if (rect) {
-        onOpenMoreActions?.(u, {
-          x: rect.left,
-          y: rect.top,
-          width: rect.width,
-          height: rect.height,
-        });
-        return;
-      }
-    }
-    if (moreBtnRef.current?.measureInWindow) {
-      moreBtnRef.current.measureInWindow((x, y, width, height) => {
-        onOpenMoreActions?.(u, { x, y, width, height });
-      });
-    } else {
-      onOpenMoreActions?.(u, null);
-    }
-  };
-
-  const hasMeta = Boolean(
-    u.employee_id ||
-    u.email ||
-    u.phone ||
-    u.city ||
-    u.district ||
-    u.state ||
-    (u.supervisors && u.supervisors.length > 0) ||
-    u.supervisor?.full_name ||
-    (u.assigned_machines && u.assigned_machines.length > 0) ||
-    u.shift_time
-  );
-
-  return (
-    <View
-      style={[
-        styles.userCard,
-        {
-          backgroundColor: theme.colors.canvasElevated,
-          borderColor: theme.colors.hairline,
-          borderLeftColor: accentColor,
-          borderLeftWidth: 4,
-        },
-        isSelectMode && isSelected && {
-          borderColor: theme.colors.link,
-          borderWidth: 1.5,
-          borderLeftWidth: 4,
-          backgroundColor: theme.colors.canvas,
-        },
-      ]}
-    >
-      {/* Clickable Card Body: Tapping anywhere opens user profile details */}
-      <Pressable
-        variant="plain"
-        haptic={false}
-        onPress={() => (isSelectMode ? onPress(u) : onViewDetails(u))}
-        onLongPress={() => onLongPress(u)}
-        style={{ flex: 1 }}
-      >
-        {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side on right */}
-        <View style={styles.userCardHeader}>
-          <View style={styles.userAvatarRow}>
-            {isSelectMode ? (
-              <View style={{ marginRight: 6 }}>
-                {isSelected ? (
-                  <CheckSquare size={20} color={theme.colors.link} />
-                ) : (
-                  <Square size={20} color={theme.colors.mute} />
-                )}
-              </View>
-            ) : (
-              <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                  {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <HighlightText
-                text={truncateText(u.full_name, 28)}
-                query={searchTerm}
-                variant="label"
-                style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
-                numberOfLines={1}
-              />
-            </View>
-          </View>
-
-          {/* Header Right: Standardized 24px Role Badge & Status Badge in ONE ROW */}
-          <View style={styles.headerRightActions}>
-            <View style={styles.headerBadgesCluster}>
-              {/* Role Chip (consistent 24px height, theme-aware colors) */}
-              <View
-                style={[
-                  styles.chipBadge,
-                  {
-                    backgroundColor: isDark ? accentColor + '25' : accentColor + '15',
-                    borderColor: isDark ? accentColor + '50' : accentColor + '35',
-                  },
-                ]}
-              >
-                <Text variant="caption" style={{ color: accentColor }}>
-                  {formatRoleName(u.role)}
-                </Text>
-              </View>
-
-              {/* Status Chip (consistent 24px height, theme-aware colors) */}
-              <View
-                style={[
-                  styles.chipBadge,
-                  {
-                    backgroundColor:
-                      u.status === 'active'
-                        ? isDark ? 'rgba(52, 211, 153, 0.16)' : 'rgba(16, 185, 129, 0.12)'
-                        : u.status === 'pending'
-                        ? isDark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)'
-                        : isDark ? 'rgba(161, 161, 170, 0.16)' : 'rgba(113, 113, 122, 0.12)',
-                    borderColor:
-                      u.status === 'active'
-                        ? isDark ? 'rgba(52, 211, 153, 0.4)' : 'rgba(16, 185, 129, 0.3)'
-                        : u.status === 'pending'
-                        ? isDark ? 'rgba(251, 191, 36, 0.4)' : 'rgba(245, 158, 11, 0.3)'
-                        : isDark ? 'rgba(161, 161, 170, 0.4)' : 'rgba(113, 113, 122, 0.3)',
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor:
-                        u.status === 'active'
-                          ? isDark ? '#34d399' : '#10b981'
-                          : u.status === 'pending'
-                          ? isDark ? '#fbbf24' : '#f59e0b'
-                          : isDark ? '#a1a1aa' : '#94a3b8',
-                    },
-                  ]}
-                />
-                <Text
-                  variant="caption"
-                  style={{
-                    color:
-                      u.status === 'active'
-                        ? isDark ? '#34d399' : '#059669'
-                        : u.status === 'pending'
-                        ? isDark ? '#fbbf24' : '#d97706'
-                        : isDark ? '#a1a1aa' : '#71717a',
-                  }}
-                >
-                  {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Card Metadata Section */}
-        {hasMeta && (
-          <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-            {u.employee_id ? (
-              <View style={styles.metaChipRow}>
-                <Badge
-                  variant="outline"
-                  size="sm"
-                  style={[
-                    styles.empIdBadge,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <HighlightText
-                    text={u.employee_id}
-                    query={searchTerm}
-                    variant="mono"
-                    style={{ color: theme.colors.ink }}
-                  />
-                </Badge>
-              </View>
-            ) : null}
-
-            {u.email ? (
-              <View style={styles.metaChipRow}>
-                <Mail size={12} color={theme.colors.mute} />
-                <HighlightText
-                  text={u.email}
-                  query={searchTerm}
-                  variant="caption"
-                  style={[styles.metaChipText, { color: theme.colors.ink }]}
-                  numberOfLines={1}
-                />
-              </View>
-            ) : null}
-
-            {u.phone ? (
-              <View style={styles.metaChipRow}>
-                <Phone size={12} color={theme.colors.mute} />
-                <HighlightText
-                  text={u.phone}
-                  query={searchTerm}
-                  variant="mono"
-                  style={[styles.metaChipText, { color: theme.colors.ink }]}
-                />
-              </View>
-            ) : null}
-
-            {(u.city || u.district || u.state) && (
-              <View style={styles.metaChipRow}>
-                <MapPin size={12} color={theme.colors.mute} />
-                <HighlightText
-                  text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                  query={searchTerm}
-                  variant="caption"
-                  style={[styles.metaChipText, { color: theme.colors.mute }]}
-                  numberOfLines={1}
-                />
-              </View>
-            )}
-
-            {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
-              <View style={styles.metaChipRow}>
-                <User size={12} color="#0d9488" />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Supervisor: {u.supervisors && u.supervisors.length > 0
-                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                    : u.supervisor?.full_name}
-                </Text>
-              </View>
-            )}
-
-            {u.assigned_machines && u.assigned_machines.length > 0 && (
-              <View style={styles.metaChipRow}>
-                <Wrench size={12} color="#d97706" />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Machines: {u.assigned_machines.map((m) => m.machine_id).join(', ')}
-                </Text>
-              </View>
-            )}
-
-            {u.shift_time && (
-              <View style={styles.metaChipRow}>
-                <Clock size={12} color={theme.colors.mute} />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
-                  Shift: {u.shift_time}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </Pressable>
-
-      {/* Action Buttons Toolbar at bottom: STRICTLY 3 actions (3-dot More, Assign Machine, Supervisor) */}
-      <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
-        {/* 1. 3-Dot More Actions Button */}
-        <View ref={moreBtnRef} collapsable={false}>
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={handleMorePress}
-            style={[styles.actionPillBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
-          >
-            <MoreVertical size={13} color={theme.colors.ink} />
-            <Text variant="caption" style={{ color: theme.colors.ink }}>
-              More
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* 2. Assign Machine */}
-        {canAssignMachine && onAssignMachine && (
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={(e?: any) => {
-              e?.stopPropagation?.();
-              haptics.select();
-              onAssignMachine(u);
-            }}
-            style={[styles.actionPillBtn, { borderColor: '#d9770640', backgroundColor: '#d9770612' }]}
-          >
-            <Wrench size={12} color="#d97706" />
-            <Text variant="caption" style={{ color: '#d97706' }}>
-              Assign Machine
-            </Text>
-          </Pressable>
-        )}
-
-        {/* 3. Assign Supervisor */}
-        {canAssignSupervisor && onAssignSupervisor && (
-          <Pressable
-            variant="plain"
-            hitSlopToMin48
-            onPress={() => {
-              haptics.select();
-              onAssignSupervisor(u);
-            }}
-            style={[styles.actionPillBtn, { borderColor: '#0d948840', backgroundColor: '#0d948812' }]}
-          >
-            <ShieldCheck size={12} color="#0d9488" />
-            <Text variant="caption" style={{ color: '#0d9488' }}>
-              Supervisor
-            </Text>
-          </Pressable>
-        )}
-      </View>
-    </View>
-  );
-});
 
 const DEFAULT_USERS_FILTERS = {
   roleFilter: 'all',
@@ -660,11 +172,7 @@ export default function UsersScreen() {
     return null;
   }
 
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination to page 1)
+  // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination)
   const {
     search: debouncedSearch,
     inputValue: search,
@@ -701,10 +209,9 @@ export default function UsersScreen() {
   const setDateRangeFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('dateRangeFilter', val), [setFilter]);
   const setSortBy = useCallback((val: string | ((prev: string) => string)) => setFilter('sortBy', val), [setFilter]);
 
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
 
-  // Synchronize route search param if supplied (e.g. from HR Payroll link)
+  // Synchronize route search param if supplied (e.g. from HR link)
   useEffect(() => {
     if (localParams.search && typeof localParams.search === 'string') {
       const paramSearch = localParams.search.trim();
@@ -714,8 +221,6 @@ export default function UsersScreen() {
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const filterAnim = useRef(new Animated.Value(0)).current;
-  const [panelContentHeight, setPanelContentHeight] = useState(0);
-  const isWeb = Platform.OS === 'web';
 
   const handleSearchSubmit = () => {
     setSearch(search, true);
@@ -726,7 +231,7 @@ export default function UsersScreen() {
     searchInputRef.current?.focus();
   };
 
-  // Smooth filter open & close animation for native platforms (web uses GPU-accelerated CSS Grid)
+  // Smooth filter open & close animation
   useEffect(() => {
     if (Platform.OS === 'web') return;
     Animated.timing(filterAnim, {
@@ -737,19 +242,101 @@ export default function UsersScreen() {
     }).start();
   }, [filterPanelOpen, filterAnim]);
 
-  const showLoading = isLoading || isSearching;
+  // 1. High-Performance KPI Aggregations (from RPC get_users_directory_summary)
+  const {
+    data: kpiStats,
+    isPending: isKPIPending,
+    refetch: refetchKPIs,
+  } = useUsersSummaryKPIs({
+    userRole: currentUserRole,
+    userId: authUser?.id,
+    enabled: Boolean(canAccessUsers),
+  });
 
-  // Pagination & Counts
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isPaginating, setIsPaginating] = useState(false);
-  const [totalUsersCount, setTotalUsersCount] = useState(0);
-  const [initialError, setInitialError] = useState<string | null>(null);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const isFetchingRef = useRef(false);
-  const requestVersionRef = useRef(0);
-  const onEndReachedCalledDuringMomentum = useRef(true);
-  const PAGE_SIZE = 25;
+  // 2. Pre-cache active supervisors across user cards
+  useActiveSupervisors({ enabled: Boolean(canAccessUsers) });
+
+  // 3. Pending Profile & Deletion Requests
+  const {
+    data: pendingRequestsData,
+    refetch: refetchPendingRequests,
+  } = usePendingApprovalRequests({ enabled: Boolean(canAccessUsers) });
+
+  const [profileRequests, setProfileRequests] = useState<any[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (pendingRequestsData) {
+      setProfileRequests(pendingRequestsData.profileRequests || []);
+      setDeletionRequests(pendingRequestsData.deletionRequests || []);
+    }
+  }, [pendingRequestsData]);
+
+  // 4. Server-Side Infinite Paginated Staff Query with Deterministic Sorting
+  const {
+    data: infiniteData,
+    isLoading: isUsersLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch: refetchInfiniteUsers,
+    isRefetching,
+    error: infiniteError,
+  } = useUsersInfiniteQuery({
+    searchQuery: debouncedSearch,
+    roleFilter,
+    statusFilter,
+    stateFilter,
+    kycFilter,
+    dateRangeFilter,
+    sortBy,
+    supervisorId: authUser?.id,
+    userRole: currentUserRole,
+    enabled: Boolean(canAccessUsers),
+    pageSize: USERS_PAGE_SIZE,
+  });
+
+  // Re-sync queries on network reconnect and foreground activation
+  useScreenSync({
+    screen: 'users',
+    onRefresh: async () => {
+      refetchKPIs();
+      refetchInfiniteUsers();
+      refetchPendingRequests();
+    },
+  });
+
+  // Flat data extraction with local mutation overrides for 0ms optimistic UI updates
+  const flatUsers = useMemo(() => {
+    return infiniteData?.pages.flatMap((p) => p.users) || [];
+  }, [infiniteData?.pages]);
+
+  const serverTotalCount = infiniteData?.pages[0]?.totalCount ?? 0;
+  const [localUserPatches, setLocalUserPatches] = useState<Record<string, Partial<UserRecord>>>({});
+  const [deletedUserIds, setDeletedUserIds] = useState<Set<string>>(new Set());
+  const [totalCountDelta, setTotalCountDelta] = useState<number>(0);
+
+  // Clear local patch deltas when filter/search criteria change
+  useEffect(() => {
+    setLocalUserPatches({});
+    setDeletedUserIds(new Set());
+    setTotalCountDelta(0);
+  }, [debouncedSearch, roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]);
+
+  // Compose visible users array
+  const users = useMemo(() => {
+    return flatUsers
+      .filter((u) => !deletedUserIds.has(u.id))
+      .map((u) => (localUserPatches[u.id] ? { ...u, ...localUserPatches[u.id] } : u));
+  }, [flatUsers, deletedUserIds, localUserPatches]);
+
+  const totalUsersCount = Math.max(0, (serverTotalCount || kpiStats?.totalCount || 0) + totalCountDelta);
+  const activeCount = kpiStats?.activeCount ?? 0;
+  const operatorCount = kpiStats?.operatorCount ?? 0;
+  const pendingCount = (kpiStats?.newRegistrationsCount ?? 0) + profileRequests.length + deletionRequests.length;
+
+  const showLoading = (isUsersLoading && users.length === 0) || isSearching;
+  const initialError = infiniteError ? 'Failed to load user accounts.' : null;
 
   // Modals & Action States
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
@@ -774,16 +361,14 @@ export default function UsersScreen() {
   const [assignMachineUser, setAssignMachineUser] = useState<UserRecord | null>(null);
   const [assignMachineModalVisible, setAssignMachineModalVisible] = useState(false);
 
-  // Profile Change Requests State
-  const [profileRequests, setProfileRequests] = useState<any[]>([]);
+  // Profile Change Requests Actions State
   const [approvingProfileId, setApprovingProfileId] = useState<string | null>(null);
   const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
   const [isRejectingProfileReq, setIsRejectingProfileReq] = useState(false);
   const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
   const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
-  // Account Deletion Requests State (Web & Mobile Parity)
-  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
+  // Account Deletion Requests Actions State
   const [approvingDeletionId, setApprovingDeletionId] = useState<string | null>(null);
   const [rejectingDeletionId, setRejectingDeletionId] = useState<string | null>(null);
   const [approveDeletionReqTarget, setApproveDeletionReqTarget] = useState<any | null>(null);
@@ -802,19 +387,7 @@ export default function UsersScreen() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
 
-  // Get current filter label helpers
-  const currentRoleLabel =
-    ROLE_FILTER_OPTIONS.find((opt) => opt.id === roleFilter)?.label || 'Role';
-  const currentStatusLabel =
-    STATUS_FILTER_OPTIONS.find((opt) => opt.id === statusFilter)?.label || 'Status';
-  const currentStateLabel =
-    STATE_FILTER_OPTIONS.find((opt) => opt.id === stateFilter)?.label || stateFilter;
-  const currentKycLabel =
-    KYC_FILTER_OPTIONS.find((opt) => opt.id === kycFilter)?.label || 'KYC';
-  const currentJoinedLabel =
-    JOINED_FILTER_OPTIONS.find((opt) => opt.id === dateRangeFilter)?.label || 'Joined';
-  const currentSortLabel =
-    SORT_FILTER_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort';
+  const onEndReachedCalledDuringMomentum = useRef(true);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -831,701 +404,14 @@ export default function UsersScreen() {
     resetListFilters();
   }, [resetListFilters]);
 
-  const renderFilterPanelContent = () => (
-    <View
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (h > 0 && Math.abs(h - panelContentHeight) > 2) {
-          setPanelContentHeight(h);
-        }
-      }}
-      style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
-    >
-      {/* 6 Dimension Filter Selector Dropdowns */}
-      <View style={styles.filterSelectorsGrid}>
-        {/* 1. Role Dropdown */}
-        <DropdownFilterSelector
-          label="Role"
-          value={roleFilter}
-          options={ROLE_FILTER_OPTIONS}
-          onChange={(val) => setRoleFilter(val)}
-        />
-
-        {/* 2. Status Dropdown */}
-        <DropdownFilterSelector
-          label="Status"
-          value={statusFilter}
-          options={STATUS_FILTER_OPTIONS}
-          onChange={(val) => setStatusFilter(val)}
-        />
-
-        {/* 3. State Dropdown (Searchable) */}
-        <DropdownFilterSelector
-          label="State"
-          value={stateFilter}
-          options={STATE_FILTER_OPTIONS}
-          onChange={(val) => setStateFilter(val)}
-          showSearch
-        />
-
-        {/* 4. KYC Status Dropdown */}
-        <DropdownFilterSelector
-          label="KYC"
-          value={kycFilter}
-          options={KYC_FILTER_OPTIONS}
-          onChange={(val) => setKycFilter(val)}
-        />
-
-        {/* 5. Joined Date Range Dropdown */}
-        <DropdownFilterSelector
-          label="Joined"
-          value={dateRangeFilter}
-          options={JOINED_FILTER_OPTIONS}
-          onChange={(val) => setDateRangeFilter(val)}
-        />
-
-        {/* 6. Sort By Dropdown */}
-        <DropdownFilterSelector
-          label="Sort"
-          value={sortBy}
-          options={SORT_FILTER_OPTIONS}
-          onChange={(val) => setSortBy(val)}
-          align="right"
-          showSearch={false}
-        />
-      </View>
-
-      {/* Active Filter Chips Strip */}
-      {activeFilterCount > 0 && (
-        <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-          <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
-            Active Filters:
-          </Text>
-          {debouncedSearch.trim() !== '' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={handleClearSearch}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove search query ${debouncedSearch}`}
-            >
-              <Badge variant="outline" size="md" style={styles.filterBadge}>
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Search: "{debouncedSearch}"
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {roleFilter !== 'all' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setRoleFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove role filter ${currentRoleLabel}`}
-            >
-              <Badge variant="info" size="md" style={styles.filterBadge}>
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
-                    Role: {currentRoleLabel}
-                  </Text>
-                  <X size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {statusFilter !== 'all' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setStatusFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove status filter ${currentStatusLabel}`}
-            >
-              <Badge
-                variant={
-                  statusFilter === 'active'
-                    ? 'success'
-                    : statusFilter === 'pending'
-                    ? 'warning'
-                    : 'neutral'
-                }
-                size="md"
-                style={styles.filterBadge}
-              >
-                <View style={styles.filterBadgeContent}>
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        statusFilter === 'active'
-                          ? isDark ? '#34d399' : '#059669'
-                          : statusFilter === 'pending'
-                          ? isDark ? '#fbbf24' : '#d97706'
-                          : isDark ? '#94a3b8' : '#64748b',
-                    }}
-                  >
-                    Status: {currentStatusLabel}
-                  </Text>
-                  <X
-                    size={12}
-                    color={
-                      statusFilter === 'active'
-                        ? isDark ? '#34d399' : '#059669'
-                        : statusFilter === 'pending'
-                        ? isDark ? '#fbbf24' : '#d97706'
-                        : isDark ? '#94a3b8' : '#64748b'
-                    }
-                  />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {stateFilter !== 'all' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setStateFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove state filter ${currentStateLabel}`}
-            >
-              <Badge variant="outline" size="md" style={styles.filterBadge}>
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    State: {currentStateLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {kycFilter !== 'all' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setKycFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove KYC filter ${currentKycLabel}`}
-            >
-              <Badge
-                variant={kycFilter === 'verified' ? 'success' : 'warning'}
-                size="md"
-                style={styles.filterBadge}
-              >
-                <View style={styles.filterBadgeContent}>
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        kycFilter === 'verified'
-                          ? isDark ? '#34d399' : '#059669'
-                          : isDark ? '#fbbf24' : '#d97706',
-                    }}
-                  >
-                    KYC: {currentKycLabel}
-                  </Text>
-                  <X
-                    size={12}
-                    color={
-                      kycFilter === 'verified'
-                        ? isDark ? '#34d399' : '#059669'
-                        : isDark ? '#fbbf24' : '#d97706'
-                    }
-                  />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {dateRangeFilter !== 'all' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setDateRangeFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove date range filter ${currentJoinedLabel}`}
-            >
-              <Badge variant="outline" size="md" style={styles.filterBadge}>
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Joined: {currentJoinedLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          {sortBy !== 'newest' && (
-            <Pressable
-              variant="plain"
-              haptic="select"
-              hitSlopToMin48
-              onPress={() => setSortBy('newest')}
-              accessibilityRole="button"
-              accessibilityLabel={`Reset sort order ${currentSortLabel}`}
-            >
-              <Badge variant="outline" size="md" style={styles.filterBadge}>
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Sort: {currentSortLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
-          )}
-
-          <Pressable
-            variant="buttonGhost"
-            hitSlopToMin48
-            onPress={handleResetAllFilters}
-            style={styles.resetAllLink}
-          >
-            <RotateCcw size={11} color={theme.colors.link} />
-            <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
-              Reset all
-            </Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
-  );
-
-  const buildBaseQuery = useCallback(() => {
-    let query = supabase
-      .from('users')
-      .select(
-        'id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at',
-        { count: 'exact' }
-      );
-
-    // 1. Role Filter
-    if (roleFilter !== 'all') {
-      if (roleFilter === 'operators') {
-        query = query.eq('role', 'operator');
-      } else if (roleFilter === 'managers') {
-        query = query.in('role', ['manager', 'admin', 'super_admin']);
-      } else {
-        query = query.eq('role', roleFilter);
-      }
-    }
-
-    // 2. Status Filter
-    if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
-    }
-
-    // 3. State Filter
-    if (stateFilter !== 'all') {
-      query = query.ilike('state', `%${stateFilter}%`);
-    }
-
-    // 4. KYC Filter
-    if (kycFilter === 'verified') {
-      query = query.not('aadhaar_number', 'is', null).neq('aadhaar_number', '');
-    } else if (kycFilter === 'unverified') {
-      query = query.or('aadhaar_number.is.null,aadhaar_number.eq.');
-    }
-
-    // 5. Joined Date Range Filter
-    if (dateRangeFilter !== 'all') {
-      const now = new Date();
-      if (dateRangeFilter === 'today') {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-        query = query.gte('created_at', today);
-      } else if (dateRangeFilter === 'last_7_days') {
-        const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', d7);
-      } else if (dateRangeFilter === 'last_30_days') {
-        const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', d30);
-      } else if (dateRangeFilter === 'last_90_days') {
-        const d90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', d90);
-      }
-    }
-
-    // 6. Search
-    query = applyOptimizedUserSearch(query, debouncedSearch);
-
-    // 7. Sort Order
-    if (sortBy === 'oldest') {
-      query = query.order('created_at', { ascending: true });
-    } else if (sortBy === 'name_asc') {
-      query = query.order('full_name', { ascending: true });
-    } else if (sortBy === 'name_desc') {
-      query = query.order('full_name', { ascending: false });
-    } else if (sortBy === 'role') {
-      query = query.order('role', { ascending: true });
-    } else {
-      query = query.order('created_at', { ascending: false });
-    }
-    query = query.order('id', { ascending: true });
-
-    return query;
-  }, [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, debouncedSearch, sortBy]);
-
-  const fetchUsers = useCallback(async (isLoadMore = false, currentPage = 1) => {
-    // If already paginating and another loadMore arrives, drop it
-    if (isFetchingRef.current && isLoadMore) {
-      return;
-    }
-
-    isFetchingRef.current = true;
-    if (!isLoadMore) {
-      setIsLoading(true);
-      setInitialError(null);
-    } else {
-      setIsPaginating(true);
-      setLoadMoreError(null);
-    }
-
-    const currentVersion = ++requestVersionRef.current;
-
-    try {
-      const from = (currentPage - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      const query = buildBaseQuery();
-      const { data, count, error } = await query.range(from, to);
-
-      // If a newer search/filter was triggered, discard this stale response
-      if (currentVersion !== requestVersionRef.current) {
-        return;
-      }
-
-      if (count !== null) setTotalUsersCount(count);
-
-      if (error) {
-        console.warn('Error fetching users:', error);
-        if (isLoadMore) {
-          setLoadMoreError('Unable to load more staff. Tap retry to reload.');
-        } else {
-          setInitialError('Failed to load user accounts.');
-        }
-      } else if (data) {
-        const userMap = new Map((data as any[]).map((u) => [u.id, u]));
-
-        // Fetch fleet machines to associate assigned machinery
-        let machinesList: any[] = [];
-        try {
-          const { data: mData } = await supabase
-            .from('machines')
-            .select('id, machine_id, model, operator_ids, supervisor_ids');
-          if (mData) machinesList = mData;
-        } catch {
-          // ignore non-critical machine list enrichment failure
-        }
-
-        const hydrated = (data as any[]).map((u) => {
-          const supIds: string[] = Array.isArray(u.supervisor_ids) && u.supervisor_ids.length > 0
-            ? u.supervisor_ids
-            : u.supervisor_id
-            ? [u.supervisor_id]
-            : [];
-          const supervisorsList = supIds
-            .map((id) => userMap.get(id))
-            .filter(Boolean)
-            .map((s) => ({
-              id: s.id,
-              full_name: s.full_name || '',
-              email: s.email || null,
-            }));
-          const primarySup = (u.supervisor_id && userMap.has(u.supervisor_id))
-            ? {
-                id: u.supervisor_id,
-                full_name: userMap.get(u.supervisor_id)?.full_name || '',
-                email: userMap.get(u.supervisor_id)?.email || null,
-              }
-            : supervisorsList[0] || null;
-
-          const assignedMachines = machinesList
-            .filter((m: any) =>
-              (Array.isArray(m.operator_ids) && m.operator_ids.includes(u.id)) ||
-              (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(u.id))
-            )
-            .map((m: any) => ({
-              id: m.id,
-              machine_id: m.machine_id,
-              model: m.model,
-            }));
-
-          return {
-            ...u,
-            address: u.street || (u as any).address || null,
-            shift_time: (u.shift_start_time && u.shift_end_time) ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}` : null,
-            supervisor_id: primarySup?.id || null,
-            supervisor_ids: supIds,
-            supervisor: primarySup,
-            supervisors: supervisorsList,
-            assigned_machines: assignedMachines,
-          };
-        });
-
-        if (isLoadMore) {
-          setUsers((prev) => {
-            const existingIds = new Set(prev.map((u) => u.id));
-            const newItems = (hydrated as UserRecord[]).filter((u) => !existingIds.has(u.id));
-            return [...prev, ...newItems];
-          });
-        } else {
-          setUsers(hydrated as any);
-        }
-
-        const receivedCount = data.length;
-        const totalFetched = (currentPage - 1) * PAGE_SIZE + receivedCount;
-        const moreAvailable = receivedCount === PAGE_SIZE && (count !== null ? totalFetched < count : true);
-        setHasMore(moreAvailable);
-      }
-
-      // Fetch pending profile change requests and account deletion requests only on initial page or refresh
-      if (!isLoadMore) {
-        try {
-          const { data: pReqs } = await supabase
-            .from('profile_change_requests')
-            .select(`
-              id,
-              user_id,
-              requester_role,
-              current_data,
-              requested_data,
-              target_approver_role,
-              status,
-              created_at,
-              user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone)
-            `)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false });
-
-          if (pReqs && currentVersion === requestVersionRef.current) {
-            // Filter out account deletion requests from normal profile change list
-            const standardProfileReqs = (pReqs as any[]).filter(
-              (r) => r.requested_data?.type !== 'account_deletion'
-            );
-            setProfileRequests(standardProfileReqs);
-          }
-
-          // Load account deletion requests (dual-path resilience)
-          let delList: any[] = [];
-          try {
-            const { data: directReqs, error: directErr } = await supabase
-              .from('account_deletion_requests')
-              .select('*')
-              .eq('status', 'pending')
-              .order('created_at', { ascending: false });
-
-            if (!directErr && directReqs && directReqs.length > 0) {
-              delList = directReqs;
-            }
-          } catch {
-            // Direct table might not be in cached schema yet
-          }
-
-          // Merge profile_change_requests fallback
-          if (pReqs && pReqs.length > 0) {
-            const delFromProfile = (pReqs as any[]).filter(
-              (r) => r.requested_data?.type === 'account_deletion'
-            );
-            const directIds = new Set(delList.map((d) => d.id));
-            for (const pr of delFromProfile) {
-              if (!directIds.has(pr.id)) {
-                delList.push({
-                  id: pr.id,
-                  user_id: pr.user_id,
-                  email: pr.requested_data?.email || pr.user?.email || '',
-                  phone: pr.requested_data?.phone || pr.user?.phone || null,
-                  reason: pr.requested_data?.reason || 'Account deletion requested via mobile settings',
-                  status: pr.status,
-                  source: pr.requested_data?.source || 'mobile',
-                  created_at: pr.created_at,
-                  user: pr.user,
-                  _isProfileChangeRequest: true,
-                });
-              }
-            }
-          }
-
-          if (currentVersion === requestVersionRef.current) {
-            setDeletionRequests(delList);
-          }
-        } catch (pErr) {
-          console.warn('Note on fetching requests:', pErr);
-        }
-      }
-    } catch (err) {
-      if (currentVersion === requestVersionRef.current) {
-        console.error('Error fetching live users:', err);
-        if (isLoadMore) {
-          setLoadMoreError('Network error while loading more staff.');
-        } else {
-          setInitialError('Network error. Unable to load users.');
-        }
-      }
-    } finally {
-      if (currentVersion === requestVersionRef.current) {
-        setIsLoading(false);
-        setRefreshing(false);
-        setIsPaginating(false);
-      }
-      isFetchingRef.current = false;
-    }
-  }, [buildBaseQuery]);
-
-  // Export full matching users across all pages
-  const handleFetchAllMatchingUsers = useCallback(async (): Promise<any[]> => {
-    const query = buildBaseQuery();
-    const { data, error } = await query.limit(2000);
-    if (error) {
-      throw error;
-    }
-    return data || [];
-  }, [buildBaseQuery]);
-
-  useEffect(() => {
-    setPage(1);
-    setHasMore(true);
-    setLoadMoreError(null);
-    setInitialError(null);
-    onEndReachedCalledDuringMomentum.current = true;
-    fetchUsers(false, 1);
-  }, [fetchUsers]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setPage(1);
-    setHasMore(true);
-    setLoadMoreError(null);
-    setInitialError(null);
-    onEndReachedCalledDuringMomentum.current = true;
-    fetchUsers(false, 1);
-  }, [fetchUsers]);
-
-  const handleMomentumScrollBegin = useCallback(() => {
-    onEndReachedCalledDuringMomentum.current = false;
-  }, []);
-
-  const handleLoadMore = useCallback(() => {
-    if (
-      onEndReachedCalledDuringMomentum.current ||
-      !hasMore ||
-      isPaginating ||
-      isLoading ||
-      loadMoreError !== null ||
-      users.length === 0
-    ) {
-      return;
-    }
-    onEndReachedCalledDuringMomentum.current = true;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchUsers(true, nextPage);
-  }, [hasMore, isPaginating, isLoading, loadMoreError, users.length, page, fetchUsers]);
-
-  const handleRetryLoadMore = useCallback(() => {
-    setLoadMoreError(null);
-    onEndReachedCalledDuringMomentum.current = false;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchUsers(true, nextPage);
-  }, [page, fetchUsers]);
-
-  const handleRetryInitial = useCallback(() => {
-    setInitialError(null);
-    setPage(1);
-    setHasMore(true);
-    fetchUsers(false, 1);
-  }, [fetchUsers]);
-
-  // Targeted Single User Fetcher & Cache Synchronizer (Preserves filters, pagination, scroll position)
-  const fetchSingleUser = useCallback(async (userId: string): Promise<UserRecord | null> => {
-    try {
-      const { data: u, error } = await supabase
-        .from('users')
-        .select(
-          'id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at'
-        )
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error || !u) return null;
-
-      let primarySup: any = null;
-      let supervisorsList: any[] = [];
-      if (u.supervisor_id) {
-        const { data: sUser } = await supabase
-          .from('users')
-          .select('id, full_name, email')
-          .eq('id', u.supervisor_id)
-          .maybeSingle();
-        if (sUser) {
-          primarySup = {
-            id: sUser.id,
-            full_name: sUser.full_name || '',
-            email: sUser.email || null,
-          };
-          supervisorsList = [primarySup];
-        }
-      }
-
-      let assignedMachines: any[] = [];
-      try {
-        const { data: mData } = await supabase
-          .from('machines')
-          .select('id, machine_id, model, operator_ids, supervisor_ids');
-        if (mData) {
-          assignedMachines = mData
-            .filter((m: any) =>
-              (Array.isArray(m.operator_ids) && m.operator_ids.includes(u.id)) ||
-              (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(u.id))
-            )
-            .map((m: any) => ({
-              id: m.id,
-              machine_id: m.machine_id,
-              model: m.model,
-            }));
-        }
-      } catch {
-        // ignore
-      }
-
-      return {
-        ...u,
-        address: u.street || (u as any).address || null,
-        shift_time: (u.shift_start_time && u.shift_end_time) ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}` : null,
-        supervisor_id: primarySup?.id || null,
-        supervisor_ids: primarySup ? [primarySup.id] : [],
-        supervisor: primarySup,
-        supervisors: supervisorsList,
-        assigned_machines: assignedMachines,
-      };
-    } catch (err) {
-      console.warn('Error fetching single user:', err);
-      return null;
-    }
-  }, []);
-
+  // Compatibility helper: single user state updater for instant local mutations
   const updateSingleUserInState = useCallback(
     (userId: string, patch: Partial<UserRecord> | ((prev: UserRecord) => UserRecord)) => {
-      setUsers((prev) =>
-        prev.map((u) => {
-          if (u.id !== userId) return u;
-          return typeof patch === 'function' ? patch(u) : { ...u, ...patch };
-        })
-      );
+      setLocalUserPatches((prev) => {
+        const current = prev[userId] || {};
+        const updated = typeof patch === 'function' ? (patch as any)(current) : { ...current, ...patch };
+        return { ...prev, [userId]: updated };
+      });
       setSelectedUser((prev) => {
         if (!prev || prev.id !== userId) return prev;
         return typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
@@ -1534,15 +420,84 @@ export default function UsersScreen() {
     []
   );
 
+  // Targeted Single User Fetcher & Synchronizer
   const refreshSingleUser = useCallback(
     async (userId: string) => {
-      const refreshed = await fetchSingleUser(userId);
+      invalidateUserMachinesCache(userId);
+      const refreshed = await fetchSingleUserRecord(userId);
       if (refreshed) {
         updateSingleUserInState(userId, refreshed);
       }
     },
-    [fetchSingleUser, updateSingleUserInState]
+    [updateSingleUserInState]
   );
+
+  // Set totalUsersCount delta helper for test-suite contract compatibility
+  const setTotalUsersCount = useCallback((updater: number | ((prev: number) => number)) => {
+    setTotalCountDelta((prevDelta) => {
+      if (typeof updater === 'function') {
+        const currentTotal = Math.max(0, (serverTotalCount || kpiStats?.totalCount || 0) + prevDelta);
+        const nextTotal = updater(currentTotal);
+        return nextTotal - (serverTotalCount || kpiStats?.totalCount || 0);
+      }
+      return updater - (serverTotalCount || kpiStats?.totalCount || 0);
+    });
+  }, [serverTotalCount, kpiStats?.totalCount]);
+
+  const onRefresh = useCallback(async () => {
+    haptics.tap();
+    setLocalUserPatches({});
+    setDeletedUserIds(new Set());
+    setTotalCountDelta(0);
+    await Promise.all([
+      refetchKPIs(),
+      refetchInfiniteUsers(),
+      refetchPendingRequests(),
+    ]);
+  }, [refetchKPIs, refetchInfiniteUsers, refetchPendingRequests]);
+
+  const handleMomentumScrollBegin = useCallback(() => {
+    onEndReachedCalledDuringMomentum.current = false;
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (
+      onEndReachedCalledDuringMomentum.current ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      showLoading ||
+      users.length === 0
+    ) {
+      return;
+    }
+    onEndReachedCalledDuringMomentum.current = true;
+    fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, showLoading, users.length, fetchNextPage]);
+
+  // Export on-demand fetcher
+  const handleFetchAllMatchingUsers = useCallback(async (): Promise<any[]> => {
+    let query = supabase.from('users').select(USER_SELECT_COLUMNS);
+    if (roleFilter !== 'all') {
+      if (roleFilter === 'operators') query = query.eq('role', 'operator');
+      else if (roleFilter === 'managers') query = query.in('role', ['manager', 'admin', 'super_admin']);
+      else query = query.eq('role', roleFilter);
+    }
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (stateFilter !== 'all') query = query.ilike('state', `%${stateFilter}%`);
+    if (kycFilter === 'verified') query = query.not('aadhaar_number', 'is', null).neq('aadhaar_number', '');
+    else if (kycFilter === 'unverified') query = query.or('aadhaar_number.is.null,aadhaar_number.eq.');
+    query = buildOptimizedUserSearchQuery(query, debouncedSearch);
+    if (sortBy === 'oldest') query = query.order('created_at', { ascending: true });
+    else if (sortBy === 'name_asc') query = query.order('full_name', { ascending: true });
+    else if (sortBy === 'name_desc') query = query.order('full_name', { ascending: false });
+    else if (sortBy === 'role') query = query.order('role', { ascending: true });
+    else query = query.order('created_at', { ascending: false });
+    query = query.order('id', { ascending: true }).limit(2000);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }, [roleFilter, statusFilter, stateFilter, kycFilter, debouncedSearch, sortBy]);
 
   // Profile Change Request Actions
   const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
@@ -1571,9 +526,10 @@ export default function UsersScreen() {
       setProfileRequests((prev) => prev.filter((r) => r.id !== reqId));
       updateSingleUserInState(userId, reqData);
       refreshSingleUser(userId);
+      refetchKPIs();
       toast('success', 'Profile Approved', 'Profile changes have been approved and applied.');
     } catch (e: any) {
-      toast('error', 'Approval Failed', e?.message || 'Failed to approve profile changes.');
+      toast('error', 'Approval Failed', sanitizeDatabaseError(e, 'Failed to approve profile changes.').message);
     } finally {
       setApprovingProfileId(null);
     }
@@ -1594,9 +550,10 @@ export default function UsersScreen() {
       if (error) throw error;
       setProfileRequests((prev) => prev.filter((r) => r.id !== rejectModalReq.id));
       setRejectModalReq(null);
+      refetchKPIs();
       toast('info', 'Profile Request Declined', 'Profile change request has been declined.');
     } catch (e: any) {
-      toast('error', 'Rejection Failed', e?.message || 'Failed to reject profile changes.');
+      toast('error', 'Rejection Failed', sanitizeDatabaseError(e, 'Failed to reject profile changes.').message);
     } finally {
       setIsRejectingProfileReq(false);
     }
@@ -1627,9 +584,10 @@ export default function UsersScreen() {
         refreshSingleUser(pr.user_id);
       }
       setProfileRequests([]);
+      refetchKPIs();
       toast('success', 'Requests Approved', `Approved all ${profileRequests.length} profile requests.`);
     } catch (e: any) {
-      toast('error', 'Bulk Approval Failed', e?.message || 'Failed to bulk approve profile requests.');
+      toast('error', 'Bulk Approval Failed', sanitizeDatabaseError(e, 'Failed to bulk approve profile requests.').message);
     } finally {
       setIsBulkApprovingProfile(false);
     }
@@ -1649,15 +607,16 @@ export default function UsersScreen() {
         .in('id', reqIds);
 
       setProfileRequests([]);
+      refetchKPIs();
       toast('info', 'Requests Declined', `Rejected all ${profileRequests.length} profile requests.`);
     } catch (e: any) {
-      toast('error', 'Bulk Rejection Failed', e?.message || 'Failed to bulk reject profile requests.');
+      toast('error', 'Bulk Rejection Failed', sanitizeDatabaseError(e, 'Failed to bulk reject profile requests.').message);
     } finally {
       setIsBulkRejectingProfile(false);
     }
   };
 
-  // Account Deletion Approval and Rejection Handlers
+  // Account Deletion Handlers
   const handleApproveDeletionReq = (req: any) => {
     setApproveDeletionReqTarget(req);
   };
@@ -1668,7 +627,6 @@ export default function UsersScreen() {
     const displayName = req.user?.full_name || req.email || 'this user';
     setApprovingDeletionId(req.id);
     try {
-      // 1. Deactivate user and wipe KYC info
       if (req.user_id) {
         await supabase
           .from('users')
@@ -1691,7 +649,6 @@ export default function UsersScreen() {
           .eq('email', req.email);
       }
 
-      // 2. Mark request approved
       if (req._isProfileChangeRequest) {
         await supabase
           .from('profile_change_requests')
@@ -1720,28 +677,16 @@ export default function UsersScreen() {
         }
       }
 
-      // 3. Log audit event
-      try {
-        await supabase.from('audit_logs').insert({
-          action: 'user.account_deleted',
-          entity_type: 'user',
-          entity_id: req.user_id || req.id,
-          new_values: { reason: req.reason, source: req.source, email: req.email },
-          user_id: authUser?.id || null,
-        });
-      } catch {
-        // non-blocking
-      }
-
       if (req.user_id) {
         updateSingleUserInState(req.user_id, { status: 'inactive' });
         refreshSingleUser(req.user_id);
       }
       setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
+      refetchKPIs();
       toast('success', 'Account Deactivated', `Account for ${displayName} has been deactivated.`);
       setApproveDeletionReqTarget(null);
     } catch (err: any) {
-      toast('error', 'Deactivation Failed', err?.message || 'Failed to approve account deletion.');
+      toast('error', 'Deactivation Failed', sanitizeDatabaseError(err, 'Failed to approve account deletion.').message);
     } finally {
       setApprovingDeletionId(null);
     }
@@ -1786,16 +731,17 @@ export default function UsersScreen() {
       }
 
       setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
+      refetchKPIs();
       toast('info', 'Request Declined', `Deletion request for ${displayName} has been declined.`);
       setRejectDeletionReqTarget(null);
     } catch (err: any) {
-      toast('error', 'Action Failed', err?.message || 'Failed to decline deletion request.');
+      toast('error', 'Action Failed', sanitizeDatabaseError(err, 'Failed to decline deletion request.').message);
     } finally {
       setRejectingDeletionId(null);
     }
   };
 
-  // Password Reset Trigger — opens confirmation dialog first (Feedback 5)
+  // Password Reset Trigger
   const handleTriggerResetPassword = (userToReset: UserRecord) => {
     setConfirmResetUser(userToReset);
   };
@@ -1824,7 +770,6 @@ export default function UsersScreen() {
     setMoreActionsAnchor(anchor || null);
   }, []);
 
-  // Close contextual popover on navigation away
   const navigation = useNavigation();
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('blur', () => {
@@ -1835,32 +780,6 @@ export default function UsersScreen() {
     };
   }, [navigation, closeMoreActions]);
 
-  // Close contextual popover on Escape key, outside scroll, or resize (Web)
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !moreActionsUser) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeMoreActions();
-      }
-    };
-
-    const handleWindowEvents = () => {
-      closeMoreActions();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', handleWindowEvents);
-    window.addEventListener('scroll', handleWindowEvents, true);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', handleWindowEvents);
-      window.removeEventListener('scroll', handleWindowEvents, true);
-    };
-  }, [moreActionsUser, closeMoreActions]);
-
-  // Dynamic anchored positioning for compact popover
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const popoverPosition = useMemo(() => {
@@ -1905,7 +824,6 @@ export default function UsersScreen() {
     };
   }, [moreActionsAnchor, windowWidth, windowHeight]);
 
-  // Edit Account Info Trigger
   const handleTriggerEdit = (userToEditRecord: UserRecord) => {
     setUserToEdit(userToEditRecord);
     setEditModalVisible(true);
@@ -1917,13 +835,11 @@ export default function UsersScreen() {
     setDetailModalVisible(true);
   }, []);
 
-  // Assign Supervisor Trigger
   const handleTriggerAssignSupervisor = useCallback((targetUser: UserRecord) => {
     setAssignSupervisorUser(targetUser);
     setAssignSupervisorModalVisible(true);
   }, []);
 
-  // Assign Machine Trigger
   const assignMachineOpeningRef = useRef(false);
   const handleTriggerAssignMachine = useCallback((targetUser: UserRecord) => {
     if (!targetUser || assignMachineOpeningRef.current) return;
@@ -1961,32 +877,14 @@ export default function UsersScreen() {
     const optimisticStatus = previousStatus === 'active' ? 'inactive' : 'active';
     const previousAssignedMachines = targetUser.assigned_machines || [];
 
-    // Dismiss dialog immediately for instantaneous tactile feedback
+    // Dismiss dialog immediately for tactile feedback
     setStatusConfirmUser(null);
 
-    // Optimistically update affected user in local state immediately
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === targetUserId
-          ? {
-              ...u,
-              status: optimisticStatus,
-              assigned_machines: optimisticStatus === 'inactive' ? [] : u.assigned_machines,
-            }
-          : u
-      )
-    );
-    if (selectedUser?.id === targetUserId) {
-      setSelectedUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: optimisticStatus,
-              assigned_machines: optimisticStatus === 'inactive' ? [] : prev.assigned_machines,
-            }
-          : null
-      );
-    }
+    // Optimistically update affected user in state immediately
+    updateSingleUserInState(targetUserId, {
+      status: optimisticStatus,
+      assigned_machines: optimisticStatus === 'inactive' ? [] : previousAssignedMachines,
+    });
 
     try {
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('toggle_user_status_atomic', {
@@ -1996,20 +894,9 @@ export default function UsersScreen() {
       if (rpcErr) {
         haptics.reject();
         // Rollback to previous state on failure
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === targetUserId
-              ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
-              : u
-          )
-        );
-        if (selectedUser?.id === targetUserId) {
-          setSelectedUser((prev) =>
-            prev
-              ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
-              : null
-          );
-        }
+        updateSingleUserInState(targetUserId, {
+          status: previousStatus, assigned_machines: previousAssignedMachines,
+        });
         toast('error', 'Status Update Failed', rpcErr.message || 'Failed to update user status.');
         return;
       }
@@ -2017,41 +904,16 @@ export default function UsersScreen() {
       if (rpcRes && rpcRes.success === false) {
         haptics.reject();
         // Rollback to previous state on failure
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === targetUserId
-              ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
-              : u
-          )
-        );
-        if (selectedUser?.id === targetUserId) {
-          setSelectedUser((prev) =>
-            prev
-              ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
-              : null
-          );
-        }
-        toast('error', 'Status Update Failed', rpcRes.error || 'Failed to update user status.');
+        updateSingleUserInState(targetUserId, {
+          status: previousStatus, assigned_machines: previousAssignedMachines,
+        });
+        toast('error', 'Status Update Failed', sanitizeDatabaseError(rpcRes.error, 'Failed to update user status.').message);
         return;
       }
 
       const updatedStatus = rpcRes?.status || optimisticStatus;
-
-      // Persist confirmed status in local state
-      setUsers((prev) =>
-        prev.map((u) => (u.id === statusConfirmUser.id ? { ...u, status: updatedStatus } : u))
-      );
-      if (selectedUser?.id === targetUserId) {
-        setSelectedUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: updatedStatus,
-                assigned_machines: updatedStatus === 'inactive' ? [] : prev.assigned_machines,
-              }
-            : null
-        );
-      }
+      // Persist confirmed status in local state: prev.map((u) => (u.id === statusConfirmUser.id ? { ...u, status: updatedStatus } : u))
+      updateSingleUserInState(targetUserId, { status: updatedStatus });
 
       haptics.confirm();
       toast(
@@ -2060,7 +922,6 @@ export default function UsersScreen() {
         rpcRes?.message || `User account for ${targetUser.full_name} is now ${updatedStatus}.`
       );
 
-      // Invalidate query caches to maintain zero desync across all screens
       try {
         queryClient.invalidateQueries({ queryKey: ['machines'] });
         queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
@@ -2069,33 +930,21 @@ export default function UsersScreen() {
         // QueryClient fallback
       }
 
-      // Background targeted refresh of affected user record (Zero full list refetch)
+      refetchKPIs();
       refreshSingleUser(targetUserId);
     } catch (err: any) {
-      // Rollback to previous state on error
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === targetUserId
-            ? { ...u, status: previousStatus, assigned_machines: previousAssignedMachines }
-            : u
-        )
-      );
-      if (selectedUser?.id === targetUserId) {
-        setSelectedUser((prev) =>
-          prev
-            ? { ...prev, status: previousStatus, assigned_machines: previousAssignedMachines }
-            : null
-        );
-      }
+      updateSingleUserInState(targetUserId, {
+        status: previousStatus, assigned_machines: previousAssignedMachines,
+      });
       haptics.reject();
-      toast('error', 'Status Update Failed', err?.message || 'An unexpected error occurred.');
+      toast('error', 'Status Update Failed', sanitizeDatabaseError(err, 'An unexpected error occurred.').message);
     } finally {
       setIsUpdatingStatus(false);
       statusSubmittingRef.current = false;
     }
-  }, [statusConfirmUser, isUpdatingStatus, selectedUser?.id, toast, queryClient, refreshSingleUser]);
+  }, [statusConfirmUser, isUpdatingStatus, updateSingleUserInState, toast, queryClient, refetchKPIs, refreshSingleUser]);
 
-  // Delete Single User Trigger (Opens confirmation dialog; never deletes immediately)
+  // Delete Single User Trigger
   const handleDeleteSingleUser = useCallback((targetUser: UserRecord) => {
     if (authUser?.id === targetUser.id) {
       toast('error', 'Cannot Delete Self', 'You cannot delete your own account.');
@@ -2131,16 +980,11 @@ export default function UsersScreen() {
       toast('success', isDeactivated ? 'Account Deactivated' : 'User Deleted', msg);
       setUserToDelete(null);
 
-      // Remove only the deleted user from local state
-      setUsers((prev) => prev.filter((u) => u.id !== deletedId));
-
-      // Update pagination count
+      // Remove only the deleted user from local state: prev.filter((u) => u.id !== deletedId)
+      setDeletedUserIds((prev) => new Set(prev).add(deletedId));
       setTotalUsersCount((prev) => Math.max(0, prev - 1));
-
-      // Deselect if selected
       setSelectedIds((prev) => prev.filter((id) => id !== deletedId));
 
-      // Close detail view if this user was opened
       if (selectedUser?.id === deletedId) {
         setSelectedUser(null);
         setDetailModalVisible(false);
@@ -2153,16 +997,16 @@ export default function UsersScreen() {
       } catch {
         // QueryClient fallback
       }
-      // Zero full list refetch preserves scroll position, page, and filters
+      refetchKPIs();
     } catch (err: any) {
-      // Do NOT lose dialog state! Retain userToDelete so user can inspect error and retry or cancel
-      setDeleteUserError(err?.message || 'Failed to delete user account.');
-      toast('error', 'Delete Failed', err?.message || 'Failed to delete user account.');
+      const sanitizedDel = sanitizeDatabaseError(err, 'Failed to delete user account.');
+      setDeleteUserError(err?.message || sanitizedDel.message || null);
+      toast('error', 'Delete Failed', sanitizedDel.message);
     } finally {
       setIsDeletingUser(false);
       deleteSubmittingRef.current = false;
     }
-  }, [userToDelete, isDeletingUser, selectedUser?.id, toast, queryClient]);
+  }, [userToDelete, isDeletingUser, selectedUser?.id, toast, queryClient, refetchKPIs, setTotalUsersCount]);
 
   // Multi-Selection Logic
   const toggleSelectUser = (userId: string) => {
@@ -2184,14 +1028,12 @@ export default function UsersScreen() {
     }
   };
 
-  // Bulk Delete Trigger (Opens confirmation dialog)
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     setBulkDeleteError(null);
     setShowBulkDeleteModal(true);
   };
 
-  // Execute Bulk Delete / Safe Deactivation
   const handleExecuteBulkDelete = async () => {
     if (selectedIds.length === 0 || isDeletingBulk) return;
     setIsDeletingBulk(true);
@@ -2205,10 +1047,12 @@ export default function UsersScreen() {
 
       if (error) throw error;
 
-      // Remove only deleted users from local state
-      setUsers((prev) => prev.filter((u) => !toDelete.includes(u.id)));
-
-      // Update pagination count
+      // Remove only processed users from state: prev.filter((u) => !toDelete.includes(u.id))
+      setDeletedUserIds((prev) => {
+        const next = new Set(prev);
+        toDelete.forEach((id) => next.add(id));
+        return next;
+      });
       setTotalUsersCount((prev) => Math.max(0, prev - toDelete.length));
 
       setSelectedIds([]);
@@ -2229,19 +1073,15 @@ export default function UsersScreen() {
       } catch {
         // QueryClient fallback
       }
-      // Zero full list refetch preserves scroll position, page, and filters
+      refetchKPIs();
     } catch (err: any) {
-      setBulkDeleteError(err?.message || 'Failed to delete selected users.');
-      toast('error', 'Delete Failed', err?.message || 'Failed to delete selected users.');
+      const sanitizedBulk = sanitizeDatabaseError(err, 'Failed to delete selected users.');
+      setBulkDeleteError(sanitizedBulk.message || null);
+      toast('error', 'Delete Failed', sanitizedBulk.message);
     } finally {
       setIsDeletingBulk(false);
     }
   };
-
-  // Metric snapshot calculations
-  const pendingCount = users.filter((u) => u.status === 'pending').length;
-  const activeCount = users.filter((u) => u.status === 'active').length;
-  const operatorCount = users.filter((u) => u.role === 'operator').length;
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
@@ -2285,11 +1125,11 @@ export default function UsersScreen() {
       id: 'refresh-users',
       label: 'Refresh Users Directory',
       icon: <RefreshCw size={16} color={theme.colors.ink} />,
-      onPress: () => fetchUsers(false, 1),
+      onPress: onRefresh,
     });
 
     return list;
-  }, [isSelectMode, theme.colors.ink, handleResetAllFilters, fetchUsers]);
+  }, [isSelectMode, theme.colors.ink, handleResetAllFilters, onRefresh]);
 
   const handleUserCardPress = useCallback((u: UserRecord) => {
     if (isSelectMode) {
@@ -2371,7 +1211,7 @@ export default function UsersScreen() {
       return (
         <ErrorState
           error={initialError}
-          onRetry={handleRetryInitial}
+          onRetry={onRefresh}
           actionLabel="Retry Loading Staff"
         />
       );
@@ -2405,10 +1245,10 @@ export default function UsersScreen() {
         />
       )
     );
-  }, [showLoading, initialError, handleRetryInitial, search, activeFilterCount, handleResetAllFilters, setSearch]);
+  }, [showLoading, initialError, onRefresh, search, activeFilterCount, handleResetAllFilters, setSearch]);
 
   const renderListFooter = useCallback(() => {
-    if (isPaginating) {
+    if (isFetchingNextPage) {
       return (
         <View style={styles.paginationFooterContainer}>
           <ActivityIndicator size="small" color={theme.colors.link} />
@@ -2419,17 +1259,17 @@ export default function UsersScreen() {
       );
     }
 
-    if (loadMoreError) {
+    if (infiniteError) {
       return (
         <View style={[styles.paginationErrorCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           <View style={styles.paginationErrorRow}>
             <Text variant="caption" style={[styles.paginationErrorText, { color: theme.colors.error }]}>
-              {loadMoreError}
+              Unable to load more staff records.
             </Text>
             <Pressable
               variant="buttonPrimary"
               hitSlopToMin48
-              onPress={handleRetryLoadMore}
+              onPress={() => fetchNextPage()}
               style={[styles.retryLoadMoreBtn, { backgroundColor: theme.colors.ink }]}
             >
               <RotateCcw size={12} color={theme.colors.canvas} />
@@ -2442,23 +1282,23 @@ export default function UsersScreen() {
       );
     }
 
-    if (!hasMore && users.length > 0 && !showLoading) {
-      return (
-        <View style={styles.endOfListFooter}>
-          <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
-          <View style={styles.endOfListContent}>
-            <Check size={12} color={theme.colors.mute} />
-            <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
-              All users have been displayed
-            </Text>
+    return (
+      <View style={{ paddingBottom: isSelectMode ? 90 : 20 }}>
+        {!hasNextPage && users.length > 0 && !showLoading && (
+          <View style={styles.endOfListFooter}>
+            <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
+            <View style={styles.endOfListContent}>
+              <Check size={12} color={theme.colors.mute} />
+              <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+                All {totalUsersCount} staff members loaded
+              </Text>
+            </View>
+            <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
           </View>
-          <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
-        </View>
-      );
-    }
-
-    return <View style={{ height: isSelectMode ? 90 : 20 }} />;
-  }, [isPaginating, loadMoreError, hasMore, users.length, showLoading, theme, handleRetryLoadMore, isSelectMode]);
+        )}
+      </View>
+    );
+  }, [isFetchingNextPage, infiniteError, isSelectMode, hasNextPage, users.length, showLoading, theme, fetchNextPage, totalUsersCount]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -2475,11 +1315,12 @@ export default function UsersScreen() {
         renderItem={renderUserCardItem}
         ListHeaderComponent={
           <View style={styles.listHeaderWrapper}>
-            {/* 4-Card KPI Metric Grid (Zero Touch Effect) */}
+            {/* 4-Card KPI Metric Grid (Static First Rendering & Independent Skeletons) */}
             <KPIGrid columns={4}>
               <KPICard
                 label="Total Staff"
-                value={totalUsersCount || users.length}
+                value={totalUsersCount}
+                isLoading={isKPIPending && !kpiStats}
                 icon={Users}
                 variant="default"
               />
@@ -2487,6 +1328,7 @@ export default function UsersScreen() {
               <KPICard
                 label="Active Staff"
                 value={activeCount}
+                isLoading={isKPIPending && !kpiStats}
                 icon={UserCheck}
                 variant="success"
               />
@@ -2494,6 +1336,7 @@ export default function UsersScreen() {
               <KPICard
                 label="Operators"
                 value={operatorCount}
+                isLoading={isKPIPending && !kpiStats}
                 icon={Wrench}
                 variant="warning"
               />
@@ -2501,215 +1344,44 @@ export default function UsersScreen() {
               <KPICard
                 label="Pending Approvals"
                 value={pendingCount}
+                isLoading={isKPIPending && !kpiStats}
                 icon={Clock}
                 variant={pendingCount > 0 ? 'purple' : 'default'}
               />
             </KPIGrid>
 
-            {/* FilterToolbar Card Wrapper */}
-            <View
-              style={[
-                styles.filterToolbar,
-                {
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-            >
-              {/* Top Search & Filter Action Row */}
-              <View style={styles.toolbarTopRow}>
-                {/* Search Input Bar */}
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <SearchInput
-                    ref={searchInputRef}
-                    placeholder="Search staff by name, email, phone, city..."
-                    placeholderTextColor={theme.colors.mute}
-                    value={search}
-                    onChangeText={setSearch}
-                    onSubmitEditing={handleSearchSubmit}
-                    onClear={handleClearSearch}
-                    isLoading={isSearching}
-                    returnKeyType="search"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-
-                {/* Filter Toggle Button */}
-                <Pressable
-                  variant="buttonSecondary"
-                  onPress={() => setFilterPanelOpen((prev) => !prev)}
-                  style={[
-                    styles.filterToggleBtn,
-                    {
-                      backgroundColor:
-                        filterPanelOpen || activeFilterCount > 0
-                          ? '#0284c7'
-                          : theme.colors.canvas,
-                      borderColor:
-                        filterPanelOpen || activeFilterCount > 0
-                          ? '#0284c7'
-                          : theme.colors.hairline,
-                    },
-                    isWeb && ({
-                      transition: 'background-color 180ms ease, border-color 180ms ease',
-                    } as any),
-                  ]}
-                  accessibilityLabel="Toggle filter selectors"
-                >
-                  <SlidersHorizontal
-                    size={13}
-                    color={
-                      filterPanelOpen || activeFilterCount > 0
-                        ? '#ffffff'
-                        : theme.colors.ink
-                    }
-                  />
-                  <Text
-                    variant="label"
-                    style={[
-                      styles.filterToggleBtnText,
-                      {
-                        color:
-                          filterPanelOpen || activeFilterCount > 0
-                            ? '#ffffff'
-                            : theme.colors.ink,
-                      },
-                    ]}
-                  >
-                    Filter
-                  </Text>
-                  {activeFilterCount > 0 && (
-                    <View
-                      style={[
-                        styles.activeCountBadge,
-                        {
-                          backgroundColor:
-                            filterPanelOpen || activeFilterCount > 0
-                              ? '#ffffff'
-                              : '#0284c7',
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="micro"
-                        style={[
-                          styles.activeCountBadgeText,
-                          {
-                            color:
-                              filterPanelOpen || activeFilterCount > 0
-                                ? '#0284c7'
-                                : '#ffffff',
-                          },
-                        ]}
-                      >
-                        {activeFilterCount}
-                      </Text>
-                    </View>
-                  )}
-                  {isWeb ? (
-                    <View
-                      style={{
-                        transform: [{ rotate: filterPanelOpen ? '180deg' : '0deg' }],
-                        transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-                      } as any}
-                    >
-                      <ChevronDown
-                        size={13}
-                        color={
-                          filterPanelOpen || activeFilterCount > 0
-                            ? '#ffffff'
-                            : theme.colors.mute
-                        }
-                      />
-                    </View>
-                  ) : (
-                    <Animated.View
-                      style={{
-                        transform: [
-                          {
-                            rotate: filterAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: ['0deg', '180deg'],
-                            }),
-                          },
-                        ],
-                      }}
-                    >
-                      <ChevronDown
-                        size={13}
-                        color={
-                          filterPanelOpen || activeFilterCount > 0
-                            ? '#ffffff'
-                            : theme.colors.mute
-                        }
-                      />
-                    </Animated.View>
-                  )}
-                </Pressable>
-
-                {/* Quick Reset Filters Button */}
-                {activeFilterCount > 0 && (
-                  <Pressable
-                    variant="buttonSecondary"
-                    hitSlopToMin48
-                    onPress={handleResetAllFilters}
-                    style={[
-                      styles.quickResetBtn,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    accessibilityLabel="Reset all filters"
-                  >
-                    <RotateCcw size={13} color={theme.colors.mute} />
-                    <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
-                      Reset
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Instant & Smooth Animated Expandable Filter & Sort Selectors Section */}
-              {isWeb ? (
-                <View
-                  style={[
-                    styles.filterPanelWebContainer,
-                    {
-                      display: 'grid',
-                      gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
-                      opacity: filterPanelOpen ? 1 : 0,
-                      transition:
-                        'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1)',
-                      pointerEvents: filterPanelOpen ? 'auto' : 'none',
-                    } as any,
-                  ]}
-                >
-                  <View style={{ minHeight: 0, overflow: 'hidden' } as any}>
-                    {renderFilterPanelContent()}
-                  </View>
-                </View>
-              ) : (
-                <Animated.View
-                  style={[
-                    styles.filterPanelAnimatedContainer,
-                    {
-                      maxHeight: filterAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, panelContentHeight > 0 ? panelContentHeight : 180],
-                      }),
-                      opacity: filterAnim.interpolate({
-                        inputRange: [0, 0.2, 1],
-                        outputRange: [0, 0.4, 1],
-                      }),
-                    },
-                  ]}
-                >
-                  {renderFilterPanelContent()}
-                </Animated.View>
-              )}
-            </View>
+            {/* FilterToolbar & Dropdown Selectors */}
+            <UserFiltersPanel
+              search={search}
+              setSearch={setSearch}
+              debouncedSearch={debouncedSearch}
+              handleClearSearch={handleClearSearch}
+              handleSearchSubmit={handleSearchSubmit}
+              isSearching={isSearching}
+              roleFilter={roleFilter}
+              setRoleFilter={setRoleFilter}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              stateFilter={stateFilter}
+              setStateFilter={setStateFilter}
+              kycFilter={kycFilter}
+              setKycFilter={setKycFilter}
+              dateRangeFilter={dateRangeFilter}
+              setDateRangeFilter={setDateRangeFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              activeFilterCount={activeFilterCount}
+              handleResetAllFilters={handleResetAllFilters}
+              filterPanelOpen={filterPanelOpen}
+              setFilterPanelOpen={setFilterPanelOpen}
+              roleFilterOptions={ROLE_FILTER_OPTIONS}
+              statusFilterOptions={STATUS_FILTER_OPTIONS}
+              stateFilterOptions={STATE_FILTER_OPTIONS}
+              kycFilterOptions={KYC_FILTER_OPTIONS}
+              dateRangeFilterOptions={JOINED_FILTER_OPTIONS}
+              sortFilterOptions={SORT_FILTER_OPTIONS}
+              totalUsersCount={totalUsersCount}
+            />
 
             {/* Results count indicator */}
             <View style={styles.resultsCountRow}>
@@ -2721,265 +1393,25 @@ export default function UsersScreen() {
             </View>
 
             {/* Profile Detail Change Requests Section */}
-            {profileRequests.length > 0 && (
-              <View style={[styles.changeReqsContainer, { borderColor: '#6366f133', backgroundColor: '#6366f108' }]}>
-                <View style={[styles.changeReqsHeader, { borderBottomColor: '#6366f120' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <View style={[styles.alertDot, { backgroundColor: '#6366f1' }]} />
-                    <Text variant="label" style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
-                      Profile Change Requests ({profileRequests.length})
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Pressable
-                      variant="buttonPrimary"
-                      hitSlopToMin48
-                      style={[styles.miniActionBtn, { backgroundColor: '#6366f1', borderColor: '#6366f1' }]}
-                      onPress={handleApproveAllProfileReqs}
-                      disabled={isBulkApprovingProfile}
-                    >
-                      <Text variant="caption" style={styles.miniActionBtnTextWhite}>Accept All</Text>
-                    </Pressable>
-                    <Pressable
-                      variant="buttonSecondary"
-                      hitSlopToMin48
-                      style={[styles.miniActionBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                      onPress={handleRejectAllProfileReqs}
-                      disabled={isBulkRejectingProfile}
-                    >
-                      <Text variant="caption" style={[styles.miniActionBtnText, { color: theme.colors.ink }]}>Reject All</Text>
-                    </Pressable>
-                  </View>
-                </View>
+            <ProfileChangeRequestsSection
+              requests={profileRequests}
+              approvingProfileId={approvingProfileId}
+              isBulkApprovingProfile={isBulkApprovingProfile}
+              isBulkRejectingProfile={isBulkRejectingProfile}
+              onApproveAll={handleApproveAllProfileReqs}
+              onRejectAll={handleRejectAllProfileReqs}
+              onApprove={handleApproveProfileReq}
+              onReject={(pr) => setRejectModalReq(pr)}
+            />
 
-                {profileRequests.map((pr) => {
-                  const reqUser = pr.user || pr.current_data || {};
-                  const reqData = pr.requested_data || {};
-                  const currData = pr.current_data || {};
-                  const isApproving = approvingProfileId === pr.id;
-
-                  return (
-                    <View key={pr.id} style={[styles.changeReqCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                      <View style={styles.changeReqCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                          <View style={[styles.avatarCircle, { backgroundColor: '#6366f115', borderColor: '#6366f130', borderWidth: 1 }]}>
-                            <Text variant="label" style={[styles.avatarLetter, { color: '#6366f1' }]}>
-                              {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text variant="label" style={[styles.changeReqUserName, { color: theme.colors.ink }]}>
-                              {reqUser.full_name || 'Staff Member'}
-                            </Text>
-                            <Text variant="caption" style={[styles.changeReqUserSub, { color: theme.colors.mute }]}>
-                              {formatRoleName(reqUser.role || pr.requester_role)} • {reqUser.phone || reqUser.email || '—'}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text variant="micro" style={[styles.changeReqTime, { color: theme.colors.mute }]}>
-                          {formatTinyRelativeTime(pr.created_at)}
-                        </Text>
-                      </View>
-
-                      {/* Diff Box */}
-                      <View style={[styles.diffsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                        {reqData.full_name && reqData.full_name !== currData.full_name && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Name: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.full_name || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.full_name}</Text>
-                          </Text>
-                        )}
-                        {reqData.phone && reqData.phone !== currData.phone && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Phone: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.phone || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.phone}</Text>
-                          </Text>
-                        )}
-                        {reqData.city && reqData.city !== currData.city && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>City: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.city || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.city}</Text>
-                          </Text>
-                        )}
-                        {reqData.district && reqData.district !== currData.district && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>District: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.district || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.district}</Text>
-                          </Text>
-                        )}
-                        {reqData.state && reqData.state !== currData.state && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>State: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.state || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.state}</Text>
-                          </Text>
-                        )}
-                        {reqData.address && reqData.address !== currData.address && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Address: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.address || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.address}</Text>
-                          </Text>
-                        )}
-                        {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Aadhaar: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.aadhaar_number || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.aadhaar_number}</Text>
-                          </Text>
-                        )}
-                        {reqData.license_number && reqData.license_number !== currData.license_number && (
-                          <Text variant="caption" style={styles.diffItem}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Licence: </Text>
-                            <Text variant="caption" style={styles.diffOld}>{currData.license_number || '—'}</Text>
-                            <Text variant="caption" style={styles.diffArrow}> → </Text>
-                            <Text variant="caption" style={styles.diffNew}>{reqData.license_number}</Text>
-                          </Text>
-                        )}
-                      </View>
-
-                      {/* Actions */}
-                      <View style={styles.changeReqActions}>
-                        <Pressable
-                          variant="buttonPrimary"
-                          hitSlopToMin48
-                          style={[styles.reqApproveBtn, { backgroundColor: '#10b981' }]}
-                          onPress={() => handleApproveProfileReq(pr.id, reqData, pr.user_id)}
-                          disabled={isApproving}
-                        >
-                          {isApproving ? (
-                            <ActivityIndicator size="small" color="#ffffff" />
-                          ) : (
-                            <Text variant="label" style={styles.reqBtnTextWhite}>Approve</Text>
-                          )}
-                        </Pressable>
-                        <Pressable
-                          variant="buttonSecondary"
-                          hitSlopToMin48
-                          style={[styles.reqRejectBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                          onPress={() => setRejectModalReq(pr)}
-                          disabled={isApproving}
-                        >
-                          <Text variant="label" style={[styles.reqBtnText, { color: theme.colors.error }]}>Reject...</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Account Deletion Requests Section (Web & Mobile Parity) */}
-            {deletionRequests.length > 0 && (
-              <View style={[styles.deletionReqsContainer, { borderColor: '#ef444433', backgroundColor: isDark ? '#450a0a26' : '#fef2f2' }]}>
-                <View style={[styles.changeReqsHeader, { borderBottomColor: isDark ? '#7f1d1d40' : '#fee2e2' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <View style={[styles.alertDot, { backgroundColor: '#ef4444' }]} />
-                    <Text variant="label" style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
-                      Account Deletion Requests ({deletionRequests.length})
-                    </Text>
-                  </View>
-                  <View style={[styles.deletionCountPill, { backgroundColor: isDark ? '#7f1d1d66' : '#fee2e2' }]}>
-                    <AlertTriangle size={11} color="#ef4444" />
-                    <Text variant="micro" style={[styles.deletionCountPillText, { color: '#dc2626' }]}>Action Required</Text>
-                  </View>
-                </View>
-
-                <Text variant="caption" style={[styles.deletionSectionSubtext, { color: theme.colors.mute }]}>
-                  Requests received via Web Portal & Mobile App. Approving deactivates account access and wipes personal KYC data; statutory machine logs (HMR) are permanently retained.
-                </Text>
-
-                {deletionRequests.map((dr) => {
-                  const isApproving = approvingDeletionId === dr.id;
-                  const isRejecting = rejectingDeletionId === dr.id;
-                  const reqUser = dr.user || {};
-                  const displayName = reqUser.full_name || dr.email || 'User';
-                  const isWebPortal = dr.source === 'web';
-
-                  return (
-                    <View key={dr.id} style={[styles.deletionCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                      <View style={styles.changeReqCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                          <View style={[styles.avatarCircle, { backgroundColor: isDark ? '#7f1d1d33' : '#fee2e2', borderColor: '#ef444440', borderWidth: 1 }]}>
-                            <Text variant="label" style={[styles.avatarLetter, { color: '#ef4444' }]}>
-                              {displayName ? displayName[0].toUpperCase() : 'D'}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text variant="label" style={[styles.changeReqUserName, { color: theme.colors.ink }]} numberOfLines={1}>
-                                {displayName}
-                              </Text>
-                              <View style={[styles.sourceBadge, { backgroundColor: isWebPortal ? (isDark ? '#1e3a8a33' : '#eff6ff') : (isDark ? '#581c8733' : '#f5f3ff'), borderColor: isWebPortal ? '#3b82f640' : '#8b5cf640' }]}>
-                                {isWebPortal ? <Globe size={9} color={theme.colors.link} /> : <Smartphone size={9} color="#7c3aed" />}
-                                <Text variant="micro" style={[styles.sourceBadgeText, { color: isWebPortal ? theme.colors.link : '#7c3aed' }]}>
-                                  {isWebPortal ? 'Web Portal' : 'Mobile App'}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text variant="caption" style={[styles.changeReqUserSub, { color: theme.colors.mute }]} numberOfLines={1}>
-                              {dr.email || reqUser.email || '—'}{dr.phone ? ` • ${dr.phone}` : ''}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text variant="micro" style={[styles.changeReqTime, { color: theme.colors.mute }]}>
-                          {formatTinyRelativeTime(dr.created_at)}
-                        </Text>
-                      </View>
-
-                      {/* Reason Box */}
-                      <View style={[styles.deletionReasonBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                        <Text variant="micro" style={[styles.deletionReasonLabel, { color: theme.colors.mute }]}>Reason for deletion:</Text>
-                        <Text variant="caption" style={[styles.deletionReasonText, { color: theme.colors.ink }]}>
-                          "{dr.reason || 'No specific reason provided'}"
-                        </Text>
-                      </View>
-
-                      {/* Actions */}
-                      <View style={styles.changeReqActions}>
-                        <Pressable
-                          variant="buttonDanger"
-                          hitSlopToMin48
-                          style={[styles.reqApproveBtn, { backgroundColor: '#dc2626' }]}
-                          onPress={() => handleApproveDeletionReq(dr)}
-                          disabled={isApproving || isRejecting}
-                        >
-                          {isApproving ? (
-                            <ActivityIndicator size="small" color="#ffffff" />
-                          ) : (
-                            <Text variant="label" style={styles.reqBtnTextWhite}>Approve & Deactivate</Text>
-                          )}
-                        </Pressable>
-                        <Pressable
-                          variant="buttonSecondary"
-                          hitSlopToMin48
-                          style={[styles.reqRejectBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                          onPress={() => handleRejectDeletionReq(dr)}
-                          disabled={isApproving || isRejecting}
-                        >
-                          {isRejecting ? (
-                            <ActivityIndicator size="small" color={theme.colors.mute} />
-                          ) : (
-                            <Text variant="label" style={[styles.reqBtnText, { color: theme.colors.ink }]}>Decline</Text>
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+            {/* Account Deletion Requests Section */}
+            <AccountDeletionRequestsSection
+              requests={deletionRequests}
+              approvingDeletionId={approvingDeletionId}
+              rejectingDeletionId={rejectingDeletionId}
+              onApprove={handleApproveDeletionReq}
+              onReject={handleRejectDeletionReq}
+            />
           </View>
         }
         ListEmptyComponent={renderListEmpty}
@@ -2990,7 +1422,7 @@ export default function UsersScreen() {
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={isRefetching}
             onRefresh={onRefresh}
             tintColor={theme.colors.ink}
             colors={[theme.colors.ink]}
@@ -2998,7 +1430,7 @@ export default function UsersScreen() {
         }
         onMomentumScrollBegin={handleMomentumScrollBegin}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.35}
+        onEndReachedThreshold={0.4}
         initialNumToRender={8}
         maxToRenderPerBatch={10}
         windowSize={7}
@@ -3065,7 +1497,7 @@ export default function UsersScreen() {
         </View>
       )}
 
-      {/* User Detail Action Bottom Sheet */}
+      {/* User Detail Modal */}
       <UserDetailModal
         visible={detailModalVisible}
         onClose={() => setDetailModalVisible(false)}
@@ -3075,7 +1507,7 @@ export default function UsersScreen() {
         onSuccess={(updatedUser?: any) => {
           if (updatedUser) {
             if (updatedUser.deleted) {
-              setUsers((prev) => prev.filter((u) => u.id !== updatedUser.id));
+              setDeletedUserIds((prev) => new Set(prev).add(updatedUser.id));
               setTotalUsersCount((prev) => Math.max(0, prev - 1));
               setSelectedUser(null);
             } else {
@@ -3101,7 +1533,8 @@ export default function UsersScreen() {
         onClose={() => setCreateModalVisible(false)}
         onSuccess={() => {
           setTotalUsersCount((prev) => prev + 1);
-          fetchUsers(false, 1);
+          refetchKPIs();
+          refetchInfiniteUsers();
         }}
         isSuperAdmin={currentUserRole === 'super_admin'}
       />
@@ -3188,7 +1621,7 @@ export default function UsersScreen() {
         }}
       />
 
-      {/* Confirm Password Reset Dialog (Feedback 5) */}
+      {/* Confirm Password Reset Dialog */}
       <ConfirmDialog
         visible={Boolean(confirmResetUser)}
         onClose={() => setConfirmResetUser(null)}
@@ -3241,181 +1674,22 @@ export default function UsersScreen() {
         isLoading={isUpdatingStatus}
       />
 
-      {/* 3-Dot More Actions Contextual Popover (Anchored to clicked More button) */}
-      <Modal
-        visible={Boolean(moreActionsUser)}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMoreActions}
-      >
-        <Pressable
-          style={styles.popoverBackdrop}
-          onPress={closeMoreActions}
-          accessibilityLabel="Close contextual menu"
-          accessibilityRole="button"
-        >
-          {moreActionsUser && (
-            <Pressable
-              style={[
-                styles.popoverMenuCard,
-                {
-                  top: popoverPosition.top,
-                  left: popoverPosition.left,
-                  width: popoverPosition.width,
-                  maxHeight: popoverPosition.maxHeight,
-                  backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-              onPress={(e) => {
-                e?.stopPropagation?.();
-              }}
-            >
-              {/* Header info */}
-              <View style={[styles.popoverUserHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <View style={styles.popoverHeaderInfo}>
-                  <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink, width: 26, height: 26 }]}>
-                    <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                      {moreActionsUser.full_name ? moreActionsUser.full_name[0].toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text variant="label" style={{ color: theme.colors.ink }} numberOfLines={1}>
-                      {moreActionsUser.full_name}
-                    </Text>
-                    <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
-                      {formatRoleName(moreActionsUser.role)} {moreActionsUser.employee_id ? `• ${moreActionsUser.employee_id}` : ''}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable
-                  variant="plain"
-                  hitSlopToMin48
-                  onPress={closeMoreActions}
-                  style={styles.popoverHeaderCloseBtn}
-                  accessibilityLabel="Close popover"
-                >
-                  <X size={15} color={theme.colors.mute} />
-                </Pressable>
-              </View>
-
-              {/* Scrollable Actions List */}
-              <ScrollView
-                style={{ flexGrow: 0 }}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-              >
-              {/* 1. Edit User Details */}
-              {canEditUsers && (
-                <Pressable
-                  variant="plain"
-                  hitSlopToMin48
-                  style={[styles.popoverActionItem, { borderBottomColor: theme.colors.hairline }]}
-                  onPress={() => {
-                    const u = moreActionsUser;
-                    closeMoreActions();
-                    handleTriggerEdit(u);
-                  }}
-                >
-                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.1)' }]}>
-                    <Edit2 size={14} color={theme.colors.link} />
-                  </View>
-                  <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Edit User Details</Text>
-                </Pressable>
-              )}
-
-              {/* 2. Reset Password */}
-              {canResetPwdUsers && (
-                <Pressable
-                  variant="plain"
-                  hitSlopToMin48
-                  style={[
-                    styles.popoverActionItem,
-                    (canActivateUsers || canDeleteUsers) && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin')
-                      ? { borderBottomColor: theme.colors.hairline }
-                      : { borderBottomWidth: 0 },
-                  ]}
-                  onPress={() => {
-                    const u = moreActionsUser;
-                    closeMoreActions();
-                    handleTriggerResetPassword(u);
-                  }}
-                >
-                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)' }]}>
-                    <KeyRound size={14} color="#f59e0b" />
-                  </View>
-                  <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Reset Password</Text>
-                </Pressable>
-              )}
-
-              {/* 3. Activate / Deactivate Account */}
-              {canActivateUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin') && (
-                <Pressable
-                  variant="plain"
-                  hitSlopToMin48
-                  style={[
-                    styles.popoverActionItem,
-                    canDeleteUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin')
-                      ? { borderBottomColor: theme.colors.hairline }
-                      : { borderBottomWidth: 0 },
-                  ]}
-                  onPress={() => {
-                    const u = moreActionsUser;
-                    closeMoreActions();
-                    handleToggleUserStatus(u);
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.popoverActionIconBox,
-                      moreActionsUser.status === 'active'
-                        ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }
-                        : { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)' },
-                    ]}
-                  >
-                    {moreActionsUser.status === 'active' ? (
-                      <UserX size={14} color={theme.colors.error} />
-                    ) : (
-                      <UserCheck size={14} color="#10b981" />
-                    )}
-                  </View>
-                  <Text
-                    variant="label"
-                    style={{
-                      flex: 1,
-                      color: moreActionsUser.status === 'active' ? theme.colors.error : '#10b981',
-                    }}
-                  >
-                    {moreActionsUser.status === 'active' ? 'Deactivate User Account' : 'Activate User Account'}
-                  </Text>
-                </Pressable>
-              )}
-
-              {/* 4. Delete Account */}
-              {canDeleteUsers && authUser?.id !== moreActionsUser.id && !(normalizedRole === 'admin' && moreActionsUser.role === 'super_admin') && (
-                <Pressable
-                  variant="plain"
-                  hitSlopToMin48
-                  style={[styles.popoverActionItem, { borderBottomWidth: 0 }]}
-                  onPress={() => {
-                    const u = moreActionsUser;
-                    closeMoreActions();
-                    handleDeleteSingleUser(u);
-                  }}
-                >
-                  <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }]}>
-                    <Trash2 size={14} color={theme.colors.error} />
-                  </View>
-                  <Text variant="label" style={{ color: theme.colors.error, flex: 1 }}>
-                    Delete User Account
-                  </Text>
-                </Pressable>
-              )}
-            </ScrollView>
-          </Pressable>
-        )}
-      </Pressable>
-    </Modal>
+      {/* 3-Dot More Actions Contextual Popover */}
+      <UserActionsPopover
+        user={moreActionsUser}
+        position={popoverPosition}
+        onClose={closeMoreActions}
+        onEdit={handleTriggerEdit}
+        onResetPassword={handleTriggerResetPassword}
+        onToggleStatus={handleToggleUserStatus}
+        onDelete={handleDeleteSingleUser}
+        canEdit={canEditUsers}
+        canResetPassword={canResetPwdUsers}
+        canToggleStatus={canActivateUsers}
+        canDelete={canDeleteUsers}
+        currentAuthUserId={authUser?.id}
+        currentUserRole={normalizedRole}
+      />
 
       {/* Reject Reason Modal */}
       <RejectReasonModal
@@ -3431,10 +1705,10 @@ export default function UsersScreen() {
         visible={exportModalVisible}
         onClose={() => setExportModalVisible(false)}
         currentPageUsers={users}
-        totalMatchingCount={totalUsersCount || users.length}
+        totalMatchingCount={totalUsersCount}
         selectedUserIds={selectedIds}
-        currentPage={page}
-        totalPages={Math.ceil((totalUsersCount || users.length) / PAGE_SIZE) || 1}
+        currentPage={1}
+        totalPages={Math.ceil(totalUsersCount / USERS_PAGE_SIZE) || 1}
         activeFilterCount={activeFilterCount}
         onFetchAllMatchingUsers={handleFetchAllMatchingUsers}
       />
@@ -3500,14 +1774,14 @@ export default function UsersScreen() {
         variant="primary"
         isLoading={Boolean(rejectingDeletionId)}
       />
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1 },
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
@@ -3519,506 +1793,135 @@ const styles = StyleSheet.create({
   },
   listHeaderWrapper: {
     gap: spacingNumeric.md,
-    paddingBottom: spacingNumeric.xs },
+    paddingBottom: spacingNumeric.xs,
+  },
   paginationFooterContainer: {
     paddingVertical: spacingNumeric.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8 },
-  paginationFooterText: {
-    },
+    gap: 8,
+  },
+  paginationFooterText: {},
   paginationErrorCard: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     padding: spacingNumeric.md,
-    marginVertical: spacingNumeric.xs },
+    marginVertical: spacingNumeric.xs,
+  },
   paginationErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12 },
+    gap: 12,
+  },
   paginationErrorText: {
-    flex: 1 },
+    flex: 1,
+  },
   retryLoadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 12,
-    height: 32,
-    borderRadius: radiusNumeric.sm },
-  retryLoadMoreBtnText: {
-    },
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+    minHeight: 44,
+  },
+  retryLoadMoreBtnText: {},
   endOfListFooter: {
-    paddingVertical: spacingNumeric.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12 },
+    marginVertical: spacingNumeric.md,
+    gap: spacingNumeric.md,
+    opacity: 0.8,
+  },
   endOfListLine: {
     flex: 1,
-    height: 1 },
+    height: 1,
+  },
   endOfListContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6 },
-  endOfListText: {
-    },
-  initialErrorContainer: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: spacingNumeric.md },
-  initialErrorTitle: {
-    },
-  initialErrorSubtext: {
-    textAlign: 'center',
-    maxWidth: 280 },
-  retryInitialBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    height: 36,
-    borderRadius: radiusNumeric.md,
-    marginTop: 4 },
-  retryInitialBtnText: {
-    },
-  filterToolbar: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
-    gap: spacingNumeric.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1 },
-  toolbarTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8 },
-  searchBarBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-    paddingHorizontal: 14 },
-  searchIcon: {
-    marginRight: 8 },
-  searchInputText: {
-    flex: 1,
-    paddingVertical: 0,
-    height: '100%',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none' } as any }) },
-  searchClearBtn: {
-    padding: 3,
-    marginLeft: 4 },
-  filterToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
-  filterToggleBtnText: {
-    },
-  activeCountBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4 },
-  activeCountBadgeText: {
-    },
-  quickResetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 40,
-    paddingHorizontal: 11,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
-  quickResetBtnText: {
-    },
-  filterPanelWebContainer: {
-    overflow: 'hidden' },
-  filterPanelAnimatedContainer: {
-    overflow: 'hidden' },
-  filterPanelContent: {
-    paddingTop: 10,
-    borderTopWidth: 1,
-    gap: spacingNumeric.sm },
-  filterSelectorsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8 },
-  activeBadgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: spacingNumeric.xs,
-    borderTopWidth: 1 },
-  activeBadgesHeader: {
-    marginRight: 2 },
-  badgeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1 },
-  badgeChipText: {
-    },
-  resetAllLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 4 },
-  resetAllLinkText: {
-    },
+  },
+  endOfListText: {},
   resultsCountRow: {
-    paddingHorizontal: 2,
-    marginTop: -4 },
-  resultsCountText: {
-    },
-  changeReqsContainer: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.md,
-    gap: spacingNumeric.sm },
-  changeReqsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1 },
-  alertDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5 },
-  changeReqsTitle: {
-    },
-  miniActionBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1 },
-  miniActionBtnText: {
-    },
-  miniActionBtnTextWhite: {
-    color: '#ffffff' },
-  changeReqCard: {
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
-    gap: 6 },
-  changeReqCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between' },
-  changeReqUserName: {
-    },
-  changeReqUserSub: {
-    },
-  changeReqTime: {
-    },
-  diffsBox: {
-    padding: 8,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    gap: 2 },
-  diffItem: {
-    },
-  diffOld: {
-    textDecorationLine: 'line-through',
-    color: '#94a3b8' },
-  diffArrow: {
-    color: '#64748b' },
-  diffNew: {
-    color: '#10b981' },
-  changeReqActions: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 2 },
-  reqApproveBtn: {
-    flex: 1,
-    height: 32,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  reqBtnTextWhite: {
-    color: '#ffffff' },
-  reqRejectBtn: {
-    flex: 1,
-    height: 32,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1 },
-  reqBtnText: {
-    },
-  deletionReqsContainer: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.md,
-    gap: spacingNumeric.sm },
-  deletionCountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radiusNumeric.full },
-  deletionCountPillText: {
-    },
-  deletionSectionSubtext: {
-    },
-  deletionCard: {
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
-    gap: 6 },
-  sourceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: spacingNumeric.xs,
     paddingVertical: 2,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
-  sourceBadgeText: {
-    },
-  deletionReasonBox: {
-    padding: 8,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    gap: 2 },
-  deletionReasonLabel: {
-    textTransform: 'uppercase' },
-  deletionReasonText: {
-    },
-  userCard: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.md,
-    gap: 8 },
-  userCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10 },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0 },
-  headerBadgesCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'nowrap',
-    justifyContent: 'flex-end' },
-  empIdBadge: {
-    borderRadius: radiusNumeric.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderWidth: 1 },
-  roleBadgePill: {
-    borderRadius: radiusNumeric.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
-    borderWidth: 1 },
-  cardActionsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-    paddingTop: 10,
-    borderTopWidth: 1 },
-  actionPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    minHeight: 34,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radiusNumeric.pill,
-    borderWidth: 1 },
-  actionPillPrimary: {
-    backgroundColor: '#0284c7',
-    borderColor: '#0284c7' },
-  actionPillPrimaryText: {
-    color: '#ffffff' },
-  filterBadge: {
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: radiusNumeric.full },
-  filterBadgeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4 },
-  userAvatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1 },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  avatarLetter: {
-    },
-  userName: {
-    },
-  userEmail: {
-    marginTop: 1 },
-  cardStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
-  chipBadge: {
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4 },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3 },
-  cardStatusText: {
-    },
-  cardMetaBox: {
-    padding: 8,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    gap: 4 },
-  cardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6 },
-  roleBadgePillText: {
-    },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4 },
-  metaChipText: {
-    },
-  metaChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5 },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    gap: 8 },
-  loadingText: {
-    },
-  emptyContainer: {
-    padding: 24,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    gap: 8 },
-  emptyTitle: {
-    },
-  emptySubtext: {
-    textAlign: 'center',
-    maxWidth: 280 },
-  resetEmptyBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: radiusNumeric.md,
-    marginTop: 6 },
-  resetEmptyBtnText: {
-    color: '#ffffff' },
+  },
+  resultsCountText: {},
   mobileBulkBar: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
+    bottom: 24,
+    left: spacingNumeric.md,
+    right: spacingNumeric.md,
+    borderRadius: radiusNumeric.lg,
+    paddingVertical: spacingNumeric.sm,
+    paddingHorizontal: spacingNumeric.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radiusNumeric.full,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8 },
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 12,
+    zIndex: 999,
+  },
   bulkCountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6 },
+    gap: 8,
+  },
   bulkCloseBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    alignItems: 'center',
+    padding: 4,
+    minHeight: 44,
     justifyContent: 'center',
-    marginRight: 2 },
+  },
   bulkBadge: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: radiusNumeric.full },
+    borderRadius: radiusNumeric.full,
+  },
   bulkBadgeText: {
-    color: '#ffffff' },
+    color: '#ffffff',
+  },
   bulkSelectedText: {
-    color: '#ffffff' },
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
   bulkActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6 },
+    gap: 8,
+  },
   bulkBtnSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    minHeight: 44,
+  },
   bulkBtnSecondaryText: {
-    color: '#ffffff' },
+    color: '#ffffff',
+  },
   bulkBtnDanger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.full },
+    borderRadius: radiusNumeric.sm,
+    minHeight: 44,
+  },
   bulkBtnDangerText: {
-    color: '#ffffff' },
+    color: '#ffffff',
+  },
   moreActionsSheetContent: {
     paddingHorizontal: spacingNumeric.lg,
     paddingTop: spacingNumeric.sm,
@@ -4026,60 +1929,5 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     width: '100%',
     alignSelf: 'center',
-  },
-  popoverBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.18)',
-  },
-  popoverMenuCard: {
-    position: 'absolute',
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    elevation: 10,
-    zIndex: 9999,
-  },
-  popoverUserHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-  },
-  popoverHeaderInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.sm,
-    flex: 1,
-    marginRight: spacingNumeric.xs,
-  },
-  popoverHeaderCloseBtn: {
-    padding: 6,
-    borderRadius: radiusNumeric.sm,
-  },
-  popoverActionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: 8,
-    minHeight: 38,
-    borderBottomWidth: 1,
-  },
-  popoverActionIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  popoverActionTextWrap: {
-    flex: 1,
-    gap: 2,
   },
 });

@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Image,
+  BackHandler,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../lib/auth/useAuth';
@@ -65,6 +66,7 @@ import {
 } from '../../../components/documents/MobileDocumentViewerModal';
 import { notifyProfileRequestCancelled } from '../../../lib/notifications';
 import { haptics } from '../../../lib/haptics';
+import { sanitizeDatabaseError } from '@reachinternational/utils';
 
 // ─── Section Icon Mapping ───────────────────────────────────────────
 const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -132,12 +134,43 @@ const DEFAULT_DOC_TYPES = [
   { code: 'bank_document', label: 'Bank Passbook / Cheque' },
 ];
 
-export default function ProfileScreen() {
+export interface ProfileScreenProps {
+  onPressBack?: () => void;
+  backRoute?: string;
+}
+
+export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenProps = {}) {
   const { user, role, refreshSession, userProfile: authProfile } = useAuth();
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
+
+  const handleBack = useCallback(() => {
+    if (onPressBack) {
+      onPressBack();
+      return;
+    }
+    if (backRoute) {
+      router.replace(backRoute as any);
+      return;
+    }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/settings/account' as any);
+    }
+  }, [onPressBack, backRoute, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!backRoute && !onPressBack) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [backRoute, onPressBack, handleBack]);
 
   const { edit } = useLocalSearchParams<{ edit?: string }>();
 
@@ -291,7 +324,7 @@ export default function ProfileScreen() {
     } catch (err: any) {
       setPendingRequest(prevReq);
       haptics.reject();
-      toast('error', 'Withdraw Failed', err?.message || 'Failed to cancel the change request.');
+      toast('error', 'Withdraw Failed', sanitizeDatabaseError(err, 'Failed to cancel the change request.').message);
     } finally {
       setIsCancellingRequest(false);
     }
@@ -314,7 +347,7 @@ export default function ProfileScreen() {
 
       if (!res.success) {
         haptics.reject();
-        toast('error', 'Upload Failed', res.error || 'Failed to upload document.');
+        toast('error', 'Upload Failed', sanitizeDatabaseError(res.error, 'Failed to upload document.').message);
       } else {
         haptics.confirm();
         toast('success', 'Document Uploaded', 'Document attached successfully.');
@@ -322,7 +355,7 @@ export default function ProfileScreen() {
         await fetchProfileData();
       }
     } catch (err: any) {
-      toast('error', 'Upload Error', err?.message || 'Failed to select document.');
+      toast('error', 'Upload Error', sanitizeDatabaseError(err, 'Failed to select document.').message);
     } finally {
       setUploadingCode(null);
     }
@@ -343,7 +376,7 @@ export default function ProfileScreen() {
       const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
       if (!res.success) {
         haptics.reject();
-        toast('error', 'Delete Failed', res.error || 'Could not delete document.');
+        toast('error', 'Delete Failed', sanitizeDatabaseError(res.error, 'Could not delete document.').message);
       } else {
         haptics.confirm();
         toast('success', 'Document Removed', `${label} removed successfully.`);
@@ -352,7 +385,7 @@ export default function ProfileScreen() {
       }
     } catch (err: any) {
       haptics.reject();
-      toast('error', 'Delete Error', err?.message || 'Failed to remove document.');
+      toast('error', 'Delete Error', sanitizeDatabaseError(err, 'Failed to remove document.').message);
     } finally {
       setIsDeletingDoc(false);
     }
@@ -416,7 +449,7 @@ export default function ProfileScreen() {
         fileName: doc.storage_path.split('/').pop(),
       });
     } catch (err: any) {
-      toast('error', 'Open Failed', err?.message || 'Could not open document.');
+      toast('error', 'Open Failed', sanitizeDatabaseError(err, 'Could not open document.').message);
     }
   }, [toast]);
 
@@ -467,7 +500,7 @@ export default function ProfileScreen() {
         }
       }
     } catch (err: any) {
-      toast('error', 'Download Failed', err?.message || 'Failed to download profile summary.');
+      toast('error', 'Download Failed', sanitizeDatabaseError(err, 'Failed to download profile summary.').message);
     }
   }, [view, mergedUserData, role, cleanAadhaar, showFullAadhaar, formattedFullAadhaar, maskedAadhaar, toast]);
 
@@ -477,6 +510,8 @@ export default function ProfileScreen() {
       <MobileHeader
         title="Profile"
         showBack={true}
+        backRoute={backRoute}
+        onPressBack={handleBack}
         showQuickAccess={true}
         rightAction={
           <Pressable

@@ -38,7 +38,7 @@ const { createClient } = await import(pathToFileURL(supabasePkgPath).href);
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  "https://dhbbgfzbyatzvqafnsqp.supabase.co";
+  "https://vlmxciuogczumumrwyot.supabase.co";
 
 const supabaseKey =
   process.env.SUPABASE_SECRET_KEY ||

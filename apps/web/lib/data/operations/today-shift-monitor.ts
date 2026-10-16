@@ -29,7 +29,7 @@ export const getTodayShiftLogMonitor = cache(
       });
       if (error) {
         console.error("Error fetching today shift log monitor (direct):", error);
-        return [];
+        throw new Error(`Failed to load shift log monitor: ${error.message}`);
       }
       return (data as TodayShiftMonitorRow[]) || [];
     }
@@ -49,7 +49,7 @@ export const getTodayShiftLogMonitor = cache(
 
         if (error) {
           console.error("Error fetching today shift log monitor:", error);
-          return [];
+          throw new Error(`Failed to load shift log monitor: ${error.message}`);
         }
 
         return (data as TodayShiftMonitorRow[]) || [];

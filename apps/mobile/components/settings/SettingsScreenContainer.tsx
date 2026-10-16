@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,9 +6,11 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../ui/ThemeProvider';
 import { MobileHeader } from '../ui/MobileHeader';
 import { spacingNumeric } from '@reachinternational/design-tokens';
@@ -16,6 +18,7 @@ import { spacingNumeric } from '@reachinternational/design-tokens';
 export interface SettingsScreenContainerProps {
   title: string;
   showBack?: boolean;
+  backRoute?: string;
   onPressBack?: () => void;
   children: React.ReactNode;
   refreshing?: boolean;
@@ -27,6 +30,7 @@ export interface SettingsScreenContainerProps {
 export function SettingsScreenContainer({
   title,
   showBack = true,
+  backRoute,
   onPressBack,
   children,
   refreshing = false,
@@ -35,13 +39,48 @@ export function SettingsScreenContainer({
   headerRight,
 }: SettingsScreenContainerProps) {
   const { theme } = useTheme();
+  const router = useRouter();
+
+  const handleBack = useCallback(() => {
+    if (onPressBack) {
+      onPressBack();
+      return;
+    }
+    if (backRoute) {
+      router.replace(backRoute as any);
+      return;
+    }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/settings' as any);
+    }
+  }, [onPressBack, backRoute, router]);
+
+  // Intercept Android hardware back button
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!showBack) return;
+
+    const onHardwareBack = () => {
+      handleBack();
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onHardwareBack
+    );
+    return () => subscription.remove();
+  }, [showBack, handleBack]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <MobileHeader
         title={title}
         showBack={showBack}
-        onPressBack={onPressBack}
+        backRoute={backRoute}
+        onPressBack={handleBack}
         showQuickAccess={!showBack}
         showQuickAccessCapsule={false}
         rightAction={headerRight}

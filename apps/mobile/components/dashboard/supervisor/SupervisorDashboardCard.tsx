@@ -67,24 +67,28 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
             value={assignedMachines}
             icon={Wrench}
             variant="default"
+            href="/machines"
           />
           <KPICard
             label="Field Operators"
             value={assignedOperators}
             icon={Users}
             variant="info"
+            href="/users"
           />
           <KPICard
             label="Logs Submitted"
             value={submitted}
             icon={CheckCircle2}
             variant="success"
+            href="/running-logs"
           />
           <KPICard
             label="Logs Pending"
             value={pending}
             icon={Clock}
             variant={pending > 0 ? 'warning' : 'default'}
+            href="/running-logs"
           />
         </KPIGrid>
       </View>

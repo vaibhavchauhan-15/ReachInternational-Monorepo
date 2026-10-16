@@ -1,25 +1,29 @@
 /**
  * ReachInternational Mobile — React Native Reusables Card Component
- * Official RNR Card primitive with CardHeader, CardTitle, CardDescription, CardContent, CardFooter.
+ * Official RNR Card primitive with CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
+ * powered by canonical Pressable with Material Design 3 and iOS press feedback.
  */
 
 import { TextClassContext } from '@/components/ui/Text';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
-import { View, type ViewProps, Pressable, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type ViewProps, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { useTheme } from './ThemeProvider';
+import { Pressable } from './touch/Pressable';
 
 export type CardProps = ViewProps & {
   className?: string;
   variant?: 'default' | 'elevated' | 'outlined' | 'flat' | string;
   onPress?: () => void;
-  style?: StyleProp<ViewStyle>;
+  interactive?: boolean;
+  style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
 };
 
 const CardPressContext = React.createContext<{ isPressed: boolean }>({ isPressed: false });
 
 const Card: React.ForwardRefExoticComponent<CardProps & React.RefAttributes<View>> = React.forwardRef(
-  ({ className, variant = 'default', onPress, style, ...props }: CardProps, ref) => {
+  ({ className, variant = 'default', onPress, interactive, style, children, ...props }: CardProps, ref) => {
     const { theme, isDark } = useTheme();
 
     const variantClass =
@@ -40,23 +44,48 @@ const Card: React.ForwardRefExoticComponent<CardProps & React.RefAttributes<View
           : theme.colors.canvasElevated,
       borderColor: theme.colors.hairline,
       borderWidth: variant === 'flat' ? 0 : 1,
+      borderRadius: radiusNumeric.lg,
+      padding: spacingNumeric.md,
+      ...Platform.select({
+        web: {
+          outlineStyle: 'none',
+          WebkitTapHighlightColor: 'transparent',
+          transition: 'border-color 150ms ease, opacity 150ms ease, background-color 150ms ease',
+        } as any,
+        default: {},
+      }),
     };
 
-    if (onPress) {
+    const isInteractive = Boolean(onPress || interactive);
+
+    if (isInteractive) {
       return (
         <Pressable
           ref={ref as any}
+          variant="card"
           onPress={onPress}
-          className={cn(
-            'rounded-xl p-4 shadow-xs',
-            variantClass,
-            className
-          )}
-          style={[defaultStyle, style]}
+          style={(state) => {
+            const resolved = typeof style === 'function' ? style(state) : style;
+            const resolvedList = Array.isArray(resolved) ? resolved : [resolved];
+            return [
+              defaultStyle,
+              state.pressed && {
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(23, 23, 23, 0.22)',
+              },
+              ...resolvedList,
+            ];
+          }}
           {...(props as any)}
-        />
+        >
+          {(state) => (
+            <CardPressContext.Provider value={{ isPressed: state.pressed }}>
+              {typeof children === 'function' ? (children as any)(state) : children}
+            </CardPressContext.Provider>
+          )}
+        </Pressable>
       );
     }
+
     return (
       <View
         ref={ref}
@@ -65,9 +94,11 @@ const Card: React.ForwardRefExoticComponent<CardProps & React.RefAttributes<View
           variantClass,
           className
         )}
-        style={[defaultStyle, style]}
+        style={[defaultStyle, style as StyleProp<ViewStyle>]}
         {...props}
-      />
+      >
+        {children}
+      </View>
     );
   }
 );

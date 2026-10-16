@@ -218,13 +218,7 @@ const getCachedMachineList = unstable_cache(
 
     if (error) {
       console.error("Error fetching machine list:", error.message || error.details || error);
-      return {
-        machines: [],
-        total: 0,
-        page,
-        pageSize,
-        totalPages: 0,
-      };
+      throw new Error(`Failed to fetch machine list: ${error.message || "Database error"}`);
     }
 
     const hydrated = await hydrateMachinesPersonnel(data ?? [], supabase);

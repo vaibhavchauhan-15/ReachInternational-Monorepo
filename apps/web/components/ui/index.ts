@@ -67,7 +67,7 @@ export {
 } from "./Table";
 export { EnterpriseTable, CopyCell, type ColumnDef, type TableDensity } from "./EnterpriseTable";
 export { DataTable, type DataTableProps } from "./DataTable";
-export { EmptyState } from "./EmptyState";
+export { EmptyState, type EmptyStateProps, type EmptyStateVariant } from "./EmptyState";
 export {
   Skeleton,
   SkeletonHeader,
@@ -106,9 +106,10 @@ export {
   DialogPortal,
   type DialogContentProps,
   type DialogFrom,
-} from "./dialog";
+} from "./Dialog";
 export { ConfirmationDialog } from "./ConfirmationDialog";
 export { Alert, type AlertProps, type AlertVariant } from "./Alert";
+export { ErrorState, type ErrorStateProps } from "./ErrorState";
 export { Drawer, type DrawerProps } from "./Drawer";
 export { ToastProvider, useToast } from "./Toast";
 export { Spinner, FullPageSpinner } from "./Spinner";
@@ -122,7 +123,7 @@ export {
   MetricTooltip,
   SidebarTooltip,
   TruncatedTooltip,
-} from "./tooltip";
+} from "./Tooltip";
 
 // 9. Navigation & Layout
 export { PageHeader } from "./PageHeader";
@@ -147,6 +148,8 @@ export {
 } from "./Container";
 export { Badge } from "./Badge";
 export { MetricCard } from "./MetricCard";
+export { KPICard, type KPICardProps, type KPIVariant } from "./KPICard";
+export { KPIGrid, type KPIGridProps } from "./KPIGrid";
 export { Sparkline } from "./Sparkline";
 export { CommandPalette } from "./CommandPalette";
 export { RefreshButton } from "./RefreshButton";
@@ -185,7 +188,7 @@ export {
   useSidebar,
   SIDEBAR_WIDTH_EXPANDED,
   SIDEBAR_WIDTH_COLLAPSED,
-} from "./sidebar";
+} from "./Sidebar";
 
 // 10. Motion & Animation
 export {
@@ -199,7 +202,7 @@ export {
   AnimatedProgress,
   AnimatePresence,
 } from "./Motion";
-export { AnimateIcon, AnimatedIcon, createAnimatedIcon, InteractiveIcon, getIconInteractionClass } from "./animated-icon";
+export { AnimateIcon, AnimatedIcon, createAnimatedIcon, InteractiveIcon, getIconInteractionClass } from "./AnimatedIcon";
 export type {
   IconAnimationVariant,
   IconInteractionVariant,
@@ -207,7 +210,7 @@ export type {
   AnimateIconProps,
   AnimatedIconProps,
   InteractiveIconProps,
-} from "./animated-icon";
+} from "./AnimatedIcon";
 
 // 11. Branding
 export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";

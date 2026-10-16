@@ -20,20 +20,15 @@ export const getSuperAdminDashboard = cache(
   async (userId: string): Promise<SuperAdminDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<SuperAdminDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_super_admin_dashboard");
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_super_admin_dashboard");
 
-          if (error) {
-            console.error("[DAL] getSuperAdminDashboard RPC error:", error.message);
-            return DEFAULT_SUPER_ADMIN_DASHBOARD;
-          }
-
-          return (data as SuperAdminDashboardDTO) || DEFAULT_SUPER_ADMIN_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getSuperAdminDashboard fatal error:", err);
-          return DEFAULT_SUPER_ADMIN_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getSuperAdminDashboard RPC error:", error.message);
+          throw new Error(`Failed to load super admin dashboard: ${error.message}`);
         }
+
+        return (data as SuperAdminDashboardDTO) || DEFAULT_SUPER_ADMIN_DASHBOARD;
       },
       [`dashboard-super-admin-${userId}`],
       {

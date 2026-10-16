@@ -458,3 +458,78 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type UserAccountRequestInput = z.infer<typeof UserAccountRequestSchema>;
 export type OnboardingProfileInput = z.infer<typeof OnboardingProfileSchema>;
 
+export interface SignupSectionFields {
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  supervisor_id?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  street?: string | null;
+  address?: string | null;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
+  state_id?: number | string | null;
+  bank_account_number?: string | null;
+  bank_ifsc_code?: string | null;
+  has_bank_doc?: boolean | null;
+  aadhaar_number?: string | null;
+  has_aadhaar_doc?: boolean | null;
+  password?: string | null;
+  confirm_password?: string | null;
+  agreed_to_terms?: boolean | null;
+}
+
+export function isSignupSection1Complete(fields: SignupSectionFields): boolean {
+  const nameOk = Boolean(fields.full_name && fields.full_name.trim().length >= 2);
+  const emailOk = Boolean(fields.email && fields.email.trim().includes("@"));
+  const phoneOk = Boolean(fields.phone && fields.phone.replace(/\D/g, "").length >= 10);
+  const roleOk = Boolean(fields.role && fields.role.trim().length > 0);
+  const isOperator = fields.role === "operator";
+  const supOk = !isOperator || Boolean(fields.supervisor_id && fields.supervisor_id.trim().length > 0);
+  return nameOk && emailOk && phoneOk && roleOk && supOk;
+}
+
+export function isSignupSection2Complete(fields: SignupSectionFields): boolean {
+  return Boolean(
+    fields.shift_start_time &&
+    fields.shift_start_time.trim().length > 0 &&
+    fields.shift_end_time &&
+    fields.shift_end_time.trim().length > 0
+  );
+}
+
+export function isSignupSection3Complete(fields: SignupSectionFields): boolean {
+  const hasStreet = Boolean((fields.street || fields.address) && (fields.street || fields.address)!.trim().length >= 2);
+  const hasCity = Boolean(fields.city && fields.city.trim().length >= 2);
+  const hasDistrict = Boolean(fields.district && fields.district.trim().length >= 2);
+  const hasState = Boolean((fields.state && fields.state.trim().length >= 2) || fields.state_id);
+  return hasStreet && hasCity && hasDistrict && hasState;
+}
+
+export function isSignupSection4Complete(fields: SignupSectionFields): boolean {
+  const hasBankAcc = Boolean(fields.bank_account_number && validateBankAccountNumber(fields.bank_account_number).isValid);
+  const hasIfsc = Boolean(fields.bank_ifsc_code && validateIfscCode(fields.bank_ifsc_code).isValid);
+  const hasDoc = Boolean(fields.has_bank_doc);
+  return hasBankAcc && hasIfsc && hasDoc;
+}
+
+export function isSignupSection5Complete(fields: SignupSectionFields): boolean {
+  const hasAadhaar = Boolean(fields.aadhaar_number && fields.aadhaar_number.replace(/\D/g, "").length === 12);
+  const hasDoc = Boolean(fields.has_aadhaar_doc);
+  return hasAadhaar && hasDoc;
+}
+
+export function isSignupSection6Complete(fields: SignupSectionFields): boolean {
+  return Boolean(
+    fields.password &&
+    fields.confirm_password &&
+    fields.password.length >= 8 &&
+    fields.confirm_password.length >= 8 &&
+    fields.password === fields.confirm_password &&
+    fields.agreed_to_terms
+  );
+}
+

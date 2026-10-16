@@ -15,13 +15,6 @@ import {
   Building,
   CreditCard,
   Calendar,
-  CheckCircle,
-  AlertCircle,
-  HelpCircle,
-  Clock,
-  Briefcase,
-  User,
-  Shield,
 } from "lucide-react";
 import {
   AnimatedUsers,
@@ -62,13 +55,27 @@ import {
   Badge,
 } from "@/components/ui";
 import { AnimatedCounter } from "@/components/ui/Motion";
+import {
+  PayrollKPIStrip,
+  PayrollDesktopTable,
+  PayrollMobileCard,
+  SalarySlipModal,
+  EditStatementModal,
+} from "@/components/payroll";
 import type { HRPayrollSummary, HRPayrollOperator } from "@/lib/types/database";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { UserRole } from "@reachinternational/types";
 import {
   updateOperatorRates,
   bulkUpdateOperatorRates,
   updateOperatorSalaryStatementAction,
 } from "@/app/actions/payroll";
+import {
+  calculateOperatorSalary,
+  calculatePayrollKpis,
+  PAYROLL_CSV_HEADERS,
+  formatPayrollCsvRow,
+} from "@reachinternational/utils";
 
 interface PayrollClientProps {
   initialData: HRPayrollSummary;
@@ -418,37 +425,8 @@ export function PayrollClient({
     return result;
   }, [operators, searchQuery, payoutFilter, stateFilter, sortBy]);
 
-  // Monorepo Summary KPI calculations
-  const kpis = useMemo(() => {
-    let totalGross = 0;
-    let totalNet = 0;
-    let totalPaid = 0;
-    let totalBalance = 0;
-    let totalAttendedDays = 0;
-    let totalOtDays = 0;
-    let totalPlAdjusted = 0;
-
-    operators.forEach((op) => {
-      totalGross += op.gross_pay || op.total_pay || 0;
-      totalNet += op.net_pay || op.total_pay || 0;
-      totalPaid += (op.paid_reach || 0) + (op.paid_ss || 0) + (op.paid_quess || 0);
-      totalBalance += op.balance_pay || 0;
-      totalAttendedDays += op.attended_days || op.work_days || 0;
-      totalOtDays += op.ot_days || 0;
-      totalPlAdjusted += op.pl_adjusted || 0;
-    });
-
-    return {
-      operatorCount: operators.length,
-      totalGross: Math.round(totalGross),
-      totalNet: Math.round(totalNet),
-      totalPaid: Math.round(totalPaid),
-      totalBalance: Math.round(totalBalance),
-      totalAttendedDays: Math.round(totalAttendedDays * 10) / 10,
-      totalOtDays: Math.round(totalOtDays * 10) / 10,
-      totalPlAdjusted: Math.round(totalPlAdjusted * 10) / 10,
-    };
-  }, [operators]);
+  // Monorepo Summary KPI calculations via canonical domain utility
+  const kpis = useMemo(() => calculatePayrollKpis(operators), [operators]);
 
   // Multi-select handlers
   const handleToggleSelect = (id: string) => {
@@ -497,45 +475,9 @@ export function PayrollClient({
     });
   };
 
-  // Live calculation for Edit Modal
+  // Live calculation for Edit Modal via canonical domain formula
   const editComputed = useMemo(() => {
-    const basic = Number(editFormData.basic_salary) || 0;
-    const wd = Math.max(1, Number(editFormData.working_days) || 30);
-    const ad = Number(editFormData.attended_days) || 0;
-    const otDays = Number(editFormData.ot_days) || 0;
-    const plAdj = Number(editFormData.pl_adjusted) || 0;
-    const ntAmt = Number(editFormData.night_travel_amount) || 0;
-    const loan = Number(editFormData.loan_deduction) || 0;
-    const addBal = Number(editFormData.additional_balance_salary) || 0;
-    const advDed = Number(editFormData.advance_deduction) || 0;
-    const otherDed = Number(editFormData.other_deductions) || 0;
-    const plUsed = Number(editFormData.pl_used_as_on_date) || 0;
-    const reach = Number(editFormData.paid_reach) || 0;
-    const ss = Number(editFormData.paid_ss) || 0;
-    const quess = Number(editFormData.paid_quess) || 0;
-    const totalPl = Number(editFormData.total_pl_quota) || 12;
-
-    const totalDays = ad + plAdj + otDays;
-    const attendedAmt = Math.round(((basic / wd) * ad) * 100) / 100;
-    const plAmt = Math.round(((basic / wd) * plAdj) * 100) / 100;
-    const otAmt = Math.round(((basic / wd) * otDays) * 100) / 100;
-    const totalEarned = Math.round((attendedAmt + plAmt + ntAmt) * 100) / 100;
-    const grossPay = Math.round((totalEarned + otAmt + addBal) * 100) / 100;
-    const netPay = Math.round((grossPay - (loan + advDed + otherDed)) * 100) / 100;
-    const balance = Math.round((netPay - (reach + ss + quess)) * 100) / 100;
-    const plBalance = Math.max(0, totalPl - (plUsed + plAdj));
-
-    return {
-      totalDays,
-      attendedAmt,
-      plAmt,
-      otAmt,
-      totalEarned,
-      grossPay,
-      netPay,
-      balance,
-      plBalance,
-    };
+    return calculateOperatorSalary(editFormData);
   }, [editFormData]);
 
   // Save Statement Edit with Optimistic UI & Snapshot Rollback
@@ -595,84 +537,15 @@ export function PayrollClient({
     }
   };
 
-  // Browser-native CSV Export matching EXACT 32 Excel Reference Columns
+  // Browser-native CSV Export matching EXACT 32 Excel Reference Columns via canonical domain utility
   const handleExportCSV = useCallback(() => {
     const listToExport =
       selectedIds.size > 0
         ? operators.filter((o) => selectedIds.has(o.operator_id))
         : operators;
 
-    const headers = [
-      "SL NO",
-      "NAME",
-      "DOJ",
-      "BASIC",
-      "EARNED",
-      "W/D",
-      "A/D",
-      "OT days",
-      "PL ADJUSTED",
-      "Total Days",
-      "AMOUNT",
-      "PL AMT.",
-      "N/T",
-      "Amt",
-      "TOTAL",
-      "Loan",
-      "Add Bal Salary",
-      "ADV./Other Deduction",
-      "ADV. BAL.",
-      "Dedu",
-      "PL Use as on date",
-      "OT AMT",
-      "Gross/Pay",
-      "Net/Pay",
-      "PAID REACH",
-      "S&S",
-      "QUESS",
-      "BALANCE",
-      "TOTAL PL",
-      "PL BALANCE",
-      "AC NO",
-      "IFSC CODE",
-    ];
-
-    const rows = listToExport.map((op, idx) => [
-      op.sl_no || idx + 1,
-      `"${(op.full_name || "").replace(/"/g, '""')}"`,
-      `"${op.doj || ""}"`,
-      op.basic_salary || 0,
-      op.earned_basic || op.basic_salary || 0,
-      op.working_days || 30,
-      op.attended_days || op.work_days || 0,
-      op.ot_days || 0,
-      op.pl_adjusted || 0,
-      op.total_days || 0,
-      op.attended_amount || 0,
-      op.pl_amount || 0,
-      op.night_travel_days || 0,
-      op.night_travel_amount || 0,
-      op.total_earned || 0,
-      op.loan_deduction || 0,
-      op.additional_balance_salary || 0,
-      op.advance_deduction || 0,
-      op.advance_balance || 0,
-      op.other_deductions || 0,
-      op.pl_used_as_on_date || 0,
-      op.ot_amount || 0,
-      op.gross_pay || op.total_pay || 0,
-      op.net_pay || op.total_pay || 0,
-      op.paid_reach || 0,
-      op.paid_ss || 0,
-      op.paid_quess || 0,
-      op.balance_pay || 0,
-      op.total_pl_quota || 12,
-      op.pl_balance || 12,
-      `"${op.bank_account_number || ""}"`,
-      `"${op.bank_ifsc_code || ""}"`,
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const rows = listToExport.map((op, idx) => formatPayrollCsvRow(op, idx));
+    const csvContent = [PAYROLL_CSV_HEADERS.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -699,6 +572,17 @@ export function PayrollClient({
       window.removeEventListener("reach:quick-export", onQuickExport);
     };
   }, [handleExportCSV]);
+
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        onExportCSV: handleExportCSV,
+        onExportExcel: handleExportCSV,
+        onRefresh: () => router.refresh(),
+      }),
+      [handleExportCSV, router]
+    )
+  );
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6 pb-24 md:pb-6">
@@ -766,79 +650,7 @@ export function PayrollClient({
       </div>
 
       {/* 2. Interactive KPI Summary Cards */}
-      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 transition-opacity ${
-        isPending ? "opacity-75 pointer-events-none" : "opacity-100"
-      }`}>
-        {/* Total Gross Payroll */}
-        <motion.div
-          data-hover-parent
-          whileTap={{ scale: 0.98 }}
-          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-[var(--color-ink)]/30 active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
-              Total Gross Payroll
-            </span>
-            <AnimatedCreditCard size={16} className="w-4 h-4 shrink-0 text-sky-500" />
-          </div>
-          <div className="mt-2 text-base sm:text-xl lg:text-2xl font-extrabold text-[var(--color-ink)] font-mono tabular-nums truncate">
-            ₹{kpis.totalGross.toLocaleString("en-IN")}
-          </div>
-        </motion.div>
-
-        {/* Total Net Payable */}
-        <motion.div
-          data-hover-parent
-          whileTap={{ scale: 0.98 }}
-          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-emerald-500/40 active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-              Net Payable
-            </span>
-            <AnimatedBriefcase size={16} className="w-4 h-4 shrink-0 text-emerald-500" />
-          </div>
-          <div className="mt-2 text-base sm:text-xl lg:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums truncate">
-            ₹{kpis.totalNet.toLocaleString("en-IN")}
-          </div>
-        </motion.div>
-
-        {/* Disbursed vs Unpaid Balance */}
-        <motion.div
-          data-hover-parent
-          whileTap={{ scale: 0.98 }}
-          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-amber-500/40 active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">
-              Disbursed vs Unpaid
-            </span>
-            <AnimatedClock size={16} className="w-4 h-4 shrink-0 text-amber-500" />
-          </div>
-          <div className="mt-2 flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 text-base sm:text-xl lg:text-2xl font-extrabold text-[var(--color-ink)] font-mono tabular-nums">
-            <span className="text-emerald-600 dark:text-emerald-400">₹{kpis.totalPaid.toLocaleString("en-IN")}</span>
-            <span className="text-[10px] sm:text-xs font-normal text-[var(--color-mute)] truncate">/ bal ₹{kpis.totalBalance.toLocaleString("en-IN")}</span>
-          </div>
-        </motion.div>
-
-        {/* Total Working & Attended Days */}
-        <motion.div
-          data-hover-parent
-          whileTap={{ scale: 0.98 }}
-          className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-all hover:border-indigo-500/40 active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 truncate">
-              Days &amp; Leave Summary
-            </span>
-            <AnimatedCalendar size={16} className="w-4 h-4 shrink-0 text-indigo-500" />
-          </div>
-          <div className="mt-2 flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 text-base sm:text-xl lg:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums">
-            <span>{kpis.totalAttendedDays} d</span>
-            <span className="text-[10px] sm:text-xs font-normal text-[var(--color-mute)] truncate">/ OT {kpis.totalOtDays} d</span>
-          </div>
-        </motion.div>
-      </div>
+      <PayrollKPIStrip kpis={kpis} isPending={isPending} />
 
       {/* 3. Reusable View Mode Switcher Strip */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-[var(--color-hairline)]">
@@ -902,388 +714,18 @@ export function PayrollClient({
       </div>
 
       {/* 5. Desktop High-Density Data Grid with Sticky Freeze Columns */}
-      <div className="hidden md:block rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-xs">
-        <div className="overflow-x-auto max-h-[750px]">
-          <table className="w-full text-left text-xs border-collapse font-sans whitespace-nowrap">
-            {/* Multi-tier Group Header Bar */}
-            <thead className="sticky top-0 z-30 bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
-              <tr className="border-b border-[var(--color-hairline)]/70 text-[10px] uppercase font-bold tracking-wider text-[var(--color-mute)]">
-                <th colSpan={3} className="py-1 px-3 bg-white dark:bg-[#121212] border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.4)] sticky left-0 z-40 text-left">
-                  Identity Details
-                </th>
-
-                {(viewMode === "statement" || viewMode === "attendance") && (
-                  <th colSpan={8} className="py-1 px-3 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-r border-[var(--color-hairline)] text-center">
-                    Attendance &amp; Days
-                  </th>
-                )}
-
-                {(viewMode === "statement" || viewMode === "earnings") && (
-                  <th colSpan={7} className="py-1 px-3 bg-sky-500/10 text-sky-700 dark:text-sky-300 border-r border-[var(--color-hairline)] text-center">
-                    Earnings Breakdown
-                  </th>
-                )}
-
-                {(viewMode === "statement" || viewMode === "deductions") && (
-                  <th colSpan={6} className="py-1 px-3 bg-rose-500/10 text-rose-700 dark:text-rose-300 border-r border-[var(--color-hairline)] text-center">
-                    Deductions &amp; Recoveries
-                  </th>
-                )}
-
-                {(viewMode === "statement" || viewMode === "payouts") && (
-                  <th colSpan={4} className="py-1 px-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-r border-[var(--color-hairline)] text-center">
-                    Agency Disbursements &amp; Balance
-                  </th>
-                )}
-
-                {(viewMode === "statement" || viewMode === "leaves") && (
-                  <th colSpan={2} className="py-1 px-3 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-r border-[var(--color-hairline)] text-center">
-                    Leave Ledger
-                  </th>
-                )}
-
-                {(viewMode === "statement" || viewMode === "deductions") && (
-                  <th colSpan={2} className="py-1 px-3 bg-slate-500/10 text-slate-700 dark:text-slate-300 border-r border-[var(--color-hairline)] text-center">
-                    Bank Info
-                  </th>
-                )}
-
-                <th className="py-1 px-3 bg-[var(--color-canvas)] text-center">Actions</th>
-              </tr>
-
-              {/* Exact Excel Column Header Row */}
-              <tr className="border-b border-[var(--color-hairline)] text-[11px] font-semibold text-[var(--color-body)] uppercase">
-                {/* Checkbox */}
-                <th className="py-2.5 px-2 w-[36px] min-w-[36px] max-w-[36px] text-center sticky left-0 z-40 bg-white dark:bg-[#121212] border-r border-[var(--color-hairline)]/60">
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    className="h-4.5 w-4.5 rounded border border-[var(--color-hairline)] hover:border-[var(--color-ink)] flex items-center justify-center transition-colors cursor-pointer"
-                    title={selectedIds.size === filteredOperators.length ? "Deselect all" : "Select all"}
-                  >
-                    {selectedIds.size === filteredOperators.length && filteredOperators.length > 0 && (
-                      <AnimatedCheck size={11} className="text-emerald-600 dark:text-emerald-400" />
-                    )}
-                  </button>
-                </th>
-
-                {/* SL NO */}
-                <th className="py-2.5 px-2.5 text-center w-[48px] min-w-[48px] max-w-[48px] sticky left-[36px] z-40 bg-white dark:bg-[#121212] border-r border-[var(--color-hairline)]/60 font-mono">
-                  SL NO
-                </th>
-
-                {/* NAME - Partition Line */}
-                <th className="py-2.5 px-3.5 min-w-[200px] sticky left-[84px] z-40 bg-white dark:bg-[#121212] border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.4)]">
-                  NAME
-                </th>
-
-                {/* ATTENDANCE COLUMNS */}
-                {(viewMode === "statement" || viewMode === "attendance") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[100px] text-center border-r border-[var(--color-hairline)]/60 font-mono">DOJ</th>
-                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">BASIC</th>
-                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">EARNED</th>
-                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono">W/D</th>
-                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono text-blue-600 dark:text-blue-400">A/D</th>
-                    <th className="py-2.5 px-2.5 min-w-[75px] text-center border-r border-[var(--color-hairline)]/60 font-mono">OT days</th>
-                    <th className="py-2.5 px-2.5 min-w-[75px] text-center border-r border-[var(--color-hairline)]/60 font-mono">PL ADJ</th>
-                    <th className="py-2.5 px-2.5 min-w-[90px] text-center border-r border-[var(--color-hairline)]/60 font-mono font-bold text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30">
-                      Total Days
-                    </th>
-                  </>
-                )}
-
-                {/* EARNINGS COLUMNS */}
-                {(viewMode === "statement" || viewMode === "earnings") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono">AMOUNT</th>
-                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">PL AMT.</th>
-                    <th className="py-2.5 px-2.5 min-w-[65px] text-center border-r border-[var(--color-hairline)]/60 font-mono">N/T</th>
-                    <th className="py-2.5 px-3 min-w-[85px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Amt</th>
-                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-semibold">TOTAL</th>
-                    <th className="py-2.5 px-3 min-w-[95px] text-right border-r border-[var(--color-hairline)]/60 font-mono text-amber-600 dark:text-amber-400">OT AMT</th>
-                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50/50 dark:bg-sky-950/30">
-                      Gross/Pay
-                    </th>
-                  </>
-                )}
-
-                {/* DEDUCTIONS COLUMNS */}
-                {(viewMode === "statement" || viewMode === "deductions") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Loan</th>
-                    <th className="py-2.5 px-3 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Add Bal Salary</th>
-                    <th className="py-2.5 px-3 min-w-[120px] text-right border-r border-[var(--color-hairline)]/60 font-mono">ADV./Deduction</th>
-                    <th className="py-2.5 px-3 min-w-[100px] text-right border-r border-[var(--color-hairline)]/60 font-mono">ADV. BAL.</th>
-                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">Dedu</th>
-                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30">
-                      Net/Pay
-                    </th>
-                  </>
-                )}
-
-                {/* AGENCY DISBURSEMENTS COLUMNS */}
-                {(viewMode === "statement" || viewMode === "payouts") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[100px] text-right border-r border-[var(--color-hairline)]/60 font-mono">PAID REACH</th>
-                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">S&amp;S</th>
-                    <th className="py-2.5 px-3 min-w-[90px] text-right border-r border-[var(--color-hairline)]/60 font-mono">QUESS</th>
-                    <th className="py-2.5 px-3.5 min-w-[110px] text-right border-r border-[var(--color-hairline)]/60 font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/30">
-                      BALANCE
-                    </th>
-                  </>
-                )}
-
-                {/* LEAVE LEDGER COLUMNS */}
-                {(viewMode === "statement" || viewMode === "leaves") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[85px] text-center border-r border-[var(--color-hairline)]/60 font-mono">TOTAL PL</th>
-                    <th className="py-2.5 px-3 min-w-[95px] text-center border-r border-[var(--color-hairline)]/60 font-mono font-bold text-indigo-700 dark:text-indigo-300">
-                      PL BALANCE
-                    </th>
-                  </>
-                )}
-
-                {/* BANK DETAILS */}
-                {(viewMode === "statement" || viewMode === "deductions") && (
-                  <>
-                    <th className="py-2.5 px-3 min-w-[150px] text-left border-r border-[var(--color-hairline)]/60 font-mono">AC NO</th>
-                    <th className="py-2.5 px-3 min-w-[130px] text-left border-r border-[var(--color-hairline)]/60 font-mono">IFSC CODE</th>
-                  </>
-                )}
-
-                {/* ACTIONS */}
-                <th className="py-2.5 px-3 min-w-[85px] text-center">Action</th>
-              </tr>
-            </thead>
-
-            {/* Table Body */}
-            <tbody className="divide-y divide-[var(--color-hairline)] bg-white dark:bg-[#121212]">
-              {filteredOperators.length === 0 ? (
-                <tr>
-                  <td colSpan={34} className="py-12 text-center">
-                    <EmptyState
-                      icon={<AnimatedCreditCard size={32} />}
-                      title="No operator payroll records found"
-                      description={
-                        activeFilterCount > 0
-                          ? "No records match your active search and filter criteria."
-                          : "No operators recorded for this period."
-                      }
-                      action={
-                        activeFilterCount > 0 ? (
-                          <Button variant="secondary" size="sm" onClick={resetFilters}>
-                            Clear Filters
-                          </Button>
-                        ) : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredOperators.map((op, index) => {
-                  const isSelected = selectedIds.has(op.operator_id);
-                  const stickyBg = isSelected
-                    ? "bg-[#f0f9ff] dark:bg-[#0c2233] group-hover:bg-[#e0f2fe] dark:group-hover:bg-[#133047]"
-                    : "bg-white dark:bg-[#121212] group-hover:bg-[#f5f5f5] dark:group-hover:bg-[#1c1c1c]";
-                  const rowBg = isSelected
-                    ? "bg-[#f0f9ff] dark:bg-[#0c2233] hover:bg-[#e0f2fe] dark:hover:bg-[#133047]"
-                    : "bg-white dark:bg-[#121212] hover:bg-[#f5f5f5] dark:hover:bg-[#1c1c1c]";
-
-                  return (
-                    <tr
-                      key={op.operator_id}
-                      className={`transition-colors group ${rowBg}`}
-                    >
-                      {/* Checkbox - 100% Solid Opaque Background */}
-                      <td className={`py-2 px-2 w-[36px] min-w-[36px] max-w-[36px] text-center sticky left-0 z-20 ${stickyBg} border-r border-[var(--color-hairline)]/60`}>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSelect(op.operator_id)}
-                          className={`h-4.5 w-4.5 rounded border transition-all flex items-center justify-center cursor-pointer ${
-                            isSelected
-                              ? "bg-[var(--color-ink)] border-[var(--color-ink)] text-[var(--color-canvas)]"
-                              : "border-[var(--color-hairline)] hover:border-[var(--color-ink)]/50"
-                          }`}
-                        >
-                          {isSelected && <AnimatedCheck size={11} />}
-                        </button>
-                      </td>
-
-                      {/* SL NO - 100% Solid Opaque Background */}
-                      <td className={`py-2 px-2.5 w-[48px] min-w-[48px] max-w-[48px] text-center font-mono text-[var(--color-mute)] sticky left-[36px] z-20 ${stickyBg} border-r border-[var(--color-hairline)]/60 tabular-nums`}>
-                        {op.sl_no || index + 1}
-                      </td>
-
-                      {/* NAME - 100% Solid Opaque Background + Visible Partition Line */}
-                      <td className={`py-2 px-3.5 min-w-[200px] sticky left-[84px] z-20 ${stickyBg} border-r-2 border-neutral-300 dark:border-neutral-700 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_12px_-2px_rgba(0,0,0,0.5)]`}>
-                        <div className="flex items-center gap-1.5">
-                          <Link
-                            href={`/users?search=${encodeURIComponent(op.full_name)}`}
-                            title={`View ${op.full_name}'s profile`}
-                            className="font-semibold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors inline-flex items-center gap-1 truncate"
-                          >
-                            <span className="truncate">{highlightText(op.full_name, searchQuery)}</span>
-                          </Link>
-                        </div>
-                        <div className="text-[10px] text-[var(--color-mute)] font-mono truncate">
-                          {op.phone ? highlightText(op.phone, searchQuery) : "No phone"}
-                          {op.city ? ` • ${op.city}` : ""}
-                        </div>
-                      </td>
-
-                      {/* ATTENDANCE & DAYS */}
-                      {(viewMode === "statement" || viewMode === "attendance") && (
-                        <>
-                          <td className="py-2 px-3 text-center text-[var(--color-mute)] font-mono border-r border-[var(--color-hairline)]/60">
-                            {op.doj || "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.basic_salary || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.earned_basic || op.basic_salary || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            {op.working_days || 30}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums font-semibold text-blue-600 dark:text-blue-400 border-r border-[var(--color-hairline)]/60">
-                            {op.attended_days || op.work_days || 0}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            {op.ot_days || 0}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            {op.pl_adjusted || 0}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums font-bold text-blue-700 dark:text-blue-300 bg-blue-50/20 dark:bg-blue-950/10 border-r border-[var(--color-hairline)]/60">
-                            {op.total_days || 0}
-                          </td>
-                        </>
-                      )}
-
-                      {/* EARNINGS */}
-                      {(viewMode === "statement" || viewMode === "earnings") && (
-                        <>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.attended_amount || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.pl_amount || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            {op.night_travel_days || 0}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.night_travel_amount || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums font-semibold text-[var(--color-ink)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.total_earned || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-600 dark:text-amber-400 font-medium border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.ot_amount || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-sky-700 dark:text-sky-300 bg-sky-50/20 dark:bg-sky-950/10 border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                          </td>
-                        </>
-                      )}
-
-                      {/* DEDUCTIONS */}
-                      {(viewMode === "statement" || viewMode === "deductions") && (
-                        <>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.loan_deduction || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.additional_balance_salary || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.advance_deduction || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.advance_balance || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.other_deductions || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50/20 dark:bg-emerald-950/10 border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                          </td>
-                        </>
-                      )}
-
-                      {/* AGENCY PAYOUTS & BALANCE */}
-                      {(viewMode === "statement" || viewMode === "payouts") && (
-                        <>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.paid_reach || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.paid_ss || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.paid_quess || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3.5 text-right font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400 bg-amber-50/20 dark:bg-amber-950/10 border-r border-[var(--color-hairline)]/60">
-                            ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
-                          </td>
-                        </>
-                      )}
-
-                      {/* LEAVE LEDGER */}
-                      {(viewMode === "statement" || viewMode === "leaves") && (
-                        <>
-                          <td className="py-2 px-3 text-center font-mono tabular-nums text-[var(--color-body)] border-r border-[var(--color-hairline)]/60">
-                            {op.total_pl_quota || 12}
-                          </td>
-                          <td className="py-2 px-3 text-center font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400 border-r border-[var(--color-hairline)]/60">
-                            {op.pl_balance || 0}
-                          </td>
-                        </>
-                      )}
-
-                      {/* BANK INFO */}
-                      {(viewMode === "statement" || viewMode === "deductions") && (
-                        <>
-                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            {op.bank_account_number || "XXXXXXXX1234"}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-[11px] text-[var(--color-mute)] border-r border-[var(--color-hairline)]/60">
-                            {op.bank_ifsc_code || "BANK0001234"}
-                          </td>
-                        </>
-                      )}
-
-                      {/* ACTIONS */}
-                      <td className="py-2 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setViewSlipOp(op)}
-                            className="p-1.5 text-[var(--color-mute)] hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 rounded-md transition-colors cursor-pointer"
-                            title="View Salary Slip"
-                          >
-                            <AnimatedFileText size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditStatement(op)}
-                            className="p-1.5 text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] rounded-md transition-colors cursor-pointer"
-                            title="Edit Salary Statement"
-                          >
-                            <AnimatedEdit2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <PayrollDesktopTable
+        operators={filteredOperators}
+        viewMode={viewMode}
+        selectedIds={selectedIds}
+        onSelectAll={handleSelectAll}
+        onToggleSelect={handleToggleSelect}
+        onViewSlip={setViewSlipOp}
+        onEditStatement={handleOpenEditStatement}
+        searchQuery={searchQuery}
+        activeFilterCount={activeFilterCount}
+        onResetFilters={resetFilters}
+      />
 
       {/* 6. Mobile Touch Cards View (≤640px) */}
       <div className="block md:hidden space-y-3">
@@ -1333,700 +775,40 @@ export function PayrollClient({
             />
           </div>
         ) : (
-          filteredOperators.map((op, idx) => {
-            const isSelected = selectedIds.has(op.operator_id);
-
-            return (
-              <div
-                key={op.operator_id}
-                className={`rounded-xl border bg-white dark:bg-[#121212] p-3.5 sm:p-4 shadow-xs space-y-3 transition-colors ${
-                  isSelected
-                    ? "border-sky-500 bg-sky-50/20 dark:bg-sky-950/20 ring-1 ring-sky-500"
-                    : "border-[var(--color-hairline)]"
-                }`}
-              >
-                {/* Header Row: Checkbox, Name, SL NO, Net Pay */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                    {/* Minimum 44px Touch Target for Checkbox */}
-                    <div className="flex items-center justify-center min-h-[44px] min-w-[44px] -ml-2.5 -mt-2.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSelect(op.operator_id)}
-                        className={`h-6 w-6 rounded border transition-all flex items-center justify-center cursor-pointer ${
-                          isSelected
-                            ? "bg-[var(--color-ink)] border-[var(--color-ink)] text-[var(--color-canvas)]"
-                            : "border-[var(--color-hairline)] hover:border-[var(--color-ink)]/50"
-                        }`}
-                        title={isSelected ? "Deselect" : "Select"}
-                      >
-                        {isSelected && <AnimatedCheck size={13} />}
-                      </button>
-                    </div>
-
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono font-bold text-[var(--color-mute)] bg-[var(--color-canvas)] px-1.5 py-0.5 rounded border border-[var(--color-hairline)]">
-                          #{op.sl_no || idx + 1}
-                        </span>
-                        <Link
-                          href={`/users?search=${encodeURIComponent(op.full_name)}`}
-                          title={`View ${op.full_name}'s record`}
-                          className="font-semibold text-sm text-[var(--color-ink)] hover:text-sky-600 transition-colors truncate"
-                        >
-                          <span className="truncate">{highlightText(op.full_name, searchQuery)}</span>
-                        </Link>
-                      </div>
-                      <p className="text-xs text-[var(--color-mute)] font-mono truncate mt-0.5">
-                        {op.phone ? highlightText(op.phone, searchQuery) : "No phone"} • {op.city || op.state || "No location"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0 pt-0.5">
-                    <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] block">
-                      Net Pay
-                    </span>
-                    <span className="font-bold text-base text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
-                      ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </div>
-
-                {/* ViewMode-Aware Dynamic Quick KPI Strip */}
-                {viewMode === "attendance" ? (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Attended Days</span>
-                      <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono tabular-nums">
-                        {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">OT Days</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
-                        {op.ot_days || 0} d
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Total Days</span>
-                      <span className="font-semibold text-blue-700 dark:text-blue-300 font-mono tabular-nums">
-                        {op.total_days || 0} d
-                      </span>
-                    </div>
-                  </div>
-                ) : viewMode === "earnings" ? (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Basic / Earned</span>
-                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
-                        ₹{(op.earned_basic || op.basic_salary || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">OT Amt</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
-                        ₹{(op.ot_amount || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Gross Pay</span>
-                      <span className="font-semibold text-sky-600 dark:text-sky-400 font-mono tabular-nums truncate block">
-                        ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  </div>
-                ) : viewMode === "deductions" ? (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Loan Ded</span>
-                      <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums truncate block">
-                        ₹{(op.loan_deduction || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Adv Ded</span>
-                      <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums truncate block">
-                        ₹{(op.advance_deduction || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Net Pay</span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums truncate block">
-                        ₹{(op.net_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  </div>
-                ) : viewMode === "payouts" ? (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Paid Reach</span>
-                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
-                        ₹{(op.paid_reach || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">S&amp;S / Quess</span>
-                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
-                        ₹{((op.paid_ss || 0) + (op.paid_quess || 0)).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Unpaid Bal</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
-                        ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  </div>
-                ) : viewMode === "leaves" ? (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Quota</span>
-                      <span className="font-semibold text-[var(--color-body)] font-mono tabular-nums">
-                        {op.total_pl_quota || 12} d
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">PL Adj</span>
-                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums">
-                        {op.pl_adjusted || 0} d
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">PL Balance</span>
-                      <span className="font-semibold text-indigo-700 dark:text-indigo-300 font-mono tabular-nums">
-                        {op.pl_balance || 0} d
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-[var(--color-canvas)] p-2.5 rounded-lg border border-[var(--color-hairline)]">
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Attended Days</span>
-                      <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono tabular-nums">
-                        {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Gross Pay</span>
-                      <span className="font-semibold text-[var(--color-ink)] font-mono tabular-nums truncate block">
-                        ₹{(op.gross_pay || op.total_pay || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Unpaid Bal</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums truncate block">
-                        ₹{(op.balance_pay || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Additional Detailed Breakdown Drawer on Mobile */}
-                <div className="space-y-1.5 text-xs text-[var(--color-body)] pt-1 border-t border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--color-mute)]">Basic Monthly Salary:</span>
-                    <span className="font-mono tabular-nums font-medium">₹{(op.basic_salary || 0).toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--color-mute)]">Overtime &amp; Leaves:</span>
-                    <span className="font-mono tabular-nums">OT: {op.ot_days || 0}d (₹{(op.ot_amount || 0).toLocaleString("en-IN")}) • PL: {op.pl_adjusted || 0}d</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--color-mute)]">Deductions (Loan/Adv):</span>
-                    <span className="font-mono tabular-nums text-rose-600 dark:text-rose-400">
-                      -₹{((op.loan_deduction || 0) + (op.advance_deduction || 0) + (op.other_deductions || 0)).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--color-mute)]">PL Balance &amp; Bank:</span>
-                    <span className="font-mono text-[11px] truncate">
-                      {op.pl_balance || 0} PL left • {op.bank_ifsc_code || "BANK0001234"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Action Buttons Row (min 44px touch targets) */}
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-[var(--color-hairline)]">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setViewSlipOp(op)}
-                    icon={<AnimatedFileText size={14} className="text-sky-500" />}
-                    className="h-11 px-3 text-xs font-semibold gap-1.5 flex-1"
-                  >
-                    <span>View Salary Slip</span>
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleOpenEditStatement(op)}
-                    icon={<AnimatedEdit2 size={13} />}
-                    className="h-11 px-3 text-xs font-semibold gap-1.5 flex-1"
-                  >
-                    <span>Edit Statement</span>
-                  </Button>
-                </div>
-              </div>
-            );
-          })
+          filteredOperators.map((op, idx) => (
+            <PayrollMobileCard
+              key={op.operator_id}
+              op={op}
+              idx={idx}
+              isSelected={selectedIds.has(op.operator_id)}
+              onToggleSelect={handleToggleSelect}
+              onViewSlip={setViewSlipOp}
+              onEditStatement={handleOpenEditStatement}
+              searchQuery={searchQuery}
+            />
+          ))
         )}
       </div>
 
       {/* 7. Salary Slip Modal (Printable & Exportable Slip Parity) */}
-      <Modal
+      <SalarySlipModal
         open={!!viewSlipOp}
         onClose={() => setViewSlipOp(null)}
-        title="Official Salary Statement Slip"
-        description={`Monthly compensation statement for ${viewSlipOp?.full_name} (${initialData.payrollMonth})`}
-        footer={
-          <div className="flex items-center justify-between w-full">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                if (typeof window !== "undefined") window.print();
-              }}
-              icon={<Printer size={14} />}
-              className="h-9 px-3 text-xs font-semibold gap-1.5"
-            >
-              <span>Print Slip</span>
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setViewSlipOp(null)}
-              className="h-9 px-4 text-xs font-semibold"
-            >
-              Close
-            </Button>
-          </div>
-        }
-      >
-        {viewSlipOp && (
-          <div className="space-y-4 py-2 text-xs font-sans">
-            {/* Slip Header Box */}
-            <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2">
-              <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-2">
-                <div>
-                  <h4 className="font-extrabold text-sm text-[var(--color-ink)] uppercase tracking-wider">
-                    REACH INTERNATIONAL
-                  </h4>
-                  <p className="text-[11px] text-[var(--color-mute)]">Industrial Fleet &amp; Personnel Operations</p>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono font-bold text-xs bg-[var(--color-ink)] text-[var(--color-canvas)] px-2 py-0.5 rounded">
-                    SL #{viewSlipOp.sl_no || 1}
-                  </span>
-                  <p className="text-[10px] text-[var(--color-mute)] mt-0.5">Month: {initialData.payrollMonth}</p>
-                </div>
-              </div>
-
-              {/* Operator details grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-                <div>
-                  <span className="text-[var(--color-mute)] block">Operator Name:</span>
-                  <span className="font-semibold text-[var(--color-ink)]">{viewSlipOp.full_name}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] block">Phone Number:</span>
-                  <span className="font-mono text-[var(--color-ink)]">{viewSlipOp.phone || "—"}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] block">Date of Joining:</span>
-                  <span className="font-mono text-[var(--color-ink)]">{viewSlipOp.doj || "—"}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] block">Bank Account:</span>
-                  <span className="font-mono text-[var(--color-ink)]">{viewSlipOp.bank_account_number || "XXXXXXXX1234"}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] block">IFSC Code:</span>
-                  <span className="font-mono text-[var(--color-ink)]">{viewSlipOp.bank_ifsc_code || "BANK0001234"}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] block">Location:</span>
-                  <span className="text-[var(--color-ink)]">{viewSlipOp.city || viewSlipOp.state || "—"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Attendance Days Ledger */}
-            <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-50/20 dark:bg-blue-950/10">
-              <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block mb-1.5">
-                Attendance &amp; Payable Days
-              </span>
-              <div className="grid grid-cols-5 gap-2 text-center font-mono text-[11px]">
-                <div>
-                  <span className="text-[var(--color-mute)] text-[10px] block">Working (W/D)</span>
-                  <span className="font-semibold">{viewSlipOp.working_days || 30} d</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] text-[10px] block">Attended (A/D)</span>
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">{viewSlipOp.attended_days || viewSlipOp.work_days || 0} d</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] text-[10px] block">OT Days</span>
-                  <span className="font-semibold">{viewSlipOp.ot_days || 0} d</span>
-                </div>
-                <div>
-                  <span className="text-[var(--color-mute)] text-[10px] block">PL Adjusted</span>
-                  <span className="font-semibold">{viewSlipOp.pl_adjusted || 0} d</span>
-                </div>
-                <div className="bg-blue-500/10 rounded py-0.5">
-                  <span className="text-blue-700 dark:text-blue-300 text-[10px] block font-bold">Total Days</span>
-                  <span className="font-extrabold text-blue-700 dark:text-blue-300">{viewSlipOp.total_days || 0} d</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Financials 2-Column Box: Earnings vs Deductions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Earnings Column */}
-              <div className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5">
-                <span className="text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300 block pb-1 border-b border-[var(--color-hairline)]">
-                  Earnings
-                </span>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Basic Salary (Monthly):</span>
-                  <span className="font-mono">₹{(viewSlipOp.basic_salary || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Attended Amount:</span>
-                  <span className="font-mono">₹{(viewSlipOp.attended_amount || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Paid Leave Amount:</span>
-                  <span className="font-mono">₹{(viewSlipOp.pl_amount || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Overtime Amount (OT):</span>
-                  <span className="font-mono text-amber-600 dark:text-amber-400">₹{(viewSlipOp.ot_amount || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Night / Travel Allowance:</span>
-                  <span className="font-mono">₹{(viewSlipOp.night_travel_amount || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px] pt-1.5 border-t border-[var(--color-hairline)] font-bold text-sky-700 dark:text-sky-300">
-                  <span>Gross Pay:</span>
-                  <span className="font-mono">₹{(viewSlipOp.gross_pay || viewSlipOp.total_pay || 0).toLocaleString("en-IN")}</span>
-                </div>
-              </div>
-
-              {/* Deductions Column */}
-              <div className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5">
-                <span className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-300 block pb-1 border-b border-[var(--color-hairline)]">
-                  Deductions &amp; Recoveries
-                </span>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Loan Deduction:</span>
-                  <span className="font-mono">₹{(viewSlipOp.loan_deduction || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Advance Salary Deduction:</span>
-                  <span className="font-mono">₹{(viewSlipOp.advance_deduction || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Advance Balance Remaining:</span>
-                  <span className="font-mono">₹{(viewSlipOp.advance_balance || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[var(--color-mute)]">Other Miscellaneous Deductions:</span>
-                  <span className="font-mono">₹{(viewSlipOp.other_deductions || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between text-[11px] pt-1.5 border-t border-[var(--color-hairline)] font-bold text-rose-700 dark:text-rose-300">
-                  <span>Total Deductions:</span>
-                  <span className="font-mono">
-                    ₹{((viewSlipOp.loan_deduction || 0) + (viewSlipOp.advance_deduction || 0) + (viewSlipOp.other_deductions || 0)).toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Net Pay Banner */}
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-200 block">
-                  Net Salary Payable
-                </span>
-                <p className="text-[11px] text-[var(--color-mute)]">Transferred to bank account on scheduled disbursement date</p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                  ₹{(viewSlipOp.net_pay || viewSlipOp.total_pay || 0).toLocaleString("en-IN")}
-                </span>
-              </div>
-            </div>
-
-            {/* Agency Disbursement Split & Leave Ledger */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-              <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] space-y-1">
-                <span className="font-semibold text-[10px] uppercase text-[var(--color-mute)] block">Agency Payout Split</span>
-                <div className="flex justify-between">
-                  <span>Reach International:</span>
-                  <span className="font-mono">₹{(viewSlipOp.paid_reach || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>S&amp;S Staffing:</span>
-                  <span className="font-mono">₹{(viewSlipOp.paid_ss || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Quess Corp:</span>
-                  <span className="font-mono">₹{(viewSlipOp.paid_quess || 0).toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between font-bold pt-1 border-t border-[var(--color-hairline)] text-amber-600 dark:text-amber-400">
-                  <span>Remaining Unpaid Balance:</span>
-                  <span className="font-mono">₹{(viewSlipOp.balance_pay || 0).toLocaleString("en-IN")}</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] space-y-1">
-                <span className="font-semibold text-[10px] uppercase text-[var(--color-mute)] block">Paid Leave Ledger</span>
-                <div className="flex justify-between">
-                  <span>Annual PL Quota:</span>
-                  <span className="font-mono">{viewSlipOp.total_pl_quota || 12} days</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Previously Used (To Date):</span>
-                  <span className="font-mono">{viewSlipOp.pl_used_as_on_date || 0} days</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Adjusted this Month:</span>
-                  <span className="font-mono">{viewSlipOp.pl_adjusted || 0} days</span>
-                </div>
-                <div className="flex justify-between font-bold pt-1 border-t border-[var(--color-hairline)] text-indigo-600 dark:text-indigo-400">
-                  <span>Closing PL Balance:</span>
-                  <span className="font-mono">{viewSlipOp.pl_balance || 0} days remaining</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+        operator={viewSlipOp}
+        payrollMonth={initialData.payrollMonth}
+      />
 
       {/* 8. Edit Salary Statement Modal with Live Calculations */}
-      <Modal
+      <EditStatementModal
         open={!!editStatementOp}
         onClose={() => setEditStatementOp(null)}
-        title={`Edit Salary Statement — ${editStatementOp?.full_name}`}
-        description="Modify attendance days, monthly basic salary, deductions, and payouts. Real-time calculations are saved atomically."
-        footer={
-          <div className="flex items-center justify-between w-full">
-            <div className="text-left">
-              <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Calculated Net Pay</span>
-              <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400 font-mono">
-                ₹{editComputed.netPay.toLocaleString("en-IN")}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={isSavingStatement}
-                onClick={() => setEditStatementOp(null)}
-                className="h-9 px-4 text-xs font-semibold"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                loading={isSavingStatement}
-                onClick={handleSaveStatement}
-                icon={<AnimatedSave size={13} />}
-                className="h-9 px-4 text-xs font-semibold gap-1.5"
-              >
-                Save Statement
-              </Button>
-            </div>
-          </div>
-        }
-      >
-        <div className="space-y-4 py-2 max-h-[65vh] overflow-y-auto pr-1">
-          {/* Section 1: Basic & Attendance */}
-          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
-            <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <AnimatedCalendar size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
-              <span>Basic Salary &amp; Attendance Days</span>
-            </h5>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <Input
-                label="Basic Salary (₹)"
-                type="number"
-                min="0"
-                value={editFormData.basic_salary ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, basic_salary: Number(e.target.value) })}
-              />
-              <Input
-                label="Working Days (W/D)"
-                type="number"
-                min="1"
-                value={editFormData.working_days ?? 30}
-                onChange={(e) => setEditFormData({ ...editFormData, working_days: Number(e.target.value) })}
-              />
-              <Input
-                label="Attended Days (A/D)"
-                type="number"
-                min="0"
-                step="0.5"
-                value={editFormData.attended_days ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, attended_days: Number(e.target.value) })}
-              />
-              <Input
-                label="Overtime Days (OT)"
-                type="number"
-                min="0"
-                step="0.5"
-                value={editFormData.ot_days ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, ot_days: Number(e.target.value) })}
-              />
-              <Input
-                label="PL Adjusted"
-                type="number"
-                min="0"
-                step="0.5"
-                value={editFormData.pl_adjusted ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, pl_adjusted: Number(e.target.value) })}
-              />
-              <div className="flex flex-col justify-end pb-1 text-xs">
-                <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold">Total Days</span>
-                <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-sm">
-                  {editComputed.totalDays} days
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Allowances & Deductions */}
-          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
-            <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <AnimatedCreditCard size={14} className="text-rose-600 dark:text-rose-400 shrink-0" />
-              <span>Deductions &amp; Allowances</span>
-            </h5>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <Input
-                label="Loan Deduction (₹)"
-                type="number"
-                min="0"
-                value={editFormData.loan_deduction ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, loan_deduction: Number(e.target.value) })}
-              />
-              <Input
-                label="Advance Deduction (₹)"
-                type="number"
-                min="0"
-                value={editFormData.advance_deduction ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, advance_deduction: Number(e.target.value) })}
-              />
-              <Input
-                label="Advance Balance (₹)"
-                type="number"
-                min="0"
-                value={editFormData.advance_balance ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, advance_balance: Number(e.target.value) })}
-              />
-              <Input
-                label="Other Deductions (₹)"
-                type="number"
-                min="0"
-                value={editFormData.other_deductions ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, other_deductions: Number(e.target.value) })}
-              />
-              <Input
-                label="Night/Travel Days"
-                type="number"
-                min="0"
-                value={editFormData.night_travel_days ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, night_travel_days: Number(e.target.value) })}
-              />
-              <Input
-                label="Night/Travel Amount (₹)"
-                type="number"
-                min="0"
-                value={editFormData.night_travel_amount ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, night_travel_amount: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-
-          {/* Section 3: Agency Disbursements & Unpaid Balance */}
-          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
-            <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <AnimatedBriefcase size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>Agency Disbursements</span>
-            </h5>
-            <div className="grid grid-cols-3 gap-2.5">
-              <Input
-                label="Paid by Reach (₹)"
-                type="number"
-                min="0"
-                value={editFormData.paid_reach ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, paid_reach: Number(e.target.value) })}
-              />
-              <Input
-                label="Paid by S&S (₹)"
-                type="number"
-                min="0"
-                value={editFormData.paid_ss ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, paid_ss: Number(e.target.value) })}
-              />
-              <Input
-                label="Paid by Quess (₹)"
-                type="number"
-                min="0"
-                value={editFormData.paid_quess ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, paid_quess: Number(e.target.value) })}
-              />
-            </div>
-            <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 flex justify-between text-xs font-mono">
-              <span className="text-amber-800 dark:text-amber-200 font-semibold">Remaining Unpaid Balance:</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">₹{editComputed.balance.toLocaleString("en-IN")}</span>
-            </div>
-          </div>
-
-          {/* Section 4: Bank Details & Leave Ledger */}
-          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
-            <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <AnimatedBuilding size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span>Bank Account &amp; Leave Ledger</span>
-            </h5>
-            <div className="grid grid-cols-2 gap-2.5">
-              <Input
-                label="Bank Account Number"
-                type="text"
-                placeholder="e.g. XXXXXXXX1234"
-                value={editFormData.bank_account_number ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, bank_account_number: e.target.value })}
-              />
-              <Input
-                label="Bank IFSC Code"
-                type="text"
-                placeholder="e.g. BANK0001234"
-                value={editFormData.bank_ifsc_code ?? ""}
-                onChange={(e) => setEditFormData({ ...editFormData, bank_ifsc_code: e.target.value })}
-              />
-              <Input
-                label="Total Annual PL Quota"
-                type="number"
-                min="0"
-                value={editFormData.total_pl_quota ?? 12}
-                onChange={(e) => setEditFormData({ ...editFormData, total_pl_quota: Number(e.target.value) })}
-              />
-              <Input
-                label="PL Used as on Date"
-                type="number"
-                min="0"
-                value={editFormData.pl_used_as_on_date ?? 0}
-                onChange={(e) => setEditFormData({ ...editFormData, pl_used_as_on_date: Number(e.target.value) })}
-              />
-            </div>
-            <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20 flex justify-between text-xs font-mono">
-              <span className="text-indigo-800 dark:text-indigo-200 font-semibold">Closing PL Balance:</span>
-              <span className="font-bold text-indigo-600 dark:text-indigo-400">{editComputed.plBalance} days</span>
-            </div>
-          </div>
-        </div>
-      </Modal>
+        operator={editStatementOp}
+        formData={editFormData}
+        setFormData={setEditFormData}
+        computed={editComputed}
+        isSaving={isSavingStatement}
+        onSave={handleSaveStatement}
+      />
     </div>
   );
 }

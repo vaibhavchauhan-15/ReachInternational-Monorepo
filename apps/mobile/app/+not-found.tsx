@@ -39,6 +39,65 @@ export default function NotFoundScreen() {
       return <Redirect href="/settings" />;
     }
 
+    // Legacy Settings sub-page normalizations
+    if (raw === '/settings/notification' || raw === '/(app)/settings/notification') {
+      return <Redirect href="/settings/notifications" />;
+    }
+    if (
+      raw === '/settings/preference' ||
+      raw === '/(app)/settings/preference' ||
+      raw === '/settings/prefrences' ||
+      raw === '/(app)/settings/prefrences'
+    ) {
+      return <Redirect href="/settings/preferences" />;
+    }
+    if (
+      raw === '/settings/fontsize' ||
+      raw === '/(app)/settings/fontsize' ||
+      raw === '/settings/font-size' ||
+      raw === '/(app)/settings/font-size'
+    ) {
+      return <Redirect href="/settings/preferences/font-size" />;
+    }
+    if (raw === '/settings/aboutapp' || raw === '/(app)/settings/aboutapp') {
+      return <Redirect href="/settings/about" />;
+    }
+    if (
+      raw === '/settings/appinfo' ||
+      raw === '/(app)/settings/appinfo' ||
+      raw === '/settings/app-info' ||
+      raw === '/(app)/settings/app-info'
+    ) {
+      return <Redirect href="/settings/about/app-info" />;
+    }
+    if (
+      raw === '/settings/whats-new' ||
+      raw === '/(app)/settings/whats-new' ||
+      raw === '/settings/whatsnew' ||
+      raw === '/(app)/settings/whatsnew' ||
+      raw === '/whats-new' ||
+      raw === '/release-notes'
+    ) {
+      return <Redirect href="/settings/about/whats-new" />;
+    }
+    if (
+      raw === '/settings/support' ||
+      raw === '/(app)/settings/support' ||
+      raw === '/settings/contact' ||
+      raw === '/(app)/settings/contact'
+    ) {
+      return <Redirect href="/settings/about/support" />;
+    }
+    if (raw === '/settings/password' || raw === '/(app)/settings/password') {
+      return <Redirect href="/settings/account/change-password" />;
+    }
+    if (raw === '/settings/security' || raw === '/(app)/settings/security') {
+      return <Redirect href="/settings/account" />;
+    }
+    if (raw === '/settings/account/edit-profile' || raw === '/(app)/settings/account/edit-profile') {
+      return <Redirect href="/settings/account/profile" />;
+    }
+
     // Specific Settings sub-pages aliases
     if (raw.startsWith('/(app)/settings/')) {
       const sub = raw.replace(/^\/\(app\)\/settings\//, '');

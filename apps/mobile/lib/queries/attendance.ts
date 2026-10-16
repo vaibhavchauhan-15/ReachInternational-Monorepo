@@ -47,12 +47,19 @@ export interface AttendanceDetailData {
     shift_start_time: string | null;
     shift_end_time: string | null;
   };
+  year?: number;
+  month?: number;
+  page?: number;
+  pageSize?: number;
+  totalDays?: number;
+  hasMore?: boolean;
   days: AttendanceDay[];
   summary: {
     presentDays: number;
     absentDays: number;
     halfDays: number;
     weekOffs: number;
+    disabledDays?: number;
     totalWorkedMinutes: number;
     totalOtMinutes: number;
     totalBreakdownMinutes: number;
@@ -67,7 +74,9 @@ export interface AttendanceDetailData {
 export async function fetchAttendanceDetailFallback(
   employeeId: string,
   year: number,
-  month: number
+  month: number,
+  page: number = 1,
+  pageSize: number = 31
 ): Promise<AttendanceDetailData> {
   // 1. Fetch employee profile from public.users with safe default
   let employee: AttendanceDetailData['employee'] = {
@@ -298,9 +307,20 @@ export async function fetchAttendanceDetailFallback(
     totalBreakdownMinutes,
   };
 
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.max(1, Math.min(60, pageSize));
+  const offset = (safePage - 1) * safePageSize;
+  const pagedDays = days.slice(offset, offset + safePageSize);
+
   return {
     employee,
-    days,
+    year,
+    month,
+    page: safePage,
+    pageSize: safePageSize,
+    totalDays: days.length,
+    hasMore: safePage * safePageSize < days.length,
+    days: pagedDays,
     summary,
   };
 }
@@ -313,7 +333,9 @@ export async function fetchAttendanceDetailFallback(
 export async function getAttendanceDailyDetail(
   employeeId: string,
   year: number,
-  month: number
+  month: number,
+  page: number = 1,
+  pageSize: number = 31
 ): Promise<AttendanceDetailData> {
   // 1. Primary: PostgreSQL RPC
   try {
@@ -321,6 +343,8 @@ export async function getAttendanceDailyDetail(
       p_employee_id: employeeId,
       p_year: year,
       p_month: month,
+      p_page: page,
+      p_page_size: pageSize,
     });
 
     if (!error && data && typeof data === 'object' && !('error' in (data as any)) && Array.isArray((data as any).days)) {
@@ -336,5 +360,5 @@ export async function getAttendanceDailyDetail(
   }
 
   // 2. Secondary: Resilient direct query fallback
-  return fetchAttendanceDetailFallback(employeeId, year, month);
+  return fetchAttendanceDetailFallback(employeeId, year, month, page, pageSize);
 }

@@ -15,7 +15,6 @@ import {
   Easing,
   ReduceMotion,
 } from 'react-native-reanimated';
-import { usePressProgress } from '../touch/Pressable';
 import { useReducedMotion } from '../../../lib/preferences/useReducedMotion';
 import { SPATIAL, DUR } from '../../../lib/motion/tokens';
 import type { IconBehaviorKey } from './registry';
@@ -39,7 +38,6 @@ export function useIconBehavior({
   degrees = 180,
   slideDistance = 3,
 }: UseIconBehaviorOptions) {
-  const pressProgress = usePressProgress();
   const reduceMotion = useReducedMotion();
 
   const isOpen = state === 'open' || state === true || state === '1';
@@ -91,25 +89,10 @@ export function useIconBehavior({
     };
   }, [loading, animate, behavior, reduceMotion, spinVal]);
 
-  // 3. Pulse single scale bounce effect
-  const isMountedRef = useRef(false);
+  // 3. Pulse single scale bounce effect (disabled to prevent icon bounce / scaling)
   useEffect(() => {
-    const isPulse =
-      behavior === 'pulse' ||
-      animate === 'pulse' ||
-      (animate === 'mount' && pulseKey === undefined);
-    if (!isPulse || reduceMotion) return;
-
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      if (pulseKey === undefined && animate !== 'mount') return;
-    }
-
-    pulseVal.value = withSequence(
-      withSpring(1.12, { ...SPATIAL.fast, reduceMotion: ReduceMotion.System }),
-      withSpring(1.0, { ...SPATIAL.fast, reduceMotion: ReduceMotion.System })
-    );
-  }, [pulseKey, animate, behavior, reduceMotion, pulseVal]);
+    pulseVal.value = 1;
+  }, [pulseKey, animate, behavior, pulseVal]);
 
   // 4. Ring bell damped oscillation effect
   const isRingMountedRef = useRef(false);
@@ -139,28 +122,9 @@ export function useIconBehavior({
 
     const transforms: any[] = [];
 
-    // Press nudge scale (0.90 -> 1.0)
-    if (
-      pressProgress &&
-      (behavior === 'pressNudge' || animate === 'press' || animate === 'auto')
-    ) {
-      const p = pressProgress.value;
-      if (!reduceMotion && p > 0) {
-        transforms.push({ scale: 1 - p * 0.1 });
-      }
-    }
-
     // Pulse scale (1.0 -> 1.12 -> 1.0)
     if (pulseVal.value !== 1 && !reduceMotion) {
       transforms.push({ scale: pulseVal.value });
-    }
-
-    // Slide nudge translateX (0 -> distance)
-    if (pressProgress && behavior === 'slideNudge') {
-      const p = pressProgress.value;
-      if (!reduceMotion && p > 0) {
-        transforms.push({ translateX: p * slideDistance });
-      }
     }
 
     // Rotate toggle

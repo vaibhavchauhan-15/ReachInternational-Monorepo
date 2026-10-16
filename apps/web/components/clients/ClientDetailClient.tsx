@@ -47,6 +47,8 @@ import {
   TableCell,
   SearchBox,
   useToast,
+  KPICard,
+  KPIGrid,
 } from "@/components/ui";
 import { ClientModal } from "@/components/clients/ClientModal";
 import { ClientShiftCodesTab } from "./ClientShiftCodesTab";
@@ -710,83 +712,36 @@ export function ClientDetailClient({
       </div>
 
       {/* ─── 4. 4-CARD KPI METRICS STRIP (Balanced 4-col layout, zero empty space) ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Metric 1: Machinery */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Assigned Fleet
-            </span>
-            <AnimatedTruck size={16} className="text-sky-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {initialMachines.length}
-          </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            {activeMachinesCount === 1 ? "1 active unit" : `${activeMachinesCount} active equipment units`}
-          </div>
-        </div>
-
-        {/* Metric 2: Running Hours */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Running Hours
-            </span>
-            <AnimatedClock size={16} className="text-emerald-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-            {totalRunningHours} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">hrs</span>
-          </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            {initialLogs.length} logged machine shifts
-          </div>
-        </div>
-
-        {/* Metric 3: Active Operators */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Operator Roster
-            </span>
-            <AnimatedUsers size={16} className="text-purple-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400">
-            {activeAssignmentsCount}
-          </div>
-          <div className="text-[11px] text-[var(--color-mute)]">
-            {initialAssignments.length} total shift allocations
-          </div>
-        </div>
-
-        {/* Metric 4: Account Status */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1.5 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Account Standing
-            </span>
-            <AnimatedShieldCheck size={16} className="text-indigo-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {client.status.toUpperCase()}
-          </div>
-          <div className="text-[11px] text-[var(--color-mute)]" suppressHydrationWarning>
-            Member since {formatDate(client.created_at)}
-          </div>
-        </div>
-      </div>
+      <KPIGrid columns={4}>
+        <KPICard
+          label="Assigned Fleet"
+          value={initialMachines.length}
+          icon="machines"
+          variant="default"
+          subtitle={activeMachinesCount === 1 ? "1 active unit" : `${activeMachinesCount} active equipment units`}
+        />
+        <KPICard
+          label="Running Hours"
+          value={`${totalRunningHours} hrs`}
+          icon="hours"
+          variant="success"
+          subtitle={`${initialLogs.length} logged machine shifts`}
+        />
+        <KPICard
+          label="Operator Roster"
+          value={activeAssignmentsCount}
+          icon="users"
+          variant="purple"
+          subtitle={`${initialAssignments.length} total shift allocations`}
+        />
+        <KPICard
+          label="Account Standing"
+          value={client.status.toUpperCase()}
+          icon="shield"
+          variant={client.status === "active" ? "info" : "default"}
+          subtitle={`Member since ${formatDate(client.created_at)}`}
+        />
+      </KPIGrid>
 
       {/* ─── 5. TAB STRIP & SEARCH TOOLBAR (Consistent with Users/Machines Page) ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">

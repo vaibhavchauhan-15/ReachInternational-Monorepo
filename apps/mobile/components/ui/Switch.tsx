@@ -127,6 +127,7 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: isChecked, disabled }}
       aria-checked={isChecked}
+      android_ripple={null}
       disabled={disabled}
       onPress={handlePress}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -137,7 +138,13 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
           height: trackHeight,
           opacity: disabled ? 0.45 : 1,
         },
-        Platform.OS === 'web' && ({ cursor: disabled ? 'not-allowed' : 'pointer', outlineStyle: 'none' } as any),
+        Platform.OS === 'web' &&
+          ({
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            outlineStyle: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
+          } as any),
         style,
       ]}
       testID={testID}

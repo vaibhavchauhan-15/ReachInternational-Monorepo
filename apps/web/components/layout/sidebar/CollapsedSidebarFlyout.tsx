@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import type { NavItem } from "./types";
-import { SIDEBAR_WIDTH_COLLAPSED } from "@/components/ui/sidebar";
+import { SIDEBAR_WIDTH_COLLAPSED } from "@/components/ui/Sidebar";
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 

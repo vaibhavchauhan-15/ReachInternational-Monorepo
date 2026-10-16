@@ -14,7 +14,7 @@ import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "@/components/ui/sidebar";
+} from "@/components/ui/Sidebar";
 import { CollapsedSidebarFlyout } from "./CollapsedSidebarFlyout";
 import type { NavItem } from "./types";
 

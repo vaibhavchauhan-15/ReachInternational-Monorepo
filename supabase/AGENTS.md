@@ -42,7 +42,7 @@ supabase/
 ├── seed_dummy_data.mjs     # Dummy data seeding
 ├── seed_frontend_workflow.mjs  # Frontend workflow seeding
 ├── verify_seed.mjs         # Seed verification
-└── Indian_location data/   # Regional reference data
+└── data/                   # Regional reference data
 ```
 
 ---

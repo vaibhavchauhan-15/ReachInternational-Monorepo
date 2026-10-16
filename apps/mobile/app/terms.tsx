@@ -6,7 +6,7 @@
  * and industrial safety compliance.
  */
 
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,6 +15,7 @@ import {
   Platform,
   Image,
   useWindowDimensions,
+  BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pressable } from '../components/ui/touch/Pressable';
@@ -41,7 +42,12 @@ import {
 
 const loginPageImage = require('../assets/loginpageimage.png');
 
-export default function TermsOfServiceScreen() {
+export interface TermsOfServiceScreenProps {
+  onPressBack?: () => void;
+  backRoute?: string;
+}
+
+export default function TermsOfServiceScreen({ onPressBack, backRoute }: TermsOfServiceScreenProps = {}) {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { width, height } = useWindowDimensions();
@@ -55,13 +61,31 @@ export default function TermsOfServiceScreen() {
     Linking.openURL(`mailto:${BRAND_EMAIL}?subject=Terms%20of%20Service%20Inquiry`);
   };
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
+  const handleBack = useCallback(() => {
+    if (onPressBack) {
+      onPressBack();
+      return;
+    }
+    if (backRoute) {
+      router.replace(backRoute as any);
+      return;
+    }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/settings');
+      router.replace('/settings' as any);
     }
-  };
+  }, [onPressBack, backRoute, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!backRoute && !onPressBack) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [backRoute, onPressBack, handleBack]);
 
   return (
     <View
@@ -154,6 +178,7 @@ export default function TermsOfServiceScreen() {
           <MobileHeader
             title="Terms of Service"
             showBack={true}
+            backRoute={backRoute}
             onPressBack={handleBack}
             showQuickAccess={false}
           />

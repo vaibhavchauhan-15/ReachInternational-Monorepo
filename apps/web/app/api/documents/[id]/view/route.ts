@@ -9,15 +9,23 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: "Document ID is required" }, { status: 400 });
+    if (!id || typeof id !== "string") {
+      return NextResponse.json(
+        { success: false, error: "Valid Document ID is required" },
+        { status: 400 }
+      );
     }
 
     const result = await getDocumentViewUrlAction({ documentId: id });
     if (!result.success || !result.signedUrl) {
+      const err = result.error || "Document not accessible";
+      const isNotFound = err.toLowerCase().includes("not found");
+      const isForbidden = err.toLowerCase().includes("permission") || err.toLowerCase().includes("unauthorized");
+      const status = isNotFound ? 404 : isForbidden ? 403 : 500;
+
       return NextResponse.json(
-        { error: result.error || "Document not accessible" },
-        { status: 403 }
+        { success: false, error: err },
+        { status }
       );
     }
 
@@ -29,9 +37,10 @@ export async function GET(
       fileName: result.fileName,
       fileSizeBytes: result.fileSizeBytes,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    console.error("[DocumentsAPI] Error fetching document view url:", err);
     return NextResponse.json(
-      { error: err?.message || "Internal server error" },
+      { success: false, error: "An unexpected error occurred while accessing the document." },
       { status: 500 }
     );
   }

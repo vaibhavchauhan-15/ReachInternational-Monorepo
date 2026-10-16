@@ -21,6 +21,14 @@ import {
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
+import {
+  isSignupSection1Complete,
+  isSignupSection2Complete,
+  isSignupSection3Complete,
+  isSignupSection4Complete,
+  isSignupSection5Complete,
+  isSignupSection6Complete,
+} from "@reachinternational/validation";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -298,28 +306,31 @@ export default function SignupPage() {
   }, [formValues.shift_start_time, formValues.shift_end_time]);
 
   const section1Complete = useMemo(() => {
-    return (
-      formValues.full_name.trim().length >= 2 &&
-      formValues.email.trim().includes("@") &&
-      formValues.phone.trim().replace(/\D/g, "").length >= 10 &&
-      Boolean(formValues.role) &&
-      (!isSupervisedRole(formValues.role) || formValues.supervisor_id.trim().length > 0)
-    );
+    return isSignupSection1Complete({
+      full_name: formValues.full_name,
+      email: formValues.email,
+      phone: formValues.phone,
+      role: formValues.role,
+      supervisor_id: formValues.supervisor_id,
+    });
   }, [formValues.full_name, formValues.email, formValues.phone, formValues.role, formValues.supervisor_id]);
 
   const section2Complete = useMemo(() => {
-    return (
-      formValues.shift_start_time.trim().length > 0 &&
-      formValues.shift_end_time.trim().length > 0
-    );
+    return isSignupSection2Complete({
+      shift_start_time: formValues.shift_start_time,
+      shift_end_time: formValues.shift_end_time,
+    });
   }, [formValues.shift_start_time, formValues.shift_end_time]);
 
   const section3Complete = useMemo(() => {
-    const hasStreet = (formValues.street || formValues.address).trim().length >= 2;
-    const hasCity = formValues.city.trim().length >= 2;
-    const hasDistrict = formValues.district.trim().length >= 2;
-    const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
-    return hasStreet && hasCity && hasDistrict && hasState;
+    return isSignupSection3Complete({
+      street: formValues.street,
+      address: formValues.address,
+      city: formValues.city,
+      district: formValues.district,
+      state: formValues.state,
+      state_id: formValues.state_id,
+    });
   }, [
     formValues.street,
     formValues.address,
@@ -330,25 +341,26 @@ export default function SignupPage() {
   ]);
 
   const section4Complete = useMemo(() => {
-    const hasBankAccount = validateBankAccountNumber(formValues.bank_account_number).isValid;
-    const hasBankIfsc = validateIfscCode(formValues.bank_ifsc_code).isValid;
-    const hasBankDoc = Boolean(bankFile);
-    return hasBankAccount && hasBankIfsc && hasBankDoc;
+    return isSignupSection4Complete({
+      bank_account_number: formValues.bank_account_number,
+      bank_ifsc_code: formValues.bank_ifsc_code,
+      has_bank_doc: Boolean(bankFile),
+    });
   }, [formValues.bank_account_number, formValues.bank_ifsc_code, bankFile]);
 
   const section5Complete = useMemo(() => {
-    const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
-    const hasAadhaarDoc = Boolean(aadhaarFile);
-    return hasAadhaar && hasAadhaarDoc;
+    return isSignupSection5Complete({
+      aadhaar_number: formValues.aadhaar_number,
+      has_aadhaar_doc: Boolean(aadhaarFile),
+    });
   }, [formValues.aadhaar_number, aadhaarFile]);
 
   const section6Complete = useMemo(() => {
-    return (
-      formValues.password.length >= 8 &&
-      formValues.confirm_password.length >= 8 &&
-      formValues.password === formValues.confirm_password &&
-      agreedToTerms
-    );
+    return isSignupSection6Complete({
+      password: formValues.password,
+      confirm_password: formValues.confirm_password,
+      agreed_to_terms: agreedToTerms,
+    });
   }, [formValues.password, formValues.confirm_password, agreedToTerms]);
 
   const isAllMandatoryFilled = useMemo(() => {

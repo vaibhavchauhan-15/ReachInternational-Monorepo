@@ -26,20 +26,15 @@ export const getManagerDashboard = cache(
   async (userId: string): Promise<ManagerDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<ManagerDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_manager_dashboard");
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_manager_dashboard");
 
-          if (error) {
-            console.error("[DAL] getManagerDashboard RPC error:", error.message);
-            return DEFAULT_MANAGER_DASHBOARD;
-          }
-
-          return (data as ManagerDashboardDTO) || DEFAULT_MANAGER_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getManagerDashboard fatal error:", err);
-          return DEFAULT_MANAGER_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getManagerDashboard RPC error:", error.message);
+          throw new Error(`Failed to load manager dashboard: ${error.message}`);
         }
+
+        return (data as ManagerDashboardDTO) || DEFAULT_MANAGER_DASHBOARD;
       },
       [`dashboard-manager-${userId}`],
       {

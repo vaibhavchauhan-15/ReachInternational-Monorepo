@@ -9,9 +9,9 @@ import {
 } from "./animated-icons";
 import { Download, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { EmptyState } from "./EmptyState";
-import { InfoTooltip, TooltipWrapper } from "./tooltip";
+import { InfoTooltip, TooltipWrapper } from "./Tooltip";
 import { motion, AnimatePresence } from "framer-motion";
-import { AnimateIcon, AnimatedIcon } from "./animated-icon";
+import { AnimateIcon, AnimatedIcon } from "./AnimatedIcon";
 
 export interface ColumnDef<T> {
   id: string;

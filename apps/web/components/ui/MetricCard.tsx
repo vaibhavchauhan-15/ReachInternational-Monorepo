@@ -26,7 +26,7 @@ import {
   AnimatedTrendingDown,
 } from "./animated-icons";
 import { AnimatedCounter, springTransition } from "./Motion";
-import { InfoTooltip } from "./tooltip";
+import { InfoTooltip } from "./Tooltip";
 import { Card } from "./Card";
 import { Sparkline } from "./Sparkline";
 

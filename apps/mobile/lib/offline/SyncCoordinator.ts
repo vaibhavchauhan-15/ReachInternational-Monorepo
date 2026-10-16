@@ -298,6 +298,7 @@ export class SyncCoordinator {
       this.queryClient.invalidateQueries({ queryKey: ['operator', 'entry-context'] }),
       this.queryClient.invalidateQueries({ queryKey: ['machines'] }),
       this.queryClient.invalidateQueries({ queryKey: ['today-shift-monitor'] }),
+      this.queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
     ]);
   }
 

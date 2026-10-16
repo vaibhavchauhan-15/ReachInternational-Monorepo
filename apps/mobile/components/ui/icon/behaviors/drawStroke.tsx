@@ -39,7 +39,7 @@ export const AnimatedDrawCheck: React.FC<DrawStrokeProps> = ({
   const CIRCLE_LENGTH = 63;
 
   const progress = useSharedValue(reduceMotion ? 1 : 0);
-  const scale = useSharedValue(reduceMotion ? 1 : 0.85);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -54,10 +54,7 @@ export const AnimatedDrawCheck: React.FC<DrawStrokeProps> = ({
       reduceMotion: ReduceMotion.System,
     });
 
-    scale.value = withSequence(
-      withSpring(1.12, { ...SPATIAL.fast, reduceMotion: ReduceMotion.System }),
-      withSpring(1.0, { ...SPATIAL.fast, reduceMotion: ReduceMotion.System })
-    );
+    scale.value = 1;
   }, [reduceMotion, progress, scale]);
 
   const animatedCheckProps = useAnimatedProps(() => {

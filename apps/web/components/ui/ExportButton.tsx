@@ -8,7 +8,7 @@ import {
   AnimatedDownload,
 } from "./animated-icons";
 import { Button, ButtonProps } from "./Button";
-import { TooltipWrapper } from "./tooltip";
+import { TooltipWrapper } from "./Tooltip";
 
 export type ExportFormat = "xlsx" | "csv" | "pdf" | "print" | "generic";
 

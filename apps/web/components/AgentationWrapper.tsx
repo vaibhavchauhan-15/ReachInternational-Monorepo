@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Agentation } from "agentation";
+import { isAgentationEnabled } from "@/lib/env/client";
 
 const emptySubscribe = () => () => {};
 
@@ -40,11 +41,8 @@ export function AgentationWrapper() {
 
   if (!isMounted) return null;
 
-  // Render in development mode (or if explicitly enabled)
-  if (
-    process.env.NODE_ENV !== "development" &&
-    process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "true"
-  ) {
+  // Render in development mode (or if explicitly enabled via NEXT_PUBLIC_ENABLE_AGENTATION)
+  if (!isAgentationEnabled()) {
     return null;
   }
 

@@ -35,6 +35,7 @@ export const Clock = createIconComponent('clock');
 export const Copy = createIconComponent('copy');
 export const Cpu = createIconComponent('cpu');
 export const CreditCard = createIconComponent('credit-card');
+export const Database = createIconComponent('database');
 export const Download = createIconComponent('download');
 export const Edit = createIconComponent('edit');
 export const Edit2 = createIconComponent('edit2');

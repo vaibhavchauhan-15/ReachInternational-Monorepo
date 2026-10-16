@@ -57,7 +57,7 @@ export const OverlayHostProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Intercept Android hardware back button
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS !== 'android') return;
 
     const onBackPress = () => {
       const currentStack = stackRef.current;

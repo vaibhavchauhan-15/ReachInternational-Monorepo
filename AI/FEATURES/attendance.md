@@ -27,6 +27,11 @@ Supports both administrative roster summaries (for HR, Managers, Admins, Supervi
   - `supabase/migrations/136_allow_operator_self_and_manager_attendance_daily_detail.sql` — Operator self-access authorization and manager RBAC grant.
   - `supabase/migrations/137_restrict_operator_attendance_and_monthly_summary.sql` — Strict database-level operator lockdown on `get_attendance_monthly_summary` (raises 42501) and self-check on `get_attendance_daily_detail` (raises 42501 if caller is operator and `auth.uid() <> p_employee_id`).
   - `supabase/migrations/150_fix_attendance_summary_and_daily_detail_rpcs.sql` — Unified CTE scoping for `get_attendance_monthly_summary`, weekend/Sunday shift log reflection as `PRESENT`, scheduled vs absent day calculations, `shift_code` projection in `get_attendance_daily_detail`, and mobile day cards optimization.
+  - `supabase/migrations/171_attendance_daily_detail_pagination.sql` — Efficient server-side pagination for `get_attendance_daily_detail(uuid, int, int, int, int)` with `p_page` and `p_page_size` support while computing full-month summary statistics on page 1, plus 3-arg backwards-compatible overload for web consumers. Strict operator isolation enforced via SQLSTATE 42501.
+
+- **Mobile Query Hooks**:
+  - `apps/mobile/lib/hooks/useAttendanceData.ts` — `useOperatorAttendanceInfiniteQuery` for incremental daily record pagination, TanStack Query caching with 60s staleTime / 10m gcTime, and `useAttendanceDetailQuery` for manager employee modals.
+
 
 ## Security & Data Isolation
 1. **Operator Isolation Rule**:

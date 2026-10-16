@@ -1,6 +1,6 @@
 {
   "name": "@reachinternational/mobile",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -12,6 +12,14 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "node run-tests.mjs",
+    "test:splash": "node test-splash-screen.mjs",
+    "test:settings": "node test-settings-workflows.mjs",
+    "test:navigation": "node test-navigation-transitions.mjs",
+    "test:assign-modal": "node test-assign-operator-modal.mjs",
+    "test:press-feedback": "node test-press-feedback.mjs",
+    "test:whats-new": "node test-whats-new-system.mjs",
+    "test:all": "node run-tests.mjs && node test-splash-screen.mjs && node test-ui-states.mjs && node test-offline-duplicate-prevention.mjs && node test-signup-workflows.mjs && node test-auth-workflows.mjs && node test-shift-workflows.mjs && node test-machines-workflows.mjs && node test-users-workflows.mjs && node test-quick-access.mjs && node test-dashboard-states.mjs && node test-settings-workflows.mjs && node test-assign-operator-modal.mjs && node test-navigation-transitions.mjs && node test-press-feedback.mjs && node test-whats-new-system.mjs",
     "build": "echo \"Mobile app build target ready\""
   },
   "dependencies": {
@@ -32,7 +40,6 @@
     "@rn-primitives/radio-group": "^1.5.2",
     "@rn-primitives/separator": "^1.5.2",
     "@rn-primitives/slot": "^1.5.2",
-    "@rn-primitives/switch": "^1.5.2",
     "@rn-primitives/tabs": "^1.5.2",
     "@rn-primitives/tooltip": "^1.5.2",
     "@rn-primitives/types": "^1.5.2",
@@ -43,17 +50,17 @@
     "@tanstack/react-query-persist-client": "^5.104.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "expo": "~57.0.28",
+    "expo": "~57.0.30",
     "expo-clipboard": "~57.0.2",
-    "expo-constants": "~57.0.21",
+    "expo-constants": "~57.0.22",
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
     "expo-haptics": "^57.0.3",
     "expo-linear-gradient": "^57.0.2",
-    "expo-linking": "~57.0.12",
+    "expo-linking": "~57.0.13",
     "expo-print": "~57.0.2",
-    "expo-router": "~57.0.26",
+    "expo-router": "~57.0.28",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.23",
     "expo-splash-screen": "~57.0.10",
@@ -95,6 +102,11 @@
       "exclude": [
         "@sentry/react-native"
       ]
+    },
+    "doctor": {
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
     }
   }
 }

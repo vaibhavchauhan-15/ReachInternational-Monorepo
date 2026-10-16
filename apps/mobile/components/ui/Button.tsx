@@ -1,53 +1,62 @@
 /**
  * ReachInternational Mobile — React Native Reusables Button Component
- * Official RNR Button primitive powered by class-variance-authority and TextClassContext.
+ * Official RNR Button primitive powered by class-variance-authority, TextClassContext,
+ * and canonical Pressable with Material Design 3 and iOS press feedback.
  */
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 import {
   ActivityIndicator,
-  Pressable,
-  type PressableProps,
+  Platform,
   type StyleProp,
   type ViewStyle,
   View,
 } from 'react-native';
 import { Text, TextClassContext } from '@/components/ui/Text';
 import { cn } from '@/lib/utils';
+import { Pressable, type PressableProps } from './touch/Pressable';
+import type { TouchVariant } from './touch/feedback';
+import type { HapticKind } from '../../lib/haptics';
+import { useTheme } from './ThemeProvider';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 
 const buttonVariants = cva(
-  'group flex flex-row items-center justify-center rounded-xl web:ring-offset-background web:transition-colors web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+  'group flex flex-row items-center justify-center',
   {
     variants: {
       variant: {
-        default: 'bg-primary web:hover:opacity-90 active:opacity-90',
-        primary: 'bg-primary web:hover:opacity-90 active:opacity-90',
-        destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-        danger: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-        outline:
-          'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
-        secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
-        ghost: 'web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
+        default: 'bg-primary',
+        primary: 'bg-primary',
+        destructive: 'bg-destructive',
+        danger: 'bg-destructive',
+        outline: 'border border-input bg-background',
+        secondary: 'bg-secondary',
+        ghost: '',
         link: 'web:underline-offset-4 web:hover:underline web:focus:underline',
       },
       size: {
         default: 'h-11 px-4 py-2 native:h-12 native:px-5',
         md: 'h-11 px-4 py-2 native:h-12 native:px-5',
-        sm: 'h-9 rounded-lg px-3 native:h-10 native:px-4',
-        lg: 'h-12 rounded-xl px-8 native:h-14 native:px-6',
-        icon: 'h-10 w-10 native:h-11 native:w-11 rounded-lg',
+        sm: 'h-9 px-3 native:h-10 native:px-4',
+        lg: 'h-12 px-8 native:h-14 native:px-6',
+        icon: 'h-10 w-10 native:h-11 native:w-11',
+      },
+      shape: {
+        rounded: 'rounded-xl',
+        pill: 'rounded-full',
       },
     },
     defaultVariants: {
       variant: 'default',
       size: 'default',
+      shape: 'rounded',
     },
   }
 );
 
 const buttonTextVariants = cva(
-  'web:whitespace-nowrap text-sm font-medium text-foreground web:transition-colors',
+  'web:whitespace-nowrap text-sm font-medium text-foreground',
   {
     variants: {
       variant: {
@@ -55,10 +64,10 @@ const buttonTextVariants = cva(
         primary: 'text-primary-foreground font-semibold',
         destructive: 'text-destructive-foreground font-semibold',
         danger: 'text-destructive-foreground font-semibold',
-        outline: 'text-foreground group-active:text-accent-foreground font-medium',
-        secondary: 'text-secondary-foreground group-active:text-secondary-foreground font-medium',
-        ghost: 'text-foreground group-active:text-accent-foreground font-medium',
-        link: 'text-primary group-active:underline font-medium',
+        outline: 'text-foreground font-medium',
+        secondary: 'text-secondary-foreground font-medium',
+        ghost: 'text-foreground font-medium',
+        link: 'text-primary font-medium',
       },
       size: {
         default: 'text-sm native:text-base font-semibold',
@@ -75,18 +84,40 @@ const buttonTextVariants = cva(
   }
 );
 
-export type ButtonProps = PressableProps &
+function mapButtonVariantToTouch(variant: string, size?: string): TouchVariant {
+  if (size === 'icon') return 'iconButton';
+  switch (variant) {
+    case 'primary':
+    case 'default':
+      return 'buttonPrimary';
+    case 'destructive':
+    case 'danger':
+      return 'buttonDanger';
+    case 'secondary':
+      return 'buttonSecondary';
+    case 'outline':
+      return 'buttonOutline';
+    case 'ghost':
+    case 'link':
+      return 'buttonGhost';
+    default:
+      return 'buttonPrimary';
+  }
+}
+
+export type ButtonProps = Omit<PressableProps, 'variant'> &
   VariantProps<typeof buttonVariants> & {
     className?: string;
     textClassName?: string;
     label?: string;
     isLoading?: boolean;
     fullWidth?: boolean;
-    shape?: 'pill' | 'rounded' | string;
+    shape?: 'pill' | 'rounded';
     icon?: React.ReactNode;
     leftIcon?: React.ReactNode;
     rightIcon?: React.ReactNode;
-    style?: StyleProp<ViewStyle>;
+    style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
+    haptic?: HapticKind | false;
   };
 
 const Button: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<React.ElementRef<typeof Pressable>>> = React.forwardRef(
@@ -105,15 +136,101 @@ const Button: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<
       rightIcon,
       children,
       disabled,
+      style,
+      haptic,
       ...props
     }: ButtonProps,
     ref
   ) => {
+    const { theme, isDark } = useTheme();
     const effectiveVariant = variant ?? 'default';
     const effectiveSize = size ?? 'default';
+    const effectiveShape = shape ?? 'rounded';
     const isDisabled = Boolean(disabled || isLoading);
-
     const actualLeftIcon = leftIcon || icon;
+    const touchVariant = mapButtonVariantToTouch(effectiveVariant, effectiveSize as string);
+
+    const isFilled =
+      effectiveVariant === 'default' ||
+      effectiveVariant === 'primary' ||
+      effectiveVariant === 'destructive' ||
+      effectiveVariant === 'danger';
+
+    const resolvedTextColor = isFilled
+      ? '#ffffff'
+      : effectiveVariant === 'link'
+      ? theme.colors.link
+      : isDark
+      ? '#f8fafc'
+      : theme.colors.ink;
+
+    const sizeStyles: ViewStyle = {
+      default: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10 },
+      md: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10 },
+      sm: { minHeight: 36, paddingHorizontal: 12, paddingVertical: 6 },
+      lg: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 12 },
+      icon: { width: 44, height: 44, padding: 0 },
+    }[effectiveSize as string] || { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10 };
+
+    let variantStyle: ViewStyle;
+    switch (effectiveVariant) {
+      case 'default':
+      case 'primary':
+        variantStyle = {
+          backgroundColor: isDark ? '#0ea5e9' : '#0284c7',
+          borderWidth: 0,
+        };
+        break;
+      case 'destructive':
+      case 'danger':
+        variantStyle = {
+          backgroundColor: isDark ? '#dc2626' : '#ee0000',
+          borderWidth: 0,
+        };
+        break;
+      case 'outline':
+        variantStyle = {
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderColor: theme.colors.hairline,
+        };
+        break;
+      case 'secondary':
+        variantStyle = {
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(23, 23, 23, 0.05)',
+          borderWidth: 0,
+        };
+        break;
+      case 'ghost':
+      case 'link':
+      default:
+        variantStyle = {
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+        };
+        break;
+    }
+
+    const isPill = effectiveShape === 'pill' || className?.includes('rounded-full');
+    const borderRadius = isPill ? 9999 : effectiveSize === 'icon' ? 22 : radiusNumeric.md;
+
+    const baseBtnStyle: ViewStyle = {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius,
+      ...sizeStyles,
+      ...variantStyle,
+      ...(fullWidth ? { width: '100%' } : {}),
+      ...Platform.select({
+        web: {
+          outlineStyle: 'none',
+          userSelect: 'none',
+          WebkitTapHighlightColor: 'transparent',
+        } as any,
+        default: {},
+      }),
+    };
 
     return (
       <TextClassContext.Provider
@@ -123,14 +240,26 @@ const Button: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<
         )}
       >
         <Pressable
-          ref={ref}
+          ref={ref as any}
+          variant={touchVariant}
+          haptic={haptic}
+          rippleRadius={isPill ? 9999 : effectiveSize === 'icon' ? 24 : undefined}
           disabled={isDisabled}
+          loading={isLoading}
           className={cn(
-            buttonVariants({ variant: effectiveVariant, size: effectiveSize }),
+            buttonVariants({ variant: effectiveVariant, size: effectiveSize, shape: effectiveShape }),
             fullWidth && 'w-full',
             isDisabled && 'opacity-50 pointer-events-none',
             className
           )}
+          style={
+            typeof style === 'function'
+              ? (state) => {
+                  const resolved = style(state);
+                  return [baseBtnStyle, resolved];
+                }
+              : [baseBtnStyle, style]
+          }
           {...props}
         >
           {isLoading ? (
@@ -145,7 +274,17 @@ const Button: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<
           ) : (
             <>
               {actualLeftIcon && <View className="mr-2">{actualLeftIcon}</View>}
-              {label ? <Text>{label}</Text> : children}
+              {label ? (
+                <Text
+                  variant="label"
+                  weight="semibold"
+                  style={{ color: resolvedTextColor }}
+                >
+                  {label}
+                </Text>
+              ) : (
+                children
+              )}
               {rightIcon && <View className="ml-2">{rightIcon}</View>}
             </>
           )}

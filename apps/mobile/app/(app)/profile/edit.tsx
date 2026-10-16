@@ -78,7 +78,11 @@ export default function ProfileEditScreen() {
             isModal={false}
             onCancel={handleBack}
             onSuccess={() => {
-              router.replace('/profile' as any);
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/profile' as any);
+              }
             }}
           />
         </KeyboardAvoidingView>

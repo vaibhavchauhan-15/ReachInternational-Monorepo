@@ -10,13 +10,13 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, Text, AppModal, Touchable, showToast } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
+import Constants from 'expo-constants';
 import { haptics } from '../../lib/haptics';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Badge } from '../ui/Badge';
@@ -574,7 +574,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
               <View style={styles.brandFooter}>
                 <ReachInternationalLogo size={18} showTagline={false} />
                 <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-                  Reach International v1.2.0 • www.reachinternational.co.in
+                  {`Reach International v${Constants.expoConfig?.version || '1.3.0'} • www.reachinternational.co.in`}
                 </Text>
               </View>
             </ScrollView>

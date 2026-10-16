@@ -7,7 +7,7 @@ import { CookieConsent } from "@/components/ui/CookieConsent";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { GoogleAnalytics } from "@/components/analytics";
-import { getAppUrl, getSupabaseUrl } from "@/lib/env/client";
+import { getAppUrl, getSupabaseUrl, hasSupabaseUrl } from "@/lib/env/client";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -87,6 +87,7 @@ export const metadata: Metadata = {
 };
 
 import { TooltipProvider, ToastProvider, PullToRefresh } from "@/components/ui";
+import { WebOfflineBanner } from "@/components/ui/WebOfflineBanner";
 
 export default function RootLayout({
   children,
@@ -110,7 +111,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/dark-apple-touch-icon.png" media="(prefers-color-scheme: light)" />
         <link rel="preconnect" href="https://www.googletagmanager.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-        {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+        {hasSupabaseUrl() ? (
           <link
             rel="preconnect"
             href={getSupabaseUrl()}
@@ -122,6 +123,7 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <TooltipProvider delayDuration={200}>
+              <WebOfflineBanner />
               <PullToRefresh>
                 {children}
               </PullToRefresh>

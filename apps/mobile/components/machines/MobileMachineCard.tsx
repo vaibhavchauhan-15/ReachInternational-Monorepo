@@ -29,7 +29,7 @@ export interface MobileMachineCardProps {
   onViewDetails: (machine: any) => void;
 }
 
-export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
+export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
   machine,
   isAdmin,
   isSupervisor = false,
@@ -360,7 +360,35 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
       </View>
     </View>
   );
-};
+}, (prevProps, nextProps) => {
+  if (prevProps.isAdmin !== nextProps.isAdmin) return false;
+  if (prevProps.isSupervisor !== nextProps.isSupervisor) return false;
+  if (prevProps.searchTerm !== nextProps.searchTerm) return false;
+
+  const p = prevProps.machine;
+  const n = nextProps.machine;
+  if (p === n) return true;
+  if (!p || !n) return false;
+
+  return (
+    p.id === n.id &&
+    p.machine_id === n.machine_id &&
+    p.model === n.model &&
+    p.serial_number === n.serial_number &&
+    p.year_of_mfg === n.year_of_mfg &&
+    p.status === n.status &&
+    p.health_status === n.health_status &&
+    p.hour_meter === n.hour_meter &&
+    p.client_id === n.client_id &&
+    (p.client?.company_name || p.customer_name) === (n.client?.company_name || n.customer_name) &&
+    p.current_supervisor?.id === n.current_supervisor?.id &&
+    p.current_supervisor?.full_name === n.current_supervisor?.full_name &&
+    p.current_operator?.id === n.current_operator?.id &&
+    p.current_operator?.full_name === n.current_operator?.full_name &&
+    (Array.isArray(p.supervisors) ? p.supervisors.length : 0) === (Array.isArray(n.supervisors) ? n.supervisors.length : 0) &&
+    (Array.isArray(p.operators) ? p.operators.length : 0) === (Array.isArray(n.operators) ? n.operators.length : 0)
+  );
+});
 
 const styles = StyleSheet.create({
   card: {

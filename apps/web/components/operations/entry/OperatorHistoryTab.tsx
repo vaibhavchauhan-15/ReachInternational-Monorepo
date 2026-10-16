@@ -791,10 +791,12 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
               const endM = Number(log.end_meter) || startM;
               const rt = log.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
 
-              // 12-hour format with AM/PM and no seconds
-              const sTime = formatTo12Hour(log.start_time);
-              const eTime = formatTo12Hour(log.end_time);
-              const shiftTimingStr = sTime && eTime ? `${sTime} – ${eTime}` : sTime || eTime || "";
+              const rawShift = (log.shift_code || log.shift || "").trim();
+              const shiftName = !rawShift
+                ? "Shift A"
+                : /^shift/i.test(rawShift)
+                ? rawShift.replace(/^shift\s*/i, "Shift ")
+                : `Shift ${rawShift}`;
 
               // Machine Model + Serial Number
               const model = log.machine?.model || "";
@@ -829,14 +831,34 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
                   key={log.id}
                   className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5 shadow-2xs"
                 >
-                  {/* Row 1: Top Header — Exact timestamp date & time with small text + Operating Hours badge */}
+                  {/* Row 1: Top Header — Exact timestamp date & time with small text + Operating Hours badge & Edit/Lock Action */}
                   <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-1.5 text-[10px] font-mono">
                     <span className="text-[var(--color-mute)] font-medium">
                       {timestampStr}
                     </span>
-                    <span className="font-mono text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                      +{rt.toFixed(1)} hrs
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
+                        +{rt.toFixed(1)} hrs
+                      </span>
+                      {isLogWithin7Days(log.log_date) ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingLog(log)}
+                          className="p-1 rounded-full text-[var(--color-mute)] hover:text-[var(--color-link)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 transition-colors cursor-pointer"
+                          title="Edit log within 7 days"
+                          aria-label="Edit machine log"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      ) : (
+                        <span
+                          className="p-1 text-[var(--color-mute)] opacity-50 inline-flex items-center"
+                          title="Locked after 7 days"
+                        >
+                          <Lock size={12} />
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Row 2: Machine + Serial Number */}
@@ -872,67 +894,38 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
                     <strong className="text-[var(--color-ink)] font-bold">{endM.toFixed(1)}</strong>
                   </div>
 
-                  {/* Shift Date above shift time with bold */}
-                  <div className="text-[11px] font-mono text-[var(--color-mute)] flex items-center gap-1.5">
+                  {/* Row 5: Shift Date & Shift Badge */}
+                  <div className="text-[11px] font-mono text-[var(--color-mute)] flex items-center gap-2 flex-wrap">
                     <span>Shift Date : </span>
                     <strong className="text-[var(--color-ink)] font-bold">{formatDate(log.log_date)}</strong>
-                  </div>
-
-                  {/* Row 5: Shift Time : 06:00 AM-03:00 PM */}
-                  <div className="text-[11px] font-mono text-[var(--color-mute)] flex items-center gap-1.5 flex-wrap">
-                    <span>Shift Time : </span>
-                    <span className="text-[var(--color-ink)] font-medium">
-                      {shiftTimingStr || "—"}
+                    <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
+                      {shiftName}
                     </span>
                     {log.overtime_hours ? (
-                      <span className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                      <span className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                         +{log.overtime_hours}h OT
                       </span>
                     ) : null}
                   </div>
 
-                  {/* Row 6: Breakdown (small text) & Edit Icon at the end (only icon, outer layout removed) */}
-                  <div className="flex items-center justify-between pt-1 border-t border-[var(--color-hairline)]/70 gap-2 min-w-0">
-                    <div className="min-w-0 flex-1">
-                      {log.is_breakdown ? (
-                        <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 flex items-center gap-1 truncate">
-                          <span className="font-semibold shrink-0">Breakdown: </span>
-                          <span
-                            className="truncate"
-                            title={breakdownInfo.displayText || log.breakdown_duration || "Yes"}
-                          >
-                            {breakdownInfo.displayText || log.breakdown_duration || "Yes"}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] font-mono text-[var(--color-mute)] flex items-center gap-1">
-                          <span className="font-semibold shrink-0">Breakdown: </span>
-                          <span>0</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Edit icon only at the end (Feedbacks 1 & 2) */}
-                    <div className="shrink-0 flex items-center">
-                      {isLogWithin7Days(log.log_date) ? (
-                        <button
-                          type="button"
-                          onClick={() => setEditingLog(log)}
-                          className="p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-link)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 transition-colors cursor-pointer"
-                          title="Edit log within 7 days"
-                          aria-label="Edit machine log"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      ) : (
+                  {/* Row 6: Breakdown */}
+                  <div className="pt-1 border-t border-[var(--color-hairline)]/70">
+                    {log.is_breakdown ? (
+                      <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 flex items-center gap-1 truncate">
+                        <span className="font-semibold shrink-0">Breakdown: </span>
                         <span
-                          className="p-1 text-[var(--color-mute)] opacity-50 inline-flex items-center"
-                          title="Locked after 7 days"
+                          className="truncate"
+                          title={breakdownInfo.displayText || log.breakdown_duration || "Yes"}
                         >
-                          <Lock size={13} />
+                          {breakdownInfo.displayText || log.breakdown_duration || "Yes"}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] font-mono text-[var(--color-mute)] flex items-center gap-1">
+                        <span className="font-semibold shrink-0">Breakdown: </span>
+                        <span>0 (Normal)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

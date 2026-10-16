@@ -8,8 +8,10 @@ import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
+import { Skeleton } from '../../ui/Skeleton';
 import { useTheme } from '../../ui/ThemeProvider';
-import { spacingNumeric } from '@reachinternational/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { haptics } from '../../../lib/haptics';
 
 export type KPIVariant =
   | 'default'
@@ -23,6 +25,7 @@ export type KPIVariant =
 export interface KPICardProps {
   label: string;
   value: number | string;
+  isLoading?: boolean;
   icon?: React.ComponentType<{ size?: number; color?: string; style?: any }>;
   variant?: KPIVariant;
   href?: string;
@@ -117,11 +120,12 @@ const resolveRoute = (href?: string): string | null => {
 export const KPICard: React.FC<KPICardProps> = ({
   label,
   value,
+  isLoading = false,
   icon: Icon,
   variant = 'default',
   href,
   onPress,
-  interactive = false,
+  interactive = true,
   active = false,
   style,
   containerStyle,
@@ -130,7 +134,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   const router = useRouter();
   const config = variantConfig[variant] || variantConfig.default;
   const targetRoute = resolveRoute(href);
-  const isInteractive = interactive && Boolean(onPress || targetRoute);
+  const isInteractive = Boolean(onPress || targetRoute || interactive);
 
   const handlePress = () => {
     if (isInteractive) {
@@ -138,6 +142,8 @@ export const KPICard: React.FC<KPICardProps> = ({
         onPress();
       } else if (targetRoute) {
         router.push(targetRoute as any);
+      } else {
+        haptics.tap();
       }
     }
   };
@@ -145,9 +151,11 @@ export const KPICard: React.FC<KPICardProps> = ({
   return (
     <View style={[styles.touchWrapper, containerStyle]}>
       <Card
+        interactive={isInteractive}
         onPress={isInteractive ? handlePress : undefined}
         className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 flex-col justify-between h-full"
         style={[
+          styles.kpiCard,
           active && {
             borderColor: isDark ? '#f8fafc' : theme.colors.ink,
             borderWidth: 1.5,
@@ -187,17 +195,21 @@ export const KPICard: React.FC<KPICardProps> = ({
 
         {/* Metric Value */}
         <View style={styles.valueRow}>
-          <Text
-            variant="display"
-            style={[
-              styles.value,
-              {
-                color: isDark ? config.valueColorDark : config.valueColorLight,
-              },
-            ]}
-          >
-            {value}
-          </Text>
+          {isLoading ? (
+            <Skeleton width={38} height={26} borderRadius={radiusNumeric.xs} style={{ marginVertical: 2 }} />
+          ) : (
+            <Text
+              variant="display"
+              style={[
+                styles.value,
+                {
+                  color: isDark ? config.valueColorDark : config.valueColorLight,
+                },
+              ]}
+            >
+              {value}
+            </Text>
+          )}
         </View>
       </Card>
     </View>
@@ -233,4 +245,11 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.xs + 2,
   },
   value: {},
+  kpiCard: {
+    borderRadius: radiusNumeric.lg,
+    padding: spacingNumeric.sm + 2,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    minHeight: 88,
+  },
 });

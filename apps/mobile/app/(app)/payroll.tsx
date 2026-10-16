@@ -3,37 +3,31 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   RefreshControl,
-  Platform} from 'react-native';
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
-import { MobileHeader, Card, Badge, EmptyState, ErrorState, PermissionDeniedView, FormError, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, useTypeStyle, AppModal, Input, SearchInput, useToast } from '../../components/ui';
-import { PayrollSkeleton } from '../../components/payroll';
+import { MobileHeader, Card, EmptyState, ErrorState, PermissionDeniedView, FormError, KPICard, KPIGrid, HighlightText, type HeaderActionItem, Text, AppModal, Input, SearchInput, useToast } from '../../components/ui';
+import { PayrollSkeleton, OperatorPayrollCard } from '../../components/payroll';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
+import { usePayrollData } from '../../lib/hooks/usePayrollData';
+import { calculateOperatorSalary, sanitizeDatabaseError } from '@reachinternational/utils';
 import { useAuth } from '../../lib/auth/useAuth';
 import { supabase } from '../../lib/supabase';
 import {
   Banknote,
-  Calendar,
   Search,
-  Clock,
   RefreshCw,
-  Briefcase,
-  Users,
   Edit2,
   X,
-  Check,
-  Info,
-  ExternalLink,
   FileText,
   ChevronDown,
   ChevronUp,
   CreditCard,
-  Shield,
 } from '../../components/ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import type { HRPayrollSummary, HRPayrollOperator } from '@reachinternational/types';
@@ -51,10 +45,7 @@ export default function PayrollScreen() {
   const normalizedRole = (role || '').toLowerCase();
   const isAllowed = ALLOWED_ROLES.includes(normalizedRole);
 
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<Error | null>(null);
   const [statementError, setStatementError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -84,7 +75,23 @@ export default function PayrollScreen() {
   const payoutFilter = filters.payoutFilter || 'all';
   const setPayoutFilter = useCallback((p: string) => setFilter('payoutFilter', p), [setFilter]);
 
-  const [payrollData, setPayrollData] = useState<HRPayrollSummary | null>(null);
+  // Delegated domain coordinator hook (TanStack Query + domain business logic)
+  const {
+    payrollData,
+    operators,
+    summaryKpis,
+    isLoading: loading,
+    error: fetchError,
+    refetch,
+    isFetching: refreshing,
+    saveStatement,
+    isSavingStatement: savingStatement,
+  } = usePayrollData({
+    month: selectedMonth,
+    searchQuery: debouncedSearchQuery,
+    payoutFilter,
+    enabled: isAllowed,
+  });
 
   // Expanded card tracking
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -105,111 +112,10 @@ export default function PayrollScreen() {
   const [editPaidReach, setEditPaidReach] = useState('');
   const [editPaidSS, setEditPaidSS] = useState('');
   const [editPaidQuess, setEditPaidQuess] = useState('');
-  const [savingStatement, setSavingStatement] = useState(false);
-
-  const fetchPayroll = useCallback(async (monthStr: string) => {
-    try {
-      setLoading(true);
-      setFetchError(null);
-      const targetDate = `${monthStr}-01`;
-      const { data, error } = await supabase.rpc('get_hr_payroll_summary', {
-        p_payroll_month: targetDate,
-      });
-
-      if (error) {
-        console.error('[HRPayrollScreen] Fetch error:', error);
-        const errObj = new Error(error.message || 'Failed to fetch payroll data');
-        setFetchError(errObj);
-        toast('error', 'Error', error.message || 'Failed to fetch payroll data');
-      } else if (data) {
-        const rawOperators: HRPayrollOperator[] = Array.isArray(data)
-          ? (data as unknown as HRPayrollOperator[])
-          : (data && Array.isArray((data as any).operators) ? (data as any).operators : []);
-        setPayrollData({
-          payrollMonth: (data && !Array.isArray(data) && (data as any).payrollMonth) || monthStr,
-          regularPeriod: (data && !Array.isArray(data) && (data as any).regularPeriod) || '',
-          otPeriod: (data && !Array.isArray(data) && (data as any).otPeriod) || '',
-          operators: rawOperators,
-        });
-      }
-    } catch (err: any) {
-      console.error('[HRPayrollScreen] Unexpected error:', err);
-      setFetchError(err instanceof Error ? err : new Error(err?.message || 'Failed to fetch payroll data'));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    if (isAllowed) {
-      fetchPayroll(selectedMonth);
-    }
-  }, [selectedMonth, isAllowed, fetchPayroll]);
 
   const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchPayroll(selectedMonth);
-  }, [selectedMonth, fetchPayroll]);
-
-  // Filtered operators
-  const operators = useMemo(() => {
-    let list = payrollData?.operators || [];
-    const q = searchQuery.toLowerCase().trim();
-    if (q) {
-      list = list.filter(
-        (op) =>
-          op.full_name.toLowerCase().includes(q) ||
-          (op.phone && op.phone.includes(q)) ||
-          (op.city && op.city.toLowerCase().includes(q)) ||
-          (op.state && op.state.toLowerCase().includes(q)) ||
-          (op.bank_ifsc_code && op.bank_ifsc_code.toLowerCase().includes(q)) ||
-          (op.bank_account_number && op.bank_account_number.toLowerCase().includes(q))
-      );
-    }
-    if (payoutFilter === 'pending') {
-      list = list.filter((op) => (op.balance_pay || 0) > 0);
-    } else if (payoutFilter === 'disbursed') {
-      list = list.filter((op) => (op.balance_pay || 0) <= 0);
-    } else if (payoutFilter === 'with_ot') {
-      list = list.filter((op) => (op.ot_days || 0) > 0 || (op.ot_hours || 0) > 0);
-    } else if (payoutFilter === 'with_deductions') {
-      list = list.filter(
-        (op) =>
-          ((op.loan_deduction || 0) +
-            (op.advance_deduction || 0) +
-            (op.other_deductions || 0)) > 0
-      );
-    }
-    return list;
-  }, [payrollData, searchQuery, payoutFilter]);
-
-  // Summary KPIs
-  const summaryKpis = useMemo(() => {
-    const list = payrollData?.operators || [];
-    let totalGross = 0;
-    let totalNet = 0;
-    let totalPaid = 0;
-    let totalBalance = 0;
-    let totalAttendedDays = 0;
-
-    list.forEach((op) => {
-      totalGross += op.gross_pay || op.total_pay || 0;
-      totalNet += op.net_pay || op.total_pay || 0;
-      totalPaid += (op.paid_reach || 0) + (op.paid_ss || 0) + (op.paid_quess || 0);
-      totalBalance += op.balance_pay || 0;
-      totalAttendedDays += op.attended_days || op.work_days || 0;
-    });
-
-    return {
-      activeCount: list.length,
-      totalGross: Math.round(totalGross),
-      totalNet: Math.round(totalNet),
-      totalPaid: Math.round(totalPaid),
-      totalBalance: Math.round(totalBalance),
-      totalAttendedDays: Math.round(totalAttendedDays * 10) / 10,
-    };
-  }, [payrollData]);
+    refetch();
+  }, [refetch]);
 
   // Open edit modal
   const handleOpenEdit = (op: HRPayrollOperator) => {
@@ -228,28 +134,21 @@ export default function PayrollScreen() {
     setEditPaidQuess(String(op.paid_quess || 0));
   };
 
-  // Live computed Net Pay for Edit Modal
+  // Live computed Net Pay for Edit Modal via canonical domain formula
   const editComputed = useMemo(() => {
-    const basic = Number(editBasic) || 0;
-    const wd = Math.max(1, Number(editWorkingDays) || 30);
-    const ad = Number(editAttendedDays) || 0;
-    const ot = Number(editOtDays) || 0;
-    const pl = Number(editPlAdj) || 0;
-    const loan = Number(editLoan) || 0;
-    const adv = Number(editAdvance) || 0;
-    const ded = Number(editOtherDed) || 0;
-    const reach = Number(editPaidReach) || 0;
-    const ss = Number(editPaidSS) || 0;
-    const quess = Number(editPaidQuess) || 0;
-
-    const attAmt = Math.round(((basic / wd) * ad) * 100) / 100;
-    const plAmt = Math.round(((basic / wd) * pl) * 100) / 100;
-    const otAmt = Math.round(((basic / wd) * ot) * 100) / 100;
-    const gross = attAmt + plAmt + otAmt;
-    const net = gross - (loan + adv + ded);
-    const bal = net - (reach + ss + quess);
-
-    return { gross, net, bal };
+    return calculateOperatorSalary({
+      basic_salary: Number(editBasic) || 0,
+      working_days: Number(editWorkingDays) || 30,
+      attended_days: Number(editAttendedDays) || 0,
+      ot_days: Number(editOtDays) || 0,
+      pl_adjusted: Number(editPlAdj) || 0,
+      loan_deduction: Number(editLoan) || 0,
+      advance_deduction: Number(editAdvance) || 0,
+      other_deductions: Number(editOtherDed) || 0,
+      paid_reach: Number(editPaidReach) || 0,
+      paid_ss: Number(editPaidSS) || 0,
+      paid_quess: Number(editPaidQuess) || 0,
+    });
   }, [
     editBasic,
     editWorkingDays,
@@ -264,12 +163,11 @@ export default function PayrollScreen() {
     editPaidQuess,
   ]);
 
-  // Save statement updates
+  // Save statement updates via hook mutation
   const handleSaveStatement = async () => {
     if (!editingOperator) return;
 
     try {
-      setSavingStatement(true);
       setStatementError(null);
       const targetDate = `${selectedMonth}-01`;
       const payload = {
@@ -286,29 +184,20 @@ export default function PayrollScreen() {
         paid_quess: Number(editPaidQuess) || 0,
       };
 
-      const { error } = await supabase.rpc('update_operator_salary_statement', {
-        p_operator_id: editingOperator.operator_id,
-        p_payroll_month: targetDate,
-        p_fields: payload,
+      await saveStatement({
+        operatorId: editingOperator.operator_id,
+        payload,
       });
 
-      if (error) {
-        haptics.reject();
-        setStatementError(error.message);
-        toast('error', 'Update Failed', error.message);
-      } else {
-        haptics.confirm();
-        setStatementError(null);
-        toast('success', 'Salary Statement Updated', 'Changes have been saved successfully.');
-        // Refresh payroll list
-        fetchPayroll(selectedMonth);
-        setEditingOperator(null);
-      }
+      haptics.confirm();
+      setStatementError(null);
+      toast('success', 'Salary Statement Updated', 'Changes have been saved successfully.');
+      setEditingOperator(null);
     } catch (err: any) {
-      setStatementError(err?.message || 'Failed to save salary statement.');
-      toast('error', 'Error', 'Failed to save salary statement.');
-    } finally {
-      setSavingStatement(false);
+      haptics.reject();
+      const sanitized = sanitizeDatabaseError(err, 'Failed to save salary statement.');
+      setStatementError(sanitized.message || null);
+      toast('error', 'Update Failed', sanitized.message);
     }
   };
 
@@ -372,7 +261,9 @@ export default function PayrollScreen() {
         ) : fetchError && !payrollData ? (
           <ErrorState
             error={fetchError}
-            onRetry={() => fetchPayroll(selectedMonth)}
+            onRetry={() => {
+              refetch();
+            }}
             actionLabel="Retry Loading Statement"
           />
         ) : (
@@ -523,184 +414,24 @@ export default function PayrollScreen() {
               />
             )
           ) : (
-            operators.map((op, idx) => {
-              const isExpanded = expandedId === op.operator_id;
-
-              return (
-                <View
-                  key={op.operator_id}
-                  style={[
-                    styles.operatorCard,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  {/* Card Header Row */}
-                  <View style={styles.cardHeader}>
-                    <Pressable
-                      variant="listRow"
-                      style={styles.headerLeft}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/users',
-                          params: { search: op.full_name },
-                        })
-                      }
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.slBadge, { color: theme.colors.mute, borderColor: theme.colors.hairline }]}>
-                          #{op.sl_no || idx + 1}
-                        </Text>
-                        <HighlightText
-                          text={op.full_name}
-                          query={searchQuery}
-                          style={[styles.operatorName, { color: theme.colors.ink }]}
-                          numberOfLines={1}
-                        />
-                      </View>
-                      <HighlightText
-                        text={`${op.phone || 'No phone'} • ${op.city || op.state || 'No location'}`}
-                        query={searchQuery}
-                        style={[styles.operatorLocation, { color: theme.colors.mute }]}
-                      />
-                    </Pressable>
-
-                    <View style={styles.headerRight}>
-                      <Text style={[styles.totalPayAmount, { color: '#059669' }]}>
-                        ₹{(op.net_pay || op.total_pay || 0).toLocaleString('en-IN')}
-                      </Text>
-                      <Text style={[styles.totalPayLabel, { color: theme.colors.mute }]}>
-                        Net Pay
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Quick Stat Tiles */}
-                  <View
-                    style={[
-                      styles.breakdownRow,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.breakdownCol}>
-                      <Text style={[styles.colSub, { color: theme.colors.mute }]}>
-                        Attended Days
-                      </Text>
-                      <Text style={[styles.colMain, { color: '#2563eb' }]}>
-                        {op.attended_days || op.work_days || 0} / {op.working_days || 30} d
-                      </Text>
-                    </View>
-
-                    <View style={styles.breakdownCol}>
-                      <Text style={[styles.colSub, { color: theme.colors.mute }]}>
-                        Gross Pay
-                      </Text>
-                      <Text style={[styles.colMain, { color: theme.colors.ink }]}>
-                        ₹{(op.gross_pay || op.total_pay || 0).toLocaleString('en-IN')}
-                      </Text>
-                    </View>
-
-                    <View style={styles.breakdownCol}>
-                      <Text style={[styles.colSub, { color: theme.colors.mute }]}>
-                        Unpaid Bal
-                      </Text>
-                      <Text style={[styles.colMain, { color: '#d97706' }]}>
-                        ₹{(op.balance_pay || 0).toLocaleString('en-IN')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Expandable Accordion Breakdown */}
-                  {isExpanded && (
-                    <View style={[styles.detailsDrawer, { borderTopColor: theme.colors.hairline }]}>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Basic Monthly Salary:</Text>
-                        <Text style={[styles.detailVal, { color: theme.colors.ink }]}>₹{(op.basic_salary || 0).toLocaleString('en-IN')}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Attended Pay:</Text>
-                        <Text style={[styles.detailVal, { color: theme.colors.ink }]}>₹{(op.attended_amount || 0).toLocaleString('en-IN')}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Overtime (OT):</Text>
-                        <Text style={[styles.detailVal, { color: '#d97706' }]}>{op.ot_days || 0}d (₹{(op.ot_amount || 0).toLocaleString('en-IN')})</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>PL Adjusted:</Text>
-                        <Text style={[styles.detailVal, { color: theme.colors.ink }]}>{op.pl_adjusted || 0}d (₹{(op.pl_amount || 0).toLocaleString('en-IN')})</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Deductions (Loan/Adv):</Text>
-                        <Text style={[styles.detailVal, { color: '#dc2626' }]}>
-                          -₹{((op.loan_deduction || 0) + (op.advance_deduction || 0) + (op.other_deductions || 0)).toLocaleString('en-IN')}
-                        </Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Agency Splits:</Text>
-                        <Text style={[styles.detailVal, { color: theme.colors.ink }]}>
-                          Reach ₹{op.paid_reach || 0} • S&S ₹{op.paid_ss || 0} • Quess ₹{op.paid_quess || 0}
-                        </Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Leave Balance:</Text>
-                        <Text style={[styles.detailVal, { color: '#4f46e5' }]}>{op.pl_balance || 0} days remaining</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={[styles.detailKey, { color: theme.colors.mute }]}>Bank Account:</Text>
-                        <Text style={[styles.detailVal, { color: theme.colors.mute }]}>{op.bank_account_number || 'XXXXXXXX1234'} ({op.bank_ifsc_code || 'BANK0001234'})</Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Card Actions Row */}
-                  <View style={styles.cardFooter}>
-                    <Pressable
-                      variant="buttonSecondary"
-                      hitSlopToMin48
-                      onPress={() => setExpandedId(isExpanded ? null : op.operator_id)}
-                      style={[styles.actionBtn, { borderColor: theme.colors.hairline }]}
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp size={13} color={theme.colors.mute} />
-                          <Text style={[styles.actionBtnText, { color: theme.colors.mute }]}>Less</Text>
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown size={13} color={theme.colors.mute} />
-                          <Text style={[styles.actionBtnText, { color: theme.colors.mute }]}>Details</Text>
-                        </>
-                      )}
-                    </Pressable>
-
-                    <Pressable
-                      variant="buttonSecondary"
-                      hitSlopToMin48
-                      onPress={() => setViewSlipOp(op)}
-                      style={[styles.actionBtn, { borderColor: theme.colors.hairline }]}
-                    >
-                      <FileText size={13} color="#2563eb" />
-                      <Text style={[styles.actionBtnText, { color: '#2563eb' }]}>Slip</Text>
-                    </Pressable>
-
-                    <Pressable
-                      variant="buttonPrimary"
-                      hitSlopToMin48
-                      onPress={() => handleOpenEdit(op)}
-                      style={[styles.actionBtn, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
-                    >
-                      <Edit2 size={13} color={theme.colors.canvas} />
-                      <Text style={[styles.actionBtnText, { color: theme.colors.canvas }]}>Edit</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })
+            operators.map((op: HRPayrollOperator, idx: number) => (
+              <OperatorPayrollCard
+                key={op.operator_id}
+                operator={op}
+                index={idx}
+                searchQuery={searchQuery}
+                isExpanded={expandedId === op.operator_id}
+                onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+                onViewUser={(name) =>
+                  router.push({
+                    pathname: '/users',
+                    params: { search: name },
+                  })
+                }
+                onViewSlip={(operator) => setViewSlipOp(operator)}
+                onEditStatement={(operator) => handleOpenEdit(operator)}
+              />
+            ))
           )}
         </View>
           </>
@@ -938,11 +669,11 @@ export default function PayrollScreen() {
                 <View style={[styles.slipBox, { backgroundColor: '#05966910', borderColor: '#05966925', gap: 4 }]}>
                   <View style={styles.detailRow}>
                     <Text variant="caption" style={{ color: theme.colors.mute }}>Gross Pay:</Text>
-                    <Text style={{ color: theme.colors.ink }}>₹{editComputed.gross.toLocaleString('en-IN')}</Text>
+                    <Text style={{ color: theme.colors.ink }}>₹{editComputed.grossPay.toLocaleString('en-IN')}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text variant="caption" style={{ color: '#059669' }}>Calculated Net Pay:</Text>
-                    <Text variant="heading" style={{ color: '#059669' }}>₹{editComputed.net.toLocaleString('en-IN')}</Text>
+                    <Text variant="heading" style={{ color: '#059669' }}>₹{editComputed.netPay.toLocaleString('en-IN')}</Text>
                   </View>
                 </View>
               </View>

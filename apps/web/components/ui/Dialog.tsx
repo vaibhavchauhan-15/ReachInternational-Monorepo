@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AnimatedX } from "@/components/ui/animated-icons";
 import { cn } from "@/lib/utils";
-import { TooltipWrapper } from "@/components/ui/tooltip";
+import { TooltipWrapper } from "@/components/ui/Tooltip";
 
 export type DialogFrom = "top" | "bottom" | "left" | "right" | "center";
 

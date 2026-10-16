@@ -9,3 +9,8 @@ export * from './AssignSupervisorModal';
 export * from './AssignMachineModal';
 export * from './UserCardSkeleton';
 export * from './DeleteUserConfirmDialog';
+export * from './UserTouchCard';
+export * from './UserActionsPopover';
+export * from './ProfileChangeRequestsSection';
+export * from './AccountDeletionRequestsSection';
+export * from './UserFiltersPanel';

@@ -20,3 +20,9 @@ export {
   DropdownFilterSelector,
   type DropdownFilterSelectorProps,
 } from './DropdownFilterSelector';
+export * from './MachineKPIStrip';
+export * from './MachineFilterPanel';
+export {
+  MachineFilterSidebar,
+  type MachineFilterSidebarProps,
+} from './MachineFilterSidebar';

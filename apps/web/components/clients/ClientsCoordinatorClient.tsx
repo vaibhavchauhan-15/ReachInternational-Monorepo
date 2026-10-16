@@ -27,6 +27,7 @@ import {
   exportClientsToPDF,
 } from "@/lib/utils/clients-export";
 import { serializeClientFilter, type ClientDirectoryFilter } from "@reachinternational/utils";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import { ClientsHeader } from "./ClientsHeader";
 import { ClientsTable } from "./ClientsTable";
 import { MobileClientCard } from "./MobileClientCard";
@@ -619,6 +620,20 @@ export function ClientsCoordinatorClient({
     };
   }, [handleExportExcel, handleExportCSV, handleExportPDF]);
 
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        onAdd: () => setIsAddModalOpen(true),
+        onExportExcel: () => handleExportExcel(),
+        onExportCSV: () => handleExportCSV(),
+        onExportPDF: () => handleExportPDF(),
+        onPrint: () => handleExportPDF(),
+        onRefresh: () => router.refresh(),
+      }),
+      [handleExportExcel, handleExportCSV, handleExportPDF, router]
+    )
+  );
+
   // ─── Silent URL Synchronization (Preserves bookmarkability without full RSC reload) ───
 
   const syncUrl = useCallback(
@@ -756,8 +771,9 @@ export function ClientsCoordinatorClient({
           if (nextFilter.sortOrder) setCurrentOrder(nextFilter.sortOrder);
           syncUrl(nextFilter);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error executing client directory query:", err);
+        toast("error", "Failed to filter clients", err.message || "An unexpected error occurred.");
       } finally {
         setIsTabLoading(false);
       }
@@ -933,8 +949,9 @@ export function ClientsCoordinatorClient({
           setCurrentStatus(newStatus);
           syncUrl({ status: newStatus, page: 1 });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to load status tab data:", err);
+        toast("error", "Failed to switch status tab", err.message || "An unexpected error occurred.");
       } finally {
         setIsTabLoading(false);
       }

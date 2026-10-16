@@ -2,7 +2,7 @@
 
 import React, { forwardRef } from "react";
 import { Button, ButtonProps, ButtonVariant } from "./Button";
-import { TooltipWrapper } from "./tooltip";
+import { TooltipWrapper } from "./Tooltip";
 
 export interface IconButtonProps extends Omit<ButtonProps, "children" | "size"> {
   /** The icon to render inside the button */

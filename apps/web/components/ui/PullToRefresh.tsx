@@ -63,9 +63,7 @@ export function PullToRefresh({
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   // Check centralized feature flag and route exclusion kill-switch
-  const isFeatureEnabled =
-    isPullToRefreshEnabledForRoute(pathname) &&
-    process.env.NEXT_PUBLIC_DISABLE_PULL_TO_REFRESH !== "true";
+  const isFeatureEnabled = isPullToRefreshEnabledForRoute(pathname);
   const isEffectivelyDisabled = disabled || !isFeatureEnabled || !isTouchOrMobile;
 
   const [pullDistance, setPullDistance] = useState(0);

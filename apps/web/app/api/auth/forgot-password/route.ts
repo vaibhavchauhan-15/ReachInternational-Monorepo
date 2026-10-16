@@ -3,6 +3,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getResetPasswordRedirectUrl } from "@/lib/env/client";
 
+const GENERIC_RESET_SUCCESS_MESSAGE =
+  "If an active account exists for this email address, password reset instructions have been sent. Please check your inbox.";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -24,7 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Verify if the account exists in Supabase (public.users)
+    // 1. Lookup account in Supabase (public.users)
     const adminSupabase = createSupabaseAdminClient();
     const { data: existingUser, error: lookupError } = await adminSupabase
       .from("users")
@@ -33,52 +36,18 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (lookupError) {
-      console.error("Database error in /api/auth/forgot-password lookup:", lookupError);
+      console.error("[ForgotPassword] Database error in account lookup:", lookupError.message);
     }
 
-    if (!existingUser) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No account found with this email address. Please check your email or request access.",
-        },
-        { status: 404 }
-      );
+    // 2. User Enumeration Defense: If user does not exist or is not active, return generic success
+    if (!existingUser || existingUser.status !== "active") {
+      return NextResponse.json({
+        success: true,
+        message: GENERIC_RESET_SUCCESS_MESSAGE,
+      });
     }
 
-    // 2. Verify user is approved by admin (status must be 'active')
-    if (existingUser.status === "pending") {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Your account is pending administrator approval. You cannot reset your password until your account has been approved.",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (existingUser.status === "inactive") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Your account has been deactivated. Please contact your administrator.",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (existingUser.status !== "active") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Your account is not active. Please contact your administrator.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // 3. User is approved and active: send the password reset email via Supabase Auth
+    // 3. User is approved and active: send password reset email via Supabase Auth
     const supabase = await createSupabaseServerClient();
     const referer = request.headers.get("referer");
     const origin =
@@ -95,11 +64,11 @@ export async function POST(request: NextRequest) {
     );
 
     if (resetError) {
-      console.error("Supabase resetPasswordForEmail error in API route:", resetError);
+      console.error("[ForgotPassword] Supabase resetPasswordForEmail error:", resetError.message);
       return NextResponse.json(
         {
           success: false,
-          error: resetError.message || "Failed to send reset email. Please try again.",
+          error: "Failed to send reset email. Please try again shortly.",
         },
         { status: 500 }
       );
@@ -107,16 +76,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message:
-        "Password reset link has been sent to your email. Please check your inbox and click the link to set your new password.",
+      message: GENERIC_RESET_SUCCESS_MESSAGE,
     });
   } catch (err: unknown) {
-    const error = err as { message?: string };
-    console.error("Exception in /api/auth/forgot-password:", err);
+    console.error("[ForgotPassword] Unexpected exception in /api/auth/forgot-password:", err);
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || "An unexpected error occurred. Please try again.",
+        error: "An unexpected error occurred. Please try again.",
       },
       { status: 500 }
     );

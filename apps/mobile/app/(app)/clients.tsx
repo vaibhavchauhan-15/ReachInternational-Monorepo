@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog } from '../../components/ui';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog, Pagination, FilterSidebar, FilterCategoryCard } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, SlidersHorizontal, RotateCcw } from '../../components/ui/icon';
+import { Search, Building2, MapPin, Phone, Plus, X, CheckCircle2, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, RotateCcw } from '../../components/ui/icon';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
+import { ClientListSkeleton, MobileClientCard, ClientModal, ClientSiteModal, ClientDetailModal } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate } from '@reachinternational/utils';
@@ -161,19 +161,6 @@ export default function ClientsScreen() {
   }, [activeFilter, debouncedSearch, sortBy]);
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const filterAnim = useRef(new Animated.Value(0)).current;
-  const [panelContentHeight, setPanelContentHeight] = useState(0);
-  const isWeb = Platform.OS === 'web';
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    Animated.timing(filterAnim, {
-      toValue: filterPanelOpen ? 1 : 0,
-      duration: 220,
-      easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: false,
-    }).start();
-  }, [filterPanelOpen, filterAnim]);
 
   const handleResetAllFilters = useCallback(() => {
     haptics.success();
@@ -1087,89 +1074,6 @@ export default function ClientsScreen() {
           onResetFilters={handleResetAllFilters}
           style={{ marginBottom: spacingNumeric.md }}
         >
-          {/* Collapsible Filter Selectors Drawer */}
-          {isWeb ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
-                transition: 'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-                overflow: 'hidden' }}
-            >
-              <div style={{ minHeight: 0 }}>
-                <View style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}>
-                  <View style={styles.filterSelectorsGrid}>
-                    <View style={styles.selectorCol}>
-                      <DropdownFilterSelector
-                        label="Status"
-                        value={activeFilter}
-                        options={CLIENT_STATUS_FILTER_OPTIONS}
-                        onChange={(val) => handleFilterChange(val as StatusFilter)}
-                        minMenuWidth={160}
-                      />
-                    </View>
-                    <View style={styles.selectorCol}>
-                      <DropdownFilterSelector
-                        label="Sort By"
-                        value={sortBy}
-                        options={CLIENT_SORT_OPTIONS}
-                        onChange={(val) => {
-                          setSortBy(val as ClientSortOptionType);
-                          setPage(1);
-                        }}
-                        align="right"
-                        minMenuWidth={200}
-                      />
-                    </View>
-                  </View>
-                </View>
-              </div>
-            </div>
-          ) : (
-            <Animated.View
-              style={[
-                styles.filterPanelAnimatedContainer,
-                {
-                  maxHeight: filterAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, Math.max(panelContentHeight, 150)],
-                  }),
-                  opacity: filterAnim,
-                },
-              ]}
-            >
-              <View
-                onLayout={(e) => setPanelContentHeight(e.nativeEvent.layout.height)}
-                style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
-              >
-                <View style={styles.filterSelectorsGrid}>
-                  <View style={styles.selectorCol}>
-                    <DropdownFilterSelector
-                      label="Status"
-                      value={activeFilter}
-                      options={CLIENT_STATUS_FILTER_OPTIONS}
-                      onChange={(val) => handleFilterChange(val as StatusFilter)}
-                      minMenuWidth={160}
-                    />
-                  </View>
-                  <View style={styles.selectorCol}>
-                    <DropdownFilterSelector
-                      label="Sort By"
-                      value={sortBy}
-                      options={CLIENT_SORT_OPTIONS}
-                      onChange={(val) => {
-                        setSortBy(val as ClientSortOptionType);
-                        setPage(1);
-                      }}
-                      align="right"
-                      minMenuWidth={200}
-                    />
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          )}
-
           {/* Active Filter Chips Row */}
           {activeFilterCount > 0 && (
             <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
@@ -1243,6 +1147,57 @@ export default function ClientsScreen() {
           )}
         </FilterToolbar>
 
+        {/* Canonical Reusable FilterSidebar Drawer */}
+        <FilterSidebar
+          visible={filterPanelOpen}
+          onClose={() => setFilterPanelOpen(false)}
+          title="Filters & Sorting"
+          subtitle="Category-wise client directory refinement"
+          activeFilterCount={activeFilterCount}
+          onResetAll={handleResetAllFilters}
+          applyText={`Show ${totalFiltered} ${totalFiltered === 1 ? 'Client' : 'Clients'}`}
+          onApply={() => setFilterPanelOpen(false)}
+          testID="client-filter-sidebar"
+        >
+          {/* Category 1: Status */}
+          <FilterCategoryCard
+            index={1}
+            title="CLIENT STATUS"
+            subtitle="Filter client accounts by active contract status"
+            isFiltered={activeFilter !== 'all'}
+            testID="category-client-status"
+          >
+            <DropdownFilterSelector
+              label="Status"
+              value={activeFilter}
+              options={CLIENT_STATUS_FILTER_OPTIONS}
+              onChange={(val) => handleFilterChange(val as StatusFilter)}
+              minMenuWidth={280}
+            />
+          </FilterCategoryCard>
+
+          {/* Category 2: Sorting Order */}
+          <FilterCategoryCard
+            index={2}
+            title="SORTING ORDER"
+            subtitle="Order clients by company name, client ID, or registration"
+            isFiltered={sortBy !== 'company_name_asc'}
+            badgeLabel="Custom"
+            testID="category-client-sorting"
+          >
+            <DropdownFilterSelector
+              label="Sort By"
+              value={sortBy}
+              options={CLIENT_SORT_OPTIONS}
+              onChange={(val) => {
+                setSortBy(val as ClientSortOptionType);
+                setPage(1);
+              }}
+              minMenuWidth={280}
+            />
+          </FilterCategoryCard>
+        </FilterSidebar>
+
         {/* Client Cards List */}
         <View style={styles.listContainer}>
           {isLoading || isSearching ? (
@@ -1296,981 +1251,112 @@ export default function ClientsScreen() {
           )}
         </View>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <View style={styles.paginationRow}>
-            <Pressable
-              variant="buttonSecondary"
-              style={[
-                styles.pageBtn,
-                { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                page === 1 && { opacity: 0.5 },
-              ]}
-              disabled={page === 1}
-              onPress={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Previous</Text>
-            </Pressable>
-
-            <Text style={[styles.pageIndicator, { color: theme.colors.ink }]}>
-              Page {page} of {totalPages}
-            </Text>
-
-            <Pressable
-              variant="buttonSecondary"
-              style={[
-                styles.pageBtn,
-                { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                page === totalPages && { opacity: 0.5 },
-              ]}
-              disabled={page === totalPages}
-              onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Server-Side Page Size Selector (10, 25, 50, 100) */}
-        {totalFiltered > 0 && (
-          <View style={styles.pageSizeRow}>
-            <Text style={[styles.pageSizeLabel, { color: theme.colors.mute }]}>Rows per page:</Text>
-            {([10, 25, 50, 100] as const).map((opt) => (
-              <Pressable
-                key={opt}
-                variant="chip"
-                haptic="select"
-                style={[
-                  styles.pageSizeChip,
-                  {
-                    backgroundColor: pageSize === opt ? theme.colors.primary : theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                onPress={() => {
-                  if (pageSize !== opt) {
-                    setPageSize(opt);
-                    setPage(1);
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.pageSizeChipText,
-                    { color: pageSize === opt ? '#ffffff' : theme.colors.ink },
-                  ]}
-                >
-                  {opt}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {/* Canonical Server-Side Pagination & Page Size Selector */}
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          pageSize={pageSize}
+          totalCount={totalFiltered}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize as 10 | 25 | 50 | 100);
+            setPage(1);
+          }}
+          pageSizeOptions={[10, 25, 50, 100]}
+        />
       </ScrollView>
 
       {/* Add / Edit Client Modal */}
-      <AppModal visible={modalVisible} onClose={() => setModalVisible(false)} variant="bottom">
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
-                {editingClient ? `Edit (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
-              </Text>
-              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setModalVisible(false)} accessibilityLabel="Close modal">
-                <X size={20} color={theme.colors.mute} />
-              </Pressable>
-            </View>
+      <ClientModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        editingClient={editingClient}
+        companyName={companyName}
+        setCompanyName={setCompanyName}
+        contactPerson={contactPerson}
+        setContactPerson={setContactPerson}
+        phone={phone}
+        setPhone={setPhone}
+        gstin={gstin}
+        setGstin={setGstin}
+        panNumber={panNumber}
+        setPanNumber={setPanNumber}
+        address={address}
+        setAddress={setAddress}
+        city={city}
+        setCity={setCity}
+        district={district}
+        setDistrict={setDistrict}
+        stateName={stateName}
+        setStateName={setStateName}
+        pincode={pincode}
+        setPincode={setPincode}
+        isBillingAddressDifferent={isBillingAddressDifferent}
+        setIsBillingAddressDifferent={setIsBillingAddressDifferent}
+        billingAddress={billingAddress}
+        setBillingAddress={setBillingAddress}
+        billingCity={billingCity}
+        setBillingCity={setBillingCity}
+        billingDistrict={billingDistrict}
+        setBillingDistrict={setBillingDistrict}
+        billingState={billingState}
+        setBillingState={setBillingState}
+        billingPincode={billingPincode}
+        setBillingPincode={setBillingPincode}
+        allowanceHours={allowanceHours}
+        setAllowanceHours={setAllowanceHours}
+        allowanceMinutes={allowanceMinutes}
+        setAllowanceMinutes={setAllowanceMinutes}
+        selectedPresetId={selectedPresetId}
+        setSelectedPresetId={setSelectedPresetId}
+        onSave={handleSave}
+      />
 
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.formSection}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>Company & Tax Details</Text>
-                
-                {editingClient && (
-                  <View style={styles.formGroup}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Client ID</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.canvas, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Lock size={10} color="#f59e0b" />
-                        <Text variant="mono" style={{ color: theme.colors.mute }}>Permanent</Text>
-                      </View>
-                    </View>
-                    <Input
-                      value={editingClient.client_id || editingClient.code}
-                      editable={false}
-                      style={[styles.modalInput, useTypeStyle('mono'), { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas }]}
-                    />
-                  </View>
-                )}
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Company Name *</Text>
-                  <Input
-                    value={companyName}
-                    onChangeText={setCompanyName}
-                    placeholder="e.g. Pushpa Infracon Pvt Ltd"
-                    placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Contact Person</Text>
-                  <Input
-                    value={contactPerson}
-                    onChangeText={setContactPerson}
-                    placeholder="e.g. Rajesh Sharma"
-                    placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Phone Number</Text>
-                  <Input
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="e.g. +91 98765 43210"
-                    placeholderTextColor={theme.colors.mute}
-                    keyboardType="phone-pad"
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                  />
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>GSTIN Number</Text>
-                    <Input
-                      value={gstin}
-                      onChangeText={(t: string) => setGstin(t.toUpperCase())}
-                      placeholder="07AAAAA0000A1Z5"
-                      placeholderTextColor={theme.colors.mute}
-                      autoCapitalize="characters"
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>PAN Number</Text>
-                    <Input
-                      value={panNumber}
-                      onChangeText={(t: string) => setPanNumber(t.toUpperCase())}
-                      placeholder="ABCDE1234F"
-                      placeholderTextColor={theme.colors.mute}
-                      autoCapitalize="characters"
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.formSection}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 8 }]}>Site Location</Text>
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
-                  <Input
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder="e.g. Plot 42, Sector 18, Industrial Area"
-                    placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                  />
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town / Village *</Text>
-                    <Input
-                      value={city}
-                      onChangeText={setCity}
-                      placeholder="e.g. Pune"
-                      placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District</Text>
-                    <Input
-                      value={district}
-                      onChangeText={setDistrict}
-                      placeholder="e.g. Pune"
-                      placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-                    <Input
-                      value={stateName}
-                      onChangeText={setStateName}
-                      placeholder="e.g. Maharashtra"
-                      placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode</Text>
-                    <Input
-                      value={pincode}
-                      onChangeText={setPincode}
-                      placeholder="411001"
-                      placeholderTextColor={theme.colors.mute}
-                      keyboardType="numeric"
-                      maxLength={6}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.formSection}>
-                <View style={styles.toggleRow}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Billing Address</Text>
-                  <View style={styles.switchWrapper}>
-                    <Text style={[styles.switchLabel, { color: theme.colors.ink }]}>Different Address</Text>
-                    <Switch
-                      value={isBillingAddressDifferent}
-                      onValueChange={setIsBillingAddressDifferent}
-                      trackColor={{ false: theme.colors.hairline, true: theme.colors.primary }}
-                    />
-                  </View>
-                </View>
-
-                {isBillingAddressDifferent && (
-                  <View style={{ marginTop: 8 }}>
-                    <View style={styles.formGroup}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Street / Area</Text>
-                      <Input
-                        value={billingAddress}
-                        onChangeText={setBillingAddress}
-                        placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
-                        placeholderTextColor={theme.colors.mute}
-                        style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                      />
-                    </View>
-
-                    <View style={styles.rowInputs}>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing City / Town / Village</Text>
-                        <Input
-                          value={billingCity}
-                          onChangeText={setBillingCity}
-                          placeholder="e.g. Gurugram"
-                          placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                        />
-                      </View>
-
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing District</Text>
-                        <Input
-                          value={billingDistrict}
-                          onChangeText={setBillingDistrict}
-                          placeholder="e.g. Gurugram"
-                          placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.rowInputs}>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing State</Text>
-                        <Input
-                          value={billingState}
-                          onChangeText={setBillingState}
-                          placeholder="e.g. Haryana"
-                          placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                        />
-                      </View>
-
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Pincode</Text>
-                        <Input
-                          value={billingPincode}
-                          onChangeText={setBillingPincode}
-                          placeholder="122002"
-                          placeholderTextColor={theme.colors.mute}
-                          keyboardType="numeric"
-                          maxLength={6}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              {/* Section 4: Monthly Maintenance Allowance */}
-              <View style={styles.formSection}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Wrench size={14} color="#d97706" />
-                    <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Monthly Maintenance Allowance</Text>
-                  </View>
-                  {(parseInt(allowanceHours, 10) > 0 || parseInt(allowanceMinutes, 10) > 0) && (
-                    <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
-                      <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
-                        {parseInt(allowanceHours, 10) > 0 ? `${allowanceHours}h ` : ''}{parseInt(allowanceMinutes, 10) > 0 ? `${allowanceMinutes}m` : ''} / mo
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <Text variant="caption" style={{ color: theme.colors.mute, marginBottom: 8 }}>
-                  Breakdowns up to this monthly limit per machine are classified as Maintenance instead of B/D. Leave at 0 for no allowance.
-                </Text>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Hours</Text>
-                    <Input
-                      value={allowanceHours}
-                      onChangeText={setAllowanceHours}
-                      placeholder="0"
-                      placeholderTextColor={theme.colors.mute}
-                      keyboardType="numeric"
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Minutes</Text>
-                    <Input
-                      value={allowanceMinutes}
-                      onChangeText={setAllowanceMinutes}
-                      placeholder="0"
-                      placeholderTextColor={theme.colors.mute}
-                      keyboardType="numeric"
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              {!editingClient && (
-                <View style={[styles.formSection, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-                      Shift Templates (1-Click Presets)
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd' }}>
-                      <Sparkles size={10} color={isDark ? '#38bdf8' : '#0284c7'} />
-                      <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
-                        Auto Provision
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text variant="caption" style={{ color: theme.colors.mute, marginBottom: 8 }}>
-                    Select an operational shift preset for this client. Shifts will be pre-configured upon creation.
-                  </Text>
-
-                  <View style={{ gap: 8 }}>
-                    {CLIENT_SHIFT_PRESETS.map((preset) => {
-                      const isSelected = selectedPresetId === preset.id;
-                      return (
-                        <Pressable
-                          key={preset.id}
-                          variant="cardSelect"
-                          haptic="select"
-                          onPress={() => setSelectedPresetId(preset.id)}
-                          style={{
-                            borderWidth: 1.5,
-                            borderColor: isSelected ? theme.colors.primary : theme.colors.hairline,
-                            backgroundColor: isSelected ? (isDark ? 'rgba(0, 112, 243, 0.1)' : 'rgba(0, 112, 243, 0.05)') : theme.colors.canvasElevated,
-                            borderRadius: radiusNumeric.sm,
-                            padding: 10,
-                            minHeight: 44 }}
-                        >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                            <Text style={{ color: isSelected ? theme.colors.primary : theme.colors.ink }}>
-                              {preset.name}
-                            </Text>
-                            {isSelected ? (
-                              <CheckCircle2 size={16} color={theme.colors.primary} />
-                            ) : (
-                              <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: theme.colors.mute }} />
-                            )}
-                          </View>
-                          <Text variant="caption" style={{ color: isSelected ? theme.colors.primary : theme.colors.mute, marginBottom: 4 }}>
-                            {preset.badge}
-                          </Text>
-                          {preset.shifts.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                              {preset.shifts.map((s) => (
-                                <View
-                                  key={s.code}
-                                  style={{
-                                    backgroundColor: theme.colors.canvas,
-                                    borderWidth: 1,
-                                    borderColor: theme.colors.hairline,
-                                    borderRadius: 4,
-                                    paddingHorizontal: 5,
-                                    paddingVertical: 2 }}
-                                >
-                                  <Text variant="mono" style={{ color: theme.colors.ink }}>
-                                    {s.code}: {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
-                                  </Text>
-                                </View>
-                              ))}
-                            </View>
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <Button label="Cancel" variant="outline" onPress={() => setModalVisible(false)} />
-              <Button label={editingClient ? 'Update Client' : 'Save Client'} variant="primary" onPress={handleSave} />
-            </View>
-        </View>
-      </AppModal>
-
-      {/* C11 Client Detail Modal */}
-      <AppModal visible={detailModalVisible} onClose={() => setDetailModalVisible(false)} variant="bottom">
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, maxHeight: '92%' }]}>
-            {/* Header: Summary */}
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
-                  <Text style={[styles.codeText, { color: theme.colors.primary }]}>
-                    {selectedDetailClient?.client_id || selectedDetailClient?.code}
-                  </Text>
-                  {selectedDetailClient?.status && (
-                    <Badge
-                      status={selectedDetailClient.deleted_at ? 'inactive' : selectedDetailClient.status}
-                      customLabel={selectedDetailClient.deleted_at ? 'SOFT DELETED' : selectedDetailClient.status.toUpperCase()}
-                    />
-                  )}
-                  {typeof selectedDetailClient?.maintenance_allowance_minutes === 'number' && selectedDetailClient.maintenance_allowance_minutes > 0 ? (
-                    <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Wrench size={10} color={isDark ? '#fbbf24' : '#d97706'} />
-                      <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
-                        MAINT: {Math.floor(selectedDetailClient.maintenance_allowance_minutes / 60)}h{selectedDetailClient.maintenance_allowance_minutes % 60 > 0 ? ` ${selectedDetailClient.maintenance_allowance_minutes % 60}m` : ''}/MO
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <AlertCircle size={10} color="#dc2626" />
-                      <Text variant="caption" style={{ color: '#dc2626' }}>
-                        MAINT: NOT ALLOWED
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {selectedDetailClient?.company_name}
-                </Text>
-              </View>
-              <Pressable
-                variant="iconButton"
-                hitSlopToMin48
-                onPress={() => setDetailModalVisible(false)}
-                style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}
-                accessibilityLabel="Close detail modal"
-              >
-                <X size={20} color={theme.colors.mute} />
-              </Pressable>
-            </View>
-
-            {/* Scrollable Modal Body with Persistent Summary & Operational Tabs */}
-            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 10, paddingBottom: 10 }}>
-                {/* 1. Primary Contact Card (Immediate / Summary) */}
-                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                  <Text style={[styles.detailCardTitle, { color: theme.colors.primary }]}>
-                    Primary Contact
-                  </Text>
-                  <View style={{ gap: 4, marginTop: 4 }}>
-                    <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>
-                      Person: <Text style={{ color: theme.colors.ink }}>{selectedDetailClient?.contact_person || '—'}</Text>
-                    </Text>
-                    {selectedDetailClient?.phone && (
-                      <Pressable
-                        variant="buttonGhost"
-                        hitSlopToMin48
-                        onPress={() => Linking.openURL(`tel:${selectedDetailClient.phone}`)}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 }}
-                      >
-                        <Phone size={12} color={theme.colors.primary} />
-                        <Text variant="mono" style={{ color: theme.colors.primary }}>
-                          {selectedDetailClient.phone}
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-
-                {/* 2. Tax Identifiers Card (Immediate / Summary) */}
-                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                  <Text style={[styles.detailCardTitle, { color: '#7e22ce' }]}>
-                    Tax & Statutory Identifiers
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>GSTIN</Text>
-                      <Text variant="mono" style={{ color: theme.colors.ink }}>
-                        {selectedDetailClient?.gstin || 'Not Registered'}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>PAN</Text>
-                      <Text variant="mono" style={{ color: theme.colors.ink }}>
-                        {selectedDetailClient?.pan_number || '—'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* 3. Location & Billing Card (On Demand) */}
-                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.detailCardTitle, { color: '#059669' }]}>
-                      Operational & Billing Addresses
-                    </Text>
-                    <Pressable
-                      variant="buttonGhost"
-                      hitSlopToMin48
-                      onPress={handleToggleMobileLocation}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 6 }}
-                    >
-                      <Text variant="caption" style={{ color: theme.colors.primary }}>
-                        {mobileLocationExpanded ? 'Hide' : 'Load On Demand'}
-                      </Text>
-                      {mobileLocationExpanded ? <ChevronUp size={12} color={theme.colors.primary} /> : <ChevronDown size={12} color={theme.colors.primary} />}
-                    </Pressable>
-                  </View>
-
-                  {!mobileLocationExpanded ? (
-                    <Text style={{ color: theme.colors.mute, marginTop: 2 }}>
-                      {[selectedDetailClient?.street, selectedDetailClient?.city, selectedDetailClient?.state].filter(Boolean).join(', ') || '—'}
-                    </Text>
-                  ) : mobileLocationLoading ? (
-                    <View style={{ paddingVertical: 12, alignItems: 'center', gap: 4 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Fetching location details...</Text>
-                    </View>
-                  ) : (
-                    <View style={{ gap: 8, marginTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingTop: 6 }}>
-                      <View>
-                        <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Site Address:</Text>
-                        <Text style={{ color: theme.colors.ink }}>
-                          {mobileLocationData?.site_address || '—'}
-                        </Text>
-                      </View>
-                      <View>
-                        <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Billing Address:</Text>
-                        <Text style={{ color: theme.colors.ink }}>
-                          {mobileLocationData?.billing_address || 'Same as site location'}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-
-                {/* 4. Horizontal Sub-Navigation Tab Strip (5 Operational Tabs) */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                  style={{ maxHeight: 48 }}
-                >
-                  {(
-                    [
-                      { id: 'machines', label: 'Machines', icon: Truck, count: mobileMachines.length },
-                      { id: 'sites', label: 'Sites', icon: MapPin, count: mobileSites.length },
-                      { id: 'logs', label: 'Running Logs', icon: Clock, count: mobileLogs.length },
-                      { id: 'assignments', label: 'Assignments', icon: UserCheck, count: mobileAssignments.length },
-                      { id: 'history', label: 'History', icon: History, count: mobileHistory.length },
-                      { id: 'audit', label: 'Audit', icon: ShieldCheck, count: mobileAudits.length },
-                    ] as const
-                  ).map((tab) => {
-                    const isActive = mobileActiveTab === tab.id;
-                    const IconComponent = tab.icon;
-                    return (
-                      <Pressable
-                        key={tab.id}
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => handleMobileTabChange(tab.id)}
-                        style={[
-                          styles.detailTabChip,
-                          {
-                            backgroundColor: isActive ? theme.colors.primary : theme.colors.canvas,
-                            borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
-                            minHeight: 44,
-                          },
-                        ]}
-                      >
-                        <IconComponent size={12} color={isActive ? '#ffffff' : theme.colors.mute} />
-                        <Text
-                          style={[
-                            styles.detailTabChipText,
-                            { color: isActive ? '#ffffff' : theme.colors.ink },
-                          ]}
-                        >
-                          {tab.label} {tab.count > 0 ? `(${tab.count})` : ''}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-
-                {/* 5. Operational Tab Content Area */}
-                {mobileActiveTab === null && (
-                  <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, alignItems: 'center', paddingVertical: 16 }]}>
-                    <Text variant="caption" style={{ color: theme.colors.ink }}>
-                      Operational Records (On Demand)
-                    </Text>
-                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
-                      Select a tab above to load machines, logs, assignments, history, or audit logs on demand.
-                    </Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => handleMobileTabChange('machines')}
-                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
-                      >
-                        <Truck size={12} color={theme.colors.primary} />
-                        <Text style={{ color: theme.colors.ink }}>Machines</Text>
-                      </Pressable>
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => handleMobileTabChange('logs')}
-                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
-                      >
-                        <Clock size={12} color="#059669" />
-                        <Text style={{ color: theme.colors.ink }}>Running Logs</Text>
-                      </Pressable>
-                      <Pressable
-                        variant="chip"
-                        haptic="select"
-                        onPress={() => handleMobileTabChange('assignments')}
-                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
-                      >
-                        <UserCheck size={12} color="#7e22ce" />
-                        <Text style={{ color: theme.colors.ink }}>Assignments</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-
-                {/* TAB: MACHINES */}
-                {mobileActiveTab === 'machines' && (
-                  <View style={{ gap: 8 }}>
-                  {mobileTabLoading === 'machines' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading deployed machines...</Text>
-                    </View>
-                  ) : mobileMachines.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      No equipment assigned to this client.
-                    </Text>
-                  ) : (
-                    mobileMachines.map((m: any) => (
-                      <View key={m.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        <View>
-                          <Text variant="mono" style={{ color: theme.colors.primary }}>
-                            {m.machine_id}
-                          </Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>{m.model}</Text>
-                        </View>
-                        <Badge status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'} customLabel={m.status.toUpperCase()} />
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* TAB: SITES */}
-              {mobileActiveTab === 'sites' && (
-                <View style={{ gap: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <Text variant="caption" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
-                      Registered Sites ({mobileSites.length})
-                    </Text>
-                    <Pressable
-                      variant="buttonPrimary"
-                      hitSlopToMin48
-                      onPress={() => handleOpenAddSite(selectedDetailClient?.id)}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 32 }}
-                    >
-                      <Plus size={12} color="#ffffff" />
-                      <Text variant="caption" style={{ color: '#ffffff' }}>Add Site</Text>
-                    </Pressable>
-                  </View>
-                  {mobileTabLoading === 'sites' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading operational sites...</Text>
-                    </View>
-                  ) : mobileSites.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      No sites registered for this client.
-                    </Text>
-                  ) : (
-                    mobileSites.map((s: any) => (
-                      <View key={s.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Text variant="mono" style={{ color: theme.colors.primary }}>
-                            {s.site_code}
-                          </Text>
-                          <Badge status={s.status === 'active' ? 'active' : 'inactive'} customLabel={s.status.toUpperCase()} />
-                        </View>
-                        <Text style={{ color: theme.colors.ink }}>{s.site_name}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <MapPin size={12} color={theme.colors.mute} />
-                          <Text variant="caption" style={{ color: theme.colors.mute, flexShrink: 1 }}>
-                            {[s.street, s.city, s.district, s.state_name, s.pincode].filter(Boolean).join(', ')}
-                          </Text>
-                        </View>
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* TAB: LOGS */}
-              {mobileActiveTab === 'logs' && (
-                <View style={{ gap: 8 }}>
-                  {mobileTabLoading === 'logs' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading running logs...</Text>
-                    </View>
-                  ) : mobileLogs.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      No running logs recorded.
-                    </Text>
-                  ) : (
-                    mobileLogs.map((l: any) => (
-                      <View key={l.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        <View>
-                          <Text variant="mono" style={{ color: theme.colors.ink }}>
-                            {l.machine_code} • {l.log_date}
-                          </Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
-                        </View>
-                        <Text variant="mono" style={{ color: '#059669' }}>
-                          {l.running_hours} hrs
-                        </Text>
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* TAB: ASSIGNMENTS */}
-              {mobileActiveTab === 'assignments' && (
-                <View style={{ gap: 8 }}>
-                  {mobileTabLoading === 'assignments' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading assignments...</Text>
-                    </View>
-                  ) : mobileAssignments.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      No operator assignments found.
-                    </Text>
-                  ) : (
-                    mobileAssignments.map((a: any) => (
-                      <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        <View>
-                          <Text style={{ color: theme.colors.ink }}>{a.operator_name}</Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>
-                            {a.machine_code} • {a.shift_name || `Shift ${a.shift_code || '1'}`} ({a.shift})
-                          </Text>
-                        </View>
-                        <Badge status={a.is_active ? 'active' : 'inactive'} customLabel={a.is_active ? 'ACTIVE' : 'ENDED'} />
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* TAB: HISTORY */}
-              {mobileActiveTab === 'history' && (
-                <View style={{ gap: 8 }}>
-                  {mobileTabLoading === 'history' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading history...</Text>
-                    </View>
-                  ) : mobileHistory.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      No timeline history events found.
-                    </Text>
-                  ) : (
-                    mobileHistory.map((h: any) => (
-                      <View key={h.id} style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ color: theme.colors.ink }}>{h.title}</Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
-                        </View>
-                        <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* TAB: AUDIT */}
-              {mobileActiveTab === 'audit' && (
-                <View style={{ gap: 8 }}>
-                  {mobileTabLoading === 'audit' ? (
-                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Loading audit trail...</Text>
-                    </View>
-                  ) : mobileAudits.length === 0 ? (
-                    <Text variant="caption" style={{ textAlign: 'center', paddingVertical: 20, color: theme.colors.mute }}>
-                      Zero audit entries logged.
-                    </Text>
-                  ) : (
-                    mobileAudits.map((a: any) => (
-                      <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        <View>
-                          <Text variant="mono" style={{ color: theme.colors.primary }}>
-                            {a.action}
-                          </Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
-                        </View>
-                        <Text variant="caption" style={{ color: theme.colors.mute }}>{formatDate(a.created_at)}</Text>
-                      </View>
-                    ))
-                  )}
-                </View>
-              )}
-              </View>
-            </ScrollView>
-
-            {/* Modal Footer */}
-            <View style={styles.modalFooter}>
-              <Button label="Close" variant="outline" onPress={() => setDetailModalVisible(false)} />
-              {selectedDetailClient && (
-                <Button
-                  label="Edit Client"
-                  variant="primary"
-                  onPress={() => {
-                    setDetailModalVisible(false);
-                    handleOpenEdit(selectedDetailClient);
-                  }}
-                />
-              )}
-            </View>
-          </View>
-        </AppModal>
+      {/* Client Detail Modal */}
+      <ClientDetailModal
+        visible={detailModalVisible}
+        onClose={() => setDetailModalVisible(false)}
+        client={selectedDetailClient}
+        mobileLocationExpanded={mobileLocationExpanded}
+        mobileLocationLoading={mobileLocationLoading}
+        mobileLocationData={mobileLocationData}
+        onToggleMobileLocation={handleToggleMobileLocation}
+        mobileActiveTab={mobileActiveTab}
+        mobileTabLoading={mobileTabLoading}
+        onMobileTabChange={handleMobileTabChange}
+        mobileMachines={mobileMachines}
+        mobileSites={mobileSites}
+        mobileLogs={mobileLogs}
+        mobileAssignments={mobileAssignments}
+        mobileHistory={mobileHistory}
+        mobileAudits={mobileAudits}
+        onOpenAddSite={handleOpenAddSite}
+        onOpenEdit={handleOpenEdit}
+      />
 
       {/* Add Client Site Modal */}
-      <AppModal visible={siteModalVisible} onClose={() => setSiteModalVisible(false)} variant="bottom">
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Add Operating Site</Text>
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
-                  {siteTargetClientId
-                    ? (clients.find((c) => c.id === siteTargetClientId)?.company_name || 'Existing Client')
-                    : 'Register an operational facility'}
-                </Text>
-              </View>
-              <Pressable variant="iconButton" hitSlopToMin48 onPress={() => setSiteModalVisible(false)} accessibilityLabel="Close site modal">
-                <X size={20} color={theme.colors.mute} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.formSection}>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Site Name *</Text>
-                  <Input
-                    value={siteFormName}
-                    onChangeText={setSiteFormName}
-                    placeholder="e.g. Pune Manufacturing Facility"
-                    placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
-                  <Input
-                    value={siteFormStreet}
-                    onChangeText={setSiteFormStreet}
-                    placeholder="e.g. Plot 42, MIDC Phase 2"
-                    placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                  />
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town *</Text>
-                    <Input
-                      value={siteFormCity}
-                      onChangeText={setSiteFormCity}
-                      placeholder="e.g. Pune"
-                      placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District *</Text>
-                    <Input
-                      value={siteFormDistrict}
-                      onChangeText={setSiteFormDistrict}
-                      placeholder="e.g. Pune"
-                      placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State (Default: MH)</Text>
-                    <Input
-                      value="Maharashtra"
-                      editable={false}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, minHeight: 44 }]}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode (6 digits) *</Text>
-                    <Input
-                      value={siteFormPincode}
-                      onChangeText={setSiteFormPincode}
-                      placeholder="411001"
-                      placeholderTextColor={theme.colors.mute}
-                      keyboardType="numeric"
-                      maxLength={6}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
-                    />
-                  </View>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <Button label="Cancel" variant="outline" onPress={() => setSiteModalVisible(false)} disabled={isSavingSite} />
-              <Button label={isSavingSite ? 'Saving...' : 'Save Site'} variant="primary" onPress={handleSaveSite} disabled={isSavingSite} />
-            </View>
-        </View>
-      </AppModal>
+      <ClientSiteModal
+        visible={siteModalVisible}
+        onClose={() => setSiteModalVisible(false)}
+        siteTargetClientId={siteTargetClientId}
+        targetClientName={
+          siteTargetClientId
+            ? (clients.find((c) => c.id === siteTargetClientId)?.company_name || 'Existing Client')
+            : undefined
+        }
+        siteFormName={siteFormName}
+        setSiteFormName={setSiteFormName}
+        siteFormStreet={siteFormStreet}
+        setSiteFormStreet={setSiteFormStreet}
+        siteFormCity={siteFormCity}
+        setSiteFormCity={setSiteFormCity}
+        siteFormDistrict={siteFormDistrict}
+        setSiteFormDistrict={setSiteFormDistrict}
+        siteFormPincode={siteFormPincode}
+        setSiteFormPincode={setSiteFormPincode}
+        onSaveSite={handleSaveSite}
+        isSavingSite={isSavingSite}
+      />
 
       <ConfirmDialog
         visible={Boolean(clientToDelete)}
@@ -2290,17 +1376,6 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: spacingNumeric.md },
-  filterPanelContent: {
-    paddingTop: 10,
-    borderTopWidth: 1,
-    gap: spacingNumeric.sm },
-  filterSelectorsGrid: {
-    flexDirection: 'row',
-    gap: 8 },
-  selectorCol: {
-    flex: 1 },
-  filterPanelAnimatedContainer: {
-    overflow: 'hidden' },
   activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -40,6 +40,8 @@ try {
   const deleteConfirmDialogPath = path.join(__dirname, 'components', 'users', 'DeleteUserConfirmDialog.tsx');
   const confirmDialogPath = path.join(__dirname, 'components', 'ui', 'ConfirmDialog.tsx');
   const sheetPath = path.join(__dirname, 'components', 'ui', 'overlay', 'Sheet.tsx');
+  const userActionsPopoverPath = path.join(__dirname, 'components', 'users', 'UserActionsPopover.tsx');
+  const userTouchCardPath = path.join(__dirname, 'components', 'users', 'UserTouchCard.tsx');
 
   const usersContent = fs.readFileSync(usersScreenPath, 'utf8');
   const userDetailContent = fs.readFileSync(userDetailModalPath, 'utf8');
@@ -49,6 +51,8 @@ try {
   const deleteConfirmContent = fs.readFileSync(deleteConfirmDialogPath, 'utf8');
   const confirmDialogContent = fs.readFileSync(confirmDialogPath, 'utf8');
   const sheetContent = fs.readFileSync(sheetPath, 'utf8');
+  const userActionsPopoverContent = fs.readFileSync(userActionsPopoverPath, 'utf8');
+  const userTouchCardContent = fs.readFileSync(userTouchCardPath, 'utf8');
 
   console.log('--- 1. RBAC Matrix & Permissions Verification ---');
   // Edit permission
@@ -218,17 +222,17 @@ try {
   console.log('\n--- 5. Action Menu & Parity Workflows ---');
   // More Actions menu items (Edit, Password, Status, Delete; Assign Machine and Supervisor excluded)
   assert(
-    usersContent.includes('handleTriggerEdit(u)') &&
-    usersContent.includes('handleTriggerResetPassword(u)') &&
-    usersContent.includes('handleToggleUserStatus(u)') &&
-    usersContent.includes('handleDeleteSingleUser(u)'),
+    (usersContent.includes('handleTriggerEdit(u)') || userActionsPopoverContent.includes('onEdit(user)')) &&
+    (usersContent.includes('handleTriggerResetPassword(u)') || userActionsPopoverContent.includes('onResetPassword(user)')) &&
+    (usersContent.includes('handleToggleUserStatus(u)') || userActionsPopoverContent.includes('onToggleStatus(user)')) &&
+    (usersContent.includes('handleDeleteSingleUser(u)') || userActionsPopoverContent.includes('onDelete(user)')),
     'users.tsx: More Actions menu covers Edit, Password, Status, and Delete'
   );
   // UserTouchCard toolbar buttons (More Actions, Assign Machine, Supervisor)
   assert(
-    usersContent.includes('onOpenMoreActions?.(u') &&
-    usersContent.includes('onAssignMachine(u)') &&
-    usersContent.includes('onAssignSupervisor(u)'),
+    (usersContent.includes('onOpenMoreActions?.(u') || userTouchCardContent.includes('onOpenMoreActions?.(u')) &&
+    (usersContent.includes('onAssignMachine(u)') || userTouchCardContent.includes('onAssignMachine(u)')) &&
+    (usersContent.includes('onAssignSupervisor(u)') || userTouchCardContent.includes('onAssignSupervisor(u)')),
     'UserTouchCard: Features canonical action toolbar with More Actions, Assign Machine, and Supervisor'
   );
   // UserDetailModal parity

@@ -20,36 +20,7 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
         <Skeleton width={230} height={26} borderRadius={radiusNumeric.sm} animate={animate} />
       </View>
 
-      {/* 2. Alert Card Skeleton */}
-      <View style={styles.section}>
-        <Skeleton
-          width={60}
-          height={12}
-          borderRadius={radiusNumeric.xs}
-          animate={animate}
-          style={styles.eyebrowMargin}
-        />
-        <View
-          style={[
-            styles.alertCardShell,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.alertContentRow}>
-            <Skeleton width={32} height={32} borderRadius={8} animate={animate} />
-            <View style={styles.alertTextStack}>
-              <Skeleton width={140} height={15} borderRadius={radiusNumeric.xs} animate={animate} />
-              <Skeleton width="90%" height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-            </View>
-          </View>
-          <Skeleton width={16} height={16} borderRadius={4} animate={animate} />
-        </View>
-      </View>
-
-      {/* 3. Today's Shift Status Section */}
+      {/* 2. Today's Shift Status Section */}
       <View style={styles.section}>
         <Skeleton
           width={160}
@@ -75,24 +46,6 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
               <Skeleton width={150} height={18} borderRadius={radiusNumeric.xs} animate={animate} />
             </View>
             <Skeleton width="85%" height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-          </View>
-
-          {/* Status Card 2: Last Recorded Meter */}
-          <View
-            style={[
-              styles.cardShell,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <Skeleton width={160} height={11} borderRadius={radiusNumeric.xs} animate={animate} />
-            <View style={styles.cardMainRow}>
-              <Skeleton width={30} height={30} borderRadius={8} animate={animate} />
-              <Skeleton width={120} height={20} borderRadius={radiusNumeric.xs} animate={animate} />
-            </View>
-            <Skeleton width="80%" height={12} borderRadius={radiusNumeric.xs} animate={animate} />
           </View>
         </View>
       </View>

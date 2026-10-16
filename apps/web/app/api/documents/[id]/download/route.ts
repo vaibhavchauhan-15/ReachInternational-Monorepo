@@ -114,10 +114,10 @@ export async function GET(
         "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
-  } catch (err: any) {
-    console.error("Exception in document download API:", err);
+  } catch (err: unknown) {
+    console.error("[DocumentDownloadAPI] Exception during document download:", err);
     return NextResponse.json(
-      { error: err?.message || "Internal server error" },
+      { success: false, error: "Failed to download document. Please try again." },
       { status: 500 }
     );
   }

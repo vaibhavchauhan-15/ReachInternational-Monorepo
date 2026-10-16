@@ -37,6 +37,8 @@ import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { deleteMachine, getMachineExportDataAction, searchMachinesServerAction, getMachineModalOptionsAction, getPaginatedMachinesAction } from "@/app/actions/machines";
 import { MachineRowActionsMenu } from "./MachineRowActionsMenu";
+import { MachineKPIStrip } from "./MachineKPIStrip";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { Machine, User, UserRole } from "@/lib/types/database";
 
 const MobileMachineCard = dynamic(
@@ -855,10 +857,11 @@ export function MachineListClient({
       if (data.operators?.length) setLazyOperators(data.operators);
       if (data.clients?.length) setLazyClients(data.clients);
       setHasLoadedModalOptions(true);
-    } catch {
-      // fallback
+    } catch (err) {
+      console.error("[MachineListClient] Failed to load modal options:", err);
+      toast("warning", "Could not load complete options", "Some personnel and client selections may be incomplete.");
     }
-  }, [hasLoadedModalOptions, lazySupervisors.length, lazyOperators.length, lazyClients.length]);
+  }, [hasLoadedModalOptions, lazySupervisors.length, lazyOperators.length, lazyClients.length, toast]);
 
   const handleOpenEditMachine = useCallback((m: Machine) => {
     setEditInfoMachine(m);
@@ -976,7 +979,9 @@ export function MachineListClient({
             setLazySupervisors(sups);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error("[MachineListClient] Error loading supervisor options:", err);
+        });
     });
   }, [lazySupervisors.length]);
 
@@ -990,7 +995,9 @@ export function MachineListClient({
             setLazyClients(cls);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error("[MachineListClient] Error loading client options:", err);
+        });
     });
   }, [lazyClients.length]);
 
@@ -1381,7 +1388,9 @@ export function MachineListClient({
         const dataset = await fetchExportDataset(ids);
         setPdfMachines(dataset);
         setPdfModalOpen(true);
-      } catch {
+      } catch (err) {
+        console.error("[MachineListClient] Error fetching complete export dataset:", err);
+        toast("warning", "Exporting visible page only", "Could not fetch all selected machines from server.");
         setPdfMachines(machines);
         setPdfModalOpen(true);
       } finally {
@@ -1486,6 +1495,22 @@ export function MachineListClient({
       window.removeEventListener("reach:quick-print", handleQuickPrint);
     };
   }, [handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds]);
+
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        onAdd: () => {
+          setEditingMachine(null);
+          setModalOpen(true);
+        },
+        onExportExcel: () => handleExportExcel(selectedIds),
+        onExportCSV: () => handleExportCSV(selectedIds),
+        onPrint: () => handleOpenPDFModal(selectedIds),
+        onRefresh: () => router.refresh(),
+      }),
+      [handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds, router]
+    )
+  );
 
   const tableBulkActions = useMemo(
     () => [
@@ -1790,83 +1815,18 @@ export function MachineListClient({
       />
 
       {/* Interactive KPI Cards Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
-        {/* Total Card */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => updateFilters({ status: "all", page: 1 })}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            currentStatus === "all"
-              ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
-            {userRole === "operator" ? "Assigned Fleet" : "Total Fleet"}
-          </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] mt-1">
-            <AnimatedCounter value={statsSummary.totalCount} />
-          </div>
-        </motion.div>
-
-        {/* Available Card */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => updateFilters({ status: "available", page: 1 })}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            currentStatus === "available"
-              ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Available
-          </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">
-            <AnimatedCounter value={statsSummary.availableCount} />
-          </div>
-        </motion.div>
-
-        {/* Rented Card */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => updateFilters({ status: "rented", page: 1 })}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            currentStatus === "rented"
-              ? "bg-sky-50/40 border-sky-500 shadow-xs ring-1 ring-sky-500/20 dark:bg-sky-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-sky-500/40"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
-            On Rent
-          </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-sky-700 dark:text-sky-300 mt-1">
-            <AnimatedCounter value={statsSummary.rentedCount} />
-          </div>
-        </motion.div>
-
-        {/* Breakdown Card */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
-            setHealthStatusFilter(next);
-            updateFilters({ health_status: next, page: 1 });
-          }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            healthStatusFilter === "breakdown"
-              ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-            Breakdown Events
-          </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
-            <AnimatedCounter value={statsSummary.breakdownCount} />
-          </div>
-        </motion.div>
-      </div>
+      <MachineKPIStrip
+        stats={statsSummary}
+        currentStatus={currentStatus}
+        healthStatusFilter={healthStatusFilter}
+        userRole={userRole}
+        onSelectStatus={(status) => updateFilters({ status, page: 1 })}
+        onToggleBreakdown={() => {
+          const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
+          setHealthStatusFilter(next);
+          updateFilters({ health_status: next, page: 1 });
+        }}
+      />
 
       {/* Search Bar & Filter Toolbar */}
       <FilterToolbar

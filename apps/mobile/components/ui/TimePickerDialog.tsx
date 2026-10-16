@@ -1,22 +1,30 @@
 /**
- * ReachInternational Mobile — Material Design 3 Clock Time Picker Dialog
- * Completely redesigned from scratch for buttery-smooth mobile touch ergonomics,
- * tactile haptic feedback, SVG vector precision, and arbitrary hour & minute selection.
+ * ReachInternational Mobile — Android 16 / Material 3 Clock Time Picker Dialog
+ * Redesigned for buttery-smooth mobile touch ergonomics, tactile haptics,
+ * clean sans typography, and seamless switching between Dial and Keyboard modes.
  *
- * Key Architecture & Ergonomics:
- *  - 100% Zero-Jitter Touch Architecture: Dedicated child-free touch responder overlay
- *    permanently eliminating target flipping and coordinate jumping in React Native.
- *  - Arbitrary Minute Precision: Select ANY minute (00-59) via smooth dial dragging,
- *    tap snapping, or dedicated -5m / -1m / +1m / +5m fine-tuning steppers.
- *  - 48 Intermediate Minute Ticks: High-precision SVG chronograph dial with 5-minute major
- *    indicators and intermediate minute tick dots.
- *  - SVG Vector Hand Line: Mathematically anchored from center pivot to selector disc,
- *    eliminating Android/iOS transform matrix rotation offsets.
- *  - Tactile Haptics: Distinct, guarded haptic feedback on dial dragging, step adjustments,
- *    unit switching, and confirmation.
- *  - Auto-Advance: Automatically glides from Hour selection to Minute selection on release.
- *  - Vercel Geist Design System: 100% synchronized light/dark theme tokens, 1px hairlines,
- *    and canonical <Text variant="..."> typography with zero raw property violations.
+ * Architecture & Features:
+ *  - Android 16 / Material 3 Clock UI: Modern rounded containers, accent-filled active
+ *    states, clean sans-serif typography, and zero visual clutter.
+ *  - Robust Inline Validation & Error Handling:
+ *    - Real-time validation for Hour (1–12) and Minute (00–59).
+ *    - Short, informative error messages ("Hour must be 1–12", "Minute must be 0–59", etc.).
+ *    - High-contrast red highlight (#ef4444) on invalid boxes with zero layout jitter.
+ *    - Rejection haptics and focus management preventing submission of invalid times.
+ *  - 100% Zero-Jitter Touch Dial: Dedicated child-free touch responder overlay with
+ *    SVG vector hand line and selector disc.
+ *  - Clean Minute Face: Clean 5-minute numerals (00..55) with zero clutter dots for an
+ *    ultra-lightweight 3-node SVG render tree and buttery-smooth 60/120fps dragging.
+ *  - Transparent Text Selection: Zero blue selection box on focus in keyboard mode;
+ *    hairline Reach Sky Blue cursor for native clarity.
+ *  - Dual Mode Support (Dial + Keyboard):
+ *    - Dial Mode: Interactive circular clock face with smooth dragging and auto-advance.
+ *    - Keyboard Mode: Direct numeric inputs with "Hour" & "Minute" sublabels and auto-focus advance.
+ *    - Mode Toggle: Bottom-left icon button switches instantly between Keyboard & Clock modes.
+ *  - Zero Raw Typography Violations: Strict adherence to canonical <Text variant="...">
+ *    and useTypeStyle() hooks.
+ *  - Reach Design Tokens: 100% synchronized light/dark palette, Reach Sky Blue (#0284c7 / #38bdf8),
+ *    and minimum 48px touch ergonomics.
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -26,6 +34,7 @@ import {
   StyleSheet,
   PanResponder,
   useWindowDimensions,
+  TextInput,
   type GestureResponderEvent,
 } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
@@ -33,6 +42,7 @@ import { useTheme } from './ThemeProvider';
 import { Text, useTypeStyle } from './Text';
 import { Pressable } from './touch/Pressable';
 import { haptics } from '../../lib/haptics';
+import { Clock, Keyboard } from './icon';
 
 export interface TimeOfDay {
   hour: number;
@@ -60,6 +70,8 @@ export interface TimePickerDialogProps {
   confirmText?: string;
   /** Optional header text. Defaults to 'Select time' */
   helpText?: string;
+  /** Initial input mode. Defaults to 'dial' */
+  initialMode?: 'dial' | 'keyboard';
 }
 
 /**
@@ -132,19 +144,6 @@ const STATIC_MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) =>
   };
 });
 
-// Precomputed 48 intermediate minute tick dots (minutes not divisible by 5)
-const INTERMEDIATE_MINUTE_TICKS = Array.from({ length: 60 }, (_, i) => i)
-  .filter((m) => m % 5 !== 0)
-  .map((m) => {
-    const clockDeg = m * 6;
-    const cartesianRad = ((clockDeg - 90) * Math.PI) / 180;
-    return {
-      minute: m,
-      x: DIAL_RADIUS + NUM_RADIUS * Math.cos(cartesianRad),
-      y: DIAL_RADIUS + NUM_RADIUS * Math.sin(cartesianRad),
-    };
-  });
-
 export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
   visible,
   initialTime,
@@ -153,18 +152,30 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
   cancelText = 'Cancel',
   confirmText = 'OK',
   helpText,
+  initialMode = 'dial',
 }) => {
   const { theme, isDark } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const monoStyle = useTypeStyle('mono');
+  const heroStyle = useTypeStyle('hero');
 
-  // Active dial unit: 'hour' | 'minute'
+  // Input mode: 'dial' (clock face) vs 'keyboard' (numeric inputs)
+  const [mode, setMode] = useState<'dial' | 'keyboard'>(initialMode);
+
+  // Active dial/input unit: 'hour' | 'minute'
   const [activeUnit, setActiveUnit] = useState<'hour' | 'minute'>('hour');
 
   // Selected time state
   const [selectedHour, setSelectedHour] = useState<number>(8);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
+
+  // Keyboard text input state
+  const [hourInputText, setHourInputText] = useState<string>('08');
+  const [minuteInputText, setMinuteInputText] = useState<string>('00');
+
+  // Text input refs for keyboard mode auto-advance
+  const hourInputRef = useRef<TextInput>(null);
+  const minuteInputRef = useRef<TextInput>(null);
 
   // Dial layout reference for rock-solid window coordinate tracking
   const dialRef = useRef<View>(null);
@@ -177,9 +188,57 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
       setSelectedHour(parsed.hour);
       setSelectedMinute(parsed.minute);
       setSelectedPeriod(parsed.period);
+      setHourInputText(String(parsed.hour).padStart(2, '0'));
+      setMinuteInputText(String(parsed.minute).padStart(2, '0'));
       setActiveUnit('hour');
+      setMode(initialMode);
     }
-  }, [visible, initialTime]);
+  }, [visible, initialTime, initialMode]);
+
+  // Validation logic for keyboard inputs (Hour: 1–12, Minute: 0–59)
+  const validation = useMemo(() => {
+    const trimmedH = hourInputText.trim();
+    const trimmedM = minuteInputText.trim();
+
+    let hourError: string | null = null;
+    let minuteError: string | null = null;
+
+    if (trimmedH === '') {
+      hourError = 'Enter hour';
+    } else {
+      const h = parseInt(trimmedH, 10);
+      if (isNaN(h) || h < 1 || h > 12) {
+        hourError = 'Hour must be 1–12';
+      }
+    }
+
+    if (trimmedM === '') {
+      minuteError = 'Enter minute';
+    } else {
+      const m = parseInt(trimmedM, 10);
+      if (isNaN(m) || m < 0 || m > 59) {
+        minuteError = 'Minute must be 0–59';
+      }
+    }
+
+    const hasError = Boolean(hourError || minuteError);
+
+    let errorMessage: string | null = null;
+    if (hourError && minuteError) {
+      errorMessage = 'Invalid time (1–12 : 00–59)';
+    } else if (hourError) {
+      errorMessage = hourError;
+    } else if (minuteError) {
+      errorMessage = minuteError;
+    }
+
+    return {
+      hourError,
+      minuteError,
+      hasError,
+      errorMessage,
+    };
+  }, [hourInputText, minuteInputText]);
 
   // Update measured dial position on screen
   const measureDialPosition = useCallback(() => {
@@ -192,6 +251,13 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
   const handleSelectUnit = (unit: 'hour' | 'minute') => {
     haptics.select();
     setActiveUnit(unit);
+    if (mode === 'keyboard') {
+      if (unit === 'hour') {
+        hourInputRef.current?.focus();
+      } else {
+        minuteInputRef.current?.focus();
+      }
+    }
   };
 
   // AM/PM switcher
@@ -200,34 +266,93 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
     setSelectedPeriod(period);
   };
 
-  // Step minutes by delta (-5, -1, +1, +5) with wrap-around and haptics
-  const handleStepMinute = (delta: number) => {
+  // Switch mode between dial and keyboard
+  const handleToggleMode = () => {
     haptics.select();
-    setSelectedMinute((prev) => {
-      let next = (prev + delta) % 60;
-      if (next < 0) next += 60;
-      return next;
-    });
+    if (mode === 'dial') {
+      setHourInputText(String(selectedHour).padStart(2, '0'));
+      setMinuteInputText(String(selectedMinute).padStart(2, '0'));
+      setMode('keyboard');
+      setTimeout(() => {
+        if (activeUnit === 'hour') {
+          hourInputRef.current?.focus();
+        } else {
+          minuteInputRef.current?.focus();
+        }
+      }, 50);
+    } else {
+      // If there is an active error in keyboard mode, prevent switching until corrected
+      if (validation.hasError) {
+        haptics.reject();
+        if (validation.hourError) {
+          hourInputRef.current?.focus();
+        } else {
+          minuteInputRef.current?.focus();
+        }
+        return;
+      }
+      hourInputRef.current?.blur();
+      minuteInputRef.current?.blur();
+      setMode('dial');
+    }
   };
 
-  // Step hours by delta (-1, +1) with 1..12 wrap-around and haptics
-  const handleStepHour = (delta: number) => {
-    haptics.select();
-    setSelectedHour((prev) => {
-      let next = prev + delta;
-      if (next > 12) next = 1;
-      if (next < 1) next = 12;
-      return next;
-    });
+  // Keyboard hour change
+  const handleHourInputChange = (val: string) => {
+    const digits = val.replace(/\D/g, '');
+    let next = digits;
+    if (digits.length > 2) {
+      next = digits.slice(-1);
+    }
+    setHourInputText(next);
+    if (next.length > 0) {
+      const num = parseInt(next, 10);
+      if (!isNaN(num) && num >= 1 && num <= 12) {
+        setSelectedHour(num);
+      }
+    }
+    // Auto-advance to minute input when 2 digits entered and valid (1..12)
+    if (next.length === 2) {
+      const num = parseInt(next, 10);
+      if (!isNaN(num) && num >= 1 && num <= 12) {
+        haptics.select();
+        minuteInputRef.current?.focus();
+      }
+    }
   };
 
-  // Quick shift preset (e.g. 06 AM, 02 PM)
-  const handleQuickShift = (hour: number, period: 'AM' | 'PM') => {
-    haptics.confirm();
-    setSelectedHour(hour);
-    setSelectedMinute(0);
-    setSelectedPeriod(period);
-    setActiveUnit('minute');
+  // Keyboard hour blur
+  const handleHourInputBlur = () => {
+    const num = parseInt(hourInputText, 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) {
+      setSelectedHour(num);
+      setHourInputText(String(num).padStart(2, '0'));
+    }
+  };
+
+  // Keyboard minute change
+  const handleMinuteInputChange = (val: string) => {
+    const digits = val.replace(/\D/g, '');
+    let next = digits;
+    if (digits.length > 2) {
+      next = digits.slice(-1);
+    }
+    setMinuteInputText(next);
+    if (next.length > 0) {
+      const num = parseInt(next, 10);
+      if (!isNaN(num) && num >= 0 && num <= 59) {
+        setSelectedMinute(num);
+      }
+    }
+  };
+
+  // Keyboard minute blur
+  const handleMinuteInputBlur = () => {
+    const num = parseInt(minuteInputText, 10);
+    if (!isNaN(num) && num >= 0 && num <= 59) {
+      setSelectedMinute(num);
+      setMinuteInputText(String(num).padStart(2, '0'));
+    }
   };
 
   // Compute clock angle and update hour/minute state
@@ -255,6 +380,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
         setSelectedHour((prev) => {
           if (prev !== h) {
             haptics.select();
+            setHourInputText(String(h).padStart(2, '0'));
             return h;
           }
           return prev;
@@ -264,6 +390,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
         setSelectedMinute((prev) => {
           if (prev !== m) {
             haptics.select();
+            setMinuteInputText(String(m).padStart(2, '0'));
             return m;
           }
           return prev;
@@ -303,11 +430,30 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
 
   // Confirm dialog action
   const handleConfirm = () => {
+    // Validate if in keyboard mode before confirming
+    if (mode === 'keyboard' && validation.hasError) {
+      haptics.reject();
+      if (validation.hourError) {
+        hourInputRef.current?.focus();
+      } else if (validation.minuteError) {
+        minuteInputRef.current?.focus();
+      }
+      return;
+    }
+
     haptics.confirm();
-    const formatted = formatTimeOfDay(selectedHour, selectedMinute, selectedPeriod);
+    let finalH = selectedHour;
+    let finalM = selectedMinute;
+    if (mode === 'keyboard') {
+      const hNum = parseInt(hourInputText, 10);
+      const mNum = parseInt(minuteInputText, 10);
+      if (!isNaN(hNum) && hNum >= 1 && hNum <= 12) finalH = hNum;
+      if (!isNaN(mNum) && mNum >= 0 && mNum <= 59) finalM = mNum;
+    }
+    const formatted = formatTimeOfDay(finalH, finalM, selectedPeriod);
     onConfirm({
-      hour: selectedHour,
-      minute: selectedMinute,
+      hour: finalH,
+      minute: finalM,
       period: selectedPeriod,
       formatted,
     });
@@ -331,6 +477,9 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
 
   const dialogWidth = Math.min(screenWidth - 32, 336);
 
+  const isHourInvalid = mode === 'keyboard' && Boolean(validation.hourError);
+  const isMinuteInvalid = mode === 'keyboard' && Boolean(validation.minuteError);
+
   if (!visible) return null;
 
   return (
@@ -352,7 +501,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
           accessibilityLabel="Dismiss time picker dialog"
         />
 
-        {/* Material 3 Time Picker Dialog Card */}
+        {/* Android 16 / Material 3 Time Picker Dialog Card */}
         <View
           style={[
             styles.dialogCard,
@@ -370,100 +519,206 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
             </Text>
           </View>
 
-          {/* Time Display Cluster: Hour, Minute, and AM/PM */}
+          {/* Time Display Cluster: Hour Box, Colon, Minute Box, and AM/PM Pills */}
           <View style={styles.displayClusterRow}>
-            {/* Hour Display Box */}
-            <Pressable
-              variant="card"
-              haptic="select"
-              onPress={() => handleSelectUnit('hour')}
-              accessibilityRole="button"
-              accessibilityLabel={`Select hour, current is ${selectedHour}`}
-              style={[
-                styles.timeBox,
-                {
-                  backgroundColor:
-                    activeUnit === 'hour'
+            {/* Hour Display / Input Column */}
+            <View style={styles.timeBoxColumn}>
+              <Pressable
+                variant="plain"
+                haptic="select"
+                onPress={() => handleSelectUnit('hour')}
+                accessibilityRole="button"
+                accessibilityLabel={`Select hour, current is ${selectedHour}`}
+                style={[
+                  styles.timeBox,
+                  {
+                    backgroundColor: isHourInvalid
                       ? isDark
-                        ? 'rgba(2, 132, 199, 0.2)'
+                        ? 'rgba(239, 68, 68, 0.15)'
+                        : '#fef2f2'
+                      : activeUnit === 'hour'
+                      ? isDark
+                        ? 'rgba(2, 132, 199, 0.22)'
                         : '#e0f2fe'
                       : isDark
-                      ? '#262626'
+                      ? '#26262a'
                       : '#f1f5f9',
-                  borderColor: activeUnit === 'hour' ? '#0284c7' : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                variant="hero"
-                style={[
-                  monoStyle,
-                  {
-                    color:
-                      activeUnit === 'hour'
-                        ? isDark
-                          ? '#38bdf8'
-                          : '#0284c7'
-                        : theme.colors.ink,
+                    borderColor: isHourInvalid
+                      ? '#ef4444'
+                      : activeUnit === 'hour'
+                      ? isDark
+                        ? '#38bdf8'
+                        : '#0284c7'
+                      : isDark
+                      ? '#333338'
+                      : '#e2e8f0',
+                    borderWidth: isHourInvalid || activeUnit === 'hour' ? 2 : 1,
                   },
                 ]}
               >
-                {String(selectedHour).padStart(2, '0')}
-              </Text>
-            </Pressable>
+                {mode === 'keyboard' ? (
+                  <TextInput
+                    ref={hourInputRef}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    textContentType="none"
+                    importantForAutofill="no"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    maxLength={2}
+                    value={hourInputText}
+                    onChangeText={handleHourInputChange}
+                    onFocus={() => setActiveUnit('hour')}
+                    onBlur={handleHourInputBlur}
+                    selectionColor="transparent"
+                    cursorColor={isHourInvalid ? '#ef4444' : isDark ? '#38bdf8' : '#0284c7'}
+                    style={[
+                      styles.keyboardInput,
+                      heroStyle,
+                      {
+                        color: isHourInvalid
+                          ? '#ef4444'
+                          : activeUnit === 'hour'
+                          ? isDark
+                            ? '#38bdf8'
+                            : '#0284c7'
+                          : theme.colors.ink,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Text
+                    variant="hero"
+                    style={{
+                      color:
+                        activeUnit === 'hour'
+                          ? isDark
+                            ? '#38bdf8'
+                            : '#0284c7'
+                          : theme.colors.ink,
+                    }}
+                  >
+                    {String(selectedHour).padStart(2, '0')}
+                  </Text>
+                )}
+              </Pressable>
+              {mode === 'keyboard' && (
+                <Text
+                  variant="caption"
+                  style={[styles.boxSublabel, { color: isHourInvalid ? '#ef4444' : theme.colors.mute }]}
+                >
+                  Hour
+                </Text>
+              )}
+            </View>
 
             {/* Separator Colon */}
-            <Text variant="hero" style={[monoStyle, { color: theme.colors.mute }]}>
-              :
-            </Text>
+            <View style={styles.colonContainer}>
+              <Text variant="hero" style={{ color: theme.colors.mute }}>
+                :
+              </Text>
+            </View>
 
-            {/* Minute Display Box */}
-            <Pressable
-              variant="card"
-              haptic="select"
-              onPress={() => handleSelectUnit('minute')}
-              accessibilityRole="button"
-              accessibilityLabel={`Select minute, current is ${selectedMinute}`}
-              style={[
-                styles.timeBox,
-                {
-                  backgroundColor:
-                    activeUnit === 'minute'
+            {/* Minute Display / Input Column */}
+            <View style={styles.timeBoxColumn}>
+              <Pressable
+                variant="plain"
+                haptic="select"
+                onPress={() => handleSelectUnit('minute')}
+                accessibilityRole="button"
+                accessibilityLabel={`Select minute, current is ${selectedMinute}`}
+                style={[
+                  styles.timeBox,
+                  {
+                    backgroundColor: isMinuteInvalid
                       ? isDark
-                        ? 'rgba(2, 132, 199, 0.2)'
+                        ? 'rgba(239, 68, 68, 0.15)'
+                        : '#fef2f2'
+                      : activeUnit === 'minute'
+                      ? isDark
+                        ? 'rgba(2, 132, 199, 0.22)'
                         : '#e0f2fe'
                       : isDark
-                      ? '#262626'
+                      ? '#26262a'
                       : '#f1f5f9',
-                  borderColor: activeUnit === 'minute' ? '#0284c7' : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                variant="hero"
-                style={[
-                  monoStyle,
-                  {
-                    color:
-                      activeUnit === 'minute'
-                        ? isDark
-                          ? '#38bdf8'
-                          : '#0284c7'
-                        : theme.colors.ink,
+                    borderColor: isMinuteInvalid
+                      ? '#ef4444'
+                      : activeUnit === 'minute'
+                      ? isDark
+                        ? '#38bdf8'
+                        : '#0284c7'
+                      : isDark
+                      ? '#333338'
+                      : '#e2e8f0',
+                    borderWidth: isMinuteInvalid || activeUnit === 'minute' ? 2 : 1,
                   },
                 ]}
               >
-                {String(selectedMinute).padStart(2, '0')}
-              </Text>
-            </Pressable>
+                {mode === 'keyboard' ? (
+                  <TextInput
+                    ref={minuteInputRef}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    textContentType="none"
+                    importantForAutofill="no"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    maxLength={2}
+                    value={minuteInputText}
+                    onChangeText={handleMinuteInputChange}
+                    onFocus={() => setActiveUnit('minute')}
+                    onBlur={handleMinuteInputBlur}
+                    selectionColor="transparent"
+                    cursorColor={isMinuteInvalid ? '#ef4444' : isDark ? '#38bdf8' : '#0284c7'}
+                    style={[
+                      styles.keyboardInput,
+                      heroStyle,
+                      {
+                        color: isMinuteInvalid
+                          ? '#ef4444'
+                          : activeUnit === 'minute'
+                          ? isDark
+                            ? '#38bdf8'
+                            : '#0284c7'
+                          : theme.colors.ink,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Text
+                    variant="hero"
+                    style={{
+                      color:
+                        activeUnit === 'minute'
+                          ? isDark
+                            ? '#38bdf8'
+                            : '#0284c7'
+                          : theme.colors.ink,
+                    }}
+                  >
+                    {String(selectedMinute).padStart(2, '0')}
+                  </Text>
+                )}
+              </Pressable>
+              {mode === 'keyboard' && (
+                <Text
+                  variant="caption"
+                  style={[styles.boxSublabel, { color: isMinuteInvalid ? '#ef4444' : theme.colors.mute }]}
+                >
+                  Minute
+                </Text>
+              )}
+            </View>
 
-            {/* AM/PM Vertically Stacked Segmented Switcher */}
+            {/* AM/PM Vertically Stacked Pill Switcher */}
             <View
               style={[
                 styles.ampmContainer,
                 {
                   borderColor: theme.colors.hairline,
-                  backgroundColor: isDark ? '#262626' : '#f8fafc',
+                  backgroundColor: isDark ? '#26262a' : '#f1f5f9',
                 },
               ]}
             >
@@ -535,319 +790,163 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
             </View>
           </View>
 
-          {/* Interactive Clock Dial Face */}
-          <View
-            ref={dialRef}
-            onLayout={measureDialPosition}
-            style={[
-              styles.dialContainer,
-              {
-                backgroundColor: isDark ? '#222226' : '#f1f5f9',
-                borderColor: isDark ? '#2e2e33' : '#e2e8f0',
-              },
-            ]}
-          >
-            {/* Layer A: SVG Dial Rendering (Vector Hand Line, Pivot & Selector Bubble) */}
-            <Svg
-              width={DIAL_DIAMETER}
-              height={DIAL_DIAMETER}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            >
-              {/* Intermediate minute tick marks (visible only in minute mode) */}
-              {activeUnit === 'minute' &&
-                INTERMEDIATE_MINUTE_TICKS.map((tick) => (
-                  <Circle
-                    key={`tick-${tick.minute}`}
-                    cx={tick.x}
-                    cy={tick.y}
-                    r={1.5}
-                    fill={isDark ? '#52525b' : '#94a3b8'}
-                  />
-                ))}
-
-              {/* Hand Line (Anchored directly from dial center to handTip) */}
-              <Line
-                x1={DIAL_RADIUS}
-                y1={DIAL_RADIUS}
-                x2={handTip.x}
-                y2={handTip.y}
-                stroke="#0284c7"
-                strokeWidth={2}
-              />
-
-              {/* Center Pivot Pin */}
-              <Circle cx={DIAL_RADIUS} cy={DIAL_RADIUS} r={5} fill="#0284c7" />
-              <Circle cx={DIAL_RADIUS} cy={DIAL_RADIUS} r={2} fill="#ffffff" />
-
-              {/* Selector Disc Bubble (40dp diameter at hand tip) */}
-              <Circle
-                cx={handTip.x}
-                cy={handTip.y}
-                r={SELECTOR_RADIUS}
-                fill="#0284c7"
-              />
-            </Svg>
-
-            {/* Layer B: Number Display Ring */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              {activeUnit === 'hour'
-                ? STATIC_HOURS.map((item) => {
-                    const isSelected = selectedHour === item.value;
-                    return (
-                      <View
-                        key={`h-${item.value}`}
-                        style={[
-                          styles.numberCell,
-                          {
-                            left: item.x - 18,
-                            top: item.y - 18,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="heading"
-                          style={[
-                            monoStyle,
-                            {
-                              color: isSelected ? '#ffffff' : theme.colors.ink,
-                            },
-                          ]}
-                        >
-                          {item.value}
-                        </Text>
-                      </View>
-                    );
-                  })
-                : STATIC_MINUTES.map((item) => {
-                    const isSelected = selectedMinute === item.value;
-                    return (
-                      <View
-                        key={`m-${item.value}`}
-                        style={[
-                          styles.numberCell,
-                          {
-                            left: item.x - 18,
-                            top: item.y - 18,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="heading"
-                          style={[
-                            monoStyle,
-                            {
-                              color: isSelected ? '#ffffff' : theme.colors.ink,
-                            },
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-
-              {/* In minute mode, if selected minute is not a multiple of 5, show minute value in selector disc */}
-              {activeUnit === 'minute' && selectedMinute % 5 !== 0 && (
-                <View
-                  style={[
-                    styles.numberCell,
-                    {
-                      left: handTip.x - 18,
-                      top: handTip.y - 18,
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="subheading"
-                    style={[monoStyle, { color: '#ffffff' }]}
-                  >
-                    {String(selectedMinute).padStart(2, '0')}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Layer C: Pure Transparent Touch & Drag Surface (Zero children to ensure 100% stable coordinates) */}
+          {/* Dial Mode: Interactive Clock Face */}
+          {mode === 'dial' ? (
             <View
-              style={[StyleSheet.absoluteFill, styles.touchOverlay]}
-              {...panResponder.panHandlers}
-            />
-          </View>
+              ref={dialRef}
+              onLayout={measureDialPosition}
+              style={[
+                styles.dialContainer,
+                {
+                  backgroundColor: isDark ? '#222226' : '#f1f5f9',
+                  borderColor: isDark ? '#2e2e33' : '#e2e8f0',
+                },
+              ]}
+            >
+              {/* Layer A: SVG Dial Rendering (Vector Hand Line, Pivot & Selector Disc - Ultra-Lightweight 3 Nodes) */}
+              <Svg
+                width={DIAL_DIAMETER}
+                height={DIAL_DIAMETER}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              >
+                {/* Hand Line (Center to Selector Disc) */}
+                <Line
+                  x1={DIAL_RADIUS}
+                  y1={DIAL_RADIUS}
+                  x2={handTip.x}
+                  y2={handTip.y}
+                  stroke="#0284c7"
+                  strokeWidth={2}
+                />
 
-          {/* Stepper Toolbar for Fine Adjustments & Quick Presets */}
-          <View style={styles.stepperContainer}>
-            {activeUnit === 'minute' ? (
-              <View style={styles.stepperRow}>
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepMinute(-5)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Subtract 5 minutes"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    -5m
-                  </Text>
-                </Pressable>
+                {/* Center Pivot Pin */}
+                <Circle cx={DIAL_RADIUS} cy={DIAL_RADIUS} r={4} fill="#0284c7" />
 
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepMinute(-1)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Subtract 1 minute"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    -1m
-                  </Text>
-                </Pressable>
+                {/* Selector Disc at Hand Tip */}
+                <Circle
+                  cx={handTip.x}
+                  cy={handTip.y}
+                  r={SELECTOR_RADIUS}
+                  fill="#0284c7"
+                />
+              </Svg>
 
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepMinute(1)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add 1 minute"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    +1m
-                  </Text>
-                </Pressable>
+              {/* Layer B: Number Display Ring (Clean Sans Typography, Zero Dots) */}
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {activeUnit === 'hour'
+                  ? STATIC_HOURS.map((item) => {
+                      const isSelected = selectedHour === item.value;
+                      return (
+                        <View
+                          key={`h-${item.value}`}
+                          style={[
+                            styles.numberCell,
+                            {
+                              left: item.x - 18,
+                              top: item.y - 18,
+                            },
+                          ]}
+                        >
+                          <Text
+                            variant="heading"
+                            style={{
+                              color: isSelected ? '#ffffff' : theme.colors.ink,
+                            }}
+                          >
+                            {item.value}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  : STATIC_MINUTES.map((item) => {
+                      const isSelected = selectedMinute === item.value;
+                      return (
+                        <View
+                          key={`m-${item.value}`}
+                          style={[
+                            styles.numberCell,
+                            {
+                              left: item.x - 18,
+                              top: item.y - 18,
+                            },
+                          ]}
+                        >
+                          <Text
+                            variant="heading"
+                            style={{
+                              color: isSelected ? '#ffffff' : theme.colors.ink,
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
 
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepMinute(5)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add 5 minutes"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    +5m
-                  </Text>
-                </Pressable>
+                {/* In minute mode: if selected minute is not a multiple of 5, display value in selector disc */}
+                {activeUnit === 'minute' && selectedMinute % 5 !== 0 && (
+                  <View
+                    style={[
+                      styles.numberCell,
+                      {
+                        left: handTip.x - 18,
+                        top: handTip.y - 18,
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="subheading"
+                      style={{ color: '#ffffff' }}
+                    >
+                      {String(selectedMinute).padStart(2, '0')}
+                    </Text>
+                  </View>
+                )}
               </View>
-            ) : (
-              <View style={styles.stepperRow}>
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepHour(-1)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Subtract 1 hour"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    -1 hr
-                  </Text>
-                </Pressable>
 
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="select"
-                  hitSlopToMin48
-                  onPress={() => handleStepHour(1)}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add 1 hour"
+              {/* Layer C: Pure Transparent Touch & Drag Surface (Zero children for 100% stable coordinates) */}
+              <View
+                style={[StyleSheet.absoluteFill, styles.touchOverlay]}
+                {...panResponder.panHandlers}
+              />
+            </View>
+          ) : (
+            /* Keyboard Mode Inline Error Banner with fixed minHeight to prevent jitter */
+            <View style={styles.errorContainer}>
+              {validation.errorMessage ? (
+                <Text
+                  variant="caption"
+                  style={{ color: '#ef4444', textAlign: 'center' }}
                 >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    +1 hr
-                  </Text>
-                </Pressable>
+                  {validation.errorMessage}
+                </Text>
+              ) : null}
+            </View>
+          )}
 
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="confirm"
-                  hitSlopToMin48
-                  onPress={() => handleQuickShift(6, 'AM')}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Quick Shift 06:00 AM"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    06 AM
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  variant="buttonSecondary"
-                  haptic="confirm"
-                  hitSlopToMin48
-                  onPress={() => handleQuickShift(2, 'PM')}
-                  style={[
-                    styles.stepperPill,
-                    {
-                      backgroundColor: isDark ? '#262626' : '#f1f5f9',
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Quick Shift 02:00 PM"
-                >
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    02 PM
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-
-          {/* Bottom Action Row: Cancel and OK */}
+          {/* Bottom Action Row: Mode Toggle Icon (Left) + Cancel & OK (Right) */}
           <View style={styles.bottomBarRow}>
-            <View style={styles.spacer} />
+            {/* Mode Toggle Button: Keyboard <-> Clock */}
+            <Pressable
+              variant="plain"
+              haptic="select"
+              hitSlopToMin48
+              onPress={handleToggleMode}
+              accessibilityRole="button"
+              accessibilityLabel={
+                mode === 'dial' ? 'Switch to keyboard input' : 'Switch to clock dial'
+              }
+              style={styles.modeToggleBtn}
+            >
+              {mode === 'dial' ? (
+                <Keyboard size={22} color={isDark ? '#a1a1aa' : '#64748b'} />
+              ) : (
+                <Clock size={22} color={isDark ? '#a1a1aa' : '#64748b'} />
+              )}
+            </Pressable>
 
+            {/* Actions: Cancel & OK */}
             <View style={styles.actionsRightCluster}>
               <Pressable
                 variant="buttonSecondary"
@@ -858,7 +957,10 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
                 accessibilityLabel="Cancel time selection"
                 style={styles.actionBtn}
               >
-                <Text variant="label" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                <Text
+                  variant="label"
+                  style={{ color: isDark ? '#38bdf8' : '#0284c7' }}
+                >
                   {cancelText}
                 </Text>
               </Pressable>
@@ -872,7 +974,10 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
                 accessibilityLabel="Confirm time selection"
                 style={styles.actionBtn}
               >
-                <Text variant="label" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                <Text
+                  variant="label"
+                  style={{ color: isDark ? '#38bdf8' : '#0284c7' }}
+                >
                   {confirmText}
                 </Text>
               </Pressable>
@@ -912,20 +1017,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  timeBoxColumn: {
+    alignItems: 'center',
   },
   timeBox: {
-    width: 86,
+    width: 92,
     height: 76,
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyboardInput: {
+    width: '100%',
+    height: '100%',
+    textAlign: 'center',
+    padding: 0,
+    margin: 0,
+    backgroundColor: 'transparent',
+  },
+  boxSublabel: {
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  colonContainer: {
+    width: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ampmContainer: {
     width: 52,
     height: 76,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
     flexDirection: 'column',
@@ -948,6 +1072,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     position: 'relative',
     overflow: 'hidden',
+    marginVertical: 12,
   },
   touchOverlay: {
     zIndex: 50,
@@ -959,25 +1084,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperContainer: {
-    marginTop: 14,
-    marginBottom: 8,
-    width: '100%',
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  errorContainer: {
+    minHeight: 22,
     justifyContent: 'center',
-    gap: 8,
-  },
-  stepperPill: {
-    flex: 1,
-    minHeight: 34,
-    borderRadius: 10,
-    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
+    marginBottom: 4,
   },
   bottomBarRow: {
     flexDirection: 'row',
@@ -985,8 +1097,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 8,
   },
-  spacer: {
-    flex: 1,
+  modeToggleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionsRightCluster: {
     flexDirection: 'row',

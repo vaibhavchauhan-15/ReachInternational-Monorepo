@@ -4,9 +4,10 @@
  */
 
 import React, { memo } from 'react';
-import { type ViewStyle } from 'react-native';
+import { Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from './Button';
 import { Icon, type IconName, type IconTone } from './icon';
+import { useTheme } from './ThemeProvider';
 import type { SemanticHapticKind } from '../../lib/haptics';
 
 export interface IconButtonProps {
@@ -23,7 +24,7 @@ export interface IconButtonProps {
   tone?: IconTone;
   haptic?: SemanticHapticKind | false;
   disabled?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
   className?: string;
 }
 
@@ -36,30 +37,45 @@ export const IconButton = memo(function IconButton({
   iconSize = 20,
   color,
   tone,
+  haptic,
   disabled = false,
   style,
   className,
 }: IconButtonProps) {
+  const { isDark } = useTheme();
   const content = icon ?? (name ? <Icon name={name} size={iconSize} color={color} tone={tone} /> : null);
 
   return (
     <Button
       variant="ghost"
       size="icon"
+      haptic={haptic}
       disabled={disabled}
       onPress={onPress}
       accessibilityLabel={accessibilityLabel}
       className={className}
-      style={[
+      style={(state) => [
         {
           width: size,
           height: size,
           minWidth: 44,
           minHeight: 44,
+          borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
+          backgroundColor: state.pressed
+            ? isDark
+              ? 'rgba(255, 255, 255, 0.12)'
+              : 'rgba(23, 23, 23, 0.08)'
+            : 'transparent',
+          ...Platform.select({
+            web: {
+              transition: 'background-color 150ms ease, opacity 150ms ease',
+            } as any,
+            default: {},
+          }),
         },
-        style,
+        typeof style === 'function' ? (style as any)(state) : style,
       ]}
     >
       {content}

@@ -1,25 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   Platform,
+  Pressable,
   type StyleProp,
   type ViewStyle,
+  type LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   useReducedMotion,
-  ReduceMotion,
 } from 'react-native-reanimated';
-import { SPATIAL, DUR } from '../../lib/motion/tokens';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import { Text } from './Text';
 import { haptics } from '../../lib/haptics';
-import { Pressable } from './touch/Pressable';
 
 export interface SegmentedToggleItem<T extends string = string> {
   id: T;
@@ -34,7 +32,8 @@ export interface SegmentedToggleItem<T extends string = string> {
 export type SegmentedToggleSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface SegmentedToggleProps<T extends string = string> {
-  items: SegmentedToggleItem<T>[];
+  items?: SegmentedToggleItem<T>[];
+  options?: SegmentedToggleItem<T>[];
   value: T;
   onChange: (value: T) => void;
   size?: SegmentedToggleSize;
@@ -67,9 +66,9 @@ const SIZE_CONFIGS = {
     gap: 5,
   },
   md: {
-    padding: 4,
-    containerRadius: 14,
-    pillRadius: 10,
+    padding: 3.5,
+    containerRadius: 12,
+    pillRadius: 9,
     minHeight: 40,
     textVariant: 'subheading' as const,
     badgeTextVariant: 'caption' as const,
@@ -77,9 +76,9 @@ const SIZE_CONFIGS = {
     gap: 6,
   },
   lg: {
-    padding: 5,
-    containerRadius: 16,
-    pillRadius: 12,
+    padding: 4.5,
+    containerRadius: 14,
+    pillRadius: 10,
     minHeight: 46,
     textVariant: 'heading' as const,
     badgeTextVariant: 'label' as const,
@@ -88,8 +87,174 @@ const SIZE_CONFIGS = {
   },
 } as const;
 
-export function SegmentedToggle<T extends string = string>({
-  items,
+/**
+ * Snappy, fluid spring configuration adhering to Apple HIG & Vercel Geist motion standards.
+ * Eliminates sluggish overshoot while preserving organic fluidity.
+ */
+const SPRING_CONFIG = {
+  stiffness: 440,
+  damping: 34,
+  mass: 0.8,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Pure, Memoized Individual Segment Item
+// Prevents re-rendering untouched segments when switching between two tabs.
+// ---------------------------------------------------------------------------
+interface SegmentItemProps<T extends string = string> {
+  item: SegmentedToggleItem<T>;
+  index: number;
+  isActive: boolean;
+  onSelect: (item: SegmentedToggleItem<T>, index: number) => void;
+  config: (typeof SIZE_CONFIGS)[SegmentedToggleSize];
+  fullWidth: boolean;
+  isDark: boolean;
+  itemStyle?: StyleProp<ViewStyle>;
+  resolvedActiveColor: string;
+  inactiveTextColor: string;
+  showFallbackPill: boolean;
+  onMeasure?: (index: number, x: number, width: number) => void;
+}
+
+function BaseSegmentItem<T extends string = string>({
+  item,
+  index,
+  isActive,
+  onSelect,
+  config,
+  fullWidth,
+  isDark,
+  itemStyle,
+  resolvedActiveColor,
+  inactiveTextColor,
+  showFallbackPill,
+  onMeasure,
+}: SegmentItemProps<T>) {
+  const handlePress = useCallback(() => {
+    onSelect(item, index);
+  }, [item, index, onSelect]);
+
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      if (!onMeasure) return;
+      const { x, width } = e.nativeEvent.layout;
+      onMeasure(index, x, width);
+    },
+    [index, onMeasure]
+  );
+
+  return (
+    <Pressable
+      onLayout={fullWidth ? undefined : handleLayout}
+      onPress={handlePress}
+      disabled={item.disabled}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: isActive, disabled: Boolean(item.disabled) }}
+      accessibilityLabel={item.accessibilityLabel || (typeof item.label === 'string' ? item.label : undefined)}
+      android_ripple={null}
+      style={({ pressed }) => [
+        styles.item,
+        {
+          minHeight: config.minHeight,
+          paddingHorizontal: config.itemPaddingHorizontal,
+          gap: config.gap,
+          borderRadius: config.pillRadius,
+          backgroundColor:
+            !isActive && pressed
+              ? isDark
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(0, 0, 0, 0.05)'
+              : 'transparent',
+          opacity: isActive && pressed ? 0.92 : item.disabled ? 0.38 : 1,
+        },
+        fullWidth ? styles.itemFullWidth : styles.itemInline,
+        itemStyle,
+      ]}
+    >
+      {/* Frame 0 fallback pill: renders instantly before container measurement occurs */}
+      {showFallbackPill && (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: config.pillRadius,
+              backgroundColor: resolvedActiveColor,
+            },
+            styles.pillShadowBrand,
+          ]}
+        />
+      )}
+
+      {item.icon && <View style={styles.iconWrap}>{item.icon}</View>}
+
+      {typeof item.label === 'string' ? (
+        <Text
+          variant={config.textVariant}
+          weight={isActive ? 'semibold' : 'medium'}
+          style={[
+            styles.itemText,
+            {
+              color: isActive ? '#ffffff' : inactiveTextColor,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {item.label}
+        </Text>
+      ) : (
+        item.label
+      )}
+
+      {item.badge}
+
+      {item.count !== undefined && item.count !== null && (
+        <View
+          style={[
+            styles.countBadge,
+            {
+              backgroundColor: isActive
+                ? 'rgba(255, 255, 255, 0.22)'
+                : isDark
+                ? 'rgba(255, 255, 255, 0.12)'
+                : '#e4e4e7',
+              borderColor: isActive
+                ? 'rgba(255, 255, 255, 0.35)'
+                : isDark
+                ? 'rgba(255, 255, 255, 0.18)'
+                : '#d4d4d8',
+            },
+          ]}
+        >
+          <Text
+            variant={config.badgeTextVariant}
+            weight={isActive ? 'semibold' : 'medium'}
+            style={[
+              styles.countText,
+              {
+                color: isActive
+                  ? '#ffffff'
+                  : isDark
+                  ? '#f4f4f5'
+                  : '#3f3f46',
+              },
+            ]}
+          >
+            {item.count}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const SegmentItem = React.memo(BaseSegmentItem) as typeof BaseSegmentItem;
+
+// ---------------------------------------------------------------------------
+// Base SegmentedToggle Component
+// ---------------------------------------------------------------------------
+function BaseSegmentedToggle<T extends string = string>({
+  items: rawItems,
+  options: rawOptions,
   value,
   onChange,
   size = 'md',
@@ -99,17 +264,26 @@ export function SegmentedToggle<T extends string = string>({
   activeColor,
   accessibilityLabel = 'Segmented navigation toggle',
 }: SegmentedToggleProps<T>) {
-  const { theme, isDark } = useTheme();
+  const items = useMemo(() => rawItems || rawOptions || [], [rawItems, rawOptions]);
+  const { isDark } = useTheme();
   const reduceMotion = useReducedMotion();
   const config = SIZE_CONFIGS[size] || SIZE_CONFIGS.md;
+
+  // Optimistic active ID: responds synchronously to touch at 0ms, eliminating selection lag
+  const [selectedId, setSelectedId] = useState<T>(value);
+
+  // Sync internal state when controlled value prop updates externally
+  useEffect(() => {
+    setSelectedId(value);
+  }, [value]);
 
   const [containerWidth, setContainerWidth] = useState(0);
   const [itemLayouts, setItemLayouts] = useState<Record<number, { x: number; width: number }>>({});
 
   const activeIndex = useMemo(() => {
-    const idx = items.findIndex((i) => i.id === value);
+    const idx = items.findIndex((i) => i.id === selectedId);
     return idx >= 0 ? idx : 0;
-  }, [items, value]);
+  }, [items, selectedId]);
 
   // Derive target pill geometry
   const { targetX, targetWidth } = useMemo(() => {
@@ -141,68 +315,119 @@ export function SegmentedToggle<T extends string = string>({
     return { targetX: 0, targetWidth: 0 };
   }, [items.length, itemLayouts, activeIndex, containerWidth, config.padding, fullWidth]);
 
-  // Reanimated shared values for high-frequency 60fps sliding pill animation
+  // Reanimated shared values for high-frequency 60/120fps GPU sliding pill animation
   const animX = useSharedValue(0);
   const animWidth = useSharedValue(0);
-  const animOpacity = useSharedValue(1);
-  const isInitialized = useRef(false);
+  const isInitializedRef = useRef(false);
+  const lastAnimatedIndexRef = useRef<number>(-1);
 
+  // Synchronize indicator position on dimension changes or external value changes
   useEffect(() => {
     if (targetWidth <= 0) return;
 
-    if (!isInitialized.current) {
+    if (!isInitializedRef.current) {
       animX.value = targetX;
       animWidth.value = targetWidth;
-      animOpacity.value = 1;
-      isInitialized.current = true;
-    } else {
+      isInitializedRef.current = true;
+      lastAnimatedIndexRef.current = activeIndex;
+      return;
+    }
+
+    // Only animate if this target hasn't already been animated synchronously by handleSelect
+    if (lastAnimatedIndexRef.current !== activeIndex) {
       if (reduceMotion) {
         animX.value = targetX;
         animWidth.value = targetWidth;
       } else {
-        animX.value = withSpring(targetX, {
-          stiffness: 450,
-          damping: 32,
-          mass: 1,
-        });
-        animWidth.value = withSpring(targetWidth, {
-          stiffness: 450,
-          damping: 32,
-          mass: 1,
-        });
+        animX.value = withSpring(targetX, SPRING_CONFIG);
+        if (Math.abs(animWidth.value - targetWidth) > 1) {
+          animWidth.value = withSpring(targetWidth, SPRING_CONFIG);
+        }
       }
+      lastAnimatedIndexRef.current = activeIndex;
+    } else if (Math.abs(animWidth.value - targetWidth) > 1) {
+      // Container resized or orientation changed: snap width and position cleanly
+      animWidth.value = targetWidth;
+      animX.value = targetX;
     }
-  }, [targetX, targetWidth, reduceMotion, animX, animWidth, animOpacity]);
+  }, [targetX, targetWidth, activeIndex, reduceMotion, animX, animWidth]);
 
+  // High-performance animated style: animates purely on UI thread via transform matrix
   const pillAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: animX.value }],
     width: animWidth.value,
-    opacity: animOpacity.value,
   }));
 
-  const handleSelect = (item: SegmentedToggleItem<T>) => {
-    if (item.disabled || item.id === value) return;
-    try {
-      haptics.select();
-    } catch {
-      // Haptics unavailable on some browser environments
+  const handleSelect = useCallback(
+    (item: SegmentedToggleItem<T>, index: number) => {
+      if (item.disabled || item.id === selectedId) return;
+
+      try {
+        haptics.select();
+      } catch {
+        // Haptics safe fallback for web/unsupported environments
+      }
+
+      // 1. Optimistic immediate visual highlight on touch (0ms)
+      setSelectedId(item.id);
+
+      // 2. Eagerly glide pill on UI thread immediately
+      if (fullWidth && containerWidth > 0) {
+        const availWidth = Math.max(0, containerWidth - config.padding * 2);
+        const tabW = availWidth / items.length;
+        const nextX = config.padding + index * tabW;
+
+        if (reduceMotion) {
+          animX.value = nextX;
+          animWidth.value = tabW;
+        } else {
+          animX.value = withSpring(nextX, SPRING_CONFIG);
+          // In fullWidth, width is identical across segments, so avoid width oscillation layout passes
+          animWidth.value = tabW;
+        }
+        lastAnimatedIndexRef.current = index;
+      } else if (itemLayouts[index]) {
+        const measured = itemLayouts[index];
+        if (reduceMotion) {
+          animX.value = measured.x;
+          animWidth.value = measured.width;
+        } else {
+          animX.value = withSpring(measured.x, SPRING_CONFIG);
+          if (Math.abs(animWidth.value - measured.width) > 1) {
+            animWidth.value = withSpring(measured.width, SPRING_CONFIG);
+          }
+        }
+        lastAnimatedIndexRef.current = index;
+      }
+
+      // 3. Dispatch change callback to parent
+      onChange(item.id);
+    },
+    [selectedId, fullWidth, containerWidth, config.padding, items.length, reduceMotion, animX, animWidth, itemLayouts, onChange]
+  );
+
+  const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - containerWidth) > 0.5) {
+      setContainerWidth(w);
     }
-    onChange(item.id);
-  };
+  }, [containerWidth]);
+
+  const handleMeasureItem = useCallback((index: number, x: number, width: number) => {
+    setItemLayouts((prev) => {
+      if (prev[index]?.x === x && prev[index]?.width === width) return prev;
+      return { ...prev, [index]: { x, width } };
+    });
+  }, []);
 
   if (!items || items.length === 0) return null;
 
-  const resolvedActiveColor = activeColor || '#0284c7';
+  const resolvedActiveColor = activeColor || (isDark ? '#0ea5e9' : '#0284c7');
   const inactiveTextColor = isDark ? '#a1a1aa' : '#52525b';
 
   return (
     <View
-      onLayout={(e) => {
-        const w = e.nativeEvent.layout.width;
-        if (Math.abs(w - containerWidth) > 0.5) {
-          setContainerWidth(w);
-        }
-      }}
+      onLayout={handleContainerLayout}
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
       style={[
@@ -218,8 +443,8 @@ export function SegmentedToggle<T extends string = string>({
         style,
       ]}
     >
-      {/* 1. SLIDING ACTIVE INDICATOR PILL (iOS / Android Native) */}
-      {Platform.OS !== 'web' && (
+      {/* 1. SLIDING ACTIVE INDICATOR PILL (Smooth GPU-accelerated spring glide on Native & Web) */}
+      {containerWidth > 0 && targetWidth > 0 && (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -239,108 +464,76 @@ export function SegmentedToggle<T extends string = string>({
 
       {/* 2. TAB ITEMS */}
       {items.map((item, index) => {
-        const isActive = item.id === value;
+        const isActive = item.id === selectedId;
+        const showFallbackPill = isActive && containerWidth === 0;
 
         return (
-          <Pressable
+          <SegmentItem
             key={item.id}
-            variant="segmentedOption"
-            haptic={false}
-            onLayout={(e) => {
-              const { x, width } = e.nativeEvent.layout;
-              setItemLayouts((prev) => {
-                if (prev[index]?.x === x && prev[index]?.width === width) return prev;
-                return { ...prev, [index]: { x, width } };
-              });
-            }}
-            onPress={() => handleSelect(item)}
-            disabled={item.disabled}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isActive, disabled: Boolean(item.disabled) }}
-            accessibilityLabel={item.accessibilityLabel || (typeof item.label === 'string' ? item.label : undefined)}
-            style={[
-              styles.item,
-              {
-                minHeight: config.minHeight,
-                paddingHorizontal: config.itemPaddingHorizontal,
-                gap: config.gap,
-                borderRadius: config.pillRadius,
-              },
-              Platform.OS === 'web' && isActive && {
-                backgroundColor: resolvedActiveColor,
-                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.35)',
-              } as any,
-              fullWidth ? styles.itemFullWidth : styles.itemInline,
-              item.disabled && styles.itemDisabled,
-              itemStyle,
-            ]}
-          >
-            {item.icon && (
-              <View style={styles.iconWrap}>
-                {item.icon}
-              </View>
-            )}
-
-            {typeof item.label === 'string' ? (
-              <Text
-                variant={config.textVariant}
-                style={[
-                  styles.itemText,
-                  {
-                    color: isActive ? '#ffffff' : inactiveTextColor,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {item.label}
-              </Text>
-            ) : (
-              item.label
-            )}
-
-            {item.badge}
-
-            {item.count !== undefined && item.count !== null && (
-              <View
-                style={[
-                  styles.countBadge,
-                  {
-                    backgroundColor: isActive
-                      ? 'rgba(255, 255, 255, 0.22)'
-                      : isDark
-                      ? '#27272a'
-                      : '#e4e4e7',
-                    borderColor: isActive
-                      ? 'rgba(255, 255, 255, 0.35)'
-                      : isDark
-                      ? '#3f3f46'
-                      : '#d4d4d8',
-                  },
-                ]}
-              >
-                <Text
-                  variant={config.badgeTextVariant}
-                  style={[
-                    styles.countText,
-                    {
-                      color: isActive
-                        ? '#ffffff'
-                        : isDark
-                        ? '#d4d4d8'
-                        : '#52525b',
-                    },
-                  ]}
-                >
-                  {item.count}
-                </Text>
-              </View>
-            )}
-          </Pressable>
+            item={item}
+            index={index}
+            isActive={isActive}
+            onSelect={handleSelect}
+            config={config}
+            fullWidth={fullWidth}
+            isDark={isDark}
+            itemStyle={itemStyle}
+            resolvedActiveColor={resolvedActiveColor}
+            inactiveTextColor={inactiveTextColor}
+            showFallbackPill={showFallbackPill}
+            onMeasure={fullWidth ? undefined : handleMeasureItem}
+          />
         );
       })}
     </View>
   );
 }
+
+/**
+ * Custom shallow equality comparator for SegmentedToggle.
+ * Ensures the component only re-renders when relevant props or item attributes change,
+ * shielding it from parent re-render storms.
+ */
+function areSegmentedTogglePropsEqual<T extends string = string>(
+  prev: SegmentedToggleProps<T>,
+  next: SegmentedToggleProps<T>
+): boolean {
+  if (prev.value !== next.value) return false;
+  if (prev.size !== next.size) return false;
+  if (prev.fullWidth !== next.fullWidth) return false;
+  if (prev.activeColor !== next.activeColor) return false;
+  if (prev.accessibilityLabel !== next.accessibilityLabel) return false;
+  if (prev.onChange !== next.onChange) return false;
+  if (prev.style !== next.style) return false;
+  if (prev.itemStyle !== next.itemStyle) return false;
+
+  const prevItems = prev.items || prev.options || [];
+  const nextItems = next.items || next.options || [];
+
+  if (prevItems.length !== nextItems.length) return false;
+
+  for (let i = 0; i < prevItems.length; i++) {
+    const p = prevItems[i];
+    const n = nextItems[i];
+    if (
+      p.id !== n.id ||
+      p.label !== n.label ||
+      p.count !== n.count ||
+      p.disabled !== n.disabled ||
+      p.icon !== n.icon ||
+      p.badge !== n.badge
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export const SegmentedToggle = React.memo(
+  BaseSegmentedToggle,
+  areSegmentedTogglePropsEqual
+) as typeof BaseSegmentedToggle;
 
 const styles = StyleSheet.create({
   container: {
@@ -361,6 +554,12 @@ const styles = StyleSheet.create({
     left: 0,
     borderWidth: 1,
     zIndex: 0,
+    ...Platform.select({
+      web: {
+        willChange: 'transform',
+      } as any,
+      default: {},
+    }),
   },
   pillShadowBrand: {
     ...Platform.select({
@@ -376,39 +575,13 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  pillShadowLight: {
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
-      } as any,
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1.5 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2.5,
-        elevation: 2,
-      },
-    }),
-  },
-  pillShadowDark: {
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2)',
-      } as any,
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1.5 },
-        shadowOpacity: 0.35,
-        shadowRadius: 2.5,
-        elevation: 2,
-      },
-    }),
-  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
+    overflow: 'hidden',
+    position: 'relative',
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -426,16 +599,6 @@ const styles = StyleSheet.create({
   itemInline: {
     flexGrow: 0,
     flexShrink: 0,
-  },
-  itemDisabled: {
-    opacity: 0.4,
-    ...Platform.select({
-      web: {
-        cursor: 'not-allowed',
-        pointerEvents: 'none',
-      } as any,
-      default: {},
-    }),
   },
   itemText: {
     textAlign: 'center',

@@ -31,6 +31,32 @@ export function getGaMeasurementId(): string | undefined {
   return process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || undefined;
 }
 
+export function hasSupabaseUrl(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim());
+}
+
+export function hasSupabaseConfig(): boolean {
+  return (
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim())
+  );
+}
+
+export function getAppVersion(): string {
+  return process.env.NEXT_PUBLIC_APP_VERSION?.trim() || "2026.08.27.01";
+}
+
+export function getSentryDsn(): string | undefined {
+  return process.env.NEXT_PUBLIC_SENTRY_DSN?.trim() || undefined;
+}
+
+export function isAgentationEnabled(): boolean {
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "true") {
+    return false;
+  }
+  return process.env.NEXT_PUBLIC_ENABLE_AGENTATION === "true" || process.env.NODE_ENV === "development";
+}
+
 /**
  * Returns the canonical redirect URL for password reset emails.
  * Routes through the server-side /api/auth/callback endpoint for PKCE code exchange.
@@ -49,3 +75,39 @@ export function getResetPasswordRedirectUrl(customOrigin?: string): string {
   const base = getAppUrl();
   return `${base}/api/auth/callback?next=/reset-password`;
 }
+
+/**
+ * Typed client environment access object
+ */
+export const clientEnv = {
+  get appUrl(): string {
+    return getAppUrl();
+  },
+  get supabaseUrl(): string {
+    return getSupabaseUrl();
+  },
+  get supabasePublishableKey(): string {
+    return getSupabasePublishableKey();
+  },
+  get hasSupabaseUrl(): boolean {
+    return hasSupabaseUrl();
+  },
+  get hasSupabaseConfig(): boolean {
+    return hasSupabaseConfig();
+  },
+  get gaMeasurementId(): string | undefined {
+    return getGaMeasurementId();
+  },
+  get appVersion(): string {
+    return getAppVersion();
+  },
+  get sentryDsn(): string | undefined {
+    return getSentryDsn();
+  },
+  get isAgentationEnabled(): boolean {
+    return isAgentationEnabled();
+  },
+  get resetPasswordRedirectUrl(): string {
+    return getResetPasswordRedirectUrl();
+  },
+} as const;

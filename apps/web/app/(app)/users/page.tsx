@@ -11,7 +11,7 @@ import {
   USERS_PAGE_SIZE,
 } from "@/lib/data/users";
 import { canViewUsers, canCreateUser } from "@reachinternational/permissions";
-import { UsersPageClient } from "./users-client";
+import { UsersPageClient } from "./UsersClient";
 import { UsersSkeleton } from "@/components/ui";
 
 export const dynamic = "force-dynamic";

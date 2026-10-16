@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button, useToast } from "@/components/ui";
 import { cancelMyProfileChangeRequest } from "@/app/actions/profile";
-import { formatDate } from "@/lib/format";
+import { formatDate } from "@reachinternational/utils";
 
 interface ProfilePendingBannerProps {
   requestId: string;

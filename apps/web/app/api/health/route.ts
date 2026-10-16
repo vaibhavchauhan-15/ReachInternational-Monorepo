@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAppVersion } from "@/lib/env/client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const isReadinessCheck = url.searchParams.get("check") === "ready";
-  const release = process.env.NEXT_PUBLIC_APP_VERSION || "2026.08.27.01";
+  const release = getAppVersion();
   const timestamp = new Date().toISOString();
 
   // 1. Liveness Check (Process is alive and responding)

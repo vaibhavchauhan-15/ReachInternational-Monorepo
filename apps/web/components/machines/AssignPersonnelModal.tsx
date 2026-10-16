@@ -29,7 +29,13 @@ import { AnimatedAlertCircle, AnimatedLoader } from "@/components/ui/animated-ic
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole, ClientShiftCode } from "@reachinternational/types";
 import { isManagerOrAbove } from "@reachinternational/permissions";
-import { formatTo12Hour, parseTimeToMinutes } from "@reachinternational/utils";
+import {
+  formatTo12Hour,
+  parseTimeToMinutes,
+  shiftToMinuteRanges,
+  doRangesOverlap,
+  checkShiftIntervalOverlap,
+} from "@reachinternational/utils";
 import { DEFAULT_CLIENT_SHIFTS } from "../operations/entry/ShiftInputs";
 import { getClientShiftCodesAction } from "@/app/actions/clients";
 import {
@@ -49,28 +55,6 @@ import {
   getAssignableMachinesAction,
 } from "@/app/actions/assignments";
 import type { ActiveOperatorOtherAssignment } from "./OperatorShiftRosterEditor";
-
-function shiftToMinuteRanges(startStr?: string | null, endStr?: string | null): Array<[number, number]> {
-  if (!startStr || !endStr) return [];
-  const start = parseTimeToMinutes(startStr);
-  const end = parseTimeToMinutes(endStr);
-  if (start === null || end === null || start === end) return [];
-  if (start < end) {
-    return [[start, end]];
-  }
-  return [[start, 1440], [0, end]];
-}
-
-function doRangesOverlap(ranges1: Array<[number, number]>, ranges2: Array<[number, number]>): boolean {
-  for (const [s1, e1] of ranges1) {
-    for (const [s2, e2] of ranges2) {
-      if (Math.max(s1, s2) < Math.min(e1, e2)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 export interface OperatorAssignmentItem {
   operatorId: string;

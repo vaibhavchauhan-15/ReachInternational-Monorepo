@@ -8,7 +8,7 @@ import {
 import { useTheme } from '../ui/ThemeProvider';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { Textarea } from '../ui/textarea';
+import { Textarea } from '../ui/Textarea';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { AlertTriangle, X } from '../ui/icon';

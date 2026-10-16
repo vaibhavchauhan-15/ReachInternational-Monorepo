@@ -31,6 +31,7 @@ const CommandPalette = dynamic(
 
 import { ScrollCloud } from "@/components/ui/ScrollCloud";
 import { recordAppNavigation, popPreviousAppRoute } from "@/lib/navigation";
+import { usePageActions } from "@/components/layout/PageActionContext";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
@@ -117,6 +118,8 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const isUserDetail = pathname.startsWith("/users/") && pathname.split("/").filter(Boolean).length === 2;
   const canManageUserDetail = isUserDetail && userRole !== "operator" && userRole !== "client";
 
+  const { actions } = usePageActions();
+
   useEffect(() => {
     queueMicrotask(() => {
       setMoreOpen(false);
@@ -131,34 +134,58 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   };
 
   const handleAdd = () => {
+    if (actions?.onAdd) {
+      actions.onAdd();
+      return;
+    }
     if (pathname === "/machines") {
       window.dispatchEvent(new CustomEvent("reach:quick-add"));
     }
   };
 
   const handleAddUser = () => {
+    if (actions?.onAdd) {
+      actions.onAdd();
+      return;
+    }
     window.dispatchEvent(new CustomEvent("reach:quick-add-user"));
     router.push("/users?action=create");
   };
 
   const handleAddClient = () => {
+    if (actions?.onAdd) {
+      actions.onAdd();
+      return;
+    }
     window.dispatchEvent(new CustomEvent("reach:quick-add-client"));
     window.dispatchEvent(new CustomEvent("reach:quick-add"));
   };
 
   const handleAssign = () => {
     setMoreOpen(false);
+    if (actions?.onQuickAssign) {
+      actions.onQuickAssign();
+      return;
+    }
     window.dispatchEvent(new CustomEvent("reach:quick-assign"));
   };
 
   const handleExport = (format: "excel" | "csv") => {
     setMoreOpen(false);
     if (format === "excel") {
+      if (actions?.onExportExcel) {
+        actions.onExportExcel();
+        return;
+      }
       window.dispatchEvent(new CustomEvent("reach:quick-export-excel", { cancelable: true }));
       window.dispatchEvent(
         new CustomEvent("reach:quick-export", { cancelable: true, detail: { format: "excel" } })
       );
     } else {
+      if (actions?.onExportCSV) {
+        actions.onExportCSV();
+        return;
+      }
       window.dispatchEvent(new CustomEvent("reach:quick-export-csv", { cancelable: true }));
       window.dispatchEvent(
         new CustomEvent("reach:quick-export", { cancelable: true, detail: { format: "csv" } })
@@ -168,6 +195,10 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
 
   const handlePrint = () => {
     setMoreOpen(false);
+    if (actions?.onPrint) {
+      actions.onPrint();
+      return;
+    }
     const event = new CustomEvent("reach:quick-print", { cancelable: true });
     window.dispatchEvent(event);
     if (!event.defaultPrevented) {

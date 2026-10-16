@@ -90,7 +90,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
   monoValue = false,
   children,
 }) => {
-  const { isDark } = useTheme();
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const config = statusConfig[status] || statusConfig.default;
   const Icon = customIcon || config.icon;
@@ -166,7 +166,12 @@ export const StatusCard: React.FC<StatusCardProps> = ({
       ) : null}
 
       {children ? (
-        <View style={label ? styles.childrenWithLabel : styles.childrenOnly}>
+        <View
+          style={[
+            label ? styles.childrenWithLabel : styles.childrenOnly,
+            { borderTopColor: theme.colors.hairline },
+          ]}
+        >
           {children}
         </View>
       ) : null}

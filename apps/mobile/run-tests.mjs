@@ -153,6 +153,12 @@ try {
 
   const dashContent = fs.readFileSync(path.join(__dirname, 'app', '(app)', 'dashboard.tsx'), 'utf8');
   assert(dashContent.includes("screen: 'dashboard'"), 'dashboard.tsx integrates screen-scoped revalidation via useScreenSync');
+  assert(dashContent.includes('checkAndNotifyShiftEnded'), 'dashboard.tsx dispatches shift-end native notifications');
+
+  const operatorCardContent = fs.readFileSync(path.join(__dirname, 'components', 'dashboard', 'operator', 'OperatorDashboardCard.tsx'), 'utf8');
+  assert(!operatorCardContent.includes('"Enter Shift Entry"'), 'OperatorDashboardCard suppresses redundant Enter Shift Entry button in StatusCard');
+  assert(operatorCardContent.includes('/operations?tab=entry'), 'Shift card links to /operations?tab=entry');
+  assert(!operatorCardContent.includes('title="LAST RECORDED METER (HMR)"'), 'OperatorDashboardCard suppresses Last Recorded Meter card');
 
   // Test 8: Validate /users Workflow Verification (RBAC, Assignment, Deletion, Status, Layout)
   const usersScreenPath = path.join(__dirname, 'app', '(app)', 'users.tsx');
@@ -205,9 +211,22 @@ try {
   assert(usersContent.includes("'toggle_user_status_atomic'"), 'users.tsx calls toggle_user_status_atomic RPC');
   assert(usersContent.includes('haptics.reject()') && usersContent.includes('prev.map((u) => (u.id === statusConfirmUser.id ? { ...u, status: updatedStatus } : u))'), 'users.tsx preserves UI integrity and provides haptics on status update');
 
+  const userTouchCardPath = path.join(__dirname, 'components', 'users', 'UserTouchCard.tsx');
+  const userActionsPopoverPath = path.join(__dirname, 'components', 'users', 'UserActionsPopover.tsx');
+  const userTouchCardContent = fs.existsSync(userTouchCardPath) ? fs.readFileSync(userTouchCardPath, 'utf8') : '';
+  const userActionsPopoverContent = fs.existsSync(userActionsPopoverPath) ? fs.readFileSync(userActionsPopoverPath, 'utf8') : '';
+
   // Action Menu & User Detail Modal Parity
-  assert(usersContent.includes('handleTriggerResetPassword(u)'), 'users.tsx More Actions menu includes password triggers');
-  assert(usersContent.includes('onOpenMoreActions?.(u') && usersContent.includes('onAssignMachine(u)') && usersContent.includes('onAssignSupervisor(u)'), 'UserTouchCard includes canonical 3-action toolbar with More, Assign Machine, and Supervisor');
+  assert(
+    usersContent.includes('handleTriggerResetPassword') && (usersContent.includes('handleTriggerResetPassword(u)') || userActionsPopoverContent.includes('onResetPassword')),
+    'users.tsx More Actions menu includes password triggers'
+  );
+  assert(
+    (usersContent.includes('onOpenMoreActions?.(u') || userTouchCardContent.includes('onOpenMoreActions?.(u')) &&
+      (usersContent.includes('onAssignMachine(u)') || userTouchCardContent.includes('onAssignMachine(u)') || userTouchCardContent.includes('onAssignMachine?.(u)')) &&
+      (usersContent.includes('onAssignSupervisor(u)') || userTouchCardContent.includes('onAssignSupervisor(u)') || userTouchCardContent.includes('onAssignSupervisor?.(u)')),
+    'UserTouchCard includes canonical 3-action toolbar with More, Assign Machine, and Supervisor'
+  );
   assert(userDetailContent.includes('<DeleteUserConfirmDialog') && userDetailContent.includes('<ConfirmDialog'), 'UserDetailModal maintains 100% parity with confirmation dialogs');
 
   // Responsive Layout & Ergonomics
@@ -285,12 +304,79 @@ try {
   assert(operatorEntryContent.includes('No Equipment Assigned') && operatorEntryContent.includes('<EmptyState'), 'MobileOperatorEntryCard renders EmptyState when unassigned');
   assert(operatorEntryContent.includes('isMeterRegressed') && operatorEntryContent.includes('<FormError'), 'MobileOperatorEntryCard validates meter regression via FormError');
   assert(operatorEntryContent.includes('isOver24Hours') && operatorEntryContent.includes('<FormError'), 'MobileOperatorEntryCard validates running hours cap via FormError');
-  assert(operatorEntryContent.includes('isFutureShift') && operatorEntryContent.includes('Shift in progress: logs can be submitted once your shift concludes'), 'MobileOperatorEntryCard displays in-progress shift advisory banner');
+  assert(operatorEntryContent.includes('isFutureShift') && operatorEntryContent.includes('Shift in progress · Submit logs after'), 'MobileOperatorEntryCard displays short & informative in-progress shift advisory banner');
   assert(monitorContent.includes('if (isError && rows.length === 0)') && monitorContent.includes('<ErrorState'), 'MobileTodayShiftMonitorTab renders ErrorState on query failure');
   assert(monitorContent.includes('variant="no-results"') && monitorContent.includes('variant="filtered"') && monitorContent.includes('variant="empty"'), 'MobileTodayShiftMonitorTab handles all semantic EmptyState variants');
   assert(historyContent.includes('isError && filteredLogs.length === 0') && historyContent.includes('<ErrorState'), 'MobileOperatorHistoryTab renders ErrorState on query failure');
   assert(historyContent.includes('variant="no-results"') && historyContent.includes('variant="filtered"') && historyContent.includes('variant="empty"'), 'MobileOperatorHistoryTab handles all semantic EmptyState variants');
   assert(opsContent.includes('maxWidth: 1200'), 'operations.tsx constrains maxWidth to 1200px for 1920x869 wide desktop viewports');
+
+  // Test 37: Verify TimePickerDialog Android 16 Clock UI invariants
+  const timePickerPath = path.join(__dirname, 'components/ui/TimePickerDialog.tsx');
+  const timePickerContent = fs.readFileSync(timePickerPath, 'utf8');
+  assert(timePickerContent.includes("const [mode, setMode] = useState<'dial' | 'keyboard'>"), 'TimePickerDialog implements dual Dial and Keyboard modes');
+  assert(timePickerContent.includes('<Keyboard size={22}') && timePickerContent.includes('<Clock size={22}'), 'TimePickerDialog integrates mode switch icon button');
+  assert(!timePickerContent.includes('-1 hr') && !timePickerContent.includes('+5m'), 'TimePickerDialog eliminates crowded stepper button clutter');
+  assert(timePickerContent.includes("activeUnit === 'hour'") && timePickerContent.includes("rgba(2, 132, 199, 0.22)"), 'TimePickerDialog applies accent-filled active container styling');
+  assert(timePickerContent.includes('styles.ampmContainer') && timePickerContent.includes('styles.ampmDivider'), 'TimePickerDialog renders vertically stacked AM/PM capsule');
+  assert(!timePickerContent.includes('INTERMEDIATE_MINUTE_TICKS'), 'TimePickerDialog eliminates minute dots for lightweight smooth dial');
+  assert(!timePickerContent.includes('selectTextOnFocus') && timePickerContent.includes('selectionColor="transparent"'), 'TimePickerDialog eliminates blue selection highlight box in keyboard mode');
+
+  // Test 38: Verify Native Attendance Performance & Workflow Invariants
+  const attendanceScreenPath = path.join(__dirname, 'app/(app)/attendance.tsx');
+  const attendanceScreenContent = fs.readFileSync(attendanceScreenPath, 'utf8');
+  assert(attendanceScreenContent.includes('useOperatorAttendanceInfiniteQuery'), 'attendance.tsx integrates useOperatorAttendanceInfiniteQuery for server-side pagination');
+  assert(attendanceScreenContent.includes("screen: 'attendance'"), 'attendance.tsx registers screen-scoped reconnect revalidation via useScreenSync');
+  assert(attendanceScreenContent.includes('initialNumToRender={8}'), 'attendance.tsx configures initialNumToRender={8} for fast initial rendering');
+  assert(attendanceScreenContent.includes('removeClippedSubviews='), 'attendance.tsx configures removeClippedSubviews to unmount off-screen day cards');
+  assert(attendanceScreenContent.includes('ListHeaderComponent={renderOperatorListHeader}'), 'attendance.tsx uses ListHeaderComponent to eliminate nested scrolling');
+  assert(attendanceScreenContent.includes('onEndReachedThreshold={0.4}'), 'attendance.tsx triggers lazy page fetches at 0.4 threshold');
+  assert(attendanceScreenContent.includes('fetchNextPage'), 'attendance.tsx calls fetchNextPage on scroll end');
+
+  const attendanceQueriesPath = path.join(__dirname, 'lib/queries/attendance.ts');
+  const attendanceQueriesContent = fs.readFileSync(attendanceQueriesPath, 'utf8');
+  assert(attendanceQueriesContent.includes('p_page: page') && attendanceQueriesContent.includes('p_page_size: pageSize'), 'getAttendanceDailyDetail passes pagination parameters to RPC');
+  assert(attendanceQueriesContent.includes('totalDays') && attendanceQueriesContent.includes('hasMore'), 'attendance.ts queries define paginated response contract');
+
+  const attendanceHooksPath = path.join(__dirname, 'lib/hooks/useAttendanceData.ts');
+  const attendanceHooksContent = fs.readFileSync(attendanceHooksPath, 'utf8');
+  assert(attendanceHooksContent.includes('useInfiniteQuery'), 'useAttendanceData.ts implements useInfiniteQuery for operator monthly attendance');
+  assert(attendanceHooksContent.includes('initialPageParam: 1'), 'useAttendanceData.ts sets initialPageParam: 1');
+  assert(attendanceHooksContent.includes('getNextPageParam'), 'useAttendanceData.ts derives next page from hasMore flag');
+
+  const attendanceDayCardPath = path.join(__dirname, 'components/attendance/AttendanceDayCard.tsx');
+  const attendanceDayCardContent = fs.readFileSync(attendanceDayCardPath, 'utf8');
+  assert(attendanceDayCardContent.includes('React.memo'), 'AttendanceDayCard is wrapped in React.memo for row memoization');
+
+  const attendanceEmployeeCardPath = path.join(__dirname, 'components/attendance/AttendanceEmployeeCard.tsx');
+  const attendanceEmployeeCardContent = fs.readFileSync(attendanceEmployeeCardPath, 'utf8');
+  assert(attendanceEmployeeCardContent.includes('React.memo'), 'AttendanceEmployeeCard is wrapped in React.memo for row memoization');
+
+  const migration171Path = path.join(__dirname, '../../supabase/migrations/171_attendance_daily_detail_pagination.sql');
+  assert(fs.existsSync(migration171Path), 'Migration 171 for attendance daily detail pagination exists');
+  const migration171Content = fs.readFileSync(migration171Path, 'utf8');
+  assert(migration171Content.includes('p_page int') && migration171Content.includes('p_page_size int'), 'Migration 171 implements paginated get_attendance_daily_detail');
+  assert(migration171Content.includes("v_caller_role = 'operator'") && migration171Content.includes('42501'), 'Migration 171 enforces strict operator self-attendance isolation (42501)');
+
+  // Test 175: Validate Mobile Splash Screen & Gateway Optimizations
+  const splashIndexContent = fs.readFileSync(path.join(__dirname, 'app/index.tsx'), 'utf8');
+  assert(!splashIndexContent.includes('ActivityIndicator'), 'Splash screen completely removes loading spinner (ActivityIndicator)');
+  assert(!splashIndexContent.includes('styles.indicator'), 'Splash screen removes styles.indicator');
+  assert(splashIndexContent.includes('width < 360 ? 120 : 144'), 'Splash screen scales logo to industry standard 144dp (120dp compact fallback)');
+  assert(splashIndexContent.includes('FadeIn.duration(200)'), 'Splash screen applies GPU-accelerated FadeIn entrance animation');
+  assert(splashIndexContent.includes('memo(function NativeGatewayScreen'), 'NativeGatewayScreen is memoized with React.memo');
+  assert(splashIndexContent.includes('SplashScreen.hideAsync()'), 'Splash screen coordinates native splash dismissal upon auth resolution');
+
+  // Test 176: Validate Production-Ready What's New System
+  assert(fs.existsSync(path.join(__dirname, 'lib/whats-new/releaseManifest.ts')), "What's New manifest exists");
+  assert(fs.existsSync(path.join(__dirname, 'lib/whats-new/whatsNewService.ts')), "What's New service exists");
+  assert(fs.existsSync(path.join(__dirname, 'components/whats-new/WhatsNewSheet.tsx')), "WhatsNewSheet bottom sheet exists");
+  assert(fs.existsSync(path.join(__dirname, 'components/whats-new/WhatsNewController.tsx')), "WhatsNewController exists");
+  assert(fs.existsSync(path.join(__dirname, 'app/(app)/settings/about/whats-new.tsx')), "Dedicated What's New screen route exists");
+
+  const appLayoutCheck = fs.readFileSync(path.join(__dirname, 'app/(app)/_layout.tsx'), 'utf8');
+  assert(appLayoutCheck.includes('WhatsNewController'), 'AppLayout mounts WhatsNewController');
+  assert(appLayoutCheck.includes('settings/about/whats-new'), 'AppLayout registers settings/about/whats-new route');
 
   console.log(`\n✅ Verification Suite Passed: All ${passed}/${passed + failed} test scenarios verified!`);
   process.exit(failed > 0 ? 1 : 0);

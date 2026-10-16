@@ -123,13 +123,13 @@ export function ShiftCardSelector({
                   )}
                 </div>
                 {compactRange ? (
-                  <span className="text-[8.5px] sm:text-[10px] font-mono font-medium text-white/95 leading-tight mt-0.5 whitespace-nowrap truncate tracking-tighter sm:tracking-tight">
+                  <span className="text-[8.5px] sm:text-[10px] font-mono font-medium text-white/70 leading-tight mt-0.5 whitespace-nowrap truncate tracking-tighter sm:tracking-tight">
                     {compactRange}
                   </span>
                 ) : null}
               </div>
             ) : (
-              /* CLOSED (UNSELECTED) STATE: Exactly ONE line (Only Name) */
+              /* CLOSED (UNSELECTED) STATE: One line (Name ONLY, no shift time) */
               <div className="flex flex-col justify-center items-center sm:items-start leading-tight min-w-0 w-full select-none">
                 <span
                   className={cn(

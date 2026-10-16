@@ -1,20 +1,21 @@
 /**
  * ReachInternational Mobile — Clean Settings Hub
+ * Route: /settings/index
  * 
  * Displays strictly the 4 canonical navigation cards:
  * 1. Account (/settings/account)
- * 2. Notification (/settings/notification)
- * 3. Preferences (/settings/preference / /settings/prefrences)
- * 4. About App (/settings/aboutapp)
- * Plus clean secure session sign out.
+ * 2. Notifications (/settings/notifications)
+ * 3. Preferences (/settings/preferences)
+ * 4. About App (/settings/about)
+ * Plus clean secure session sign out with Confirmation Dialog.
  */
 
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAuth } from '../../../lib/auth/useAuth';
 import {
-  Card,
   Button,
   useTheme,
   ConfirmDialog,
@@ -37,6 +38,7 @@ interface SettingsNavCardProps {
   icon: React.ReactNode;
   iconBg: string;
   title: string;
+  subtitle: string;
   onPress: () => void;
   accessibilityLabel: string;
 }
@@ -45,6 +47,7 @@ function SettingsNavCard({
   icon,
   iconBg,
   title,
+  subtitle,
   onPress,
   accessibilityLabel,
 }: SettingsNavCardProps) {
@@ -68,13 +71,22 @@ function SettingsNavCard({
       <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
         {icon}
       </View>
-      <Text
-        variant="subheading"
-        style={[styles.cardTitle, { color: theme.colors.ink }]}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
+      <View style={styles.textColumn}>
+        <Text
+          variant="subheading"
+          style={[styles.cardTitle, { color: theme.colors.ink }]}
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.cardSubtitle, { color: theme.colors.mute }]}
+          numberOfLines={1}
+        >
+          {subtitle}
+        </Text>
+      </View>
       <View style={styles.chevronBox}>
         <ChevronRight size={18} color={theme.colors.mute} />
       </View>
@@ -84,7 +96,7 @@ function SettingsNavCard({
 
 export default function SettingsHomeScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, userProfile, role } = useAuth();
   const { theme, isDark } = useTheme();
 
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
@@ -100,13 +112,16 @@ export default function SettingsHomeScreen() {
       setIsSigningOut(true);
       await signOut();
       setShowSignOutDialog(false);
-      router.replace('/login');
+      router.replace('/(auth)/login');
     } catch (err) {
       console.error('[Settings] Sign out error:', err);
     } finally {
       setIsSigningOut(false);
     }
   };
+
+  const roleText = (role || userProfile?.role || 'Operator').toUpperCase();
+  const appVersion = Constants.expoConfig?.version || '1.3.0';
 
   return (
     <SettingsScreenContainer
@@ -119,6 +134,7 @@ export default function SettingsHomeScreen() {
         icon={<User size={20} color={isDark ? '#818cf8' : '#4f46e5'} />}
         iconBg={isDark ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff'}
         title="Account"
+        subtitle={`Profile, credentials, KYC & security (${roleText})`}
         onPress={() => router.push('/settings/account' as any)}
         accessibilityLabel="Navigate to Account Settings"
       />
@@ -128,7 +144,8 @@ export default function SettingsHomeScreen() {
         icon={<Bell size={20} color={isDark ? '#a78bfa' : '#7c3aed'} />}
         iconBg={isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe'}
         title="Notifications"
-        onPress={() => router.push('/settings/notification' as any)}
+        subtitle="Shift reminders, machinery alerts & push controls"
+        onPress={() => router.push('/settings/notifications' as any)}
         accessibilityLabel="Navigate to Notification Settings"
       />
 
@@ -137,7 +154,8 @@ export default function SettingsHomeScreen() {
         icon={<Sliders size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
         iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
         title="Preferences"
-        onPress={() => router.push('/settings/preference' as any)}
+        subtitle="Theme mode, font size scaling & haptic feedback"
+        onPress={() => router.push('/settings/preferences' as any)}
         accessibilityLabel="Navigate to Preferences Settings"
       />
 
@@ -146,7 +164,8 @@ export default function SettingsHomeScreen() {
         icon={<Info size={20} color={isDark ? '#34d399' : '#059669'} />}
         iconBg={isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'}
         title="About App"
-        onPress={() => router.push('/settings/aboutapp' as any)}
+        subtitle={`Version ${appVersion}, privacy, terms, support & cookies`}
+        onPress={() => router.push('/settings/about' as any)}
         accessibilityLabel="Navigate to About App"
       />
 
@@ -155,11 +174,21 @@ export default function SettingsHomeScreen() {
         <Button
           label="Sign Out"
           onPress={handleSignOutPress}
-          variant="outline"
+          variant="danger"
           shape="pill"
-          icon={<LogOut size={16} color={theme.colors.ink} />}
+          icon={<LogOut size={16} color="#ffffff" />}
           fullWidth
         />
+      </View>
+
+      {/* App Version Info */}
+      <View style={styles.versionContainer}>
+        <Text
+          variant="caption"
+          style={[styles.versionText, { color: theme.colors.mute }]}
+        >
+          Version {appVersion}
+        </Text>
       </View>
 
       {/* Confirm Sign Out Dialog */}
@@ -186,7 +215,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   navCard: {
-    minHeight: 56,
+    minHeight: 64,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     flexDirection: 'row',
@@ -202,8 +231,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: {
+  textColumn: {
     flex: 1,
+    gap: 2,
+  },
+  cardTitle: {
+    flexShrink: 1,
+  },
+  cardSubtitle: {
+    marginTop: 1,
   },
   chevronBox: {
     alignItems: 'center',
@@ -211,5 +247,14 @@ const styles = StyleSheet.create({
   },
   signOutBox: {
     marginTop: spacingNumeric.lg,
+  },
+  versionContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacingNumeric.xs,
+    paddingBottom: spacingNumeric.sm,
+  },
+  versionText: {
+    textAlign: 'center',
   },
 });

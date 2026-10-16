@@ -16,13 +16,15 @@ import {
 import { cn } from '@/lib/utils';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { useTheme } from '@/components/ui/ThemeProvider';
 
 export interface InputProps extends TextInputProps {
   className?: string;
   containerClassName?: string;
+  placeholderClassName?: string;
   label?: string;
   required?: boolean;
-  error?: string;
+  error?: string | boolean;
   helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -30,6 +32,7 @@ export interface InputProps extends TextInputProps {
   containerStyle?: StyleProp<ViewStyle>;
   name?: string;
   id?: string;
+  focusBorderColor?: string;
 }
 
 const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
@@ -55,11 +58,32 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       spellCheck,
       keyboardType,
       inputMode,
+      focusBorderColor,
+      onFocus,
+      onBlur,
       ...props
     },
     ref
   ) => {
+    const { isDark } = useTheme();
     const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
+    const [isFocused, setIsFocused] = React.useState(false);
+
+    const handleFocus = React.useCallback(
+      (e: any) => {
+        setIsFocused(true);
+        onFocus?.(e);
+      },
+      [onFocus]
+    );
+
+    const handleBlur = React.useCallback(
+      (e: any) => {
+        setIsFocused(false);
+        onBlur?.(e);
+      },
+      [onBlur]
+    );
 
     const actualSecureTextEntry = isPassword
       ? !isPasswordVisible
@@ -107,6 +131,37 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
         }
       : {};
 
+    const hasError = Boolean(error);
+    const errorMessage = typeof error === 'string' && error.trim().length > 0 ? error : undefined;
+
+    const activeBorderColor = hasError
+      ? '#ef4444'
+      : (focusBorderColor || (isDark ? '#0ea5e9' : '#0284c7'));
+
+    const resolvedInputStyle = React.useMemo(() => {
+      const list: any[] = [style];
+
+      if (isFocused) {
+        list.push({
+          borderColor: activeBorderColor,
+        });
+      }
+
+      if (Platform.OS === 'web') {
+        list.push({
+          outlineStyle: 'none',
+          outline: 'none',
+          ...(isFocused
+            ? {
+                boxShadow: `0 0 0 1px ${activeBorderColor}`,
+              }
+            : {}),
+        });
+      }
+
+      return list;
+    }, [style, isFocused, activeBorderColor]);
+
     return (
       <View style={containerStyle} className={cn('w-full', label && 'mb-3', containerClassName)}>
         {label && (
@@ -134,17 +189,19 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
             keyboardType={keyboardType}
             inputMode={effectiveInputMode}
             aria-autocomplete="none"
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             {...webSecurityProps}
             className={cn(
-              'web:flex h-11 native:h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+              'web:flex h-11 native:h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground web:outline-none web:focus:outline-none web:focus-visible:outline-none web:transition-[border-color,box-shadow] web:duration-150',
               leftIcon && 'pl-10',
               (rightIcon || isPassword) && 'pr-10',
-              error && 'border-destructive',
+              hasError && 'border-destructive',
               props.editable === false && 'opacity-50 web:cursor-not-allowed',
               className
             )}
             placeholderClassName={cn('text-muted-foreground', placeholderClassName)}
-            style={style}
+            style={resolvedInputStyle}
             {...props}
           />
           {isPassword ? (
@@ -168,8 +225,8 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
             </View>
           ) : null}
         </View>
-        {error ? (
-          <Text variant="caption" className="text-destructive mt-1 font-medium">{error}</Text>
+        {errorMessage ? (
+          <Text variant="caption" className="text-destructive mt-1 font-medium">{errorMessage}</Text>
         ) : helperText ? (
           <Text variant="caption" className="text-muted-foreground mt-1">{helperText}</Text>
         ) : null}

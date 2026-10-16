@@ -71,30 +71,35 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
             value={totalFleet}
             icon={Wrench}
             variant="default"
+            href="/machines"
           />
           <KPICard
             label="On Rent"
             value={rentedFleet}
             icon={CheckCircle2}
             variant="success"
+            href="/machines"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
             icon={Layers}
             variant="info"
+            href="/operations"
           />
           <KPICard
             label="Spare / Idle"
             value={spareFleet}
             icon={Clock}
             variant="warning"
+            href="/machines"
           />
           <KPICard
             label="Breakdowns"
             value={breakdownFleet}
             icon={AlertTriangle}
             variant={breakdownFleet > 0 ? 'error' : 'default'}
+            href="/operations"
           />
         </KPIGrid>
       </View>
@@ -113,12 +118,14 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
             value={todayLogs}
             icon={FileSpreadsheet}
             variant="default"
+            href="/running-logs"
           />
           <KPICard
             label="Running Hours Today"
             value={`${todayHours.toFixed(1)} hrs`}
             icon={Gauge}
             variant="info"
+            href="/running-logs"
           />
         </KPIGrid>
       </View>

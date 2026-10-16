@@ -4,6 +4,7 @@
  */
 
 import { parseTimeToMinutes, formatTo12Hour } from './date';
+export { parseTimeToMinutes, formatTo12Hour };
 
 export interface ShiftMatchTarget {
   code: string;

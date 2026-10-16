@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert';
+import { fileURLToPath } from 'node:url';
 
 console.log('\n================================================================');
 console.log('  REACHINTERNATIONAL PRODUCTION SECURITY & PERSISTENCE SUITE    ');
@@ -34,8 +35,10 @@ function check(title, assertion) {
   }
 }
 
-const rootDir = process.cwd();
-const mobileDir = path.join(rootDir, 'apps', 'mobile');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const mobileDir = __dirname;
+const rootDir = path.resolve(__dirname, '../..');
 const savedEmailsPath = path.join(mobileDir, 'lib', 'auth', 'savedEmails.ts');
 const authErrorsPath = path.join(mobileDir, 'lib', 'auth', 'authErrors.ts');
 const supabasePath = path.join(mobileDir, 'lib', 'supabase.ts');

@@ -10,7 +10,7 @@ import {
 import { getClientOptions } from "@/lib/queries/clients";
 import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
 import { EmptyState, MachineDetailSkeleton } from "@/components/ui";
-import { MachineClientView } from "./machine-client-view";
+import { MachineClientView } from "./MachineClientView";
 
 async function MachineDetailContent({ id }: { id: string }) {
   const user = await getCurrentUser();

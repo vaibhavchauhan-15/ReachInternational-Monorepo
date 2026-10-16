@@ -32,22 +32,17 @@ export const getOperatorDashboard = cache(
   async (operatorId: string): Promise<OperatorDashboardDTO> => {
     const fetchCached = unstable_cache(
       async (): Promise<OperatorDashboardDTO> => {
-        try {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_operator_dashboard", {
-            p_operator_id: operatorId,
-          });
+        const supabase = createSupabaseAdminClient();
+        const { data, error } = await supabase.rpc("get_operator_dashboard", {
+          p_operator_id: operatorId,
+        });
 
-          if (error) {
-            console.error("[DAL] getOperatorDashboard RPC error:", error.message);
-            return DEFAULT_OPERATOR_DASHBOARD;
-          }
-
-          return (data as OperatorDashboardDTO) || DEFAULT_OPERATOR_DASHBOARD;
-        } catch (err) {
-          console.error("[DAL] getOperatorDashboard fatal error:", err);
-          return DEFAULT_OPERATOR_DASHBOARD;
+        if (error) {
+          console.error("[DAL] getOperatorDashboard RPC error:", error.message);
+          throw new Error(`Failed to load operator dashboard: ${error.message}`);
         }
+
+        return (data as OperatorDashboardDTO) || DEFAULT_OPERATOR_DASHBOARD;
       },
       [`dashboard-operator-${operatorId}`],
       {

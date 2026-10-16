@@ -12,6 +12,7 @@ import { AnimatedTrash2 } from "@/components/ui/animated-icons";
 import { FileSpreadsheet, Download, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { User, UserRole, ProfileChangeRequest, AccountDeletionRequest } from "@/lib/types/database";
 
 import {
@@ -1231,6 +1232,44 @@ export function UsersPageClient({
       window.removeEventListener("reach:quick-print", handleQuickExportPdf);
     };
   }, [selectedUserIds, handleExportSelected, handleExportFiltered]);
+
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        onAdd: readOnly ? undefined : () => setShowCreateModal(true),
+        onExportExcel: () => {
+          if (selectedUserIds.length > 0) {
+            handleExportSelected("xlsx");
+          } else {
+            handleExportFiltered("xlsx");
+          }
+        },
+        onExportCSV: () => {
+          if (selectedUserIds.length > 0) {
+            handleExportSelected("csv");
+          } else {
+            handleExportFiltered("csv");
+          }
+        },
+        onExportPDF: () => {
+          if (selectedUserIds.length > 0) {
+            handleExportSelected("pdf");
+          } else {
+            handleExportFiltered("pdf");
+          }
+        },
+        onPrint: () => {
+          if (selectedUserIds.length > 0) {
+            handleExportSelected("pdf");
+          } else {
+            handleExportFiltered("pdf");
+          }
+        },
+        onRefresh: () => router.refresh(),
+      }),
+      [readOnly, selectedUserIds, handleExportSelected, handleExportFiltered, router]
+    )
+  );
 
   const stateOptions = useMemo(() => {
     const baseStates = aggregates?.states ?? [];

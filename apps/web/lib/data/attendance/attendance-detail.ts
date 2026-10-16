@@ -395,36 +395,12 @@ export async function getAttendanceDetail(
     try {
       return await fetchAttendanceDetailFallback(employeeId, year, month);
     } catch (fallbackErr) {
-      console.error("[getAttendanceDetail] Fallback query failed, returning safe empty matrix:", fallbackErr);
-      return {
-        employee: {
-          id: employeeId,
-          employee_id: `EMP-${employeeId.slice(0, 8).toUpperCase()}`,
-          full_name: "Operator",
-          email: null,
-          phone: null,
-          role: "operator",
-          city: null,
-          district: null,
-          state: null,
-          shift_start_time: "06:00:00",
-          shift_end_time: "14:00:00",
-        },
-        year,
-        month,
-        days: [],
-        weekdayRollup: [],
-        summary: {
-          presentDays: 0,
-          absentDays: 0,
-          halfDays: 0,
-          weekOffs: 0,
-          disabledDays: 0,
-          totalWorkedMinutes: 0,
-          totalOtMinutes: 0,
-          totalBreakdownMinutes: 0,
-        },
-      };
+      console.error("[getAttendanceDetail] Fallback query failed:", fallbackErr);
+      throw new Error(
+        `Failed to fetch attendance details: ${
+          fallbackErr instanceof Error ? fallbackErr.message : "Database error"
+        }`
+      );
     }
   };
 
