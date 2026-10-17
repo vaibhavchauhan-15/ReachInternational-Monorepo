@@ -110,7 +110,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     if (!visible && mounted) {
       const fallbackTimer = setTimeout(() => {
         handleDismissComplete();
-      }, 240);
+      }, 220);
       return () => clearTimeout(fallbackTimer);
     }
   }, [visible, mounted, handleDismissComplete]);
@@ -122,7 +122,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         translateX.value = 0;
       } else {
         translateX.value = withTiming(0, {
-          duration: 220,
+          duration: 200,
           easing: OPEN_EASING,
           reduceMotion: ReduceMotion.System,
         });
@@ -135,7 +135,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         translateX.value = withTiming(
           drawerWidth,
           {
-            duration: 180,
+            duration: 170,
             easing: CLOSE_EASING,
             reduceMotion: ReduceMotion.System,
           },
@@ -188,7 +188,7 @@ export const Drawer: React.FC<DrawerProps> = ({
           );
         } else {
           translateX.value = withTiming(0, {
-            duration: 180,
+            duration: 170,
             easing: OPEN_EASING,
             reduceMotion: ReduceMotion.System,
           });
@@ -196,9 +196,14 @@ export const Drawer: React.FC<DrawerProps> = ({
       });
   }, [drawerWidth, translateX, contextX, onClose, handleDismissComplete]);
 
-  const drawerAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
+  const drawerAnimatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    const norm = Math.max(0, Math.min(1, 1 - translateX.value / drawerWidth));
+    return {
+      transform: [{ translateX: translateX.value }],
+      opacity: 0.2 + norm * 0.8,
+    };
+  });
 
   if (!mounted) return null;
 

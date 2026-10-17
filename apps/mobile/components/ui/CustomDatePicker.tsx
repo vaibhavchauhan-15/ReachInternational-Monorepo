@@ -50,6 +50,8 @@ export interface CustomDatePickerProps {
   onChange: (dateStr: string) => void;
   /** Trigger label prefix (defaults to "Date") */
   label?: string;
+  /** Whether to show label prefix on trigger button (defaults to true) */
+  showPrefix?: boolean;
   /** Max allowed days in the past (default: undefined / unlimited if allowAnyPast is true) */
   maxDaysOld?: number;
   /** Allowed days in the future (default: 0 for operational historical logs) */
@@ -116,6 +118,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   value,
   onChange,
   label = 'Date',
+  showPrefix = true,
   maxDaysOld = 365,
   allowFutureDays = 0,
   allowAnyPast = true,
@@ -605,9 +608,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
               size={13}
               color={isFiltered || open ? '#0284c7' : theme.colors.mute}
             />
-            <Text variant="caption" style={[{ color: theme.colors.mute }]}>
-              {label}:
-            </Text>
+            {showPrefix && label ? (
+              <Text variant="caption" style={[{ color: theme.colors.mute }]}>
+                {label}:
+              </Text>
+            ) : null}
             <Text
               variant="caption"
               style={[

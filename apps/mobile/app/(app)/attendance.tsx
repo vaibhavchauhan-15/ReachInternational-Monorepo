@@ -25,6 +25,10 @@ import {
   AppModal,
   SearchInput,
   useToast,
+  FilterSidebar,
+  FilterCategoryCard,
+  DropdownFilterSelector,
+  type FilterOption,
 } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import {
@@ -52,11 +56,30 @@ import {
   ChevronLeft,
   X,
   SlidersHorizontal,
+  RotateCcw,
 } from '../../components/ui/icon';
+import { haptics } from '../../lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import type { AttendanceDay, AttendanceDetailData } from '../../lib/queries/attendance';
 
 const ALLOWED_ROLES = ['super_admin', 'admin', 'hr', 'manager', 'supervisor', 'operator'];
+
+const OPERATOR_STATUS_OPTIONS: FilterOption[] = [
+  { id: 'all', label: 'All Statuses' },
+  { id: 'PRESENT', label: 'Present Only', dotColor: '#10b981' },
+  { id: 'ABSENT', label: 'Absent Only', dotColor: '#ef4444' },
+  { id: 'HALF_DAY', label: 'Half Day Only', dotColor: '#f59e0b' },
+  { id: 'WEEK_OFF', label: 'Week Off Only', dotColor: '#6b7280' },
+];
+
+const MANAGEMENT_STATUS_OPTIONS: FilterOption[] = [
+  { id: 'all', label: 'All Operators' },
+  { id: 'present', label: 'Present Today', dotColor: '#10b981' },
+  { id: 'absent', label: 'Absent Today', dotColor: '#ef4444' },
+  { id: 'half_day', label: 'Half Day Today', dotColor: '#f59e0b' },
+  { id: 'has_absences', label: 'Has Past Absences', dotColor: '#f97316' },
+  { id: 'perfect', label: 'Perfect Attendance (0 Absences)', dotColor: '#10b981' },
+];
 
 export default function AttendanceScreen() {
   const { theme, isDark } = useTheme();
@@ -91,6 +114,7 @@ export default function AttendanceScreen() {
   const [operatorStatusFilter, setOperatorStatusFilter] = useState<
     'all' | 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF'
   >('all');
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
 
   // Manager persistent search and filter state
   const {
@@ -872,16 +896,82 @@ export default function AttendanceScreen() {
             />
           </ScrollView>
 
-          {/* Search Input */}
-          <View style={{ marginBottom: 12 }}>
-            <SearchInput
-              value={searchQuery}
-              onChangeText={(text) => setSearchQuery(text)}
-              onClear={() => setSearchQuery('', true)}
-              placeholder="Search operator by name, phone, city..."
-              placeholderTextColor={theme.colors.mute}
-              autoCapitalize="none"
-            />
+          {/* Search & Filter Bar */}
+          <View style={styles.searchFilterRow}>
+            <View style={styles.searchContainer}>
+              <SearchInput
+                value={searchQuery}
+                onChangeText={(text) => setSearchQuery(text)}
+                onClear={() => setSearchQuery('', true)}
+                placeholder="Search operator by name, phone, city..."
+                placeholderTextColor={theme.colors.mute}
+                autoCapitalize="none"
+              />
+            </View>
+            <Pressable
+              variant="outline"
+              haptic="select"
+              hitSlopToMin48
+              onPress={() => setIsFilterSidebarOpen(true)}
+              style={[
+                styles.managementFilterBtn,
+                {
+                  backgroundColor:
+                    statusFilter !== 'all' ? '#0284c7' : theme.colors.canvasElevated,
+                  borderColor:
+                    statusFilter !== 'all' ? '#0284c7' : theme.colors.hairline,
+                },
+              ]}
+              accessibilityLabel="Filter attendance roster"
+            >
+              <SlidersHorizontal
+                size={14}
+                color={statusFilter !== 'all' ? '#ffffff' : theme.colors.ink}
+              />
+              <Text
+                variant="label"
+                style={{
+                  color: statusFilter !== 'all' ? '#ffffff' : theme.colors.ink,
+                  marginLeft: 4,
+                }}
+              >
+                Filter
+              </Text>
+              {statusFilter !== 'all' && (
+                <View style={styles.activeFilterCountBadge}>
+                  <Text variant="caption" style={{ color: '#0284c7' }}>
+                    1
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+
+            {/* Quick Reset Attendance Filters Button */}
+            {(statusFilter !== 'all' || searchQuery.length > 0) && (
+              <Pressable
+                variant="outline"
+                haptic="tap"
+                hitSlopToMin48
+                onPress={() => {
+                  haptics.success();
+                  setStatusFilter('all');
+                  setSearchQuery('', true);
+                }}
+                style={[
+                  styles.managementResetBtn,
+                  {
+                    backgroundColor: theme.colors.canvasElevated,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+                accessibilityLabel="Reset attendance filters"
+              >
+                <RotateCcw size={13} color={theme.colors.mute} />
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  Reset
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           {/* Status Filter Strip */}
@@ -985,16 +1075,8 @@ export default function AttendanceScreen() {
         <Pressable
           variant="fab"
           haptic="select"
-          accessibilityLabel="Filter daily records"
-          onPress={() => {
-            setOperatorStatusFilter((cur) => {
-              if (cur === 'all') return 'PRESENT';
-              if (cur === 'PRESENT') return 'ABSENT';
-              if (cur === 'ABSENT') return 'HALF_DAY';
-              if (cur === 'HALF_DAY') return 'WEEK_OFF';
-              return 'all';
-            });
-          }}
+          accessibilityLabel="Open attendance filter sidebar"
+          onPress={() => setIsFilterSidebarOpen(true)}
           style={[
             styles.fabBtn,
             {
@@ -1005,6 +1087,13 @@ export default function AttendanceScreen() {
           ]}
         >
           <SlidersHorizontal size={20} color="#ffffff" />
+          {operatorStatusFilter !== 'all' && (
+            <View style={styles.fabBadge}>
+              <Text variant="caption" style={styles.fabBadgeText}>
+                1
+              </Text>
+            </View>
+          )}
         </Pressable>
       )}
 
@@ -1079,6 +1168,54 @@ export default function AttendanceScreen() {
           </View>
         </AppModal>
       )}
+
+      {/* Reusable Filter Sidebar */}
+      <FilterSidebar
+        isOpen={isFilterSidebarOpen}
+        onClose={() => setIsFilterSidebarOpen(false)}
+        title="Filters & Sorting"
+        badgeCount={isOperator ? (operatorStatusFilter !== 'all' ? 1 : 0) : (statusFilter !== 'all' ? 1 : 0)}
+        onReset={() => {
+          if (isOperator) {
+            setOperatorStatusFilter('all');
+          } else {
+            setStatusFilter('all');
+          }
+        }}
+        onApply={() => setIsFilterSidebarOpen(false)}
+        applyLabel={
+          isOperator
+            ? `Show ${visibleDays.length} Record${visibleDays.length === 1 ? '' : 's'}`
+            : `Show ${managementQuery.rows.length} Operator${managementQuery.rows.length === 1 ? '' : 's'}`
+        }
+        testID="attendance-filter-sidebar"
+      >
+        <FilterCategoryCard
+          title="Attendance Status"
+          isFiltered={isOperator ? operatorStatusFilter !== 'all' : statusFilter !== 'all'}
+          testID="category-attendance-status"
+        >
+          {isOperator ? (
+            <DropdownFilterSelector
+              label="Status"
+              selectedId={operatorStatusFilter}
+              options={OPERATOR_STATUS_OPTIONS}
+              onSelect={(id: string) => setOperatorStatusFilter(id as any)}
+              placeholder="Select Status"
+              minMenuWidth={280}
+            />
+          ) : (
+            <DropdownFilterSelector
+              label="Status"
+              selectedId={statusFilter}
+              options={MANAGEMENT_STATUS_OPTIONS}
+              onSelect={(id: string) => setStatusFilter(id as any)}
+              placeholder="Select Status"
+              minMenuWidth={280}
+            />
+          )}
+        </FilterCategoryCard>
+      </FilterSidebar>
     </View>
   );
 }
@@ -1264,5 +1401,57 @@ const styles = StyleSheet.create({
   },
   modalEmpCol: {
     flex: 1,
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  searchContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  managementFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  managementResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 44,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  activeFilterCountBadge: {
+    marginLeft: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  fabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#0284c7',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
+  fabBadgeText: {
+    color: '#ffffff',
   },
 });

@@ -137,6 +137,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
           variant="buttonSecondary"
           haptic="select"
           hitSlopToMin48
+          activeOpacity={1.0}
           onPress={() => setFilterPanelOpen(true)}
           style={[
             styles.filterToggleBtn,
@@ -144,15 +145,16 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
               backgroundColor:
                 filterPanelOpen || activeFilterCount > 0
                   ? isDark
-                    ? 'rgba(2, 132, 199, 0.22)'
-                    : '#e0f2fe'
-                  : theme.colors.canvas,
+                    ? '#0ea5e9'
+                    : '#0284c7'
+                  : theme.colors.canvasElevated,
               borderColor:
                 filterPanelOpen || activeFilterCount > 0
                   ? isDark
-                    ? '#38bdf8'
+                    ? '#0ea5e9'
                     : '#0284c7'
                   : theme.colors.hairline,
+              opacity: 1,
             },
           ]}
           accessibilityRole="button"
@@ -162,9 +164,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             size={14}
             color={
               filterPanelOpen || activeFilterCount > 0
-                ? isDark
-                  ? '#38bdf8'
-                  : '#0284c7'
+                ? '#ffffff'
                 : theme.colors.ink
             }
           />
@@ -173,9 +173,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             style={{
               color:
                 filterPanelOpen || activeFilterCount > 0
-                  ? isDark
-                    ? '#38bdf8'
-                    : '#0284c7'
+                  ? '#ffffff'
                   : theme.colors.ink,
             }}
           >
@@ -186,14 +184,25 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
               style={[
                 styles.activeCountBadge,
                 {
-                  backgroundColor: isDark ? '#38bdf8' : '#0284c7',
+                  backgroundColor:
+                    filterPanelOpen || activeFilterCount > 0
+                      ? '#ffffff'
+                      : isDark
+                      ? '#0ea5e9'
+                      : '#0284c7',
+                  opacity: 1,
                 },
               ]}
             >
               <Text
                 variant="micro"
                 style={{
-                  color: '#ffffff',
+                  color:
+                    filterPanelOpen || activeFilterCount > 0
+                      ? isDark
+                        ? '#0ea5e9'
+                        : '#0284c7'
+                      : '#ffffff',
                 }}
               >
                 {activeFilterCount}
@@ -208,19 +217,21 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             variant="buttonSecondary"
             haptic="select"
             hitSlopToMin48
+            activeOpacity={1.0}
             onPress={handleResetAllFilters}
             style={[
               styles.quickResetBtn,
               {
-                backgroundColor: theme.colors.canvas,
+                backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
+                opacity: 1,
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Reset all filters"
           >
-            <RotateCcw size={13} color={theme.colors.mute} />
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
+            <RotateCcw size={13} color={theme.colors.ink} />
+            <Text variant="caption" style={{ color: theme.colors.ink }}>
               Reset
             </Text>
           </Pressable>
@@ -237,9 +248,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
         >
           {debouncedSearch.trim() !== '' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={handleClearSearch}
               accessibilityRole="button"
               accessibilityLabel={`Remove search query ${debouncedSearch}`}
@@ -257,19 +269,20 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {roleFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setRoleFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove role filter ${currentRoleLabel}`}
             >
               <Badge variant="info" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                  <Text variant="caption" style={{ color: isDark ? '#bfdbfe' : '#1d4ed8' }}>
                     Role: {currentRoleLabel}
                   </Text>
-                  <X size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+                  <X size={12} color={isDark ? '#bfdbfe' : '#1d4ed8'} />
                 </View>
               </Badge>
             </Pressable>
@@ -277,9 +290,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {statusFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setStatusFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove status filter ${currentStatusLabel}`}
@@ -294,10 +308,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
                     style={{
                       color:
                         statusFilter === 'active'
-                          ? isDark ? '#34d399' : '#059669'
+                          ? isDark ? '#a7f3d0' : '#065f46'
                           : statusFilter === 'suspended'
-                          ? isDark ? '#f87171' : '#dc2626'
-                          : isDark ? '#fbbf24' : '#d97706',
+                          ? isDark ? '#fca5a5' : '#b91c1c'
+                          : isDark ? '#fde68a' : '#b45309',
                     }}
                   >
                     Status: {currentStatusLabel}
@@ -306,10 +320,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
                     size={12}
                     color={
                       statusFilter === 'active'
-                        ? isDark ? '#34d399' : '#059669'
+                        ? isDark ? '#a7f3d0' : '#065f46'
                         : statusFilter === 'suspended'
-                        ? isDark ? '#f87171' : '#dc2626'
-                        : isDark ? '#fbbf24' : '#d97706'
+                        ? isDark ? '#fca5a5' : '#b91c1c'
+                        : isDark ? '#fde68a' : '#b45309'
                     }
                   />
                 </View>
@@ -319,9 +333,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {stateFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setStateFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove state filter ${currentStateLabel}`}
@@ -339,9 +354,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {kycFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setKycFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove KYC filter ${currentKycLabel}`}
@@ -359,9 +375,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {dateRangeFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setDateRangeFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove timeline filter ${currentJoinedLabel}`}
@@ -379,9 +396,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
           {sortBy !== 'newest' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setSortBy('newest')}
               accessibilityRole="button"
               accessibilityLabel={`Reset sorting order ${currentSortLabel}`}
@@ -418,7 +436,6 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
         visible={filterPanelOpen}
         onClose={() => setFilterPanelOpen(false)}
         title="Filters & Sorting"
-        subtitle="Category-wise staff directory refinement"
         activeFilterCount={activeFilterCount}
         onResetAll={handleResetAllFilters}
         applyText={
@@ -431,9 +448,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
       >
         {/* Category 1: Role */}
         <FilterCategoryCard
-          index={1}
-          title="ORGANIZATIONAL ROLE"
-          subtitle="Filter personnel by administrative and operational role"
+          title="Organizational Role"
           isFiltered={roleFilter !== 'all'}
           testID="category-user-role"
         >
@@ -448,9 +463,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
         {/* Category 2: Status */}
         <FilterCategoryCard
-          index={2}
-          title="EMPLOYMENT STATUS"
-          subtitle="Filter accounts by current operational activity status"
+          title="Employment Status"
           isFiltered={statusFilter !== 'all'}
           testID="category-user-status"
         >
@@ -465,9 +478,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
         {/* Category 3: State Allocation */}
         <FilterCategoryCard
-          index={3}
-          title="STATE ALLOCATION"
-          subtitle="Filter staff assigned to regional jurisdictions"
+          title="State Allocation"
           isFiltered={stateFilter !== 'all'}
           testID="category-user-state"
         >
@@ -483,9 +494,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
         {/* Category 4: KYC Verification */}
         <FilterCategoryCard
-          index={4}
-          title="KYC VERIFICATION"
-          subtitle="Filter personnel by statutory compliance documents"
+          title="KYC Verification"
           isFiltered={kycFilter !== 'all'}
           testID="category-user-kyc"
         >
@@ -500,9 +509,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
         {/* Category 5: Joined Timeline */}
         <FilterCategoryCard
-          index={5}
-          title="JOINED TIMELINE"
-          subtitle="Filter personnel by organization onboarding date range"
+          title="Joined Timeline"
           isFiltered={dateRangeFilter !== 'all'}
           testID="category-user-joined"
         >
@@ -517,9 +524,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
 
         {/* Category 6: Sorting Order */}
         <FilterCategoryCard
-          index={6}
-          title="SORTING ORDER"
-          subtitle="Order staff records by registration date, name, or employee ID"
+          title="Sort By"
           isFiltered={sortBy !== 'newest'}
           badgeLabel="Custom"
           testID="category-user-sorting"
@@ -549,6 +554,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flex: 1,
+    minWidth: 0,
   },
   filterToggleBtn: {
     flexDirection: 'row',
@@ -558,6 +564,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
+    flexShrink: 0,
   },
   activeCountBadge: {
     paddingHorizontal: 6,
@@ -572,6 +579,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
+    flexShrink: 0,
   },
   activeBadgesScroll: {
     maxHeight: 38,

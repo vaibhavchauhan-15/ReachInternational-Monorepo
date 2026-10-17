@@ -27,7 +27,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast } from '../../components/ui';
-import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
+import { ReachLongLogo } from '../../components/branding/ReachLongLogo';
 import {
   validateAadhaarNumber,
   validateLicenseNumber,
@@ -668,7 +668,7 @@ export default function OnboardingScreen() {
 
           {/* Top Brand Logo */}
           <View style={styles.showcaseLogoContainer}>
-            <ReachInternationalLogo variant="full" size={28} iconType="scissor" />
+            <ReachLongLogo width={220} height={110} />
           </View>
 
           {/* Central Hero Stage: Title + Machinery Asset */}
@@ -772,7 +772,7 @@ export default function OnboardingScreen() {
                 {/* Brand Logo Centered (clean wordmark without scissor lift SVG icon, hidden on Desktop since left showcase panel displays it) */}
                 {!isDesktop && (
                   <View style={styles.logoContainer}>
-                    <ReachInternationalLogo variant="full" size={26} showIcon={false} />
+                    <ReachLongLogo width={180} height={90} />
                   </View>
                 )}
 

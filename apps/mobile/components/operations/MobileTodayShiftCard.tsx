@@ -14,6 +14,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
+import { Badge } from '../ui/Badge';
 import { HighlightText } from '../ui/HighlightText';
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -120,14 +121,14 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
         styles.card,
         {
           backgroundColor: isEntered
-            ? (isDark ? 'rgba(2, 132, 199, 0.05)' : 'rgba(2, 132, 199, 0.03)')
+            ? (isDark ? '#082f49' : '#f0f9ff')
             : theme.colors.canvasElevated,
           borderColor: isEntered
-            ? (isDark ? '#0284c755' : '#7dd3fc')
+            ? (isDark ? '#0284c7' : '#7dd3fc')
             : isBreakdown
-            ? (isDark ? '#ef444455' : '#fca5a5')
+            ? (isDark ? '#ef4444' : '#fca5a5')
             : isMaintenance
-            ? (isDark ? '#f59e0b55' : '#fcd34d')
+            ? (isDark ? '#f59e0b' : '#fcd34d')
             : theme.colors.hairline,
           borderLeftColor: accentColor,
           borderLeftWidth: 4,
@@ -144,10 +145,10 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
               {
                 backgroundColor: isUnassigned
                   ? isBreakdown
-                    ? isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2'
+                    ? isDark ? '#450a0a' : '#fee2e2'
                     : isMaintenance
-                    ? isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
-                    : isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'
+                    ? isDark ? '#451a03' : '#fef3c7'
+                    : isDark ? '#451a03' : '#fef3c7'
                   : '#0284c7',
               },
             ]}
@@ -206,48 +207,21 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
 
         {/* Right Header: Shift Log Status Badge + 3-Dot Action Menu */}
         <View style={styles.cardHeaderRight}>
-          <View
-            style={[
-              styles.cardStatusBadge,
-              {
-                backgroundColor: isEntered
-                  ? isDark ? '#064e3b26' : '#d1fae5'
-                  : isBreakdown
-                  ? isDark ? '#7f1d1d26' : '#fee2e2'
-                  : isMaintenance
-                  ? isDark ? '#78350f26' : '#fef3c7'
-                  : isUnassigned
-                  ? isDark ? '#78350f26' : '#fef3c7'
-                  : isDark ? '#78350f26' : '#fffbeb',
-                borderColor: isEntered
-                  ? '#10b98133'
-                  : isBreakdown
-                  ? '#ef444433'
-                  : isMaintenance
-                  ? '#f59e0b33'
-                  : '#f59e0b33',
-              },
-            ]}
-          >
-            <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
-            <Text
-              variant="caption"
-              style={[
-                styles.cardStatusText,
-                {
-                  color: isEntered
-                    ? '#047857'
-                    : isBreakdown
-                    ? '#dc2626'
-                    : isMaintenance
-                    ? '#d97706'
-                    : isUnassigned
-                    ? isDark ? '#fbbf24' : '#b45309'
-                    : isDark ? '#fbbf24' : '#d97706',
-                },
-              ]}
-            >
-              {isEntered
+          <Badge
+            status={
+              isEntered
+                ? 'entered'
+                : isBreakdown
+                ? 'breakdown'
+                : isMaintenance
+                ? 'maintenance'
+                : isUnassigned
+                ? 'unassigned'
+                : 'pending'
+            }
+            dot
+            label={
+              isEntered
                 ? 'ENTERED'
                 : isBreakdown
                 ? 'BREAKDOWN'
@@ -255,9 +229,10 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
                 ? 'MAINTENANCE'
                 : isUnassigned
                 ? 'UNASSIGNED'
-                : 'PENDING'}
-            </Text>
-          </View>
+                : 'PENDING'
+            }
+            size="md"
+          />
 
           {/* 3-Dot Action Menu Button (Gated by RBAC: only authorized roles) */}
           {canEnterLog && !isUnassigned && (
@@ -269,7 +244,7 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
               style={[
                 styles.cardMoreBtn,
                 {
-                  backgroundColor: theme.colors.canvas,
+                  backgroundColor: theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
                 },
               ]}

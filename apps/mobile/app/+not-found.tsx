@@ -81,6 +81,16 @@ export default function NotFoundScreen() {
       return <Redirect href="/settings/about/whats-new" />;
     }
     if (
+      raw === '/settings/about-us' ||
+      raw === '/(app)/settings/about-us' ||
+      raw === '/settings/aboutus' ||
+      raw === '/(app)/settings/aboutus' ||
+      raw === '/about-us' ||
+      raw === '/about'
+    ) {
+      return <Redirect href="/settings/about/about-us" />;
+    }
+    if (
       raw === '/settings/support' ||
       raw === '/(app)/settings/support' ||
       raw === '/settings/contact' ||

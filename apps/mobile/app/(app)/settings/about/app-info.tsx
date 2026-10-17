@@ -13,15 +13,10 @@ import Constants from 'expo-constants';
 import {
   Card,
   useTheme,
-  ReachInternationalLogo,
   Text,
 } from '../../../../components/ui';
 import { SettingsScreenContainer } from '../../../../components/settings';
 import { radiusNumeric } from '@reachinternational/design-tokens';
-import {
-  BRAND_NAME,
-  BRAND_TAGLINE,
-} from '../../../../lib/brand';
 import {
   Cpu,
   Layers,
@@ -85,28 +80,6 @@ export default function AppInfoScreen() {
       onPressBack={handleBack}
       contentContainerStyle={styles.containerContent}
     >
-      {/* Brand Hero Card */}
-      <Card
-        variant="elevated"
-        style={[
-          styles.heroCard,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        <View style={styles.heroCenter}>
-          <ReachInternationalLogo size={24} showTagline={false} />
-          <Text variant="heading" style={[styles.brandTitle, { color: theme.colors.ink }]}>
-            {BRAND_NAME}
-          </Text>
-          <Text variant="caption" style={{ color: theme.colors.mute }}>
-            {BRAND_TAGLINE}
-          </Text>
-        </View>
-      </Card>
-
       {/* Specifications Card */}
       <Card
         variant="elevated"
@@ -168,20 +141,6 @@ export default function AppInfoScreen() {
 const styles = StyleSheet.create({
   containerContent: {
     gap: 14,
-  },
-  heroCard: {
-    padding: 20,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroCenter: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  brandTitle: {
-    marginTop: 2,
   },
   specsCard: {
     padding: 0,

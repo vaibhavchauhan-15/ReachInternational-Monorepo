@@ -1052,8 +1052,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   style={[
                     styles.errorBanner,
                     {
-                      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
-                      borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca',
+                      backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                      borderColor: isDark ? '#991b1b' : '#fecaca',
                     },
                   ]}
                 >
@@ -1196,10 +1196,10 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                   styles.machineDropdownItem,
                                   {
                                     backgroundColor: isSelected
-                                      ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff')
+                                      ? (isDark ? '#082f49' : '#f0f9ff')
                                       : theme.colors.canvas,
                                     borderColor: isSelected
-                                      ? (isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd')
+                                      ? (isDark ? '#38bdf8' : '#bae6fd')
                                       : theme.colors.hairline,
                                   },
                                 ]}
@@ -1267,8 +1267,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     style={[
                       styles.maintenanceWarningBanner,
                       {
-                        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
-                        borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fca5a5',
+                        backgroundColor: isDark ? '#450a0a' : '#fee2e2',
+                        borderColor: isDark ? '#991b1b' : '#fca5a5',
                       },
                     ]}
                   >
@@ -1634,9 +1634,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                 style={[
                                   styles.operatorIndexCircle,
                                   {
-                                    backgroundColor: isDark
-                                      ? 'rgba(245, 158, 11, 0.2)'
-                                      : 'rgba(245, 158, 11, 0.12)',
+                                    backgroundColor: isDark ? '#451a03' : '#fef3c7',
                                   },
                                 ]}
                               >
@@ -1890,12 +1888,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     style={[
                       styles.fullCoverageBanner,
                       {
-                        backgroundColor: isDark
-                          ? 'rgba(16, 185, 129, 0.1)'
-                          : 'rgba(16, 185, 129, 0.08)',
-                        borderColor: isDark
-                          ? 'rgba(16, 185, 129, 0.3)'
-                          : 'rgba(16, 185, 129, 0.25)',
+                        backgroundColor: isDark ? '#022c22' : '#f0fdf4',
+                        borderColor: isDark ? '#065f46' : '#bbf7d0',
                       },
                     ]}
                   >

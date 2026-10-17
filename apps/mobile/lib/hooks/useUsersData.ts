@@ -33,7 +33,6 @@ export const USER_SELECT_COLUMNS = `
   aadhaar_number,
   license_number,
   supervisor_id,
-  supervisor_ids,
   monthly_salary,
   created_at
 `;
@@ -451,9 +450,7 @@ export function useUsersInfiniteQuery({
 
       // Supervisor scoping: limit to supervised operators
       if (effectiveSupervisorId) {
-        query = query.or(
-          `supervisor_id.eq.${effectiveSupervisorId},supervisor_ids.cs.{${effectiveSupervisorId}}`
-        );
+        query = query.eq('supervisor_id', effectiveSupervisorId);
         if (roleFilter !== 'all') {
           query = query.eq('role', roleFilter);
         } else {

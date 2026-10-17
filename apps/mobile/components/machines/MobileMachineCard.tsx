@@ -98,6 +98,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           {/* Machine ID Reusable Badge Chip */}
           <Touchable
             preset="icon"
+            activeOpacity={1.0}
             onPress={handleCopyId}
             style={styles.codeBtn}
             accessibilityLabel={`Copy machine ID ${machine.machine_id}`}
@@ -109,8 +110,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               style={[
                 styles.codeBadge,
                 {
-                  backgroundColor: theme.colors.canvas,
+                  backgroundColor: theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
+                  opacity: 1,
                 },
               ]}
             >
@@ -146,16 +148,16 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
         {/* Badges Column: Active / Health + Rented / Available */}
         <View style={styles.badgeWrap}>
           {machine.health_status === 'breakdown' && (
-            <Badge status="breakdown" customLabel="Breakdown" size="md" />
+            <Badge status="breakdown" dot customLabel="Breakdown" size="md" />
           )}
           {machine.health_status === 'under_maintenance' && (
-            <Badge status="under_maintenance" customLabel="Maintenance" size="md" />
+            <Badge status="under_maintenance" dot customLabel="Maintenance" size="md" />
           )}
           {machine.health_status === 'spare' && (
-            <Badge status="spare" customLabel="Spare" size="md" />
+            <Badge status="spare" dot customLabel="Spare" size="md" />
           )}
           {(!machine.health_status || machine.health_status === 'active') && (
-            <Badge status="active" customLabel="Active" size="md" />
+            <Badge status="active" dot customLabel="Active" size="md" />
           )}
 
           <Badge

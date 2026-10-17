@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { AppModal } from '../ui/AppModal';
-import { Button, Input, Separator, useTheme, Text } from '../ui';
+import { Button, Input, Separator, useTheme, Text, Badge } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -190,30 +190,21 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               style={[
                 styles.alertHeaderCard,
                 {
-                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#fffbeb',
-                  borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : '#fde68a',
+                  backgroundColor: isDark ? '#451a03' : '#fffbeb',
+                  borderColor: isDark ? '#92400e' : '#fde68a',
                 },
               ]}
             >
               <View style={styles.alertHeaderTopRow}>
-                <View style={[styles.severityPill, { backgroundColor: isDark ? '#d97706' : '#d97706' }]}>
+                <View style={[styles.severityPill, { backgroundColor: '#d97706' }]}>
                   <Text variant="caption" style={styles.severityPillText}>{conflictDetails.badgeText}</Text>
                 </View>
                 {conflictDetails.overtimeHoursText && (
-                  <View
-                    style={[
-                      styles.otChip,
-                      {
-                        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7',
-                        borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <Text variant="caption" style={[styles.otChipText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
-                      {conflictDetails.overtimeHoursText}
-                    </Text>
-                  </View>
+                  <Badge
+                    variant="warning"
+                    size="sm"
+                    label={conflictDetails.overtimeHoursText}
+                  />
                 )}
               </View>
               <Text variant="heading" style={[styles.alertHeading, { color: theme.colors.ink }]}>
@@ -337,7 +328,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 style={[
                   styles.actionBtn,
                   {
-                    backgroundColor: action === 'acknowledge' ? (isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe') : theme.colors.canvas,
+                    backgroundColor: action === 'acknowledge' ? (isDark ? '#082f49' : '#e0f2fe') : theme.colors.canvas,
                     borderColor: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.hairline,
                   },
                 ]}
@@ -362,7 +353,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 style={[
                   styles.actionBtn,
                   {
-                    backgroundColor: action === 'adjust' ? (isDark ? 'rgba(217, 119, 6, 0.15)' : '#fef3c7') : theme.colors.canvas,
+                    backgroundColor: action === 'adjust' ? (isDark ? '#451a03' : '#fef3c7') : theme.colors.canvas,
                     borderColor: action === 'adjust' ? (isDark ? '#fbbf24' : '#d97706') : theme.colors.hairline,
                   },
                 ]}
@@ -401,10 +392,10 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                       {
                         backgroundColor: adjustedCalculation.valid
                           ? isDark
-                            ? 'rgba(16, 185, 129, 0.12)'
+                            ? '#064e3b'
                             : '#ecfdf5'
                           : isDark
-                          ? 'rgba(239, 68, 68, 0.12)'
+                          ? '#450a0a'
                           : '#fef2f2',
                       },
                     ]}
@@ -502,12 +493,6 @@ const styles = StyleSheet.create({
   severityPillText: {
     color: '#ffffff',
   },
-  otChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  otChipText: {},
   alertHeading: {
     marginTop: 2,
   },

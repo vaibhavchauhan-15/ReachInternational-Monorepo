@@ -5,7 +5,7 @@ import { Pressable } from '../ui/touch/Pressable';
 import { Icon, AlertTriangle } from '../ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate } from '@reachinternational/utils';
-import type { HourLogRecord } from '../../app/(app)/running-logs';
+import type { HourLogRecord } from '../../lib/hooks/useOperationsData';
 import { RunningLogShiftCard } from './RunningLogShiftCard';
 
 export interface RunningLogDayGroupProps {

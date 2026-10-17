@@ -5,96 +5,48 @@ import {
   ScrollView,
   RefreshControl,
   StatusBar,
-  LayoutAnimation,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Pressable } from '../../components/ui/touch/Pressable';
-import { useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, HighlightText , Text, useToast, EmptyState, ErrorState, PermissionDeniedView } from '../../components/ui';
-import { MeterLogModal } from '../../components/work/MeterLogModal';
+import {
+  useTheme,
+  MobileHeader,
+  HeaderActionItem,
+  EmptyState,
+  ErrorState,
+  PermissionDeniedView,
+  SearchInput,
+} from '../../components/ui';
 import {
   MobileConflictResolutionModal,
   OperationsExportModal,
   OperationLogListSkeleton,
-  RunningLogDayGroup,
+  RunningLogFilterPanel,
+  RunningLogShiftCard,
+  RunningLogSummaryCard,
+  RunningLogMachineHeaderCard,
+  type LogsViewMode,
 } from '../../components/operations';
-import { useOperationsMasterData, useOperationsLogs } from '../../lib/hooks/useOperationsData';
+import {
+  useOperationsMasterData,
+  useOperationsLogs,
+  type HourLogRecord,
+  type MachineWithAssignments,
+} from '../../lib/hooks/useOperationsData';
 import { useAuth } from '../../lib/auth/useAuth';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  formatDate,
-} from '@reachinternational/utils';
-import {
-  Clock,
   AlertTriangle,
   RefreshCw,
   Printer,
-  Gauge,
-  Zap,
-  Icon,
+  Search,
 } from '../../components/ui/icon';
 
-export type LogsViewMode = 'machine' | 'client' | 'operator';
-
-export interface HourLogRecord {
-  id: string;
-  machine_id?: string;
-  machine_code: string;
-  log_date: string;
-  shift?: string;
-  shift_code?: string;
-  shift_scheduled_minutes?: number;
-  start_meter: number;
-  end_meter: number;
-  running_hours: number;
-  start_time?: string;
-  end_time?: string;
-  overtime_hours?: number;
-  normal_working_hours?: number;
-  location?: string;
-  is_breakdown: boolean;
-  remarks?: string;
-  operator_id?: string;
-  client_id?: string;
-  created_at?: string;
-  conflict_flag?: boolean;
-  conflict_reason?: string;
-  conflict_status?: string;
-  machine?: {
-    id?: string;
-    machine_id: string;
-    model?: string;
-    serial_number?: string;
-  } | null;
-  operator?: { id?: string; full_name: string; phone?: string } | null;
-  client?: {
-    id?: string;
-    company_name?: string;
-    street?: string;
-    city?: string;
-  } | null;
-}
-
-export const MONTH_OPTIONS = [
-  { id: '01', label: 'January' },
-  { id: '02', label: 'February' },
-  { id: '03', label: 'March' },
-  { id: '04', label: 'April' },
-  { id: '05', label: 'May' },
-  { id: '06', label: 'June' },
-  { id: '07', label: 'July' },
-  { id: '08', label: 'August' },
-  { id: '09', label: 'September' },
-  { id: '10', label: 'October' },
-  { id: '11', label: 'November' },
-  { id: '12', label: 'December' },
-  { id: 'all', label: 'All Months' },
-];
+export type { HourLogRecord } from '../../lib/hooks/useOperationsData';
 
 export default function RunningLogsScreen() {
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
 
   // Guard: Restrict operator role from accessing Daily Running Logs
   const isOperator = (role || '').toLowerCase() === 'operator';
@@ -102,7 +54,7 @@ export default function RunningLogsScreen() {
   if (role && isOperator) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <MobileHeader title="Daily Running Logs" showBack={false} />
+        <MobileHeader title="Running logs" showBack={false} />
         <PermissionDeniedView
           featureName="Daily Running Logs"
           currentRole={role}
@@ -112,82 +64,34 @@ export default function RunningLogsScreen() {
     );
   }
 
-  // Master Data State
-  const [logs, setLogs] = useState<HourLogRecord[]>([]);
-  const [machinesList, setMachinesList] = useState<any[]>([]);
-  const [clientsList, setClientsList] = useState<any[]>([]);
-  const [activeOperators, setActiveOperators] = useState<any[]>([]);
-
   // View Mode: 'machine' | 'client' | 'operator'
-  const [logsViewMode, setLogsViewMode] = useState<LogsViewMode>('machine');
+  const [logsViewMode, setLogsViewMode] = useState<LogsViewMode>('client');
 
   const getCurrentMonthValue = (): string => {
     const m = new Date().getMonth() + 1;
     return m < 10 ? `0${m}` : `${m}`;
   };
 
+  // Filter States
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedSiteLocation, setSelectedSiteLocation] = useState<string>('');
   const [selectedClientMachineId, setSelectedClientMachineId] = useState<string>('all');
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonthValue());
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
 
+  // Search
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+  const [isSearchVisible, setIsSearchVisible] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Modals
   const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
   const [selectedConflictLog, setSelectedConflictLog] = useState<HourLogRecord | null>(null);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [editingLogRecord, setEditingLogRecord] = useState<HourLogRecord | null>(null);
-
-  // Expandable date groups
-  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-
-  const toggleDateExpanded = useCallback((dateKey: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedDates((prev) => ({
-      ...prev,
-      [dateKey]: !prev[dateKey],
-    }));
-  }, []);
-
-  const [allExpanded, setAllExpanded] = useState<boolean>(false);
-  const toggleAllExpanded = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setAllExpanded((prev) => !prev);
-  }, []);
-
-  // TanStack Query Data Fetching
-  const { data: masterData, isError: isMasterError, error: masterError, refetch: refetchMaster } = useOperationsMasterData();
-  const { data: logsData, isLoading: isLogsLoading, isError: isLogsError, error: logsError, refetch: refetchLogs } = useOperationsLogs();
-
-  useEffect(() => {
-    if (!masterData) return;
-    setActiveOperators(masterData.activeOperators as any);
-    setClientsList(masterData.clientsList as any);
-    setMachinesList(masterData.machinesList as any);
-
-    if (!selectedMachineId && masterData.machinesList.length > 0) {
-      setSelectedMachineId(masterData.machinesList[0].id);
-    }
-    if (!selectedOperatorId && masterData.activeOperators.length > 0) {
-      setSelectedOperatorId(masterData.activeOperators[0].id);
-    }
-  }, [masterData, selectedMachineId, selectedOperatorId]);
-
-  useEffect(() => {
-    if (!logsData) return;
-    setLogs(logsData as any);
-  }, [logsData]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refetchMaster(), refetchLogs()]);
-    setRefreshing(false);
-  }, [refetchMaster, refetchLogs]);
 
   // Search debounce
   useEffect(() => {
@@ -197,59 +101,289 @@ export default function RunningLogsScreen() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Conflict logs
-  const pendingConflicts = useMemo(() => {
-    return logs.filter((l) => l.conflict_flag && l.conflict_status !== 'resolved');
-  }, [logs]);
+  // Master Data Hook
+  const {
+    data: masterData,
+    isError: isMasterError,
+    error: masterError,
+    refetch: refetchMaster,
+  } = useOperationsMasterData();
 
-  // Filtered logs
+  const machinesList = useMemo(() => masterData?.machinesList || [], [masterData]);
+  const clientsList = useMemo(() => masterData?.clientsList || [], [masterData]);
+  const clientSites = useMemo(() => masterData?.clientSites || [], [masterData]);
+  const activeOperators = useMemo(() => masterData?.activeOperators || [], [masterData]);
+
+  // Initialize selections once master data arrives
+  useEffect(() => {
+    if (!masterData) return;
+    if (!selectedClientId && masterData.clientsList.length > 0) {
+      setSelectedClientId(masterData.clientsList[0].id);
+    }
+    if (!selectedMachineId && masterData.machinesList.length > 0) {
+      setSelectedMachineId(masterData.machinesList[0].id);
+    }
+    if (!selectedOperatorId && masterData.activeOperators.length > 0) {
+      setSelectedOperatorId(masterData.activeOperators[0].id);
+    }
+  }, [masterData, selectedClientId, selectedMachineId, selectedOperatorId]);
+
+  // Build Normalized Query Filters for TanStack Query
+  const logsQueryFilters = useMemo(() => {
+    return {
+      viewMode: logsViewMode,
+      machineId: logsViewMode === 'machine' ? selectedMachineId : undefined,
+      clientId: logsViewMode === 'client' ? selectedClientId : undefined,
+      operatorId: logsViewMode === 'operator' ? selectedOperatorId : undefined,
+      month: selectedMonth,
+      customStart: selectedMonth === 'custom' ? customStartDate : undefined,
+      customEnd: selectedMonth === 'custom' ? customEndDate : undefined,
+      search: debouncedSearch || undefined,
+      site: selectedSiteLocation || undefined,
+    };
+  }, [
+    logsViewMode,
+    selectedMachineId,
+    selectedClientId,
+    selectedOperatorId,
+    selectedMonth,
+    customStartDate,
+    customEndDate,
+    debouncedSearch,
+    selectedSiteLocation,
+  ]);
+
+  // Query logs from TanStack Query
+  const {
+    data: rawLogsData,
+    isLoading: isLogsLoading,
+    isError: isLogsError,
+    error: logsError,
+    refetch: refetchLogs,
+  } = useOperationsLogs(logsQueryFilters);
+
+  const logs = useMemo<HourLogRecord[]>(() => {
+    return (rawLogsData as HourLogRecord[]) || [];
+  }, [rawLogsData]);
+
+  // On refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetchMaster(), refetchLogs()]);
+    setRefreshing(false);
+  }, [refetchMaster, refetchLogs]);
+
+  // Compute Client Machines for selected client
+  const clientMachines = useMemo<MachineWithAssignments[]>(() => {
+    if (!selectedClientId) return [];
+    const directMachines = machinesList.filter((m) => m.client_id === selectedClientId);
+
+    // Also include machines that have logs recorded under this client
+    const logMachineIds = new Set<string>();
+    logs.forEach((l) => {
+      if (l.client_id === selectedClientId && l.machine_id) {
+        logMachineIds.add(l.machine_id);
+      }
+    });
+
+    const additionalMachines = machinesList.filter(
+      (m) => logMachineIds.has(m.id) && !directMachines.some((dm) => dm.id === m.id)
+    );
+
+    return [...directMachines, ...additionalMachines];
+  }, [selectedClientId, machinesList, logs]);
+
+  // Active Client, Machine, and Operator Objects
+  const activeClient = useMemo(() => {
+    return clientsList.find((c) => c.id === selectedClientId) || clientsList[0] || null;
+  }, [clientsList, selectedClientId]);
+
+  const activeMachine = useMemo(() => {
+    return machinesList.find((m) => m.id === selectedMachineId) || machinesList[0] || null;
+  }, [machinesList, selectedMachineId]);
+
+  const activeOperator = useMemo(() => {
+    return activeOperators.find((o) => o.id === selectedOperatorId) || activeOperators[0] || null;
+  }, [activeOperators, selectedOperatorId]);
+
+  // Filter logs for the active view mode
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
+      // Client view matching
+      if (logsViewMode === 'client') {
+        if (selectedClientId && log.client_id && log.client_id !== selectedClientId) {
+          return false;
+        }
+        if (selectedSiteLocation && log.location !== selectedSiteLocation) {
+          return false;
+        }
+        if (selectedClientMachineId && selectedClientMachineId !== 'all') {
+          if (log.machine_id !== selectedClientMachineId) return false;
+        }
+      }
+
+      // Machine view matching
+      if (logsViewMode === 'machine') {
+        if (selectedMachineId && log.machine_id && log.machine_id !== selectedMachineId) {
+          return false;
+        }
+      }
+
+      // Operator view matching
+      if (logsViewMode === 'operator') {
+        if (selectedOperatorId && log.operator_id && log.operator_id !== selectedOperatorId) {
+          return false;
+        }
+      }
+
+      // Month matching
+      if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom') {
+        const logMonth = log.log_date ? log.log_date.slice(5, 7) : '';
+        if (logMonth && logMonth !== selectedMonth) return false;
+      }
+
+      // Custom date range matching
+      if (selectedMonth === 'custom' && customStartDate && customEndDate) {
+        if (log.log_date && (log.log_date < customStartDate || log.log_date > customEndDate)) {
+          return false;
+        }
+      }
+
+      // Free text search matching
       if (debouncedSearch.trim()) {
-        const q = debouncedSearch.toLowerCase();
-        const matchesMachine = (log.machine_code || '').toLowerCase().includes(q) ||
-          (log.machine?.model || '').toLowerCase().includes(q);
+        const q = debouncedSearch.toLowerCase().trim();
+        const matchesMachine =
+          (log.machine_code || '').toLowerCase().includes(q) ||
+          (log.machine?.model || '').toLowerCase().includes(q) ||
+          (log.machine?.serial_number || '').toLowerCase().includes(q);
         const matchesOperator = (log.operator?.full_name || '').toLowerCase().includes(q);
         const matchesClient = (log.client?.company_name || '').toLowerCase().includes(q);
-        if (!matchesMachine && !matchesOperator && !matchesClient) return false;
+        const matchesRemarks = (log.remarks || '').toLowerCase().includes(q);
+        if (!matchesMachine && !matchesOperator && !matchesClient && !matchesRemarks) {
+          return false;
+        }
       }
+
       return true;
     });
-  }, [logs, debouncedSearch]);
+  }, [
+    logs,
+    logsViewMode,
+    selectedClientId,
+    selectedSiteLocation,
+    selectedClientMachineId,
+    selectedMachineId,
+    selectedOperatorId,
+    selectedMonth,
+    customStartDate,
+    customEndDate,
+    debouncedSearch,
+  ]);
 
-  // Date-grouped logs
-  const groupedLogs = useMemo(() => {
-    const groups: Record<string, HourLogRecord[]> = {};
-    filteredLogs.forEach((l) => {
-      const d = l.log_date || 'Unknown';
-      if (!groups[d]) groups[d] = [];
-      groups[d].push(l);
-    });
-    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  // Conflict Logs
+  const pendingConflicts = useMemo(() => {
+    return filteredLogs.filter((l) => l.conflict_flag && l.conflict_status !== 'resolved');
   }, [filteredLogs]);
 
-  // Summary Metrics
+  // Overall summary metrics for active view
   const summaryMetrics = useMemo(() => {
-    let totalRunningHours = 0;
-    let totalOvertimeHours = 0;
+    let totalRunHours = 0;
     let totalWorkingHours = 0;
     let totalBreakdowns = 0;
+    const dateSet = new Set<string>();
+
     filteredLogs.forEach((l) => {
-      totalRunningHours += Number(l.running_hours) || 0;
-      totalOvertimeHours += Number(l.overtime_hours) || 0;
-      totalWorkingHours += (Number(l.normal_working_hours) || 8) + (Number(l.overtime_hours) || 0);
+      totalRunHours += Number(l.running_hours) || 0;
+      totalWorkingHours +=
+        (Number(l.normal_working_hours) || 8) + (Number(l.overtime_hours) || 0);
       if (l.is_breakdown) totalBreakdowns++;
+      if (l.log_date) dateSet.add(l.log_date);
     });
+
     return {
-      totalRunningHours: Math.round(totalRunningHours * 10) / 10,
-      totalOvertimeHours: Math.round(totalOvertimeHours * 10) / 10,
+      totalRunHours: Math.round(totalRunHours * 10) / 10,
       totalWorkingHours: Math.round(totalWorkingHours * 10) / 10,
       totalBreakdowns,
-      totalShifts: filteredLogs.length,
-      totalDays: groupedLogs.length,
+      totalDays: dateSet.size,
     };
-  }, [filteredLogs, groupedLogs]);
+  }, [filteredLogs]);
 
+  // Group logs by machine for Client View
+  const clientMachineGroups = useMemo(() => {
+    if (logsViewMode !== 'client') return [];
+
+    const logsByMachId = new Map<string, HourLogRecord[]>();
+    filteredLogs.forEach((l) => {
+      const mId = l.machine_id || (l.machine as any)?.id || 'unassigned';
+      const existing = logsByMachId.get(mId);
+      if (existing) {
+        existing.push(l);
+      } else {
+        logsByMachId.set(mId, [l]);
+      }
+    });
+
+    const targetMachineList: {
+      machine: MachineWithAssignments;
+      logs: HourLogRecord[];
+      totalDays: number;
+      totalRunHours: number;
+      totalWorkingHours: number;
+    }[] = [];
+
+    // Prioritize selected machine if specific machine selected
+    if (selectedClientMachineId && selectedClientMachineId !== 'all') {
+      const mach = clientMachines.find((m) => m.id === selectedClientMachineId);
+      const machLogs = logsByMachId.get(selectedClientMachineId) || [];
+      if (mach) {
+        const dates = new Set(machLogs.map((l) => l.log_date));
+        const runH = machLogs.reduce((acc, cur) => acc + (Number(cur.running_hours) || 0), 0);
+        const workH = machLogs.reduce(
+          (acc, cur) =>
+            acc + (Number(cur.normal_working_hours) || 8) + (Number(cur.overtime_hours) || 0),
+          0
+        );
+        targetMachineList.push({
+          machine: mach,
+          logs: machLogs.sort((a, b) => b.log_date.localeCompare(a.log_date)),
+          totalDays: dates.size,
+          totalRunHours: Math.round(runH * 10) / 10,
+          totalWorkingHours: Math.round(workH * 10) / 10,
+        });
+      }
+      return targetMachineList;
+    }
+
+    // All machines that belong to client or have logs
+    clientMachines.forEach((mach) => {
+      const machLogs = logsByMachId.get(mach.id) || [];
+      if (machLogs.length > 0) {
+        const dates = new Set(machLogs.map((l) => l.log_date));
+        const runH = machLogs.reduce((acc, cur) => acc + (Number(cur.running_hours) || 0), 0);
+        const workH = machLogs.reduce(
+          (acc, cur) =>
+            acc + (Number(cur.normal_working_hours) || 8) + (Number(cur.overtime_hours) || 0),
+          0
+        );
+        targetMachineList.push({
+          machine: mach,
+          logs: machLogs.sort((a, b) => b.log_date.localeCompare(a.log_date)),
+          totalDays: dates.size,
+          totalRunHours: Math.round(runH * 10) / 10,
+          totalWorkingHours: Math.round(workH * 10) / 10,
+        });
+      }
+    });
+
+    return targetMachineList;
+  }, [logsViewMode, filteredLogs, selectedClientMachineId, clientMachines]);
+
+  // Machine / Operator sorted logs list
+  const sortedLogs = useMemo(() => {
+    return [...filteredLogs].sort((a, b) => (b.log_date || '').localeCompare(a.log_date || ''));
+  }, [filteredLogs]);
+
+  // Header 3-dot Menu Actions
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [
       {
@@ -280,121 +414,100 @@ export default function RunningLogsScreen() {
     return list;
   }, [theme.colors.ink, onRefresh, pendingConflicts]);
 
+  const handleOpenConflictModal = useCallback((log: HourLogRecord) => {
+    setSelectedConflictLog(log);
+    setShowConflictModal(true);
+  }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setSearch('');
+    setSelectedMonth(getCurrentMonthValue());
+    setSelectedSiteLocation('');
+    setSelectedClientMachineId('all');
+  }, []);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
+      {/* Main Header with Back Arrow, Title, Search Icon, 3-Dot More Menu */}
       <MobileHeader
-        title="Daily Running Logs"
+        title="Running logs"
+        showBack={true}
+        showQuickAccess={false}
+        showMoreMenu={true}
+        onPressBack={() => router.back()}
         actions={headerActions}
+        onSearchPress={() => setIsSearchVisible((prev) => !prev)}
       />
 
-      {/* View Mode Strip: Machine | Client | Operator */}
-      <View style={[styles.viewModeStrip, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.viewModeContent}>
-          <Pressable
-            variant="chip"
-            haptic="select"
-            onPress={() => setLogsViewMode('machine')}
-            style={[
-              styles.viewModeTab,
-              logsViewMode === 'machine'
-                ? [styles.viewModeTabActive, { backgroundColor: theme.colors.ink }]
-                : [styles.viewModeTabInactive, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }],
-            ]}
-          >
-            <Text style={[styles.viewModeTabText, { color: logsViewMode === 'machine' ? theme.colors.canvas : theme.colors.body }]}>
-              Machine View
-            </Text>
-          </Pressable>
+      {/* Optional Search Input Bar (smooth toggle) */}
+      {isSearchVisible && (
+        <View
+          style={[
+            styles.searchBarWrapper,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderBottomColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          <SearchInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by model, code, operator, remarks..."
+            onClear={() => setSearch('')}
+            autoFocus={true}
+          />
+        </View>
+      )}
 
-          <Pressable
-            variant="chip"
-            haptic="select"
-            onPress={() => setLogsViewMode('client')}
-            style={[
-              styles.viewModeTab,
-              logsViewMode === 'client'
-                ? [styles.viewModeTabActive, { backgroundColor: theme.colors.ink }]
-                : [styles.viewModeTabInactive, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }],
-            ]}
-          >
-            <Text style={[styles.viewModeTabText, { color: logsViewMode === 'client' ? theme.colors.canvas : theme.colors.body }]}>
-              Client View
-            </Text>
-          </Pressable>
-
-          <Pressable
-            variant="chip"
-            haptic="select"
-            onPress={() => setLogsViewMode('operator')}
-            style={[
-              styles.viewModeTab,
-              logsViewMode === 'operator'
-                ? [styles.viewModeTabActive, { backgroundColor: theme.colors.ink }]
-                : [styles.viewModeTabInactive, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }],
-            ]}
-          >
-            <Text style={[styles.viewModeTabText, { color: logsViewMode === 'operator' ? theme.colors.canvas : theme.colors.body }]}>
-              Operator View
-            </Text>
-          </Pressable>
-        </ScrollView>
-      </View>
-
-      {/* Main Content Feed */}
+      {/* Main Scrollable Body */}
       <ScrollView
         style={styles.contentScroll}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.link}
+          />
+        }
       >
-        {/* KPI Summary Cards */}
-        <KPIGrid columns={4}>
-          <KPICard
-            label="Running Hours"
-            value={`${summaryMetrics.totalRunningHours}h`}
-            icon={Clock}
-            variant="default"
-          />
-          <KPICard
-            label="Working Hours"
-            value={`${summaryMetrics.totalWorkingHours}h`}
-            icon={Gauge}
-            variant="success"
-          />
-          <KPICard
-            label="Overtime"
-            value={`${summaryMetrics.totalOvertimeHours}h`}
-            icon={Zap}
-            variant="info"
-          />
-          <KPICard
-            label="Breakdowns"
-            value={summaryMetrics.totalBreakdowns}
-            icon={AlertTriangle}
-            variant={summaryMetrics.totalBreakdowns > 0 ? 'error' : 'default'}
-          />
-        </KPIGrid>
+        {/* Reusable Filter Card */}
+        <RunningLogFilterPanel
+          viewMode={logsViewMode}
+          onViewModeChange={(mode) => setLogsViewMode(mode)}
+          machines={machinesList}
+          clients={clientsList}
+          clientSites={clientSites}
+          operators={activeOperators}
+          clientMachines={clientMachines}
+          selectedClientId={selectedClientId}
+          onSelectClient={(id) => {
+            setSelectedClientId(id);
+            setSelectedSiteLocation('');
+            setSelectedClientMachineId('all');
+          }}
+          selectedSite={selectedSiteLocation}
+          onSelectSite={(site) => setSelectedSiteLocation(site)}
+          selectedClientMachineId={selectedClientMachineId}
+          onSelectClientMachine={(mId) => setSelectedClientMachineId(mId)}
+          selectedMachineId={selectedMachineId}
+          onSelectMachine={(id) => setSelectedMachineId(id)}
+          selectedOperatorId={selectedOperatorId}
+          onSelectOperator={(id) => setSelectedOperatorId(id)}
+          selectedMonth={selectedMonth}
+          onSelectMonth={(m) => setSelectedMonth(m)}
+          customStartDate={customStartDate}
+          onSelectCustomStartDate={(d) => setCustomStartDate(d)}
+          customEndDate={customEndDate}
+          onSelectCustomEndDate={(d) => setCustomEndDate(d)}
+        />
 
-        {/* Expand / Collapse All Toggle Strip */}
-        <View style={styles.controlsStrip}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-            Daily Logs ({groupedLogs.length} days)
-          </Text>
-          <Pressable
-            variant="buttonSecondary"
-            hitSlopToMin48
-            onPress={toggleAllExpanded}
-            style={[styles.expandAllBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}
-          >
-            <Text style={[styles.expandAllText, { color: theme.colors.ink }]}>
-              {allExpanded ? 'Collapse All' : 'Expand All'}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Loading / Error / Empty State */}
+        {/* View Mode Content Feeds */}
         {isLogsLoading && logs.length === 0 ? (
           <OperationLogListSkeleton count={4} />
         ) : (isLogsError || isMasterError) && logs.length === 0 ? (
@@ -403,7 +516,7 @@ export default function RunningLogsScreen() {
             onRetry={onRefresh}
             actionLabel="Retry Loading Logs"
           />
-        ) : groupedLogs.length === 0 ? (
+        ) : filteredLogs.length === 0 ? (
           debouncedSearch.trim() ? (
             <EmptyState
               variant="no-results"
@@ -418,10 +531,10 @@ export default function RunningLogsScreen() {
             <EmptyState
               variant="filtered"
               title="No Logs for Selected Period"
-              description="No running hour logs match the selected month."
+              description="No running hour logs match the selected period or filters."
               action={{
-                label: 'Show All Months',
-                onPress: () => setSelectedMonth('all'),
+                label: 'Reset Filters',
+                onPress: handleResetFilters,
               }}
             />
           ) : (
@@ -431,83 +544,146 @@ export default function RunningLogsScreen() {
             />
           )
         ) : (
-          /* Date Grouped Log Cards */
-          groupedLogs.map(([dateKey, dayLogs]) => {
-            const isExpanded = allExpanded || Boolean(expandedDates[dateKey]);
-            const dayRunningHours = Math.round(dayLogs.reduce((acc, cur) => acc + (Number(cur.running_hours) || 0), 0) * 10) / 10;
-            const dayOtHours = Math.round(dayLogs.reduce((acc, cur) => acc + (Number(cur.overtime_hours) || 0), 0) * 10) / 10;
-            const startMeter = Math.min(...dayLogs.map((l) => l.start_meter));
-            const endMeter = Math.max(...dayLogs.map((l) => l.end_meter));
-            const hasBreakdown = dayLogs.some((l) => Boolean(l.is_breakdown));
+          <View style={styles.feedWrapper}>
+            {/* 1. CLIENT VIEW: Summary Card + Machine Sub-Groups + Shift Cards */}
+            {logsViewMode === 'client' && (
+              <>
+                <RunningLogSummaryCard
+                  viewMode="client"
+                  client={activeClient}
+                  clientMachinesCount={clientMachines.length}
+                  totalRunHours={summaryMetrics.totalRunHours}
+                  totalWorkingHours={summaryMetrics.totalWorkingHours}
+                  totalBreakdowns={summaryMetrics.totalBreakdowns}
+                  totalDays={summaryMetrics.totalDays}
+                />
 
-            return (
-              <RunningLogDayGroup
-                key={dateKey}
-                date={dateKey}
-                dayLogs={dayLogs}
-                dayRunningHours={dayRunningHours}
-                dayOtHours={dayOtHours}
-                startMeter={startMeter}
-                endMeter={endMeter}
-                hasBreakdown={hasBreakdown}
-                isExpanded={isExpanded}
-                onToggle={() => toggleDateExpanded(dateKey)}
-                searchTerm={debouncedSearch}
-              />
-            );
-          })
+                {clientMachineGroups.map((group) => (
+                  <View key={group.machine.id} style={styles.machineGroupBlock}>
+                    <RunningLogMachineHeaderCard
+                      model={group.machine.model || 'Equipment'}
+                      serialNumber={group.machine.serial_number}
+                      machineCode={group.machine.machine_id}
+                      totalDays={group.totalDays}
+                      totalRunHours={group.totalRunHours}
+                      totalWorkingHours={group.totalWorkingHours}
+                    />
+
+                    {group.logs.map((log, idx) => (
+                      <RunningLogShiftCard
+                        key={log.id}
+                        log={log}
+                        logsViewMode="client"
+                        searchTerm={debouncedSearch}
+                        onOpenConflictModal={handleOpenConflictModal}
+                        isLast={idx === group.logs.length - 1}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* 2. MACHINE VIEW: Summary Card + Shift Cards */}
+            {logsViewMode === 'machine' && (
+              <>
+                <RunningLogSummaryCard
+                  viewMode="machine"
+                  machine={activeMachine}
+                  totalRunHours={summaryMetrics.totalRunHours}
+                  totalWorkingHours={summaryMetrics.totalWorkingHours}
+                  totalBreakdowns={summaryMetrics.totalBreakdowns}
+                  totalDays={summaryMetrics.totalDays}
+                  onOpenHistoryModal={() => {
+                    // Navigate or open machine history
+                    if (activeMachine?.id) {
+                      router.push(`/machines?search=${activeMachine.machine_id || activeMachine.model}`);
+                    }
+                  }}
+                />
+
+                {sortedLogs.map((log, idx) => (
+                  <RunningLogShiftCard
+                    key={log.id}
+                    log={log}
+                    logsViewMode="machine"
+                    searchTerm={debouncedSearch}
+                    onOpenConflictModal={handleOpenConflictModal}
+                    isLast={idx === sortedLogs.length - 1}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* 3. OPERATOR VIEW: Summary Card + Shift Cards */}
+            {logsViewMode === 'operator' && (
+              <>
+                <RunningLogSummaryCard
+                  viewMode="operator"
+                  operator={activeOperator}
+                  totalRunHours={summaryMetrics.totalRunHours}
+                  totalWorkingHours={summaryMetrics.totalWorkingHours}
+                  totalBreakdowns={summaryMetrics.totalBreakdowns}
+                  totalDays={summaryMetrics.totalDays}
+                />
+
+                {sortedLogs.map((log, idx) => (
+                  <RunningLogShiftCard
+                    key={log.id}
+                    log={log}
+                    logsViewMode="operator"
+                    searchTerm={debouncedSearch}
+                    onOpenConflictModal={handleOpenConflictModal}
+                    isLast={idx === sortedLogs.length - 1}
+                  />
+                ))}
+              </>
+            )}
+          </View>
         )}
       </ScrollView>
 
-      {/* Export Report Modal */}
-      {showExportModal && (
-        <OperationsExportModal
-          visible={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          logs={filteredLogs as any}
-          viewMode={logsViewMode}
-          selectedEntityName={
-            logsViewMode === 'machine'
-              ? machinesList.find((m) => m.id === selectedMachineId)?.machine_id || 'Machine'
-              : logsViewMode === 'client'
-              ? clientsList.find((c) => c.id === selectedClientId)?.company_name || 'Client'
-              : activeOperators.find((o) => o.id === selectedOperatorId)?.full_name || 'Operator'
-          }
-          selectedMonthLabel={MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'All Months'}
-          selectedLocationLabel={selectedSiteLocation}
-          selectedMachineLabel={
-            selectedClientMachineId === 'all'
-              ? 'All Machines'
-              : machinesList.find((m) => m.id === selectedClientMachineId)?.machine_id
-          }
-          totalRunningHours={summaryMetrics.totalRunningHours}
-          totalOtHours={summaryMetrics.totalOvertimeHours}
-          totalBreakdowns={summaryMetrics.totalBreakdowns}
-          supervisorName={user?.user_metadata?.full_name || 'Supervisor'}
-        />
-      )}
-
       {/* Conflict Resolution Modal */}
-      {showConflictModal && selectedConflictLog && (
+      {selectedConflictLog && (
         <MobileConflictResolutionModal
           visible={showConflictModal}
-          onClose={() => setShowConflictModal(false)}
           log={selectedConflictLog as any}
           currentUserId={user?.id || ''}
-          onSuccess={() => onRefresh()}
+          onClose={() => {
+            setShowConflictModal(false);
+            setSelectedConflictLog(null);
+          }}
+          onSuccess={() => {
+            setShowConflictModal(false);
+            setSelectedConflictLog(null);
+            onRefresh();
+          }}
         />
       )}
 
-      {/* Edit Log Modal */}
-      {editingLogRecord && (
-        <MeterLogModal
-          visible={Boolean(editingLogRecord)}
-          onClose={() => setEditingLogRecord(null)}
-          onSubmit={() => onRefresh()}
-          machineId={editingLogRecord.machine_id}
-          machineCode={editingLogRecord.machine_code}
-        />
-      )}
+      {/* Export / Print Report Modal */}
+      <OperationsExportModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        logs={filteredLogs}
+        viewMode={logsViewMode}
+        selectedEntityName={
+          logsViewMode === 'client'
+            ? activeClient?.company_name || 'All Clients'
+            : logsViewMode === 'machine'
+            ? activeMachine?.model || 'All Machines'
+            : activeOperator?.full_name || 'All Operators'
+        }
+        selectedMonthLabel={
+          selectedMonth === 'all'
+            ? 'All Months'
+            : selectedMonth === 'custom'
+            ? `${customStartDate || 'Start'} to ${customEndDate || 'End'}`
+            : 'Selected Month'
+        }
+        totalRunningHours={summaryMetrics.totalRunHours}
+        totalBreakdowns={summaryMetrics.totalBreakdowns}
+      />
     </View>
   );
 }
@@ -516,61 +692,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  viewModeStrip: {
+  searchBarWrapper: {
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.sm,
     borderBottomWidth: 1,
-    paddingVertical: spacingNumeric.xs,
-  },
-  viewModeContent: {
-    flexDirection: 'row',
-    gap: spacingNumeric.xs,
-    paddingHorizontal: spacingNumeric.md,
-  },
-  viewModeTab: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: spacingNumeric.xs + 2,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
-  viewModeTabActive: {
-    borderWidth: 0,
-  },
-  viewModeTabInactive: {},
-  viewModeTabText: {
   },
   contentScroll: {
     flex: 1,
   },
   contentContainer: {
     padding: spacingNumeric.md,
-    gap: spacingNumeric.md,
-    paddingBottom: spacingNumeric.xl * 2,
+    paddingBottom: 40,
   },
-  controlsStrip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacingNumeric.xs,
-  },
-  sectionTitle: {
-  },
-  expandAllBtn: {
-    paddingHorizontal: spacingNumeric.sm,
-    paddingVertical: 5,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  expandAllText: {
-  },
-  emptyContainer: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.xl,
-    alignItems: 'center',
+  feedWrapper: {
     gap: spacingNumeric.xs,
   },
-  emptyTitle: {
-  },
-  emptySub: {
-    textAlign: 'center',
+  machineGroupBlock: {
+    marginBottom: spacingNumeric.md,
   },
 });

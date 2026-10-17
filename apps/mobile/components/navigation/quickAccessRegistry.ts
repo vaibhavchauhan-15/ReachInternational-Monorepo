@@ -324,6 +324,16 @@ export function buildQuickAccessDestinations(
       keywords: ['whats new', 'release notes', 'changelog', 'version', 'new features', 'updates', 'recent changes'],
     },
     {
+      id: 'nav-settings-about-us',
+      title: 'About Us & Company Profile',
+      subtitle: 'Reach International leadership, EWP fleet, vision & mission',
+      category: 'Settings',
+      breadcrumb: 'Settings → About Us',
+      icon: Building2,
+      href: '/settings/about/about-us',
+      keywords: ['about us', 'company', 'founder', 'directors', 'vishal', 'dhruv', 'mission', 'vision', 'reach international'],
+    },
+    {
       id: 'nav-settings-app-info',
       title: 'App Information & Specifications',
       subtitle: 'Installed build, runtime environment, Hermes engine & system specs',

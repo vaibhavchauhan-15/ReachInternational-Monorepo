@@ -22,11 +22,19 @@ import {
   FlatList,
   RefreshControl,
 } from 'react-native';
-import { Drawer } from '../ui/overlay/Drawer';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
 import { SearchInput } from '../ui/SearchInput';
-import { showToast, EmptyState, ErrorState, SlowNetworkBanner } from '../ui';
+import {
+  showToast,
+  EmptyState,
+  ErrorState,
+  SlowNetworkBanner,
+  FilterSidebar,
+  FilterCategoryCard,
+  DropdownFilterSelector,
+  Badge,
+} from '../ui';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
@@ -242,25 +250,11 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
             )}
           </View>
           <View style={styles.headerRightActions}>
-            <View
-              style={[
-                styles.hoursBadge,
-                {
-                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)',
-                  borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.20)',
-                },
-              ]}
-            >
-              <Text
-                variant="micro"
-                style={[
-                  styles.hoursBadgeText,
-                  { color: isDark ? '#4ade80' : '#15803d' },
-                ]}
-              >
-                +{rt.toFixed(1)} hrs
-              </Text>
-            </View>
+            <Badge
+              variant="success"
+              size="sm"
+              label={`+${rt.toFixed(1)} hrs`}
+            />
 
             {canEdit && (!log.sync_status || log.sync_status === 'synced') ? (
               <Pressable
@@ -288,34 +282,10 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
             {model}
           </Text>
           {machineIdCode ? (
-            <View
-              style={[
-                styles.codePillSmall,
-                {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)',
-                },
-              ]}
-            >
-              <Text variant="micro" style={[styles.codePillSmallText, { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' }]}>
-                {machineIdCode}
-              </Text>
-            </View>
+            <Badge variant="neutral" size="sm" label={machineIdCode} />
           ) : null}
           {serial ? (
-            <View
-              style={[
-                styles.serialPill,
-                {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                },
-              ]}
-            >
-              <Text variant="micro" style={[styles.machineSerial, { color: theme.colors.mute }]}>
-                S/N: {serial}
-              </Text>
-            </View>
+            <Badge variant="outline" size="sm" label={`S/N: ${serial}`} />
           ) : null}
         </View>
 
@@ -326,19 +296,7 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
             {clientName}
           </Text>
           {clientCode ? (
-            <View
-              style={[
-                styles.codePillSmall,
-                {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.07)',
-                },
-              ]}
-            >
-              <Text variant="micro" style={[styles.codePillSmallText, { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' }]}>
-                {clientCode}
-              </Text>
-            </View>
+            <Badge variant="neutral" size="sm" label={clientCode} />
           ) : null}
           {clientCity ? (
             <Text variant="caption" style={[styles.clientCity, { color: theme.colors.mute }]}>
@@ -352,7 +310,7 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
           style={[
             styles.metricsBox,
             {
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.015)',
+              backgroundColor: theme.colors.canvas,
               borderColor: theme.colors.hairline,
             },
           ]}
@@ -366,41 +324,11 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
               </Text>
 
               {/* Shift Badge with ONLY shift name (e.g. Shift A, Shift B) */}
-              <View
-                style={[
-                  styles.shiftBadge,
-                  {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.10)' : 'rgba(2, 132, 199, 0.07)',
-                    borderColor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.18)',
-                  },
-                ]}
-              >
-                <Text
-                  variant="micro"
-                  style={[
-                    styles.shiftBadgeText,
-                    { color: isDark ? '#38bdf8' : '#0284c7' },
-                  ]}
-                >
-                  {shiftName}
-                </Text>
-              </View>
+              <Badge variant="info" size="sm" label={shiftName} />
             </View>
 
             {log.overtime_hours ? (
-              <View
-                style={[
-                  styles.otPill,
-                  {
-                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
-                    borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(245, 158, 11, 0.18)',
-                  },
-                ]}
-              >
-                <Text variant="micro" style={[styles.otPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
-                  +{log.overtime_hours}h OT
-                </Text>
-              </View>
+              <Badge variant="warning" size="sm" label={`+${log.overtime_hours}h OT`} />
             ) : null}
           </View>
 
@@ -442,8 +370,8 @@ const HistoryLogCard = React.memo<HistoryLogCardProps>(
                 style={[
                   styles.breakdownNoteBox,
                   {
-                    backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : '#fff1f2',
-                    borderColor: isDark ? 'rgba(244, 63, 94, 0.25)' : '#fecdd3',
+                    backgroundColor: isDark ? '#450a0a' : '#fff1f2',
+                    borderColor: isDark ? '#991b1b' : '#fecdd3',
                   },
                 ]}
               >
@@ -803,8 +731,8 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
               style={[
                 styles.cachedErrorBanner,
                 {
-                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
-                  borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+                  backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                  borderColor: isDark ? '#991b1b' : '#fecaca',
                 },
               ]}
             >
@@ -822,7 +750,13 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                 onPress={() => {
                   void refetch();
                 }}
-                style={styles.cachedRetryChip}
+                style={[
+                  styles.cachedRetryChip,
+                  {
+                    backgroundColor: isDark ? '#7f1d1d' : '#fee2e2',
+                    borderColor: isDark ? '#ef4444' : '#dc2626',
+                  },
+                ]}
               >
                 <RotateCcw size={12} color={isDark ? '#f87171' : '#dc2626'} />
                 <Text
@@ -868,8 +802,8 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   style={[
                     styles.iconCtaBtn,
                     {
-                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
-                      borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0',
+                      backgroundColor: isDark ? '#064e3b' : '#ecfdf5',
+                      borderColor: isDark ? '#059669' : '#a7f3d0',
                     },
                   ]}
                   accessibilityLabel="Export Shift Logs to Excel"
@@ -889,8 +823,8 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   style={[
                     styles.iconCtaBtn,
                     {
-                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
-                      borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                      backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe',
+                      borderColor: isDark ? '#0284c7' : '#bae6fd',
                     },
                   ]}
                   accessibilityLabel="Print or Export Shift Logs to PDF"
@@ -902,13 +836,14 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
             {/* 2. Search & Filter Bar (Screenshot 4) */}
             <View style={styles.searchFilterRow}>
-              <SearchInput
-                value={search}
-                onChangeText={setSearch}
-                onClear={() => setSearch('')}
-                placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
-                containerStyle={{ flex: 1 }}
-              />
+              <View style={styles.searchContainer}>
+                <SearchInput
+                  value={search}
+                  onChangeText={setSearch}
+                  onClear={() => setSearch('')}
+                  placeholder="Search date (e.g. 19 Sep, 2026-09-19)..."
+                />
+              </View>
 
               {/* Filter Dropdown Toggle Button */}
               <Pressable
@@ -921,11 +856,11 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   {
                     backgroundColor:
                       activeFilterCount > 0
-                        ? isDark ? 'rgba(2, 132, 199, 0.15)' : '#eff6ff'
-                        : isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                        ? isDark ? '#082f49' : '#e0f2fe'
+                        : theme.colors.canvasElevated,
                     borderColor:
                       activeFilterCount > 0
-                        ? isDark ? 'rgba(2, 132, 199, 0.4)' : '#0284c7'
+                        ? isDark ? '#38bdf8' : '#0284c7'
                         : theme.colors.hairline,
                   },
                 ]}
@@ -962,11 +897,34 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                     </Text>
                   </View>
                 )}
-                <ChevronDown
-                  size={13}
-                  color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
-                />
               </Pressable>
+
+              {/* Quick Reset Filters Button */}
+              {(activeFilterCount > 0 || search.length > 0) && (
+                <Pressable
+                  variant="outline"
+                  haptic="tap"
+                  hitSlopToMin48
+                  onPress={() => {
+                    haptics.success();
+                    handleResetFilters();
+                    setSearch('');
+                  }}
+                  style={[
+                    styles.quickResetBtn,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityLabel="Reset all filters"
+                >
+                  <RotateCcw size={13} color={theme.colors.mute} />
+                  <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
+                    Reset
+                  </Text>
+                </Pressable>
+              )}
             </View>
 
             {/* 3. Active Filter Chips Row (Screenshot 4) */}
@@ -978,50 +936,42 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
                 {/* Date Search Chip */}
                 {search.trim() !== '' && (
-                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                      Date: "{search}"
-                    </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSearch('')}>
-                      <X size={11} color={theme.colors.mute} />
-                    </Pressable>
-                  </View>
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    label={`Date: "${search}"`}
+                    onRemove={() => setSearch('')}
+                  />
                 )}
 
                 {/* Date Preset Chip */}
                 {dateFilter !== 'all' && (
-                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                      {DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
-                    </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setDateFilter('all')}>
-                      <X size={11} color={theme.colors.mute} />
-                    </Pressable>
-                  </View>
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    label={DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label || dateFilter}
+                    onRemove={() => setDateFilter('all')}
+                  />
                 )}
 
                 {/* Condition Chip */}
                 {conditionFilter !== 'all' && (
-                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                      {CONDITION_FILTER_OPTIONS.find((o) => o.value === conditionFilter)?.label}
-                    </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setConditionFilter('all')}>
-                      <X size={11} color={theme.colors.mute} />
-                    </Pressable>
-                  </View>
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    label={CONDITION_FILTER_OPTIONS.find((o) => o.value === conditionFilter)?.label || conditionFilter}
+                    onRemove={() => setConditionFilter('all')}
+                  />
                 )}
 
                 {/* Sort Chip */}
                 {sortBy !== 'date_desc' && (
-                  <View style={[styles.filterChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                    <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                      Sort: {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
-                    </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setSortBy('date_desc')}>
-                      <X size={11} color={theme.colors.mute} />
-                    </Pressable>
-                  </View>
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    label={`Sort: ${SORT_OPTIONS.find((o) => o.value === sortBy)?.label || sortBy}`}
+                    onRemove={() => setSortBy('date_desc')}
+                  />
                 )}
 
                 {/* Reset All */}
@@ -1193,208 +1143,63 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
           }
         />
 
-      {/* 5. Filter Drawer (Lazy mounted only when opened, zero background footprint) */}
-      {isFilterModalOpen && (
-        <Drawer
-          visible={isFilterModalOpen}
-          onClose={() => setIsFilterModalOpen(false)}
-          maxPixelWidth={380}
-          widthRatio={0.88}
+      {/* 5. Reusable Filter Sidebar */}
+      <FilterSidebar
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        title="Filters & Sorting"
+        badgeCount={activeFilterCount}
+        onReset={handleResetFilters}
+        onApply={() => setIsFilterModalOpen(false)}
+        applyLabel={`Show ${totalCount} Record${totalCount === 1 ? '' : 's'}`}
+        testID="operator-history-filter-sidebar"
+      >
+        <FilterCategoryCard
+          title="Date Range"
+          isFiltered={dateFilter !== 'all'}
+          testID="category-date-range"
         >
-        <View style={styles.drawerContainer}>
-          {/* Drawer Header */}
-          <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.hairline }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <View style={[styles.drawerIconBox, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe' }]}>
-                <SlidersHorizontal size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="heading" style={{ color: theme.colors.ink }}>
-                  Filter Shift Logs
-                </Text>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Refine records by date & status
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              variant="iconButton"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setIsFilterModalOpen(false)}
-              accessibilityLabel="Close filter drawer"
-            >
-              <X size={20} color={theme.colors.mute} />
-            </Pressable>
-          </View>
+          <DropdownFilterSelector
+            label="Date Range"
+            selectedId={dateFilter}
+            options={DATE_FILTER_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+            onSelect={(id: string) => setDateFilter(id as DateFilterPreset)}
+            placeholder="Select Date Range"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
 
-          {/* Drawer Scrollable Content */}
-          <ScrollView
-            style={styles.drawerScroll}
-            contentContainerStyle={styles.drawerScrollContent}
-            showsVerticalScrollIndicator={true}
-          >
-            {/* 1. Date Filter Section */}
-            <View style={styles.filterSection}>
-              <Text variant="mono" style={[styles.filterSectionTitle, { color: theme.colors.mute }]}>
-                DATE RANGE
-              </Text>
-              <View style={styles.filterOptionsGrid}>
-                {DATE_FILTER_OPTIONS.map((opt) => {
-                  const isSelected = dateFilter === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      variant="chip"
-                      haptic="select"
-                      hitSlopToMin48
-                      onPress={() => setDateFilter(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
-                        {
-                          backgroundColor: isSelected
-                            ? (isDark ? 'rgba(2, 132, 199, 0.18)' : '#e0f2fe')
-                            : (isDark ? 'rgba(255, 255, 255, 0.04)' : theme.colors.canvas),
-                          borderColor: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      {isSelected && <Check size={12} color={isDark ? '#38bdf8' : '#0284c7'} />}
-                      <Text
-                        variant={isSelected ? 'label' : 'caption'}
-                        style={{
-                          color: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.ink,
-                        }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+        <FilterCategoryCard
+          title="Status & Condition"
+          isFiltered={conditionFilter !== 'all'}
+          testID="category-status-condition"
+        >
+          <DropdownFilterSelector
+            label="Condition"
+            selectedId={conditionFilter}
+            options={CONDITION_FILTER_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+            onSelect={(id: string) => setConditionFilter(id as ConditionFilterPreset)}
+            placeholder="Select Condition"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
 
-            {/* 2. Condition Section */}
-            <View style={styles.filterSection}>
-              <Text variant="mono" style={[styles.filterSectionTitle, { color: theme.colors.mute }]}>
-                STATUS & CONDITION
-              </Text>
-              <View style={styles.filterOptionsGrid}>
-                {CONDITION_FILTER_OPTIONS.map((opt) => {
-                  const isSelected = conditionFilter === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      variant="chip"
-                      haptic="select"
-                      hitSlopToMin48
-                      onPress={() => setConditionFilter(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
-                        {
-                          backgroundColor: isSelected
-                            ? (isDark ? 'rgba(2, 132, 199, 0.18)' : '#e0f2fe')
-                            : (isDark ? 'rgba(255, 255, 255, 0.04)' : theme.colors.canvas),
-                          borderColor: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      {isSelected && <Check size={12} color={isDark ? '#38bdf8' : '#0284c7'} />}
-                      <Text
-                        variant={isSelected ? 'label' : 'caption'}
-                        style={{
-                          color: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.ink,
-                        }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* 3. Sort Order Section */}
-            <View style={styles.filterSection}>
-              <Text variant="mono" style={[styles.filterSectionTitle, { color: theme.colors.mute }]}>
-                SORT ORDER
-              </Text>
-              <View style={styles.filterOptionsGrid}>
-                {SORT_OPTIONS.map((opt) => {
-                  const isSelected = sortBy === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      variant="chip"
-                      haptic="select"
-                      hitSlopToMin48
-                      onPress={() => setSortBy(opt.value)}
-                      style={[
-                        styles.filterOptionPill,
-                        {
-                          backgroundColor: isSelected
-                            ? (isDark ? 'rgba(2, 132, 199, 0.18)' : '#e0f2fe')
-                            : (isDark ? 'rgba(255, 255, 255, 0.04)' : theme.colors.canvas),
-                          borderColor: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      {isSelected && <Check size={12} color={isDark ? '#38bdf8' : '#0284c7'} />}
-                      <Text
-                        variant={isSelected ? 'label' : 'caption'}
-                        style={{
-                          color: isSelected
-                            ? (isDark ? '#38bdf8' : '#0284c7')
-                            : theme.colors.ink,
-                        }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          </ScrollView>
-
-          {/* Drawer Footer Actions */}
-          <View style={[styles.drawerFooter, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
-            <Pressable
-              variant="outline"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={handleResetFilters}
-              style={[styles.modalSecondaryBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
-            >
-              <Text variant="label" style={{ color: theme.colors.ink }}>
-                Reset Filters
-              </Text>
-            </Pressable>
-            <Pressable
-              variant="primary"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setIsFilterModalOpen(false)}
-              style={[styles.modalPrimaryBtn, { backgroundColor: '#0284c7' }]}
-            >
-              <Text variant="label" style={{ color: '#ffffff' }}>
-                Apply Filters
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Drawer>
-      )}
+        <FilterCategoryCard
+          title="Sort By"
+          isFiltered={sortBy !== 'date_desc'}
+          badgeLabel="Custom"
+          testID="category-sorting-order"
+        >
+          <DropdownFilterSelector
+            label="Sort By"
+            selectedId={sortBy}
+            options={SORT_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+            onSelect={(id: string) => setSortBy(id as SortPreset)}
+            placeholder="Select Sort"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+      </FilterSidebar>
 
       {/* 4. Full-Featured Export & Print Modal (Web & Native Resilient) */}
       {showExportModal && (
@@ -1520,6 +1325,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  searchContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
   filterBtn: {
     height: 38,
     borderRadius: radiusNumeric.lg,
@@ -1528,8 +1337,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
   },
   filterBtnText: {
+  },
+  quickResetBtn: {
+    height: 38,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  quickResetBtnText: {
   },
   activeFilterChipsRow: {
     flexDirection: 'row',
@@ -1720,77 +1542,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  drawerContainer: {
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-  },
-  drawerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  drawerIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: radiusNumeric.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  drawerScroll: {
-    flex: 1,
-  },
-  drawerScrollContent: {
-    padding: 16,
-    gap: 16,
-  },
-  drawerFooter: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  filterSection: {
-    marginBottom: 14,
-  },
-  filterSectionTitle: {
-    marginBottom: 8,
-  },
-  filterOptionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  filterOptionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 38,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
-  modalSecondaryBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalPrimaryBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: radiusNumeric.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   cachedErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',

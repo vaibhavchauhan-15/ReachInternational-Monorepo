@@ -12,6 +12,7 @@ import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Trash2, AlertTriangle, ShieldAlert } from '../ui/icon';
 import { Text } from '../ui/Text';
+import { Badge } from '../ui/Badge';
 import { Dialog } from '../ui/overlay/Dialog';
 import { Touchable } from '../ui/Touchable';
 import { haptics } from '../../lib/haptics';
@@ -179,62 +180,18 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
 
           {/* Badges Row */}
           <View style={styles.badgesRow}>
-            <View
-              style={[
-                styles.roleBadge,
-                {
-                  backgroundColor: isDark ? `${roleColor}22` : `${roleColor}14`,
-                  borderColor: isDark ? `${roleColor}44` : `${roleColor}33`,
-                },
-              ]}
-            >
-              <View style={[styles.badgeDot, { backgroundColor: roleColor }]} />
-              <Text variant="caption" style={{ color: roleColor }}>
-                {formatRoleLabel(user.role)}
-              </Text>
-            </View>
+            <Badge
+              role={user.role}
+              label={formatRoleLabel(user.role)}
+              size="sm"
+            />
 
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    user.status === 'active'
-                      ? isDark
-                        ? 'rgba(16, 185, 129, 0.16)'
-                        : 'rgba(16, 185, 129, 0.1)'
-                      : isDark
-                      ? 'rgba(148, 163, 184, 0.16)'
-                      : 'rgba(148, 163, 184, 0.1)',
-                  borderColor:
-                    user.status === 'active'
-                      ? isDark
-                        ? 'rgba(16, 185, 129, 0.35)'
-                        : 'rgba(16, 185, 129, 0.25)'
-                      : isDark
-                      ? 'rgba(148, 163, 184, 0.35)'
-                      : 'rgba(148, 163, 184, 0.25)',
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.badgeDot,
-                  {
-                    backgroundColor: user.status === 'active' ? '#10b981' : '#94a3b8',
-                  },
-                ]}
-              />
-              <Text
-                variant="caption"
-                style={{
-                  color: user.status === 'active' ? '#10b981' : theme.colors.mute,
-                  textTransform: 'capitalize',
-                }}
-              >
-                {user.status || 'Active'}
-              </Text>
-            </View>
+            <Badge
+              status={user.status || 'active'}
+              dot
+              label={user.status === 'active' ? 'Active' : (user.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1).toLowerCase() : 'Active')}
+              size="sm"
+            />
           </View>
         </View>
 

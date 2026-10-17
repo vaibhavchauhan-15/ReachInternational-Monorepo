@@ -131,6 +131,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
           variant="buttonSecondary"
           haptic="select"
           hitSlopToMin48
+          activeOpacity={1.0}
           onPress={() => setFilterPanelOpen(true)}
           style={[
             styles.filterToggleBtn,
@@ -138,15 +139,16 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
               backgroundColor:
                 filterPanelOpen || activeFilterCount > 0
                   ? isDark
-                    ? 'rgba(2, 132, 199, 0.22)'
-                    : '#e0f2fe'
-                  : theme.colors.canvas,
+                    ? '#0ea5e9'
+                    : '#0284c7'
+                  : theme.colors.canvasElevated,
               borderColor:
                 filterPanelOpen || activeFilterCount > 0
                   ? isDark
-                    ? '#38bdf8'
+                    ? '#0ea5e9'
                     : '#0284c7'
                   : theme.colors.hairline,
+              opacity: 1,
             },
           ]}
           accessibilityRole="button"
@@ -156,9 +158,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             size={14}
             color={
               filterPanelOpen || activeFilterCount > 0
-                ? isDark
-                  ? '#38bdf8'
-                  : '#0284c7'
+                ? '#ffffff'
                 : theme.colors.ink
             }
           />
@@ -167,9 +167,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             style={{
               color:
                 filterPanelOpen || activeFilterCount > 0
-                  ? isDark
-                    ? '#38bdf8'
-                    : '#0284c7'
+                  ? '#ffffff'
                   : theme.colors.ink,
             }}
           >
@@ -180,14 +178,25 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
               style={[
                 styles.activeCountBadge,
                 {
-                  backgroundColor: isDark ? '#38bdf8' : '#0284c7',
+                  backgroundColor:
+                    filterPanelOpen || activeFilterCount > 0
+                      ? '#ffffff'
+                      : isDark
+                      ? '#0ea5e9'
+                      : '#0284c7',
+                  opacity: 1,
                 },
               ]}
             >
               <Text
                 variant="micro"
                 style={{
-                  color: '#ffffff',
+                  color:
+                    filterPanelOpen || activeFilterCount > 0
+                      ? isDark
+                        ? '#0ea5e9'
+                        : '#0284c7'
+                      : '#ffffff',
                 }}
               >
                 {activeFilterCount}
@@ -202,18 +211,21 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             variant="buttonSecondary"
             haptic="select"
             hitSlopToMin48
+            activeOpacity={1.0}
             onPress={handleResetAllFilters}
             style={[
               styles.quickResetBtn,
               {
-                backgroundColor: theme.colors.canvas,
+                backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
+                opacity: 1,
               },
             ]}
+            accessibilityRole="button"
             accessibilityLabel="Reset all filters"
           >
-            <RotateCcw size={13} color={theme.colors.mute} />
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
+            <RotateCcw size={13} color={theme.colors.ink} />
+            <Text variant="caption" style={{ color: theme.colors.ink }}>
               Reset
             </Text>
           </Pressable>
@@ -230,9 +242,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
         >
           {debouncedSearch.trim() !== '' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={handleClearSearch}
               accessibilityRole="button"
               accessibilityLabel={`Remove search query ${debouncedSearch}`}
@@ -250,19 +263,20 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 
           {rentalFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setRentalFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove rental filter ${currentRentalLabel}`}
             >
               <Badge variant="info" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                  <Text variant="caption" style={{ color: isDark ? '#bfdbfe' : '#1d4ed8' }}>
                     Rental: {currentRentalLabel}
                   </Text>
-                  <X size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+                  <X size={12} color={isDark ? '#bfdbfe' : '#1d4ed8'} />
                 </View>
               </Badge>
             </Pressable>
@@ -270,9 +284,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 
           {healthFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setHealthFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove health filter ${currentHealthLabel}`}
@@ -284,10 +299,12 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
                     style={{
                       color:
                         healthFilter === 'spare'
-                          ? isDark ? '#38bdf8' : '#0284c7'
+                          ? isDark ? '#bfdbfe' : '#1d4ed8'
                           : healthFilter === 'breakdown'
-                          ? isDark ? '#f87171' : '#dc2626'
-                          : isDark ? '#fbbf24' : '#d97706',
+                          ? isDark ? '#fca5a5' : '#b91c1c'
+                          : healthFilter === 'under_maintenance'
+                          ? isDark ? '#fde68a' : '#b45309'
+                          : isDark ? '#a7f3d0' : '#065f46',
                     }}
                   >
                     Health: {currentHealthLabel}
@@ -296,10 +313,12 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
                     size={12}
                     color={
                       healthFilter === 'spare'
-                        ? isDark ? '#38bdf8' : '#0284c7'
+                        ? isDark ? '#bfdbfe' : '#1d4ed8'
                         : healthFilter === 'breakdown'
-                        ? isDark ? '#f87171' : '#dc2626'
-                        : isDark ? '#fbbf24' : '#d97706'
+                        ? isDark ? '#fca5a5' : '#b91c1c'
+                        : healthFilter === 'under_maintenance'
+                        ? isDark ? '#fde68a' : '#b45309'
+                        : isDark ? '#a7f3d0' : '#065f46'
                     }
                   />
                 </View>
@@ -309,9 +328,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 
           {supervisorFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setSupervisorFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove supervisor filter ${currentSupervisorLabel}`}
@@ -329,9 +349,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 
           {clientFilter !== 'all' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setClientFilter('all')}
               accessibilityRole="button"
               accessibilityLabel={`Remove client filter ${currentClientLabel}`}
@@ -349,9 +370,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 
           {sortBy !== 'machine_id_asc' && (
             <Pressable
-              variant="plain"
+              variant="chip"
               haptic="select"
               hitSlopToMin48
+              activeOpacity={1.0}
               onPress={() => setSortBy('machine_id_asc')}
               accessibilityRole="button"
               accessibilityLabel={`Reset sort order ${currentSortLabel}`}
@@ -398,6 +420,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flex: 1,
+    minWidth: 0,
   },
   filterToggleBtn: {
     flexDirection: 'row',
@@ -407,6 +430,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
+    flexShrink: 0,
   },
   activeCountBadge: {
     paddingHorizontal: 6,
@@ -421,6 +445,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
+    flexShrink: 0,
   },
   activeBadgesScroll: {
     maxHeight: 38,

@@ -61,10 +61,20 @@ export interface OperatorRecord {
   shift_time?: string | null;
 }
 
+export interface ClientSiteRecord {
+  id: string;
+  client_id: string;
+  site_name: string;
+  site_code?: string;
+  street?: string;
+  city?: string;
+}
+
 export interface OperationsMasterData {
   machinesList: MachineWithAssignments[];
   activeOperators: OperatorRecord[];
   clientsList: ClientRecord[];
+  clientSites: ClientSiteRecord[];
 }
 
 export interface HourLogRecord {
@@ -136,7 +146,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
     queryKey: ['operations', 'master'],
     enabled,
     queryFn: async () => {
-      const [mchRes, assRes, opsRes, clientsRes] = await Promise.all([
+      const [mchRes, assRes, opsRes, clientsRes, sitesRes] = await Promise.all([
         supabase
           .from('machines')
           .select(`
@@ -185,6 +195,10 @@ export function useOperationsMasterData(enabled: boolean = true) {
           .from('clients')
           .select('id, code, company_name, phone, street, city, district, state, pincode')
           .order('company_name'),
+        supabase
+          .from('client_sites')
+          .select('id, client_id, site_name, site_code, street, city')
+          .order('site_name'),
       ]);
 
       if (mchRes.error) throw mchRes.error;
@@ -205,11 +219,13 @@ export function useOperationsMasterData(enabled: boolean = true) {
           : null,
       })) as OperatorRecord[];
       const clientsList: ClientRecord[] = (clientsRes.data || []) as ClientRecord[];
+      const clientSites: ClientSiteRecord[] = (sitesRes.data || []) as ClientSiteRecord[];
 
       return {
         machinesList,
         activeOperators,
         clientsList,
+        clientSites,
       };
     },
     staleTime: OPERATIONS_CACHE_TTLS.filterOperators * 1000, // 10 minutes cache stale time (600s)

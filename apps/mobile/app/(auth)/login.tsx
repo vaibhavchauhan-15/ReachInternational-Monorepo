@@ -31,7 +31,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Mail, Lock, Check, X } from '../../components/ui/icon';
 import { Input, useTheme, Text, useToast } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
+import { ReachLongLogo } from '../../components/branding/ReachLongLogo';
 import { useAuth } from '../../lib/auth/useAuth';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 import { haptics } from '../../lib/haptics';
@@ -298,7 +298,7 @@ export default function LoginScreen() {
 
           {/* Top Brand Logo */}
           <View style={styles.showcaseLogoContainer}>
-            <ReachInternationalLogo variant="full" size={28} iconType="scissor" />
+            <ReachLongLogo width={220} height={110} />
           </View>
 
           {/* Central Hero Stage: Title + Machinery Asset */}
@@ -411,10 +411,9 @@ export default function LoginScreen() {
                 {/* Brand Logo Centered (Rendered on Mobile & Tablet; hidden on Desktop since left showcase panel displays it) */}
                 {!isDesktop && (
                   <View style={styles.logoContainer}>
-                    <ReachInternationalLogo
-                      variant="full"
-                      size={isTablet ? 28 : 26}
-                      iconType="scissor"
+                    <ReachLongLogo
+                      width={isTablet ? 190 : 160}
+                      height={isTablet ? 95 : 80}
                     />
                   </View>
                 )}
@@ -796,7 +795,7 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   title: {
     textAlign: 'left',

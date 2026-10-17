@@ -182,15 +182,6 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
                 </Text>
               </View>
             )}
-            <ChevronDown
-              size={12}
-              state={isFilterOpen ? 'open' : 'closed'}
-              color={
-                isFilterOpen || activeFilterCount > 0
-                  ? '#ffffff'
-                  : theme.colors.ink
-              }
-            />
           </Pressable>
         )}
 
@@ -255,6 +246,7 @@ const styles = StyleSheet.create({
   },
   searchFlexWrap: {
     flex: 1,
+    minWidth: 0,
   },
   filterToggleBtn: {
     flexDirection: 'row',
@@ -262,8 +254,9 @@ const styles = StyleSheet.create({
     gap: 5,
     height: 40,
     paddingHorizontal: 10,
-    borderRadius: radiusNumeric.md,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+    flexShrink: 0,
   },
   activeBadge: {
     minWidth: 18,
@@ -279,8 +272,9 @@ const styles = StyleSheet.create({
     gap: 4,
     height: 40,
     paddingHorizontal: 10,
-    borderRadius: radiusNumeric.md,
+    borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+    flexShrink: 0,
   },
   childrenContainer: {
     width: '100%',

@@ -59,7 +59,7 @@ import {
   parseOperationalErrorMessage,
   type ShiftMatchTarget,
 } from '@reachinternational/utils';
-import { useToast, EmptyState, ErrorState, FormError, Skeleton, SearchableSelect, type SelectOption } from '../ui';
+import { useToast, EmptyState, ErrorState, FormError, Skeleton, SearchableSelect, Badge, type SelectOption } from '../ui';
 import type { OperatorEntryContext, ClientShiftCode } from '@reachinternational/types';
 import { supabase } from '../../lib/supabase';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
@@ -1283,45 +1283,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
           </Text>
 
           {/* Running Hours Dynamic Badge */}
-          <View
-            style={[
-              styles.rtChip,
-              {
-                backgroundColor: isMeterRegressed
-                  ? isDark ? 'rgba(244, 63, 94, 0.15)' : '#ffe4e6'
-                  : isOver24Hours
-                  ? isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7'
-                  : runningHours > 0
-                  ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7'
-                  : isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
-                borderColor: isMeterRegressed
-                  ? '#fecdd3'
-                  : isOver24Hours
-                  ? '#fde68a'
-                  : runningHours > 0
-                  ? '#bbf7d0'
-                  : theme.colors.hairline,
-              },
-            ]}
-          >
-            {isMeterRegressed ? (
-              <Text variant="mono" style={{ color: '#e11d48' }}>
-                Invalid Meter
-              </Text>
-            ) : isOver24Hours ? (
-              <Text variant="mono" style={{ color: '#d97706' }}>
-                &gt;24 hrs
-              </Text>
-            ) : (
-              <Text
-                variant="mono"
-                style={{
-                  color: runningHours > 0 ? (isDark ? '#4ade80' : '#15803d') : theme.colors.mute }}
-              >
-                RT: {runningHours.toFixed(1)} hrs
-              </Text>
-            )}
-          </View>
+          {isMeterRegressed ? (
+            <Badge variant="error" size="sm" label="Invalid Meter" />
+          ) : isOver24Hours ? (
+            <Badge variant="warning" size="sm" label=">24 hrs" />
+          ) : runningHours > 0 ? (
+            <Badge variant="success" size="sm" label={`RT: ${runningHours.toFixed(1)} hrs`} />
+          ) : (
+            <Badge variant="outline" size="sm" label="RT: 0.0 hrs" />
+          )}
         </View>
 
         {/* Start Meter Field */}
@@ -1415,8 +1385,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         style={[
           styles.lastShiftCard,
           {
-            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#f0fdf4',
-            borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0',
+            backgroundColor: isDark ? '#022c22' : '#f0fdf4',
+            borderColor: isDark ? '#065f46' : '#bbf7d0',
           },
         ]}
       >
@@ -1425,12 +1395,12 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
             LAST SHIFT
           </Text>
           {last_log?.entry_source && last_log.entry_source !== 'operator' && (
-            <View style={styles.assistedBadge}>
-              <UserCheck size={11} color={isDark ? '#38bdf8' : '#0284c7'} />
-              <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
-                Assisted Entry
-              </Text>
-            </View>
+            <Badge
+              variant="info"
+              size="sm"
+              icon={<UserCheck size={11} color={isDark ? '#38bdf8' : '#0284c7'} />}
+              label="Assisted Entry"
+            />
           )}
         </View>
 
@@ -1514,9 +1484,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
 
           {/* Duration Badge */}
           {shiftDurationHours > 0 && (
-            <Text variant="mono" style={[styles.durationBadge, { color: theme.colors.ink }]}>
-              {shiftDurationHours.toFixed(1)} hrs
-            </Text>
+            <Badge variant="neutral" size="sm" label={`${shiftDurationHours.toFixed(1)} hrs`} />
           )}
         </View>
 
@@ -1556,8 +1524,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
               style={[
                 styles.unassignedWarningBanner,
                 {
-                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-                  borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
+                  backgroundColor: isDark ? '#451a03' : '#fffbeb',
+                  borderColor: isDark ? '#92400e' : '#fde68a',
                 },
               ]}
             >
@@ -1580,8 +1548,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
               style={[
                 styles.unassignedWarningBanner,
                 {
-                  backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
-                  borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                  backgroundColor: isDark ? '#082f49' : '#f0f9ff',
+                  borderColor: isDark ? '#0284c7' : '#bae6fd',
                   marginTop: 8,
                 },
               ]}
@@ -1607,10 +1575,10 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
           styles.breakdownCard,
           {
             backgroundColor: isBreakdown
-              ? isDark ? 'rgba(244, 63, 94, 0.08)' : '#fff1f2'
-              : isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+              ? isDark ? '#450a0a' : '#fff1f2'
+              : theme.colors.canvas,
             borderColor: isBreakdown
-              ? isDark ? 'rgba(244, 63, 94, 0.3)' : '#fecdd3'
+              ? isDark ? '#991b1b' : '#fecdd3'
               : theme.colors.hairline,
             marginTop: 12,
           },
@@ -1676,8 +1644,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
                 style={[
                   styles.durationWindowBadge,
                   {
-                    backgroundColor: isDark ? 'rgba(244, 63, 94, 0.15)' : '#ffe4e6',
-                    borderColor: isDark ? 'rgba(244, 63, 94, 0.35)' : '#fecdd3',
+                    backgroundColor: isDark ? '#450a0a' : '#ffe4e6',
+                    borderColor: isDark ? '#991b1b' : '#fecdd3',
                   },
                 ]}
               >

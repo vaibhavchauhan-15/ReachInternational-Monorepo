@@ -24,7 +24,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
-import { ReachInternationalLogo } from '../branding';
+import { ReachLongLogo } from '../branding';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
@@ -572,7 +572,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
               {/* Brand Footer */}
               <View style={styles.brandFooter}>
-                <ReachInternationalLogo size={18} showTagline={false} />
+                <ReachLongLogo width={130} height={65} />
                 <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
                   {`Reach International v${Constants.expoConfig?.version || '1.3.0'} • www.reachinternational.co.in`}
                 </Text>

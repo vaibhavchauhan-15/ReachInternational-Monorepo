@@ -3,11 +3,11 @@
  * Official RNR Alert primitive with AlertTitle and AlertDescription.
  */
 
-import { TextClassContext } from '@/components/ui/Text';
+import { Text, TextClassContext } from '@/components/ui/Text';
 import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
-import { View, type ViewProps, Text as RNText } from 'react-native';
+import { View, type ViewProps } from 'react-native';
 import { AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react-native';
 
 const alertVariants = cva(
@@ -80,22 +80,28 @@ const Alert = React.forwardRef<React.ElementRef<typeof View>, AlertProps>(
 Alert.displayName = 'Alert';
 
 const AlertTitle = React.forwardRef<
-  React.ElementRef<typeof View>,
-  ViewProps & { className?: string }
+  React.ElementRef<typeof Text>,
+  React.ComponentPropsWithoutRef<typeof Text>
 >(({ className, ...props }, ref) => (
-  <TextClassContext.Provider value="text-base font-semibold leading-none tracking-tight text-foreground mb-1">
-    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
-  </TextClassContext.Provider>
+  <Text
+    ref={ref}
+    variant="heading"
+    className={cn('text-base font-semibold leading-none tracking-tight text-foreground mb-1', className)}
+    {...props}
+  />
 ));
 AlertTitle.displayName = 'AlertTitle';
 
 const AlertDescription = React.forwardRef<
-  React.ElementRef<typeof View>,
-  ViewProps & { className?: string }
+  React.ElementRef<typeof Text>,
+  React.ComponentPropsWithoutRef<typeof Text>
 >(({ className, ...props }, ref) => (
-  <TextClassContext.Provider value="text-sm leading-relaxed text-muted-foreground">
-    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
-  </TextClassContext.Provider>
+  <Text
+    ref={ref}
+    variant="caption"
+    className={cn('text-sm leading-relaxed text-muted-foreground', className)}
+    {...props}
+  />
 ));
 AlertDescription.displayName = 'AlertDescription';
 

@@ -18,18 +18,17 @@ import {
   BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Pressable } from '../components/ui/touch/Pressable';
 import {
   Card,
   useTheme,
   MobileHeader,
-  ReachInternationalLogo,
+  ReachLongLogo,
   Text,
 } from '../components/ui';
+import { Pressable } from '../components/ui/touch/Pressable';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   BRAND_NAME,
-  BRAND_TAGLINE,
   BRAND_WEBSITE_DISPLAY,
   BRAND_EMAIL,
 } from '../lib/brand';
@@ -37,10 +36,7 @@ import {
   CheckCircle2,
   Mail,
   ExternalLink,
-  ArrowLeft,
 } from '../components/ui/icon';
-
-const loginPageImage = require('../assets/loginpageimage.png');
 
 export interface TermsOfServiceScreenProps {
   onPressBack?: () => void;
@@ -54,8 +50,6 @@ export default function TermsOfServiceScreen({ onPressBack, backRoute }: TermsOf
 
   const isDesktop = width >= 1024;
   const isShortScreen = height < 740;
-  const showcaseWidth = isDesktop ? Math.min(520, Math.max(380, Math.round(width * 0.38))) : 0;
-  const primarySkyBlue = isDark ? '#0ea5e9' : '#0284c7';
 
   const handleContactEmail = () => {
     Linking.openURL(`mailto:${BRAND_EMAIL}?subject=Terms%20of%20Service%20Inquiry`);
@@ -93,135 +87,28 @@ export default function TermsOfServiceScreen({ onPressBack, backRoute }: TermsOf
         styles.container,
         {
           backgroundColor: theme.colors.canvas,
-          flexDirection: isDesktop ? 'row' : 'column',
         },
       ]}
     >
-      {/* Desktop Left Showcase Panel (>=1024px) */}
-      {isDesktop && (
-        <View
-          style={[
-            styles.desktopShowcasePanel,
-            {
-              width: showcaseWidth,
-              backgroundColor: isDark ? '#111111' : '#ffffff',
-              borderRightColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          {/* Top Header Row with Back Button & Logo */}
-          <View style={styles.showcaseHeaderRow}>
-            <Pressable
-              variant="iconButton"
-              hitSlopToMin48
-              onPress={handleBack}
-              style={[
-                styles.showcaseBackBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvas,
-                },
-              ]}
-              accessibilityLabel="Back"
-            >
-              <ArrowLeft size={16} color={theme.colors.ink} />
-            </Pressable>
-            <ReachInternationalLogo variant="full" size={28} iconType="scissor" />
-          </View>
+      <MobileHeader
+        title="Terms of Service"
+        showBack={true}
+        backRoute={backRoute}
+        onPressBack={handleBack}
+        showQuickAccess={false}
+      />
 
-          {/* Central Hero Stage */}
-          <View style={styles.showcaseHeroContent}>
-            <View style={styles.showcaseHeadingBlock}>
-              <Text
-                variant="display"
-                style={{ color: isDark ? '#ffffff' : '#0f172a' }}
-              >
-                Platform Terms.
-              </Text>
-              <Text
-                variant="heading"
-                style={{ color: primarySkyBlue }}
-              >
-                Safety & Compliance.
-              </Text>
-            </View>
-
-            <View style={styles.machineStageContainer}>
-              <Image
-                source={loginPageImage}
-                style={[
-                  styles.machineImage,
-                  {
-                    maxHeight: Math.min(260, Math.max(160, height * 0.32)),
-                  },
-                ]}
-                resizeMode="contain"
-                accessible={true}
-                accessibilityLabel="Reach International Aerial Boom Lift Fleet Equipment"
-              />
-            </View>
-          </View>
-
-          {/* Bottom Info Badge */}
-          <View style={styles.showcaseBottomInfo}>
-            <View style={styles.greenDot} />
-            <Text variant="caption" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
-              Enterprise Fleet Governance · Statutory Safety
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Main Workspace */}
-      <View style={[styles.mainWorkspace, { backgroundColor: theme.colors.canvas }]}>
-        {!isDesktop ? (
-          <MobileHeader
-            title="Terms of Service"
-            showBack={true}
-            backRoute={backRoute}
-            onPressBack={handleBack}
-            showQuickAccess={false}
-          />
-        ) : (
-          <View
-            style={[
-              styles.desktopHeaderBar,
-              {
-                borderBottomColor: theme.colors.hairline,
-                backgroundColor: theme.colors.canvasElevated,
-              },
-            ]}
-          >
-            <Pressable
-              variant="buttonGhost"
-              hitSlopToMin48
-              onPress={handleBack}
-              style={styles.desktopBackRow}
-              accessibilityLabel="Back"
-            >
-              <ArrowLeft size={16} color={theme.colors.ink} />
-              <Text variant="label" style={{ color: theme.colors.ink }}>
-                Back
-              </Text>
-            </Pressable>
-            <Text variant="subheading" style={{ color: theme.colors.ink }}>
-              Terms of Service
-            </Text>
-            <View style={{ width: 60 }} />
-          </View>
-        )}
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: isDesktop ? 40 : spacingNumeric.md,
-              paddingVertical: isShortScreen ? 14 : spacingNumeric.lg,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.termsWrapper, { maxWidth: isDesktop ? 760 : '100%' }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingHorizontal: isDesktop ? 40 : spacingNumeric.md,
+            paddingVertical: isShortScreen ? 14 : spacingNumeric.lg,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.termsWrapper}>
             {/* Terms Metadata Card */}
             <Card variant="elevated" style={styles.card}>
               <Text variant="heading" style={{ color: theme.colors.ink }}>
@@ -337,17 +224,13 @@ export default function TermsOfServiceScreen({ onPressBack, backRoute }: TermsOf
 
             {/* Brand Footprint Footer */}
             <View style={styles.brandFooter}>
-              <ReachInternationalLogo size={18} showTagline={false} />
-              <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-                {BRAND_NAME} • {BRAND_TAGLINE}
-              </Text>
+              <ReachLongLogo width={140} height={70} />
               <Text variant="micro" style={{ color: theme.colors.mute }}>
                 © {new Date().getFullYear()} Reach International. All rights reserved.
               </Text>
             </View>
           </View>
         </ScrollView>
-      </View>
     </View>
   );
 }
@@ -358,88 +241,9 @@ const styles = StyleSheet.create({
     height: '100%',
     width: '100%',
   },
-  desktopShowcasePanel: {
-    height: '100%',
-    borderRightWidth: 1,
-    paddingHorizontal: 40,
-    paddingVertical: 32,
-    justifyContent: 'space-between',
-    position: 'relative',
-    overflow: 'hidden',
-    zIndex: 1,
-  },
-  showcaseHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 2,
-  },
-  showcaseBackBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  showcaseHeroContent: {
-    marginVertical: 'auto',
-    alignItems: 'flex-start',
-    width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
-    gap: 22,
-    zIndex: 2,
-    paddingVertical: 12,
-  },
-  showcaseHeadingBlock: {
-    width: '100%',
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  machineStageContainer: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    paddingVertical: 10,
-  },
-  machineImage: {
-    width: '100%',
-    maxWidth: 340,
-  },
-  showcaseBottomInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    zIndex: 2,
-  },
-  greenDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
-  mainWorkspace: {
-    flex: 1,
-    height: '100%',
-    position: 'relative',
-  },
-  desktopHeaderBar: {
-    height: 52,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-  },
-  desktopBackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   termsWrapper: {
     width: '100%',
+    maxWidth: 800,
     alignSelf: 'center',
     gap: spacingNumeric.md,
   },

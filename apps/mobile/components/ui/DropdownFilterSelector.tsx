@@ -10,7 +10,7 @@
  * - Tactile haptic feedback on selection
  */
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -38,33 +38,112 @@ export interface FilterOption {
 
 export interface DropdownFilterSelectorProps {
   label: string;
-  value: string;
+  value?: string;
+  /** Alias for value */
+  selectedId?: string;
   options: FilterOption[];
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  /** Alias for onChange */
+  onSelect?: (value: string) => void;
   align?: 'left' | 'right';
   minMenuWidth?: number;
   showSearch?: boolean;
+  /** Alias for showSearch */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  placeholder?: string;
   disabled?: boolean;
+  showPrefix?: boolean;
+  testID?: string;
 }
+
+interface DropdownOptionRowProps {
+  option: FilterOption;
+  isSelected: boolean;
+  isDark: boolean;
+  onSelect: (id: string) => void;
+}
+
+const DropdownOptionRow = React.memo<DropdownOptionRowProps>(({
+  option,
+  isSelected,
+  isDark,
+  onSelect,
+}) => {
+  const handlePress = useCallback(() => {
+    onSelect(option.id);
+  }, [onSelect, option.id]);
+
+  return (
+    <Pressable
+      variant="listRow"
+      haptic="select"
+      onPress={handlePress}
+      style={[
+        styles.optionItem,
+        {
+          backgroundColor: isSelected
+            ? isDark
+              ? 'rgba(2, 132, 199, 0.2)'
+              : 'rgba(2, 132, 199, 0.12)'
+            : 'transparent',
+        },
+      ]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: isSelected }}
+      accessibilityLabel={option.label}
+    >
+      <View style={styles.optionLeft}>
+        {option.dotColor && (
+          <View
+            style={[
+              styles.optionDot,
+              {
+                backgroundColor: option.dotColor,
+              },
+            ]}
+          />
+        )}
+        <Text
+          variant="caption"
+          style={{
+            color: isSelected ? '#0284c7' : undefined,
+          }}
+          numberOfLines={1}
+        >
+          {option.label}
+        </Text>
+      </View>
+      {isSelected && (
+        <Check size={14} color="#0284c7" strokeWidth={2.5} animate="mount" />
+      )}
+    </Pressable>
+  );
+});
 
 export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = React.memo(({
   label,
-  value,
+  value: valueProp,
+  selectedId,
   options,
-  onChange,
+  onChange: onChangeProp,
+  onSelect,
   align = 'left',
   minMenuWidth = 200,
-  showSearch = false,
+  showSearch: showSearchProp = false,
+  searchable,
+  searchPlaceholder,
+  placeholder,
   disabled = false,
+  showPrefix = false,
+  testID,
 }) => {
+  const value = valueProp !== undefined ? valueProp : (selectedId ?? '');
+  const onChange = onChangeProp || onSelect || (() => {});
+  const showSearch = showSearchProp || Boolean(searchable);
   const { theme, isDark } = useTheme();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [windowWidth, setWindowWidth] = useState(() =>
-    Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.innerWidth
-      : Dimensions.get('window').width
-  );
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [coords, setCoords] = useState<{
     top: number;
@@ -79,25 +158,6 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
   });
 
   const buttonRef = useRef<View>(null);
-
-  // Monitor window resize on web / orientation changes
-  useEffect(() => {
-    const updateDimensions = () => {
-      const w =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.innerWidth
-          : Dimensions.get('window').width;
-      setWindowWidth(w);
-    };
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.addEventListener('resize', updateDimensions);
-      return () => window.removeEventListener('resize', updateDimensions);
-    } else {
-      const sub = Dimensions.addEventListener('change', updateDimensions);
-      return () => sub.remove();
-    }
-  }, []);
 
   // Keyboard awareness so popover stays visible above keyboard
   useEffect(() => {
@@ -224,16 +284,16 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  const handleSelectOption = (optId: string) => {
+  const handleSelectOption = useCallback((optId: string) => {
     haptics.select();
     onChange(optId);
     setOpen(false);
-  };
+  }, [onChange]);
 
   const isFiltered = value !== 'all' && value !== 'default' && value !== 'machine_id_asc' && value !== 'newest';
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID={testID}>
       {/* Anchor Trigger Button */}
       <View ref={buttonRef} collapsable={false}>
         <Pressable
@@ -256,12 +316,14 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
           ]}
           accessibilityRole="combobox"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={`${label} filter: ${selectedOption?.label}`}
+          accessibilityLabel={`${label}: ${selectedOption?.label}`}
         >
           <View style={styles.triggerLeft}>
-            <Text variant="caption" style={[{ color: theme.colors.mute }]}>
-              {label}:
-            </Text>
+            {showPrefix && (
+              <Text variant="caption" style={[{ color: theme.colors.mute }]}>
+                {label}:
+              </Text>
+            )}
             {selectedOption?.dotColor && (
               <View style={[styles.statusDot, { backgroundColor: selectedOption.dotColor }]} />
             )}
@@ -275,7 +337,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
               ]}
               numberOfLines={1}
             >
-              {selectedOption?.label}
+              {selectedOption?.label || label}
             </Text>
           </View>
           <Icon
@@ -351,52 +413,15 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
                 </Text>
               </View>
             ) : (
-              filteredOptions.map((opt: FilterOption) => {
-                const isSelected = opt.id === value;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    variant="listRow"
-                    haptic="select"
-                    onPress={() => handleSelectOption(opt.id)}
-                    style={[
-                      styles.optionItem,
-                      {
-                        backgroundColor: isSelected
-                          ? isDark
-                            ? 'rgba(2, 132, 199, 0.2)'
-                            : 'rgba(2, 132, 199, 0.12)'
-                          : 'transparent',
-                      },
-                    ]}
-                  >
-                    <View style={styles.optionLeft}>
-                      {opt.dotColor && (
-                        <View
-                          style={[
-                            styles.optionDot,
-                            {
-                              backgroundColor: opt.dotColor,
-                            },
-                          ]}
-                        />
-                      )}
-                      <Text
-                        variant="caption"
-                        style={{
-                          color: isSelected ? '#0284c7' : theme.colors.ink,
-                        }}
-                        numberOfLines={1}
-                      >
-                        {opt.label}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <Check size={14} color="#0284c7" strokeWidth={2.5} animate="mount" />
-                    )}
-                  </Pressable>
-                );
-              })
+              filteredOptions.map((opt: FilterOption) => (
+                <DropdownOptionRow
+                  key={opt.id}
+                  option={opt}
+                  isSelected={opt.id === value}
+                  isDark={isDark}
+                  onSelect={handleSelectOption}
+                />
+              ))
             )}
           </ScrollView>
         </View>
@@ -408,7 +433,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    minWidth: '47%',
+    width: '100%',
   },
   triggerBtn: {
     flexDirection: 'row',

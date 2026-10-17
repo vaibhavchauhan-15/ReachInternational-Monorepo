@@ -296,6 +296,8 @@ export const ReachBrandEmblem = memo(function ReachBrandEmblem({
   );
 });
 
+import { ReachLongLogo, type LongLogoThemeVariant } from './ReachLongLogo';
+
 export type LogoVariant = 'full' | 'compact' | 'wordmark';
 export type ThemePolarity = 'auto' | 'light' | 'dark';
 
@@ -303,6 +305,8 @@ export interface ReachInternationalLogoProps {
   variant?: LogoVariant | ThemePolarity;
   iconType?: 'emblem' | 'scissor';
   size?: number;
+  width?: number;
+  height?: number;
   showIcon?: boolean;
   showTagline?: boolean;
   style?: ViewStyle;
@@ -312,15 +316,14 @@ export interface ReachInternationalLogoProps {
 }
 
 /**
- * Authoritative Full Brand Lockup matching apps/web/components/branding/ReachInternationalLogo.tsx
- * and apps/mobile/public/pdf-logo.png
- *
- * Polarity Rule:
- * In Dark Theme: Renders the LIGHT logo (white "REACH", cyan "INTERNATIONAL", subtle light tagline).
- * In Light Theme: Renders the DARK logo (dark "REACH", brand blue "INTERNATIONAL", slate tagline).
+ * Authoritative Brand Logo Component
+ * Centralized to render the official Reach International Transparent Long Logo
+ * across dark and light themes.
  */
 export const ReachInternationalLogo = memo(function ReachInternationalLogo({
   size = 32,
+  width,
+  height,
   showIcon = true,
   showTagline = true,
   iconType = 'scissor',
@@ -341,26 +344,8 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
   const effectiveTheme: ThemePolarity =
     themeVariant || (isThemePolarityString ? (variant as ThemePolarity) : 'auto');
 
-  // In dark theme use light logo, in light theme use dark logo
   const useLightLogo =
     effectiveTheme === 'light' ? true : effectiveTheme === 'dark' ? false : isDark;
-
-  const iconSize = Math.max(22, Math.round(size * 1.05));
-  const emblemSize = Math.max(24, Math.round(size * 1.15));
-
-  // Polarity: Dark theme uses light logo, light theme uses dark logo
-  const brandReachColor = useLightLogo ? '#ffffff' : '#09090b';
-  const brandInternationalColor = useLightLogo ? '#38bdf8' : '#0284c7';
-  const taglineColor = useLightLogo ? '#94a3b8' : '#64748b';
-  const dividerColor = useLightLogo
-    ? 'rgba(255, 255, 255, 0.2)'
-    : 'rgba(203, 213, 225, 0.9)';
-
-  // Proportional typography scaling exactly matching web design
-  const reachFontSize = Math.max(11, Math.round(size * 0.54));
-  const internationalFontSize = Math.max(11, Math.round(size * 0.54));
-  const taglineFontSize = Math.max(6, Math.round(size * 0.25));
-  const gapSize = Math.max(7, Math.round(size * 0.3));
 
   if (effectiveLayoutVariant === 'compact') {
     return (
@@ -413,71 +398,18 @@ export const ReachInternationalLogo = memo(function ReachInternationalLogo({
     );
   }
 
-  const shouldRenderIcon = effectiveLayoutVariant !== 'wordmark' && showIcon;
+  // Authoritative Long Logo for full & wordmark variants (2:1 aspect ratio)
+  const logoWidth = width || Math.round(size * 5.2);
+  const logoHeight = height || Math.round(logoWidth / 2);
 
   return (
-    <View
-      style={[styles.container, { gap: gapSize }, style]}
-      accessible={true}
-      accessibilityLabel={alt}
-    >
-      {shouldRenderIcon && (
-        iconType === 'scissor' ? (
-          <ScissorLiftLogoIcon
-            size={iconSize}
-            variant={useLightLogo ? 'light' : 'dark'}
-            withArrow={withArrow}
-          />
-        ) : (
-          <ReachBrandEmblem
-            size={emblemSize}
-            variant={useLightLogo ? 'light' : 'dark'}
-          />
-        )
-      )}
-      <View style={styles.textContainer}>
-        {/* Brand Name Row */}
-        <View style={styles.brandRow}>
-          <Text
-            variant="heading"
-            style={[
-              styles.reachText,
-              { color: brandReachColor },
-            ]}
-          >
-            REACH
-          </Text>
-          <Text
-            variant="heading"
-            style={[
-              styles.internationalText,
-              {
-                color: brandInternationalColor,
-              },
-            ]}
-          >
-            INTERNATIONAL
-          </Text>
-        </View>
-
-        {/* Hairline Divider & Official "REACHING ALL HEIGHTS" Tagline */}
-        {showTagline && effectiveLayoutVariant === 'full' && (
-          <View style={styles.taglineContainer}>
-            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-            <Text
-              variant="caption"
-              style={[
-                styles.taglineText,
-                { color: taglineColor },
-              ]}
-              numberOfLines={1}
-            >
-              REACHING ALL HEIGHTS
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
+    <ReachLongLogo
+      width={logoWidth}
+      height={logoHeight}
+      themeVariant={effectiveTheme as LongLogoThemeVariant}
+      containerStyle={style}
+      alt={alt}
+    />
   );
 });
 

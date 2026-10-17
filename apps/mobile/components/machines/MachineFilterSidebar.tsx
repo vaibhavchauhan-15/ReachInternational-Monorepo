@@ -86,23 +86,20 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
       visible={visible}
       onClose={onClose}
       title="Filters & Sorting"
-      subtitle="Category-wise fleet equipment refinement"
       activeFilterCount={activeFilterCount}
       onResetAll={onResetAllFilters}
       applyText={`Show ${totalFilteredCount} ${totalFilteredCount === 1 ? 'Machine' : 'Machines'}`}
       onApply={onClose}
       testID="machine-filter-sidebar"
     >
-      {/* Category 1: Rental Status */}
+      {/* 1. Rental Status */}
       <FilterCategoryCard
-        index={1}
-        title="RENTAL STATUS"
-        subtitle="Filter equipment by rental availability status"
+        title="Rental Status"
         isFiltered={rentalFilter !== 'all'}
         testID="category-rental-status"
       >
         <DropdownFilterSelector
-          label="Rental"
+          label="Rental Status"
           value={rentalFilter}
           options={rentalFilterOptions}
           onChange={(val) => setRentalFilter(val as RentalFilterType)}
@@ -110,16 +107,14 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         />
       </FilterCategoryCard>
 
-      {/* Category 2: Health Status */}
+      {/* 2. Health Status */}
       <FilterCategoryCard
-        index={2}
-        title="HEALTH STATUS"
-        subtitle="Filter equipment by operational health condition"
+        title="Health Status"
         isFiltered={healthFilter !== 'all'}
         testID="category-health-status"
       >
         <DropdownFilterSelector
-          label="Health"
+          label="Health Status"
           value={healthFilter}
           options={healthFilterOptions}
           onChange={(val) => setHealthFilter(val as HealthFilterType)}
@@ -127,11 +122,9 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         />
       </FilterCategoryCard>
 
-      {/* Category 3: Client Allocation */}
+      {/* 3. Client Allocation */}
       <FilterCategoryCard
-        index={3}
-        title="CLIENT ALLOCATION"
-        subtitle="Filter equipment assigned to specific client locations"
+        title="Client Allocation"
         isFiltered={clientFilter !== 'all'}
         testID="category-client-allocation"
       >
@@ -139,7 +132,7 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
           <Skeleton width="100%" height={44} borderRadius={radiusNumeric.md} />
         ) : (
           <DropdownFilterSelector
-            label="Client"
+            label="Client Allocation"
             value={clientFilter}
             options={clientFilterOptions}
             onChange={setClientFilter}
@@ -149,11 +142,9 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         )}
       </FilterCategoryCard>
 
-      {/* Category 4: Site Supervisor */}
+      {/* 4. Site Supervisor */}
       <FilterCategoryCard
-        index={4}
-        title="SITE SUPERVISOR"
-        subtitle="Filter machinery overseen by supervising personnel"
+        title="Site Supervisor"
         isFiltered={supervisorFilter !== 'all'}
         testID="category-site-supervisor"
       >
@@ -161,7 +152,7 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
           <Skeleton width="100%" height={44} borderRadius={radiusNumeric.md} />
         ) : (
           <DropdownFilterSelector
-            label="Supervisor"
+            label="Site Supervisor"
             value={supervisorFilter}
             options={supervisorFilterOptions}
             onChange={setSupervisorFilter}
@@ -171,11 +162,9 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         )}
       </FilterCategoryCard>
 
-      {/* Category 5: Sorting Order */}
+      {/* 5. Sort By */}
       <FilterCategoryCard
-        index={5}
-        title="SORTING ORDER"
-        subtitle="Order equipment by ID, model, manufacturing year, or meter"
+        title="Sort By"
         isFiltered={sortBy !== 'machine_id_asc'}
         badgeLabel="Custom"
         testID="category-sorting-order"

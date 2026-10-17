@@ -12,7 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 import { AppModal } from '../ui/AppModal';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
-import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem, KPICard, KPIGrid, Pagination } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem, KPICard, KPIGrid, Pagination, FilterSidebar, FilterCategoryCard, DropdownFilterSelector } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -54,7 +54,6 @@ import {
 } from '../ui/icon';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
-import { CustomFilterSelectorModal } from './CustomFilterSelectorModal';
 import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
 import { MachineHMRSkeleton } from './MachineHMRSkeleton';
 import { MachineAuditSkeleton } from './MachineAuditSkeleton';
@@ -364,10 +363,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [logPage, setLogPage] = useState(1);
   const [logPageSize, setLogPageSize] = useState<number>(10);
 
-  // Modals for filter selectors in logs tab
-  const [dateModalOpen, setDateModalOpen] = useState(false);
-  const [operatorModalOpen, setOperatorModalOpen] = useState(false);
-  const [sortModalOpen, setSortModalOpen] = useState(false);
+  // Reusable FilterSidebar state for running logs tab
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
+
+  const activeLogFilterCount = useMemo(() => {
+    let count = 0;
+    if (logDatePreset !== 'all') count++;
+    if (logSortBy !== 'date_desc') count++;
+    return count;
+  }, [logDatePreset, logSortBy]);
+
+  const handleResetLogFilters = useCallback(() => {
+    haptics.confirm();
+    setLogSearch('');
+    setLogDatePreset('all');
+    setLogSortBy('date_desc');
+    setLogPage(1);
+  }, []);
 
   // Title formatting: Model - Serial No (Screenshot 2 Match)
   const displayTitle =
@@ -1240,16 +1252,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               ]}
             >
               {machine.health_status === 'breakdown' && (
-                <Badge status="breakdown" customLabel="Breakdown" />
+                <Badge status="breakdown" dot customLabel="Breakdown" />
               )}
               {machine.health_status === 'under_maintenance' && (
-                <Badge status="under_maintenance" customLabel="Under Maintenance" />
+                <Badge status="under_maintenance" dot customLabel="Under Maintenance" />
               )}
               {machine.health_status === 'spare' && (
-                <Badge status="spare" customLabel="Spare" />
+                <Badge status="spare" dot customLabel="Spare" />
               )}
               {(!machine.health_status || machine.health_status === 'active') && (
-                <Badge status="active" customLabel="Active" />
+                <Badge status="active" dot customLabel="Active" />
               )}
 
               <Badge
@@ -2010,54 +2022,65 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     )}
 
                     <Pressable variant="outline" haptic="tap"
-                      onPress={() => setShowFilterSort((prev) => !prev)}
+                      onPress={() => setIsFilterSidebarOpen(true)}
                       style={[
                         styles.filterToggleBtn,
-                        showFilterSort && { backgroundColor: theme.colors.link + '18' },
+                        (activeLogFilterCount > 0 || isFilterSidebarOpen) && {
+                          backgroundColor: isDark ? 'rgba(2, 132, 199, 0.22)' : '#e0f2fe',
+                          borderColor: '#0284c7',
+                        },
                       ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open filter sidebar"
                     >
-                      <SlidersHorizontal size={14} color={showFilterSort ? theme.colors.link : theme.colors.mute} />
+                      <SlidersHorizontal
+                        size={14}
+                        color={activeLogFilterCount > 0 || isFilterSidebarOpen ? '#0284c7' : theme.colors.mute}
+                      />
                     </Pressable>
                   </View>
 
-                  {/* Expandable Filter / Sort Bar */}
-                  {showFilterSort && (
+                  {/* Active Filter / Sort Chips Bar */}
+                  {(activeLogFilterCount > 0 || logSearch) && (
                     <View style={[styles.expandableFilters, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      {/* Date Preset Selector */}
-                      <Pressable variant="outline" haptic="tap"
-                        onPress={() => setDateModalOpen(true)}
-                        style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
-                      >
-                        <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                          Date: {logDatePreset === 'all' ? 'All' : logDatePreset === '7d' ? '7 Days' : logDatePreset === '30d' ? '30 Days' : 'This Month'}
-                        </Text>
-                        <ChevronDown size={12} color={theme.colors.mute} />
-                      </Pressable>
-
-                      {/* Sort Selector */}
-                      <Pressable variant="outline" haptic="tap"
-                        onPress={() => setSortModalOpen(true)}
-                        style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
-                      >
-                        <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
-                          Sort: {logSortBy === 'date_desc' ? 'Newest' : logSortBy === 'date_asc' ? 'Oldest' : logSortBy === 'hours_desc' ? 'High Hours' : 'Low Hours'}
-                        </Text>
-                        <ChevronDown size={12} color={theme.colors.mute} />
-                      </Pressable>
-
-                      {/* Clear Filters */}
-                      {(logSearch || logDatePreset !== 'all' || logSortBy !== 'date_desc') && (
+                      {/* Date Preset Selector Chip */}
+                      {logDatePreset !== 'all' && (
                         <Pressable variant="outline" haptic="tap"
-                          onPress={() => {
-                            setLogSearch('');
-                            setLogDatePreset('all');
-                            setLogSortBy('date_desc');
-                            setLogPage(1);
-                          }}
+                          onPress={() => setIsFilterSidebarOpen(true)}
+                          style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Modify date filter"
                         >
-                          <Text style={[styles.resetFilterText, { color: theme.colors.error }]}>Reset</Text>
+                          <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                            Date: {logDatePreset === '7d' ? '7 Days' : logDatePreset === '30d' ? '30 Days' : 'This Month'}
+                          </Text>
+                          <ChevronDown size={12} color={theme.colors.mute} />
                         </Pressable>
                       )}
+
+                      {/* Sort Selector Chip */}
+                      {logSortBy !== 'date_desc' && (
+                        <Pressable variant="outline" haptic="tap"
+                          onPress={() => setIsFilterSidebarOpen(true)}
+                          style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Modify sorting order"
+                        >
+                          <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                            Sort: {logSortBy === 'date_asc' ? 'Oldest' : logSortBy === 'hours_desc' ? 'High Hours' : 'Low Hours'}
+                          </Text>
+                          <ChevronDown size={12} color={theme.colors.mute} />
+                        </Pressable>
+                      )}
+
+                      {/* Clear Filters */}
+                      <Pressable variant="outline" haptic="tap"
+                        onPress={handleResetLogFilters}
+                        accessibilityRole="button"
+                        accessibilityLabel="Reset all filters"
+                      >
+                        <Text style={[styles.resetFilterText, { color: theme.colors.error }]}>Reset</Text>
+                      </Pressable>
                     </View>
                   )}
 
@@ -2953,40 +2976,62 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         isLoading={isDeleting}
       />
 
-      {/* Filter Modals for Running Logs */}
-      <CustomFilterSelectorModal
-        visible={dateModalOpen}
-        onClose={() => setDateModalOpen(false)}
-        title="Filter by Date Range"
-        options={[
-          { id: 'all', label: 'All Dates' },
-          { id: '7d', label: 'Last 7 Days' },
-          { id: '30d', label: 'Last 30 Days' },
-          { id: 'month', label: 'This Month' },
-        ]}
-        selectedValue={logDatePreset}
-        onSelect={(val) => {
-          setLogDatePreset(val as any);
-          setLogPage(1);
-        }}
-      />
+      {/* Reusable FilterSidebar for Running Logs */}
+      <FilterSidebar
+        isOpen={isFilterSidebarOpen}
+        onClose={() => setIsFilterSidebarOpen(false)}
+        title="Filters & Sorting"
+        badgeCount={activeLogFilterCount}
+        onReset={handleResetLogFilters}
+        onApply={() => setIsFilterSidebarOpen(false)}
+        applyLabel={`Show ${filteredLogs.length} Log${filteredLogs.length === 1 ? '' : 's'}`}
+        testID="machine-detail-logs-filter-sidebar"
+      >
+        <FilterCategoryCard
+          title="Date Range"
+          isFiltered={logDatePreset !== 'all'}
+          testID="category-date-range"
+        >
+          <DropdownFilterSelector
+            label="Date Range"
+            selectedId={logDatePreset}
+            options={[
+              { id: 'all', label: 'All Dates' },
+              { id: '7d', label: 'Last 7 Days' },
+              { id: '30d', label: 'Last 30 Days' },
+              { id: 'month', label: 'This Month' },
+            ]}
+            onSelect={(val) => {
+              setLogDatePreset(val as any);
+              setLogPage(1);
+            }}
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
 
-      <CustomFilterSelectorModal
-        visible={sortModalOpen}
-        onClose={() => setSortModalOpen(false)}
-        title="Sort Logs By"
-        options={[
-          { id: 'date_desc', label: 'Date: Newest First' },
-          { id: 'date_asc', label: 'Date: Oldest First' },
-          { id: 'hours_desc', label: 'Hours: High to Low' },
-          { id: 'hours_asc', label: 'Hours: Low to High' },
-        ]}
-        selectedValue={logSortBy}
-        onSelect={(val) => {
-          setLogSortBy(val as any);
-          setLogPage(1);
-        }}
-      />
+        <FilterCategoryCard
+          title="Sort By"
+          isFiltered={logSortBy !== 'date_desc'}
+          badgeLabel="Custom"
+          testID="category-sorting-order"
+        >
+          <DropdownFilterSelector
+            label="Sort By"
+            selectedId={logSortBy}
+            options={[
+              { id: 'date_desc', label: 'Date: Newest First' },
+              { id: 'date_asc', label: 'Date: Oldest First' },
+              { id: 'hours_desc', label: 'Hours: High to Low' },
+              { id: 'hours_asc', label: 'Hours: Low to High' },
+            ]}
+            onSelect={(val) => {
+              setLogSortBy(val as any);
+              setLogPage(1);
+            }}
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+      </FilterSidebar>
 
       {/* Hero Edit Options Modal Popup */}
       <AppModal
@@ -3574,6 +3619,7 @@ const styles = StyleSheet.create({
   },
   logSearchInput: {
     flex: 1,
+    minWidth: 0,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
@@ -3589,6 +3635,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   expandableFilters: {
     flexDirection: 'row',

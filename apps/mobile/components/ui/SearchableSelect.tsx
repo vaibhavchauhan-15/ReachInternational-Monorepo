@@ -65,6 +65,7 @@ export interface SearchableSelectProps {
   labelStyle?: TextStyle;
   presentation?: 'dropdown' | 'modal';
   onDropdownOpen?: () => void;
+  inlineDescription?: boolean;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -86,6 +87,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   labelStyle,
   presentation = 'dropdown',
   onDropdownOpen,
+  inlineDescription = false,
 }) => {
   const { theme, isDark } = useTheme();
   const windowDim = useWindowDimensions();
@@ -353,19 +355,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       styles.codeBadge,
                       {
                         backgroundColor: isDark
-                          ? 'rgba(255, 255, 255, 0.06)'
-                          : 'rgba(0, 0, 0, 0.04)',
+                          ? 'rgba(2, 132, 199, 0.18)'
+                          : 'rgba(2, 132, 199, 0.10)',
                         borderColor: isDark
-                          ? 'rgba(255, 255, 255, 0.10)'
-                          : 'rgba(0, 0, 0, 0.07)',
+                          ? 'rgba(2, 132, 199, 0.35)'
+                          : 'rgba(2, 132, 199, 0.22)',
                       },
                     ]}
                   >
                     <Text
                       variant="micro"
+                      weight="semibold"
                       style={[
                         styles.codeText,
-                        { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' },
+                        { color: isDark ? '#38bdf8' : '#0284c7' },
                       ]}
                     >
                       {selectedOption.code}
@@ -420,8 +423,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     </Text>
                   </View>
                 )}
+                {selectedOption?.description && inlineDescription && (
+                  <Text
+                    variant="caption"
+                    style={[
+                      styles.triggerDesc,
+                      { color: isDark ? '#a1a1aa' : '#71717a', flexShrink: 1 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {' · '}{selectedOption.description}
+                  </Text>
+                )}
               </View>
-              {selectedOption?.description ? (
+              {selectedOption?.description && !inlineDescription ? (
                 <Text
                   variant="caption"
                   style={[
@@ -592,19 +607,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                     styles.codeBadge,
                                     {
                                       backgroundColor: isDark
-                                        ? 'rgba(255, 255, 255, 0.06)'
-                                        : 'rgba(0, 0, 0, 0.04)',
+                                        ? 'rgba(2, 132, 199, 0.18)'
+                                        : 'rgba(2, 132, 199, 0.10)',
                                       borderColor: isDark
-                                        ? 'rgba(255, 255, 255, 0.10)'
-                                        : 'rgba(0, 0, 0, 0.07)',
+                                        ? 'rgba(2, 132, 199, 0.35)'
+                                        : 'rgba(2, 132, 199, 0.22)',
                                     },
                                   ]}
                                 >
                                   <Text
                                     variant="micro"
+                                    weight="semibold"
                                     style={[
                                       styles.codeText,
-                                      { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' },
+                                      { color: isDark ? '#38bdf8' : '#0284c7' },
                                     ]}
                                   >
                                     {item.code}
@@ -797,19 +813,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                   styles.codeBadge,
                                   {
                                     backgroundColor: isDark
-                                      ? 'rgba(255, 255, 255, 0.06)'
-                                      : 'rgba(0, 0, 0, 0.04)',
+                                      ? 'rgba(2, 132, 199, 0.18)'
+                                      : 'rgba(2, 132, 199, 0.10)',
                                     borderColor: isDark
-                                      ? 'rgba(255, 255, 255, 0.10)'
-                                      : 'rgba(0, 0, 0, 0.07)',
+                                      ? 'rgba(2, 132, 199, 0.35)'
+                                      : 'rgba(2, 132, 199, 0.22)',
                                   },
                                 ]}
                               >
                                 <Text
                                   variant="micro"
+                                  weight="semibold"
                                   style={[
                                     styles.codeText,
-                                    { color: isDark ? 'rgba(226, 232, 240, 0.75)' : 'rgba(71, 85, 105, 0.75)' },
+                                    { color: isDark ? '#38bdf8' : '#0284c7' },
                                   ]}
                                 >
                                   {item.code}

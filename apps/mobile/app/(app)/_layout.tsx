@@ -88,6 +88,7 @@ export default function AppLayout() {
         {/* Settings Module — About */}
         <Tabs.Screen name="settings/about/index" options={{ ...motion.tabsShift, title: 'About App', href: null }} />
         <Tabs.Screen name="settings/about/whats-new" options={{ ...motion.tabsShift, title: "What's New", href: null }} />
+        <Tabs.Screen name="settings/about/about-us" options={{ ...motion.tabsShift, title: 'About Us', href: null }} />
         <Tabs.Screen name="settings/about/app-info" options={{ ...motion.tabsShift, title: 'App Information', href: null }} />
         <Tabs.Screen name="settings/about/privacy" options={{ ...motion.tabsShift, title: 'Privacy Policy', href: null }} />
         <Tabs.Screen name="settings/about/terms" options={{ ...motion.tabsShift, title: 'Terms of Service', href: null }} />

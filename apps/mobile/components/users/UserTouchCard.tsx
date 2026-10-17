@@ -250,68 +250,20 @@ function BaseUserTouchCard({
           {/* Header Right: Standardized 24px Role Badge & Status Badge in ONE ROW */}
           <View style={styles.headerRightActions}>
             <View style={styles.headerBadgesCluster}>
-              {/* Role Chip (consistent 24px height, theme-aware colors) */}
-              <View
-                style={[
-                  styles.chipBadge,
-                  {
-                    backgroundColor: isDark ? accentColor + '25' : accentColor + '15',
-                    borderColor: isDark ? accentColor + '50' : accentColor + '35',
-                  },
-                ]}
-              >
-                <Text variant="caption" style={{ color: accentColor }}>
-                  {formatRoleName(u.role)}
-                </Text>
-              </View>
+              {/* Role Badge (centralized Badge with theme tokens) */}
+              <Badge
+                role={u.role}
+                label={formatRoleName(u.role)}
+                size="md"
+              />
 
-              {/* Status Chip (consistent 24px height, theme-aware colors) */}
-              <View
-                style={[
-                  styles.chipBadge,
-                  {
-                    backgroundColor:
-                      u.status === 'active'
-                        ? isDark ? 'rgba(52, 211, 153, 0.16)' : 'rgba(16, 185, 129, 0.12)'
-                        : u.status === 'pending'
-                        ? isDark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)'
-                        : isDark ? 'rgba(161, 161, 170, 0.16)' : 'rgba(113, 113, 122, 0.12)',
-                    borderColor:
-                      u.status === 'active'
-                        ? isDark ? 'rgba(52, 211, 153, 0.4)' : 'rgba(16, 185, 129, 0.3)'
-                        : u.status === 'pending'
-                        ? isDark ? 'rgba(251, 191, 36, 0.4)' : 'rgba(245, 158, 11, 0.3)'
-                        : isDark ? 'rgba(161, 161, 170, 0.4)' : 'rgba(113, 113, 122, 0.3)',
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor:
-                        u.status === 'active'
-                          ? isDark ? '#34d399' : '#10b981'
-                          : u.status === 'pending'
-                          ? isDark ? '#fbbf24' : '#f59e0b'
-                          : isDark ? '#a1a1aa' : '#94a3b8',
-                    },
-                  ]}
-                />
-                <Text
-                  variant="caption"
-                  style={{
-                    color:
-                      u.status === 'active'
-                        ? isDark ? '#34d399' : '#059669'
-                        : u.status === 'pending'
-                        ? isDark ? '#fbbf24' : '#d97706'
-                        : isDark ? '#a1a1aa' : '#71717a',
-                  }}
-                >
-                  {u.status === 'active' ? 'Active' : (u.status ? u.status.toUpperCase() : 'INACTIVE')}
-                </Text>
-              </View>
+              {/* Status Badge (centralized Badge with status dot) */}
+              <Badge
+                status={u.status}
+                dot
+                label={u.status === 'active' ? 'Active' : (u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1).toLowerCase() : 'Inactive')}
+                size="md"
+              />
             </View>
           </View>
         </View>

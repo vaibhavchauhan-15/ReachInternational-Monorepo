@@ -12,10 +12,10 @@ import { Text } from './Text';
 import { Icon } from './icon';
 import { AppModal } from './AppModal';
 import { Touchable } from './Touchable';
-import { haptics } from '../../lib/haptics';
-import { ReachBrandEmblem, ReachInternationalLogo } from '../branding';
+import { ReachBrandEmblem, ReachLongLogo } from '../branding';
 import { Share2, Copy, Check, ExternalLink, X } from './icon';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { haptics } from '../../lib/haptics';
 
 export interface SharedLinkPreviewCardProps {
   url: string;
@@ -141,10 +141,10 @@ export const SharedLinkPreviewCard = memo(function SharedLinkPreviewCard({
           },
         ]}
       >
-        <ReachInternationalLogo
-          size={28}
-          showTagline={true}
-          variant={isDark ? 'light' : 'dark'}
+        <ReachLongLogo
+          width={180}
+          height={90}
+          themeVariant={isDark ? 'dark' : 'light'}
         />
       </View>
 

@@ -666,6 +666,11 @@ export default function MachinesScreen() {
 
   // List Empty / Initial Loading Component
   const renderListEmpty = useCallback(() => {
+    // When the filter sidebar is open, do not flash EmptyState behind the active drawer
+    if (filterPanelOpen) {
+      return null;
+    }
+
     if ((isLoading || isSearching) && machines.length === 0) {
       return (
         <View style={styles.skeletonContainer}>
@@ -693,7 +698,6 @@ export default function MachinesScreen() {
         <EmptyState
           variant="no-results"
           title={`No machines matching "${debouncedSearch.trim()}"`}
-          description="No equipment matches your search query across Machine ID, Model, or Serial Number."
           actionLabel="Clear Search"
           onAction={handleClearSearch}
         />
@@ -705,7 +709,7 @@ export default function MachinesScreen() {
         <EmptyState
           variant="filtered"
           title="No Machines for Selected Filters"
-          description="No fleet equipment assets match your active filter criteria."
+          description=""
           actionLabel="Reset All Filters"
           onAction={handleResetAllFilters}
         />
@@ -745,6 +749,7 @@ export default function MachinesScreen() {
       />
     );
   }, [
+    filterPanelOpen,
     isLoading,
     isSearching,
     fetchError,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useTheme, Text } from '../ui';
+import { useTheme, Text, Badge } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import {
   ShieldAlert,
@@ -48,8 +48,8 @@ export function OperationsConflictBanner({
       style={[
         styles.conflictBanner,
         {
-          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#fffbeb',
-          borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
+          backgroundColor: isDark ? '#451a03' : '#fffbeb',
+          borderColor: isDark ? '#92400e' : '#fde68a',
         },
       ]}
     >
@@ -61,22 +61,7 @@ export function OperationsConflictBanner({
             {pendingConflicts.length} Overtime Shift Conflict
             {pendingConflicts.length > 1 ? 's' : ''}
           </Text>
-          <View
-            style={[
-              styles.conflictActionBadge,
-              {
-                backgroundColor: isDark ? 'rgba(245, 158, 11, 0.22)' : '#fef3c7',
-                borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
-              },
-            ]}
-          >
-            <Text
-              variant="caption"
-              style={{ color: isDark ? '#fbbf24' : '#92400e' }}
-            >
-              Action Required
-            </Text>
-          </View>
+          <Badge variant="warning" size="sm" label="Action Required" />
         </View>
 
         {pendingConflicts.length > 2 && (
@@ -155,26 +140,11 @@ export function OperationsConflictBanner({
               </View>
 
               <View style={styles.actionsWrap}>
-                <View
-                  style={[
-                    styles.cleanSeverityPill,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(245, 158, 11, 0.15)'
-                        : '#fef3c7',
-                      borderColor: isDark
-                        ? 'rgba(245, 158, 11, 0.35)'
-                        : '#fde68a',
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="caption"
-                    style={{ color: isDark ? '#fbbf24' : '#b45309' }}
-                  >
-                    {parsed.badgeText || 'DUAL MACHINE CONFLICT'}
-                  </Text>
-                </View>
+                <Badge
+                  variant="warning"
+                  size="sm"
+                  label={parsed.badgeText || 'DUAL MACHINE CONFLICT'}
+                />
                 <Pressable
                   variant="buttonSecondary"
                   hitSlopToMin48
@@ -183,10 +153,10 @@ export function OperationsConflictBanner({
                     styles.cleanReviewBtn,
                     {
                       borderColor: isDark
-                        ? 'rgba(245, 158, 11, 0.4)'
+                        ? '#92400e'
                         : '#fde68a',
                       backgroundColor: isDark
-                        ? 'rgba(245, 158, 11, 0.15)'
+                        ? '#451a03'
                         : '#fef3c7',
                     },
                   ]}
@@ -260,26 +230,11 @@ export function OperationsConflictBanner({
                     {formatShiftTimingRange(cLog.start_time, cLog.end_time)}
                   </Text>
                   {cLog.overtime_hours ? (
-                    <View
-                      style={[
-                        styles.cleanOtPill,
-                        {
-                          backgroundColor: isDark
-                            ? 'rgba(245, 158, 11, 0.2)'
-                            : '#fef3c7',
-                          borderColor: isDark
-                            ? 'rgba(245, 158, 11, 0.35)'
-                            : '#fde68a',
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="caption"
-                        style={{ color: isDark ? '#fbbf24' : '#b45309' }}
-                      >
-                        +{cLog.overtime_hours}h OT
-                      </Text>
-                    </View>
+                    <Badge
+                      variant="warning"
+                      size="sm"
+                      label={`+${cLog.overtime_hours}h OT`}
+                    />
                   ) : null}
                 </View>
               </View>
@@ -297,26 +252,11 @@ export function OperationsConflictBanner({
                     size={12}
                     color={isDark ? '#f87171' : '#dc2626'}
                   />
-                  <View
-                    style={[
-                      styles.cleanConflictEntityBadge,
-                      {
-                        backgroundColor: isDark
-                          ? 'rgba(239, 68, 68, 0.18)'
-                          : '#fee2e2',
-                        borderColor: isDark
-                          ? 'rgba(239, 68, 68, 0.35)'
-                          : '#fecaca',
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="caption"
-                      style={{ color: isDark ? '#f87171' : '#b91c1c' }}
-                    >
-                      {parsed.conflictingEntity || 'Subsequent Shift Roster'}
-                    </Text>
-                  </View>
+                  <Badge
+                    variant="error"
+                    size="sm"
+                    label={parsed.conflictingEntity || 'Subsequent Shift Roster'}
+                  />
                 </View>
               </View>
             </View>
@@ -345,12 +285,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  conflictActionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -390,12 +324,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cleanSeverityPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
   cleanReviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -426,17 +354,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-  },
-  cleanOtPill: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  cleanConflictEntityBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
   },
 });

@@ -77,28 +77,28 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           defaultTitle: 'No Matching Results',
           defaultDesc: 'Try adjusting your search terms or clearing keywords.',
           icon: <Search size={compact ? 20 : 26} color={theme.colors.mute} />,
-          badgeBg: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+          badgeBg: isDark ? '#262626' : '#f4f4f5',
         };
       case 'filtered':
         return {
           defaultTitle: 'No Records for Selected Filters',
           defaultDesc: 'Reset your active filter criteria to see all available records.',
           icon: <SlidersHorizontal size={compact ? 20 : 26} color={theme.colors.mute} />,
-          badgeBg: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+          badgeBg: isDark ? '#262626' : '#f4f4f5',
         };
       case 'offline':
         return {
           defaultTitle: 'Offline — No Local Data',
           defaultDesc: 'Connect to cellular or Wi-Fi to load and sync these records.',
           icon: <WifiOff size={compact ? 20 : 26} color={theme.colors.mute} />,
-          badgeBg: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+          badgeBg: isDark ? '#78350f' : '#fef3c7',
         };
       case 'unauthorized':
         return {
           defaultTitle: 'Access Restricted',
           defaultDesc: 'Your account role does not have authorization to view this data.',
           icon: <ShieldAlert size={compact ? 20 : 26} color={theme.colors.mute} />,
-          badgeBg: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+          badgeBg: isDark ? '#450a0a' : '#fee2e2',
         };
       case 'empty':
       default:
@@ -106,13 +106,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           defaultTitle: 'No Records Found',
           defaultDesc: 'There are currently no items recorded in this section.',
           icon: <ClipboardList size={compact ? 20 : 26} color={theme.colors.mute} />,
-          badgeBg: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+          badgeBg: isDark ? '#262626' : '#f4f4f5',
         };
     }
   })();
 
   const title = propTitle || variantConfig.defaultTitle;
-  const description = propDescription || variantConfig.defaultDesc;
+  const description = propDescription !== undefined ? propDescription : variantConfig.defaultDesc;
 
   const handleAction = () => {
     if (!resolvedOnAction) return;

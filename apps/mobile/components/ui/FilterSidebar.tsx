@@ -18,6 +18,7 @@ import {
   ScrollView,
   type StyleProp,
   type ViewStyle,
+  Platform,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { Text } from './Text';
@@ -32,13 +33,40 @@ import { haptics } from '../../lib/haptics';
 // CANONICAL FILTER CATEGORY CARD
 // ============================================================================
 
-export interface FilterCategoryCardProps {
-  /** Optional index number (1, 2, 3...) */
-  index?: number;
-  /** Section title (e.g. "RENTAL STATUS", "HEALTH STATUS", "CLIENT ALLOCATION") */
+export interface FilterCategoryItemConfig {
+  /** Unique category identifier */
+  id: string;
+  /** Section title (e.g. "Rental Status", "Health Status", "Client Allocation") */
   title: string;
   /** Explanatory subtitle below the title */
   subtitle?: string;
+  /** Whether this filter currently deviates from default */
+  isFiltered?: boolean;
+  /** Badge label when filtered (defaults to "Filtered") */
+  badgeLabel?: string;
+  /** Badge color variant */
+  badgeVariant?: 'info' | 'success' | 'warning' | 'error' | 'outline' | 'neutral';
+  /** Optional index number (1, 2, 3...) */
+  index?: number;
+  /** Whether to display index prefix (defaults to false for clean minimal UX) */
+  showIndex?: boolean;
+  /** Render function for category filter control */
+  renderControl?: () => React.ReactNode;
+  /** Children node alternative */
+  children?: React.ReactNode;
+  /** Test identifier */
+  testID?: string;
+}
+
+export interface FilterCategoryCardProps {
+  /** Optional index number (1, 2, 3...) */
+  index?: number;
+  /** Section title (e.g. "Rental Status", "Health Status", "Client Allocation") */
+  title: string;
+  /** Explanatory subtitle below the title */
+  subtitle?: string;
+  /** Alias for subtitle */
+  description?: string;
   /** Whether this filter currently deviates from default */
   isFiltered?: boolean;
   /** Badge label when filtered (defaults to "Filtered") */
@@ -51,49 +79,53 @@ export interface FilterCategoryCardProps {
   style?: StyleProp<ViewStyle>;
   /** Test ID for automated tests */
   testID?: string;
+  /** Whether to display index prefix (defaults to false for clean minimal UX) */
+  showIndex?: boolean;
 }
 
 export const FilterCategoryCard: React.FC<FilterCategoryCardProps> = React.memo(({
   index,
   title,
   subtitle,
+  description,
   isFiltered = false,
   badgeLabel = 'Filtered',
   badgeVariant = 'info',
   children,
   style,
   testID,
+  showIndex = false,
 }) => {
   const { theme } = useTheme();
+  const effectiveSubtitle = subtitle || description;
 
   return (
     <View
       style={[
-        styles.categoryCard,
-        {
-          backgroundColor: theme.colors.canvas,
-          borderColor: theme.colors.hairline,
-        },
+        styles.categorySection,
         style,
       ]}
       testID={testID}
     >
-      {/* Category Header: Clean numbered title without icon */}
+      {/* Category Header: Clean, minimal title without numbering or decorative icons */}
       <View style={styles.categoryTitleRow}>
-        <Text variant="mono" style={[styles.categoryTitleText, { color: theme.colors.mute }]}>
-          {index !== undefined ? `${index}.  ` : ''}{title}
+        <Text variant="label" style={[styles.categoryTitleText, { color: theme.colors.ink }]}>
+          {showIndex && index !== undefined ? `${index}.  ` : ''}{title}
         </Text>
         {isFiltered && (
-          <Badge variant={badgeVariant} size="sm" style={styles.categoryBadge}>
-            {badgeLabel}
-          </Badge>
+          <Badge
+            variant={badgeVariant}
+            size="sm"
+            label={badgeLabel}
+            style={styles.categoryBadge}
+          />
         )}
       </View>
 
-      {/* Explanatory Subtitle */}
-      {subtitle ? (
+      {/* Explanatory Subtitle (only rendered if provided) */}
+      {effectiveSubtitle ? (
         <Text variant="caption" style={[styles.categorySubtitle, { color: theme.colors.mute }]}>
-          {subtitle}
+          {effectiveSubtitle}
         </Text>
       ) : null}
 
@@ -109,19 +141,27 @@ export const FilterCategoryCard: React.FC<FilterCategoryCardProps> = React.memo(
 
 export interface FilterSidebarProps {
   /** Visibility state of the drawer */
-  visible: boolean;
+  visible?: boolean;
+  /** Alias for visible */
+  isOpen?: boolean;
   /** Callback when drawer requests close */
   onClose: () => void;
   /** Header title (defaults to "Filters & Sorting") */
   title?: string;
-  /** Header subtitle (e.g. "Category-wise fleet equipment refinement") */
+  /** Header subtitle (optional, omitted by default for clean minimalism) */
   subtitle?: string;
   /** Count of currently active filters */
   activeFilterCount?: number;
+  /** Alias for activeFilterCount */
+  badgeCount?: number;
   /** Callback when "Reset All" button is pressed */
   onResetAll?: () => void;
+  /** Alias for onResetAll */
+  onReset?: () => void;
   /** Custom label for apply button (e.g. "Show 1 Machine" or "Show 24 Users") */
   applyText?: string;
+  /** Alias for applyText */
+  applyLabel?: string;
   /** Callback when apply button is pressed (defaults to closing drawer with haptic) */
   onApply?: () => void;
   /** Maximum pixel width on wide viewports (defaults to 380) */
@@ -130,43 +170,64 @@ export interface FilterSidebarProps {
   widthRatio?: number;
   /** Test identifier */
   testID?: string;
-  /** Filter categories and content */
-  children: React.ReactNode;
+  /** Declarative filter categories config (alternative to direct children) */
+  categories?: FilterCategoryItemConfig[];
+  /** Custom footer actions slot (replaces default Reset All + Apply bar) */
+  footerActions?: React.ReactNode;
+  /** Filter categories and content (when not using declarative categories) */
+  children?: React.ReactNode;
 }
 
 export const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({
   visible,
+  isOpen,
   onClose,
   title = 'Filters & Sorting',
   subtitle,
-  activeFilterCount = 0,
-  onResetAll,
-  applyText,
+  activeFilterCount: activeFilterCountProp,
+  badgeCount,
+  onResetAll: onResetAllProp,
+  onReset,
+  applyText: applyTextProp,
+  applyLabel,
   onApply,
   maxPixelWidth = 380,
   widthRatio = 0.88,
   testID = 'reusable-filter-sidebar',
+  categories,
+  footerActions,
   children,
 }) => {
+  const isVisible = visible !== undefined ? visible : Boolean(isOpen);
+  const activeFilterCount = activeFilterCountProp !== undefined ? activeFilterCountProp : (badgeCount ?? 0);
+  const onResetAll = onResetAllProp || onReset;
+  const applyText = applyTextProp || applyLabel;
   const { theme, isDark } = useTheme();
+  const isApplyingRef = React.useRef(false);
 
-  const handleApply = () => {
+  const handleApply = React.useCallback(() => {
+    if (isApplyingRef.current) return;
+    isApplyingRef.current = true;
     haptics.confirm();
     if (onApply) {
       onApply();
     } else {
       onClose();
     }
-  };
+    setTimeout(() => {
+      isApplyingRef.current = false;
+    }, 400);
+  }, [onApply, onClose]);
 
-  const handleReset = () => {
+  const handleReset = React.useCallback(() => {
+    if (activeFilterCount === 0) return;
     haptics.select();
     onResetAll?.();
-  };
+  }, [activeFilterCount, onResetAll]);
 
   return (
     <Drawer
-      visible={visible}
+      visible={isVisible}
       onClose={onClose}
       maxPixelWidth={maxPixelWidth}
       widthRatio={widthRatio}
@@ -181,13 +242,16 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({
                 {title}
               </Text>
               {activeFilterCount > 0 && (
-                <Badge variant="info" size="sm" style={styles.activeBadge}>
-                  {activeFilterCount} active
-                </Badge>
+                <Badge
+                  variant="info"
+                  size="sm"
+                  label={`${activeFilterCount} active`}
+                  style={styles.activeBadge}
+                />
               )}
             </View>
             {subtitle ? (
-              <Text variant="caption" style={{ color: theme.colors.mute }}>
+              <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
                 {subtitle}
               </Text>
             ) : null}
@@ -210,57 +274,90 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({
           showsVerticalScrollIndicator={true}
           indicatorStyle={isDark ? 'white' : 'black'}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={Platform.OS === 'android'}
         >
-          {children}
+          {categories && categories.length > 0
+            ? categories.map((cat, idx) => (
+                <FilterCategoryCard
+                  key={cat.id || String(idx)}
+                  index={cat.index !== undefined ? cat.index : idx + 1}
+                  showIndex={cat.showIndex}
+                  title={cat.title}
+                  subtitle={cat.subtitle}
+                  isFiltered={cat.isFiltered}
+                  badgeLabel={cat.badgeLabel}
+                  badgeVariant={cat.badgeVariant}
+                  testID={cat.testID}
+                >
+                  {cat.renderControl ? cat.renderControl() : cat.children}
+                </FilterCategoryCard>
+              ))
+            : children}
         </ScrollView>
 
         {/* Sticky Footer with Reset All and Apply Actions */}
-        <View
-          style={[
-            styles.sidebarFooter,
-            {
-              borderTopColor: theme.colors.hairline,
-              backgroundColor: theme.colors.canvasElevated,
-            },
-          ]}
-        >
-          {onResetAll && (
+        {footerActions ? (
+          footerActions
+        ) : (
+          <View
+            style={[
+              styles.sidebarFooter,
+              {
+                borderTopColor: theme.colors.hairline,
+                backgroundColor: theme.colors.canvasElevated,
+              },
+            ]}
+          >
+            {onResetAll && (
+              <Pressable
+                variant="buttonSecondary"
+                hitSlopToMin48
+                disabled={activeFilterCount === 0}
+                activeOpacity={1.0}
+                onPress={handleReset}
+                style={[
+                  styles.resetBtn,
+                  {
+                    borderColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvasElevated,
+                    opacity: activeFilterCount === 0 ? 0.45 : 1,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Reset all filters"
+              >
+                <RotateCcw
+                  size={14}
+                  color={activeFilterCount === 0 ? theme.colors.mute : theme.colors.ink}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  variant="label"
+                  style={{
+                    color: activeFilterCount === 0 ? theme.colors.mute : theme.colors.ink,
+                  }}
+                >
+                  Reset All
+                </Text>
+              </Pressable>
+            )}
+
             <Pressable
-              variant="buttonSecondary"
+              variant="buttonPrimary"
               hitSlopToMin48
-              disabled={activeFilterCount === 0}
-              onPress={handleReset}
-              style={[
-                styles.resetBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  opacity: activeFilterCount === 0 ? 0.45 : 1,
-                },
-              ]}
+              activeOpacity={1.0}
+              onPress={handleApply}
+              style={styles.applyBtn}
               accessibilityRole="button"
-              accessibilityLabel="Reset all filters"
+              accessibilityLabel={applyText || 'Apply filters and view results'}
             >
-              <RotateCcw size={14} color={theme.colors.mute} style={{ marginRight: 6 }} />
-              <Text variant="label" style={{ color: theme.colors.mute }}>
-                Reset All
+              <Check size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text variant="label" style={{ color: '#ffffff' }}>
+                {applyText || 'Apply Filters'}
               </Text>
             </Pressable>
-          )}
-
-          <Pressable
-            variant="buttonPrimary"
-            hitSlopToMin48
-            onPress={handleApply}
-            style={styles.applyBtn}
-            accessibilityRole="button"
-            accessibilityLabel={applyText || 'Apply filters and view results'}
-          >
-            <Check size={15} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text variant="label" style={{ color: '#ffffff' }}>
-              {applyText || 'Apply Filters'}
-            </Text>
-          </Pressable>
-        </View>
+          </View>
+        )}
       </View>
     </Drawer>
   );
@@ -299,26 +396,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.md,
-    paddingBottom: 40,
-    gap: spacingNumeric.md,
+    paddingBottom: 28,
+    gap: 16,
   },
-  categoryCard: {
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    padding: spacingNumeric.md,
+  categorySection: {
+    gap: 6,
   },
   categoryTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
   },
   categoryTitleText: {},
   categoryBadge: {
     marginLeft: 'auto',
   },
   categorySubtitle: {
-    marginBottom: 10,
+    marginBottom: 2,
   },
   sidebarFooter: {
     flexDirection: 'row',

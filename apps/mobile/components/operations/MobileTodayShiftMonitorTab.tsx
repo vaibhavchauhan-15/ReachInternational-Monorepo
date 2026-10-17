@@ -19,8 +19,6 @@ import {
   View,
   StyleSheet,
   FlatList,
-  Animated,
-  Easing,
   Platform,
   Modal,
   RefreshControl,
@@ -32,6 +30,8 @@ import {
   KPIGrid,
   DropdownFilterSelector,
   CustomDatePicker,
+  FilterSidebar,
+  FilterCategoryCard,
   type FilterOption,
   Text,
   ConfirmDialog,
@@ -39,6 +39,7 @@ import {
   EmptyState,
   ErrorState,
   SlowNetworkBanner,
+  Badge,
 } from '../ui';
 import { SearchInput } from '../ui/SearchInput';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
@@ -142,11 +143,9 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const searchInputRef = useRef<any>(null);
   const [menuRow, setMenuRow] = useState<TodayShiftMonitorRow | null>(null);
 
-  // Animated Expandable Filter Drawer state
+  // Filter Drawer state
   const isWeb = Platform.OS === 'web';
-  const filterAnim = useRef(new Animated.Value(0)).current;
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const [panelContentHeight, setPanelContentHeight] = useState(160);
 
   const [internalAssignModalOpen, setInternalAssignModalOpen] = useState(false);
   const [assignMachineId, setAssignMachineId] = useState<string | undefined>();
@@ -154,17 +153,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const [isReactivating, setIsReactivating] = useState(false);
 
   const isAssignModalOpen = isAssignModalOpenProp !== undefined ? isAssignModalOpenProp : internalAssignModalOpen;
-
-  useEffect(() => {
-    if (!isWeb) {
-      Animated.timing(filterAnim, {
-        toValue: filterPanelOpen ? 1 : 0,
-        duration: 220,
-        easing: Easing.bezier(0.16, 1, 0.3, 1),
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [filterPanelOpen, isWeb]);
 
   const handleOpenAssignModal = useCallback((machineId?: string) => {
     setAssignMachineId(machineId);
@@ -415,228 +403,86 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const renderFilterPanelContent = () => (
-    <View
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (h > 0 && Math.abs(h - panelContentHeight) > 2) {
-          setPanelContentHeight(h);
-        }
-      }}
-      style={[
-        styles.filterPanelCard,
-        {
-          backgroundColor: theme.colors.canvasElevated,
-          borderColor: theme.colors.hairline,
-        },
-      ]}
-    >
-      <View style={styles.filterSelectorsGrid}>
-        {/* Date Calendar Filter */}
-        <CustomDatePicker
-          label="Date"
-          value={selectedDate}
-          onChange={(val) => setSelectedDate(val)}
-          allowAnyPast={true}
-          allowFutureDays={0}
-          showRelativeBadge={true}
-        />
+  const renderActiveFilterBadges = () => {
+    if (activeFilterCount === 0 && searchQuery.trim() === '') return null;
+    return (
+      <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
+        <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+          Active Filters:
+        </Text>
 
-        {/* Status Dropdown */}
-        <DropdownFilterSelector
-          label="Status"
-          value={statusFilter}
-          options={STATUS_FILTER_OPTIONS}
-          onChange={(val) => setStatusFilter(val as any)}
-        />
+        {clientFilter !== 'all' && (
+          <Badge
+            variant="info"
+            size="md"
+            label={`Client: ${currentClientLabel}`}
+            onRemove={() => setClientFilter('all')}
+          />
+        )}
 
-        {/* Client Dropdown */}
-        <DropdownFilterSelector
-          label="Client"
-          value={clientFilter}
-          options={clientOptions}
-          onChange={(val) => setClientFilter(val)}
-          showSearch={true}
-          minMenuWidth={220}
-        />
+        {searchQuery.trim() !== '' && (
+          <Badge
+            variant="outline"
+            size="md"
+            label={`Search: "${searchQuery}"`}
+            onRemove={() => {
+              setSearchQuery('');
+              setDebouncedSearchQuery('');
+            }}
+          />
+        )}
 
-        {/* Shift Dropdown */}
-        <DropdownFilterSelector
-          label="Shift"
-          value={shiftFilter}
-          options={shiftOptions}
-          onChange={(val) => setShiftFilter(val)}
-        />
+        {selectedDate !== todayStr && (
+          <Badge
+            variant="info"
+            size="md"
+            label={`Date: ${selectedDateLabel}`}
+            onRemove={() => setSelectedDate(todayStr)}
+          />
+        )}
 
-        {/* Sort By Dropdown */}
-        <DropdownFilterSelector
-          label="Sort"
-          value={sortBy}
-          options={SORT_FILTER_OPTIONS}
-          onChange={(val) => setSortBy(val)}
-          align="right"
-          showSearch={false}
-        />
-      </View>
+        {statusFilter !== 'all' && (
+          <Badge
+            variant={statusFilter === 'entered' ? 'success' : 'warning'}
+            size="md"
+            label={`Status: ${currentStatusLabel}`}
+            onRemove={() => setStatusFilter('all')}
+          />
+        )}
 
-      {/* Active Filter Chips Strip */}
-      {(activeFilterCount > 0 || searchQuery.trim() !== '') && (
-        <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-          <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
-            Active Filters:
+        {shiftFilter !== 'all' && (
+          <Badge
+            variant="info"
+            size="md"
+            label={`Shift: ${currentShiftLabel}`}
+            onRemove={() => setShiftFilter('all')}
+          />
+        )}
+
+        {sortBy !== 'default' && (
+          <Badge
+            variant="outline"
+            size="md"
+            label={`Sort: ${currentSortLabel}`}
+            onRemove={() => setSortBy('default')}
+          />
+        )}
+
+        <Pressable
+          variant="ghost"
+          haptic="tap"
+          hitSlopToMin48
+          onPress={handleResetAllFilters}
+          style={styles.resetAllLink}
+        >
+          <RotateCcw size={11} color={theme.colors.link} />
+          <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+            Reset all
           </Text>
-
-          {clientFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setClientFilter('all')}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor: isDark ? '#0284c726' : '#eff6ff',
-                  borderColor: '#3b82f633',
-                },
-              ]}
-            >
-              <Text variant="caption" style={[styles.badgeChipText, { color: '#0284c7' }]}>
-                Client: {currentClientLabel}
-              </Text>
-              <X size={12} color="#0284c7" />
-            </Pressable>
-          )}
-
-          {searchQuery.trim() !== '' && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => {
-                setSearchQuery('');
-                setDebouncedSearchQuery('');
-              }}
-              style={[
-                styles.badgeChip,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-              ]}
-            >
-              <Text variant="caption" style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                Search: "{searchQuery}"
-              </Text>
-              <X size={12} color={theme.colors.mute} />
-            </Pressable>
-          )}
-
-          {selectedDate !== todayStr && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setSelectedDate(todayStr)}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor: isDark ? '#0284c726' : '#f0f9ff',
-                  borderColor: '#0284c733',
-                },
-              ]}
-            >
-              <Text variant="caption" style={[styles.badgeChipText, { color: '#0284c7' }]}>
-                Date: {selectedDateLabel}
-              </Text>
-              <X size={12} color="#0284c7" />
-            </Pressable>
-          )}
-
-          {statusFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setStatusFilter('all')}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor:
-                    statusFilter === 'entered'
-                      ? isDark ? '#064e3b26' : '#ecfdf5'
-                      : isDark ? '#78350f26' : '#fffbeb',
-                  borderColor:
-                    statusFilter === 'entered' ? '#10b98133' : '#f59e0b33',
-                },
-              ]}
-            >
-              <Text
-                variant="caption"
-                style={[
-                  styles.badgeChipText,
-                  {
-                    color: statusFilter === 'entered' ? '#059669' : '#d97706',
-                  },
-                ]}
-              >
-                Status: {currentStatusLabel}
-              </Text>
-              <X size={12} color={statusFilter === 'entered' ? '#059669' : '#d97706'} />
-            </Pressable>
-          )}
-
-          {shiftFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setShiftFilter('all')}
-              style={[
-                styles.badgeChip,
-                {
-                  backgroundColor: isDark ? '#1e3a8a26' : '#eff6ff',
-                  borderColor: '#3b82f633',
-                },
-              ]}
-            >
-              <Text variant="caption" style={[styles.badgeChipText, { color: '#2563eb' }]}>
-                Shift: {currentShiftLabel}
-              </Text>
-              <X size={12} color="#2563eb" />
-            </Pressable>
-          )}
-
-          {sortBy !== 'default' && (
-            <Pressable
-              variant="chip"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => setSortBy('default')}
-              style={[
-                styles.badgeChip,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-              ]}
-            >
-              <Text variant="caption" style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                Sort: {currentSortLabel}
-              </Text>
-              <X size={12} color={theme.colors.mute} />
-            </Pressable>
-          )}
-
-          <Pressable
-            variant="ghost"
-            haptic="tap"
-            hitSlopToMin48
-            onPress={handleResetAllFilters}
-            style={styles.resetAllLink}
-          >
-            <RotateCcw size={11} color={theme.colors.link} />
-            <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
-              Reset all
-            </Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
-  );
+        </Pressable>
+      </View>
+    );
+  };
 
   // ListHeaderComponent renders static UI immediately on frame 0 (no blocking skeletons)
   const renderHeader = useCallback(
@@ -657,8 +503,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
             style={[
               styles.cachedErrorBanner,
               {
-                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
-                borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+                backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                borderColor: isDark ? '#991b1b' : '#fecaca',
               },
             ]}
           >
@@ -674,7 +520,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               haptic="tap"
               hitSlopToMin48
               onPress={handleRefresh}
-              style={styles.cachedRetryChip}
+              style={[
+                styles.cachedRetryChip,
+                {
+                  backgroundColor: isDark ? '#171717' : '#ffffff',
+                  borderColor: isDark ? '#ef4444' : '#dc2626',
+                },
+              ]}
             >
               <RotateCcw size={12} color={isDark ? '#f87171' : '#dc2626'} />
               <Text
@@ -763,18 +615,19 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           {/* Top Search & Filter Action Row */}
           <View style={styles.toolbarTopRow}>
             {/* Search Input Bar with 280ms debounced server query */}
-            <SearchInput
-              ref={searchInputRef}
-              placeholder="Search operator, machine, client..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onClear={() => {
-                setSearchQuery('');
-                setDebouncedSearchQuery('');
-              }}
-              isLoading={isFetching && debouncedSearchQuery !== searchQuery}
-              containerStyle={{ flex: 1 }}
-            />
+            <View style={styles.searchContainer}>
+              <SearchInput
+                ref={searchInputRef}
+                placeholder="Search operator, machine, client..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onClear={() => {
+                  setSearchQuery('');
+                  setDebouncedSearchQuery('');
+                }}
+                isLoading={isFetching && debouncedSearchQuery !== searchQuery}
+              />
+            </View>
 
             {/* Filter Toggle Button */}
             <Pressable
@@ -850,16 +703,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   </Text>
                 </View>
               )}
-              <Icon
-                name="chevron-down"
-                size={13}
-                color={
-                  filterPanelOpen || activeFilterCount > 0
-                    ? '#ffffff'
-                    : theme.colors.mute
-                }
-                state={filterPanelOpen ? 'open' : 'closed'}
-              />
             </Pressable>
 
             {/* Quick Reset Filters Button */}
@@ -886,29 +729,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
             )}
           </View>
 
-          {/* Expandable Filter Selectors Section */}
-          {isWeb ? (
-            filterPanelOpen ? (
-              <View style={styles.filterPanelWebContainer}>
-                {renderFilterPanelContent()}
-              </View>
-            ) : null
-          ) : (
-            <Animated.View
-              style={[
-                styles.filterPanelAnimatedContainer,
-                {
-                  maxHeight: filterAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, Math.max(panelContentHeight + 40, 260)],
-                  }),
-                  opacity: filterAnim,
-                },
-              ]}
-            >
-              {renderFilterPanelContent()}
-            </Animated.View>
-          )}
+          {/* Active Filter Badges */}
+          {renderActiveFilterBadges()}
         </View>
       </View>
     ),
@@ -931,8 +753,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       theme,
       isWeb,
       handleResetAllFilters,
-      filterAnim,
-      panelContentHeight,
       clientFilter,
       currentClientLabel,
       selectedDateLabel,
@@ -942,8 +762,6 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       currentShiftLabel,
       sortBy,
       currentSortLabel,
-      clientOptions,
-      shiftOptions,
     ]
   );
 
@@ -1219,8 +1037,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   style={[
                     styles.sheetActionItem,
                     {
-                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
-                      borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#7dd3fc',
+                      backgroundColor: isDark ? '#172554' : '#e0f2fe',
+                      borderColor: isDark ? '#1e40af' : '#7dd3fc',
                     },
                   ]}
                 >
@@ -1249,8 +1067,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   style={[
                     styles.sheetActionItem,
                     {
-                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
-                      borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#7dd3fc',
+                      backgroundColor: isDark ? '#172554' : '#e0f2fe',
+                      borderColor: isDark ? '#1e40af' : '#7dd3fc',
                     },
                   ]}
                 >
@@ -1290,6 +1108,99 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           </View>
         </View>
       </Modal>
+
+      {/* FILTER & SORTING REUSABLE SIDEBAR */}
+      <FilterSidebar
+        isOpen={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        title="Filters & Sorting"
+        badgeCount={activeFilterCount}
+        onReset={handleResetAllFilters}
+        onApply={() => setFilterPanelOpen(false)}
+        applyLabel={`Show ${totalCount} Shift${totalCount === 1 ? '' : 's'}`}
+        testID="operations-shift-filter-sidebar"
+      >
+        <FilterCategoryCard
+          title="Shift Date"
+          isFiltered={selectedDate !== todayStr}
+          testID="category-shift-date"
+        >
+          <CustomDatePicker
+            label="Date"
+            showPrefix={false}
+            value={selectedDate}
+            onChange={(newDate) => {
+              setSelectedDate(newDate);
+            }}
+            allowAnyPast
+          />
+        </FilterCategoryCard>
+
+        <FilterCategoryCard
+          title="Entry Status"
+          isFiltered={statusFilter !== 'all'}
+          testID="category-entry-status"
+        >
+          <DropdownFilterSelector
+            label="Entry Status"
+            selectedId={statusFilter}
+            options={STATUS_FILTER_OPTIONS}
+            onSelect={(id: string) => setStatusFilter(id as any)}
+            placeholder="Select Status"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+
+        <FilterCategoryCard
+          title="Client Allocation"
+          isFiltered={clientFilter !== 'all'}
+          testID="category-client-allocation"
+        >
+          <DropdownFilterSelector
+            label="Client Allocation"
+            selectedId={clientFilter}
+            options={clientOptions}
+            onSelect={(id: string) => setClientFilter(id)}
+            searchable={clientOptions.length > 5}
+            searchPlaceholder="Search clients..."
+            placeholder="Select Client"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+
+        <FilterCategoryCard
+          title="Shift Preset"
+          isFiltered={shiftFilter !== 'all'}
+          testID="category-shift-preset"
+        >
+          <DropdownFilterSelector
+            label="Shift Preset"
+            selectedId={shiftFilter}
+            options={shiftOptions}
+            onSelect={(id: string) => setShiftFilter(id)}
+            searchable={shiftOptions.length > 5}
+            searchPlaceholder="Search shifts..."
+            placeholder="Select Shift"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+
+        <FilterCategoryCard
+          title="Sort By"
+          isFiltered={sortBy !== 'default'}
+          badgeLabel="Custom"
+          testID="category-sorting-order"
+        >
+          <DropdownFilterSelector
+            label="Sort By"
+            selectedId={sortBy}
+            options={SORT_FILTER_OPTIONS}
+            onSelect={(id: string) => setSortBy(id)}
+            placeholder="Select Sort"
+            minMenuWidth={280}
+          />
+        </FilterCategoryCard>
+      </FilterSidebar>
     </View>
   );
 };
@@ -1355,6 +1266,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  searchContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
   filterToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1363,6 +1278,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+    flexShrink: 0,
   },
   filterToggleBtnText: {},
   activeCountBadge: {
@@ -1382,26 +1298,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+    flexShrink: 0,
   },
   quickResetBtnText: {},
-  filterPanelWebContainer: {
-    overflow: 'hidden',
-  },
-  filterPanelAnimatedContainer: {
-    overflow: 'hidden',
-  },
-  filterPanelCard: {
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.sm,
-    gap: spacingNumeric.sm,
-    marginTop: 4,
-  },
-  filterSelectorsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+
   activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

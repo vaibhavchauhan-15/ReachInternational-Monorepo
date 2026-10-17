@@ -9,7 +9,6 @@ export * from './DeleteMachineDialog';
 export * from './MachineImportModal';
 export * from './ClientSelectModal';
 export * from './MultiUserSelectModal';
-export * from './CustomFilterSelectorModal';
 export * from './MachineCategoryModal';
 export * from './MachineExportModal';
 export * from './MobileMachineCardSkeleton';
@@ -20,6 +19,7 @@ export {
   DropdownFilterSelector,
   type DropdownFilterSelectorProps,
 } from './DropdownFilterSelector';
+export type { FilterOption } from '../ui';
 export * from './MachineKPIStrip';
 export * from './MachineFilterPanel';
 export {

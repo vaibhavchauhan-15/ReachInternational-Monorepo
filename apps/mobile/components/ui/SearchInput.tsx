@@ -94,10 +94,17 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
   const height = size === 'sm' ? 34 : size === 'lg' ? 44 : 38;
   const borderRadius = variant === 'pill' ? radiusNumeric.full : radiusNumeric.lg;
 
+  const isFlexLayout = React.useMemo(() => {
+    if (!containerStyle) return false;
+    const flat = StyleSheet.flatten(containerStyle);
+    return flat != null && (flat.flex !== undefined || flat.flexGrow !== undefined);
+  }, [containerStyle]);
+
   return (
     <View
       style={[
         styles.container,
+        isFlexLayout ? styles.flexContainer : styles.fullWidthContainer,
         {
           height,
           borderRadius,
@@ -116,19 +123,21 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
       ]}
     >
       {/* Left Search Icon or Loading Spinner */}
-      {isLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={isDark ? '#38bdf8' : '#0284c7'}
-        />
-      ) : leftIcon ? (
-        leftIcon
-      ) : (
-        <Search
-          size={14}
-          color={isFocused ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute}
-        />
-      )}
+      <View style={styles.leftIconWrapper}>
+        {isLoading ? (
+          <ActivityIndicator
+            size="small"
+            color={isDark ? '#38bdf8' : '#0284c7'}
+          />
+        ) : leftIcon ? (
+          leftIcon
+        ) : (
+          <Search
+            size={14}
+            color={isFocused ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute}
+          />
+        )}
+      </View>
 
       {/* Borderless Inner TextInput */}
       <TextInput
@@ -197,15 +206,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     gap: 8,
-    width: '100%',
+    minWidth: 0,
     ...Platform.select({
       web: {
         transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
       } as any,
     }),
   },
+  fullWidthContainer: {
+    width: '100%',
+  },
+  flexContainer: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  leftIconWrapper: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     flex: 1,
+    minWidth: 0,
     height: '100%',
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -221,5 +244,6 @@ const styles = StyleSheet.create({
     padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
 });

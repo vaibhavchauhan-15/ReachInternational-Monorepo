@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Animated, Easing, Platform } from 'react-native';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog, Pagination, FilterSidebar, FilterCategoryCard } from '../../components/ui';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog, Pagination, FilterSidebar, FilterCategoryCard, DropdownFilterSelector, type FilterOption } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Search, Building2, MapPin, Phone, Plus, X, CheckCircle2, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, RotateCcw } from '../../components/ui/icon';
 import { haptics } from '../../lib/haptics';
@@ -9,7 +9,6 @@ import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard, ClientModal, ClientSiteModal, ClientDetailModal } from '../../components/clients';
-import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate } from '@reachinternational/utils';
 import { createTempId, reconcileRow, removeTempRow } from '../../lib/optimistic';
@@ -1152,7 +1151,6 @@ export default function ClientsScreen() {
           visible={filterPanelOpen}
           onClose={() => setFilterPanelOpen(false)}
           title="Filters & Sorting"
-          subtitle="Category-wise client directory refinement"
           activeFilterCount={activeFilterCount}
           onResetAll={handleResetAllFilters}
           applyText={`Show ${totalFiltered} ${totalFiltered === 1 ? 'Client' : 'Clients'}`}
@@ -1161,14 +1159,12 @@ export default function ClientsScreen() {
         >
           {/* Category 1: Status */}
           <FilterCategoryCard
-            index={1}
-            title="CLIENT STATUS"
-            subtitle="Filter client accounts by active contract status"
+            title="Client Status"
             isFiltered={activeFilter !== 'all'}
             testID="category-client-status"
           >
             <DropdownFilterSelector
-              label="Status"
+              label="Client Status"
               value={activeFilter}
               options={CLIENT_STATUS_FILTER_OPTIONS}
               onChange={(val) => handleFilterChange(val as StatusFilter)}
@@ -1178,9 +1174,7 @@ export default function ClientsScreen() {
 
           {/* Category 2: Sorting Order */}
           <FilterCategoryCard
-            index={2}
-            title="SORTING ORDER"
-            subtitle="Order clients by company name, client ID, or registration"
+            title="Sort By"
             isFiltered={sortBy !== 'company_name_asc'}
             badgeLabel="Custom"
             testID="category-client-sorting"

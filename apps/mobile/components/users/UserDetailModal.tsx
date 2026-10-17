@@ -631,68 +631,20 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 {user.full_name}
               </Text>
               <View style={styles.badgesRow}>
-                {/* Role Badge Chip */}
-                <View
-                  style={[
-                    styles.chipBadge,
-                    {
-                      backgroundColor: isDark ? roleAccent + '25' : roleAccent + '15',
-                      borderColor: isDark ? roleAccent + '50' : roleAccent + '35',
-                    },
-                  ]}
-                >
-                  <Text variant="caption" style={{ color: roleAccent }}>
-                    {roleName}
-                  </Text>
-                </View>
+                {/* Role Badge */}
+                <Badge
+                  role={user.role}
+                  label={roleName}
+                  size="md"
+                />
 
-                {/* Status Badge Chip */}
-                <View
-                  style={[
-                    styles.chipBadge,
-                    {
-                      backgroundColor:
-                        user.status === 'active'
-                          ? isDark ? 'rgba(52, 211, 153, 0.16)' : 'rgba(16, 185, 129, 0.12)'
-                          : user.status === 'pending'
-                          ? isDark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)'
-                          : isDark ? 'rgba(161, 161, 170, 0.16)' : 'rgba(113, 113, 122, 0.12)',
-                      borderColor:
-                        user.status === 'active'
-                          ? isDark ? 'rgba(52, 211, 153, 0.4)' : 'rgba(16, 185, 129, 0.3)'
-                          : user.status === 'pending'
-                          ? isDark ? 'rgba(251, 191, 36, 0.4)' : 'rgba(245, 158, 11, 0.3)'
-                          : isDark ? 'rgba(161, 161, 170, 0.4)' : 'rgba(113, 113, 122, 0.3)',
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor:
-                          user.status === 'active'
-                            ? isDark ? '#34d399' : '#10b981'
-                            : user.status === 'pending'
-                            ? isDark ? '#fbbf24' : '#f59e0b'
-                            : isDark ? '#a1a1aa' : '#94a3b8',
-                      },
-                    ]}
-                  />
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        user.status === 'active'
-                          ? isDark ? '#34d399' : '#059669'
-                          : user.status === 'pending'
-                          ? isDark ? '#fbbf24' : '#d97706'
-                          : isDark ? '#a1a1aa' : '#71717a',
-                    }}
-                  >
-                    {user.status === 'active' ? 'Active' : (user.status ? user.status.toUpperCase() : 'INACTIVE')}
-                  </Text>
-                </View>
+                {/* Status Badge */}
+                <Badge
+                  status={user.status}
+                  dot
+                  label={user.status === 'active' ? 'Active' : (user.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1).toLowerCase() : 'Inactive')}
+                  size="md"
+                />
               </View>
             </View>
           </View>

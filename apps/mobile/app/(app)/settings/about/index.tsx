@@ -19,6 +19,7 @@ import { SettingsScreenContainer } from '../../../../components/settings';
 import { radiusNumeric } from '@reachinternational/design-tokens';
 import {
   Sparkles,
+  Building2,
   Info,
   FileText,
   ClipboardList,
@@ -113,7 +114,17 @@ export default function AboutAppHomeScreen() {
         accessibilityLabel="Navigate to What's New and Release Notes"
       />
 
-      {/* 1. App Information */}
+      {/* 1. About Us */}
+      <AboutNavCard
+        icon={<Building2 size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
+        iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
+        title="About Us"
+        subtitle="Company story, leadership, EWP fleet & core values"
+        onPress={() => router.push('/settings/about/about-us' as any)}
+        accessibilityLabel="Navigate to About Us and Company Profile"
+      />
+
+      {/* 2. App Information */}
       <AboutNavCard
         icon={<Info size={20} color={isDark ? '#34d399' : '#059669'} />}
         iconBg={isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'}

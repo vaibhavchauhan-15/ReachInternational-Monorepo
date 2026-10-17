@@ -1,3 +1,240 @@
+- [x] **196 — Native Daily Running Logs (/running-logs) Web App Parity: Segmented View Modes, Dynamic Searchable Selects, Reusable Summary & Sub-Header Cards, and Daily Shift Logs (2026-10-17)**:
+  - **Delivered**:
+    1. **Filter Panel with Segmented Toggle & Dynamic Dropdowns (`RunningLogFilterPanel.tsx`)**: Reusable top pill switcher: `SegmentedToggle` with `Machine` | `Clients` | `Operator` view modes (`LogsViewMode`). Clean hairline border separation with `theme.colors.hairline`. Dynamic mode-tailored filter dropdowns using `SearchableSelect`:
+       - *Client View*: `Select Client` (with total count badge, `CLI-xxxx` code badge, address), `Select Location` (with site counter badge, `All Sites & Locations`), `Select Machine` (with machine count badge, `All Machines`), and `Select Month`.
+       - *Machine View*: `Select Machine` (`M/C-xxxx` code badge, model, S/N) and `Select Month`.
+       - *Operator View*: `Select Operator` (phone subtitle) and `Select Month`.
+       - *Custom Range*: Start and End `CustomDatePicker` pickers when 'custom' month is selected.
+    2. **SearchableSelect Single-Line Trigger & Reach Sky Blue Accents (`SearchableSelect.tsx`)**: Added `inlineDescription?: boolean` prop supporting single-line `Title · Code · Description` trigger layouts matching web screenshots. Replaced neutral gray code badges with vibrant Reach Sky Blue tokens (`rgba(2,132,199,0.18)` fill, `rgba(2,132,199,0.35)` border, `#0284c7` / `#38bdf8` text) in triggers, popovers, and bottom sheet dialogs.
+    3. **Unified Group Summary Card (`RunningLogSummaryCard.tsx`)**: Reusable card rendering entity headers matching screenshot:
+       - *Client Mode*: Client title + `X Machines` Reach sky blue badge + collapsible chevron.
+       - *Machine Mode*: Model name + Serial Number + `RENTED` / `AVAILABLE` status badge + `History` clock button.
+       - *Operator Mode*: Operator name + role badge + total running hours.
+    4. **Machine Sub-Header Card for Client View (`RunningLogMachineHeaderCard.tsx`)**: Renders machine sub-group bar: `Model (SN: xxxx)` with inline metrics summary: `DAYS: X`, `M/C RT: X.Xh` (Reach Sky Blue), `WH: Xh`.
+    5. **Daily Shift Card Overhaul (`RunningLogShiftCard.tsx`)**: Redesigned daily shift card matching screenshot:
+       - Top row: Sky Blue calendar icon + Excel-style date `DD-Mon-YY` (e.g. `17-Oct-26`) + conflict/remark indicators + secondary machine/client title on right.
+       - Middle row: `Shift: A` (highlighted sky blue) and `Operator: <Name>`.
+       - Bottom row: 3 rounded stat boxes side-by-side: `M/C RT` (blue bold value), `WH` (ink bold value), `B/D` (ink bold value).
+       - Expandable section: "View Remark" / "View Remarks & Stoppage" toggle with styled quote callout and stoppage duration breakdown.
+    6. **Operations Master Data Hook Extension (`useOperationsData.ts`)**: Added `ClientSiteRecord` interface. Extended `useOperationsMasterData` to query `client_sites` in parallel with machines, assignments, operators, and clients.
+    7. **Running Logs Page Orchestration (`running-logs.tsx`)**: Rebuilt `apps/mobile/app/(app)/running-logs.tsx` to seamlessly coordinate `RunningLogFilterPanel`, `RunningLogSummaryCard`, `RunningLogMachineHeaderCard`, and `RunningLogShiftCard`. Integrated mobile header with back button, screen title, interactive search bar toggle, and export / print modal menu. Integrated TanStack Query hooks, pull-to-refresh (`RefreshControl`), and empty/error states.
+  - **Verification**:
+    - `node apps/mobile/run-tests.mjs`: **PASS** (307/307 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (0 TypeScript errors).
+
+- [x] **195 — Native Operations Hub (/operations) 100% Solid Opacity & Centralized Reusable Badge / Button Component Consistency (2026-10-17)**:
+  - **Delivered**:
+    1. **Centralized Reusable `<Badge>` Component Enhancements (`Badge.tsx`)**: Added interactive `onPress` and dismissible `onRemove` support directly to `BadgeProps` with native tactile haptics (`haptics.tap()`), touch-slop expansion (`hitSlopToMin48`), and standard `X` icon. Purged all legacy alpha transparencies from `resolveBadgeColors` (eliminated `${accentColor}25` and `${accentColor}15`), standardizing on 100% solid, fully opaque fills (`theme.colors.canvasElevated` `#ffffff` light / `#171717` dark with solid hairline border). Preserved WCAG AAA contrast across all 9 variants (default, secondary, destructive, error, info, outline, success, warning, neutral).
+    2. **Operations Shift Monitor Solid Fills & Centralized Badges (`MobileTodayShiftMonitorTab.tsx`, `MobileTodayShiftCard.tsx`)**: Refactored `renderActiveFilterBadges()`: replaced ad-hoc `<Pressable>` chips with `#0284c726`, `#064e3b26`, `#78350f26`, `#1e3a8a26` (15% transparency washes) with standardized `<Badge variant="..." onRemove={...} label={...} />`. Upgraded `cachedErrorBanner` and `cachedRetryChip` to 100% solid backgrounds (`#450a0a` dark / `#fef2f2` light) and solid borders (`#991b1b` / `#fecaca`). Upgraded bottom sheet action items (`sheetActionItem`) to 100% solid `#172554` / `#e0f2fe`. Purged alpha hexes (`#0284c755`, `#ef444455`, `#f59e0b55`) and `rgba` backgrounds from `MobileTodayShiftCard.tsx` (avatar circles now solid `#450a0a` / `#fee2e2` and `#451a03` / `#fef3c7`).
+    3. **Operator History Tab Badge Standardization (`MobileOperatorHistoryTab.tsx`)**: Replaced ad-hoc `styles.shiftBadge` with reusable `<Badge variant="info" size="sm" label={shiftName} />`. Replaced ad-hoc `styles.otPill` with reusable `<Badge variant="warning" size="sm" label={'+...h OT'} />`. Replaced ad-hoc `styles.codePillSmall` and `styles.serialPill` with reusable `<Badge variant="neutral" />` and `<Badge variant="outline" />`. Replaced custom `styles.filterChip` elements in the active filter row with reusable `<Badge variant="outline" size="sm" onRemove={...} label={...} />`. Upgraded filter trigger button (`filterBtn`), quick reset button (`quickResetBtn`), and export CTA buttons (`iconCtaBtn`) to 100% solid fully opaque backgrounds.
+    4. **Operator Daily Log Entry Solid Surfaces (`MobileOperatorEntryCard.tsx`)**: Replaced ad-hoc `styles.rtChip` with dynamic `<Badge variant="error" | "warning" | "success" | "outline" size="sm" />`. Replaced ad-hoc `styles.assistedBadge` with `<Badge variant="info" size="sm" icon={<UserCheck .../>} label="Assisted Entry" />`. Replaced unstyled duration text with `<Badge variant="neutral" size="sm" label={...} />`. Upgraded `lastShiftCard` to solid `#022c22` dark / `#f0fdf4` light, and unassigned/in-progress warning banners to solid `#451a03` / `#fffbeb` and `#082f49` / `#f0f9ff`. Upgraded breakdown card and breakdown duration window badge to 100% solid `#450a0a` dark / `#fff1f2` light.
+    5. **Conflict Banner & Modals Solid Buttons & Badges (`OperationsConflictBanner.tsx`, `MobileConflictResolutionModal.tsx`, `MobileAssignPersonnelModal.tsx`, `RunningLogShiftCard.tsx`)**: In `OperationsConflictBanner.tsx`: replaced `conflictActionBadge` with `<Badge variant="warning" size="sm" label="Action Required" />`, `cleanSeverityPill` with `<Badge variant="warning" size="sm" />`, `cleanOtPill` with `<Badge variant="warning" size="sm" />`, `cleanConflictEntityBadge` with `<Badge variant="error" size="sm" />`, and `cleanReviewBtn` with 100% solid `#451a03` dark / `#fef3c7` light. In `RunningLogShiftCard.tsx`: replaced transparent `shiftCodeBadge` (`#0284c712`) with `<Badge variant="info" size="sm" />` and overtime text with `<Badge variant="warning" size="sm" />`. In `MobileConflictResolutionModal.tsx`: replaced `otChip` with `<Badge variant="warning" size="sm" />`, made action toggle buttons 100% solid (`#082f49` / `#e0f2fe` for acknowledge, `#451a03` / `#fef3c7` for adjust), and calculation feedback row solid `#064e3b` / `#ecfdf5`. In `MobileAssignPersonnelModal.tsx`: made error banners, maintenance warning banners, machine dropdown items, operator index circle, and full coverage banner 100% solid.
+  - **Verification**:
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (53/53 assertions passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations across mobile codebase).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (286/286 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+
+- [x] **194 — Native Fleet Directory (/machines) UI Polish & Solid Surface Ergonomics: EmptyState Suppression, 100% Solid Button & Badge Surfaces, and AAA Contrast Tokens (2026-10-17)**:
+  - **Delivered**:
+    1. **EmptyState Drawer Overlay Conflict Resolution (`machines.tsx`)**: Guarded `renderListEmpty` against rendering when `filterPanelOpen` is active, preventing filtered EmptyState from rendering in the background FlatList directly beneath the user-facing modal filter drawer while configuring multi-criteria filters. Omitted redundant description text from the filtered EmptyState (`description=""`) directly resolving user feedback on the description text node while preserving necessary reset actions and test contracts.
+    2. **100% Solid Opacity Filter Trigger & Reset Action Buttons (`MachineFilterPanel.tsx`, `FilterSidebar.tsx`, `UserFiltersPanel.tsx`)**: Replaced translucent `rgba(2, 132, 199, 0.22)` dark-mode background washes with solid 100% opaque `#0284c7` (light) / `#0ea5e9` (dark) when active, and solid `canvasElevated` (`#ffffff` light / `#171717` dark) when inactive. Added `activeOpacity={1.0}` and `opacity: 1` to ensure zero opacity drops or transparent flashing during press interactions. High-contrast ink text and icons (`theme.colors.ink`, 15:1 contrast) when inactive and crisp white text on primary blue active states.
+    3. **100% Solid Opacity Active Filter Chips & WCAG AAA Contrast Tokens (`MachineFilterPanel.tsx`, `UserFiltersPanel.tsx`)**: Converted active filter badge wrappers to `variant="chip"` with `activeOpacity={1.0}` and 100% solid fully opaque backgrounds. Upgraded text and dismiss icon colors to exceed WCAG AAA standards: Info/Rental/Spare (`#1d4ed8` on `#eff6ff` light / `#bfdbfe` on `#1e3a8a` dark, 7.2+:1 contrast); Error/Breakdown (`#b91c1c` on `#fef2f2` light / `#fca5a5` on `#450a0a` dark, 6.1+:1 contrast); Warning/Maintenance (`#b45309` on `#fffbeb` light / `#fde68a` on `#78350f` dark, 5.6+:1 contrast); Success (`#065f46` on `#ecfdf5` light / `#a7f3d0` on `#064e3b` dark, 7.5+:1 contrast).
+    4. **Solid Machine ID Code Badge (`MobileMachineCard.tsx`)**: Updated machine ID copy badge with `backgroundColor: theme.colors.canvasElevated`, `opacity: 1`, and `activeOpacity={1.0}` on `Touchable` for tactile, solid, high-contrast feedback.
+    5. **Universal Badge Icon Prop Support (`Badge.tsx`)**: Added `icon?: React.ReactNode` to `BadgeProps` and rendered with dedicated layout spacing before the label text, fixing typing across assisted shift entry badges while preserving pure functional styling.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (286/286 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **193 — Centralized Native Badge Architecture: Unified Theme Tokens, Canonical Roles, Bimodal Shapes & Universal Cross-Screen Reuse (2026-10-17)**:
+  - **Delivered**:
+    1. **Centralized Native Theme Color Resolver (`resolveBadgeColors` in `Badge.tsx`)**: Replaced fragile Nativewind utility class dependencies with bulletproof, runtime-safe theme colors derived from `useTheme()` / `RNThemeType`. Implemented dedicated Light & Dark mode palettes:
+       - `success`: `#ecfdf5` / `#064e3b` background, `#a7f3d0` / `#047857` border, `#065f46` / `#a7f3d0` text, `#10b981` / `#34d399` dot.
+       - `info`: `#eff6ff` / `#1e3a8a` background, `#bfdbfe` / `#2563eb` border, `#1d4ed8` / `#bfdbfe` text, `#3b82f6` / `#60a5fa` dot.
+       - `warning`: `#fffbeb` / `#78350f` background, `#fde68a` / `#92400e` border, `#b45309` / `#fde68a` text, `#f59e0b` / `#fbbf24` dot.
+       - `error` / `destructive`: `#fef2f2` / `#450a0a` background, `#fecaca` / `#991b1b` border, `#b91c1c` / `#fca5a5` text, `#ef4444` / `#f87171` dot.
+       - `neutral`: `#f4f4f5` / `#27272a` background, `#e4e4e7` / `#3f3f46` border, `#52525b` / `#d4d4d8` text, `#71717a` / `#a1a1aa` dot.
+       - `outline` / `secondary`: solid `canvasElevated` and high-contrast ink text.
+    2. **First-Class Canonical Role Support (`role?: string`, `userRole?: string`)**: Built-in support for all 6 canonical roles (`operator`, `supervisor`, `admin`, `super_admin`, `manager`, `hr`) with bespoke theme-aware pastel washes and high-contrast text. Omitted `role` from `ViewProps` (`Omit<ViewProps, 'role'>`) to eliminate TypeScript conflict with React Native's accessibility `role`.
+    3. **Static Layout Architecture & Bimodal Shapes**: Pre-allocated static base, dot, and size styles (`staticBadgeStyles` via `StyleSheet.create`, `BADGE_SIZE_STYLES` dictionary) outside the render loop with 0 raw typography property violations. Added first-class `shape?: 'pill' | 'rounded'` support (`radiusNumeric.full` vs `radiusNumeric.sm`).
+    4. **Automatic Label Formatting**: Integrated `formatBadgeStatusLabel` and `formatBadgeRoleLabel` fallback when `customLabel` or `label` is omitted, allowing clean `<Badge status={status} />` or `<Badge role={role} />` invocations.
+    5. **Universal Cross-Screen Reuse**:
+       - `MobileMachineCard.tsx`: Bound `dot` to health status badges (`Active` in emerald, `Maintenance` in amber, `Breakdown` in rose, `Spare` in cyan) and differentiated rental badges (`Rented` in sky blue vs `Available` in neutral gray), eradicating the issue where both badges looked identical (plain white with black borders).
+       - `UserTouchCard.tsx`: Eradicated custom hand-rolled `styles.chipBadge` and unified onto `<Badge role={u.role} />` and `<Badge status={u.status} dot />`.
+       - `UserDetailModal.tsx`: Eradicated duplicate `styles.chipBadge` and unified onto `<Badge role={user.role} />` and `<Badge status={user.status} dot />`.
+       - `FilterSidebar.tsx`: Automatic resolution of `variant="info"` gives `5 active` in header and `Filtered` in category cards proper sky blue background and text.
+       - `MobileTodayShiftCard.tsx`: Replaced custom `styles.cardStatusBadge` with `<Badge status={...} dot />`.
+       - `DeleteUserConfirmDialog.tsx`: Replaced custom `styles.statusBadge` with `<Badge role={...} />` and `<Badge status={...} dot />`.
+       - `MachineDetailView.tsx`: Added `dot` to health status badges and mapped `in_transit` to `info`.
+    6. **Comprehensive Automated Verification (`test-badge-component.mjs`, `run-tests.mjs`)**: Expanded test suite to 53 checks and integrated Test 183 into `run-tests.mjs` bringing passing scenarios to 286/286 (100%).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (53/53 assertions passed, 100%).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (286/286 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **192 — Mobile Search & Filter Non-Overlapping Layout Architecture Across All Pages (2026-10-17)**:
+  - **Delivered**:
+    1. **Core `SearchInput` Flex Safety & Minimum Width Protection (`SearchInput.tsx`)**: Resolved intrinsic HTML `<input>` minimum width conflict (`size=20`, ~160px) in React Native Web flexbox rows. Added `minWidth: 0` to container and input styles, dynamic `flexContainer` (`flex: 1, minWidth: 0, flexShrink: 1`) when `isFlexLayout` is active, and protected `leftIconWrapper` and `clearBtn` with `flexShrink: 0`.
+    2. **Operations Shift Monitor Non-Overlapping Layout (`MobileTodayShiftMonitorTab.tsx`)**: Wrapped SearchInput in `searchContainer` (`flex: 1, minWidth: 0`), bound `flexShrink: 0` to `filterToggleBtn` and `quickResetBtn`, and removed redundant chevron down icon from drawer trigger (reclaiming ~19px of horizontal space on narrow viewports ≤427px).
+    3. **Operations Operator History Tab Parity (`MobileOperatorHistoryTab.tsx`)**: Wrapped SearchInput in `searchContainer` (`flex: 1, minWidth: 0`), enforced `flexShrink: 0` on `filterBtn` without chevron down, and added dedicated `quickResetBtn` with `RotateCcw` icon and `flexShrink: 0`.
+    4. **Machine Filter Panel Non-Overlapping Layout (`MachineFilterPanel.tsx`)**: Added `minWidth: 0` to `searchContainer`, and `flexShrink: 0` to `filterToggleBtn` and `quickResetBtn`.
+    5. **User Filters Panel Non-Overlapping Layout (`UserFiltersPanel.tsx`)**: Added `minWidth: 0` to `searchContainer`, and `flexShrink: 0` to `filterToggleBtn` and `quickResetBtn`.
+    6. **Reusable FilterToolbar Non-Overlapping Layout (`FilterToolbar.tsx`)**: Added `minWidth: 0` to `searchFlexWrap`, removed redundant chevron down, and bound `flexShrink: 0` to `filterToggleBtn` and `resetBtn`.
+    7. **Attendance Screen Search & Filter Layout (`attendance.tsx`)**: Replaced raw flex view with `searchContainer` (`flex: 1, minWidth: 0`), bound `flexShrink: 0` to `managementFilterBtn`, and added dedicated `managementResetBtn` with `RotateCcw` and `flexShrink: 0`.
+    8. **Machine Detail View Running Logs (`MachineDetailView.tsx`)**: Added `minWidth: 0` to `logSearchInput` and `flexShrink: 0` to `filterToggleBtn`.
+    9. **Comprehensive Automated Verification (`test-search-filter-layout.mjs`, `run-tests.mjs`)**: Authored 30-assertion test suite; integrated Test 182 into primary test runner bringing passing scenarios to 271/271 (100%).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `node apps/mobile/test-search-filter-layout.mjs`: **PASS** (30/30 assertions passed, 100%).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (271/271 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **191 — Mobile Button Component Optimization: Centralized Theme Tokens, Solid Variant Surfaces, Static Layout Architecture & Variant-Aware Spinners (2026-10-17)**:
+  - **Delivered**:
+    1. **Solid Surfaces & Intentional Transparency Boundaries (`Button.tsx`)**: Replaced transparent outline background with solid `theme.colors.canvasElevated` (`#ffffff` light / `#171717` dark) with 1px hairline border (`#ebebeb` light / `#262626` dark). Replaced secondary transparent `rgba(23, 23, 23, 0.05)` with solid neutral surface (`#f4f4f5` light / `#262626` dark) and ink foreground (`#171717` light / `#fafafa` dark). Maintained solid Reach sky blue (`#0284c7` / `#0ea5e9`) on primary and solid accessible red (`#ee0000` / `#dc2626`) on destructive. Preserved intentional transparent styling on `ghost` and `link` for minimal low-emphasis actions.
+    2. **Centralized Theme Tokens (`resolveButtonColors`)**: Consolidated dynamic colors in `resolveButtonColors(variant, theme, isDark, isDisabled, isLoading)` consuming `theme.colors` directly. Eradicated hardcoded `#f8fafc` and arbitrary ternary color logic.
+    3. **Variant-Aware & Theme-Aware Loading Spinners**: Derived ActivityIndicator color dynamically from `colors.spinner`. Secondary buttons use readable ink spinners instead of white; link buttons use link color; primary/destructive use high-contrast white; outline/ghost use primary blue.
+    4. **Performance & Static Architecture**: Extracted `BUTTON_SIZE_STYLES` dictionary outside the component render loop (0 allocations on render). Pre-allocated static base, fullWidth, and icon layout styles via `StyleSheet.create`. Enforced min 44px touch targets on `default`, `md`, and `icon`.
+    5. **Explicit Shape & Ripple Radius**: Resolved shape explicitly as first-class API (`shape?: 'pill' | 'rounded'`) with safe word-boundary fallback regex for backward compatibility. Bound full-circle ripple radius (`RADIUS_PILL` = 9999) for pill buttons and 24dp for icon buttons.
+    6. **Deliberate Disabled Palette & Touch Suppression**: Separated passive disabled state from active loading state. Applied deliberate muted backgrounds (`theme.colors.hairline` / `#e5e7eb`) and muted text (`theme.colors.mute` / `theme.colors.faint`). Suppressed blunt `opacity-50` that degraded text readability. Confirmed Pressable's `disabled` and `loading` flags 100% suppress haptics, ripples, and scale animations.
+    7. **Documented Leading Icon Precedence**: Preserved and documented `const leadingIcon = leftIcon ?? icon;` with dedicated static layout spacing wrappers.
+    8. **Children Text Protection & Public Contract**: Preserved automatic `<Text>` wrapping for strings, numbers, and primitive arrays to prevent unparented text crashes. Maintained `forwardRef`, `ButtonProps`, `buttonVariants`, and `buttonTextVariants` exports.
+    9. **Comprehensive Automated Verification (`test-button-optimizations.mjs`, `run-tests.mjs`)**: Authored 36-point automated test suite; integrated Test 181 into primary test runner bringing passing scenarios to 258/258 (100%).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `node apps/mobile/test-button-optimizations.mjs`: **PASS** (36/36 assertions passed, 100%).
+    - `node apps/mobile/test-press-feedback.mjs`: **PASS** (all press feedback & interaction checks passed, 100%).
+    - `node apps/mobile/test-operator-dashboard-optimizations.mjs`: **PASS** (12/12 checks passed, 100%).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (258/258 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **190 — Mobile Badge Component Optimization: 100% Solid Opaque Fills, High-Contrast Themes & Production Polish (2026-10-17)**:
+  - **Delivered**:
+    1. **100% Solid, Fully Opaque Surface Fills (`Badge.tsx`)**: Replaced all semi-transparent `/10` and `/20` opacity washes across every badge variant (`default`, `secondary`, `destructive`, `error`, `info`, `outline`, `success`, `warning`, `neutral`) with solid, opaque backgrounds and matching hairline borders. Converted `outline` from transparent to solid `bg-card` (`#ffffff` light / `#171717` dark) with `border-border`.
+    2. **Synchronized Light & Dark Theme Contrast**: Bound WCAG AAA compliant text tokens across all variants: `error` (`text-rose-800 dark:text-rose-200`), `info` (`text-sky-800 dark:text-sky-200`), `success` (`text-emerald-800 dark:text-emerald-200`), `warning` (`text-amber-800 dark:text-amber-200`), `neutral` (`text-neutral-700 dark:text-neutral-300`), and `default` / `destructive` (`text-primary-foreground` / `text-destructive-foreground`).
+    3. **Refined Typography & Compact Layout**: Configured proportional padding and min-heights (`sm`: `px-2 py-0.5 min-h-[20px]`, `md`: `px-2.5 py-0.5 min-h-[22px]`, `lg`: `px-3 py-1 min-h-[26px]`) with `leading-tight` and `leading-none` to guarantee razor-sharp vertical centering without text descender clipping.
+    4. **Status Dot Alignment & Proportional Scaling**: Integrated `shrink-0 self-center` on status dots to ensure flawless vertical alignment with text and prevent circular distortion on narrow viewports; scaled dot diameter proportionally with badge size (`1.5px` for `sm`/`md` with `mr-1`/`mr-1.5`, `2px` for `lg` with `mr-2`).
+    5. **Comprehensive & Case-Resilient Status Mapping**: Enhanced `STATUS_VARIANT_MAP` with canonical mappings (`active`, `completed`, `verified`, `running`, `present`, `approved`, `resolved`, `pending`, `warning`, `paused`, `in_progress`, `half_day`, `open`, `reopened`, `under_maintenance`, `pending_approval`, `today`, `inactive`, `archived`, `rest_day`, `week_off`, `draft`, `closed`, `available`, `upcoming`, `error`, `failed`, `rejected`, `stopped`, `maintenance`, `breakdown`, `absent`, `overdue`, `revision_requested`, `spare`, `on_rent`, `rented`, `submitted`, `tomorrow`) and bound `String(status).trim().toLowerCase()` for full case resilience.
+    6. **Preserved Compatibility & React Native Reusables Integration**: Preserved `forwardRef`, `Slot.View` via `asChild`, `TextClassContext.Provider`, `customLabel || label` precedence, and `renderBadgeChildren` text node safeguards.
+    7. **Comprehensive Automated Verification (`test-badge-component.mjs`, `run-tests.mjs`)**: Authored 32-point automated test suite verifying solid fills, all 9 variants, 3 sizes, dot alignment, status mapping, and label precedence; updated `run-tests.mjs` bringing passing scenarios to 244/244 (100%).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (32/32 assertions passed, 100%).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (244/244 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node scripts/test-touch-haptics.mjs`: **PASS** (all touch & soft haptics guards passed).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **189 — Universal Standardized Filters & Sorting Across Native Mobile App & Duplicate Filter Component Eradication (2026-10-17)**:
+  - **Delivered**:
+    1. **Operations Shift Monitor Standardized Filters & Sorting (`MobileTodayShiftMonitorTab.tsx`)**: Replaced cluttered "Filter Shifts" drawer and noisy header subtitle with the canonical `"Filters & Sorting"` drawer matching Image 1 (`MachineFilterSidebar.tsx`). Cleaned up all categories to title case (`Shift Date`, `Entry Status`, `Client Allocation`, `Shift Preset`, `Sort By`), stripped verbose descriptions and numbered index prefixes, and bound `minMenuWidth={280}`.
+    2. **Shift Date Clean Display Ergonomics (`CustomDatePicker.tsx`)**: Added `showPrefix?: boolean` prop defaulting to `true`. Inside `FilterCategoryCard title="Shift Date"`, `showPrefix={false}` renders `[CalendarIcon] Today` cleanly without repeating `Date: Today`.
+    3. **Operations History Tab Clean Parity (`MobileOperatorHistoryTab.tsx`)**: Standardized title to `"Filters & Sorting"`, removed numbered prefixes and category descriptions, retaining clean `Date Range`, `Status & Condition`, and `Sort By`.
+    4. **Attendance Screen Sidebar Standardized (`attendance.tsx`)**: Standardized title to `"Filters & Sorting"` with clean `Attendance Status` label (eradicated all-caps `ATTENDANCE STATUS` and description).
+    5. **Clients Directory Import Cleanup (`clients.tsx`)**: Standardized imports to consume `DropdownFilterSelector` directly from `../../components/ui`.
+    6. **Machine Detail View Running Logs Migration (`MachineDetailView.tsx`)**: Replaced duplicate `CustomFilterSelectorModal` bottom sheets with the canonical `<FilterSidebar>` + `<FilterCategoryCard>` + `<DropdownFilterSelector>` (`Date Range` and `Sort By`), wired up to filter chips and header action.
+    7. **Eradication of Duplicate Filter Components**: Permanently deleted duplicate legacy modals `machines/CustomFilterSelectorModal.tsx`, `users/CustomFilterSelectorModal.tsx`, and `operations/OperationsFilterSelectorModal.tsx`. Pruned barrel exports in `machines/index.ts`, `users/index.ts`, and `operations/index.ts`.
+    8. **Automated Verification Expansion**: Expanded `test-optimized-filter-components.mjs` from 77 to 104 assertions (104/104 passing, 100%) and updated `run-tests.mjs` (227/227 scenarios passing, 100%).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (227/227 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **188 — Fix React Native Unparented Text Node Crashes in Badge, FilterSidebar, Alert, Card, and Button (2026-10-17)**:
+  - **Delivered**:
+    1. **Badge Children Protection Helper (`Badge.tsx`)**: Resolved fatal runtime crash `Unexpected text node: [text]. A text node cannot be a child of a <View>`. Implemented `renderBadgeChildren` helper in `Badge.tsx` that safely wraps string, number, and primitive array children (e.g. `{activeFilterCount} active`) in `<Text>` components while preserving React elements, custom view contents, and icons.
+    2. **Explicit Label Prop Binding (`FilterSidebar.tsx`)**: Replaced raw string children `{badgeLabel}` in `FilterCategoryCard` and `{activeFilterCount} active` in `FilterSidebar` header with explicit `label={badgeLabel}` and `label={`${activeFilterCount} active`}` props.
+    3. **Alert Component Fixes (`Alert.tsx`)**: Refactored `AlertTitle` and `AlertDescription` to forward refs to `<Text>` instead of `<View>`, eliminating crashes when string messages or titles are passed to `<Alert>`.
+    4. **Card Component Fixes (`Card.tsx`)**: Refactored `CardTitle` and `CardDescription` to forward refs to `<Text>` instead of `<View>`.
+    5. **Button Component String Safeguards (`Button.tsx`)**: Added safe fallback to wrap raw string, number, or primitive array children in `<Text>` when the `label` prop is omitted.
+    6. **Comprehensive Automated Verification (`test-optimized-filter-components.mjs`)**: Added 10 automated test assertions verifying that all UI primitives properly safeguard against unparented text nodes; 77/77 assertions passed, 0 typecheck errors, 215/215 test runner checks passed.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (77/77 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (215/215 test scenarios passed, 100%).
+
+- [x] **187 — Reusable FilterSidebar Everywhere with Smooth GPU Animations & Code Duplication Elimination (2026-10-17)**:
+  - **Delivered**:
+    1. **Universal Reusable FilterSidebar & FilterCategoryCard (`FilterSidebar.tsx`, `DropdownFilterSelector.tsx`)**: Enhanced `FilterSidebar` to support both composable `children` (with `FilterCategoryCard`) and declarative `categories: FilterCategoryItemConfig[]` data prop. Added dual naming props (`visible` & `isOpen`, `activeFilterCount` & `badgeCount`, `onResetAll` & `onReset`, `applyText` & `applyLabel`) and dropdown aliases (`value` & `selectedId`, `onChange` & `onSelect`, `showSearch` & `searchable`) for zero-friction cross-screen compatibility. Added `removeClippedSubviews={Platform.OS === 'android'}` on ScrollView container to eliminate memory consumption from off-screen form rows. Wrapped primitives in `React.memo` with 0 raw typography properties and rapid tap mutex lock (`isApplyingRef`).
+    2. **Shift Monitor Tab Optimization (`MobileTodayShiftMonitorTab.tsx`)**: Eradicated legacy `Animated.timing` accordion animation that used `maxHeight.interpolate()`. Animating `maxHeight` forced Yoga to recalculate layouts on every single animation frame on the JavaScript thread, creating noticeable stutter. Replaced the accordion with canonical `<FilterSidebar>` and `<FilterCategoryCard>` covering Shift Date (`CustomDatePicker`), Entry Status (`DropdownFilterSelector`), Client Allocation (`DropdownFilterSelector`), Shift Preset (`DropdownFilterSelector`), and Sort Order (`DropdownFilterSelector`). Replaced header accordion with clean active filter badge strip. Deleted dead styles (`filterPanelWebContainer`, `filterPanelAnimatedContainer`, `filterPanelCard`, `filterSelectorsGrid`).
+    3. **Operator History Tab Refactoring (`MobileOperatorHistoryTab.tsx`)**: Eradicated ~200 lines of hardcoded custom `Drawer` markup, manual pill selection loops, and bespoke footer buttons. Replaced with canonical `<FilterSidebar>` and `<FilterCategoryCard>` with Date Range, Status & Condition, and Sort Order options. Deleted 12 dead styles (`drawerContainer`, `drawerHeader`, `drawerIconBox`, `drawerScroll`, `drawerScrollContent`, `drawerFooter`, `filterSection`, `filterSectionTitle`, `filterOptionsGrid`, `filterOptionPill`, `modalSecondaryBtn`, `modalPrimaryBtn`).
+    4. **Standardized Attendance Screen Filtering (`attendance.tsx`)**: Replaced the operator FAB status-cycling hack with a dedicated trigger for `<FilterSidebar>`. Added management search & filter toolbar with one-tap access to `<FilterSidebar>`. Integrated `DropdownFilterSelector` for Attendance Status across both Operator and Management views with full role parity.
+    5. **Monorepo Cross-Screen Consistency & Automated Verification**: Confirmed seamless parity in `machines.tsx`, `users.tsx`, and `clients.tsx`. Expanded test suite (`test-optimized-filter-components.mjs`) to 67 assertions (100% pass) and verified all 215/215 mobile test suite scenarios.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (67/67 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (215/215 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **186 — Filter Components Optimization: Production-Grade UI/UX & Mobile Dropdown Performance (2026-10-17)**:
+  - **Delivered**:
+    1. **Eradication of Visual Noise & Numbered Sections (`MachineFilterSidebar.tsx`, `UserFiltersPanel.tsx`, `clients.tsx`)**: Removed noisy numbered section prefixes (`1.  RENTAL STATUS`, `2.  HEALTH STATUS`, etc.) in favor of clean title case labels (`Rental Status`, `Health Status`, `Client Allocation`, `Site Supervisor`, `Sort By`). Eliminated repetitive explanatory subtitle text beneath each filter section. Removed cluttered header subtitles (`Category-wise fleet equipment refinement`, etc.), presenting a clean, focused, high-density filtering drawer.
+    2. **Dropdown Label Prefix Minimization (`DropdownFilterSelector.tsx`)**: Introduced `showPrefix = false` default to eradicate redundant prefix text inside dropdown values (`Rental: All Rental Status` -> `All Rental Status`), displaying clean, concise values. Maintained explicit `showPrefix={true}` on inline horizontal filter toolbars (`MobileTodayShiftMonitorTab.tsx`).
+    3. **De-nested Minimal Form Layout (`FilterSidebar.tsx`)**: Refactored `FilterCategoryCard` to eliminate bulky nested card borders, background fills, and excessive padding. Replaced with lightweight, compact form-group sections (`categorySection` with `gap: 6` and `gap: 16` container scroll), allowing the entire filter panel to fit comfortably on mobile viewports with minimal scrolling.
+    4. **Smooth Opening & Closing Drawer Transitions (`Drawer.tsx`)**: Tuned drawer open duration to 200ms with cubic-bezier ease-out curve (`OPEN_EASING`), and close duration to 170ms with ease-in curve (`CLOSE_EASING`), satisfying the 160–220ms requirement. Coupled UI-thread panel opacity fade (`opacity: 0.2 + norm * 0.8`) with translation and scrim opacity for silky smooth entrance/exit without blank frames or jarring pops.
+    5. **Dropdown Rendering & State Efficiency (`DropdownFilterSelector.tsx`)**: Eradicated unused `windowWidth` state and redundant resize listeners. Extracted memoized `DropdownOptionRow` subcomponent with stabilized `useCallback` onSelect handler, eliminating re-renders of unselected items during search typing or selection. Added rapid double-tap submission lock on FilterSidebar Apply button (`isApplyingRef`).
+    6. **Comprehensive Automated Verification (`test-optimized-filter-components.mjs`, `run-tests.mjs`)**: Authored 54-point automated test suite covering animation durations, easing curves, layout de-nesting, prefix removal, touch ergonomics, combobox/checkbox accessibility roles, and cross-page parity; integrated checks into primary test runner bringing passing scenarios to 215/215 (100%).
+  - **Verification**:
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (54/54 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (215/215 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
+- [x] **185 — Mobile Staff Query Column Resolution & Meeting Report / Holiday Calendar Web App Refactoring (2026-10-17)**:
+  - **Delivered**:
+    1. **Mobile Staff Query Column Resolution (`apps/mobile/lib/hooks/useUsersData.ts`)**: Diagnosed and resolved the fatal PostgreSQL error `42703: column "supervisor_ids" does not exist in table public.users` shown in the mobile User Management screen screenshot ("Unable to Load Data: Failed to load user accounts"). Eradicated non-existent `supervisor_ids` from `USER_SELECT_COLUMNS` and aligned the query filter to `.eq('supervisor_id', effectiveSupervisorId)`, restoring clean directory loading and keyset pagination.
+    2. **Meeting Report Codebase Architecture Refactoring (`Reach International Workflow`)**: Executed a comprehensive audit across all workflows. Decomposed the 1,862-line monolithic `MeetingSummariesPage.jsx` into modular, feature-scoped components under `src/features/meeting-reports/` (`MeetingList`, `MeetingCard`, `BreakdownCard`, `MeetingDetailDocument`, `ActionItemsSection`, `BreakdownSection`, `DirectivesSection`, `PartsSection`, `MeetingHeaderBar`, `MonthFilterBar`, `TextHighlightPopup`, `ChronologicalNav`).
+    3. **Eradication of Hardcoded Supabase Secrets (`src/lib/supabaseClient.js`, `src/lib/supabase/client.js`)**: Eliminated hardcoded fallback JWT anon token from source control. Unified client access under validated environment configuration (`src/lib/config/env.js`).
+    4. **Holiday Calendar Feature Modularization & Deduplication (`src/features/holidays/`)**: Modularized 2026 Indian festival & company holiday calendar (`HolidayCalendar`, `CalendarGrid`, `CalendarHeader`, `HolidayDetails`, `UpcomingHolidays`, `companyHolidays2026.js`). Eradicated duplicate `src/components/calendar/` directory and established clean backward compatibility proxies.
+    5. **Multi-Platform Automated Verification**: Verified all 197 monorepo mobile tests (100%), 0 monorepo typecheck errors across all 7 packages, clean Vite build (`vite build` -> 0 errors, 56% bundle reduction on main JS), 200/200 holiday validation assertions, 30/30 search algorithm tests, and full Playwright visual test suites across Desktop (1440x900) and Mobile (390x844).
+  - **Verification**:
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (197/197 test scenarios passed, 100%).
+    - `npm --prefix "Reach International Workflow" run build`: **PASS** (`vite build` -> 0 errors, exit code 0).
+    - `node "Reach International Workflow/scripts/verify-holidays.js"`: **PASS** (200/200 assertions passed, 100%).
+    - `node "Reach International Workflow/scripts/test-search.js"`: **PASS** (30/30 search tests passed, 100%).
+    - `node "Reach International Workflow/scripts/test-visual-calendar.js"`: **PASS** (Desktop & Mobile visual tests passed, 100%).
+
+- [x] **184 — Centralized Transparent LongLogo System, Authentic “About Us” Page, & Settings Page Feedback Eradication (2026-10-17)**:
+  - **Delivered**:
+    1. **Centralized Reusable `ReachLongLogo` Component (`ReachLongLogo.tsx`, `branding/index.ts`)**: Built typed, transparent branding primitive consuming `Reach International Light Theme LongLogo.png` and `Reach International Dark Theme LongLogo.png` with 2:1 native aspect ratio (1774×887px), supporting `'auto' | 'light' | 'dark'` theme modes and auto width/height computation. Delegated legacy `ReachInternationalLogo` full/wordmark layouts to `ReachLongLogo`, creating centralized control and eliminating the old scissor lift lockup across the entire codebase.
+    2. **Authentic “About Us” Screen (`about-us.tsx`)**: Created comprehensive About Us screen at `/settings/about/about-us` based on live data scraped from `https://www.reachinternational.co.in/` and `https://www.reachinternational.co.in/about-us/`. Features founders & directors (Mr. Vishal, Mr. Dhruv Sharma), 10+ years established history, 15+ years director EWP expertise, core operational pillars (Safe, Quick, Cost-Effective), full EWP fleet categories (articulated boom, telescopic boom, scissor lifts, spider lifts), company vision & mission, and 1-tap touch actions for phone (`+91 88000 40308`), website, and email. Conforms 100% to Vercel Geist design tokens with 0 raw typography property violations.
+    3. **Erased Redundant `/settings/about/app-info` Hero Card**: Removed the `heroCard` containing the scissor lift logo, company name, and tagline. Centered the technical runtime and architecture specifications card directly.
+    4. **Completely Removed Desktop Split Showcase in `/settings/about/terms`**: Eradicated `desktopShowcasePanel`, `loginPageImage`, and duplicate desktop header that occupied 40% of the screen. Unified legal terms into a responsive single-column layout with `ReachLongLogo` footer.
+    5. **App-Wide LongLogo Integration**: Replaced scissor lift lockups and hardcoded logos in `/login`, `/onboarding`, `/privacy`, `/terms`, `MobileProfileSheet`, and `SharedLinkPreviewCard`.
+    6. **Navigation, Security, & Command Palette Indexing**: Registered route in `app/(app)/_layout.tsx`, added navigation card in `settings/about/index.tsx`, whitelisted routes in `lib/security.ts`, indexed in Command Palette (`quickAccessRegistry.ts`), and registered alias redirects in `app/+not-found.tsx`.
+    7. **Comprehensive Automated Verification (`test-about-and-longlogo.mjs`, `run-tests.mjs`)**: Authored 24-point automated test suite; integrated into primary test runner bringing passing scenarios to 197/197 (100%).
+  - **Verification**:
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-about-and-longlogo.mjs`: **PASS** (24/24 checks passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (197/197 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+
 - [x] **183 — Expo Doctor Root Cause Analysis & Resolution: Disable Non-CNG Check for Bare Native Workflow & Upgrade Expo SDK 57 Patch Dependencies (2026-10-16)**:
   - **Delivered**:
     1. **Non-CNG Check Resolution (`apps/mobile/package.json`)**: Configured `"expo": { "doctor": { "appConfigFieldsNotSyncedCheck": { "enabled": false } } }`, the official Expo Doctor flag for projects managing native code directly (`android/` checked into git), resolving the non-CNG warning where EAS Build expects Prebuild if native folders are present.

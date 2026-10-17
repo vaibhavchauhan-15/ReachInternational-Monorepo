@@ -29,6 +29,7 @@ const expectedFiles = [
   'app/(app)/settings/preferences/index.tsx',
   'app/(app)/settings/preferences/font-size.tsx',
   'app/(app)/settings/about/index.tsx',
+  'app/(app)/settings/about/about-us.tsx',
   'app/(app)/settings/about/app-info.tsx',
   'app/(app)/settings/about/privacy.tsx',
   'app/(app)/settings/about/terms.tsx',
@@ -85,6 +86,7 @@ const registeredRoutes = [
   'settings/preferences/index',
   'settings/preferences/font-size',
   'settings/about/index',
+  'settings/about/about-us',
   'settings/about/app-info',
   'settings/about/privacy',
   'settings/about/terms',
@@ -167,6 +169,7 @@ const backRouteSpecs = [
   { file: 'app/(app)/settings/preferences/index.tsx', expectedBack: '/settings' },
   { file: 'app/(app)/settings/preferences/font-size.tsx', expectedBack: '/settings/preferences' },
   { file: 'app/(app)/settings/about/index.tsx', expectedBack: '/settings' },
+  { file: 'app/(app)/settings/about/about-us.tsx', expectedBack: '/settings/about' },
   { file: 'app/(app)/settings/about/app-info.tsx', expectedBack: '/settings/about' },
   { file: 'app/(app)/settings/about/privacy.tsx', expectedBack: '/settings/about' },
   { file: 'app/(app)/settings/about/terms.tsx', expectedBack: '/settings/about' },
@@ -255,12 +258,13 @@ console.log('  ✓ Font Size screen has live preview and persistent commit');
 
 // About Hub Screen
 const aboutIndex = fs.readFileSync(path.join(mobileDir, 'app/(app)/settings/about/index.tsx'), 'utf-8');
+assert(aboutIndex.includes('/settings/about/about-us'), 'Links to About Us');
 assert(aboutIndex.includes('/settings/about/app-info'), 'Links to App Info');
 assert(aboutIndex.includes('/settings/about/privacy'), 'Links to Privacy Policy');
 assert(aboutIndex.includes('/settings/about/terms'), 'Links to Terms & Conditions');
 assert(aboutIndex.includes('/settings/about/support'), 'Links to Support & Contact');
 assert(aboutIndex.includes('/settings/about/cookies'), 'Links to Cookie Policy');
-console.log('  ✓ About Index links to all 5 legal and support sub-pages');
+console.log('  ✓ About Index links to all company profile, legal, and support sub-pages');
 
 console.log('\n======================================================');
 console.log('✅ ALL SETTINGS & NAVIGATION VERIFICATION CHECKS PASSED!');

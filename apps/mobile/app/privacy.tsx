@@ -14,7 +14,7 @@ import {
   Card,
   useTheme,
   MobileHeader,
-  ReachInternationalLogo,
+  ReachLongLogo,
   Text,
   Separator,
 } from '../components/ui';
@@ -364,10 +364,7 @@ export default function PrivacyPolicyScreen({ onPressBack, backRoute }: PrivacyP
 
         {/* Brand Footprint Footer */}
         <View style={styles.brandFooter}>
-          <ReachInternationalLogo size={18} showTagline={false} />
-          <Text variant="caption" style={[styles.brandFooterText, { color: theme.colors.mute }]}>
-            {BRAND_NAME} • {BRAND_TAGLINE}
-          </Text>
+          <ReachLongLogo width={140} height={70} />
           <Text variant="micro" style={{ color: theme.colors.mute }}>
             © {new Date().getFullYear()} Reach International. All rights reserved.
           </Text>

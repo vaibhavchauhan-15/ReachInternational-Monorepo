@@ -4,7 +4,7 @@
  * powered by canonical Pressable with Material Design 3 and iOS press feedback.
  */
 
-import { TextClassContext } from '@/components/ui/Text';
+import { Text, TextClassContext } from '@/components/ui/Text';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { View, type ViewProps, Platform, type StyleProp, type ViewStyle } from 'react-native';
@@ -113,22 +113,28 @@ const CardHeader = React.forwardRef<
 CardHeader.displayName = 'CardHeader';
 
 const CardTitle = React.forwardRef<
-  React.ElementRef<typeof View>,
-  ViewProps & { className?: string }
+  React.ElementRef<typeof Text>,
+  React.ComponentPropsWithoutRef<typeof Text>
 >(({ className, ...props }, ref) => (
-  <TextClassContext.Provider value="text-xl font-semibold leading-none tracking-tight text-card-foreground">
-    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
-  </TextClassContext.Provider>
+  <Text
+    ref={ref}
+    variant="heading"
+    className={cn('text-xl font-semibold leading-none tracking-tight text-card-foreground', className)}
+    {...props}
+  />
 ));
 CardTitle.displayName = 'CardTitle';
 
 const CardDescription = React.forwardRef<
-  React.ElementRef<typeof View>,
-  ViewProps & { className?: string }
+  React.ElementRef<typeof Text>,
+  React.ComponentPropsWithoutRef<typeof Text>
 >(({ className, ...props }, ref) => (
-  <TextClassContext.Provider value="text-sm text-muted-foreground">
-    <View ref={ref} className={cn('flex flex-col', className)} {...props} />
-  </TextClassContext.Provider>
+  <Text
+    ref={ref}
+    variant="caption"
+    className={cn('text-sm text-muted-foreground', className)}
+    {...props}
+  />
 ));
 CardDescription.displayName = 'CardDescription';
 

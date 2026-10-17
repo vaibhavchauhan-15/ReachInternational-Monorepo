@@ -378,6 +378,200 @@ try {
   assert(appLayoutCheck.includes('WhatsNewController'), 'AppLayout mounts WhatsNewController');
   assert(appLayoutCheck.includes('settings/about/whats-new'), 'AppLayout registers settings/about/whats-new route');
 
+  // Test 177: Validate About Us Screen, LongLogo Centralization & UI Polish
+  assert(fs.existsSync(path.join(__dirname, 'components/branding/ReachLongLogo.tsx')), 'ReachLongLogo component exists');
+  assert(fs.existsSync(path.join(__dirname, 'assets/Reach International Light Theme LongLogo.png')), 'Light Theme LongLogo PNG exists');
+  assert(fs.existsSync(path.join(__dirname, 'assets/Reach International Dark Theme LongLogo.png')), 'Dark Theme LongLogo PNG exists');
+  assert(fs.existsSync(path.join(__dirname, 'app/(app)/settings/about/about-us.tsx')), 'About Us screen exists');
+  assert(appLayoutCheck.includes('settings/about/about-us'), 'AppLayout registers settings/about/about-us route');
+
+  const appInfoCheck = fs.readFileSync(path.join(__dirname, 'app/(app)/settings/about/app-info.tsx'), 'utf8');
+  assert(!appInfoCheck.includes('heroCard'), 'App Info screen removes heroCard');
+
+  const termsCheck = fs.readFileSync(path.join(__dirname, 'app/terms.tsx'), 'utf8');
+  assert(!termsCheck.includes('desktopShowcasePanel'), 'Terms screen removes desktopShowcasePanel');
+  assert(termsCheck.includes('ReachLongLogo'), 'Terms screen footer uses ReachLongLogo');
+
+  const loginCheck = fs.readFileSync(path.join(__dirname, 'app/(auth)/login.tsx'), 'utf8');
+  assert(loginCheck.includes('ReachLongLogo'), 'Login screen uses ReachLongLogo');
+
+  const privacyCheck = fs.readFileSync(path.join(__dirname, 'app/privacy.tsx'), 'utf8');
+  assert(privacyCheck.includes('ReachLongLogo'), 'Privacy screen footer uses ReachLongLogo');
+
+  // Test 178: Validate Optimized Filter Components, UI Minimalism & Mobile Dropdown Performance
+  const drawerCheck = fs.readFileSync(path.join(__dirname, 'components/ui/overlay/Drawer.tsx'), 'utf8');
+  assert(drawerCheck.includes('duration: 200'), 'Drawer opening animation duration is 200ms');
+  assert(drawerCheck.includes('duration: 170'), 'Drawer closing animation duration is 170ms');
+  assert(drawerCheck.includes('opacity: 0.2 + norm * 0.8'), 'Drawer integrates UI-thread panel opacity fade');
+
+  const filterSidebarCheck = fs.readFileSync(path.join(__dirname, 'components/ui/FilterSidebar.tsx'), 'utf8');
+  assert(filterSidebarCheck.includes('styles.categorySection'), 'FilterCategoryCard uses minimal form group without nested card borders');
+  assert(filterSidebarCheck.includes('isApplyingRef.current'), 'FilterSidebar implements rapid double-tap lock on Apply action');
+  assert(filterSidebarCheck.includes('accessibilityLabel="Close filter sidebar"'), 'Close button has accessible label');
+  assert(filterSidebarCheck.includes('disabled={activeFilterCount === 0}'), 'Reset All is disabled when active filter count is 0');
+
+  const dropdownFilterCheck = fs.readFileSync(path.join(__dirname, 'components/ui/DropdownFilterSelector.tsx'), 'utf8');
+  assert(dropdownFilterCheck.includes('showPrefix = false'), 'DropdownFilterSelector showPrefix defaults to false');
+  assert(dropdownFilterCheck.includes('DropdownOptionRow = React.memo'), 'DropdownOptionRow is memoized');
+  assert(!dropdownFilterCheck.includes('setWindowWidth'), 'DropdownFilterSelector eliminates unused windowWidth state');
+
+  const machineFilterCheck = fs.readFileSync(path.join(__dirname, 'components/machines/MachineFilterSidebar.tsx'), 'utf8');
+  assert(!machineFilterCheck.includes('index={1}'), 'MachineFilterSidebar removes numbered section prefixes');
+  assert(machineFilterCheck.includes('title="Rental Status"'), 'MachineFilterSidebar uses clean Rental Status title');
+  assert(machineFilterCheck.includes('title="Health Status"'), 'MachineFilterSidebar uses clean Health Status title');
+  assert(machineFilterCheck.includes('title="Client Allocation"'), 'MachineFilterSidebar uses clean Client Allocation title');
+  assert(machineFilterCheck.includes('title="Site Supervisor"'), 'MachineFilterSidebar uses clean Site Supervisor title');
+  assert(machineFilterCheck.includes('title="Sort By"'), 'MachineFilterSidebar uses clean Sort By title');
+  assert(!machineFilterCheck.includes('subtitle="Filter equipment by rental availability status"'), 'MachineFilterSidebar eliminates redundant subtitles');
+  assert(!machineFilterCheck.includes('subtitle="Category-wise fleet equipment refinement"'), 'MachineFilterSidebar eliminates header subtitle');
+
+  // Test 179: Validate Universal Filters & Sorting and Duplicate Modal Eradication
+  const todayShiftCheck = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftMonitorTab.tsx'), 'utf8');
+  assert(todayShiftCheck.includes('title="Filters & Sorting"'), 'Operations Shift Monitor uses standard Filters & Sorting');
+  assert(!todayShiftCheck.includes('title="Filter Shifts"'), 'Operations Shift Monitor eradicates legacy Filter Shifts');
+  assert(todayShiftCheck.includes('title="Shift Date"'), 'Operations Shift Monitor uses clean Shift Date category');
+  assert(todayShiftCheck.includes('title="Entry Status"'), 'Operations Shift Monitor uses clean Entry Status category');
+
+  const operatorHistCheck = fs.readFileSync(path.join(__dirname, 'components/operations/MobileOperatorHistoryTab.tsx'), 'utf8');
+  assert(operatorHistCheck.includes('title="Filters & Sorting"'), 'Operator History uses standard Filters & Sorting');
+  assert(!operatorHistCheck.includes('title="Filter Shift Logs"'), 'Operator History eradicates legacy Filter Shift Logs');
+
+  const attendanceCheck = fs.readFileSync(path.join(__dirname, 'app/(app)/attendance.tsx'), 'utf8');
+  assert(attendanceCheck.includes('title="Filters & Sorting"'), 'Attendance uses standard Filters & Sorting');
+
+  const machineDetailCheck = fs.readFileSync(path.join(__dirname, 'components/machines/MachineDetailView.tsx'), 'utf8');
+  assert(machineDetailCheck.includes('<FilterSidebar'), 'MachineDetailView uses canonical FilterSidebar');
+  assert(!machineDetailCheck.includes('CustomFilterSelectorModal'), 'MachineDetailView eradicates CustomFilterSelectorModal');
+
+  assert(!fs.existsSync(path.join(__dirname, 'components/machines/CustomFilterSelectorModal.tsx')), 'Duplicate machines/CustomFilterSelectorModal.tsx is deleted');
+  assert(!fs.existsSync(path.join(__dirname, 'components/users/CustomFilterSelectorModal.tsx')), 'Duplicate users/CustomFilterSelectorModal.tsx is deleted');
+  assert(!fs.existsSync(path.join(__dirname, 'components/operations/OperationsFilterSelectorModal.tsx')), 'Duplicate operations/OperationsFilterSelectorModal.tsx is deleted');
+
+  // Test 180: Validate Production-Ready Fully Opaque Badge Component
+  const badgeCheck = fs.readFileSync(path.join(__dirname, 'components/ui/Badge.tsx'), 'utf8');
+  const badgeVariantsCode = badgeCheck.slice(badgeCheck.indexOf('const badgeVariants'), badgeCheck.indexOf('export type BadgeProps'));
+  assert(!badgeVariantsCode.includes('/10'), 'Badge variants completely eliminate /10 semi-transparent washes');
+  assert(!badgeVariantsCode.includes('/20'), 'Badge variants completely eliminate /20 semi-transparent borders');
+  assert(badgeCheck.includes("default: 'border-primary bg-primary'"), 'Badge default variant uses solid primary fill');
+  assert(badgeCheck.includes("secondary: 'border-border bg-secondary'"), 'Badge secondary variant uses solid secondary fill');
+  assert(badgeCheck.includes("destructive: 'border-destructive bg-destructive'"), 'Badge destructive variant uses solid destructive fill');
+  assert(badgeCheck.includes("error: 'border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950'"), 'Badge error variant uses solid opaque rose fill');
+  assert(badgeCheck.includes("info: 'border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950'"), 'Badge info variant uses solid opaque sky fill');
+  assert(badgeCheck.includes("outline: 'border-border bg-card'"), 'Badge outline variant uses solid opaque bg-card (never transparent)');
+  assert(badgeCheck.includes("success: 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950'"), 'Badge success variant uses solid opaque emerald fill');
+  assert(badgeCheck.includes("warning: 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950'"), 'Badge warning variant uses solid opaque amber fill');
+  assert(badgeCheck.includes("neutral: 'border-border bg-muted'"), 'Badge neutral variant uses solid opaque muted fill');
+  assert(badgeCheck.includes('text-emerald-800 dark:text-emerald-200'), 'Badge success text uses high-contrast tokens');
+  assert(badgeCheck.includes('text-rose-800 dark:text-rose-200'), 'Badge error text uses high-contrast tokens');
+  assert(badgeCheck.includes('text-sky-800 dark:text-sky-200'), 'Badge info text uses high-contrast tokens');
+  assert(badgeCheck.includes('text-amber-800 dark:text-amber-200'), 'Badge warning text uses high-contrast tokens');
+  assert(badgeCheck.includes('rounded-full shrink-0 self-center'), 'Badge status dot uses shrink-0 and self-center for vertical alignment');
+  assert(badgeCheck.includes('normalizedStatus = String(status).trim().toLowerCase()'), 'Badge normalizes status for case-resilience');
+
+  // Test 181: Validate Production-Ready Optimized Mobile Button Component
+  const buttonCheck = fs.readFileSync(path.join(__dirname, 'components/ui/Button.tsx'), 'utf8');
+  assert(buttonCheck.includes('useTheme'), 'Button consumes useTheme for centralized theme tokens');
+  assert(buttonCheck.includes('BUTTON_SIZE_STYLES: Record<string, ViewStyle>'), 'Button extracts static size definitions outside render loop');
+  assert(buttonCheck.includes('minHeight: 44'), 'Button enforces minimum 44px touch targets');
+  assert(buttonCheck.includes('background: theme.colors.canvasElevated'), 'Button outline variant uses solid canvas elevated background');
+  assert(!buttonCheck.includes('rgba(23, 23, 23, 0.05)'), 'Button secondary variant eradicates transparent rgba in favor of solid surface');
+  assert(buttonCheck.includes("case 'ghost':") && buttonCheck.includes("background: 'transparent'"), 'Button ghost variant intentionally preserves transparent styling');
+  assert(buttonCheck.includes("case 'link':") && buttonCheck.includes("background: 'transparent'"), 'Button link variant intentionally preserves transparent styling');
+  assert(buttonCheck.includes('#0284c7'), 'Button defines Reach blue #0284c7 primary background');
+  assert(buttonCheck.includes('color={colors.spinner}'), 'Button derives loading spinner color from variant/theme foreground');
+  assert(buttonCheck.includes('const leadingIcon = leftIcon ?? icon;'), 'Button preserves documented leftIcon precedence over icon');
+  assert(buttonCheck.includes('staticStyles = StyleSheet.create'), 'Button defines static layout styles via StyleSheet.create');
+  assert(buttonCheck.includes('isDisabled && !isLoading'), 'Button applies deliberate disabled palette without degrading active loading state');
+  assert(buttonCheck.includes('loading={isLoading}'), 'Button passes loading state to Pressable to suppress interactions');
+  // Test 182: Validate Search, Filter & Clear/Reset Non-Overlapping Layout Architecture
+  const searchInputCheck182 = fs.readFileSync(path.join(__dirname, 'components/ui/SearchInput.tsx'), 'utf8');
+  assert(searchInputCheck182.includes('minWidth: 0'), 'SearchInput defines minWidth: 0 in container style');
+  assert(searchInputCheck182.includes('flexContainer: {'), 'SearchInput defines flexContainer style');
+  assert(searchInputCheck182.includes('fullWidthContainer: {'), 'SearchInput defines fullWidthContainer style');
+  assert(searchInputCheck182.includes('isFlexLayout ? styles.flexContainer : styles.fullWidthContainer'), 'SearchInput conditionally applies flex vs full width');
+  assert(searchInputCheck182.includes('leftIconWrapper: {') && searchInputCheck182.includes('clearBtn: {'), 'SearchInput protects left icon and clear button with flexShrink: 0');
+
+  const shiftMonitorCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftMonitorTab.tsx'), 'utf8');
+  assert(shiftMonitorCheck182.includes('<View style={styles.searchContainer}>'), 'MobileTodayShiftMonitorTab wraps SearchInput in searchContainer');
+  assert(shiftMonitorCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MobileTodayShiftMonitorTab searchContainer has flex: 1 and minWidth: 0');
+  assert(shiftMonitorCheck182.includes('filterToggleBtn: {') && shiftMonitorCheck182.includes('quickResetBtn: {'), 'MobileTodayShiftMonitorTab styles filter and reset buttons');
+
+  const operatorHistCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileOperatorHistoryTab.tsx'), 'utf8');
+  assert(operatorHistCheck182.includes('<View style={styles.searchContainer}>'), 'MobileOperatorHistoryTab wraps SearchInput in searchContainer');
+  assert(operatorHistCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MobileOperatorHistoryTab searchContainer has flex: 1 and minWidth: 0');
+
+  const machinePanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/machines/MachineFilterPanel.tsx'), 'utf8');
+  assert(machinePanelCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MachineFilterPanel searchContainer defines minWidth: 0');
+
+  const userPanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/users/UserFiltersPanel.tsx'), 'utf8');
+  assert(userPanelCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'UserFiltersPanel searchContainer defines minWidth: 0');
+
+  const filterToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'components/ui/FilterToolbar.tsx'), 'utf8');
+  assert(filterToolbarCheck182.includes('searchFlexWrap: {\n    flex: 1,\n    minWidth: 0'), 'FilterToolbar searchFlexWrap defines minWidth: 0');
+
+  const attendanceToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'app/(app)/attendance.tsx'), 'utf8');
+  assert(attendanceToolbarCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'Attendance screen searchContainer defines minWidth: 0');
+
+  // Test 183: Centralized Native Badges with Light & Dark Theme Tokens, Roles, and Universal Reuse
+  const badgeCheck183 = fs.readFileSync(path.join(__dirname, 'components/ui/Badge.tsx'), 'utf8');
+  assert(badgeCheck183.includes('export function resolveBadgeColors('), 'Badge exports resolveBadgeColors helper');
+  assert(badgeCheck183.includes('export function formatBadgeRoleLabel('), 'Badge exports formatBadgeRoleLabel helper');
+  assert(badgeCheck183.includes('export function formatBadgeStatusLabel('), 'Badge exports formatBadgeStatusLabel helper');
+  assert(badgeCheck183.includes("shape === 'rounded' ? radiusNumeric.sm : radiusNumeric.full"), 'Badge supports bimodal shapes (rounded & pill)');
+  assert(badgeCheck183.includes('const staticBadgeStyles = StyleSheet.create({'), 'Badge allocates static base layout once via StyleSheet.create');
+  assert(badgeCheck183.includes("in_transit: 'info'"), 'Badge maps in_transit to info');
+
+  const machineCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/machines/MobileMachineCard.tsx'), 'utf8');
+  assert(machineCardCheck183.includes('<Badge status="active" dot customLabel="Active"'), 'MobileMachineCard binds dot to Active health status badge');
+  assert(machineCardCheck183.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard renders Rented/Available badge');
+
+  const userTouchCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserTouchCard.tsx'), 'utf8');
+  assert(userTouchCardCheck183.includes('<Badge\n                role={u.role}'), 'UserTouchCard reuses centralized Badge for user role');
+  assert(userTouchCardCheck183.includes('<Badge\n                status={u.status}\n                dot'), 'UserTouchCard reuses centralized Badge with dot for user status');
+
+  const userDetailCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserDetailModal.tsx'), 'utf8');
+  assert(userDetailCheck183.includes('<Badge\n                  role={user.role}'), 'UserDetailModal reuses centralized Badge for user role');
+  assert(userDetailCheck183.includes('<Badge\n                  status={user.status}\n                  dot'), 'UserDetailModal reuses centralized Badge with dot for user status');
+
+  const todayShiftCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftCard.tsx'), 'utf8');
+  assert(todayShiftCardCheck183.includes('<Badge\n            status='), 'MobileTodayShiftCard reuses centralized Badge for shift log status');
+
+  const deleteDialogCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/DeleteUserConfirmDialog.tsx'), 'utf8');
+  assert(deleteDialogCheck183.includes('<Badge\n              role={user.role}'), 'DeleteUserConfirmDialog reuses centralized Badge for user role');
+  assert(deleteDialogCheck183.includes('<Badge\n              status={user.status'), 'DeleteUserConfirmDialog reuses centralized Badge for user status');
+
+  // Test 184: Running Logs Screen Redesign & Visual Parity with Web App
+  const runningLogsScreenCheck184 = fs.readFileSync(path.join(__dirname, 'app/(app)/running-logs.tsx'), 'utf8');
+  assert(runningLogsScreenCheck184.includes('RunningLogFilterPanel'), 'running-logs.tsx orchestrates RunningLogFilterPanel');
+  assert(runningLogsScreenCheck184.includes('RunningLogSummaryCard'), 'running-logs.tsx renders RunningLogSummaryCard');
+  assert(runningLogsScreenCheck184.includes('RunningLogMachineHeaderCard'), 'running-logs.tsx renders RunningLogMachineHeaderCard');
+  assert(runningLogsScreenCheck184.includes('RunningLogShiftCard'), 'running-logs.tsx renders RunningLogShiftCard');
+  assert(runningLogsScreenCheck184.includes('useOperationsMasterData'), 'running-logs.tsx queries centralized master data hook');
+  assert(runningLogsScreenCheck184.includes('useOperationsLogs'), 'running-logs.tsx queries operations logs with TanStack Query');
+
+  const filterPanelCheck184 = fs.readFileSync(path.join(__dirname, 'components/operations/RunningLogFilterPanel.tsx'), 'utf8');
+  assert(filterPanelCheck184.includes('SegmentedToggle'), 'RunningLogFilterPanel renders SegmentedToggle for mode selection');
+  assert(filterPanelCheck184.includes("id: 'machine', label: 'Machine'"), 'RunningLogFilterPanel provides Machine view option');
+  assert(filterPanelCheck184.includes("id: 'client', label: 'Clients'"), 'RunningLogFilterPanel provides Clients view option');
+  assert(filterPanelCheck184.includes("id: 'operator', label: 'Operator'"), 'RunningLogFilterPanel provides Operator view option');
+  assert(filterPanelCheck184.includes('inlineDescription'), 'RunningLogFilterPanel passes inlineDescription to SearchableSelect');
+
+  const shiftCardCheck184 = fs.readFileSync(path.join(__dirname, 'components/operations/RunningLogShiftCard.tsx'), 'utf8');
+  assert(shiftCardCheck184.includes('export function formatExcelDate('), 'RunningLogShiftCard exports formatExcelDate');
+  assert(shiftCardCheck184.includes('export function resolveShiftCode('), 'RunningLogShiftCard exports resolveShiftCode');
+  assert(shiftCardCheck184.includes('M/C RT'), 'RunningLogShiftCard renders M/C RT metric container');
+  assert(shiftCardCheck184.includes('WH'), 'RunningLogShiftCard renders WH metric container');
+  assert(shiftCardCheck184.includes('B/D'), 'RunningLogShiftCard renders B/D metric container');
+
+  const searchableSelectCheck184 = fs.readFileSync(path.join(__dirname, 'components/ui/SearchableSelect.tsx'), 'utf8');
+  assert(searchableSelectCheck184.includes('inlineDescription?: boolean;'), 'SearchableSelect supports inlineDescription prop');
+  assert(searchableSelectCheck184.includes('rgba(2, 132, 199,'), 'SearchableSelect styles code badges with Reach Sky Blue tokens');
+
+  const operationsDataHookCheck184 = fs.readFileSync(path.join(__dirname, 'lib/hooks/useOperationsData.ts'), 'utf8');
+  assert(operationsDataHookCheck184.includes('export interface ClientSiteRecord'), 'useOperationsData exports ClientSiteRecord');
+  assert(operationsDataHookCheck184.includes(".from('client_sites')"), 'useOperationsData queries client_sites table');
+  assert(operationsDataHookCheck184.includes("clientSites,"), 'useOperationsData integrates clientSites in master data');
+
   console.log(`\n✅ Verification Suite Passed: All ${passed}/${passed + failed} test scenarios verified!`);
   process.exit(failed > 0 ? 1 : 0);
 } catch (err) {
