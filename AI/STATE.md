@@ -1,3 +1,55 @@
+- [x] **230 — Android Production Play Store Release (.aab) Build & Release Notes (2026-10-21)**:
+  - **Delivered**:
+    1. **Expo Doctor Sweep (`npx expo-doctor`)**: Ran full 20-check verification across native dependencies, plugins, and app configuration (20/20 checks passed).
+    2. **Local Bundling & Type Safety Verification**:
+       - Tested native release bundling via Gradle: bundled 4,772 JavaScript modules and 36 static assets in 70.7s without errors.
+       - Fixed TypeScript strict null-checks on storage signed URLs in `apps/mobile/lib/documents.ts` and `apps/web/app/actions/documents.ts`.
+       - Full monorepo typecheck verified: 7/7 packages clean (0 errors).
+       - Automated test suite passed: 357/357 test scenarios verified (100%).
+       - Typography compliance verified: 0 raw typography properties found.
+    3. **Release Notes Documentation**:
+       - Updated `apps/mobile/store-assets/release-notes-en-US.txt` formatted for Google Play's 500-character limit.
+       - Authored comprehensive `apps/mobile/RELEASE_NOTES_v1.3.0.md` detailing new capabilities, security hardening, and platform compliance.
+    4. **Production EAS Build (.aab)**:
+       - Profile: `production` (`buildType: "app-bundle"`).
+       - Version code incremented: 16 -> 17.
+       - Signed with production keystore from EAS Cloud Vault.
+       - Android App Bundle generated: `https://expo.dev/artifacts/eas/07UhHchIFo2LtQLERXJWrzlHIs5UmN21wPlpd8_mS8A.aab`.
+
+- [x] **229 — Document Viewer: Rotate Button Strictly for Images (Removed for PDFs) & Comprehensive Profile/Document Pipeline Optimization (2026-10-21)**:
+  - **Delivered**:
+    1. **Rotate Button Configuration (Images Only, Removed for PDFs)**:
+       - In `MobileDocumentViewerModal.tsx`: Changed Rotate button condition from `{isPdf && (` to `{isImage && (`.
+       - **Images** (`JPG`, `PNG`, `WEBP`): Rotate action button `<RotateCw size={18} />` is displayed with accessibility label `Rotate image 90 degrees`.
+       - **PDFs**: Rotate button is completely removed.
+       - **Share Button**: Stays completely removed across all documents.
+       - **Download & Close Buttons**: Retained with 48px touch ergonomics.
+    2. **Document Fetching & Opening Optimization (`fetchUserDocuments`, `apps/mobile/lib/documents.ts`)**:
+       - Replaced multiple individual document signed URL requests with a single batch `supabase.storage.from('user_files').createSignedUrls(allPaths, 3600)` call, reducing N storage network round-trips to exactly 1 batch request.
+       - Batch candidate checking for self-healing resolution, eliminating sequential loops.
+       - Pre-resolved signed URLs pass directly into `MobileDocumentViewerModal` for instant opening with zero lag.
+    3. **Document Uploading Optimization (`uploadUserDocumentDirect`, `apps/mobile/lib/documents.ts`, `apps/mobile/app/(app)/profile/index.tsx`)**:
+       - Converted stale extension file cleanup to a non-blocking background task (`void supabase.storage.from('user_files').remove(stalePaths).catch(...)`), preventing storage purge latency from stalling upload response.
+       - Generated signed preview URLs immediately upon upload completion and returned `{ success: true, path, signedUrl }`.
+       - In `handleUploadDocument`: Optimistically updated `userDocuments` state immediately with the new file and signed URL, providing instantaneous UI reset and checkmark feedback without waiting for full profile refetches.
+       - Triggered lightweight background document synchronization (`fetchUserDocuments(user.id).then(setUserDocuments)`).
+    4. **Document Deleting Optimization (`deleteUserDocument`, `apps/mobile/lib/documents.ts`, `apps/mobile/app/(app)/profile/index.tsx`)**:
+       - Executed database record deletion and storage file purge in parallel via `Promise.all` rather than sequential blocking steps.
+       - In `handleConfirmDeleteDocument`: Streamlined post-delete refresh to document-only synchronization, eliminating heavy 5-query profile refetches.
+    5. **Profile Screen & API Optimization (`apps/mobile/app/(app)/profile/index.tsx`, `edit.tsx`, `apps/web/app/actions/documents.ts`)**:
+       - Cached static reference data (`user_document_types`) in module-level `cachedDocumentTypes`, eliminating redundant database round-trips on subsequent profile visits and tab transitions.
+       - Fixed `apps/mobile/app/(app)/profile/edit.tsx` to use explicit column projections instead of `select('*')`.
+       - Optimized web Server Action `getUserDocumentsAction` in `apps/web/app/actions/documents.ts` with batch signed URL generation via `createSignedUrls`.
+  - **Verification**:
+    - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (43/43 assertions verified, 100%).
+    - `node apps/mobile/test-document-crud-workflows.mjs`: **PASS** (100% assertions verified).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
 - [x] **228 — Quick Access Modal: Remove Duplicate Nested Modal, Add Touch Close Button & Optimize Responsiveness (2026-10-21)**:
   - **Delivered**:
     1. **Eliminate Duplicate Nested Modal Sheet (`MobileCommandPalette.tsx`)**:
