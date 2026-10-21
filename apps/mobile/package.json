@@ -23,6 +23,7 @@
     "build": "echo \"Mobile app build target ready\""
   },
   "dependencies": {
+    "@kishannareshpal/expo-pdf": "^0.3.2",
     "@reachinternational/design-tokens": "workspace:*",
     "@reachinternational/permissions": "workspace:*",
     "@reachinternational/types": "workspace:*",
@@ -69,6 +70,7 @@
     "expo-updates": "~57.0.26",
     "lucide-react-native": "^1.52.0",
     "nativewind": "^4.2.7",
+    "pdfjs-dist": "^6.4.299",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-css-interop": "0.2.7",

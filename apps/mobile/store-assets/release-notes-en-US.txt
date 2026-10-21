@@ -1,6 +1,6 @@
 What's New in v1.3.0:
-• Performance: Instant launch experience with redesigned splash screen and 60fps GPU animations.
-• Operations: Eradicated shift list freezes with fast keyset pagination and real-time shift monitoring.
-• User Directory: Instant directory KPIs, targeted fleet assignment views, and infinite scrolling.
-• Attendance: Fast month-by-month navigation, monthly work hour summaries, and interactive filters.
-• Navigation: Re-engineered tabs with high contrast and instant tactile haptics.
+• Native PDF & Document Viewer: In-app continuous vertical scrolling, zoom, and instant download/share.
+• User Profile: Instant document uploads, optimistic deletion, and one-tap copy actions.
+• Dark Theme Polish: Fixed autofill backgrounds, high-contrast labels, and theme-aware loading skeletons.
+• Auth & Security: Live password strength meter, password match verification, and concise feedback.
+• Fleet & Users: Responsive segmented tabs, direct WhatsApp contact, and faster shift logging.

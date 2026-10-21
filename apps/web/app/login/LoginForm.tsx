@@ -42,11 +42,11 @@ export function LoginFormClient() {
 
   const resolvedUrlError = urlError
     ? urlError === "account_pending"
-      ? "Your account is pending administrator approval. Please wait for an administrator to approve your account."
+      ? "Account pending administrator approval."
       : urlError === "account_inactive"
-        ? "Your account has been deactivated. Contact your administrator."
+        ? "Account deactivated. Contact administrator."
         : urlError === "profile_not_found"
-          ? "User profile not found. Please log in again or contact your administrator."
+          ? "Profile not found. Contact administrator."
           : urlError
     : null;
 

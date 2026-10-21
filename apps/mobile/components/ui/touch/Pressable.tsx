@@ -238,6 +238,16 @@ export const Pressable = memo(
       pressFeedbackStyle,
     ];
 
+    const resolvedChildren =
+      typeof children === 'function' ? (children as any)({ pressed: isPressed }) : children;
+
+    const sanitizedChildren =
+      resolvedChildren === '' || resolvedChildren === false
+        ? null
+        : Array.isArray(resolvedChildren)
+        ? resolvedChildren.map((child) => (child === '' || child === false ? null : child))
+        : resolvedChildren;
+
     return (
       <PressProgressContext.Provider value={progress}>
         <AnimatedRNPressable
@@ -260,7 +270,7 @@ export const Pressable = memo(
           onLongPress={handleLongPress}
           style={finalStyle}
         >
-          {typeof children === 'function' ? (children as any)({ pressed: isPressed }) : children}
+          {sanitizedChildren}
         </AnimatedRNPressable>
       </PressProgressContext.Provider>
     );

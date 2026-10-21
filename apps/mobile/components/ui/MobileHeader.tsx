@@ -456,7 +456,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   {eyebrow}
                 </Text>
               ) : null}
-              {title && (
+              {Boolean(title) && (
                 <Text
                   variant="heading"
                   style={{ color: theme.colors.ink }}
@@ -787,6 +787,7 @@ const styles = StyleSheet.create({
   },
   subtitleText: {
     marginTop: 0,
+    opacity: 0.72,
   },
   eyebrowText: {
     textTransform: 'uppercase',

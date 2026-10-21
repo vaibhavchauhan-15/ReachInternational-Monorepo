@@ -3,14 +3,14 @@ import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linkin
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem, KPICard, KPIGrid, FilterToolbar, Text, useTypeStyle, AppModal, Switch, useToast, EmptyState, ErrorState, PermissionDeniedView, ConfirmDialog, Pagination, FilterSidebar, FilterCategoryCard, DropdownFilterSelector, type FilterOption } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Plus, X, CheckCircle2, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, RotateCcw } from '../../components/ui/icon';
+import { Search, Building2, MapPin, Phone, Plus, CheckCircle2, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle, Sparkles, AlertTriangle, RotateCcw } from '../../components/ui/icon';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard, ClientModal, ClientSiteModal, ClientDetailModal } from '../../components/clients';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
-import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate } from '@reachinternational/utils';
+import { CLIENT_SHIFT_PRESETS, DEFAULT_CLIENT_SHIFT_PRESET_ID, getClientShiftPresetById, formatDate, sanitizeDatabaseError } from '@reachinternational/utils';
 import { createTempId, reconcileRow, removeTempRow } from '../../lib/optimistic';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
@@ -586,7 +586,8 @@ export default function ClientsScreen() {
           if (error) throw error;
         } catch (err: any) {
           setClients(prevClients);
-          toast('error', 'Update Failed', err?.message || 'Failed to update client on server.');
+          const sanitized = sanitizeDatabaseError(err);
+          toast('error', 'Update Failed', sanitized.error || 'Failed to update client on server.');
         }
       })();
     } else {
@@ -670,7 +671,8 @@ export default function ClientsScreen() {
           }
         } catch (err: any) {
           setClients((current) => removeTempRow(current, tempId));
-          toast('error', 'Registration Failed', err?.message || 'Failed to save new client to server.');
+          const sanitized = sanitizeDatabaseError(err);
+          toast('error', 'Registration Failed', sanitized.error || 'Failed to save new client to server.');
         }
       })();
     }
@@ -748,7 +750,8 @@ export default function ClientsScreen() {
         }
       }
     } catch (err: any) {
-      toast('error', 'Error', err.message || 'Failed to create site.');
+      const sanitized = sanitizeDatabaseError(err);
+      toast('error', 'Site Creation Failed', sanitized.error || 'Failed to create site.');
     } finally {
       setIsSavingSite(false);
     }
@@ -776,7 +779,8 @@ export default function ClientsScreen() {
       if (error) {
         setClients(prevClients);
         haptics.reject();
-        toast('error', 'Error', error.message || 'Failed to soft delete client.');
+        const sanitized = sanitizeDatabaseError(error);
+        toast('error', 'Archive Failed', sanitized.error || 'Failed to archive client.');
       } else {
         haptics.confirm();
         toast('success', 'Client Archived', `"${client.company_name}" has been soft deleted.`);
@@ -785,7 +789,8 @@ export default function ClientsScreen() {
     } catch (err: any) {
       setClients(prevClients);
       haptics.reject();
-      toast('error', 'Error', err?.message || 'Failed to soft delete client.');
+      const sanitized = sanitizeDatabaseError(err);
+      toast('error', 'Archive Failed', sanitized.error || 'Failed to archive client.');
     } finally {
       setIsDeletingClient(false);
     }
@@ -1076,69 +1081,47 @@ export default function ClientsScreen() {
           {/* Active Filter Chips Row */}
           {activeFilterCount > 0 && (
             <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-              <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
                 Active Filters:
               </Text>
 
               {debouncedSearch.trim() !== '' && (
-                <Pressable
-                  variant="chip"
-                  haptic="select"
-                  onPress={() => handleSearchChange('')}
-                  style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.badgeChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                    Search: "{debouncedSearch}"
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </Pressable>
+                <Badge
+                  variant="outline"
+                  size="md"
+                  label={`Search: "${debouncedSearch}"`}
+                  onRemove={() => handleSearchChange('')}
+                />
               )}
 
               {activeFilter !== 'all' && (
-                <Pressable
-                  variant="chip"
-                  haptic="select"
-                  onPress={() => handleFilterChange('all')}
-                  style={[
-                    styles.badgeChip,
-                    {
-                      backgroundColor:
-                        activeFilter === 'active'
-                          ? isDark ? '#064e3b26' : '#ecfdf5'
-                          : isDark ? '#78350f26' : '#fffbeb',
-                      borderColor: activeFilter === 'active' ? '#10b98133' : '#f59e0b33',
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeChipText,
-                      { color: activeFilter === 'active' ? '#059669' : '#d97706' },
-                    ]}
-                  >
-                    Status: {CLIENT_STATUS_FILTER_OPTIONS.find((s) => s.id === activeFilter)?.label || activeFilter}
-                  </Text>
-                  <X size={12} color={activeFilter === 'active' ? '#059669' : '#d97706'} />
-                </Pressable>
+                <Badge
+                  variant={activeFilter === 'active' ? 'success' : 'warning'}
+                  size="md"
+                  label={`Status: ${CLIENT_STATUS_FILTER_OPTIONS.find((s) => s.id === activeFilter)?.label || activeFilter}`}
+                  onRemove={() => handleFilterChange('all')}
+                />
               )}
 
               {sortBy !== 'company_name_asc' && (
-                <Pressable
-                  variant="chip"
-                  haptic="select"
-                  onPress={() => setSortBy('company_name_asc')}
-                  style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
-                    Sort: {CLIENT_SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </Pressable>
+                <Badge
+                  variant="outline"
+                  size="md"
+                  label={`Sort: ${CLIENT_SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}`}
+                  onRemove={() => setSortBy('company_name_asc')}
+                />
               )}
 
-              <Pressable variant="buttonGhost" hitSlopToMin48 onPress={handleResetAllFilters} style={styles.resetAllLink}>
+              <Pressable
+                variant="buttonGhost"
+                hitSlopToMin48
+                onPress={handleResetAllFilters}
+                style={styles.resetAllLink}
+                accessibilityRole="button"
+                accessibilityLabel="Reset all active filters"
+              >
                 <RotateCcw size={11} color={theme.colors.link} />
-                <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+                <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
                   Reset all
                 </Text>
               </Pressable>
@@ -1379,16 +1362,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1 },
   activeBadgesHeader: {
     marginRight: 2 },
-  badgeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1 },
-  badgeChipText: {
-    },
   resetAllLink: {
     flexDirection: 'row',
     alignItems: 'center',

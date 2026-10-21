@@ -1169,7 +1169,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             </Touchable>
           </View>
 
-          {targetOperatorName && (
+          {Boolean(targetOperatorName) && (
             <View
               style={{
                 marginHorizontal: spacingNumeric.sm,

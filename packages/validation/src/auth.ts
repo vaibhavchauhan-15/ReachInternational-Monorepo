@@ -125,10 +125,10 @@ export const LicenseFieldSchema = z
   });
 
 export const SignupSchema = z.object({
-  full_name: z.string().trim().min(2, "Enter your full name.").max(100, "Full name cannot exceed 100 characters"),
-  email: z.string().trim().email("Enter a valid email address.").max(255, "Email address cannot exceed 255 characters"),
+  full_name: z.string().trim().min(2, "Full name required (min 2 chars)").max(100, "Full name cannot exceed 100 characters"),
+  email: z.string().trim().email("Valid email required").max(255, "Email address cannot exceed 255 characters"),
   password: z.string().min(8, "Password must be at least 8 characters").max(128, "Password cannot exceed 128 characters"),
-  phone: z.string().trim().min(10, "Enter a valid mobile number.").max(15, "Mobile number cannot exceed 15 digits"),
+  phone: z.string().trim().min(10, "10-digit mobile number required").max(15, "Mobile number cannot exceed 15 digits"),
   role: z.string().trim().min(1, "Select a role.").max(50, "Role string cannot exceed 50 characters"),
   street: z.string().trim().max(255, "Street address cannot exceed 255 characters").optional().nullable(),
   address: z.string().trim().max(255, "Address cannot exceed 255 characters").optional().nullable(),
@@ -158,7 +158,7 @@ export const SignupSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["supervisor_id"],
-      message: "Select a supervisor.",
+      message: "Supervisor required",
     });
   }
   if (data.shift_start_time && data.shift_end_time) {
@@ -171,8 +171,8 @@ export const SignupSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["shift_end_time"],
         message: timing.errorMessage === "Start time and end time cannot be identical."
-          ? "End time must be after start time."
-          : timing.errorMessage || "End time must be after start time.",
+          ? "End time must be after start time"
+          : timing.errorMessage || "End time must be after start time",
       });
     }
   }
@@ -209,29 +209,29 @@ export function validateSignupFormData(fields: SignupValidationFields): {
 
   const cleanName = fields.fullName.trim();
   if (!cleanName || cleanName.length < 2) {
-    errors.full_name = "Enter your full name.";
+    errors.full_name = "Full name required (min 2 chars)";
   }
 
   const cleanEmail = fields.email.trim().toLowerCase();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-    errors.email = "Enter a valid email address.";
+    errors.email = "Valid email required";
   }
 
   const cleanPhone = fields.phone.replace(/\D/g, "");
   if (cleanPhone.length < 10) {
-    errors.phone = "Enter a valid mobile number.";
+    errors.phone = "10-digit mobile number required";
   }
 
   if (fields.role === "operator" && (!fields.supervisorId || !fields.supervisorId.trim())) {
-    errors.supervisor_id = "Select a supervisor.";
+    errors.supervisor_id = "Supervisor required";
   }
 
   if (!fields.shiftStartTime?.trim()) {
-    errors.shift_start_time = "Select shift start time.";
+    errors.shift_start_time = "Start time required";
   }
   if (!fields.shiftEndTime?.trim()) {
-    errors.shift_end_time = "Select shift end time.";
+    errors.shift_end_time = "End time required";
   }
 
   if (fields.shiftStartTime?.trim() && fields.shiftEndTime?.trim()) {
@@ -241,88 +241,88 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     });
     if (!shiftTiming.isValid) {
       const msg = shiftTiming.errorMessage === "Start time and end time cannot be identical."
-        ? "End time must be after start time."
-        : shiftTiming.errorMessage || "End time must be after start time.";
+        ? "End time must be after start time"
+        : shiftTiming.errorMessage || "End time must be after start time";
       errors.shift_end_time = msg;
       errors.shift_time = msg;
     }
   }
 
   if (!fields.street?.trim() || fields.street.trim().length < 2) {
-    errors.street = "Street address is required.";
+    errors.street = "Street address required";
   }
   if (!fields.city?.trim() || fields.city.trim().length < 2) {
-    errors.city = "City is required.";
+    errors.city = "City required";
   }
   if (!fields.district?.trim() || fields.district.trim().length < 2) {
-    errors.district = "District is required.";
+    errors.district = "District required";
   }
   if (!fields.state?.trim()) {
-    errors.state = "State is required.";
+    errors.state = "State required";
   }
 
   const cleanBankAcc = fields.bankAccountNumber.replace(/\D/g, "");
   if (!cleanBankAcc || cleanBankAcc.length < 9 || cleanBankAcc.length > 18) {
-    errors.bank_account_number = "Enter a valid bank account number (9 to 18 digits).";
+    errors.bank_account_number = "Account number required (9-18 digits)";
   } else {
     const bankRes = validateBankAccountNumber(cleanBankAcc);
     if (!bankRes.isValid) {
-      errors.bank_account_number = bankRes.error || "Enter a valid bank account number (9 to 18 digits).";
+      errors.bank_account_number = bankRes.error || "Account number required (9-18 digits)";
     }
   }
 
   const cleanIfsc = fields.bankIfscCode.trim().toUpperCase();
   if (!cleanIfsc || cleanIfsc.length !== 11) {
-    errors.bank_ifsc_code = "Enter a valid 11-character IFSC code (e.g. SBIN0001234).";
+    errors.bank_ifsc_code = "11-character IFSC required";
   } else {
     const ifscRes = validateIfscCode(cleanIfsc);
     if (!ifscRes.isValid) {
-      errors.bank_ifsc_code = ifscRes.error || "Enter a valid 11-character IFSC code (e.g. SBIN0001234).";
+      errors.bank_ifsc_code = ifscRes.error || "11-character IFSC required";
     }
   }
 
   if (!fields.hasBankDoc) {
-    errors.bank_doc = "Upload your bank account document.";
+    errors.bank_doc = "Bank document required";
   }
 
   const cleanAadhaar = fields.aadhaarNumber.replace(/\D/g, "");
   if (cleanAadhaar.length !== 12) {
-    errors.aadhaar_number = "Enter a valid 12-digit Aadhaar number.";
+    errors.aadhaar_number = "12-digit Aadhaar required";
   } else {
     const aadhaarRes = validateAadhaarNumber(cleanAadhaar);
     if (!aadhaarRes.isValid) {
-      errors.aadhaar_number = aadhaarRes.error || "Enter a valid 12-digit Aadhaar number.";
+      errors.aadhaar_number = aadhaarRes.error || "12-digit Aadhaar required";
     }
   }
 
   if (!fields.hasAadhaarDoc) {
-    errors.aadhaar_doc = "Upload your Aadhaar document.";
+    errors.aadhaar_doc = "Aadhaar document required";
   }
 
   if (fields.licenseNumber && fields.licenseNumber.trim()) {
     const licRes = validateLicenseNumber(fields.licenseNumber.trim());
     if (!licRes.isValid) {
-      errors.license_number = licRes.error || "Invalid driving licence format.";
+      errors.license_number = licRes.error || "Invalid licence format";
     }
   }
 
   if (!fields.password || fields.password.length < 8) {
-    errors.password = "Password must be at least 8 characters long.";
+    errors.password = "Min 8 characters required";
   } else {
     const hasUpper = /[A-Z]/.test(fields.password);
     const hasLower = /[a-z]/.test(fields.password);
     const hasNum = /\d/.test(fields.password);
     if (!hasUpper || !hasLower || !hasNum) {
-      errors.password = "Password must include uppercase, lowercase, and a number.";
+      errors.password = "Must include upper, lower & number";
     }
   }
 
   if (fields.password !== fields.confirmPassword) {
-    errors.confirm_password = "Passwords do not match.";
+    errors.confirm_password = "Passwords do not match";
   }
 
   if (!fields.agreedToTerms) {
-    errors.terms = "You must agree to the Terms of Service and Privacy Policy.";
+    errors.terms = "Please agree to terms to continue";
   }
 
   return {

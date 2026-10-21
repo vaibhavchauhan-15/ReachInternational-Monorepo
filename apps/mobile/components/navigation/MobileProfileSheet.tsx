@@ -620,7 +620,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
               Enter a new secure password (minimum 6 characters) for your account.
             </Text>
 
-            {passwordError && (
+            {Boolean(passwordError) && (
               <View style={styles.errorBanner}>
                 <Text variant="caption" style={styles.errorText}>{passwordError}</Text>
               </View>

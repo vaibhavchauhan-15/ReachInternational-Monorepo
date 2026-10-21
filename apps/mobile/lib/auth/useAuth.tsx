@@ -298,7 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
-      return { success: false, error: 'Email and password are required' };
+      return { success: false, error: 'Email and password are required.' };
     }
 
     isSigningInRef.current = true;
@@ -308,7 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 15-second timeout protection with explicit cleanup
       const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) => {
         timeoutTimer = setTimeout(() => {
-          reject(new Error('Connection timed out. Please check your internet connection.'));
+          reject(new Error('Connection timed out. Check your connection.'));
         }, 15000);
       });
 
@@ -330,7 +330,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!data?.session || !data.user) {
-        return { success: false, error: 'Unable to establish session. Please try again.' };
+        return { success: false, error: 'Unable to start session. Please try again.' };
       }
 
       // Cryptographic identity established; set session

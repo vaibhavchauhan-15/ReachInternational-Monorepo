@@ -396,6 +396,14 @@ function _sanitizeDatabaseErrorRaw(
 
   // 3. Foreign Key Violations (23503)
   if (code === "23503" || combined.includes("foreign key constraint") || combined.includes("is not present in table")) {
+    if (combined.includes("machines_site_fk") || combined.includes("mhl_site_fk")) {
+      return {
+        error: "The selected deployment site is not associated with this client. Please select a valid site.",
+        fieldErrors: { site_id: "Selected site does not belong to the assigned client." },
+        code: "23503",
+        statusCode: 400,
+      };
+    }
     if (combined.includes("machines") || combined.includes("machine_id")) {
       return {
         error: "Cannot complete operation: Active shift logs or assignments are attached to this machine.",
@@ -426,6 +434,22 @@ function _sanitizeDatabaseErrorRaw(
 
   // 4. Check Constraint Violations (23514)
   if (code === "23514" || combined.includes("violates check constraint")) {
+    if (combined.includes("machines_site_needs_client") || combined.includes("site_needs_client")) {
+      return {
+        error: "A client must be assigned before designating a deployment site. Please assign a client or clear the site.",
+        fieldErrors: { client_id: "Client is required when a deployment site is specified.", site_id: "Site requires a client." },
+        code: "23514",
+        statusCode: 400,
+      };
+    }
+    if (combined.includes("check_machines_serial_number_not_empty") || combined.includes("serial_number_not_empty")) {
+      return {
+        error: "Serial number is mandatory and cannot be empty.",
+        fieldErrors: { serial_number: "Serial number is required." },
+        code: "23514",
+        statusCode: 400,
+      };
+    }
     if (combined.includes("meter_range") || combined.includes("cannot be less than start meter")) {
       return {
         error: "Ending hour meter reading cannot be less than starting hour meter reading.",

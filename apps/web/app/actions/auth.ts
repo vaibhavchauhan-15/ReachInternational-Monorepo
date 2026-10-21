@@ -23,7 +23,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
   const password = (formData.get("password") as string) || "";
 
   const fieldErrors: Record<string, string> = {};
-  if (!email) fieldErrors.email = "Email address is required.";
+  if (!email) fieldErrors.email = "Email is required.";
   if (!password) fieldErrors.password = "Password is required.";
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -45,15 +45,15 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     // Distinguish between unconfirmed email, server errors, and invalid credentials
     if (error.message.toLowerCase().includes("email not confirmed")) {
       return {
-        error: "Your email is not confirmed yet. Please wait for an administrator to approve your account.",
-        fieldErrors: { email: "Email pending administrator confirmation." },
+        error: "Account pending administrator approval.",
+        fieldErrors: { email: "Pending administrator approval." },
         fieldValues: { email },
       };
     }
 
     if (error.status && error.status >= 500) {
       return {
-        error: "Authentication service encountered a server error. Please try again shortly.",
+        error: "Service unavailable. Try again shortly.",
         fieldValues: { email },
       };
     }
@@ -75,8 +75,8 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
   if (!profile) {
     await supabase.auth.signOut();
     return {
-      error: "User profile not found. Contact your administrator.",
-      fieldErrors: { email: "User profile not found." },
+      error: "Profile not found. Contact administrator.",
+      fieldErrors: { email: "Profile not found." },
       fieldValues: { email },
     };
   }
@@ -84,7 +84,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
   if (profile.status === "inactive") {
     await supabase.auth.signOut();
     return {
-      error: "Your account has been deactivated. Contact your administrator.",
+      error: "Account deactivated. Contact administrator.",
       fieldErrors: { email: "Account is deactivated." },
       fieldValues: { email },
     };
@@ -93,8 +93,8 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
   if (profile.status === "pending") {
     await supabase.auth.signOut();
     return {
-      error: "Your account is pending approval. Please wait for an administrator to approve your account.",
-      fieldErrors: { email: "Account pending admin approval." },
+      error: "Account pending administrator approval.",
+      fieldErrors: { email: "Pending administrator approval." },
       fieldValues: { email },
     };
   }
@@ -182,7 +182,7 @@ export async function forgotPassword(
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(emailLower)) {
     return {
-      error: "Please enter a valid email address.",
+      error: "Enter a valid email address.",
       fieldErrors: { email: "Please enter a valid email address." },
       fieldValues: { email },
     };
@@ -404,7 +404,7 @@ export async function signup(
   }
 
   if (!email) {
-    fieldErrors.email = "Email address is required.";
+    fieldErrors.email = "Email is required.";
   } else if (email.length > 255) {
     fieldErrors.email = "Email address cannot exceed 255 characters.";
   }
@@ -415,8 +415,8 @@ export async function signup(
     fieldErrors.phone = "Mobile number cannot exceed 15 digits.";
   }
 
-  if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Shift start time is required.";
-  if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "Shift end time is required.";
+  if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Start time is required.";
+  if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "End time is required.";
 
   // Admin client for supervisor and duplicate checks
   const adminSupabase = createSupabaseAdminClient();
@@ -424,7 +424,7 @@ export async function signup(
   let safeSupervisorId: string | null = null;
   if (isSupervisedRole(role)) {
     if (!supervisorIdRaw) {
-      fieldErrors.supervisor_id = "Please select your supervisor.";
+      fieldErrors.supervisor_id = "Supervisor is required.";
     } else {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(supervisorIdRaw)) {
@@ -453,7 +453,7 @@ export async function signup(
   }
 
   if (!address) {
-    fieldErrors.address = "Street / site base address is required.";
+    fieldErrors.address = "Street address is required.";
   } else if (address.length < 2 || address.length > 255) {
     fieldErrors.address = "Address must be between 2 and 255 characters.";
   }
@@ -482,7 +482,7 @@ export async function signup(
   } else {
     const bankRes = validateBankAccountNumber(bankAccountNumber);
     if (!bankRes.isValid) {
-      fieldErrors.bank_account_number = bankRes.error || "Please enter a valid bank account number (9 to 18 digits).";
+      fieldErrors.bank_account_number = bankRes.error || "Valid bank account required (9-18 digits).";
     }
   }
 
@@ -491,22 +491,22 @@ export async function signup(
   } else {
     const ifscRes = validateIfscCode(bankIfscCode);
     if (!ifscRes.isValid) {
-      fieldErrors.bank_ifsc_code = ifscRes.error || "Please enter a valid 11-character IFSC code (e.g. SBIN0001234).";
+      fieldErrors.bank_ifsc_code = ifscRes.error || "Valid 11-character IFSC code required.";
     }
   }
 
   // File Upload Security & MIME Whitelisting
   const bankFileRaw = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
-  const bankValidation = validateDocumentUpload(bankFileRaw, true, "Bank document (Passbook front page, cancelled cheque, or statement)");
+  const bankValidation = validateDocumentUpload(bankFileRaw, true, "Bank document");
   if (bankValidation.error) {
     fieldErrors.bank_document_file = bankValidation.error;
   }
 
   if (!aadhaarNumber) {
-    fieldErrors.aadhaar_number = "Aadhaar card number is required.";
+    fieldErrors.aadhaar_number = "Aadhaar number is required.";
   }
   const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
-  const aadhaarValidation = validateDocumentUpload(aadhaarFileRaw, true, "Aadhaar document (Photo / PDF)");
+  const aadhaarValidation = validateDocumentUpload(aadhaarFileRaw, true, "Aadhaar document");
   if (aadhaarValidation.error) {
     fieldErrors.aadhaar_file = aadhaarValidation.error;
   }
@@ -522,7 +522,7 @@ export async function signup(
 
   if (Object.keys(fieldErrors).length > 0) {
     return {
-      error: "Please fill in all required fields.",
+      error: "Please complete all required fields.",
       fieldErrors,
       fieldValues,
     };
@@ -553,9 +553,9 @@ export async function signup(
   // SECURITY (F08): Enforce minimum 8-character passwords with complexity requirements
   if (password.length < 8) {
     return {
-      error: "Password must be at least 8 characters long.",
+      error: "Must be at least 8 characters.",
       fieldErrors: {
-        password: "Password must be at least 8 characters long.",
+        password: "Must be at least 8 characters.",
       },
       fieldValues,
     };
@@ -567,9 +567,9 @@ export async function signup(
   const hasDigit = /\d/.test(password);
   if (!hasUppercase || !hasLowercase || !hasDigit) {
     return {
-      error: "Password must contain at least one uppercase letter, one lowercase letter, and one number.",
+      error: "Must include uppercase, lowercase, and a number.",
       fieldErrors: {
-        password: "Password must include uppercase, lowercase, and a number.",
+        password: "Must include uppercase, lowercase, and a number.",
       },
       fieldValues,
     };
@@ -583,9 +583,9 @@ export async function signup(
 
   if (!is10DigitMobile) {
     return {
-      error: "Please enter a valid 10-digit mobile number.",
+      error: "Valid 10-digit mobile number required.",
       fieldErrors: {
-        phone: "Please enter a valid 10-digit mobile number.",
+        phone: "Valid 10-digit mobile number required.",
       },
       fieldValues,
     };
@@ -595,9 +595,9 @@ export async function signup(
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(emailLower)) {
     return {
-      error: "Please enter a valid email address.",
+      error: "Enter a valid email address.",
       fieldErrors: {
-        email: "Please enter a valid email address.",
+        email: "Enter a valid email address.",
       },
       fieldValues,
     };
@@ -612,9 +612,9 @@ export async function signup(
 
   if (existingEmailUser) {
     return {
-      error: "A user account with this email address already exists.",
+      error: "Email already registered.",
       fieldErrors: {
-        email: "A user account with this email address already exists.",
+        email: "Email already registered.",
       },
       fieldValues,
     };
@@ -639,9 +639,9 @@ export async function signup(
 
     if (hasDuplicatePhone) {
       return {
-        error: "A user account with this mobile number already exists.",
+        error: "Mobile number already registered.",
         fieldErrors: {
-          phone: "A user account with this mobile number already exists.",
+          phone: "Mobile number already registered.",
         },
         fieldValues,
       };
@@ -654,9 +654,9 @@ export async function signup(
     const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
     if (!aadhaarResult.isValid) {
       return {
-        error: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number.",
+        error: aadhaarResult.error || "Valid 12-digit Aadhaar required.",
         fieldErrors: {
-          aadhaar_number: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number.",
+          aadhaar_number: aadhaarResult.error || "Valid 12-digit Aadhaar required.",
         },
         fieldValues,
       };
@@ -672,9 +672,9 @@ export async function signup(
 
       if (existingAadhaar) {
         return {
-          error: "A user account with this Aadhaar number already exists.",
+          error: "Aadhaar number already registered.",
           fieldErrors: {
-            aadhaar_number: "A user account with this Aadhaar number already exists.",
+            aadhaar_number: "Aadhaar number already registered.",
           },
           fieldValues,
         };
@@ -688,9 +688,9 @@ export async function signup(
     const licResult = validateLicenseNumber(licenseNumber);
     if (!licResult.isValid) {
       return {
-        error: licResult.error || "Please enter a valid driving licence number.",
+        error: licResult.error || "Invalid licence format.",
         fieldErrors: {
-          license_number: licResult.error || "Please enter a valid driving licence number.",
+          license_number: licResult.error || "Invalid licence format.",
         },
         fieldValues,
       };
@@ -705,9 +705,9 @@ export async function signup(
 
     if (existingLic) {
       return {
-        error: "A user account with this driving licence number already exists.",
+        error: "Licence number already registered.",
         fieldErrors: {
-          license_number: "A user account with this driving licence number already exists.",
+          license_number: "Licence number already registered.",
         },
         fieldValues,
       };
@@ -773,9 +773,9 @@ export async function signup(
     }
     if (message.includes("invalid") && (message.includes("email") || message.includes("address"))) {
       return {
-        error: "Please enter a valid email address.",
+        error: "Enter a valid email address.",
         fieldErrors: {
-          email: "Please enter a valid email address.",
+          email: "Enter a valid email address.",
         },
         fieldValues,
       };
@@ -1099,7 +1099,7 @@ export async function resetPasswordAction(params: {
     if (!hasUppercase || !hasLowercase || !hasDigit) {
       return {
         success: false,
-        error: "Password must contain at least one uppercase letter, one lowercase letter, and one number.",
+        error: "Must include uppercase, lowercase, and a number.",
       };
     }
 

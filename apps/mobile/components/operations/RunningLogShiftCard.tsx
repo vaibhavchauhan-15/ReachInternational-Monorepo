@@ -1,5 +1,12 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+  Easing,
+} from 'react-native-reanimated';
 import { Text, HighlightText, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -9,6 +16,7 @@ import {
   AlertTriangle,
   Clock,
   ShieldAlert,
+  ChevronDown,
 } from '../ui/icon';
 import type { HourLogRecord } from '../../lib/hooks/useOperationsData';
 
@@ -38,6 +46,26 @@ export function formatExcelDate(dateStr?: string | null): string {
     }
   } catch {}
   return String(dateStr);
+}
+
+export function formatEntryTimestamp(timestampStr?: string | null): string | null {
+  if (!timestampStr) return null;
+  try {
+    const d = new Date(timestampStr);
+    if (isNaN(d.getTime())) return null;
+    const day = d.getDate() < 10 ? `0${d.getDate()}` : `${d.getDate()}`;
+    const mon = MONTH_ABBR[d.getMonth()] || '';
+    const yearStr = String(d.getFullYear()).slice(-2);
+    let hours = d.getHours();
+    const minutes = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const hoursStr = hours < 10 ? `0${hours}` : `${hours}`;
+    return `${day}-${mon}-${yearStr} ${hoursStr}:${minutes} ${ampm}`;
+  } catch {
+    return null;
+  }
 }
 
 export function resolveShiftCode(log: HourLogRecord): string {
@@ -99,7 +127,31 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
   const { theme, isDark } = useTheme();
   const [isRemarksOpen, setIsRemarksOpen] = useState(false);
 
+  const remarksProgress = useSharedValue(isRemarksOpen ? 1 : 0);
+
+  useEffect(() => {
+    remarksProgress.value = withTiming(isRemarksOpen ? 1 : 0, {
+      duration: 220,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    });
+  }, [isRemarksOpen, remarksProgress]);
+
+  const remarksChevronAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${remarksProgress.value * 180}deg` }],
+    };
+  });
+
+  const remarksAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: remarksProgress.value,
+      maxHeight: interpolate(remarksProgress.value, [0, 1], [0, 220]),
+      overflow: 'hidden' as const,
+    };
+  });
+
   const formattedDate = useMemo(() => formatExcelDate(log.log_date), [log.log_date]);
+  const entryTimestamp = useMemo(() => formatEntryTimestamp(log.created_at), [log.created_at]);
   const shiftCode = useMemo(() => resolveShiftCode(log), [log]);
   const runningHoursFormatted = useMemo(() => formatHoursWithUnit(log.running_hours), [log.running_hours]);
   const workingHoursFormatted = useMemo(() => formatHoursWithUnit(calculateWorkingHours(log)), [log]);
@@ -114,7 +166,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
   // Secondary text shown on the top-right of the card:
   // - Client view: Machine Model
   // - Machine view: Client Company Name
-  // - Operator view: Machine Model or Client Name
+  // - Operator view: Machine Model
   const secondaryTitle = useMemo(() => {
     if (logsViewMode === 'client') {
       return log.machine?.model || log.machine_code || 'Equipment';
@@ -122,12 +174,23 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
     if (logsViewMode === 'machine') {
       return log.client?.company_name || log.client?.name || log.location || 'Client';
     }
-    return log.machine?.model || log.client?.company_name || 'Equipment';
+    return log.machine?.model || log.machine_code || 'Equipment';
   }, [logsViewMode, log]);
 
-  const operatorName = useMemo(() => {
+  // Secondary entity displayed in metadata row:
+  // - In operator view, show Client so operator sees which client they worked for
+  // - In client and machine view, show Operator who operated the machine
+  const secondaryEntityLabel = useMemo(() => {
+    if (logsViewMode === 'operator') return 'Client: ';
+    return 'Operator: ';
+  }, [logsViewMode]);
+
+  const secondaryEntityValue = useMemo(() => {
+    if (logsViewMode === 'operator') {
+      return log.client?.company_name || log.client?.name || log.location || 'Client Site';
+    }
     return log.operator?.full_name || 'Unassigned Operator';
-  }, [log.operator]);
+  }, [logsViewMode, log]);
 
   const hasConflict = Boolean(log.conflict_flag && log.conflict_status !== 'resolved');
   const hasRemarks = Boolean(log.remarks && log.remarks.trim());
@@ -200,7 +263,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
         </View>
       </View>
 
-      {/* Row 2: Shift & Operator */}
+      {/* Row 2: Shift & Secondary Entity (Operator or Client) */}
       <View style={styles.metadataRow}>
         <View style={styles.shiftTagWrapper}>
           <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -213,16 +276,26 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
 
         <View style={styles.operatorWrapper}>
           <Text variant="caption" style={{ color: theme.colors.mute }}>
-            Operator:{' '}
+            {secondaryEntityLabel}
           </Text>
           <HighlightText
-            text={operatorName}
+            text={secondaryEntityValue}
             query={searchTerm}
             style={[{ color: theme.colors.ink }]}
             numberOfLines={1}
           />
         </View>
       </View>
+
+      {/* Shift Entry Timestamp */}
+      {Boolean(entryTimestamp) && (
+        <View style={styles.timestampRow}>
+          <Clock size={11} color={theme.colors.mute} />
+          <Text variant="micro" style={{ color: theme.colors.mute }}>
+            Entered: {entryTimestamp}
+          </Text>
+        </View>
+      )}
 
       {/* Row 3: 3 Metric Stat Boxes (M/C RT, WH, B/D) */}
       <View style={[styles.metricsGrid, { borderTopColor: theme.colors.hairline }]}>
@@ -295,6 +368,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
             haptic="select"
             onPress={handleToggleRemarks}
             style={styles.remarksToggleBtn}
+            accessibilityLabel={isRemarksOpen ? 'Hide remarks details' : 'View remarks details'}
           >
             <MessageSquare size={12} color={theme.colors.link} />
             <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
@@ -304,9 +378,12 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                 ? 'View Remarks & Stoppage'
                 : 'View Remark'}
             </Text>
+            <Animated.View style={remarksChevronAnimatedStyle}>
+              <ChevronDown size={11} color={theme.colors.link} />
+            </Animated.View>
           </Pressable>
 
-          {isRemarksOpen && (
+          <Animated.View style={[styles.collapsibleWrapper, remarksAnimatedStyle]}>
             <View style={styles.expandedDetailsContainer}>
               {hasRemarks && (
                 <View
@@ -346,7 +423,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                     </Text>
                   </View>
 
-                  {(log.breakdown_start_time || log.breakdown_end_time) && (
+                  {Boolean(log.breakdown_start_time || log.breakdown_end_time) && (
                     <View style={styles.stoppageTimingRow}>
                       <Clock size={11} color={theme.colors.link} />
                       <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -357,7 +434,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                 </View>
               )}
             </View>
-          )}
+          </Animated.View>
         </View>
       )}
     </View>
@@ -370,6 +447,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacingNumeric.md,
     marginBottom: spacingNumeric.sm,
+    overflow: 'hidden',
+  },
+  collapsibleWrapper: {
     overflow: 'hidden',
   },
   conflictCardHighlight: {
@@ -424,6 +504,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 1,
     maxWidth: '75%',
+  },
+  timestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 2,
+    paddingBottom: spacingNumeric.xs,
   },
   metricsGrid: {
     flexDirection: 'row',

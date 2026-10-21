@@ -13,7 +13,7 @@ import { Input } from '../ui/Input';
 import { Text, useTypeStyle } from '../ui/Text';
 import { AppModal } from '../ui/AppModal';
 import { Touchable } from '../ui/Touchable';
-import { showToast, ConfirmDialog, EmptyState } from '../ui';
+import { showToast, ConfirmDialog, EmptyState, Skeleton } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
@@ -253,9 +253,27 @@ export const MachineCategoryModal: React.FC<MachineCategoryModalProps> = ({
 
           {/* Categories List */}
           {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.link} />
-              <Text variant="caption" style={{ color: theme.colors.mute }}>Loading categories...</Text>
+            <View style={{ gap: 12, paddingVertical: 8 }}>
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <View
+                  key={`cat-skel-${idx}`}
+                  style={[
+                    styles.categoryItem,
+                    {
+                      borderBottomColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <View style={styles.catLeft}>
+                    <Skeleton width={32} height={32} borderRadius={radiusNumeric.full} />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Skeleton width={idx === 0 ? 120 : 90} height={15} borderRadius={radiusNumeric.xs} />
+                      <Skeleton width={idx === 0 ? 180 : 140} height={11} borderRadius={radiusNumeric.xs} />
+                    </View>
+                  </View>
+                  <Skeleton width={28} height={28} borderRadius={radiusNumeric.xs} />
+                </View>
+              ))}
             </View>
           ) : categories.length === 0 ? (
             <EmptyState

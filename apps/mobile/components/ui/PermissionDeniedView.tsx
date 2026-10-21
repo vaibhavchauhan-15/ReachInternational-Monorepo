@@ -120,7 +120,7 @@ export const PermissionDeniedView: React.FC<PermissionDeniedViewProps> = ({
         </Text>
 
         {/* Role Diagnostic Metadata */}
-        {(formattedCurrentRole || formattedRequiredRoles) && (
+        {Boolean(formattedCurrentRole || formattedRequiredRoles) && (
           <View
             style={[
               styles.metaBox,
@@ -130,7 +130,7 @@ export const PermissionDeniedView: React.FC<PermissionDeniedViewProps> = ({
               },
             ]}
           >
-            {formattedCurrentRole && (
+            {Boolean(formattedCurrentRole) && (
               <View style={styles.metaRow}>
                 <Text variant="micro" style={[styles.metaLabel, { color: theme.colors.mute }]}>
                   YOUR ROLE:
@@ -151,7 +151,7 @@ export const PermissionDeniedView: React.FC<PermissionDeniedViewProps> = ({
               </View>
             )}
 
-            {formattedRequiredRoles && (
+            {Boolean(formattedRequiredRoles) && (
               <View style={[styles.metaRow, { marginTop: 6 }]}>
                 <Text variant="micro" style={[styles.metaLabel, { color: theme.colors.mute }]}>
                   AUTHORIZED:

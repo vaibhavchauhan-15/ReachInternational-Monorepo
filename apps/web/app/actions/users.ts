@@ -26,7 +26,7 @@ export interface UserFormState {
  * Generates a human-friendly, secure temporary password formatted as:
  * `<UserFirstName>@<4DigitRandomNumber>` (e.g. "Vaibhav@2026", "Aman@8341")
  */
-function generateUserFormattedPassword(fullName?: string): string {
+export function generateUserFormattedPassword(fullName?: string): string {
   const rawFirst = (fullName || "").trim().split(/\s+/)[0] || "User";
   const cleaned = rawFirst.replace(/[^a-zA-Z0-9]/g, "");
   const firstName = cleaned

@@ -79,54 +79,98 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; color?:
   user: User,
 };
 
-// ─── Role Configuration (Matches Web Geist Color Scheme) ───────────
-const ROLE_CONFIG: Record<
-  string,
-  { label: string; bg: string; text: string; border: string; icon: React.ComponentType<{ size?: number; color?: string }> }
-> = {
-  super_admin: {
-    label: 'Super Admin',
-    bg: 'rgba(239, 68, 68, 0.1)',
-    text: '#ef4444',
-    border: 'rgba(239, 68, 68, 0.25)',
-    icon: ShieldAlert,
-  },
-  admin: {
-    label: 'Admin',
-    bg: 'rgba(245, 158, 11, 0.1)',
-    text: '#d97706',
-    border: 'rgba(245, 158, 11, 0.25)',
-    icon: ShieldCheck,
-  },
-  manager: {
-    label: 'Manager',
-    bg: 'rgba(99, 102, 241, 0.1)',
-    text: '#6366f1',
-    border: 'rgba(99, 102, 241, 0.25)',
-    icon: Shield,
-  },
-  supervisor: {
-    label: 'Supervisor',
-    bg: 'rgba(20, 184, 166, 0.1)',
-    text: '#0d9488',
-    border: 'rgba(20, 184, 166, 0.25)',
-    icon: Shield,
-  },
-  hr: {
-    label: 'HR',
-    bg: 'rgba(236, 72, 153, 0.1)',
-    text: '#db2777',
-    border: 'rgba(236, 72, 153, 0.25)',
-    icon: Shield,
-  },
-  operator: {
-    label: 'Operator',
-    bg: 'rgba(16, 185, 129, 0.1)',
-    text: '#059669',
-    border: 'rgba(16, 185, 129, 0.25)',
-    icon: Shield,
-  },
-};
+// ─── Theme-Aware 100% Solid Opacity Role Badge Config ──────────────
+function getRoleBadgeConfig(roleKey: string, isDark: boolean) {
+  const r = (roleKey || 'operator').toLowerCase();
+  switch (r) {
+    case 'super_admin':
+      return {
+        label: 'Super Admin',
+        bg: isDark ? '#450a0a' : '#fef2f2',
+        text: isDark ? '#fca5a5' : '#b91c1c',
+        border: isDark ? '#991b1b' : '#fecaca',
+        icon: ShieldAlert,
+      };
+    case 'admin':
+      return {
+        label: 'Admin',
+        bg: isDark ? '#422006' : '#fefce8',
+        text: isDark ? '#fef08a' : '#a16207',
+        border: isDark ? '#854d0e' : '#fde047',
+        icon: ShieldCheck,
+      };
+    case 'manager':
+      return {
+        label: 'Manager',
+        bg: isDark ? '#1e1b4b' : '#eef2ff',
+        text: isDark ? '#c7d2fe' : '#4338ca',
+        border: isDark ? '#4338ca' : '#c7d2fe',
+        icon: Shield,
+      };
+    case 'supervisor':
+      return {
+        label: 'Supervisor',
+        bg: isDark ? '#042f2e' : '#f0fdfa',
+        text: isDark ? '#99f6e4' : '#0f766e',
+        border: isDark ? '#0f766e' : '#99f6e4',
+        icon: Shield,
+      };
+    case 'hr':
+      return {
+        label: 'HR',
+        bg: isDark ? '#064e3b' : '#ecfdf5',
+        text: isDark ? '#a7f3d0' : '#047857',
+        border: isDark ? '#047857' : '#a7f3d0',
+        icon: Shield,
+      };
+    case 'operator':
+    default:
+      return {
+        label: (roleKey || 'Operator').replace('_', ' '),
+        bg: isDark ? '#451a03' : '#fffbeb',
+        text: isDark ? '#fde68a' : '#b45309',
+        border: isDark ? '#78350f' : '#fde68a',
+        icon: Shield,
+      };
+  }
+}
+
+// ─── Theme-Aware 100% Solid Opacity Status Badge Config ────────────
+function getStatusBadgeConfig(status: string, isDark: boolean) {
+  const s = (status || 'active').toLowerCase();
+  switch (s) {
+    case 'active':
+    case 'completed':
+    case 'verified':
+    case '100% complete':
+      return {
+        label: (status || 'ACTIVE').toUpperCase(),
+        bg: isDark ? '#064e3b' : '#ecfdf5',
+        border: isDark ? '#047857' : '#a7f3d0',
+        text: isDark ? '#a7f3d0' : '#065f46',
+        dot: isDark ? '#34d399' : '#10b981',
+      };
+    case 'pending':
+    case 'incomplete':
+    case 'warning':
+      return {
+        label: (status || 'PENDING').toUpperCase(),
+        bg: isDark ? '#451a03' : '#fffbeb',
+        border: isDark ? '#78350f' : '#fde68a',
+        text: isDark ? '#fde68a' : '#92400e',
+        dot: isDark ? '#fbbf24' : '#f59e0b',
+      };
+    case 'inactive':
+    default:
+      return {
+        label: (status || 'INACTIVE').toUpperCase(),
+        bg: isDark ? '#27272a' : '#f4f4f5',
+        border: isDark ? '#3f3f46' : '#d4d4d8',
+        text: isDark ? '#d4d4d8' : '#3f3f46',
+        dot: isDark ? '#a1a1aa' : '#71717a',
+      };
+  }
+}
 
 const DEFAULT_DOC_TYPES = [
   { code: 'aadhaar', label: 'Aadhaar Card' },
@@ -138,6 +182,9 @@ export interface ProfileScreenProps {
   onPressBack?: () => void;
   backRoute?: string;
 }
+
+// In-memory cache for static reference data to eliminate repeated queries across profile visits
+let cachedDocumentTypes: { code: string; label: string }[] | null = null;
 
 export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenProps = {}) {
   const { user, role, refreshSession, userProfile: authProfile } = useAuth();
@@ -246,11 +293,13 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
           .select('id, machine_id, machine_name, model, status')
           .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}},current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`)
           .order('machine_id'),
-        supabase
-          .from('user_document_types')
-          .select('code, label')
-          .not('code', 'in', '("profile_photo","bank_passbook")')
-          .order('code'),
+        cachedDocumentTypes
+          ? Promise.resolve({ data: cachedDocumentTypes, error: null })
+          : supabase
+              .from('user_document_types')
+              .select('code, label')
+              .not('code', 'in', '("profile_photo","bank_passbook")')
+              .order('code'),
       ]);
 
       if (userRes.data) {
@@ -263,6 +312,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
       setUserDocuments(docRes || []);
       setAssignedMachines(machineRes.data || []);
       if (docTypeRes.data && docTypeRes.data.length > 0) {
+        cachedDocumentTypes = docTypeRes.data;
         setDocumentTypes(docTypeRes.data);
       }
     } catch (err) {
@@ -281,19 +331,29 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
     setRefreshing(false);
   }, [fetchProfileData, refreshSession]);
 
-  // Copy helper with 2-second checkmark feedback
-  const handleCopy = async (text: string, label: string) => {
+  // Fully functional copy helper with Web + Native clipboard, haptics, toast, and checkmark feedback
+  const handleCopy = useCallback(async (text: string, label: string) => {
+    if (!text) return;
     try {
       haptics.select();
-      if (Clipboard && Clipboard.setStringAsync) {
+      let copied = false;
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } else if (Clipboard && Clipboard.setStringAsync) {
         await Clipboard.setStringAsync(text);
+        copied = true;
+      }
+      if (copied) {
+        haptics.confirm();
+        setCopiedField(label);
+        toast('success', 'Copied to Clipboard', `${label} copied.`);
+        setTimeout(() => setCopiedField(null), 2000);
       }
     } catch {
-      // Fallback
+      toast('error', 'Copy Failed', `Could not copy ${label.toLowerCase()} to clipboard.`);
     }
-    setCopiedField(label);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  }, [toast]);
 
   // Withdraw pending change request
   const handleCancelPendingRequest = () => {
@@ -352,7 +412,28 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
         haptics.confirm();
         toast('success', 'Document Uploaded', 'Document attached successfully.');
         setReplacingCode(null);
-        await fetchProfileData();
+        // Optimistically update document list immediately with newly signed URL
+        if (res.path) {
+          const optimisticDoc: UserDocumentInfo = {
+            id: `temp_${Date.now()}`,
+            user_id: user.id,
+            document_type_code: docTypeCode,
+            storage_path: res.path,
+            mime_type: picked.mimeType,
+            file_size_bytes: picked.size,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            signed_url: res.signedUrl || picked.uri,
+          };
+          setUserDocuments((prev) => [
+            ...prev.filter((d) => d.document_type_code !== docTypeCode),
+            optimisticDoc,
+          ]);
+        }
+        // Background refresh to guarantee canonical database state
+        void fetchUserDocuments(user.id).then((docs) => {
+          if (docs && docs.length > 0) setUserDocuments(docs);
+        }).catch(() => {});
       }
     } catch (err: any) {
       toast('error', 'Upload Error', sanitizeDatabaseError(err, 'Failed to select document.').message);
@@ -372,18 +453,28 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
     if (!user?.id || !docToDelete) return;
     const { doc, label } = docToDelete;
     setIsDeletingDoc(true);
+
+    // Optimistically remove from UI immediately so user sees the slot reset to upload dropzone
+    const previousDocs = userDocuments;
+    setUserDocuments((prev) => prev.filter((d) => d.document_type_code !== doc.document_type_code));
+    setReplacingCode((prev) => (prev === doc.document_type_code ? null : prev));
+
     try {
       const res = await deleteUserDocument(user.id, doc.document_type_code, doc.storage_path);
       if (!res.success) {
+        // Roll back optimistic update if deletion failed
+        setUserDocuments(previousDocs);
         haptics.reject();
         toast('error', 'Delete Failed', sanitizeDatabaseError(res.error, 'Could not delete document.').message);
       } else {
         haptics.confirm();
         toast('success', 'Document Removed', `${label} removed successfully.`);
         setDocToDelete(null);
-        await fetchProfileData();
+        // Background refresh to guarantee canonical database state without blocking UI
+        void fetchUserDocuments(user.id).then(setUserDocuments).catch(() => {});
       }
     } catch (err: any) {
+      setUserDocuments(previousDocs);
       haptics.reject();
       toast('error', 'Delete Error', sanitizeDatabaseError(err, 'Failed to remove document.').message);
     } finally {
@@ -404,16 +495,11 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
     return toProfileView(mergedUserData);
   }, [mergedUserData]);
 
-  // Role metadata
+  // Role & status metadata with 100% solid opacity
   const userRoleKey = mergedUserData.role || role || 'operator';
-  const roleMeta = ROLE_CONFIG[userRoleKey] || {
-    label: (userRoleKey || 'Operator').replace('_', ' '),
-    bg: 'rgba(150, 150, 150, 0.1)',
-    text: theme.colors.mute,
-    border: 'rgba(150, 150, 150, 0.2)',
-    icon: User,
-  };
-  const RoleIcon = roleMeta.icon;
+  const roleBadge = useMemo(() => getRoleBadgeConfig(userRoleKey, isDark), [userRoleKey, isDark]);
+  const RoleIcon = roleBadge.icon;
+  const statusBadge = useMemo(() => getStatusBadgeConfig(view.status || 'ACTIVE', isDark), [view.status, isDark]);
 
   // Clean raw aadhaar for eye toggle
   const rawAadhaar = mergedUserData.aadhaar_number;
@@ -440,10 +526,14 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
           .createSignedUrl(doc.storage_path, 3600);
         url = signedData?.signedUrl || null;
       }
+      if (!url) {
+        toast('warning', 'File Unavailable', `The file for ${label} could not be found in storage. Please upload or replace it.`);
+        return;
+      }
       setActiveViewerDoc({
         title: label,
-        url: url || undefined,
-        uri: url || undefined,
+        url: url,
+        uri: url,
         mimeType: doc.mime_type,
         fileSizeBytes: doc.file_size_bytes,
         fileName: doc.storage_path.split('/').pop(),
@@ -560,7 +650,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
               <View style={styles.userInfoRow}>
                 {/* 56x56 Initial Letter Avatar */}
                 <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                  <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                  <Text variant="title" weight="bold" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
                     {view.name ? view.name.charAt(0).toUpperCase() : 'U'}
                   </Text>
                 </View>
@@ -568,84 +658,113 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                 {/* Name, EMP ID, Email, Role & Status Pills */}
                 <View style={styles.userDetails}>
                   <View style={styles.userNameRow}>
-                    <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
+                    <Text variant="title" weight="bold" style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
                       {view.name}
                     </Text>
                     {Boolean(mergedUserData?.employee_id) && (
-                      <View
+                      <Pressable
+                        variant="ghost"
+                        hitSlopToMin48
                         style={[
                           styles.empBadge,
                           {
-                            backgroundColor: theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
+                            backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                            borderColor: isDark ? '#383838' : '#e4e4e7',
                           },
                         ]}
+                        onPress={() => handleCopy(mergedUserData.employee_id, 'Employee ID')}
+                        accessibilityLabel={`Copy Employee ID ${mergedUserData.employee_id}`}
                       >
-                        <Text style={[styles.empBadgeText, { color: theme.colors.mute }]}>
+                        <Text variant="micro" weight="semibold" style={{ color: theme.colors.ink }}>
                           {mergedUserData.employee_id}
                         </Text>
-                      </View>
+                        {copiedField === 'Employee ID' ? (
+                          <Check size={11} color="#10b981" />
+                        ) : (
+                          <Copy size={11} color={theme.colors.mute} />
+                        )}
+                      </Pressable>
                     )}
                   </View>
 
-                  <Text
-                    style={[styles.userEmail, { color: theme.colors.mute }]}
-                    numberOfLines={2}
-                    selectable
-                  >
-                    {view.email}
-                  </Text>
+                  <View style={styles.userEmailRow}>
+                    <Text
+                      variant="caption"
+                      style={[styles.userEmail, { color: theme.colors.mute }]}
+                      numberOfLines={1}
+                      selectable
+                    >
+                      {view.email}
+                    </Text>
+                    {Boolean(view.email) && (
+                      <Pressable
+                        variant="iconButton"
+                        hitSlopToMin48
+                        style={styles.headerCopyBtn}
+                        onPress={() => handleCopy(view.email, 'Email')}
+                        accessibilityLabel="Copy Email"
+                      >
+                        {copiedField === 'Email' ? (
+                          <Check size={12} color="#10b981" />
+                        ) : (
+                          <Copy size={12} color={theme.colors.mute} />
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
 
                   <View style={styles.badgesRow}>
+                    {/* Role Badge (100% Solid Opacity) */}
                     <View
                       style={[
                         styles.roleBadge,
                         {
-                          backgroundColor: roleMeta.bg,
-                          borderColor: roleMeta.border,
+                          backgroundColor: roleBadge.bg,
+                          borderColor: roleBadge.border,
                         },
                       ]}
                     >
-                      <RoleIcon size={12} color={roleMeta.text} />
-                      <Text style={[styles.roleBadgeText, { color: roleMeta.text }]}>
-                        {roleMeta.label}
+                      <RoleIcon size={12} color={roleBadge.text} />
+                      <Text variant="micro" weight="semibold" style={[styles.roleBadgeText, { color: roleBadge.text }]}>
+                        {roleBadge.label}
                       </Text>
                     </View>
 
+                    {/* Status Badge (100% Solid Opacity) */}
                     <View
                       style={[
                         styles.statusBadge,
                         {
-                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          borderColor: 'rgba(16, 185, 129, 0.25)',
+                          backgroundColor: statusBadge.bg,
+                          borderColor: statusBadge.border,
                         },
                       ]}
                     >
-                      <View style={styles.activeDot} />
-                      <Text style={[styles.statusBadgeText, { color: '#059669' }]}>
-                        {(view.status || 'ACTIVE').toUpperCase()}
+                      <View style={[styles.activeDot, { backgroundColor: statusBadge.dot }]} />
+                      <Text variant="micro" weight="semibold" style={[styles.statusBadgeText, { color: statusBadge.text }]}>
+                        {statusBadge.label}
                       </Text>
                     </View>
                   </View>
                 </View>
               </View>
 
-              {/* Edit Profile Button */}
+              {/* Edit Profile Button (100% Solid Opacity) */}
               <Pressable
                 variant="buttonSecondary"
                 hitSlopToMin48
                 style={[
                   styles.editProfileBtn,
                   {
-                    borderColor: theme.colors.hairline,
-                    backgroundColor: theme.colors.canvas,
+                    borderColor: isDark ? '#383838' : '#e4e4e7',
+                    backgroundColor: isDark ? '#262626' : '#ffffff',
                   },
                 ]}
                 onPress={() => router.push('/profile/edit' as any)}
                 accessibilityLabel="Edit Profile"
               >
-                <Edit size={14} color={theme.colors.link} />
-                <Text style={[styles.editProfileBtnText, { color: theme.colors.ink }]}>
+                <Edit size={14} color={isDark ? '#0ea5e9' : '#0284c7'} />
+                <Text variant="label" weight="semibold" style={[styles.editProfileBtnText, { color: isDark ? '#fafafa' : '#171717' }]}>
                   Edit Profile
                 </Text>
               </Pressable>
@@ -658,35 +777,39 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
               style={[
                 styles.pendingBanner,
                 {
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  borderColor: 'rgba(245, 158, 11, 0.35)',
+                  backgroundColor: isDark ? '#291804' : '#fffbeb',
+                  borderColor: isDark ? '#78350f' : '#fde68a',
                 },
               ]}
             >
               <View style={styles.pendingHeader}>
                 <View style={styles.pendingTitleGroup}>
-                  <AlertTriangle size={15} color="#d97706" />
-                  <Text style={styles.pendingTitle}>Pending Profile Review</Text>
+                  <AlertTriangle size={15} color={isDark ? '#fbbf24' : '#d97706'} />
+                  <Text variant="label" weight="semibold" style={{ color: isDark ? '#fbbf24' : '#d97706' }}>
+                    Pending Profile Review
+                  </Text>
                 </View>
                 <View
                   style={[
                     styles.pendingPill,
                     {
-                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      borderColor: 'rgba(245, 158, 11, 0.3)',
+                      backgroundColor: isDark ? '#451a03' : '#fef3c7',
+                      borderColor: isDark ? '#92400e' : '#fcd34d',
                     },
                   ]}
                 >
-                  <Text style={styles.pendingPillText}>PENDING</Text>
+                  <Text variant="micro" weight="bold" style={{ color: isDark ? '#fde68a' : '#92400e' }}>
+                    PENDING
+                  </Text>
                 </View>
               </View>
-              <Text style={[styles.pendingDesc, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.pendingDesc, { color: theme.colors.mute }]}>
                 A profile change request submitted on{' '}
-                <Text variant="label" style={{ color: theme.colors.ink }}>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
                   {formatDate(pendingRequest.created_at)}
                 </Text>{' '}
                 is currently under review by{' '}
-                <Text variant="label" style={{ color: theme.colors.ink }}>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
                   {pendingRequest.target_approver_role === 'super_admin'
                     ? 'Super Administrator'
                     : 'Administrator / Manager'}
@@ -696,13 +819,19 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
               <Pressable
                 variant="buttonGhost"
                 hitSlopToMin48
-                style={styles.cancelRequestBtn}
+                style={[
+                  styles.cancelRequestBtn,
+                  {
+                    backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                    borderColor: isDark ? '#991b1b' : '#fecaca',
+                  },
+                ]}
                 onPress={handleCancelPendingRequest}
                 disabled={isCancellingRequest}
                 accessibilityLabel="Withdraw Request"
               >
-                <XCircle size={13} color="#dc2626" />
-                <Text style={styles.cancelRequestText}>
+                <XCircle size={13} color={isDark ? '#fca5a5' : '#dc2626'} />
+                <Text variant="caption" weight="medium" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>
                   {isCancellingRequest ? 'Cancelling...' : 'Withdraw Request'}
                 </Text>
               </Pressable>
@@ -728,8 +857,12 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                 >
                   {/* Section Header: Sky blue icon + Uppercase tracking-wider title */}
                   <View style={[styles.sectionHeader, { borderColor: theme.colors.hairline }]}>
-                    <SectionIcon size={16} color="#0284c7" />
-                    <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>
+                    <SectionIcon size={15} color="#0284c7" />
+                    <Text
+                      variant="micro"
+                      weight="bold"
+                      style={[styles.sectionTitle, { color: theme.colors.mute }]}
+                    >
                       {section.title}
                     </Text>
                   </View>
@@ -739,13 +872,15 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                     {section.rows.map((row: ProfileRow, rIdx: number) => {
                       const isAadhaar = row.label === 'Aadhaar';
                       const isLast = rIdx === section.rows.length - 1;
+                      const badgeStatus = row.badge ? getStatusBadgeConfig(row.badge.label, isDark) : null;
 
                       return (
                         <View key={row.label} style={styles.rowWrap}>
                           <View style={styles.rowContent}>
-                            {/* Label on top line */}
+                            {/* Label */}
                             <Text
                               variant="caption"
+                              weight="medium"
                               style={[
                                 styles.rowLabel,
                                 { color: theme.colors.mute },
@@ -754,15 +889,15 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                               {row.label}
                             </Text>
 
-                            {/* Value / Badges / Actions on new line */}
+                            {/* Value / Badges / Actions */}
                             <View style={styles.rowValueArea}>
                               {isAadhaar ? (
                                 <View style={styles.aadhaarArea}>
                                   <Text
-                                    variant="body"
+                                    variant={row.isMonospace ? 'mono' : 'caption'}
+                                    weight="semibold"
                                     style={[
                                       styles.rowValue,
-                                      styles.monoText,
                                       { color: theme.colors.ink },
                                     ]}
                                     selectable
@@ -809,51 +944,42 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                                   style={styles.linkArea}
                                   onPress={() => router.push(row.href as any)}
                                 >
-                                  <Text variant="body" style={[styles.rowLink, { color: '#0284c7' }]}>
+                                  <Text variant="caption" weight="semibold" style={[styles.rowLink, { color: '#0284c7' }]}>
                                     {row.value}
                                   </Text>
                                   <ExternalLink size={12} color="#0284c7" />
                                 </Pressable>
-                              ) : row.badge ? (
+                              ) : row.badge && badgeStatus ? (
                                 <View style={styles.badgeArea}>
                                   <View
                                     style={[
                                       styles.statusPill,
                                       {
-                                        backgroundColor:
-                                          row.badge.variant === 'warning'
-                                            ? 'rgba(245, 158, 11, 0.1)'
-                                            : 'rgba(16, 185, 129, 0.1)',
-                                        borderColor:
-                                          row.badge.variant === 'warning'
-                                            ? 'rgba(245, 158, 11, 0.25)'
-                                            : 'rgba(16, 185, 129, 0.25)',
+                                        backgroundColor: badgeStatus.bg,
+                                        borderColor: badgeStatus.border,
                                       },
                                     ]}
                                   >
+                                    <View style={[styles.activeDot, { backgroundColor: badgeStatus.dot }]} />
                                     <Text
-                                      variant="caption"
+                                      variant="micro"
+                                      weight="semibold"
                                       style={[
                                         styles.statusPillText,
-                                        {
-                                          color:
-                                            row.badge.variant === 'warning'
-                                              ? '#d97706'
-                                              : '#059669',
-                                        },
+                                        { color: badgeStatus.text },
                                       ]}
                                     >
-                                      {row.badge.label}
+                                      {badgeStatus.label}
                                     </Text>
                                   </View>
                                 </View>
                               ) : (
                                 <View style={styles.valueWithCopyArea}>
                                   <Text
-                                    variant="body"
+                                    variant={row.isMonospace ? 'mono' : 'caption'}
+                                    weight="semibold"
                                     style={[
                                       styles.rowValue,
-                                      row.isMonospace && styles.monoText,
                                       { color: theme.colors.ink },
                                     ]}
                                     selectable
@@ -910,7 +1036,11 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
           >
             {/* Header: Title */}
             <View style={styles.docSectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>
+              <Text
+                variant="micro"
+                weight="bold"
+                style={[styles.sectionTitle, { color: theme.colors.mute }]}
+              >
                 IDENTITY & BANKING DOCUMENTS
               </Text>
             </View>
@@ -947,12 +1077,26 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                   >
                     {/* Slot Header Row */}
                     <View style={styles.docSlotHeaderRow}>
-                      <Text variant="label" style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
+                      <Text variant="label" weight="semibold" style={[styles.docSlotTitle, { color: theme.colors.ink }]}>
                         {docType.label}
                       </Text>
                       {existing && !isReplacing && (
-                        <View style={styles.uploadedBadgeSmall}>
-                          <Text variant="caption" style={styles.uploadedBadgeSmallText}>Uploaded</Text>
+                        <View
+                          style={[
+                            styles.uploadedBadgeSmall,
+                            {
+                              backgroundColor: isDark ? '#064e3b' : '#ecfdf5',
+                              borderColor: isDark ? '#047857' : '#a7f3d0',
+                            },
+                          ]}
+                        >
+                          <Text
+                            variant="micro"
+                            weight="semibold"
+                            style={{ color: isDark ? '#a7f3d0' : '#065f46' }}
+                          >
+                            Uploaded
+                          </Text>
                         </View>
                       )}
                     </View>
@@ -983,11 +1127,27 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                               fadeDuration={0}
                             />
                           ) : isPdf ? (
-                            <View style={[styles.formatBadgeSquare, styles.formatBadgePdf]}>
+                            <View
+                              style={[
+                                styles.formatBadgeSquare,
+                                {
+                                  backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                                  borderColor: theme.colors.hairline,
+                                },
+                              ]}
+                            >
                               <FileText size={18} color="#e11d48" />
                             </View>
                           ) : (
-                            <View style={[styles.formatBadgeSquare, styles.formatBadgeGeneric]}>
+                            <View
+                              style={[
+                                styles.formatBadgeSquare,
+                                {
+                                  backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                                  borderColor: theme.colors.hairline,
+                                },
+                              ]}
+                            >
                               <FileText size={18} color={theme.colors.mute} />
                             </View>
                           )}
@@ -995,13 +1155,14 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                           <View style={styles.existingDocDetails}>
                             <Text
                               variant="caption"
+                              weight="semibold"
                               style={[styles.existingDocFileName, { color: theme.colors.ink }]}
                               numberOfLines={1}
                             >
                               {existing.storage_path.split('/').pop() || docType.label}
                             </Text>
                             <Text
-                              variant="caption"
+                              variant="micro"
                               style={[styles.existingDocMeta, { color: theme.colors.mute }]}
                               numberOfLines={1}
                             >
@@ -1011,7 +1172,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                           </View>
                         </Pressable>
 
-                        {/* Right: Replace + Delete Actions */}
+                        {/* Right: Replace + Delete Actions (100% Solid Opacity) */}
                         <View style={styles.existingDocRight}>
                           <Pressable
                             variant="buttonSecondary"
@@ -1019,15 +1180,19 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                             style={[
                               styles.docActionBtn,
                               {
-                                backgroundColor: theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
+                                backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                                borderColor: isDark ? '#383838' : '#e4e4e7',
                               },
                             ]}
                             onPress={() => setReplacingCode(docType.code)}
                             accessibilityLabel={`Replace ${docType.label}`}
                           >
                             <RefreshCw size={12} color={theme.colors.mute} />
-                            <Text variant="caption" style={[styles.docActionBtnText, { color: theme.colors.ink }]}>
+                            <Text
+                              variant="micro"
+                              weight="medium"
+                              style={[styles.docActionBtnText, { color: isDark ? '#fafafa' : '#171717' }]}
+                            >
                               Replace
                             </Text>
                           </Pressable>
@@ -1038,14 +1203,14 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                             style={[
                               styles.docDeleteBtn,
                               {
-                                backgroundColor: theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
+                                backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                                borderColor: isDark ? '#991b1b' : '#fecaca',
                               },
                             ]}
                             onPress={() => handleDeleteDocument(existing, docType.label)}
                             accessibilityLabel={`Delete ${docType.label}`}
                           >
-                            <Trash2 size={13} color="#dc2626" />
+                            <Trash2 size={13} color={isDark ? '#fca5a5' : '#dc2626'} />
                           </Pressable>
                         </View>
                       </View>
@@ -1067,7 +1232,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                           {isUploading ? (
                             <View style={styles.uploadingBox}>
                               <ActivityIndicator size="small" color={theme.colors.link} />
-                              <Text style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
+                              <Text variant="caption" style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
                                 Uploading document...
                               </Text>
                             </View>
@@ -1075,11 +1240,15 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                             <>
                               <View style={styles.dropzoneRow}>
                                 <Upload size={14} color={theme.colors.mute} />
-                                <Text style={[styles.dropzoneTitle, { color: theme.colors.mute }]}>
+                                <Text
+                                  variant="caption"
+                                  weight="medium"
+                                  style={[styles.dropzoneTitle, { color: theme.colors.mute }]}
+                                >
                                   {isReplacing ? 'Select replacement file' : 'Choose file to upload'}
                                 </Text>
                               </View>
-                              <Text style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
+                              <Text variant="micro" style={[styles.dropzoneHint, { color: theme.colors.mute }]}>
                                 PDF, PNG, JPG, WEBP, or DOC
                               </Text>
                             </>
@@ -1095,7 +1264,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                             onPress={() => setReplacingCode(null)}
                             accessibilityLabel="Cancel replacement"
                           >
-                            <Text style={[styles.cancelReplaceText, { color: theme.colors.mute }]}>
+                            <Text variant="micro" style={[styles.cancelReplaceText, { color: theme.colors.mute }]}>
                               Cancel
                             </Text>
                           </Pressable>
@@ -1165,15 +1334,18 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1 },
+    flex: 1,
+  },
   scrollContent: {
     padding: 16,
-    paddingBottom: 48 },
+    paddingBottom: 48,
+  },
   containerInner: {
     width: '100%',
     maxWidth: 896,
     alignSelf: 'center',
-    gap: 20 },
+    gap: 20,
+  },
 
   // ─── Profile Header Card ──────────────────────────────────────────
   card: {
@@ -1184,110 +1356,139 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
-    elevation: 1 },
+    elevation: 1,
+  },
   headerCardContent: {
-    gap: 16 },
+    gap: 16,
+  },
   userInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14 },
+    gap: 14,
+  },
   avatarCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0 },
-  avatarLetter: {
-    },
+    flexShrink: 0,
+  },
+  avatarLetter: {},
   userDetails: {
     flex: 1,
-    minWidth: 0 },
+    minWidth: 0,
+  },
   userNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8 },
+    gap: 8,
+  },
   userName: {
-    },
+    flexShrink: 1,
+  },
   empBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1 },
-  empBadgeText: {
-    },
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  empBadgeText: {},
+  userEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
   userEmail: {
-    marginTop: 2 },
+    flexShrink: 1,
+  },
+  headerCopyBtn: {
+    padding: 3,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 24,
+    minWidth: 24,
+  },
   badgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 8 },
+    marginTop: 8,
+  },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 9,
-    paddingVertical: 2.5,
+    paddingVertical: 3,
     borderRadius: 999,
-    borderWidth: 1 },
+    borderWidth: 1,
+  },
   roleBadgeText: {
-    textTransform: 'capitalize' },
+    textTransform: 'capitalize',
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 9,
-    paddingVertical: 2.5,
+    paddingVertical: 3,
     borderRadius: 999,
-    borderWidth: 1 },
+    borderWidth: 1,
+  },
   activeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10b981' },
-  statusBadgeText: {
-    },
+  },
+  statusBadgeText: {},
   editProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
-    minHeight: 40 },
-  editProfileBtnText: {
-    },
+    minHeight: 44,
+  },
+  editProfileBtnText: {},
 
   // ─── Pending Request Review Banner ────────────────────────────────
   pendingBanner: {
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 8 },
+    gap: 8,
+  },
   pendingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between' },
+    justifyContent: 'space-between',
+  },
   pendingTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6 },
-  pendingTitle: {
-    color: '#d97706' },
+    gap: 6,
+  },
+  pendingTitle: {},
   pendingPill: {
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 999,
-    borderWidth: 1 },
-  pendingPillText: {
-    color: '#d97706' },
-  pendingDesc: {
-    },
+    borderWidth: 1,
+  },
+  pendingPillText: {},
+  pendingDesc: {},
   cancelRequestBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1296,15 +1497,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 9,
     borderRadius: 6,
-    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    borderWidth: 1,
     marginTop: 2,
-    minHeight: 32 },
-  cancelRequestText: {
-    color: '#dc2626' },
+    minHeight: 32,
+  },
+  cancelRequestText: {},
 
   // ─── Responsive Sections Grid ─────────────────────────────────────
   sectionsGrid: {
-    gap: 20 },
+    gap: 20,
+  },
   sectionsGridWide: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1313,8 +1515,10 @@ const styles = StyleSheet.create({
       ? ({
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 20 } as any)
-      : {}) },
+          gap: 20,
+        } as any)
+      : {}),
+  },
   sectionCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1323,96 +1527,131 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
-    elevation: 1 },
+    elevation: 1,
+  },
   sectionCardHalf: {
-    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}) },
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingBottom: 8,
     marginBottom: 4,
-    borderBottomWidth: 1 },
+    borderBottomWidth: 1,
+  },
   sectionTitle: {
-    textTransform: 'uppercase' },
+    textTransform: 'uppercase',
+  },
   sectionBody: {
-    width: '100%' },
+    width: '100%',
+  },
   headerDownloadBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center' },
+    justifyContent: 'center',
+  },
   rowWrap: {
-    width: '100%' },
+    width: '100%',
+  },
   rowContent: {
-    paddingVertical: 9,
-    flexDirection: 'column',
-    gap: 4 },
-  rowLabel: {
-    },
-  rowValueArea: {
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 38,
+  },
+  rowLabel: {
+    flexShrink: 0,
+    maxWidth: '46%',
+  },
+  rowValueArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
-    minWidth: 0 },
+    flexWrap: 'wrap',
+  },
   rowValue: {
-    flexShrink: 1 },
-  monoText: {
-    },
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  monoText: {},
   rowDivider: {
     height: 1,
-    width: '100%' },
+    width: '100%',
+  },
 
   // Aadhaar, Link, Badge & Copy row elements
   aadhaarArea: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
-    flexWrap: 'wrap' },
+    flexWrap: 'wrap',
+    flexShrink: 1,
+  },
   inlineActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2 },
+    gap: 2,
+  },
   iconActionBtn: {
     padding: 6,
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 30,
-    minWidth: 30 },
+    minHeight: 28,
+    minWidth: 28,
+  },
   linkArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4 },
+    gap: 4,
+  },
   rowLink: {
-    textDecorationLine: 'underline' },
+    textDecorationLine: 'underline',
+  },
   badgeArea: {
     flexDirection: 'row',
-    alignItems: 'center' },
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
   statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 999,
-    borderWidth: 1 },
+    borderWidth: 1,
+  },
   statusPillText: {
-    textTransform: 'uppercase' },
+    textTransform: 'uppercase',
+  },
   valueWithCopyArea: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
-    flexWrap: 'wrap' },
+    flexWrap: 'wrap',
+    flexShrink: 1,
+  },
 
   // ─── Identity & Banking Documents Section ─────────────────────────
   docSectionHeader: {
     marginBottom: 14,
-    gap: 3 },
-  docSectionSubtitle: {
-    },
+    gap: 3,
+  },
+  docSectionSubtitle: {},
   docGrid: {
-    gap: 12 },
+    gap: 12,
+  },
   docGridWide: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1421,39 +1660,41 @@ const styles = StyleSheet.create({
       ? ({
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 14 } as any)
-      : {}) },
+          gap: 14,
+        } as any)
+      : {}),
+  },
   docSlotCard: {
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
-    gap: 10 },
+    gap: 10,
+  },
   docSlotCardHalf: {
-    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}) },
+    ...(Platform.OS !== 'web' ? { width: '48.5%' } : {}),
+  },
   docSlotHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between' },
-  docSlotTitle: {
-    },
+    justifyContent: 'space-between',
+  },
+  docSlotTitle: {},
   uploadedBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 999,
     borderWidth: 1,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center' },
-  uploadedBadgeSmallText: {
-    color: '#059669' },
+  },
+  uploadedBadgeSmallText: {},
   docThumbImage: {
     width: 44,
     height: 44,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(150, 150, 150, 0.2)' },
+  },
   formatBadgeSquare: {
     width: 44,
     height: 44,
@@ -1461,17 +1702,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2 },
-  formatBadgeSquareText: {
-    },
+    gap: 2,
+  },
+  formatBadgeSquareText: {},
   existingDocDetails: {
     flex: 1,
     minWidth: 0,
-    gap: 2 },
-  existingDocFileName: {
-    },
-  existingDocMeta: {
-    },
+    gap: 2,
+  },
+  existingDocFileName: {},
+  existingDocMeta: {},
   existingDocCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1479,55 +1719,21 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
-    minHeight: 52 },
+    minHeight: 52,
+  },
   existingDocLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     flex: 1,
-    minWidth: 0 },
-  formatBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1 },
-  formatBadgePdf: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderColor: 'rgba(244, 63, 94, 0.25)' },
-  formatBadgePng: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)' },
-  formatBadgeJpg: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    borderColor: 'rgba(14, 165, 233, 0.25)' },
-  formatBadgeWebp: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: 'rgba(245, 158, 11, 0.25)' },
-  formatBadgeGeneric: {
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
-    borderColor: 'rgba(150, 150, 150, 0.25)' },
-  formatBadgeText: {
-    },
-  uploadedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)' },
-  uploadedBadgeText: {
-    color: '#059669' },
+    minWidth: 0,
+  },
   existingDocRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 0 },
+    flexShrink: 0,
+  },
   docActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1537,18 +1743,20 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
-    minHeight: 32 },
-  docActionBtnText: {
-    },
+    minHeight: 32,
+  },
+  docActionBtnText: {},
   docDeleteBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     width: 32,
     height: 32,
     borderRadius: 16,
-    borderWidth: 1 },
+    borderWidth: 1,
+  },
   dropzoneWrap: {
-    gap: 6 },
+    gap: 6,
+  },
   dropzone: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
@@ -1558,22 +1766,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    minHeight: 64 },
+    minHeight: 64,
+  },
   dropzoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6 },
-  dropzoneTitle: {
-    },
-  dropzoneHint: {
-    },
+    gap: 6,
+  },
+  dropzoneTitle: {},
+  dropzoneHint: {},
   uploadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8 },
+    gap: 8,
+  },
   cancelReplaceBtn: {
     alignSelf: 'flex-end',
     paddingVertical: 2,
-    paddingHorizontal: 6 },
+    paddingHorizontal: 6,
+  },
   cancelReplaceText: {
-    textDecorationLine: 'underline' } });
+    textDecorationLine: 'underline',
+  },
+});

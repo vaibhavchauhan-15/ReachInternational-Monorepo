@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { useTheme, MobileHeader } from '../../../components/ui';
 import { ProfileEditForm } from '../../../components/profile/ProfileEditForm';
+import { ProfileEditSkeleton } from '../../../components/profile/ProfileEditSkeleton';
 import { supabase } from '../../../lib/supabase';
 import { fetchUserDocuments, type UserDocumentInfo } from '../../../lib/documents';
 
@@ -25,7 +26,7 @@ export default function ProfileEditScreen() {
         fetchUserDocuments(targetUserId),
         supabase
           .from('profile_change_requests')
-          .select('*')
+          .select('id, user_id, requester_role, current_data, requested_data, target_approver_role, status, created_at')
           .eq('user_id', targetUserId)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
@@ -63,9 +64,7 @@ export default function ProfileEditScreen() {
       />
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.link} />
-        </View>
+        <ProfileEditSkeleton />
       ) : (
         <KeyboardAvoidingView
           style={styles.content}

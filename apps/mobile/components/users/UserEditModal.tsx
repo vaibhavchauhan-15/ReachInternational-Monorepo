@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Text, Button, Input, useTheme, SearchableSelect, type SelectOption, AppModal, Touchable, showToast } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -18,6 +19,7 @@ import {
   parseProfileShiftTime,
   getStateById,
   getStateByName,
+  sanitizeDatabaseError,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserUpdated } from '../../lib/notifications';
@@ -64,7 +66,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   isSuperAdmin = false,
 }) => {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
   const isDesktop = width >= 640;
 
   const [fullName, setFullName] = useState('');
@@ -280,7 +282,8 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       onClose();
     } catch (err: any) {
       haptics.error();
-      showToast('error', 'Update Failed', err?.message || 'Failed to update user account details.');
+      const sanitized = sanitizeDatabaseError(err);
+      showToast('error', 'Update Failed', sanitized.error || 'Failed to update user account details.');
     } finally {
       setIsLoading(false);
     }
@@ -296,40 +299,74 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           ? {
               maxWidth: 580,
               width: '100%',
+              alignSelf: 'center',
               maxHeight: '90%',
-              padding: 0,
               borderRadius: radiusNumeric.lg,
               overflow: 'hidden',
             }
-          : undefined
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
       }
       persistent={isLoading}
       testID="user-edit-modal"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ width: '100%' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ width: '100%', flexShrink: 1 }}
       >
-        <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
-          {/* Header */}
+        <View
+          style={[
+            styles.drawerContainer,
+            { backgroundColor: theme.colors.canvasElevated },
+            isDesktop && {
+              borderRadius: radiusNumeric.lg,
+              borderWidth: 1,
+              borderColor: theme.colors.hairline,
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              overflow: 'hidden',
+            },
+          ]}
+        >
+          {/* Header (Clean & Pinned) */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.headerLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: theme.colors.link + '14' }]}>
+              <View style={[styles.iconWrap, { backgroundColor: isDesktop ? theme.colors.link + '14' : theme.colors.link + '18' }]}>
                 <User size={18} color={theme.colors.link} />
               </View>
-              <View>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>Edit User Account</Text>
-                <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text variant="heading" weight="semibold" style={{ color: theme.colors.ink }}>
+                  Edit User Account
+                </Text>
+                <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
                   {user.full_name} {user.employee_id ? `• ${user.employee_id} ` : ''}({user.email})
                 </Text>
               </View>
             </View>
-            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color={theme.colors.mute} />
-            </Touchable>
+            <Pressable
+              variant="iconButton"
+              haptic="tap"
+              hitSlopToMin48
+              onPress={onClose}
+              style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]}
+              accessibilityLabel="Close dialog"
+            >
+              <X size={16} color={theme.colors.mute} />
+            </Pressable>
           </View>
 
-          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+          {/* Smooth Scrollable Body with bounded height */}
+          <ScrollView
+            style={[styles.scrollArea, { maxHeight: Math.min(windowHeight * 0.65, 560) }]}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Section 1: Contact & Identity Info */}
             <MobileFormSectionCard
               stepNumber={1}
@@ -464,7 +501,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
             </MobileFormSectionCard>
           </ScrollView>
 
-          {/* Footer Actions */}
+          {/* Footer Actions (Pinned at Bottom) */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
             <Button label="Cancel" onPress={onClose} variant="outline" size="md" style={{ flex: 1, marginRight: 8 }} />
             <View style={{ flex: 1.5 }}>
@@ -485,15 +522,11 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderRadius: radiusNumeric.lg,
-    maxHeight: '92%',
+  drawerContainer: {
+    width: '100%',
+    flexShrink: 1,
     display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
   header: {
@@ -517,32 +550,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-  },
-  subtitle: {
-    marginTop: 1,
-  },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  alertBox: {
-    marginHorizontal: spacingNumeric.lg,
-    marginTop: spacingNumeric.sm,
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
+  scrollArea: {
+    maxHeight: 560,
   },
-  body: {
-    flex: 1,
-  },
-  bodyContent: {
+  scrollContent: {
     padding: spacingNumeric.lg,
     gap: spacingNumeric.md,
-  },
-  inputGroup: {
-    gap: 4,
-  },
-  fieldLabel: {
+    paddingBottom: 28,
   },
   footer: {
     flexDirection: 'row',

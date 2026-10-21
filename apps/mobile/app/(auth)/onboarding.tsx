@@ -1120,8 +1120,8 @@ export default function OnboardingScreen() {
                 style={[
                   styles.noteBox,
                   {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : 'rgba(2, 132, 199, 0.08)',
-                    borderColor: isDark ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.2)',
+                    backgroundColor: isDark ? '#082f49' : '#f0f9ff',
+                    borderColor: isDark ? '#0284c7' : '#bae6fd',
                   },
                 ]}
               >

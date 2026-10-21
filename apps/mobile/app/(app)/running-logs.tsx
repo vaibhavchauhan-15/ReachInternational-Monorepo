@@ -15,6 +15,8 @@ import {
   ErrorState,
   PermissionDeniedView,
   SearchInput,
+  SegmentedToggle,
+  Text,
 } from '../../components/ui';
 import {
   MobileConflictResolutionModal,
@@ -33,7 +35,7 @@ import {
   type MachineWithAssignments,
 } from '../../lib/hooks/useOperationsData';
 import { useAuth } from '../../lib/auth/useAuth';
-import { spacingNumeric } from '@reachinternational/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   AlertTriangle,
   RefreshCw,
@@ -462,6 +464,20 @@ export default function RunningLogsScreen() {
         </View>
       )}
 
+      {/* 2. Top Navbar: Segmented Mode Toggle (Clients | Machine | Operator) - 100% operations.tsx parity */}
+      <View style={styles.segmentedToggleWrapper}>
+        <SegmentedToggle<LogsViewMode>
+          items={[
+            { id: 'client', label: 'Clients' },
+            { id: 'machine', label: 'Machine' },
+            { id: 'operator', label: 'Operator' },
+          ]}
+          value={logsViewMode}
+          onChange={(mode) => setLogsViewMode(mode)}
+          size="md"
+        />
+      </View>
+
       {/* Main Scrollable Body */}
       <ScrollView
         style={styles.contentScroll}
@@ -480,6 +496,7 @@ export default function RunningLogsScreen() {
         <RunningLogFilterPanel
           viewMode={logsViewMode}
           onViewModeChange={(mode) => setLogsViewMode(mode)}
+          showToggle={false}
           machines={machinesList}
           clients={clientsList}
           clientSites={clientSites}
@@ -516,33 +533,11 @@ export default function RunningLogsScreen() {
             onRetry={onRefresh}
             actionLabel="Retry Loading Logs"
           />
-        ) : filteredLogs.length === 0 ? (
-          debouncedSearch.trim() ? (
-            <EmptyState
-              variant="no-results"
-              title="No Running Logs Found"
-              description={`No daily logs matched "${debouncedSearch.trim()}".`}
-              action={{
-                label: 'Clear Search',
-                onPress: () => setSearch(''),
-              }}
-            />
-          ) : selectedMonth !== 'all' ? (
-            <EmptyState
-              variant="filtered"
-              title="No Logs for Selected Period"
-              description="No running hour logs match the selected period or filters."
-              action={{
-                label: 'Reset Filters',
-                onPress: handleResetFilters,
-              }}
-            />
-          ) : (
-            <EmptyState
-              title="No Running Logs Found"
-              description="No running hour logs have been recorded for this entity."
-            />
-          )
+        ) : logs.length === 0 ? (
+          <EmptyState
+            title="No Running Logs Found"
+            description="No running hour logs have been recorded in the platform."
+          />
         ) : (
           <View style={styles.feedWrapper}>
             {/* 1. CLIENT VIEW: Summary Card + Machine Sub-Groups + Shift Cards */}
@@ -558,29 +553,47 @@ export default function RunningLogsScreen() {
                   totalDays={summaryMetrics.totalDays}
                 />
 
-                {clientMachineGroups.map((group) => (
-                  <View key={group.machine.id} style={styles.machineGroupBlock}>
-                    <RunningLogMachineHeaderCard
-                      model={group.machine.model || 'Equipment'}
-                      serialNumber={group.machine.serial_number}
-                      machineCode={group.machine.machine_id}
-                      totalDays={group.totalDays}
-                      totalRunHours={group.totalRunHours}
-                      totalWorkingHours={group.totalWorkingHours}
-                    />
-
-                    {group.logs.map((log, idx) => (
-                      <RunningLogShiftCard
-                        key={log.id}
-                        log={log}
-                        logsViewMode="client"
-                        searchTerm={debouncedSearch}
-                        onOpenConflictModal={handleOpenConflictModal}
-                        isLast={idx === group.logs.length - 1}
-                      />
-                    ))}
+                {clientMachineGroups.length === 0 ? (
+                  <View
+                    style={[
+                      styles.quietEmptyCard,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                      {debouncedSearch.trim()
+                        ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
+                        : 'No daily running hour logs found matching active filters.'}
+                    </Text>
                   </View>
-                ))}
+                ) : (
+                  clientMachineGroups.map((group) => (
+                    <View key={group.machine.id} style={styles.machineGroupBlock}>
+                      <RunningLogMachineHeaderCard
+                        model={group.machine.model || 'Equipment'}
+                        serialNumber={group.machine.serial_number}
+                        machineCode={group.machine.machine_id}
+                        totalDays={group.totalDays}
+                        totalRunHours={group.totalRunHours}
+                        totalWorkingHours={group.totalWorkingHours}
+                      />
+
+                      {group.logs.map((log, idx) => (
+                        <RunningLogShiftCard
+                          key={log.id}
+                          log={log}
+                          logsViewMode="client"
+                          searchTerm={debouncedSearch}
+                          onOpenConflictModal={handleOpenConflictModal}
+                          isLast={idx === group.logs.length - 1}
+                        />
+                      ))}
+                    </View>
+                  ))
+                )}
               </>
             )}
 
@@ -595,23 +608,40 @@ export default function RunningLogsScreen() {
                   totalBreakdowns={summaryMetrics.totalBreakdowns}
                   totalDays={summaryMetrics.totalDays}
                   onOpenHistoryModal={() => {
-                    // Navigate or open machine history
                     if (activeMachine?.id) {
                       router.push(`/machines?search=${activeMachine.machine_id || activeMachine.model}`);
                     }
                   }}
                 />
 
-                {sortedLogs.map((log, idx) => (
-                  <RunningLogShiftCard
-                    key={log.id}
-                    log={log}
-                    logsViewMode="machine"
-                    searchTerm={debouncedSearch}
-                    onOpenConflictModal={handleOpenConflictModal}
-                    isLast={idx === sortedLogs.length - 1}
-                  />
-                ))}
+                {sortedLogs.length === 0 ? (
+                  <View
+                    style={[
+                      styles.quietEmptyCard,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                      {debouncedSearch.trim()
+                        ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
+                        : 'No daily running hour logs found matching active filters.'}
+                    </Text>
+                  </View>
+                ) : (
+                  sortedLogs.map((log, idx) => (
+                    <RunningLogShiftCard
+                      key={log.id}
+                      log={log}
+                      logsViewMode="machine"
+                      searchTerm={debouncedSearch}
+                      onOpenConflictModal={handleOpenConflictModal}
+                      isLast={idx === sortedLogs.length - 1}
+                    />
+                  ))
+                )}
               </>
             )}
 
@@ -627,16 +657,34 @@ export default function RunningLogsScreen() {
                   totalDays={summaryMetrics.totalDays}
                 />
 
-                {sortedLogs.map((log, idx) => (
-                  <RunningLogShiftCard
-                    key={log.id}
-                    log={log}
-                    logsViewMode="operator"
-                    searchTerm={debouncedSearch}
-                    onOpenConflictModal={handleOpenConflictModal}
-                    isLast={idx === sortedLogs.length - 1}
-                  />
-                ))}
+                {sortedLogs.length === 0 ? (
+                  <View
+                    style={[
+                      styles.quietEmptyCard,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                      {debouncedSearch.trim()
+                        ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
+                        : 'No daily running hour logs found matching active filters.'}
+                    </Text>
+                  </View>
+                ) : (
+                  sortedLogs.map((log, idx) => (
+                    <RunningLogShiftCard
+                      key={log.id}
+                      log={log}
+                      logsViewMode="operator"
+                      searchTerm={debouncedSearch}
+                      onOpenConflictModal={handleOpenConflictModal}
+                      isLast={idx === sortedLogs.length - 1}
+                    />
+                  ))
+                )}
               </>
             )}
           </View>
@@ -692,6 +740,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  segmentedToggleWrapper: {
+    paddingHorizontal: spacingNumeric.md,
+    paddingTop: 8,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
+  },
   searchBarWrapper: {
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
@@ -702,12 +756,20 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: spacingNumeric.md,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   feedWrapper: {
     gap: spacingNumeric.xs,
   },
   machineGroupBlock: {
     marginBottom: spacingNumeric.md,
+  },
+  quietEmptyCard: {
+    padding: spacingNumeric.lg,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacingNumeric.sm,
   },
 });

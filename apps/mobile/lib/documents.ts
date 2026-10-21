@@ -158,7 +158,7 @@ export async function uploadUserDocumentDirect(params: {
   documentTypeCode: 'aadhaar' | 'driving_license' | 'bank_document' | 'bank_passbook' | string;
   doc: MobilePickedDocument;
   onProgress?: (progressPercent: number) => void;
-}): Promise<{ success: boolean; path?: string; error?: string }> {
+}): Promise<{ success: boolean; path?: string; signedUrl?: string; error?: string }> {
   const { userId, documentTypeCode, doc, onProgress } = params;
 
   try {
@@ -184,28 +184,65 @@ export async function uploadUserDocumentDirect(params: {
       return { success: false, error: uploadErr.message };
     }
 
-    if (onProgress) onProgress(80);
+    if (onProgress) onProgress(70);
 
-    // Upsert into user_documents table
-    const { error: dbErr } = await supabase.from('user_documents').upsert(
-      {
-        user_id: userId,
-        document_type_code: documentTypeCode,
-        storage_path: uploadData.path || filePath,
-        mime_type: doc.mimeType,
-        file_size_bytes: doc.size,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,document_type_code' }
-    );
+    const finalStoragePath = uploadData?.path || filePath;
+
+    // Clean up alternate extension files for this document slot asynchronously (non-blocking)
+    const otherExts = ['pdf', 'png', 'jpg', 'jpeg', 'webp'].filter((e) => e !== ext);
+    const stalePaths = otherExts.map((e) => `documents/${userId}/${documentTypeCode}.${e}`);
+    void supabase.storage.from('user_files').remove(stalePaths).catch(() => {});
+
+    if (onProgress) onProgress(85);
+
+    // Upsert into user_documents table with file_name and uploaded_by
+    const docPayload = {
+      user_id: userId,
+      document_type_code: documentTypeCode,
+      storage_path: finalStoragePath,
+      mime_type: doc.mimeType,
+      file_size_bytes: doc.size,
+      file_name: doc.name,
+      status: 'verified',
+      uploaded_by: userId,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: dbErr } = await supabase
+      .from('user_documents')
+      .upsert(docPayload, { onConflict: 'user_id,document_type_code' });
 
     if (dbErr) {
-      console.error('[Document Upload] DB upsert error:', dbErr);
-      return { success: false, error: dbErr.message };
+      console.warn('[Document Upload] Direct upsert warning, attempting RPC:', dbErr);
+      // Fallback to secure RPC
+      const { error: rpcErr } = await supabase.rpc('upsert_user_document', {
+        p_user_id: userId,
+        p_document_type_code: documentTypeCode,
+        p_storage_path: finalStoragePath,
+        p_mime_type: doc.mimeType,
+        p_file_size_bytes: doc.size,
+        p_file_name: doc.name,
+      });
+
+      if (rpcErr) {
+        console.error('[Document Upload] RPC upsert error:', rpcErr);
+        return { success: false, error: rpcErr.message || dbErr.message };
+      }
+    }
+
+    // Generate signed preview URL immediately so caller can update state with zero extra query
+    let signedUrl: string | undefined;
+    try {
+      const { data: signedData } = await supabase.storage
+        .from('user_files')
+        .createSignedUrl(finalStoragePath, 3600);
+      signedUrl = signedData?.signedUrl || undefined;
+    } catch {
+      // Non-critical signed URL generation
     }
 
     if (onProgress) onProgress(100);
-    return { success: true, path: uploadData.path || filePath };
+    return { success: true, path: finalStoragePath, signedUrl };
   } catch (err: any) {
     console.error('[Document Upload] Exception:', err);
     return { success: false, error: err?.message || 'Failed to upload document' };
@@ -289,18 +326,71 @@ export async function fetchUserDocuments(
       return [];
     }
 
+    const validDocs = docs.filter((d: any) => d.document_type_code !== 'profile_photo');
+    if (validDocs.length === 0) return [];
+
+    // 1. Batch generate signed URLs in a single round-trip
+    const allPaths = validDocs.map((d: any) => d.storage_path);
+    const { data: batchSigned } = await supabase.storage
+      .from('user_files')
+      .createSignedUrls(allPaths, 3600);
+
+    const signedUrlMap = new Map<string, string>();
+    if (batchSigned && Array.isArray(batchSigned)) {
+      for (const item of batchSigned) {
+        if (item.signedUrl && !item.error && item.path) {
+          signedUrlMap.set(item.path, item.signedUrl);
+        }
+      }
+    }
+
+    // 2. Map documents with batch-signed URLs or perform fast targeted self-healing
     const withUrls: UserDocumentInfo[] = await Promise.all(
-      docs
-        .filter((d: any) => d.document_type_code !== 'profile_photo')
-        .map(async (d: any) => {
-          const { data: signedData } = await supabase.storage
+      validDocs.map(async (d: any) => {
+        let signedUrl = signedUrlMap.get(d.storage_path) || null;
+        let activeStoragePath = d.storage_path;
+        let activeMimeType = d.mime_type;
+
+        // If batch generation missed this file, attempt candidate self-healing
+        if (!signedUrl) {
+          const commonExts = ['png', 'jpg', 'jpeg', 'pdf', 'webp'];
+          const candidatePaths = commonExts
+            .map((ext) => `documents/${userId}/${d.document_type_code}.${ext}`)
+            .filter((p) => p !== d.storage_path);
+
+          const { data: candidateSigned } = await supabase.storage
             .from('user_files')
-            .createSignedUrl(d.storage_path, 3600);
-          return {
-            ...d,
-            signed_url: signedData?.signedUrl || null,
-          };
-        })
+            .createSignedUrls(candidatePaths, 3600);
+
+          if (candidateSigned && Array.isArray(candidateSigned)) {
+            const found = candidateSigned.find((c) => c.signedUrl && !c.error && c.path);
+            if (found && found.signedUrl && found.path) {
+              signedUrl = found.signedUrl;
+              activeStoragePath = found.path;
+              const ext = found.path.split('.').pop()?.toLowerCase() || '';
+              activeMimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+
+              // Silently self-heal user_documents table so subsequent queries resolve immediately
+              void supabase
+                .from('user_documents')
+                .update({
+                  storage_path: activeStoragePath,
+                  mime_type: activeMimeType,
+                  file_name: `${d.document_type_code}.${ext}`,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', d.id);
+            }
+          }
+        }
+
+        return {
+          ...d,
+          storage_path: activeStoragePath,
+          mime_type: activeMimeType,
+          signed_url: signedUrl,
+        };
+      })
     );
 
     return withUrls;
@@ -319,20 +409,31 @@ export async function deleteUserDocument(
   storagePath: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Delete from storage
-    if (storagePath) {
-      await supabase.storage.from('user_files').remove([storagePath]);
-    }
+    // 1. Delete all possible file variations from storage (current path + common extensions)
+    const pathsToRemove = [
+      storagePath,
+      `documents/${userId}/${documentTypeCode}.pdf`,
+      `documents/${userId}/${documentTypeCode}.png`,
+      `documents/${userId}/${documentTypeCode}.jpg`,
+      `documents/${userId}/${documentTypeCode}.jpeg`,
+      `documents/${userId}/${documentTypeCode}.webp`,
+    ].filter(Boolean);
 
-    // 2. Delete from DB
-    const { error } = await supabase
-      .from('user_documents')
-      .delete()
-      .eq('user_id', userId)
-      .eq('document_type_code', documentTypeCode);
+    const uniquePaths = Array.from(new Set(pathsToRemove));
 
-    if (error) {
-      return { success: false, error: error.message };
+    // Run DB deletion and storage removal concurrently for instant response
+    const [dbResult] = await Promise.all([
+      supabase
+        .from('user_documents')
+        .delete()
+        .eq('user_id', userId)
+        .eq('document_type_code', documentTypeCode),
+      supabase.storage.from('user_files').remove(uniquePaths).catch(() => {}),
+    ]);
+
+    if (dbResult.error) {
+      console.error('[Document Delete] DB delete error:', dbResult.error);
+      return { success: false, error: dbResult.error.message };
     }
 
     return { success: true };

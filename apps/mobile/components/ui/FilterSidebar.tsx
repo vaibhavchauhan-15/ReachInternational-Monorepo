@@ -19,6 +19,8 @@ import {
   type StyleProp,
   type ViewStyle,
   Platform,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { Text } from './Text';
@@ -139,9 +141,21 @@ export const FilterCategoryCard: React.FC<FilterCategoryCardProps> = React.memo(
 // CANONICAL REUSABLE FILTER SIDEBAR DRAWER
 // ============================================================================
 
+export interface PopoverCoords {
+  top: number;
+  left?: number;
+  right?: number;
+  width?: number;
+  maxHeight?: number;
+}
+
 export interface FilterSidebarProps {
-  /** Visibility state of the drawer */
+  /** Visibility state of the drawer/popover */
   visible?: boolean;
+  /** Presentation mode: 'drawer' (default) or anchored 'popover' */
+  presentation?: 'drawer' | 'popover';
+  /** Anchored popover coordinates when presentation is 'popover' */
+  anchorCoords?: PopoverCoords | null;
   /** Alias for visible */
   isOpen?: boolean;
   /** Callback when drawer requests close */
@@ -182,6 +196,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({
   visible,
   isOpen,
   onClose,
+  presentation = 'drawer',
+  anchorCoords,
   title = 'Filters & Sorting',
   subtitle,
   activeFilterCount: activeFilterCountProp,
@@ -224,6 +240,180 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({
     haptics.select();
     onResetAll?.();
   }, [activeFilterCount, onResetAll]);
+
+  if (presentation === 'popover') {
+    const windowWidth =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerWidth
+        : Dimensions.get('window').width;
+    const windowHeight =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerHeight
+        : Dimensions.get('window').height;
+
+    const popoverWidth = anchorCoords?.width ?? Math.min(380, windowWidth - 24);
+    const top = anchorCoords?.top ?? 72;
+    const left = anchorCoords?.left ?? Math.max(12, windowWidth - popoverWidth - 12);
+    const maxHeight = anchorCoords?.maxHeight ?? Math.max(280, Math.min(540, windowHeight - top - 20));
+
+    return (
+      <Modal
+        visible={isVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+        statusBarTranslucent
+      >
+        <Pressable
+          style={styles.popoverBackdrop}
+          onPress={onClose}
+          accessibilityLabel="Dismiss filters popover"
+        >
+          <View />
+        </Pressable>
+
+        <View
+          style={[
+            styles.popoverCard,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+              top,
+              left,
+              width: popoverWidth,
+              maxHeight,
+            },
+          ]}
+          testID={testID}
+        >
+          <View style={styles.sidebarContainer}>
+            {/* Header: Clean title without icon box */}
+            <View style={[styles.sidebarHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <View style={styles.headerTitleCol}>
+                <View style={styles.titleWithBadgeRow}>
+                  <Text variant="heading" style={{ color: theme.colors.ink }}>
+                    {title}
+                  </Text>
+                  {activeFilterCount > 0 && (
+                    <Badge
+                      variant="info"
+                      size="sm"
+                      label={`${activeFilterCount} active`}
+                      style={styles.activeBadge}
+                    />
+                  )}
+                </View>
+                {subtitle ? (
+                  <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                variant="iconButton"
+                hitSlopToMin48
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close filters popover"
+              >
+                <X size={18} color={theme.colors.mute} />
+              </Pressable>
+            </View>
+
+            {/* Scrollable Categories Content */}
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle={isDark ? 'white' : 'black'}
+              keyboardShouldPersistTaps="handled"
+            >
+              {categories
+                ? categories.map((cat, idx) => (
+                    <FilterCategoryCard
+                      key={cat.id}
+                      index={cat.showIndex ? idx + 1 : undefined}
+                      title={cat.title}
+                      subtitle={cat.subtitle}
+                      isFiltered={cat.isFiltered}
+                      badgeLabel={cat.badgeLabel}
+                      badgeVariant={cat.badgeVariant}
+                      testID={cat.testID}
+                    >
+                      {cat.renderControl ? cat.renderControl() : cat.children}
+                    </FilterCategoryCard>
+                  ))
+                : children}
+            </ScrollView>
+
+            {/* Sticky Bottom Actions Bar */}
+            {footerActions ? (
+              footerActions
+            ) : (
+              <View
+                style={[
+                  styles.sidebarFooter,
+                  {
+                    borderTopColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvasElevated,
+                  },
+                ]}
+              >
+                {onResetAll && (
+                  <Pressable
+                    variant="buttonSecondary"
+                    hitSlopToMin48
+                    disabled={activeFilterCount === 0}
+                    activeOpacity={1.0}
+                    onPress={handleReset}
+                    style={[
+                      styles.resetBtn,
+                      {
+                        borderColor: theme.colors.hairline,
+                        backgroundColor: theme.colors.canvasElevated,
+                        opacity: activeFilterCount === 0 ? 0.45 : 1,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset all filters"
+                  >
+                    <RotateCcw
+                      size={14}
+                      color={activeFilterCount === 0 ? theme.colors.mute : theme.colors.ink}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      variant="label"
+                      style={{
+                        color: activeFilterCount === 0 ? theme.colors.mute : theme.colors.ink,
+                      }}
+                    >
+                      Reset All
+                    </Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  variant="buttonPrimary"
+                  hitSlopToMin48
+                  activeOpacity={1.0}
+                  onPress={handleApply}
+                  style={styles.applyBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={applyText || 'Apply filters and view results'}
+                >
+                  <Check size={15} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text variant="label" style={{ color: '#ffffff' }}>
+                    {applyText || 'Apply Filters'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Drawer
@@ -439,5 +629,31 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radiusNumeric.md,
     backgroundColor: '#0284c7',
+  },
+  popoverBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  popoverCard: {
+    position: 'absolute',
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 10,
+      },
+    }),
   },
 });

@@ -1,48 +1,44 @@
 # Current Task
 
-## Task: 196 — Native Daily Running Logs (/running-logs) Web App Parity: Segmented View Modes, Dynamic Searchable Selects, Reusable Summary & Sub-Header Cards, and Daily Shift Logs
+## Task: 229 — Document Viewer: Rotate Button Strictly for Images (Removed for PDFs) & Comprehensive Profile/Document Pipeline Optimization
 **Status**: 🟢 COMPLETED
-**Date**: 2026-10-17
+**Date**: 2026-10-21
 
-**User Request**:
-- Feedback on `/running-logs` page (viewport 1536×695):
-  - Screenshot of web app running logs page provided.
-  - "see the screenshot of the web app of runnings logs page and like same way implement the running logs page too make sure it should be consistent , reusable components ,clean and optimize apge"
+**User Objectives & Implementation**:
+1. **Rotate Button Configuration**:
+   - In `MobileDocumentViewerModal.tsx`:
+     - Changed the Rotate action button (`<RotateCw />`) condition from `{isPdf && (` to strictly `{isImage && (`.
+     - **Images** (`JPG`, `PNG`, `WEBP`): Rotate button IS displayed in the header toolbar (`accessibilityLabel="Rotate image 90 degrees"`).
+     - **PDFs**: Rotate button is completely removed.
+     - **Share Button**: Stays completely removed across all documents.
+     - **Download & Close**: Preserved symmetrically with 48px touch targets.
 
-**Key Deliverables**:
-1. **Filter Panel with Segmented Toggle & Dynamic Dropdowns (`RunningLogFilterPanel.tsx`)**:
-   - Reusable top pill switcher: `SegmentedToggle` with `Machine` | `Clients` | `Operator` view modes.
-   - Clean hairline border separation with `theme.colors.hairline`.
-   - Dynamic mode-tailored filter dropdowns using `SearchableSelect`:
-     - *Client View*: `Select Client` (with total count badge, `CLI-xxxx` code badge, address), `Select Location` (with site counter badge, `All Sites & Locations`), `Select Machine` (with machine count badge, `All Machines`), and `Select Month`.
-     - *Machine View*: `Select Machine` (`M/C-xxxx` code badge, model, S/N) and `Select Month`.
-     - *Operator View*: `Select Operator` (phone subtitle) and `Select Month`.
-     - *Custom Range*: Start and End `CustomDatePicker` pickers when 'custom' month is selected.
-2. **SearchableSelect Single-Line Trigger & Reach Sky Blue Accents (`SearchableSelect.tsx`)**:
-   - Added `inlineDescription?: boolean` prop supporting single-line `Title · Code · Description` trigger layouts matching web screenshots.
-   - Replaced neutral gray code badges with vibrant Reach Sky Blue tokens (`rgba(2,132,199,0.18)` fill, `rgba(2,132,199,0.35)` border, `#0284c7` / `#38bdf8` text) in triggers, popovers, and bottom sheet dialogs.
-3. **Unified Group Summary Card (`RunningLogSummaryCard.tsx`)**:
-   - Reusable card rendering entity headers matching screenshot:
-     - *Client Mode*: Client title + `X Machines` Reach sky blue badge + collapsible chevron.
-     - *Machine Mode*: Model name + Serial Number + `RENTED` / `AVAILABLE` status badge + `History` clock button.
-     - *Operator Mode*: Operator name + role badge + total running hours.
-4. **Machine Sub-Header Card for Client View (`RunningLogMachineHeaderCard.tsx`)**:
-   - Renders machine sub-group bar: `Model (SN: xxxx)` with inline metrics summary: `DAYS: X`, `M/C RT: X.Xh` (Reach Sky Blue), `WH: Xh`.
-5. **Daily Shift Card Overhaul (`RunningLogShiftCard.tsx`)**:
-   - Redesigned daily shift card matching screenshot:
-     - Top row: Sky Blue calendar icon + Excel-style date `DD-Mon-YY` (e.g. `17-Oct-26`) + conflict/remark indicators + secondary machine/client title on right.
-     - Middle row: `Shift: A` (highlighted sky blue) and `Operator: <Name>`.
-     - Bottom row: 3 rounded stat boxes side-by-side: `M/C RT` (blue bold value), `WH` (ink bold value), `B/D` (ink bold value).
-     - Expandable section: "View Remark" / "View Remarks & Stoppage" toggle with styled quote callout and stoppage duration breakdown.
-6. **Operations Master Data Hook Extension (`useOperationsData.ts`)**:
-   - Added `ClientSiteRecord` interface.
-   - Extended `useOperationsMasterData` to query `client_sites` in parallel with machines, assignments, operators, and clients.
-7. **Running Logs Page Orchestration (`running-logs.tsx`)**:
-   - Rebuilt `apps/mobile/app/(app)/running-logs.tsx` to seamlessly coordinate `RunningLogFilterPanel`, `RunningLogSummaryCard`, `RunningLogMachineHeaderCard`, and `RunningLogShiftCard`.
-   - Integrated mobile header with back button, screen title, interactive search bar toggle, and export / print modal menu.
-   - Integrated TanStack Query hooks, pull-to-refresh (`RefreshControl`), and empty/error states.
+2. **Document Fetching & Opening Optimization (`fetchUserDocuments`, `apps/mobile/lib/documents.ts`)**:
+   - Replaced multiple individual document signed URL requests with a single batch `supabase.storage.from('user_files').createSignedUrls(allPaths, 3600)` call, reducing N storage network round-trips to exactly 1 batch request.
+   - Optimized self-healing resolution to check candidate extension paths in batch rather than sequential loops.
+   - Pre-resolved signed URLs pass directly into `MobileDocumentViewerModal` for instant opening with zero lag.
 
-**Verification Results**:
-- `node apps/mobile/run-tests.mjs`: **PASS** (307/307 test scenarios passed, 100%).
-- `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
-- `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (0 TypeScript errors).
+3. **Document Uploading Optimization (`uploadUserDocumentDirect`, `apps/mobile/lib/documents.ts`, `apps/mobile/app/(app)/profile/index.tsx`)**:
+   - Converted stale extension file cleanup to a non-blocking background task (`void supabase.storage.from('user_files').remove(stalePaths).catch(...)`), preventing storage purge latency from stalling upload response.
+   - Generated signed preview URLs immediately upon upload completion and returned `{ success: true, path, signedUrl }`.
+   - In `handleUploadDocument`: Optimistically updated `userDocuments` state immediately with the new file and signed URL, providing instantaneous UI reset and checkmark feedback without waiting for full profile refetches.
+   - Triggered lightweight background document synchronization (`fetchUserDocuments(user.id).then(setUserDocuments)`).
+
+4. **Document Deleting Optimization (`deleteUserDocument`, `apps/mobile/lib/documents.ts`, `apps/mobile/app/(app)/profile/index.tsx`)**:
+   - Executed database record deletion and storage file purge in parallel via `Promise.all` rather than sequential blocking steps.
+   - In `handleConfirmDeleteDocument`: Streamlined post-delete refresh to document-only synchronization, eliminating heavy 5-query profile refetches.
+
+5. **Profile Screen & API Optimization (`apps/mobile/app/(app)/profile/index.tsx`, `edit.tsx`, `apps/web/app/actions/documents.ts`)**:
+   - Cached static reference data (`user_document_types`) in module-level `cachedDocumentTypes`, eliminating redundant database round-trips on subsequent profile visits and tab transitions.
+   - Fixed `apps/mobile/app/(app)/profile/edit.tsx` to use explicit column projections instead of `select('*')`.
+   - Optimized web Server Action `getUserDocumentsAction` in `apps/web/app/actions/documents.ts` with batch signed URL generation via `createSignedUrls`.
+
+6. **Automated Verification**:
+   - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (43/43 assertions verified, 100%).
+   - `node apps/mobile/test-document-crud-workflows.mjs`: **PASS** (100% assertions verified).
+   - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 test scenarios passed, 100%).
+   - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+   - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+   - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+   - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+   - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).

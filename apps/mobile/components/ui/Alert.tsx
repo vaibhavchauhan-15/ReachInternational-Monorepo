@@ -69,8 +69,8 @@ const Alert = React.forwardRef<React.ElementRef<typeof View>, AlertProps>(
       >
         {renderIcon()}
         <View className="flex-1 flex-col">
-          {title && <AlertTitle>{title}</AlertTitle>}
-          {message && <AlertDescription>{message}</AlertDescription>}
+          {Boolean(title) && <AlertTitle>{title}</AlertTitle>}
+          {Boolean(message) && <AlertDescription>{message}</AlertDescription>}
           {children}
         </View>
       </View>

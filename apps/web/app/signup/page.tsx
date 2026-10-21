@@ -653,7 +653,7 @@ export default function SignupPage() {
     } else {
       const bankRes = validateBankAccountNumber(formValues.bank_account_number);
       if (!bankRes.isValid) {
-        errors.bank_account_number = bankRes.error || "Please enter a valid bank account number.";
+        errors.bank_account_number = bankRes.error || "Valid bank account required (9-18 digits).";
       }
     }
     if (!formValues.bank_ifsc_code.trim()) {
@@ -661,53 +661,53 @@ export default function SignupPage() {
     } else {
       const ifscRes = validateIfscCode(formValues.bank_ifsc_code);
       if (!ifscRes.isValid) {
-        errors.bank_ifsc_code = ifscRes.error || "Please enter a valid IFSC code (e.g. SBIN0001234).";
+        errors.bank_ifsc_code = ifscRes.error || "Valid 11-character IFSC code required.";
       }
     }
     if (!bankFile) {
-      errors.bank_document_file = "Bank document (Passbook front page, cancelled cheque, or statement) is required.";
-      setBankFileError("Bank document (Passbook / Cheque / Statement) is required.");
+      errors.bank_document_file = "Bank document is required.";
+      setBankFileError("Bank document is required.");
     }
     if (!formValues.aadhaar_number.trim()) {
-      errors.aadhaar_number = "Aadhaar card number is required.";
+      errors.aadhaar_number = "Valid 12-digit Aadhaar required.";
     } else {
       const aadhaarRes = validateAadhaarNumber(formValues.aadhaar_number);
       if (!aadhaarRes.isValid) {
-        errors.aadhaar_number = aadhaarRes.error || "Invalid Aadhaar number.";
+        errors.aadhaar_number = aadhaarRes.error || "Valid 12-digit Aadhaar required.";
       }
     }
     if (!aadhaarFile) {
-      errors.aadhaar_file = "Aadhaar document upload is required.";
-      setAadhaarFileError("Aadhaar document (Photo / PDF) is required.");
+      errors.aadhaar_file = "Aadhaar document is required.";
+      setAadhaarFileError("Aadhaar document is required.");
     }
     if (formValues.license_number.trim()) {
       const licRes = validateLicenseNumber(formValues.license_number);
       if (!licRes.isValid) {
-        errors.license_number = licRes.error || "Invalid driving licence format.";
+        errors.license_number = licRes.error || "Invalid licence format.";
       }
     }
     if (!formValues.password || formValues.password.length < 8) {
-      errors.password = "Password must be at least 8 characters long.";
+      errors.password = "Must be at least 8 characters.";
     } else {
       const hasUppercase = /[A-Z]/.test(formValues.password);
       const hasLowercase = /[a-z]/.test(formValues.password);
       const hasDigit = /\d/.test(formValues.password);
       if (!hasUppercase || !hasLowercase || !hasDigit) {
-        errors.password = "Password must include uppercase, lowercase, and a number.";
+        errors.password = "Must include uppercase, lowercase, and a number.";
       }
     }
     if (formValues.password !== formValues.confirm_password) {
       errors.confirm_password = "Passwords do not match.";
     }
     if (!agreedToTerms) {
-      errors.terms = "You must agree to the Terms of Service and Privacy Policy to register.";
+      errors.terms = "Please agree to Terms and Privacy Policy.";
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       isSubmittingRef.current = false;
       setPending(false);
-      toast("error", "Validation Incomplete", "Please complete all mandatory fields before requesting access.");
+      toast("error", "Validation Incomplete", "Please complete all mandatory fields.");
       return;
     }
 

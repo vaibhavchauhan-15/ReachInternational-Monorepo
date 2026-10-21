@@ -54,7 +54,7 @@ export const MobileSalaryField: React.FC<MobileSalaryFieldProps> = ({
           style={[
             styles.readOnlyBox,
             {
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f9fafb',
+              backgroundColor: isDark ? '#141414' : '#f9fafb',
               borderColor: theme.colors.hairline,
             },
           ]}

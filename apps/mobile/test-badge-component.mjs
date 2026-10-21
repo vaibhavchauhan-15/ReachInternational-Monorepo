@@ -167,14 +167,16 @@ const userTouchCardPath = path.join(__dirname, 'components', 'users', 'UserTouch
 const userDetailModalPath = path.join(__dirname, 'components', 'users', 'UserDetailModal.tsx');
 const todayShiftCardPath = path.join(__dirname, 'components', 'operations', 'MobileTodayShiftCard.tsx');
 const deleteDialogPath = path.join(__dirname, 'components', 'users', 'DeleteUserConfirmDialog.tsx');
+const clientsScreenPath = path.join(__dirname, 'app', '(app)', 'clients.tsx');
 
 const machineCardContent = fs.readFileSync(machineCardPath, 'utf8');
 const userTouchCardContent = fs.readFileSync(userTouchCardPath, 'utf8');
 const userDetailModalContent = fs.readFileSync(userDetailModalPath, 'utf8');
 const todayShiftCardContent = fs.readFileSync(todayShiftCardPath, 'utf8');
 const deleteDialogContent = fs.readFileSync(deleteDialogPath, 'utf8');
+const clientsScreenContent = fs.readFileSync(clientsScreenPath, 'utf8');
 
-assert(machineCardContent.includes('<Badge status="active" dot customLabel="Active"'), 'MobileMachineCard uses Badge with dot for Active status');
+assert(machineCardContent.includes('<Badge status="active" dot') && machineCardContent.includes('customLabel="Active"'), 'MobileMachineCard uses Badge with dot for Active status');
 assert(machineCardContent.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard uses Badge for Rented / Available status');
 assert(userTouchCardContent.includes('<Badge\n                role={u.role}'), 'UserTouchCard reuses centralized Badge for user role');
 assert(userTouchCardContent.includes('<Badge\n                status={u.status}\n                dot'), 'UserTouchCard reuses centralized Badge with dot for user status');
@@ -183,8 +185,20 @@ assert(userDetailModalContent.includes('<Badge\n                  status={user.s
 assert(todayShiftCardContent.includes('<Badge\n            status='), 'MobileTodayShiftCard reuses centralized Badge for shift log status');
 assert(deleteDialogContent.includes('<Badge\n              role={user.role}'), 'DeleteUserConfirmDialog reuses centralized Badge for user role');
 assert(deleteDialogContent.includes('<Badge\n              status={user.status'), 'DeleteUserConfirmDialog reuses centralized Badge for user status');
-console.log('  ✓ Centralized Badge reused across MobileMachineCard, UserTouchCard, UserDetailModal, MobileTodayShiftCard, and DeleteUserConfirmDialog');
+assert(clientsScreenContent.includes("variant={activeFilter === 'active' ? 'success' : 'warning'}"), 'clients.tsx reuses centralized Badge for status active filter chip');
+assert(!clientsScreenContent.includes('#064e3b26'), 'clients.tsx eradicates transparent #064e3b26 in favor of 100% solid opaque Badge');
+assert(!clientsScreenContent.includes('#78350f26'), 'clients.tsx eradicates transparent #78350f26 in favor of 100% solid opaque Badge');
+console.log('  ✓ Centralized Badge reused across MobileMachineCard, UserTouchCard, UserDetailModal, MobileTodayShiftCard, DeleteUserConfirmDialog, and clients.tsx');
+
+// 12. Nested Button DOM Safety & Accessibility Role Protection
+console.log('\n12. Checking Nested Button DOM Safety & Accessibility Roles:');
+assert(badgeContent.includes('const hasRemove = Boolean(onRemove)'), 'Badge detects hasRemove');
+assert(badgeContent.includes('const hasPress = Boolean(onPress)'), 'Badge detects hasPress');
+assert(badgeContent.includes('const isInteractive = hasPress'), 'Badge container is only interactive when onPress is provided');
+assert(badgeContent.includes("accessibilityRole: hasRemove ? undefined : ('button' as const)"), 'Badge suppresses outer button accessibilityRole when onRemove exists to prevent <button> inside <button>');
+assert(badgeContent.includes('if (hasRemove && cleanProps.accessibilityRole === \'button\')'), 'Badge strips accessibilityRole="button" from forwarded props when onRemove exists');
+console.log('  ✓ Nested button prevention: onRemove badges never render outer <button> in DOM');
 
 console.log('\n========================================');
-console.log('✅ All 53 Badge Component Checks Passed Successfully!');
+console.log('✅ All 61 Badge Component Checks Passed Successfully!');
 console.log('========================================\n');

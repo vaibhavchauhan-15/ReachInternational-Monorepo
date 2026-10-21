@@ -17,6 +17,7 @@ import {
   FilterCategoryCard,
   DropdownFilterSelector,
   type FilterOption,
+  type PopoverCoords,
   Skeleton,
 } from '../ui';
 import { radiusNumeric } from '@reachinternational/design-tokens';
@@ -34,6 +35,8 @@ export type SortOptionType =
 
 export interface MachineFilterSidebarProps {
   visible: boolean;
+  presentation?: 'drawer' | 'popover';
+  anchorCoords?: PopoverCoords | null;
   onClose: () => void;
   activeFilterCount: number;
   totalFilteredCount: number;
@@ -59,6 +62,8 @@ export interface MachineFilterSidebarProps {
 
 export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.memo(({
   visible,
+  presentation = 'popover',
+  anchorCoords,
   onClose,
   activeFilterCount,
   totalFilteredCount,
@@ -84,6 +89,8 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
   return (
     <FilterSidebar
       visible={visible}
+      presentation={presentation}
+      anchorCoords={anchorCoords}
       onClose={onClose}
       title="Filters & Sorting"
       activeFilterCount={activeFilterCount}

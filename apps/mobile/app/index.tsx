@@ -1,13 +1,11 @@
 import '../lib/suppressWarnings';
 import React, { memo, useEffect } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAuth } from '../lib/auth/useAuth';
 import { useTheme } from '../components/ui/ThemeProvider';
-import { ReachBrandEmblem } from '../components/branding';
 import { AppWebView } from '../shell/AppWebView';
 import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
 import { getShellMode } from '../lib/env';
@@ -15,22 +13,16 @@ import { getShellMode } from '../lib/env';
 const SHELL_MODE = getShellMode();
 
 /**
- * NativeGatewayScreen — Optimized Mobile Launch / Splash Gateway
+ * NativeGatewayScreen — Minimal Mobile Launch / Splash Gateway
  *
  * Design & Performance Invariants:
- * 1. Zero Loading Spinner: Clean, high-end Apple/Material launch screen without distracting spinners.
- * 2. Industry Standard Logo Sizing: 144dp emblem (clamped to 120dp on compact screens <360px),
- *    matching Google Material 3 Splash & iOS Launch Screen specifications.
- * 3. 0ms Layout Overhead & GPU-Accelerated Micro-Animation: FadeIn entrance on the brand mark.
- * 4. Coordinated Splash Lifecycle: Synchronously dismisses native splash once destination route resolves.
+ * 1. Zero Logo & Minimalist Canvas: Splash screen logo completely removed, rendering clean theme canvas background.
+ * 2. Zero Loading Spinner: Clean launch screen without distracting spinners.
+ * 3. Coordinated Splash Lifecycle: Synchronously dismisses native splash once destination route resolves.
  */
 const NativeGatewayScreen = memo(function NativeGatewayScreen() {
   const { isLoading, session, role, isProfileComplete } = useAuth();
   const { theme, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-
-  // Industry standard mobile splash emblem size: 144dp (clamped to 120dp on <360px ultra-compact viewports)
-  const logoSize = width < 360 ? 120 : 144;
 
   // Once session resolution completes, ensure native splash screen is dismissed
   useEffect(() => {
@@ -39,20 +31,11 @@ const NativeGatewayScreen = memo(function NativeGatewayScreen() {
     }
   }, [isLoading]);
 
-  // While resolving session, render centered brand emblem with zero spinner and subtle elevation
+  // While resolving session, render clean minimalist canvas with zero logo and zero spinner
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          style={[
-            styles.logoContainer,
-            isDark ? styles.logoDarkElevation : styles.logoLightElevation,
-          ]}
-        >
-          <ReachBrandEmblem size={logoSize} bordered={true} />
-        </Animated.View>
       </View>
     );
   }
@@ -85,24 +68,6 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  logoContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoLightElevation: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 3,
-  },
-  logoDarkElevation: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 3,
   },
 });
 

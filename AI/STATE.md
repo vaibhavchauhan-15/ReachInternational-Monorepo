@@ -1,3 +1,614 @@
+- [x] **228 — Quick Access Modal: Remove Duplicate Nested Modal, Add Touch Close Button & Optimize Responsiveness (2026-10-21)**:
+  - **Delivered**:
+    1. **Eliminate Duplicate Nested Modal Sheet (`MobileCommandPalette.tsx`)**:
+       - Root cause identified: `MobileCommandPalette.tsx` was wrapped inside `<AppModal variant="bottom">` (which delegates to `<Sheet>` on mobile, providing an outer container with `borderTopLeftRadius: 20`, hairline border, background `canvasElevated`, and drag handle `—`).
+       - Simultaneously, `MobileCommandPalette` rendered an inner `<View style={[styles.paletteCard, styles.paletteCardBottom]}>` with its own `borderTopLeftRadius: 24`, `borderTopRightRadius: 24`, `borderTopWidth: 1`, `borderColor: theme.colors.hairline`, and `backgroundColor: theme.colors.canvasElevated`. This produced a visible duplicate nested card directly beneath the drag handle.
+       - Removed the inner duplicate card container. Delegated modal surface and border properties to `<AppModal panelStyle={isWide ? styles.dialogPanelOverride : styles.sheetPanelOverride}>`.
+       - Rendered inner contents directly in `<View style={styles.modalContent}>` with zero duplicate borders, zero duplicate radiuses, and zero duplicate backgrounds.
+    2. **Dedicated Touch-Friendly Close Button**:
+       - Added a circular close button (`<X size={16} />`) adjacent to the search input with `hitSlop={8}` (44px+ touch target) and `haptics.select()` feedback, providing a clean, explicit one-tap dismiss action alongside drag-to-dismiss and backdrop touch.
+    3. **High-Performance Typing & Instant Responsiveness**:
+       - Reduced query debounce from 120ms to 50ms for lightning-fast search response across all 38 in-memory destinations and actionable system functions.
+       - Clears search immediately (0ms delay) when the clear button is pressed.
+       - Enabled `nestedScrollEnabled={true}` and expanded max list height to 480px, taking full advantage of the viewport without artificial 400px cramping.
+       - Added item count indicators in category headers (`Navigation`, `Settings`, `Quick Actions`, `System`).
+    4. **Zero Raw Typography Compliance**:
+       - Verified 100% adherence to `<Text variant="...">` with zero raw typography properties (`letterSpacing`, `lineHeight`, `fontSize`, `fontWeight`) in `StyleSheet.create`.
+  - **Verification**:
+    - `node apps/mobile/test-quick-access.mjs`: **PASS** (16/16 checks passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile test:all`: **PASS** (all test suites passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **227 — Document Viewer: Remove Share Button from All Documents & Retain Rotate Strictly for PDFs (/profile) (2026-10-21)**:
+  - **Delivered**:
+    1. **Eradication of Share Document Button Across All Document Types**:
+       - Completely removed the Share action button (`Share2` icon button) from the header actions row in `MobileDocumentViewerModal.tsx`.
+       - Removed unused `sharing` state, `handleShare` function, and `Share2` / `shareDocumentReliable` imports.
+       - Removed `onShare` prop passed to `<NativePdfViewer>`.
+       - Removed Share secondary action button from fallback error cards in both `NativePdfViewer.tsx` (native mobile) and `NativePdfViewer.web.tsx` (web).
+       - Updated fallback notice copy across all document types to reference direct downloads rather than sharing.
+    2. **Rotate Button Removed Only for Images (Retained Strictly for PDFs)**:
+       - In `MobileDocumentViewerModal.tsx`, updated the header Rotate action button condition from `(isImage || isPdf)` to strictly `isPdf`.
+       - Images (`JPG`, `PNG`, `WEBP`) now render cleanly with only the Download and Close header actions, eliminating unnecessary rotation UI.
+       - Multipage PDFs retain the Rotate button for orientation adjustments on both native mobile (`NativePdfViewer.tsx`) and web canvas (`NativePdfViewer.web.tsx`).
+    3. **Automated Test Suite Alignment**:
+       - Updated `apps/mobile/test-document-viewer-workflows.mjs` with assertions for PDF-only rotate button rendering and complete absence of share document buttons.
+  - **Verification**:
+    - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (43/43 assertions verified, 100%).
+    - `node apps/mobile/test-document-crud-workflows.mjs`: **PASS** (all assertions verified, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **226 — Native App Document Upload, Fetch & Delete RLS Resolution (/profile) (2026-10-21)**:
+  - **Delivered**:
+    1. **Root Cause Resolution for DB Upsert Error 42501 (RLS Violation)**:
+       - Migration 166 restricted `INSERT`, `UPDATE`, and `DELETE` on `public.user_documents` strictly to `current_user_role() IN ('super_admin', 'admin', 'manager')`.
+       - Non-manager users (e.g., `operator`, `supervisor`) were blocked from uploading, replacing, or deleting their own identity documents (`aadhaar`, `driving_license`, `bank_document`).
+       - Created and applied Migration `174_fix_user_documents_rls_and_storage_policies.sql`:
+         - `INSERT`: Allows `user_id = auth.uid()` OR `current_user_role() IN ('super_admin', 'admin', 'manager')`.
+         - `UPDATE`: Allows `user_id = auth.uid()` OR `current_user_role() IN ('super_admin', 'admin', 'manager')`.
+         - `DELETE`: Allows `user_id = auth.uid()` OR `current_user_role() IN ('super_admin', 'admin', 'manager')`.
+         - `SELECT`: Allows owner read + privileged staff read (`super_admin`, `admin`, `manager`, `hr`).
+         - `storage.objects` on `user_files`: Allows owner (`storage.foldername(name)[2] = auth.uid()`) and privileged roles (`super_admin`, `admin`, `manager`) full management (`ALL`).
+         - Created `public.upsert_user_document` `SECURITY DEFINER` RPC for resilient upserts with auto-populated audit fields.
+    2. **Storage URL 400 Bad Request Resolution & Self-Healing Fetch (`apps/mobile/lib/documents.ts`)**:
+       - Addressed root cause where dummy seeded rows pointed to `.pdf` files that were nonexistent in storage, resulting in Supabase Storage API returning `400 Bad Request (code: NoSuchKey)`.
+       - Enhanced `fetchUserDocuments` with self-healing extension resolution (`png`, `jpg`, `jpeg`, `pdf`, `webp`): if the exact path returns not found, it checks alternate extensions in storage, self-heals `user_documents` in the database, and returns valid signed URLs.
+       - Reconciled existing development database records (`vlmxciuogczumumrwyot`) where `bank_document.png` and `aadhaar.png` existed in storage, correcting database records.
+    3. **Document Removal & Optimistic UI Update (`apps/mobile/app/(app)/profile/index.tsx`)**:
+       - Addressed page feedback: "after removing the document then delete the document from the supabase also update the ui after sucessfully changes".
+       - In `handleConfirmDeleteDocument`: Optimistically removes document from `userDocuments` state immediately, seamlessly resetting the slot to the "Choose file to upload" dropzone with haptic feedback.
+       - Thoroughly purges all possible extension variations from storage (`documents/${userId}/${documentTypeCode}.*`) and deletes row from `public.user_documents`.
+       - Refetches profile data on completion and rolls back on failure with sanitized database error toasts.
+       - In `handleOpenDocument`: Verifies `url` exists before opening `MobileDocumentViewerModal`, warning the user with a helpful toast if the file is absent in storage instead of opening a broken white canvas.
+    4. **Unified Document Loading Across Modals (`UserDetailModal.tsx`)**:
+       - Reused canonical `fetchUserDocuments` in `UserDetailModal.tsx` for consistent, self-healing document loading across the mobile app.
+  - **Verification**:
+    - `node apps/mobile/test-document-crud-workflows.mjs`: **PASS** (100% assertions verified).
+    - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (40/40 assertions verified).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **225 — Replace External Google Drive PDF Opening with Native In-App PDF Viewer (2026-10-21)**:
+  - **Delivered**:
+    1. **Eradication of Google Drive & External Browser Redirects**:
+       - Root cause identified: on Android, `MobileDocumentViewerModal.tsx` constructed `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(docUrl)}` in `react-native-webview`. This routed documents through external Google Drive servers, failing on authenticated Supabase signed URLs and displaying Google Drive UI chrome.
+       - Completely eradicated all `docs.google.com/gview` references from the codebase.
+    2. **Native PDF Viewer Architecture (`@kishannareshpal/expo-pdf`)**:
+       - Evaluated `@kishannareshpal/expo-pdf` (v0.3.2) vs `react-native-pdf` (v7.0.5) against Expo SDK 57, React Native 0.86, and New Architecture.
+       - Selected `@kishannareshpal/expo-pdf` for native Apple PDFKit on iOS and native PDFium on Android with modern Expo Modules API.
+       - Built `NativePdfViewer.tsx` (native) and `NativePdfViewer.web.tsx` (web):
+         - Native: configured `PdfView` with `fitMode="width"`, `horizontal={false}` (continuous vertical multipage scrolling), `pagingEnabled={false}` (free vertical scroll), `doubleTapToZoom={true}`, `autoScale={true}`, `pageGap={12}`, `onLoadComplete`, and `onPageChanged`.
+         - Added floating multipage indicator badge (`{currentPage} / {pageCount}`) using canonical Geist design tokens (`theme.colors.canvasElevated`, `theme.colors.hairline`, `<Text variant="micro">`).
+         - Defensive error boundary and fallback card with download and share actions.
+         - Web: completely eradicated browser plugin object/iframe embed (which loaded Chromium's black PDF toolbar); upgraded to Mozilla PDF.js (pdfjs-dist) rendering pages directly to HTML5 <canvas> elements with HiDPI window.devicePixelRatio sharpness, continuous vertical scroll, and zero third-party browser toolbar chrome.
+    3. **Shared Document Cache Service (`apps/mobile/lib/documentCache.ts`)**:
+       - Implemented `ensureLocalDocumentFile`: checks memory cache (`localFileCache`) and disk cache (`FileSystem.cacheDirectory + doc_${filename}`), validates file size > 0, cleans up corrupted 0-byte partial files, deduplicates concurrent in-flight download promises, and returns local file URI.
+       - Unified `downloadDocumentInApp`, `shareDocumentReliable`, and `MobileDocumentViewerModal`: the document viewer preloads and caches the file once; tapping "Download" or "Share" reuses that exact same local cached file with zero duplicate network requests!
+    4. **Toolbar & Layout Optimization**:
+       - Rotate button (`<RotateCw size={18} color={theme.colors.ink} />`) is in header, now enabled for both images and multipage PDFs (`(isImage || isPdf)`).
+       - Completely eradicated Reset button and bottom floating bar.
+       - Symmetrically ordered header action buttons: `[Rotate]`, `[Download]`, `[Share]`, `[Close]` with `hitSlopToMin48` (min 48px touch slop).
+       - Zero horizontal overflow (`overflow: 'hidden'`) and full viewport height down to safe-area insets.
+  - **Verification**:
+    - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (40/40 tests passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (357/357 tests passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **224 — Optimize Image & PDF Document Viewer (Mobile & Web Parity) (2026-10-21)**:
+  - **Delivered**:
+    1. **Flicker-Free Image Rendering & Infinite Loop Resolution (`MobileDocumentViewerModal.tsx`)**:
+       - Fixed infinite loop (`Maximum update depth exceeded`) and passive listener violations (`Unable to preventDefault inside passive event listener invocation`).
+       - Synchronously initialized `resolvedDocUrl` from direct URLs (`http://`, `https://`, `blob:`, `data:`, `file://`), eliminating the initial empty-state re-render flash.
+       - Removed unstable `doc` and `toast` object references from `useEffect` dependencies, keying strictly on deterministic `[docKey, rawDocUrl]`.
+       - Implemented `prevDocKeyRef` to ensure state and rotation resets only occur when document identity actually changes.
+       - Memoized image source URI via `useMemo(() => ({ uri: docUrl }), [docUrl])` with stable key.
+       - On Web, rendered native `<img>` with CSS transform rotation (`transition: transform 0.2s ease-out`), eradicating ScrollView passive listener errors. On Native, retained hardware-accelerated `ScrollView` with `maximumZoomScale={4}`.
+    2. **Toolbar & Layout Optimization: Header Rotate & Eradication of Reset / Bottom Bar**:
+       - Moved Rotate action button (`<RotateCw size={18} color={theme.colors.ink} />`) to the header actions row (conditionally rendered only for images).
+       - Ordered header actions: `[Rotate (images only)]`, `[Download]`, `[Share]`, `[Close]`.
+       - Completely eradicated the Reset button, bottom floating control bar (`floatingBar`), and bottom "Pinch to zoom & pan" notice.
+       - Removed bottom padding for the control bar, allowing the document canvas to maximize the full screen height down to safe-area insets.
+       - Enforced canonical Geist design system tokens (`theme.colors.canvasElevated`, `theme.colors.hairline`, `theme.colors.ink`) and min 44x44px touch targets with `hitSlopToMin48`.
+    3. **Fast In-App Download (Zero Browser Redirects) (`apps/mobile/lib/documentCache.ts`)**:
+       - Built `downloadDocumentInApp` in `documentCache.ts`:
+         - Web: Fetches file as Blob and triggers download via `URL.createObjectURL(blob)` on a local same-origin link without `target="_blank"`, saving directly into the user's Downloads folder without opening external tabs or browser redirects.
+         - Native: Downloads via `FileSystem.downloadAsync` into the local cache directory, storing the file in `localFileCache` and prompting the native OS save/share sheet via `Sharing.shareAsync`.
+       - Reusable caching across Open, Download, and Share operations without redundant network requests.
+    4. **Reliable Sharing (`apps/mobile/lib/documentCache.ts`)**:
+       - Built `shareDocumentReliable`:
+         - Web: Uses Web Share API (`navigator.share`) when supported with graceful `AbortError` cancellation. When unsupported, copies the clean preview link to clipboard via `Clipboard.setStringAsync` with user toast feedback. Never redirects to external browser!
+         - Native: Reuses cached local file from `localFileCache` and shares via `Sharing.shareAsync` with appropriate MIME type and filename.
+    5. **Continuous Multipage PDF Scrolling**:
+       - Web: Wrapped PDF in full-height container with `overflow: 'auto'`, `-webkit-overflow-scrolling: touch`, and `<object data="${docUrl}#toolbar=1&navpanes=1&view=FitH&pagemode=thumbs" type="application/pdf">` with iframe fallback, enabling native browser multipage continuous vertical scrolling.
+       - Native: Configured `WebView` with `nestedScrollEnabled={true}`, `scrollEnabled={true}`, `scalesPageToFit={false}`, `showsVerticalScrollIndicator={true}`, `bounces={true}`, and `overScrollMode="always"`.
+       - Eradicated `pdfFloatingBar` to maximize vertical document viewing area.
+  - **Verification**:
+    - `node apps/mobile/test-document-viewer-workflows.mjs`: **PASS** (33/33 tests passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (351/351 tests passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **223 — Native Mobile /users Details Page Feedback & Document Viewing 404 Fix (2026-10-21)**:
+  - **Delivered**:
+    1. **Edit Profile Button Consistency**: Styled `editProfileBtn` with canonical Geist outline pill (`radiusNumeric.pill`, `theme.colors.canvas`, `theme.colors.hairline`, `theme.colors.ink`, `Edit2` icon) and min 36px touch ergonomics, consistent across mobile/tablet/desktop viewports.
+    2. **Segmented Navbar/Toggle Responsiveness**: Configured `<SegmentedToggle>` in `UserDetailView.tsx` with `size="sm"`, `scrollable={!isTablet && !isDesktop}`, `fullWidth={isTablet || isDesktop}`, `itemStyle={!isTablet && !isDesktop ? { paddingHorizontal: 12, minHeight: 38 } : { minHeight: 38 }}` for seamless fit across mobile & tablet viewports.
+    3. **Document Viewing 404 Resolution & Query Optimization**:
+       - Fixed root cause: raw storage paths (`documents/<userId>/...`) were being passed directly to document viewer modal, causing Expo Router / WebView to interpret them as relative 404 routes.
+       - Updated `useUserDetailDocuments` in `apps/mobile/lib/hooks/useUserDetailData.ts` to generate authenticated 1-hour signed URLs via `supabase.storage.from('user_files').createSignedUrl(cleanPath, 3600)`.
+       - Wired `handleViewDocument(doc)` to the "View Document" button with `openingDocId === doc.id` activity indicator and fallback dynamic signing.
+       - Added defense-in-depth in `MobileDocumentViewerModal.tsx` to automatically resolve Supabase storage paths to signed URLs.
+       - Optimized `viewDocBtn` touch ergonomics (`radiusNumeric.pill`, `minHeight: 40`, `hitSlopToMin48`).
+    4. **WhatsApp Direct Chat Icon**: Added `<WhatsAppIcon size={13} color="#10b981" />` next to "Chat Direct" in the Contact Information card.
+    5. **Concise Headers & Button Labels**:
+       - Shortened "Attendance & Timesheet Ledger" to "Attendance Ledger" and button to "View Ledger". Removed redundant subtitle text completely.
+       - Shortened "Machine Assignment History" to "Assignment History" and button to "Manage Shifts".
+       - Shortened "Assigned Machinery Fleet" to "Assigned Fleet".
+       - Shortened "Shift Running Logs (Recent 50)" to "Shift Logs".
+       - Shortened "Employee Profile Audit Trail" to "Profile Audit Trail".
+    6. **Eradication of In-Tab Search**: Removed the search box completely from every tab, removing unused `tabSearch` state and related input styles.
+    7. **Tab Lazy Loading & Query Optimization**: Implemented lazy data fetching on tab activation (`visitedTabs` with TanStack Query enabled flags) and explicit column projections (zero `SELECT *`), eliminating unwanted background network requests.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 tests passed, 100%).
+    - `pnpm --filter @reachinternational/mobile test:all`: **PASS** (all test suites passed, 100%).
+
+- [x] **222 — Native Mobile /profile: 100% Solid Opacity Chips, Proper Typography Hierarchy & Functional Copy Icons (2026-10-21)**:
+  - **Delivered**:
+    1. **Eradicate Transparent Chip Backgrounds & Apply 100% Solid Opacity (`apps/mobile/app/(app)/profile/index.tsx`)**:
+       - Replaced all legacy translucent `rgba(..., 0.1)` backgrounds with 100% solid, fully opaque hex surfaces across all profile chips, badges, and action buttons:
+         - **Role Chips** (`getRoleBadgeConfig`): High-contrast 100% solid opaque backgrounds in both light and dark themes (Super Admin `#fef2f2`/`#450a0a`, Admin `#fefce8`/`#422006`, Manager `#eef2ff`/`#1e1b4b`, Supervisor `#f0fdfa`/`#042f2e`, HR `#ecfdf5`/`#064e3b`, Operator `#fffbeb`/`#451a03`) with WCAG AAA compliant text contrast.
+         - **Status Chips & Pills** (`getStatusBadgeConfig`): 100% solid opaque backgrounds (`active`/`completed`/`100% complete`: `#ecfdf5` light / `#064e3b` dark; `pending`/`warning`/`incomplete`: `#fffbeb` light / `#451a03` dark; `inactive`: `#f4f4f5` light / `#27272a` dark).
+         - **Employee ID Chip**: 100% solid opaque chip (`#f4f4f5` light, `#262626` dark) with interactive copy functionality on press.
+         - **Edit Profile Button**: Replaced washed-out outline with 100% solid opaque surface (`#ffffff` light, `#262626` dark), hairline border, ink text, and 44px min-height touch target.
+         - **Pending Review Banner & Pill**: 100% solid opaque background (`#fffbeb` light / `#291804` dark) and pill (`#fef3c7` light / `#451a03` dark).
+         - **Document Uploaded Badges & Action Buttons**: 100% solid opaque `Uploaded` pill, solid `Replace` button (`#f4f4f5` light / `#262626` dark), and solid `Delete` button (`#fef2f2` light / `#450a0a` dark).
+    2. **Standardize Typography Scale & Hierarchy (Web & Mobile Parity)**:
+       - Eradicated flat, unstyled default text and enforced strict Vercel Geist typography hierarchy via `<Text variant="...">`:
+         - Profile Name: `<Text variant="title" weight="bold">` (20px Geist-Bold, ink color).
+         - Avatar Letter: `<Text variant="title" weight="bold">` (20px Geist-Bold).
+         - Email: `<Text variant="caption">` (12px regular mute).
+         - Section Titles: `<Text variant="micro" weight="bold">` (11px uppercase tracking-wider, matching web `text-[11px] font-bold uppercase tracking-wider`).
+         - Detail Row Content: Streamlined horizontal row layout (`justifyContent: 'space-between'`) with label on left (`<Text variant="caption" weight="medium">`) and value on right (`<Text variant="caption" weight="semibold">` or `<Text variant="mono" weight="semibold">`).
+         - Document Slot Titles: `<Text variant="label" weight="semibold">`.
+    3. **Fully Functional Cross-Platform Copy Icons**:
+       - Overhauled `handleCopy` to seamlessly support both Web (`navigator.clipboard.writeText`) and Native (`Clipboard.setStringAsync`).
+       - Added tactile haptics (`haptics.select()` + `haptics.confirm()`), active toast feedback (`toast('success', 'Copied to Clipboard', ...)`), and 2-second checkmark icon transitions (`<Check size={...} color="#10b981" />`).
+       - Supported copy icons on Employee ID, Header Email, Contact Email, Mobile Phone, Bank Account Number, Bank IFSC Code, Working Location, Aadhaar Number, and Driving Licence.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/utils typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+
+- [x] **221 — Native Mobile Skeleton Loading Theme Consistency & Structural Alignment (2026-10-21)**:
+  - **Delivered**:
+    1. **Core Skeleton Primitive Theme-Aware Overhaul (`apps/mobile/components/ui/Skeleton.tsx`)**:
+       - Hooked directly into `useTheme()` to eradicate blinding white `#f2f2f2` (`bg-muted`) skeletons in dark mode:
+         - Dark Mode: `#262626` (Geist hairline border fill against `#171717` cards and `#0a0a0a` canvas) pulsing smoothly to ~45% opacity.
+         - Light Mode: `#ebebeb` (Geist hairline border fill against `#ffffff` and `#fafafa` canvas) pulsing smoothly to ~45% opacity.
+       - Native-driver pulse loop for 60fps performance on native mobile.
+    2. **Page-by-Page Structural Skeleton Alignment**:
+       - **Machines (`MobileMachineCardSkeleton.tsx`)**: Swapped square squircle action button with pill button (`84x36`) matching `MobileMachineCard`'s updated "Details >" pill button. Fixed results count skeleton line.
+       - **Attendance (`AttendanceSkeleton.tsx`)**: Removed legacy `dayNumberPill` square, added hairline `hoursDivider`, aligned date & status pill layout, aligned 4-stat KPI summary values.
+       - **Users (`UserCardSkeleton.tsx`)**: Added action buttons toolbar (`cardActionsContainer`: "More", "Assign Machine", "Supervisor") matching updated `UserTouchCard`.
+       - **Clients (`ClientCardSkeleton.tsx`)**: Matched current `MobileClientCard` with Client ID code pill, status badge, specs well with dividers, and 3 action buttons ("Edit", "Add Site", "Delete").
+       - **Payroll (`PayrollSkeleton.tsx`)**: Added `cardFooter` action buttons toolbar (Details, Slip, Edit) to `PayrollCardSkeleton` matching `OperatorPayrollCard`.
+       - **Profile Edit (`ProfileEditSkeleton.tsx`, `profile/edit.tsx`)**: Replaced generic `ActivityIndicator` spinner with a dedicated skeleton shell matching the 3 form sections.
+       - **Modals (`AssignSupervisorModal.tsx`, `MachineCategoryModal.tsx`)**: Replaced raw `ActivityIndicator` spinners with theme-aware skeleton rows.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 tests passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 tests passed, 100%).
+
+- [x] **220 — Native Mobile Login & Signup: Dark Mode Autofill, Concise Validation, Password Strength & Match UI (2026-10-21)**:
+  - **Delivered**:
+    1. **Autofill Dark Mode Inputs Fix (`global.css`, `app/_layout.tsx`)**:
+       - Fixed WebKit/Chrome user-agent stylesheet forcing white background (`#ffffff`) and black text on autofilled input fields in dark mode.
+       - Injected authoritative `!important` rules in both `apps/mobile/global.css` and `apps/mobile/app/_layout.tsx` (`MobileWebScrollbarStyles`):
+         - `html.dark input:-webkit-autofill`, `:root.dark input:-webkit-autofill`, and `.dark input:-webkit-autofill`: `-webkit-box-shadow: 0 0 0px 1000px #141414 inset !important`, `-webkit-text-fill-color: #fafafa !important`, `caret-color: #fafafa !important`.
+         - `html:not(.dark) input:-webkit-autofill`: `-webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important`, `-webkit-text-fill-color: #171717 !important`, `caret-color: #171717 !important`.
+    2. **Short & Informative Error Messages (`packages/validation/src/auth.ts`)**:
+       - Replaced lengthy error strings that overflowed or wrapped awkwardly on narrow mobile viewports (≤427px) with crisp, informative phrases:
+         - Full Name: `Full name required (min 2 chars)`
+         - Email: `Valid email required`
+         - Phone: `10-digit mobile number required`
+         - Supervisor: `Supervisor required`
+         - Shift Timings: `Start time required`, `End time required`, `End time must be after start time`
+         - Address: `Street address required`, `City required`, `District required`, `State required`
+         - Bank Details: `Account number required (9–18 digits)`, `11-character IFSC required`, `Bank document required`
+         - Identity: `12-digit Aadhaar required`, `Aadhaar document required`, `Invalid licence format`
+         - Password: `Min 8 characters required`, `Must include upper, lower & number`, `Passwords do not match`
+         - Terms: `Please agree to terms to continue`
+    3. **Short & Informative MobileSubmitButton Status (`apps/mobile/components/forms/MobileSubmitButton.tsx`)**:
+       - Streamlined incomplete banner: `${missingCount} required ${missingCount === 1 ? 'field' : 'fields'} remaining` (or `Required: ${fields.join(', ')}` if ≤ 2) preventing overflow next to `INCOMPLETE` pill badge.
+       - Streamlined ready banner: `All fields complete • Ready to submit` alongside `READY` pill badge.
+    4. **Real-time Password Strength Meter & Requirement Pattern Chips (`apps/mobile/app/(auth)/signup.tsx`)**:
+       - Computes real-time password score (1-4) with color-coded 4-segment progress bar (`Weak` #ef4444, `Fair` #f59e0b, `Good` #0284c7, `Strong` #10b981).
+       - Added 3 compact, informative pattern requirement chips (`8+ chars`, `Upper & lower`, `1+ number`) with green checkmarks when satisfied.
+    5. **Real-time Password Match & Unmatched Indicators (`apps/mobile/app/(auth)/signup.tsx`)**:
+       - Live check under Confirm Password field:
+         - Matching: green checkmark icon with `Passwords match` text.
+         - Unmatched: red alert icon with `Passwords do not match` text.
+    6. **Zero Raw Typography Compliance & Lightweight Optimization**:
+       - Enforced `<Text variant="micro">` and `<Text variant="caption">` throughout all new password UI sections.
+       - Wrapped handlers in `useCallback` to minimize re-renders.
+       - 0 raw typography property violations found.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/validation typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-auth-workflows.mjs`: **PASS** (32/32 tests passed, 100%).
+    - `node apps/mobile/test-signup-workflows.mjs`: **PASS** (35/35 tests passed, 100%).
+
+- [x] **219 — Native App Theme-Aware Skeleton Loading & Updated Shell Structure (2026-10-21)**:
+  - **Delivered**:
+    1. **Core Theme-Aware Skeleton Primitive (`Skeleton.tsx`)**:
+       - Fixed root cause of blinding white skeleton elements in dark mode. The primitive previously relied on `bg-muted` (`hsl(var(--muted))`), which defaulted to `:root` mode (`0 0% 95%` lightness, near-white `#f2f2f2`) inside `#171717` dark cards.
+       - Connected `useTheme()` to provide authoritative theme colors: `#262626` in dark mode (subtle hairline low-contrast fill against `#171717` cards and `#0a0a0a` canvas) and `#ebebeb` in light mode.
+       - Implemented cross-platform synchronized pulse animation: GPU-accelerated CSS `animate-pulse` on Web, and native-driver `Animated.View` with shared loop on native iOS/Android for 60fps in-sync pulsing.
+    2. **Machines Page Skeleton Updates (`MobileMachineCardSkeleton.tsx`, `machines.tsx`)**:
+       - Replaced footer right 36x36 square placeholder with `width={84}` `height={36}` `borderRadius={radiusNumeric.pill}` to match `MobileMachineCard`'s updated "Details >" pill button (`viewDetailsBtn`).
+       - Results count line skeleton (`<Skeleton width={160} height={14} ... />`) now renders in theme-aware `#262626` in dark mode.
+       - Cleaned up specs well and divider structures to match current 2-column layout.
+    3. **Attendance Page Skeleton Updates (`AttendanceSkeleton.tsx`)**:
+       - Redesigned `AttendanceDetailSkeleton` to match current `AttendanceDayCard` structure: removed legacy `dayNumberPill` (the little gray square seen in Screenshot 2), added `hoursDivider`, aligned date and badge layout, and matched 4-stat summary card value/label typography.
+    4. **Users Page Skeleton Updates (`UserCardSkeleton.tsx`)**:
+       - Added bottom action buttons toolbar (`cardActionsContainer`: "More", "Assign Machine", "Supervisor") matching the current `UserTouchCard` layout from task 212.
+    5. **Clients Page Skeleton Updates (`ClientCardSkeleton.tsx`)**:
+       - Updated layout to match current `MobileClientCard`: Client ID code pill on left, status badge on right, company name, tax badges, inset specs well with dividers, and 3 action buttons ("Edit", "Add Site", "Delete") at the bottom.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 passed).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 passed).
+
+- [x] **218 — Concise & Informative Error Messages Across /login & /signup (Web & Mobile Parity) (2026-10-21)**:
+  - **Delivered**:
+    1. **Shorten & Refine Authentication Error Messages (`authErrors.ts`, `useAuth.tsx`)**:
+       - Replaced verbose `"Invalid email or password. Please verify your credentials and try again."` with concise, informative `"Invalid email or password."`.
+       - Maintained strict user enumeration protection invariant: invalid email or incorrect password returns identical generic message.
+       - Shortened rate limit, network timeout, connection drop, server unavailable, deactivated, and pending approval error messages.
+    2. **Field-Level Inline Validation & Input Errors (`packages/validation/src/auth.ts`, `login.tsx`, `signup.tsx`)**:
+       - Standardized all validation schema error strings across `@reachinternational/validation`:
+         - Email: `"Email is required."` / `"Enter a valid email address."`.
+         - Password: `"Password is required."`, `"Must be at least 8 characters."`, `"Must include uppercase, lowercase, and a number."`.
+         - Banking & Identity: `"Valid bank account required (9-18 digits)."`, `"Valid 11-character IFSC code required."`, `"Valid 12-digit Aadhaar required."`, `"Invalid licence format."`.
+         - Terms: `"Please agree to Terms and Privacy Policy."`.
+       - Aligned inline validation in mobile `login.tsx` and `signup.tsx` to match canonical messages.
+    3. **Web & Mobile 100% Parity Synchronization (`apps/web/app/actions/auth.ts`, `LoginForm.tsx`, `apps/web/app/signup/page.tsx`)**:
+       - Synchronized Next.js 16 Server Actions `login` and `signup` in `apps/web/app/actions/auth.ts` to return the identical short and informative error messages.
+       - Aligned client-side toast notifications and form error state rendering on both web and mobile auth views.
+    4. **Automated Test Suite Alignment**:
+       - Synchronized `apps/mobile/run-tests.mjs`, `apps/mobile/test-auth-workflows.mjs`, and `apps/mobile/test-signup-workflows.mjs` with the updated error strings.
+  - **Verification**:
+    - `pnpm typecheck` across all 7 packages: **PASS** (100% clean, 0 errors).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-auth-workflows.mjs`: **PASS** (32/32 tests passed, 100%).
+    - `node apps/mobile/test-signup-workflows.mjs`: **PASS** (35/35 tests passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 tests passed, 100%).
+
+- [x] **217 — Mobile Notification Enable Modal Duplicate Removal & Design System Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Eliminate Duplicate Modal Nesting (`NotificationPermissionModal.tsx`)**: Resolved the nested card within card issue where `<NotificationPermissionModal>` wrapped its contents inside `<AppModal variant="center">` (which delegates to `<Dialog>` with an animated card container, hairline border, 20px padding, and shadow) while simultaneously rendering an inner `<View style={styles.cardContainer}>` with its own border, background, 24px padding, and shadow. Migrated to `<Dialog>` directly with `contentStyle={styles.dialogCardOverride}` and removed the redundant inner container, producing a single, clean, elevated dialog card.
+    2. **Standardize Typography & Hierarchy with Geist Tokens (`NotificationPermissionModal.tsx`)**: Replaced unvarianted `<Text>` instances with canonical Geist variants: modal title (`variant="title"`, `weight="semibold"`, 20px), subtitle (`variant="body"`, 14px, `theme.colors.mute`), feature bullet titles (`variant="subheading"`, `weight="semibold"`, 14px), feature descriptions (`variant="caption"`, 12px, `theme.colors.mute`), primary button text (`variant="label"`, `weight="semibold"`), and secondary button text (`variant="label"`, `weight="medium"`).
+    3. **Enforce Dark & Light Theme Consistency (`NotificationPermissionModal.tsx`)**: Unified colors with Vercel Geist tokens (`theme.colors.canvasElevated`, `theme.colors.hairline`). Styled feature bullet items as recessed wells (`#141414` in dark, `#fafafa` in light) with hairline borders. Converted primary action button to canonical Reach Sky Blue (`#0ea5e9` in dark, `#0284c7` in light) with `#ffffff` text, tactile `haptics.success()` / `haptics.select()` feedback, and minimum 44px+ touch targets (`minHeight: 46` primary, `minHeight: 44` secondary, and 32x32 close button with `hitSlop={8}` -> 48px).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-settings-workflows.mjs`: **PASS** (all verification checks passed).
+
+- [x] **217 — Mobile /signup & /login Dark/Light Theme Input Box, Solid Chip Fills & Submit Button Typography Parity (2026-10-21)**:
+  - **Delivered**:
+    1. **Dark/Light Theme Input Box Recessed Surface (`apps/mobile/components/ui/Input.tsx`, `Textarea.tsx`)**:
+       - Fixed dark mode `<TextInput>` rendering stark white (`#ffffff`). Bound explicit inline `backgroundColor`: `isDark ? '#141414' : '#fafafa'` and `color`: `isDark ? '#fafafa' : '#171717'`.
+       - Enforced hairline borders: `isDark ? '#262626' : '#ebebeb'`, highlighting to Sky Blue (`#0ea5e9` / `#0284c7`) on focus.
+       - Enforced placeholder color: `isDark ? '#737373' : '#8f8f8f'`.
+       - Added web autofill CSS override (`-webkit-box-shadow: 0 0 0px 1000px #141414 inset`) in `global.css` and injected into `<head>` in `apps/mobile/app/_layout.tsx` to suppress browser user-agent autofill white-out.
+    2. **Eradicate Translucent Background Chips (100% Solid Opacity Surfaces)**:
+       - **Section Step Number Circles (`MobileFormSectionCard.tsx`)**: Converted step chips (1–6) from `rgba(14, 165, 233, 0.15)` to 100% solid `#0ea5e9` (dark) / `#0284c7` (light) with crisp `#ffffff` text, turning to 100% solid `#10b981` with `#ffffff` checkmark when completed.
+       - **Card Container Surface (`MobileFormSectionCard.tsx`)**: Converted from `rgba(255, 255, 255, 0.03)` to solid `#141414` (dark) / `#ffffff` (light) with `#262626` / `#ebebeb` hairline border.
+       - **Duration Badge & Info Note Banner (`signup.tsx`)**: Replaced `rgba(2, 132, 199, 0.15)` duration chip with canonical `<Badge variant="info" solid size="sm" shape="pill" label="..." />`. Converted info note banner to solid `#082f49` (dark) / `#f0f9ff` (light) with high-contrast text.
+       - **Email Suggestion Chips (`login.tsx`)**: Converted 8-digit transparent hex chips (`#0284c722`) to 100% solid `#0c4a6e` (dark) / `#e0f2fe` (light) with `#38bdf8` / `#0369a1` text and icons.
+       - **Document Upload Cards (`MobileDocumentUploadCard.tsx`)**: Converted dashed upload box and file attachment rows to solid `#141414` and `#0c2a4d` (dark) / `#f0f9ff` (light).
+       - **Salary Field Read-Only Box (`MobileSalaryField.tsx`)**: Converted from `rgba` wash to solid `#141414` (dark) / `#f5f5f5` (light).
+    3. **Submit Button Typography & Solid Status Banner (`MobileSubmitButton.tsx`)**:
+       - Fixed typography and text size consistency: standardized status title to `variant="caption" weight="bold"` and subtitle to `variant="caption" weight="medium"`.
+       - Eradicated translucent status banner washes: incomplete status converted to 100% solid `#451a03` (dark) / `#fef3c7` (light) with `#fde68a` / `#92400e` text and `<Badge variant="warning" solid size="sm" shape="pill" label="INCOMPLETE" />`. Ready status converted to 100% solid `#064e3b` (dark) / `#ecfdf5` (light) with `#a7f3d0` / `#065f46` text and `<Badge variant="success" solid size="sm" shape="pill" label="READY" />`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+    - `node apps/mobile/test-auth-workflows.mjs`: **PASS** (32/32 tests passed, 100%).
+    - `node apps/mobile/test-signup-workflows.mjs`: **PASS** (35/35 checks passed, 100%).
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (61/61 checks passed, 100%).
+
+- [x] **216 — Mobile /login Dark Theme Input Box & Label Visibility Resolution (2026-10-21)**:
+  - **Delivered**:
+    1. **Fix Dark Theme Invisible Labels (`Input.tsx`)**: Resolved invisible "Email address" and "Password" form labels in dark theme. `<Text variant="label">` previously relied on NativeWind's `text-foreground` class, which defaulted to light `:root` mode (`0 0% 9%` black) in React Native Web / css-interop, rendering black text against the `#171717` dark card. Bound authoritative theme ink color directly to the label: `style={{ color: isDark ? '#fafafa' : '#171717' }}`. Styled the required asterisk with `style={{ color: isDark ? '#f87171' : '#ee0000' }}` and added automatic sanitization of duplicate trailing asterisks (`required ? label.replace(/\s*\*+$/, '') : label`).
+    2. **Fix Dark Theme White Input Box (`Input.tsx`)**: Resolved issue where input boxes rendered in bright white (`#ffffff`) inside the dark theme login card. Removed conflicting `bg-background`, `border-input`, and `text-foreground` classes and enforced theme-aware properties in `resolvedInputStyle`:
+       - `inputBackgroundColor`: `#141414` (dark recessed well inside `#171717` card) / `#fafafa` (light).
+       - `inputTextColor`: `theme.colors.ink` (`#fafafa` in dark mode, `#171717` in light mode).
+       - `effectiveBorderColor`: `#262626` (dark hairline) / `#ebebeb` (light hairline), highlighting to Reach Sky Blue (`#0ea5e9` / `#0284c7`) on focus with web box-shadow ring.
+       - `placeholderTextColor`: `#737373` in dark mode / `#8f8f8f` in light mode.
+       - Password visibility toggle icon: `color={isDark ? '#9ca3af' : '#888888'}`.
+       - `errorMessage` and `helperText`: styled with explicit theme colors (`#f87171` / `#a1a1aa`).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (337/337 test scenarios passed, 100%).
+
+- [x] **215 — Mobile User Touch Card Array Spread Bug Resolution (/users) (2026-10-21)**:
+  - **Delivered**:
+    1. **Fix `TypeError: Platform.default.select is not a function or its return value is not iterable` (`UserTouchCard.tsx`)**: Diagnosed crash in `<ForwardRef(Pressable)>` inside `BaseUserTouchCard` during `FlatList` rendering on `/users`. In `UserTouchCard.tsx`, the card outer `<Pressable>` passed a style array containing `...Platform.select(...)`. Because JavaScript array spread `[ ...x ]` requires `x` to be iterable and `Platform.select()` returns an Object (`{ cursor: 'pointer', ... }` or `{}`), transpiled `_toConsumableArray(Platform.default.select(...))` threw a runtime `TypeError`. Replaced with `Platform.OS === 'web' && ({ cursor: 'pointer', transition: 'background-color 150ms ease, opacity 150ms ease' } as any)`.
+    2. **Monorepo Audit**: Scanned all 55 usages of `Platform.select` across monorepo and verified that all other usages are valid object property spreads inside object literals (`StyleSheet.create({ ...Platform.select(...) })`).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 test scenarios passed, 100%).
+
+- [x] **214 — Native Machine Client Assignment, Constraint Resolution & Targeted Mutation Updates (2026-10-20)**:
+  - **Delivered**:
+    1. **Fix `machines_site_needs_client` Check Constraint Error (`MachineModal.tsx`, `useMachinesData.ts`)**: Resolved PostgreSQL check constraint error `CHECK (site_id IS NULL OR client_id IS NOT NULL)` when unassigning or switching clients in the native machine details page. Added `site_id` to `MACHINE_SELECT_COLUMNS` and hydrated it in `MachineModal.tsx`. Added dynamic deployment site loader (`clientSites`) for the selected client and enforced `effectiveSiteId = effectiveClientId && siteId ? siteId : null` across all payload builders (`clientPayload`, `supervisorPayload`, `payload`). When unassigning a client or making a machine available, `site_id` is automatically nullified.
+    2. **Standardize Typography in Edit Client Assignment / Machine Modals (`MachineModal.tsx`)**: Standardized all unvarianted `<Text>` tags in Sections 0, 1, 2, and headers using Geist design system tokens (`variant="caption"`, `variant="label"`, `variant="body"`, `variant="micro"`). Eradicated forced uppercase transform on rental helper text by introducing `styles.helperText`.
+    3. **Centralized Error Sanitization & Friendly Messages (`errors.ts`, `MachineModal.tsx`, `MachineDetailView.tsx`, `clients.tsx`, `UserEditModal.tsx`, `AssignSupervisorModal.tsx`)**: Extended `@reachinternational/utils/sanitizeDatabaseError` with explicit mappings for `machines_site_needs_client`, `check_machines_serial_number_not_empty`, `machines_site_fk`, and `mhl_site_fk`. Masked raw PostgreSQL table, relation, and constraint names across all mutation error handlers and toasts.
+    4. **Standardized Toast Notifications & Targeted Mutation Updates (`MachineDetailView.tsx`, `machines.tsx`, `AssignSupervisorModal.tsx`)**: Added `showToast` feedback for create, update, assign, and delete actions. Optimized `MobileAssignPersonnelModal.onSuccess` in `MachineDetailView.tsx` to fetch only the single updated machine record rather than running a full `handleRefresh()`. In `MachineDetailView.tsx` and `machines.tsx`, passed `deletedId` to `onMachineDeleted(machine.id)` and surgically purged deleted machines from local state and `queryClient` cache without full fleet refetches.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 passed).
+    - `pnpm --filter @reachinternational/utils test`: **PASS** (25/25 passed).
+
+- [x] **213 — Authoritative Administrative Password Reset & User Details Tabs Mobile Optimization (/users) (2026-10-19)**:
+  - **Delivered**:
+    1. **Authoritative Administrative Password Reset Fix (`useUserDetailData.ts`, `route.ts`, migration `173_admin_reset_user_password_rpc.sql`)**: Diagnosed `POST https://dashboard-reachinternational.vercel.app/api/users/[id] net::ERR_FAILED` caused by undeployed route on Vercel and missing CORS preflight handling. Created PostgreSQL `SECURITY DEFINER` RPC `public.admin_reset_user_password(target_user_id, new_password)` with caller authentication (`auth.uid()`), strict RBAC (`super_admin`/`admin`), self-reset & privilege elevation guards, bcrypt hashing via `extensions.crypt(new_password, extensions.gen_salt('bf'))` updating `auth.users`, and centralized audit logging in `public.audit_logs`. Updated `resetUserPasswordMobile` in `useUserDetailData.ts` to call this RPC directly (zero CORS or external deployment dependency) with clean API route fallback.
+    2. **API Route CORS & OPTIONS Fix (`apps/web/app/api/users/[id]/route.ts`)**: Added `CORS_HEADERS` with `Access-Control-Allow-Origin: *`, `export async function OPTIONS()`, and uniform `jsonResponse` wrapper on all responses (GET, POST, 400, 401, 403, 500).
+    3. **Users Directory List Integration (`users.tsx`)**: Replaced placeholder in-memory password generation in `handleConfirmResetPassword` with `resetUserPasswordMobile(userToReset.id, userToReset.full_name)` with async loading indicator and error handling.
+    4. **Remove Tab Count Numbering (`UserDetailView.tsx`)**: Eradicated `count` property from all tab items in `segmentedTabItems` per user feedback ("remove total numbering in the tabs keep only label").
+    5. **Shorten Tab Labels for 427px Mobile Viewport (`UserDetailView.tsx`)**: Shortened tab titles (`Machines`, `Logs`, `Assigns`, `Attendance`, `Docs`, `Audit`) and configured `size="xs"` with `itemStyle={{ paddingHorizontal: 10 }}` and smooth horizontal scrolling, perfectly fitting inside a 427px mobile viewport.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+
+- [x] **212 — User Touch Card Minimal Solid White Buttons & Whole Card Clickable (/users) (2026-10-19)**:
+  - **Delivered**:
+    1. **Minimal Solid White Action Buttons ("Supervisor" & "Assign Machine") (`UserTouchCard.tsx`)**: Replaced heavy colored background fills (amber `#d97706` and teal `#0d9488` with white text) with minimal outline action pill buttons (`variant="buttonOutline"`). In Light Mode: solid white background (`#ffffff`), hairline border (`theme.colors.hairline` `#ebebeb`), and ink text & icon (`theme.colors.ink` `#171717`) providing high-contrast 15:1 WCAG AAA readability. In Dark Mode: solid elevated surface (`#262626`), high-contrast border (`#383838`), and ink text & icon (`theme.colors.ink` `#fafafa`) providing high-contrast 13.9:1 WCAG AAA readability. Unified styling across all 3 action pill buttons in `cardActionsContainer` ("More", "Assign Machine", "Supervisor").
+    2. **Whole User Card Clickable to Enter User Details Page (`UserTouchCard.tsx`)**: Replaced outer non-clickable `<View style={styles.userCard}>` container with `<Pressable variant="card" ...>` wrapping the complete card perimeter. Removed redundant inner `<Pressable variant="card">` that previously restricted click events solely to the header/meta box sub-area. Now clicking anywhere across the entire card surface (outer padding, margins, avatar, name, badges, meta rows, and action toolbar whitespace) enters the user details page via `onViewDetails(u)` (or toggles selection in multi-select mode). Added `e?.stopPropagation?.()` on "More", "Assign Machine", and "Supervisor" buttons so clicking action buttons executes only that specific action without triggering card navigation.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **211 — Mobile Machine Update Error Resolution, Modal De-duplication & 100% Solid Opacity Chips (2026-10-19)**:
+  - **Delivered**:
+    1. **Fix `TypeError: yearOfMfg.trim is not a function` during Machine Details update (`MachineModal.tsx`)**: In PostgreSQL `machines.year_of_mfg` is an integer (`INT`). Safe string conversion during state hydration (`machineToEdit.year_of_mfg != null ? String(machineToEdit.year_of_mfg) : ''`), sanitized trimming in `handleSave` (`String(yearOfMfg || '').trim()`), and numeric integer parsing for DB payloads.
+    2. **Eradicate Duplicate Edit Machine & Edit Client Modals (`MachineModal.tsx`, `ClientModal.tsx`, `ClientSelectModal.tsx`, `ClientDetailModal.tsx`, `ClientSiteModal.tsx`, `AppModal.tsx`)**: Added `showHandle?: boolean` prop to `AppModalProps` and forwarded it to `Sheet`. Configured `showHandle={false}`, responsive `variant={isDesktop ? 'center' : 'bottom'}` with centered dialog on desktop and clean bottom sheet on mobile, and stripped inner container drop shadows, elevation, and duplicate top-corner border radii. Eradicated redundant nested `KeyboardAvoidingView` wrappers that conflicted with `Sheet`.
+    3. **Targeted Single-Record Refetch After Successful Update (`machines.tsx`)**: Replaced full fleet `fetchMachines()` with targeted local state updates and TanStack Query cache updates for `['machines']` in both `onMachineUpdated` and `MachineModal.onSuccess` when updating an existing machine.
+    4. **Machine Detail View Header & Hero Refinements (`MachineDetailView.tsx`, `MobileHeader.tsx`)**: In `MobileHeader`, displayed `title={machine.model || 'Machine Details'}` and `subtitle={machine.machine_id}` with `opacity: 0.72`. In Hero card, set title to `machine.model || 'Machine Model'` and subtitle to `{machine.serial_number} • {machine.machine_id}`. Removed duplicate Boxes 7 & 8 in the Basic Info specs grid, configured `clientGrid` to display 2 columns in one row across mobile devices, and removed redundant Call/WhatsApp buttons.
+    5. **100% Solid Opacity Background Chips (`MobileMachineCard.tsx`, `MachineFilterPanel.tsx`, `MachineDetailView.tsx`)**: Applied `solid` prop to all status badges in `MobileMachineCard` (`breakdown`, `under_maintenance`, `spare`, `active`, `rented`, `available`), yielding 100% opaque fills and high-contrast `#ffffff` text in light and dark mode. Added `solid` to `+remaining` count badges in `MobileMachineCard` and to active `rentalFilter` and `healthFilter` badges in `MachineFilterPanel`. Added solid background to filter trigger chips in `MachineDetailView`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **210 — Native Running Logs & Operations 100% Solid Opacity Chips, Buttons & Centralized Badge Standardization (2026-10-19)**:
+  - **Delivered**:
+    1. **Centralized Badge Solid Opacity Standardization (`Badge.tsx`)**: Upgraded `solid = true` as default in `BadgeProps` and `resolveBadgeColors()`. All semantic variants (`success`, `info`, `warning`, `error`, `destructive`, `neutral`, `default`) and all 6 canonical roles (`operator`, `supervisor`, `admin`, `super_admin`, `manager`, `hr`) default to 100% solid, fully opaque surface fills with high-contrast `#ffffff` text across light and dark themes. Handled `outline` with solid opaque `theme.colors.canvasElevated` and hairline border, and `secondary` with solid `#f4f4f5` (light) / `#27272a` (dark).
+    2. **Eradicate Transparent Background Washes in `SearchableSelect` (`SearchableSelect.tsx`)**: Replaced raw `View` chips (`codeBadge` and `badgePill` which used `rgba(2, 132, 199, 0.10)` / `0.18` and `rgba(16, 185, 129, 0.08)`) with canonical `<Badge variant="info" solid size="sm" shape="pill" label={item.code} />` and `<Badge variant={item.badgeVariant || 'neutral'} solid size="sm" shape="pill" label={item.badge} />`. Completely eliminated translucent background washes across `/running-logs` and `/operations` filters (e.g. `CLI-0050`, `ALL`, `EMP-0334`).
+    3. **100% Solid Opacity Touch Action Buttons (`UserTouchCard.tsx`)**: Eradicated 7% alpha hexes (`#d9770612` and `#0d948812`) in action pill buttons. Replaced with 100% solid opaque buttons (`Assign Machine`: solid amber `#d97706` / `#b45309` with `#ffffff` text/icon; `Supervisor`: solid teal `#0d9488` / `#0f766e` with `#ffffff` text/icon; `More`: solid elevated canvas with hairline border and ink text/icon).
+    4. **Theme Parity & Accessibility**: Ensured high WCAG AAA contrast in both light (`#fafafa` canvas / `#ffffff` card) and dark (`#0a0a0a` canvas / `#171717` card) modes, controlled at a single source of truth in `Badge.tsx`.
+  - **Verification**:
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (61/61 checks passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **208 — Client Directory (/clients) Active Filter Chips: 100% Solid Opacity & Canonical Badge Standardization (2026-10-19)**:
+  - **Delivered**:
+    1. **Eradicate Transparent Backgrounds & Inconsistent Chips (`apps/mobile/app/(app)/clients.tsx`)**: Replaced custom `<Pressable variant="chip">` elements in the active filters toolbar with the canonical `<Badge>` primitive (`Badge.tsx`). Eradicated 8-digit hex transparency (`#064e3b26`, `#78350f26`, `#10b98133`, `#f59e0b33`), enforcing 100% solid, fully opaque surface fills with AAA contrast across both light and dark themes (`#ecfdf5` / `#064e3b` for Active, `#fffbeb` / `#78350f` for Inactive, `#ffffff` / `#171717` for Search and Sort).
+    2. **Consistent Chip Size & Typography (`clients.tsx`)**: Replaced unvarianted `<Text>` tags that previously fell back to 16px body text with `<Badge size="md">`, standardizing on Geist 12px caption typography (`<Text variant="caption" weight="semibold">`) with consistent padding (`minHeight: 24`, `paddingHorizontal: 9`, `paddingVertical: 2`). Converted `activeBadgesHeader` and `resetAllLinkText` to `<Text variant="caption">`.
+    3. **DOM Hydration & Interaction Safety**: Replaced the outer interactive Pressable container with `<Badge onRemove>`, which renders a static `<View>` with an inner remove `<Pressable>` button, eliminating nested button conflicts and ensuring tactile haptic removal with 48px touch slop.
+    4. **Clean Code & Test Verification (`test-badge-component.mjs`, `run-tests.mjs`)**: Purged unused `X` icon import and dead `styles.badgeChip` / `styles.badgeChipText`. Added assertions to `test-badge-component.mjs` and `run-tests.mjs` verifying centralized Badge reuse and eradication of transparent hex colors.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (61/61 checks passed, 100%).
+    - `node apps/mobile/test-optimized-filter-components.mjs`: **PASS** (104/104 checks passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (333/333 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **207 — User Details Performance Optimization, 3-Dot Menu Cleanup, Temporary Password Reset Modal, Query Selective Cache Updates & Scrollable Segmented Navigation (2026-10-19)**:
+  - **Delivered**:
+    1. **3-Dot Action Menu Cleanup (`UserDetailView.tsx`)**: Completely removed `Refresh Profile Details`, `Call Phone`, `Send Email`, and `Chat on WhatsApp` actions from the header 3-dot dropdown menu. Retained direct communication actions in the contact info card while leaving the 3-dot menu focused exclusively on account management (`Edit Profile`, `Assign Equipment`, `Assign Supervisor`, `Reset Password`, `Deactivate Account`, `Delete User Account`).
+    2. **Administrative Temporary Password Reset Overhaul (Web Parity) (`UserDetailView.tsx`, `PasswordResetModal.tsx`, `api/users/[id]/route.ts`)**: Instead of dispatching reset email links, connected to the backend endpoint `POST /api/users/[id]` with `action: 'reset-password'`. Generated a formatted temporary password (`${FirstName}@${random4}`) via `generateUserFormattedPassword`, removed the older password and updated Supabase Auth via Admin client (`updateUserById`), wrote an audit log, and presented the generated password to the admin in a dedicated native `PasswordResetModal` with one-tap clipboard copy and haptic confirmation.
+    3. **Targeted Mutation Query Optimization (`useUserDetailData.ts`, `UserDetailView.tsx`)**: Created `fetchUpdatedUserRecord(queryClient, userId)` to selectively fetch only the single updated user row (`USER_DETAIL_COLUMNS`) and update the TanStack Query overview cache (`['user_detail', userId, 'overview']`) directly without re-triggering heavy aggregate KPI queries. Wired this into `UserEditModal`, `AssignSupervisorModal`, and `handleConfirmToggleStatus`.
+    4. **Edit User Details Modal Shell & Scroll Fix (`UserEditModal.tsx`)**: Pinned the modal header and footer outside the scroll container with bounded maximum height (`maxHeight: Math.min(windowHeight * 0.65, 560)` for `scrollArea`, and `maxHeight: '90%'` on `isDesktop`), removing broken nested height behavior so that all form sections and input boxes scroll cleanly and smoothly.
+    5. **SegmentedToggle Mobile Optimization (`SegmentedToggle.tsx`, `UserDetailView.tsx`)**: Added `scrollable?: boolean` to `SegmentedToggle` with horizontal scrollable wrapping, auto-scroll centering on active tab selection, and smooth spring physics (`stiffness: 440, damping: 34, mass: 0.8`), completely eliminating tab label truncation (`M.. 1`, `R 15`) across narrow mobile viewports.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-segmented-toggle.mjs`: **PASS** (18/18 checks passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 test scenarios passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+
+- [x] **206 — Native Mobile User Details Page & View Architecture (/users/[id]) (2026-10-19)**:
+  - **Delivered**:
+    1. **Eradicate User Details Dialogue Box (`users.tsx`)**: Replaced `<UserDetailModal>` modal dialog on user touch card tap with full-screen, dedicated `UserDetailView` screen view matching the `MachineDetailView` architecture.
+    2. **100% Web & Mobile Parity with `UserDetailClient.tsx` (`UserDetailView.tsx`)**: Translated full web user details page to native mobile: Monogram avatar squircle, full name, role badge, status badge, copyable employee ID, shift hours badge, 3 quick action buttons (Email, Phone, WhatsApp), 4 Metadata Cards in 2-column grid (Contact, Employment, Shift & Compensation, Location), 4 KPI Cards (Assigned Fleet, Running Hours, Work Days, KYC Documents), Segmented Toggle with count pills, in-tab search, and 6 full tab views.
+    3. **Custom-Designed API Route (`apps/web/app/api/users/[id]/route.ts`)**: Designed `/api/users/[id]?tab=...` with tab dispatching, server-side session authentication with Supabase cookie or Bearer header, PII masking (maskAadhaar, formatLicenseNumber), and RBAC authorization.
+    4. **On-Demand Lazy Loading on Every Tab (`useUserDetailData.ts`, `UserDetailView.tsx`)**: Built TanStack Query hooks for `overview`, `machines`, `logs`, `assignments`, `attendance`, `documents`, and `audit` with 30-second stale time and enabled flag tied to visited tab states.
+    5. **Employee ID in Header**: Displayed `user.employee_id` (e.g. `EMP-0338`) prominently in `<MobileHeader title={user.employee_id || 'User Profile'}>` with back button and action sheet.
+    6. **Strict RBAC Invariants**: Suppressed unauthorized UI elements (e.g., Audit Trail tab, Edit User, Delete User, Activate/Deactivate actions, salary amounts) based on canonical roles.
+    7. **100% Token & Machine Details Consistency**: Full Vercel Geist design tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`), 0 raw typography properties, 44px min touch targets, and tactile haptic feedback.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (0 errors, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck`: **PASS** (0 errors, exit code 0).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+    - `node apps/mobile/test-users-workflows.mjs`: **PASS** (42/42 test scenarios passed, 100%).
+
+- [x] **205 — Machine Details Mobile View Refinements & Fixes (/machines) (2026-10-19)**:
+  - **Delivered**:
+    1. **Hero Edit Options Popover (`MachineDetailView.tsx`)**: Replaced bottom modal (`AppModal variant="bottom"`) with an anchored popover positioned directly below the `Edit ∨` trigger button using `measureInWindow`, automatically calculating top/right coordinates and closing cleanly on backdrop tap or option selection.
+    2. **Machine ID Display in Header (`MachineDetailView.tsx`)**: Updated `<MobileHeader>` to display `machine.machine_id` (e.g. `M/C-0001`) in the top navigation header bar.
+    3. **Hero Title Cleanup & Duplicate Edit Removal (`MachineDetailView.tsx`)**: Promoted `machine.machine_id` to primary hero title, formatted subtitle with model and manufacturer, and removed redundant duplicate `Edit` button from `Basic Info` card header.
+    4. **Clean & Consistent Canonical Empty States (`MachineDetailView.tsx`)**: Implemented canonical `<EmptyState>` components across all 3 tabs (compact empty states for unassigned client site and personnel; full empty states with reset actions for HMR logs and Machine Audits).
+    5. **100% Solid Opacity Chips & AAA Contrast (`Badge.tsx`, `MachineDetailView.tsx`)**: Added `solid?: boolean` prop to `BadgeProps` and `resolveBadgeColors()`. Applied solid mode across all hero status chips (`Breakdown`, `Under Maintenance`, `Spare`, `Active`, `On Rent`, `Available`), `clientCodePill`, `Map` location button, `totalHoursBadge`, and audit action chips with crisp `#ffffff` text in light and dark mode.
+    6. **Machine Audits Complete Visibility (`MachineDetailView.tsx`)**: Upgraded Supabase query using `.or(...)` to retrieve all audit logs across `operator_machine_assignment`, `machine_hour_logs`, and `machines` tables, with diff extraction and category filtering.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 test scenarios passed, 100%).
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (58/58 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 passed).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **204 — Remove Extra DateRangePicker Component & Reuse Existing CustomDatePicker for Separate Start/End Date Selections (2026-10-19)**:
+  - **Delivered**:
+    1. **Eradicate Extra `DateRangePicker` Component (`components/ui/DateRangePicker.tsx`, `components/ui/index.ts`)**: Deleted extra `DateRangePicker.tsx` file and eradicated its barrel export from `components/ui/index.ts`.
+    2. **Reuse Existing `CustomDatePicker` Component (`components/ui/CustomDatePicker.tsx`)**: Extended canonical `CustomDatePicker` with `outerLabel?: string` prop for clean label positioning matching `SearchableSelect`, and `clearable?: boolean` prop providing quick clearing via an `X` icon on the trigger and a footer "Clear" action.
+    3. **Separate Start Date & End Date Selection (`RunningLogFilterPanel.tsx`)**: Implemented separate, side-by-side `<CustomDatePicker>` inputs for "Start Date" and "End Date" when `selectedMonth === 'custom'`, seamlessly wiring `customStartDate`/`onSelectCustomStartDate` and `customEndDate`/`onSelectCustomEndDate`.
+  - **Verification**:
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - Browser verification via subagent: **VERIFIED** on `http://localhost:8081/running-logs`.
+
+- [x] **203 — `/machines` Screen Polish: Filter Popover Anchoring, 100% Solid Opacity Chips, Specs Well Typography Standardization, Bottom Navbar Clearance & Canonical Shift Log Layout (2026-10-19)**:
+  - **Delivered**:
+    1. **Filter Popover Anchoring (`machines.tsx`, `MachineFilterPanel.tsx`, `MachineFilterSidebar.tsx`, `FilterSidebar.tsx`)**: Replaced drawer with anchored popover mode for filter button, measuring button screen bounds to position and clamp popover card directly below the trigger button.
+    2. **100% Solid Opacity Chips & AAA Contrast (`Badge.tsx`, `MachineDetailView.tsx`)**: Replaced all 8-digit hex alpha codes (`#0ea5e918`, `#10b98115`, `#e11d4818`, etc.) with 100% solid opaque fills across `clientCodePill`, `oversightBadge`, `[Open Map Location]` button, `totalHoursBadge`, `heroMenuIconBox`, and audit details modals. Ensured `activeOpacity: 1.0` and `opacity: 1` across badges.
+    3. **Specs Well Typography Standardization (`MobileMachineCard.tsx`)**: Standardized Hour Meter (`label` semibold), Assigned Client (`label` semibold), and Supervisor/Operator names (`label`) for consistent typography scale and font family.
+    4. **Bottom Navbar Overlap Clearance (`machines.tsx`, `MachineDetailView.tsx`)**: Increased container bottom padding from 90/40 to 120 in both list view and machine detail view.
+    5. **Canonical Shift Log Card Reuse & Shift Entry Timestamp (`RunningLogShiftCard.tsx`, `MachineDetailView.tsx`)**: Eradicated legacy custom `styles.logCard` layout in Tab 2, reused canonical `RunningLogShiftCard` component, and added shift entry timestamp (`Entered: dd-MMM-yy hh:mm a`) with small grey text (`variant="micro"`).
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **202 — `/machines` Screen Polish: Header Cleanup, Refresh Button Removal, Solid Pill Chips & Complete Typography Standardization (2026-10-19)**:
+  - **Delivered**:
+    1. **Header Cleanup (`MachineDetailView.tsx`)**: Removed `title="Machine Details"` and `subtitle={...}` from `<MobileHeader>`. The top bar now renders a clean back button and 3-dot action menu without redundant headers.
+    2. **Refresh Button Eradication (`MachineDetailView.tsx`)**: Completely removed the circular refresh button (`<RefreshCw>`) from the Audit Trail card header.
+    3. **100% Solid Opacity Pill Chips (`MachineDetailView.tsx`)**: Replaced semi-transparent chip styles on all 5 category chips (`all`, `hour_logs`, `breakdowns`, `assignments`, `updates`) with 100% solid opacity fills (`#f4f4f5` light / `#262626` dark for inactive, and solid `#171717` / `#059669` / `#e11d48` / `#0284c7` / `#d97706` for active states) with `borderRadius: radiusNumeric.full` and `<Text variant="caption" weight="medium">` (Geist 12px) for crisp light/dark theme contrast.
+    4. **End-to-End Typography Standardization (`MachineDetailView.tsx`)**: Converted all unvarianted `<Text>` tags throughout `MachineDetailView.tsx` (Hero, Specs Grid, Personnel Section, Client Allocation, Hours Meter Logs, Audit Trail, and all Modals) to canonical `<Text variant="...">` components (`heading`, `subheading`, `body`, `label`, `caption`, `micro`, `mono`). Verified all 178 `<Text>` elements in the component now have explicit `variant` props (0 missing).
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/test-machines-workflows.mjs`: **PASS** (30/30 test scenarios passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (325/325 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+
+- [x] **201 — Resolution of React Native Web Unparented Text Node Error in MachineDetailView & Monorepo-Wide Boolean Protection (2026-10-19)**:
+  - **Delivered**:
+    1. **MachineDetailView Root Cause Fix (`MachineDetailView.tsx`)**: Diagnosed and resolved fatal React Native Web error `Unexpected text node: . A text node cannot be a child of a <View>.`. Root cause was the conditional expression `(activeLogFilterCount > 0 || logSearch) && (` inside `<View style={styles.logsListContainer}>`, which evaluated to the empty string `""` when `activeLogFilterCount === 0` and `logSearch === ''` (`false || ''` -> `''`). Converted to `(activeLogFilterCount > 0 || logSearch.length > 0) && (`.
+    2. **Boolean Guard Hardening Across MachineDetailView**: Wrapped `logsError`, `auditError`, `log.metadata.isBreakdown && log.metadata.breakdownReason`, `log.metadata.location`, and modal audit log fields in `Boolean(...)` to guarantee zero empty strings or falsy non-boolean values reach `<View>` containers.
+    3. **Pressable Defense-in-Depth Child Sanitization (`Pressable.tsx`)**: Added `sanitizedChildren` in `Pressable.tsx` to automatically convert `""` and `false` to `null` before passing them to `AnimatedRNPressable` (`<View>`), shielding all consumers monorepo-wide against unparented empty string crashes.
+    4. **EmptyState & UI Primitive Hardening (`EmptyState.tsx`, `Alert.tsx`, `MobileHeader.tsx`, `PermissionDeniedView.tsx`)**: Wrapped action button conditions in `Boolean(...)` in `EmptyState.tsx`. Wrapped `title` and `message` in `Boolean(...)` in `Alert.tsx`, `MobileHeader.tsx`, and `PermissionDeniedView.tsx`.
+    5. **Monorepo-Wide Boolean Protection (`MobileMachineCard.tsx`, `UserTouchCard.tsx`, `MobileClientCard.tsx`, `MachineModal.tsx`, `MultiUserSelectModal.tsx`)**: Enforced `Boolean(...)` and `.length > 0` checks across metadata rows. Added missing `X` icon import in `MachineFilterPanel.tsx` and fixed `StyleSheet.create` absolute fill in `FilterSidebar.tsx`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (330/330 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+
+- [x] **200 — Native Running Logs & Filters Polish: Operator EMP ID, Month Badges Removal, Single Reusable DateRangePicker & Quiet Empty State (2026-10-19)**:
+  - **Delivered**:
+    1. **Operator EMP ID Badge Display (`useOperationsData.ts`, `RunningLogFilterPanel.tsx`)**: Extended `OperatorRecord` and `useOperationsMasterData` users query to project `employee_id`. Replaced hardcoded `code: 'OP'` badge in `operatorOptions` with `o.employee_id || undefined`, rendering `[EMP-xxxx]` badges and single-line format (`Amit Verma · EMP-001 · +91 98765 00024`) directly addressing user feedback.
+    2. **Eradication of Code Badges from Month Dropdown (`RunningLogFilterPanel.tsx`)**: Removed `code` attributes from `MONTH_OPTIONS` (`ALL`, `JAN`...`DEC`, `CUST`), presenting clean month labels in triggers and dropdown list items matching web design standards.
+    3. **Canonical Reusable Mobile DateRangePicker (`components/ui/DateRangePicker.tsx`, `components/ui/index.ts`)**: Built native mobile `DateRangePicker` component matching web parity (`apps/web/components/ui/DateRangePicker.tsx`) and screenshot reference:
+       - Single calendar popover with Month switcher (`< Month Year >`), weekday headers (`SU`...`SA`), and 7-column grid with connected light blue ribbon between start date and end date.
+       - Day count pill badge (e.g. `19 Days`), clear `X` button, and chevron indicator on trigger button.
+       - Bottom action bar with `Clear`, `Cancel`, and `Apply Range` buttons adhering to Vercel Geist tokens, min 44px touch targets, and tactile haptics.
+    4. **Single Date Range Picker Integration (`RunningLogFilterPanel.tsx`)**: Replaced the two separate `CustomDatePicker` pickers (Start Date & End Date) with the single reusable `<DateRangePicker>` component when `selectedMonth === 'custom'`.
+    5. **Filtered Empty State Polish & Summary Card Preservation (`running-logs.tsx`)**: Maintained `RunningLogSummaryCard` visibility across Client, Machine, and Operator views during filtering so active entity details and statistics are never obscured. Replaced the obstructive full-screen `<EmptyState>` with a clean, subtle quiet card (`styles.quietEmptyCard`) during active filter/search periods, preserving `<EmptyState>` strictly for genuinely empty data roots (`logs.length === 0`).
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (325/325 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (7/7 packages successful across monorepo, exit code 0).
+
+- [x] **199 — Running Logs Screen Polish: Top Navbar SegmentedToggle, Unified SearchableSelect Dropdowns, Reanimated Accordions & Bottom Navbar Clearance (2026-10-19)**:
+  - **Delivered**:
+    1. **Top Navbar Segmented Navigation Toggle (`apps/mobile/app/(app)/running-logs.tsx`, `SegmentedToggle.tsx`)**: Extracted `<SegmentedToggle<LogsViewMode>>` out of `RunningLogFilterPanel` card into top navbar layout directly below `MobileHeader` and search input inside `styles.segmentedToggleWrapper`, matching `operations.tsx` architecture. Refined `SegmentedToggle` spring physics (`stiffness: 320, damping: 28, mass: 0.6`) for fluid, lightweight sliding transition. Decoupled `RunningLogFilterPanel` toggle with optional `showToggle={false}` while maintaining Test 184 test contract.
+    2. **Unified SearchableSelect Dropdowns (`RunningLogFilterPanel.tsx`, `SearchableSelect.tsx`)**: Reused Select Operator dropdown architecture across all dropdowns (Select Client, Select Location, Select Machine, Select Month). Standardized single-line format (`inlineDescription={true}`), Reach Sky Blue code badges (`code: 'CLI'`, `'SITE'`, `'M/C'`, `'OP'`, `'JAN'...'DEC'`), and counter badges (`rightElement`). Replaced legacy hardcoded colors in `SearchableSelect` with canonical theme tokens (`theme.colors.canvas`, `theme.colors.canvasElevated`, `theme.colors.hairline`, `theme.colors.ink`, `theme.colors.mute`, `theme.colors.link`).
+    3. **Smooth Reanimated 3 Summary Card Collapsible (`RunningLogSummaryCard.tsx`)**: Replaced abrupt show/hide with Reanimated 3 `useSharedValue` and `withTiming` (220ms cubic bezier). Added smooth rotating chevron animation (`0deg` → `180deg`) and interpolated height + opacity fade (`maxHeight: [0, 280]`, `opacity: [0, 1]`, `overflow: 'hidden'`) across Client, Machine, and Operator views (e.g. "Toggle Amit Verma details").
+    4. **Bottom Navbar Clearance & Reusable Shift Card (`RunningLogShiftCard.tsx`, `running-logs.tsx`, `RunningLogDayGroup.tsx`)**: Resolved bottom navbar overlap by expanding `contentContainer.paddingBottom` from 40 to 110. Contextualized `RunningLogShiftCard` metadata row across all three view modes: Client view: Header = Machine Model, Row 2 = `Shift: A` | `Operator: <Name>`; Machine view: Header = Client Company Name, Row 2 = `Shift: A` | `Operator: <Name>`; Operator view: Header = Machine Model, Row 2 = `Shift: A` | `Client: <Client Name>`. Unified design tokens, badges, and metric boxes (M/C RT, WH, B/D) across Machine, Client, and Operator modes. Added smooth Reanimated 3 animation for "View Remark" / "Hide Details" toggle with rotating chevron and interpolated height/opacity fade.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (310/310 test scenarios passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+
+- [x] **198 — Complete Eradication of Mobile Splash Screen Logo Across All Platforms & Native Configs (2026-10-19)**:
+  - **Delivered**:
+    1. **Gateway Screen Clean Minimalist Canvas (`apps/mobile/app/index.tsx`)**: Completely eradicated `<ReachBrandEmblem>` and the animated logo container. Removed `logoSize`, `logoContainer`, `logoLightElevation`, and `logoDarkElevation` styles. Preserved zero-spinner invariant and theme-aware canvas background (`theme.colors.canvas`) with synchronized `StatusBar`.
+    2. **Expo Splash Screen Config (`apps/mobile/app.json`)**: Removed `"image"` and `"resizeMode"` properties from `expo-splash-screen` plugin, keeping only clean `"backgroundColor": "#ffffff"`.
+    3. **Android Native Splash Cleanup (`styles.xml`, `ic_launcher_background.xml`)**: Set `windowSplashScreenAnimatedIcon` to `@android:color/transparent` in `styles.xml`. Removed the `@drawable/splashscreen_logo` bitmap item from `ic_launcher_background.xml`.
+    4. **Transparent Asset Fallbacks**: Replaced `assets/splash.png` and all density variants of `splashscreen_logo.png` (`hdpi`, `mdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) with a 1x1 transparent PNG.
+    5. **Automated Verification**: Updated `apps/mobile/test-splash-screen.mjs` to test complete eradication of the splash screen logo (24/24 assertions passed, 100%). Updated Test 175 in `apps/mobile/run-tests.mjs` (310/310 test scenarios passed, 100%). Verified 0 raw typography property violations and 0 monorepo typecheck errors across all 7 packages.
+  - **Verification**:
+    - `node apps/mobile/test-splash-screen.mjs`: **PASS** (24/24 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (310/310 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+
+- [x] **197 — Resolve React DOM Hydration Error: Eradicate Nested `<button>` in `<Badge>` Primitive (2026-10-19)**:
+  - **Delivered**:
+    1. **Container Interaction Separation (`Badge.tsx`)**: Decoupled `hasPress` and `hasRemove`. Set `isInteractive = hasPress`, ensuring that badges with only `onRemove` (e.g. dismissible active filter chips across `MobileTodayShiftMonitorTab` and `MobileOperatorHistoryTab`) render as static `<View>` containers (`<div>` on Web) rather than interactive `<Pressable>` buttons.
+    2. **Suppression of Outer Button Roles on Dismissible Badges**: Suppressed `accessibilityRole: 'button'` on the outer container when `hasRemove` is true, resolving to `undefined` (or `variant="plain"` if `onPress` is also provided), ensuring outer containers are never emitted as HTML `<button>`. Added defensive prop sanitization to strip `accessibilityRole: 'button'` from forwarded `props` if `hasRemove` is present.
+    3. **Automated Verification**: Added Section 12 to `apps/mobile/test-badge-component.mjs` verifying nested button DOM safety and accessibility role protection (58/58 checks passed). Added nested button prevention assertions to `apps/mobile/run-tests.mjs` (309/309 scenarios passed). Verified 0 monorepo typecheck errors across all 7 packages.
+  - **Verification**:
+    - `node apps/mobile/test-badge-component.mjs`: **PASS** (58/58 assertions passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: **PASS** (309/309 test scenarios passed, 100%).
+    - `node scripts/check-typography.mjs`: **PASS** (0 raw typography violations).
+    - `pnpm --filter @reachinternational/permissions test`: **PASS** (5/5 tests passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: **PASS** (`tsc --noEmit` -> 0 errors, exit code 0).
+    - `pnpm typecheck`: **PASS** (`7/7 packages successful across monorepo`, exit code 0).
+
 - [x] **196 — Native Daily Running Logs (/running-logs) Web App Parity: Segmented View Modes, Dynamic Searchable Selects, Reusable Summary & Sub-Header Cards, and Daily Shift Logs (2026-10-17)**:
   - **Delivered**:
     1. **Filter Panel with Segmented Toggle & Dynamic Dropdowns (`RunningLogFilterPanel.tsx`)**: Reusable top pill switcher: `SegmentedToggle` with `Machine` | `Clients` | `Operator` view modes (`LogsViewMode`). Clean hairline border separation with `theme.colors.hairline`. Dynamic mode-tailored filter dropdowns using `SearchableSelect`:

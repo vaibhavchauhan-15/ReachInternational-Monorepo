@@ -11,11 +11,12 @@ import { useTheme } from '../ui/ThemeProvider';
 import { Text } from '../ui/Text';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
-import { showToast } from '../ui';
+import { showToast, Skeleton } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { sanitizeDatabaseError } from '@reachinternational/utils';
 import { User, ShieldCheck, Check, X } from '../ui/icon';
 import type { UserRecord } from './UserDetailModal';
 
@@ -146,6 +147,13 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
 
       const assignedName = supervisors.find((s) => s.id === selectedId)?.full_name;
       haptics.confirm();
+      showToast(
+        'success',
+        'Supervisor Assigned',
+        assignedName
+          ? `${assignedName} has been assigned as supervisor.`
+          : 'Supervisor assignment cleared.'
+      );
       const assignedSupervisor = selectedId ? supervisors.find((s) => s.id === selectedId) : null;
       const patch: Partial<UserRecord> = {
         supervisor_id: selectedId,
@@ -171,7 +179,8 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
       onClose();
     } catch (err: any) {
       haptics.reject();
-      showToast('error', 'Update Failed', err?.message || 'Failed to update supervisor assignment.');
+      const sanitized = sanitizeDatabaseError(err);
+      showToast('error', 'Update Failed', sanitized.error || 'Failed to update supervisor assignment.');
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -245,11 +254,27 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
         {/* Supervisor List */}
         <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
           {isLoading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={theme.colors.link} />
-              <Text variant="caption" style={{ color: theme.colors.mute }}>
-                Loading available supervisors...
-              </Text>
+            <View style={{ gap: spacingNumeric.sm }}>
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <View
+                  key={`sup-skel-${idx}`}
+                  style={[
+                    styles.optionRow,
+                    {
+                      borderColor: theme.colors.hairline,
+                      backgroundColor: 'transparent',
+                    },
+                  ]}
+                >
+                  <View style={styles.optionLeft}>
+                    <Skeleton width={36} height={36} borderRadius={radiusNumeric.full} />
+                    <View style={styles.optionTextContainer}>
+                      <Skeleton width={idx % 2 === 0 ? 140 : 110} height={14} borderRadius={radiusNumeric.xs} />
+                      <Skeleton width={idx % 2 === 0 ? 170 : 130} height={11} borderRadius={radiusNumeric.xs} style={{ marginTop: 4 }} />
+                    </View>
+                  </View>
+                </View>
+              ))}
             </View>
           ) : (
             <>

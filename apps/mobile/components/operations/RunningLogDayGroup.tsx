@@ -19,6 +19,7 @@ export interface RunningLogDayGroupProps {
   isExpanded: boolean;
   onToggle: () => void;
   searchTerm?: string;
+  logsViewMode?: 'machine' | 'client' | 'operator';
 }
 
 export const RunningLogDayGroup: React.FC<RunningLogDayGroupProps> = ({
@@ -32,6 +33,7 @@ export const RunningLogDayGroup: React.FC<RunningLogDayGroupProps> = ({
   isExpanded,
   onToggle,
   searchTerm,
+  logsViewMode = 'client',
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -63,14 +65,14 @@ export const RunningLogDayGroup: React.FC<RunningLogDayGroupProps> = ({
               </Text>
             </View>
             {hasBreakdown && (
-              <View style={[styles.countBadge, { backgroundColor: '#ee000015' }]}>
-                <AlertTriangle size={10} color="#ee0000" />
-                <Text variant="caption" style={{ color: '#ee0000' }}>B/D</Text>
+              <View style={[styles.countBadge, { backgroundColor: isDark ? 'rgba(238, 0, 0, 0.15)' : '#fee2e2' }]}>
+                <AlertTriangle size={10} color={theme.colors.error} />
+                <Text variant="caption" style={{ color: theme.colors.error }}>B/D</Text>
               </View>
             )}
             {dayOtHours > 0 && (
-              <View style={[styles.otBadge, { backgroundColor: '#0070f315' }]}>
-                <Text variant="caption" style={styles.otBadgeText}>+{dayOtHours}h OT</Text>
+              <View style={[styles.otBadge, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe' }]}>
+                <Text variant="caption" style={{ color: theme.colors.link }}>+{dayOtHours}h OT</Text>
               </View>
             )}
           </View>
@@ -101,6 +103,7 @@ export const RunningLogDayGroup: React.FC<RunningLogDayGroupProps> = ({
             <RunningLogShiftCard
               key={log.id}
               log={log}
+              logsViewMode={logsViewMode}
               searchTerm={searchTerm}
               isLast={index === dayLogs.length - 1}
             />
@@ -143,9 +146,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radiusNumeric.sm,
-  },
-  otBadgeText: {
-    color: '#0070f3',
   },
   dayGroupHeaderRight: {
     flexDirection: 'row',

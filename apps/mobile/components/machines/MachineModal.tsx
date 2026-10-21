@@ -6,13 +6,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  } from 'react-native';
-import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, Text, type SelectOption, AppModal } from '../ui';
+  useWindowDimensions,
+} from 'react-native';
+import { Input, useTheme, SearchableSelect, ShiftCardSelector, SearchInput, Text, type SelectOption, AppModal, showToast } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
-import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
+import { formatTo12Hour, parseTimeToMinutes, sanitizeDatabaseError } from '@reachinternational/utils';
 import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from '../ui/icon';
 import { type SelectableUser } from './MultiUserSelectModal';
 import { type SelectableClient } from './ClientSelectModal';
@@ -97,6 +98,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   initialSection = 'all',
 }) => {
   const { theme, isDark } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
 
   const normalizedRole = (userRole || '').toLowerCase();
   const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
@@ -117,6 +120,17 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   const [operatorShifts, setOperatorShifts] = useState<Record<string, string>>({});
   const [clientShifts, setClientShifts] = useState(DEFAULT_MOBILE_SHIFTS);
   const [selectedClient, setSelectedClient] = useState<SelectableClient | null>(null);
+  const [siteId, setSiteId] = useState<string>('');
+  const [clientSites, setClientSites] = useState<Array<{
+    id: string;
+    site_name: string;
+    site_code: string;
+    city: string;
+    street?: string;
+    district?: string;
+    pincode?: string;
+  }>>([]);
+  const [isLoadingSites, setIsLoadingSites] = useState(false);
 
   // Available data lists from Supabase
   const [supervisorsList, setSupervisorsList] = useState<SelectableUser[]>([]);
@@ -180,10 +194,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   useEffect(() => {
     if (visible) {
       if (machineToEdit) {
-        setModel(machineToEdit.model || '');
-        setSerialNumber(machineToEdit.serial_number || '');
-        setManufacturer(machineToEdit.manufacturer || '');
-        setYearOfMfg(machineToEdit.year_of_mfg || '');
+        setModel(machineToEdit.model ? String(machineToEdit.model) : '');
+        setSerialNumber(machineToEdit.serial_number ? String(machineToEdit.serial_number) : '');
+        setManufacturer(machineToEdit.manufacturer ? String(machineToEdit.manufacturer) : '');
+        setYearOfMfg(machineToEdit.year_of_mfg != null ? String(machineToEdit.year_of_mfg) : '');
         setHourMeter(String(machineToEdit.hour_meter ?? 0));
         setHealthStatus(machineToEdit.health_status || 'active');
         setRentalStatus(machineToEdit.status || 'available');
@@ -230,6 +244,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         } else {
           setSelectedClient(null);
         }
+        setSiteId(machineToEdit.site_id ? String(machineToEdit.site_id) : '');
       } else {
         setModel('');
         setSerialNumber('');
@@ -243,6 +258,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         setOperatorShifts({});
         setClientShifts(DEFAULT_MOBILE_SHIFTS);
         setSelectedClient(null);
+        setSiteId('');
+        setClientSites([]);
       }
       setFieldErrors({});
       setFormError('');
@@ -292,6 +309,46 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       isMounted = false;
     };
   }, [selectedClient?.id, machineToEdit?.client_id, visible]);
+
+  // Load valid deployment sites for selected client dynamically
+  useEffect(() => {
+    const targetClientId = selectedClient?.id;
+    if (!targetClientId) {
+      setClientSites([]);
+      setSiteId('');
+      return;
+    }
+    let isMounted = true;
+    setIsLoadingSites(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('client_sites')
+          .select('id, site_code, site_name, street, city, district, pincode')
+          .eq('client_id', targetClientId)
+          .eq('status', 'active')
+          .order('site_name', { ascending: true });
+        if (isMounted && data) {
+          setClientSites(data);
+          // Retain siteId if it belongs to this client's sites; otherwise clear it
+          setSiteId((prev) => (prev && data.some((s) => s.id === prev) ? prev : ''));
+        } else if (isMounted) {
+          setClientSites([]);
+          setSiteId('');
+        }
+      } catch {
+        if (isMounted) {
+          setClientSites([]);
+          setSiteId('');
+        }
+      } finally {
+        if (isMounted) setIsLoadingSites(false);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClient?.id, visible]);
 
   const maxMobileShifts = clientShifts.length > 0 ? clientShifts.length : 3;
 
@@ -517,10 +574,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     setFormError('');
 
     const errors: Record<string, string> = {};
-    const cleanModel = model.trim();
-    const cleanSerial = serialNumber.trim();
-    const cleanYum = yearOfMfg.trim();
-    const cleanMfr = manufacturer.trim();
+    const cleanModel = String(model || '').trim();
+    const cleanSerial = String(serialNumber || '').trim();
+    const cleanYum = String(yearOfMfg || '').trim();
+    const cleanMfr = String(manufacturer || '').trim();
 
     const shouldValidateSpecs = !isSupervisor && (initialSection === 'all' || initialSection === 'info');
 
@@ -646,6 +703,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
+      const effectiveSiteId = effectiveClientId && siteId ? siteId : null;
+
       if (isSupervisor && machineToEdit?.id) {
         // Supervisor limited update payload
         const supervisorPayload: any = {
@@ -655,6 +714,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
           client_id: effectiveClientId,
+          site_id: effectiveSiteId,
           updated_at: new Date().toISOString(),
         };
 
@@ -670,7 +730,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           model: cleanModel,
           serial_number: cleanSerial,
           manufacturer: cleanMfr || null,
-          year_of_mfg: cleanYum || null,
+          year_of_mfg: cleanYum ? (parseInt(cleanYum, 10) || cleanYum) : null,
           hour_meter: numericHmr,
           health_status: healthStatus,
           updated_at: new Date().toISOString(),
@@ -702,6 +762,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         // Dedicated Client Assignment update payload
         const clientPayload: any = {
           client_id: effectiveClientId,
+          site_id: effectiveSiteId,
           status: effectiveStatus,
           updated_at: new Date().toISOString(),
         };
@@ -718,7 +779,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           model: cleanModel,
           serial_number: cleanSerial,
           manufacturer: cleanMfr || null,
-          year_of_mfg: cleanYum || null,
+          year_of_mfg: cleanYum ? (parseInt(cleanYum, 10) || cleanYum) : null,
           hour_meter: numericHmr,
           status: effectiveStatus,
           health_status: healthStatus,
@@ -727,6 +788,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
           client_id: effectiveClientId,
+          site_id: effectiveSiteId,
           updated_at: new Date().toISOString(),
         };
 
@@ -746,47 +808,106 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
-      const finalSupervisors = supervisorsList.filter((s) => supervisorIds.includes(s.id));
-      const finalOperators = operatorsList.filter((o) => operatorIds.includes(o.id));
+      // Refetch the updated value only from database for the active machine
+      let savedResult: any = null;
+      if (machineToEdit?.id) {
+        try {
+          const { data: refreshedMachine } = await supabase
+            .from('machines')
+            .select(`
+              id,
+              machine_id,
+              model,
+              serial_number,
+              manufacturer,
+              year_of_mfg,
+              hour_meter,
+              status,
+              health_status,
+              notes,
+              client_id,
+              site_id,
+              current_supervisor_id,
+              current_operator_id,
+              supervisor_ids,
+              operator_ids,
+              client:clients(id, code, company_name, contact_person, phone, street, city, district, state, pincode)
+            `)
+            .eq('id', machineToEdit.id)
+            .maybeSingle();
+          if (refreshedMachine) {
+            savedResult = refreshedMachine;
+          }
+        } catch {
+          // offline/cached fallback
+        }
+      }
 
-      const savedResult = {
-        ...(machineToEdit || {}),
-        id: machineToEdit?.id || `tmp_mach_${Date.now()}`,
-        model: cleanModel,
-        serial_number: cleanSerial,
-        manufacturer: cleanMfr || null,
-        year_of_mfg: cleanYum || null,
-        hour_meter: numericHmr,
-        status: effectiveStatus,
-        health_status: healthStatus,
-        supervisor_ids: supervisorIds,
-        current_supervisor_id: supervisorIds[0] || null,
-        operator_ids: operatorIds,
-        current_operator_id: operatorIds[0] || null,
-        client_id: effectiveClientId,
-        client: selectedClient || machineToEdit?.client || null,
-        supervisors: finalSupervisors.length > 0 ? finalSupervisors : (machineToEdit?.supervisors || []),
-        current_supervisor: finalSupervisors[0] || (machineToEdit?.current_supervisor || null),
-        operators: finalOperators.length > 0 ? finalOperators : (machineToEdit?.operators || []),
-        current_operator: finalOperators[0] || (machineToEdit?.current_operator || null),
-        updated_at: new Date().toISOString(),
-      };
+      if (!savedResult) {
+        const finalSupervisors = supervisorsList.filter((s) => supervisorIds.includes(s.id));
+        const finalOperators = operatorsList.filter((o) => operatorIds.includes(o.id));
+        savedResult = {
+          ...(machineToEdit || {}),
+          id: machineToEdit?.id || `tmp_mach_${Date.now()}`,
+          model: cleanModel,
+          serial_number: cleanSerial,
+          manufacturer: cleanMfr || null,
+          year_of_mfg: cleanYum || null,
+          hour_meter: numericHmr,
+          status: effectiveStatus,
+          health_status: healthStatus,
+          supervisor_ids: supervisorIds,
+          current_supervisor_id: supervisorIds[0] || null,
+          operator_ids: operatorIds,
+          current_operator_id: operatorIds[0] || null,
+          client_id: effectiveClientId,
+          site_id: effectiveSiteId,
+          client: selectedClient || machineToEdit?.client || null,
+          supervisors: finalSupervisors.length > 0 ? finalSupervisors : (machineToEdit?.supervisors || []),
+          current_supervisor: finalSupervisors[0] || (machineToEdit?.current_supervisor || null),
+          operators: finalOperators.length > 0 ? finalOperators : (machineToEdit?.operators || []),
+          current_operator: finalOperators[0] || (machineToEdit?.current_operator || null),
+          updated_at: new Date().toISOString(),
+        };
+      }
 
       haptics.confirm();
       invalidateMobileModalOptionsCache();
+      let successTitle = isEdit ? 'Machine Updated' : 'Machine Registered';
+      let successMsg = isEdit
+        ? `Machine asset ${cleanModel || 'record'} updated successfully.`
+        : `Asset ${cleanModel} (${cleanSerial}) registered successfully.`;
+      if (initialSection === 'client') {
+        successTitle = 'Client Assignment Updated';
+        successMsg = effectiveClientId
+          ? `Assigned to ${selectedClient?.company_name || 'client'} successfully.`
+          : 'Machine unassigned and marked as Available successfully.';
+      } else if (initialSection === 'personnel') {
+        successTitle = 'Personnel Assigned';
+        successMsg = 'Supervisors and operators assigned successfully.';
+      } else if (initialSection === 'info') {
+        successTitle = 'Machine Info Updated';
+        successMsg = `Specifications for ${cleanModel || 'machine'} updated successfully.`;
+      }
+      showToast('success', successTitle, successMsg);
       onSuccess(savedResult);
       onClose();
     } catch (err: any) {
       haptics.reject();
-      let msg = err?.message || 'Failed to save machine details.';
-      if (err?.code === '23505' || msg.includes('23505') || msg.includes('serial_number')) {
+      const sanitized = sanitizeDatabaseError(err, 'Failed to save machine details.');
+      let msg = sanitized.error;
+      if (err?.code === '23505' || msg.includes('serial_number') || String(err?.message || '').includes('serial_number')) {
         msg = `A machine with Serial Number "${cleanSerial}" is already registered.`;
         setFieldErrors((prev) => ({
           ...prev,
           serial_number: msg,
         }));
       }
+      if (sanitized.fieldErrors) {
+        setFieldErrors((prev) => ({ ...prev, ...sanitized.fieldErrors }));
+      }
       setFormError(msg);
+      showToast('error', 'Update Failed', msg);
     } finally {
       setIsSaving(false);
     }
@@ -813,25 +934,42 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     .filter(Boolean) as SelectableUser[];
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetWrapper}
-      >
-        <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-            <Text style={[styles.title, { color: theme.colors.ink }]}>{modalTitle}</Text>
-            <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]} accessibilityLabel="Close dialog">
-              <X size={16} color={theme.colors.mute} />
-            </Pressable>
-          </View>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      showHandle={false}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
+    >
+      <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+          <Text variant="heading" weight="semibold" style={[styles.title, { color: theme.colors.ink }]}>{modalTitle}</Text>
+          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvas }]} accessibilityLabel="Close dialog">
+            <X size={16} color={theme.colors.mute} />
+          </Pressable>
+        </View>
 
           {/* Form Error Banner */}
           {formError ? (
             <View style={[styles.errorBanner, { backgroundColor: '#ef444415', borderColor: '#ef444430' }]}>
               <AlertCircle size={15} color="#ef4444" style={{ marginTop: 1 }} />
-              <Text style={styles.errorBannerText}>{formError}</Text>
+              <Text variant="caption" weight="medium" style={styles.errorBannerText}>{formError}</Text>
             </View>
           ) : null}
 
@@ -844,7 +982,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             {!isSupervisor && (initialSection === 'all' || initialSection === 'info') && (
               <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="caption" weight="semibold" style={[styles.sectionHeaderTitle, { color: theme.colors.mute }]}>
                     MACHINE INFO
                   </Text>
                 </View>
@@ -936,7 +1074,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             {(initialSection === 'all' || initialSection === 'personnel') && (
               <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="caption" weight="semibold" style={[styles.sectionHeaderTitle, { color: theme.colors.mute }]}>
                     {isSupervisor ? 'OPERATOR ASSIGNMENT' : 'PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS)'}
                   </Text>
                 </View>
@@ -949,10 +1087,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       {...({ 'data-dropdown-container': 'true' } as any)}
                     >
                       <View style={styles.labelRow}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                        <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                           Assigned Supervisors
                         </Text>
-                        <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                        <Text variant="caption" style={[styles.assignedCountText, { color: theme.colors.mute }]}>
                           {supervisorIds.length} assigned
                         </Text>
                       </View>
@@ -966,7 +1104,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       >
                         <View style={styles.selectedPillsWrap}>
                           {selectedSupervisors.length === 0 ? (
-                            <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                            <Text variant="body" style={[styles.placeholderText, { color: theme.colors.mute }]}>
                               Search & assign supervisors...
                             </Text>
                           ) : (
@@ -981,7 +1119,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                   },
                                 ]}
                               >
-                                <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                <Text variant="caption" weight="medium" style={[styles.userChipText, { color: theme.colors.ink }]}>
                                   {s.full_name}
                                 </Text>
                                 <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
@@ -997,7 +1135,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           {supervisorIds.length > 0 && (
                             <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={(e) => { // @ts-ignore
                                 e?.stopPropagation?.(); setSupervisorIds([]); }}>
-                              <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
+                              <Text variant="caption" weight="medium" style={[styles.clearBtnText, { color: theme.colors.mute }]}>
                                 Clear
                               </Text>
                             </Pressable>
@@ -1039,7 +1177,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               { borderBottomColor: theme.colors.hairline },
                             ]}
                           >
-                            <Text style={[styles.selectionCountText, { color: theme.colors.mute }]}>
+                            <Text variant="caption" style={[styles.selectionCountText, { color: theme.colors.mute }]}>
                               {supervisorIds.length} of {supervisorsList.length} selected
                             </Text>
                             <Pressable
@@ -1054,7 +1192,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                 }
                               }}
                             >
-                              <Text style={styles.deselectAllActionText}>
+                              <Text variant="caption" weight="semibold" style={styles.deselectAllActionText}>
                                 {supervisorIds.length > 0 ? 'Clear All' : 'Select All'}
                               </Text>
                             </Pressable>
@@ -1069,7 +1207,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           >
                             {filteredSupervisors.length === 0 ? (
                               <View style={styles.emptyDropdownList}>
-                                <Text style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
+                                <Text variant="caption" style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
                                   No supervisors matching search
                                 </Text>
                               </View>
@@ -1090,6 +1228,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                     <View style={{ flex: 1, minWidth: 0 }}>
                                       <View style={styles.staffTitleRow}>
                                         <Text
+                                          variant="body"
+                                          weight="medium"
                                           style={[
                                             styles.staffNameText,
                                             { color: isSelected ? '#0284c7' : theme.colors.ink },
@@ -1108,7 +1248,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                             },
                                           ]}
                                         >
-                                          <Text style={[styles.staffRolePillText, { color: '#0284c7' }]}>
+                                          <Text variant="micro" weight="semibold" style={[styles.staffRolePillText, { color: '#0284c7' }]}>
                                             {roleUpper}
                                           </Text>
                                         </View>
@@ -1117,13 +1257,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                       {/* Timing & Phone */}
                                       <View style={styles.staffMetaRow}>
                                         <Clock size={11} color="#10b981" />
-                                        <Text style={styles.staffTimingText}>
+                                        <Text variant="micro" style={styles.staffTimingText}>
                                           {s.shift_start_time && s.shift_end_time
                                             ? `${formatTo12Hour(s.shift_start_time)} - ${formatTo12Hour(s.shift_end_time)}`
                                             : s.shift_time || '08:00 - 20:00'}
                                         </Text>
-                                        {s.phone && (
-                                          <Text style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
+                                        {Boolean(s.phone) && (
+                                          <Text variant="micro" style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
                                             • {s.phone}
                                           </Text>
                                         )}
@@ -1153,10 +1293,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                   ) : (
                     <View style={styles.fieldGroup}>
                       <View style={styles.labelRow}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                        <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                           Designated Supervisors
                         </Text>
-                        <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                        <Text variant="caption" style={[styles.assignedCountText, { color: theme.colors.mute }]}>
                           Managed by Admin
                         </Text>
                       </View>
@@ -1172,7 +1312,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       >
                         <View style={styles.selectedPillsWrap}>
                           {selectedSupervisors.length === 0 ? (
-                            <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                            <Text variant="body" style={[styles.placeholderText, { color: theme.colors.mute }]}>
                               No supervisors designated
                             </Text>
                           ) : (
@@ -1187,7 +1327,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                   },
                                 ]}
                               >
-                                <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                <Text variant="caption" weight="medium" style={[styles.userChipText, { color: theme.colors.ink }]}>
                                   {s.full_name}
                                 </Text>
                               </View>
@@ -1204,10 +1344,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     {...({ 'data-dropdown-container': 'true' } as any)}
                   >
                     <View style={styles.labelRow}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                      <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                         Assigned Operators (24h)
                       </Text>
-                      <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.assignedCountText, { color: theme.colors.mute }]}>
                         {operatorIds.length}/{maxMobileShifts} assigned
                       </Text>
                     </View>
@@ -1220,7 +1360,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           },
                         ]}
                       >
-                        <Text style={[styles.addOperatorText, { color: theme.colors.ink }]}>
+                        <Text variant="body" weight="medium" style={[styles.addOperatorText, { color: theme.colors.ink }]}>
                           + Search & Assign Operators ({operatorIds.length}/{maxMobileShifts})
                         </Text>
                         <ChevronDown
@@ -1262,7 +1402,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         >
                           {filteredOperators.length === 0 ? (
                             <View style={styles.emptyDropdownList}>
-                              <Text style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
+                              <Text variant="caption" style={[styles.emptyDropdownText, { color: theme.colors.mute }]}>
                                 {operatorSearchQuery ? 'No matching operators found' : 'All operators assigned'}
                               </Text>
                             </View>
@@ -1285,6 +1425,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                   <View style={{ flex: 1, minWidth: 0 }}>
                                     <View style={styles.staffTitleRow}>
                                       <Text
+                                        variant="body"
+                                        weight="medium"
                                         style={[
                                           styles.staffNameText,
                                           { color: isAlreadyAssigned ? '#0284c7' : theme.colors.ink },
@@ -1304,7 +1446,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                             },
                                           ]}
                                         >
-                                          <Text style={[styles.staffRolePillText, { color: '#0284c7' }]}>
+                                          <Text variant="micro" weight="semibold" style={[styles.staffRolePillText, { color: '#0284c7' }]}>
                                             ASSIGNED
                                           </Text>
                                         </View>
@@ -1314,13 +1456,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                     {/* Timing & Phone */}
                                     <View style={styles.staffMetaRow}>
                                       <Clock size={11} color="#10b981" />
-                                      <Text style={styles.staffTimingText}>
+                                      <Text variant="micro" style={styles.staffTimingText}>
                                         {op.shift_start_time && op.shift_end_time
                                           ? `${formatTo12Hour(op.shift_start_time)} - ${formatTo12Hour(op.shift_end_time)}`
                                           : op.shift_time || '06:00 - 14:00'}
                                       </Text>
-                                      {op.phone && (
-                                        <Text style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
+                                      {Boolean(op.phone) && (
+                                        <Text variant="micro" style={[styles.staffPhoneText, { color: theme.colors.mute }]}>
                                           • {op.phone}
                                         </Text>
                                       )}
@@ -1360,7 +1502,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                                         },
                                       ]}
                                     >
-                                      <Text style={[styles.assignShiftActionText, { color: '#0284c7' }]}>
+                                      <Text variant="micro" weight="semibold" style={[styles.assignShiftActionText, { color: '#0284c7' }]}>
                                         + Shift {nextShift.code}
                                       </Text>
                                     </View>
@@ -1383,7 +1525,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           },
                         ]}
                       >
-                        <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                        <Text variant="body" style={[styles.placeholderText, { color: theme.colors.mute }]}>
                           No operators assigned. Tap above to assign up to {maxMobileShifts} shift operators.
                         </Text>
                       </View>
@@ -1409,21 +1551,21 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               <View style={styles.operatorCardHeader}>
                                 <View style={styles.operatorCardInfo}>
                                   <View style={styles.operatorIndexBadge}>
-                                    <Text style={styles.operatorIndexText}>{idx + 1}</Text>
+                                    <Text variant="micro" weight="bold" style={styles.operatorIndexText}>{idx + 1}</Text>
                                   </View>
                                   <View style={{ flex: 1, minWidth: 0 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                      <Text style={[styles.operatorCardName, { color: theme.colors.ink }]} numberOfLines={1}>
+                                      <Text variant="body" weight="semibold" style={[styles.operatorCardName, { color: theme.colors.ink }]} numberOfLines={1}>
                                         {o.full_name}
                                       </Text>
                                       <View style={[styles.shiftBadge, conflictMsg ? { backgroundColor: '#ef444420', borderColor: '#ef444450' } : null]}>
-                                        <Text style={[styles.shiftBadgeText, conflictMsg ? { color: '#ef4444' } : null]}>
+                                        <Text variant="micro" weight="bold" style={[styles.shiftBadgeText, conflictMsg ? { color: '#ef4444' } : null]}>
                                           Shift {currentShift}
                                         </Text>
                                       </View>
                                     </View>
-                                    {(o.phone || o.email) && (
-                                      <Text style={[styles.operatorContactSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
+                                    {Boolean(o.phone || o.email) && (
+                                      <Text variant="caption" style={[styles.operatorContactSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
                                         {[o.phone, o.email].filter(Boolean).join(' • ')}
                                       </Text>
                                     )}
@@ -1438,7 +1580,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               {conflictMsg && (
                                 <View style={styles.operatorConflictBadge}>
                                   <AlertCircle size={12} color="#ef4444" style={{ marginTop: 1 }} />
-                                  <Text style={styles.operatorConflictText}>{conflictMsg}</Text>
+                                  <Text variant="caption" style={styles.operatorConflictText}>{conflictMsg}</Text>
                                 </View>
                               )}
 
@@ -1446,7 +1588,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                               <View style={styles.shiftSelectionSection}>
                                 <View style={styles.shiftSelectionHeader}>
                                   <Clock size={11} color="#0284c7" />
-                                  <Text style={[styles.shiftSelectionLabel, { color: theme.colors.mute }]}>
+                                  <Text variant="caption" weight="semibold" style={[styles.shiftSelectionLabel, { color: theme.colors.mute }]}>
                                     SELECT ASSIGNED SHIFT:
                                   </Text>
                                 </View>
@@ -1472,7 +1614,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             {(initialSection === 'all' || initialSection === 'client') && (
               <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="caption" weight="semibold" style={[styles.sectionHeaderTitle, { color: theme.colors.mute }]}>
                     CLIENT ASSIGNMENT & RENTAL STATUS
                   </Text>
                 </View>
@@ -1491,6 +1633,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           setRentalStatus('rented');
                         } else {
                           setRentalStatus('available');
+                          setSiteId('');
+                          setClientSites([]);
                         }
                       }}
                       placeholder="Search or select client to rent..."
@@ -1498,9 +1642,32 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     />
                   </View>
 
+                  {/* Client Deployment Site */}
+                  {selectedClient ? (
+                    <View style={styles.fieldGroup}>
+                      <SearchableSelect
+                        label="Client Deployment Site"
+                        options={[
+                          { value: '', label: 'None (No specific site / Yard)' },
+                          ...clientSites.map((s) => ({
+                            value: s.id,
+                            label: `${s.site_name} (${s.site_code})`,
+                            code: s.site_code,
+                            description: [s.street, s.city, s.district].filter(Boolean).join(' • ') || undefined,
+                          })),
+                        ]}
+                        value={siteId}
+                        onChange={(val) => setSiteId(val)}
+                        placeholder={isLoadingSites ? "Loading deployment sites..." : "Select deployment site..."}
+                        modalTitle="Select Deployment Site"
+                        disabled={isLoadingSites || isSaving}
+                      />
+                    </View>
+                  ) : null}
+
                   {/* Automatic Rental Status Indicator */}
                   <View style={styles.fieldGroup}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Rental Status (Auto-Linked)</Text>
+                    <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>Rental Status (Auto-Linked)</Text>
                     <View
                       style={[
                         styles.singleSelectTrigger,
@@ -1519,19 +1686,19 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                             },
                           ]}
                         />
-                        <Text variant="body" style={[styles.selectValueText, { color: theme.colors.ink }]}>
+                        <Text variant="body" weight="medium" style={[styles.selectValueText, { color: theme.colors.ink }]}>
                           {selectedClient ? 'Rented' : 'Available'}
                         </Text>
                         {selectedClient && (
-                          <Text style={[styles.assignedCountText, { color: theme.colors.mute, marginLeft: 6 }]}>
+                          <Text variant="caption" style={[styles.assignedCountText, { color: theme.colors.mute, marginLeft: 6 }]}>
                             (Deployed)
                           </Text>
                         )}
                       </View>
                     </View>
-                    <Text style={[styles.assignedCountText, { color: theme.colors.mute, marginTop: 4 }]}>
+                    <Text variant="caption" style={[styles.helperText, { color: theme.colors.mute }]}>
                       {selectedClient
-                        ? `Automatically rented to ${selectedClient.company_name}.`
+                        ? `Automatically marked as rented to ${selectedClient.company_name}.`
                         : 'Automatically available when no client is assigned.'}
                     </Text>
                   </View>
@@ -1545,14 +1712,14 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                 {isSaving ? (
                   <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                 ) : (
-                  <Text style={[styles.primaryActionBtnText, { color: theme.colors.onPrimary }]}>
+                  <Text variant="label" weight="semibold" style={[styles.primaryActionBtnText, { color: theme.colors.onPrimary }]}>
                     {isSupervisor || initialSection === 'personnel' ? 'Save Assignments' : isEdit ? 'Update Machine' : 'Register Machine'}
                   </Text>
                 )}
               </Pressable>
 
               <Pressable variant="outline" haptic="tap" onPress={onClose} disabled={isSaving} style={[styles.cancelActionBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.cancelActionBtnText, { color: theme.colors.ink }]}>
+                <Text variant="label" weight="medium" style={[styles.cancelActionBtnText, { color: theme.colors.ink }]}>
                   Cancel
                 </Text>
               </Pressable>
@@ -1561,7 +1728,6 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
           {/* Sub-Modals */}
         </View>
-      </KeyboardAvoidingView>
     </AppModal>
   );
 };
@@ -1569,24 +1735,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 const styles = StyleSheet.create({
   sheetWrapper: {
     width: '100%',
-    justifyContent: 'flex-end',
+    flexShrink: 1,
   },
   sheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    maxHeight: '92%',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -8px 20px rgba(0, 0, 0, 0.35)',
-      },
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-        elevation: 16,
-      },
-    }),
+    width: '100%',
+    flexShrink: 1,
+    display: 'flex',
   },
   header: {
     flexDirection: 'row',
@@ -1659,6 +1813,9 @@ const styles = StyleSheet.create({
   fieldLabel: {},
   assignedCountText: {
     textTransform: 'uppercase',
+  },
+  helperText: {
+    marginTop: 4,
   },
   multiSelectTrigger: {
     flexDirection: 'row',

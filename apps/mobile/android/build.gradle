@@ -24,6 +24,7 @@ apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
 
 subprojects { subproject ->
+
   def configureCxx = {
     if (System.getProperty("os.name", "").toLowerCase().contains("windows") && subproject.hasProperty("android")) {
       try {

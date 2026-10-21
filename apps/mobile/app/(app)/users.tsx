@@ -31,7 +31,7 @@ import {
   ErrorState,
 } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
+import { UserDetailView, type UserRecord } from '../../components/users';
 import { DeleteUserConfirmDialog } from '../../components/users/DeleteUserConfirmDialog';
 import {
   UserTouchCard,
@@ -55,6 +55,7 @@ import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
+import { resetUserPasswordMobile } from '../../lib/hooks/useUserDetailData';
 import { haptics } from '../../lib/haptics';
 import { useScreenSync } from '../../lib/offline';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -340,7 +341,6 @@ export default function UsersScreen() {
 
   // Modals & Action States
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserRecord | null>(null);
@@ -742,21 +742,33 @@ export default function UsersScreen() {
   };
 
   // Password Reset Trigger
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+
   const handleTriggerResetPassword = (userToReset: UserRecord) => {
     setConfirmResetUser(userToReset);
   };
 
-  const handleConfirmResetPassword = (userToReset: UserRecord) => {
-    const rawFirst = (userToReset.full_name || '').trim().split(/\s+/)[0] || 'User';
-    const cleaned = rawFirst.replace(/[^a-zA-Z0-9]/g, '');
-    const firstName = cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'User';
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const generatedPwd = `${firstName}@${randomNum}`;
-
-    setResetPasswordUserName(userToReset.full_name);
-    setTemporaryPassword(generatedPwd);
-    setPasswordResetModalVisible(true);
-    notifyUserPasswordReset(userToReset.full_name);
+  const handleConfirmResetPassword = async (userToReset: UserRecord) => {
+    if (isResettingPassword) return;
+    setIsResettingPassword(true);
+    try {
+      const res = await resetUserPasswordMobile(userToReset.id, userToReset.full_name);
+      if (!res.success || !res.temporaryPassword) {
+        haptics.reject();
+        toast('error', 'Reset Failed', res.error || 'Failed to reset password');
+        return;
+      }
+      haptics.confirm();
+      setResetPasswordUserName(res.userName || userToReset.full_name);
+      setTemporaryPassword(res.temporaryPassword);
+      setPasswordResetModalVisible(true);
+      notifyUserPasswordReset(userToReset.full_name);
+    } catch (err: any) {
+      haptics.reject();
+      toast('error', 'Reset Failed', err?.message || 'Failed to reset password');
+    } finally {
+      setIsResettingPassword(false);
+    }
   };
 
   // 3-Dot More Actions Contextual Menu
@@ -832,7 +844,6 @@ export default function UsersScreen() {
   const openUserDetail = useCallback((u: UserRecord) => {
     if (!u) return;
     setSelectedUser(u);
-    setDetailModalVisible(true);
   }, []);
 
   const handleTriggerAssignSupervisor = useCallback((targetUser: UserRecord) => {
@@ -987,7 +998,6 @@ export default function UsersScreen() {
 
       if (selectedUser?.id === deletedId) {
         setSelectedUser(null);
-        setDetailModalVisible(false);
       }
 
       try {
@@ -1061,7 +1071,6 @@ export default function UsersScreen() {
 
       if (selectedUser && toDelete.includes(selectedUser.id)) {
         setSelectedUser(null);
-        setDetailModalVisible(false);
       }
 
       const msg = data?.message || `Successfully processed ${toDelete.length} user account${toDelete.length > 1 ? 's' : ''}.`;
@@ -1304,10 +1313,48 @@ export default function UsersScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <MobileHeader
-        title="User Management"
-        actions={headerActions}
-      />
+      {selectedUser ? (
+        <UserDetailView
+          user={selectedUser}
+          onBack={() => setSelectedUser(null)}
+          currentUserRole={currentUserRole || 'super_admin'}
+          currentUserId={authUser?.id}
+          onUserUpdated={(updatedUser?: any) => {
+            if (updatedUser) {
+              if (updatedUser.deleted) {
+                setDeletedUserIds((prev) => new Set(prev).add(updatedUser.id));
+                setTotalUsersCount((prev) => Math.max(0, prev - 1));
+                setSelectedUser(null);
+              } else {
+                setSelectedUser((prev: any) => ({ ...prev, ...updatedUser }));
+                updateSingleUserInState(updatedUser.id, updatedUser);
+                refreshSingleUser(updatedUser.id);
+              }
+            }
+            try {
+              queryClient.invalidateQueries({ queryKey: ['machines'] });
+              queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
+              queryClient.invalidateQueries({ queryKey: ['operator_history'] });
+            } catch {
+              // QueryClient fallback
+            }
+            refetchKPIs();
+          }}
+          onUserDeleted={() => {
+            if (selectedUser) {
+              setDeletedUserIds((prev) => new Set(prev).add(selectedUser.id));
+              setTotalUsersCount((prev) => Math.max(0, prev - 1));
+            }
+            setSelectedUser(null);
+            refetchKPIs();
+          }}
+        />
+      ) : (
+        <>
+          <MobileHeader
+            title="User Management"
+            actions={headerActions}
+          />
 
       <FlatList<UserRecord>
         data={showLoading || initialError ? [] : users}
@@ -1497,35 +1544,7 @@ export default function UsersScreen() {
         </View>
       )}
 
-      {/* User Detail Modal */}
-      <UserDetailModal
-        visible={detailModalVisible}
-        onClose={() => setDetailModalVisible(false)}
-        user={selectedUser}
-        currentUserRole={currentUserRole || 'super_admin'}
-        currentUserId={authUser?.id}
-        onSuccess={(updatedUser?: any) => {
-          if (updatedUser) {
-            if (updatedUser.deleted) {
-              setDeletedUserIds((prev) => new Set(prev).add(updatedUser.id));
-              setTotalUsersCount((prev) => Math.max(0, prev - 1));
-              setSelectedUser(null);
-            } else {
-              updateSingleUserInState(updatedUser.id, updatedUser);
-              refreshSingleUser(updatedUser.id);
-            }
-          }
-          try {
-            queryClient.invalidateQueries({ queryKey: ['machines'] });
-            queryClient.invalidateQueries({ queryKey: ['today_shifts'] });
-            queryClient.invalidateQueries({ queryKey: ['operator_history'] });
-          } catch {
-            // QueryClient fallback
-          }
-        }}
-        onEdit={handleTriggerEdit}
-        onResetPassword={handleTriggerResetPassword}
-      />
+
 
       {/* Create User Modal */}
       <CreateUserModal
@@ -1624,12 +1643,14 @@ export default function UsersScreen() {
       {/* Confirm Password Reset Dialog */}
       <ConfirmDialog
         visible={Boolean(confirmResetUser)}
-        onClose={() => setConfirmResetUser(null)}
-        onConfirm={() => {
+        onClose={() => {
+          if (!isResettingPassword) setConfirmResetUser(null);
+        }}
+        onConfirm={async () => {
           const target = confirmResetUser;
-          setConfirmResetUser(null);
           if (target) {
-            handleConfirmResetPassword(target);
+            await handleConfirmResetPassword(target);
+            setConfirmResetUser(null);
           }
         }}
         title="Reset Password"
@@ -1637,6 +1658,7 @@ export default function UsersScreen() {
         confirmText="Reset Password"
         cancelText="Cancel"
         variant="warning"
+        isLoading={isResettingPassword}
         icon={<KeyRound size={22} color="#f59e0b" />}
       />
 
@@ -1774,6 +1796,8 @@ export default function UsersScreen() {
         variant="primary"
         isLoading={Boolean(rejectingDeletionId)}
       />
+        </>
+      )}
     </View>
   );
 }

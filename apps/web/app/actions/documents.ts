@@ -68,21 +68,27 @@ export async function getUserDocumentsAction(
     .eq("user_id", userId)
     .order("document_type_code");
 
-  if (error || !docs) return [];
+  if (error || !docs || docs.length === 0) return [];
 
-  // Generate short-lived signed URLs for each document
-  const withUrls: UserDocument[] = await Promise.all(
-    docs.map(async (doc) => {
-      const { data: urlData } = await supabase.storage
-        .from("user_files")
-        .createSignedUrl(doc.storage_path, 180); // 3-minute expiry
+  // Batch generate signed URLs in a single round-trip
+  const paths = docs.map((d) => d.storage_path);
+  const { data: batchSigned } = await supabase.storage
+    .from("user_files")
+    .createSignedUrls(paths, 3600);
 
-      return {
-        ...doc,
-        signed_url: urlData?.signedUrl || null,
-      } as UserDocument;
-    })
-  );
+  const signedUrlMap = new Map<string, string>();
+  if (batchSigned && Array.isArray(batchSigned)) {
+    for (const item of batchSigned) {
+      if (item.signedUrl && !item.error && item.path) {
+        signedUrlMap.set(item.path, item.signedUrl);
+      }
+    }
+  }
+
+  const withUrls: UserDocument[] = docs.map((doc) => ({
+    ...doc,
+    signed_url: signedUrlMap.get(doc.storage_path) || null,
+  })) as UserDocument[];
 
   return withUrls;
 }

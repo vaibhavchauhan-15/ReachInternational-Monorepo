@@ -1047,7 +1047,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
               keyboardShouldPersistTaps="handled"
             >
               {/* Error Alert */}
-              {submitError && (
+              {Boolean(submitError) && (
                 <View
                   style={[
                     styles.errorBanner,

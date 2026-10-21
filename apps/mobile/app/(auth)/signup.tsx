@@ -26,7 +26,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast } from '../../components/ui';
+import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast, Badge } from '../../components/ui';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
@@ -60,6 +60,7 @@ import {
   Check,
   Info,
   RotateCw,
+  AlertCircle,
 } from '../../components/ui/icon';
 
 const SIGNUP_ROLES = [
@@ -163,38 +164,38 @@ export default function SignupScreen() {
     });
   }, [shiftStartTime, shiftEndTime]);
 
-  // Section 1 Handlers
-  const handleFullNameChange = (val: string) => {
+  // Section 1 Handlers (Memoized for high performance)
+  const handleFullNameChange = useCallback((val: string) => {
     setFullName(val);
     clearFieldError('full_name');
-  };
+  }, [clearFieldError]);
 
-  const handleEmailChange = (val: string) => {
+  const handleEmailChange = useCallback((val: string) => {
     setEmail(val);
     clearFieldError('email');
-  };
+  }, [clearFieldError]);
 
-  const handlePhoneChange = (val: string) => {
+  const handlePhoneChange = useCallback((val: string) => {
     setPhone(val);
     clearFieldError('phone');
-  };
+  }, [clearFieldError]);
 
-  const handleRoleChange = (val: string) => {
+  const handleRoleChange = useCallback((val: string) => {
     setSelectedRole(val);
     clearFieldError('role');
     if (!isSupervisedRole(val)) {
       setSelectedSupervisorId('');
       clearFieldError('supervisor_id');
     }
-  };
+  }, [clearFieldError]);
 
-  const handleSupervisorChange = (val: string) => {
+  const handleSupervisorChange = useCallback((val: string) => {
     setSelectedSupervisorId(val);
     clearFieldError('supervisor_id');
-  };
+  }, [clearFieldError]);
 
   // Section 2 Handlers: Real-time Shift Timing Validation
-  const handleShiftStartChange = (val: string) => {
+  const handleShiftStartChange = useCallback((val: string) => {
     setShiftStartTime(val);
     clearFieldError('shift_time');
     clearFieldError('shift_start_time');
@@ -205,16 +206,16 @@ export default function SignupScreen() {
           ...prev,
           shift_time:
             res.errorMessage === 'Start time and end time cannot be identical.'
-              ? 'End time must be after start time.'
-              : res.errorMessage || 'End time must be after start time.',
+              ? 'End time must be after start time'
+              : res.errorMessage || 'End time must be after start time',
         }));
       } else {
         clearFieldError('shift_time');
       }
     }
-  };
+  }, [shiftEndTime, clearFieldError]);
 
-  const handleShiftEndChange = (val: string) => {
+  const handleShiftEndChange = useCallback((val: string) => {
     setShiftEndTime(val);
     clearFieldError('shift_time');
     clearFieldError('shift_end_time');
@@ -225,37 +226,37 @@ export default function SignupScreen() {
           ...prev,
           shift_time:
             res.errorMessage === 'Start time and end time cannot be identical.'
-              ? 'End time must be after start time.'
-              : res.errorMessage || 'End time must be after start time.',
+              ? 'End time must be after start time'
+              : res.errorMessage || 'End time must be after start time',
         }));
       } else {
         clearFieldError('shift_time');
       }
     }
-  };
+  }, [shiftStartTime, clearFieldError]);
 
   // Section 4 Handlers
-  const handleBankAccountChange = (val: string) => {
+  const handleBankAccountChange = useCallback((val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 18);
     setBankAccountNumber(clean);
     clearFieldError('bank_account_number');
     if (clean.length > 0 && (clean.length < 9 || clean.length > 18)) {
       setFieldErrors((prev) => ({
         ...prev,
-        bank_account_number: 'Enter a valid bank account number (9 to 18 digits).',
+        bank_account_number: 'Account number required (9–18 digits)',
       }));
     } else if (clean.length >= 9) {
       const res = validateBankAccountNumber(clean);
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          bank_account_number: res.error || 'Enter a valid bank account number (9 to 18 digits).',
+          bank_account_number: res.error || 'Account number required (9–18 digits)',
         }));
       }
     }
-  };
+  }, [clearFieldError]);
 
-  const handleBankIfscChange = (val: string) => {
+  const handleBankIfscChange = useCallback((val: string) => {
     const formatted = formatIfscCode(val);
     setBankIfscCode(formatted);
     clearFieldError('bank_ifsc_code');
@@ -264,14 +265,14 @@ export default function SignupScreen() {
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          bank_ifsc_code: res.error || 'Enter a valid 11-character IFSC code (e.g. SBIN0001234).',
+          bank_ifsc_code: res.error || '11-character IFSC required',
         }));
       }
     }
-  };
+  }, [clearFieldError]);
 
   // Section 5 Handlers
-  const handleAadhaarChange = (val: string) => {
+  const handleAadhaarChange = useCallback((val: string) => {
     const formatted = formatAadhaar(val);
     setAadhaarNumber(formatted);
     clearFieldError('aadhaar_number');
@@ -281,13 +282,13 @@ export default function SignupScreen() {
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          aadhaar_number: res.error || 'Enter a valid 12-digit Aadhaar number.',
+          aadhaar_number: res.error || '12-digit Aadhaar required',
         }));
       }
     }
-  };
+  }, [clearFieldError]);
 
-  const handleLicenseChange = (val: string) => {
+  const handleLicenseChange = useCallback((val: string) => {
     const formatted = val.toUpperCase();
     setLicenseNumber(formatted);
     clearFieldError('license_number');
@@ -296,22 +297,64 @@ export default function SignupScreen() {
       if (!res.isValid) {
         setFieldErrors((prev) => ({
           ...prev,
-          license_number: res.error || 'Invalid driving licence format.',
+          license_number: res.error || 'Invalid licence format',
         }));
       }
     }
-  };
+  }, [clearFieldError]);
 
   // Section 6 Handlers
-  const handlePasswordChange = (val: string) => {
+  const handlePasswordChange = useCallback((val: string) => {
     setPassword(val);
     clearFieldError('password');
-  };
+  }, [clearFieldError]);
 
-  const handleConfirmPasswordChange = (val: string) => {
+  const handleConfirmPasswordChange = useCallback((val: string) => {
     setConfirmPassword(val);
     clearFieldError('confirm_password');
-  };
+  }, [clearFieldError]);
+
+  // Real-time Password Strength & Pattern Metrics
+  const passwordMetrics = useMemo(() => {
+    const hasMinLen = password.length >= 8;
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasNum = /\d/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    let score = 0;
+    if (password.length > 0) {
+      if (hasMinLen) score += 1;
+      if (hasUpper && hasLower) score += 1;
+      if (hasNum) score += 1;
+      if (hasSpecial) score += 1;
+    }
+
+    let strengthLabel = 'Weak';
+    let strengthColor = '#ef4444';
+    if (score >= 4) {
+      strengthLabel = 'Strong';
+      strengthColor = '#10b981';
+    } else if (score === 3) {
+      strengthLabel = 'Good';
+      strengthColor = '#0ea5e9';
+    } else if (score === 2) {
+      strengthLabel = 'Fair';
+      strengthColor = '#f59e0b';
+    } else {
+      strengthLabel = 'Weak';
+      strengthColor = '#ef4444';
+    }
+
+    return {
+      score,
+      strengthLabel,
+      strengthColor,
+      hasMinLen,
+      hasUpperLower: hasUpper && hasLower,
+      hasNum,
+    };
+  }, [password]);
 
   const cleanPhone = phone.replace(/[^0-9+]/g, '');
   const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
@@ -446,7 +489,7 @@ export default function SignupScreen() {
 
     if (!validationRes.isValid) {
       setFieldErrors(validationRes.errors);
-      toast('warning', 'Missing Details', 'Please complete all required fields highlighted below.');
+      toast('warning', 'Missing Details', 'Please complete all required fields.');
       haptics.reject();
       return;
     }
@@ -625,7 +668,7 @@ export default function SignupScreen() {
                   onChangeText={handleFullNameChange}
                   onBlur={() => {
                     if (!fullName.trim() || fullName.trim().length < 2) {
-                      setFieldErrors((prev) => ({ ...prev, full_name: 'Enter your full name.' }));
+                      setFieldErrors((prev) => ({ ...prev, full_name: 'Full name required (min 2 chars)' }));
                     }
                   }}
                   autoCapitalize="words"
@@ -644,7 +687,7 @@ export default function SignupScreen() {
                   onBlur={() => {
                     const clean = email.trim().toLowerCase();
                     if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
-                      setFieldErrors((prev) => ({ ...prev, email: 'Enter a valid email address.' }));
+                      setFieldErrors((prev) => ({ ...prev, email: 'Valid email required' }));
                     }
                   }}
                   autoCapitalize="none"
@@ -664,7 +707,7 @@ export default function SignupScreen() {
                   onBlur={() => {
                     const clean = phone.replace(/\D/g, '');
                     if (!clean || clean.length < 10) {
-                      setFieldErrors((prev) => ({ ...prev, phone: 'Enter a valid mobile number.' }));
+                      setFieldErrors((prev) => ({ ...prev, phone: '10-digit mobile required' }));
                     }
                   }}
                   keyboardType="phone-pad"
@@ -691,7 +734,7 @@ export default function SignupScreen() {
 
                 {/* Supervisor Selector (required for Operator) */}
                 {isSupervisedRole(selectedRole) && (
-                  <View style={[styles.supervisorWrapper, { zIndex: 10 }]}>
+                  <View style={[styles.supervisorWrapper, { borderTopColor: isDark ? '#262626' : '#ebebeb', zIndex: 10 }]}>
                     <SearchableSelect
                       label="Select Supervisor"
                       required
@@ -714,7 +757,7 @@ export default function SignupScreen() {
                       searchPlaceholder="Search supervisor..."
                       presentation="dropdown"
                     />
-                    {supervisorError && (
+                    {Boolean(supervisorError) && (
                       <Pressable
                         variant="plain"
                         haptic="select"
@@ -741,22 +784,15 @@ export default function SignupScreen() {
                 style={{ zIndex: 50 }}
                 headerAction={
                   shiftSummary?.isValid ? (
-                    <View
-                      style={[
-                        styles.durationBadge,
-                        {
-                          backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.1)',
-                          borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.25)',
-                        },
-                      ]}
-                    >
-                      <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
-                        {shiftSummary.durationMinutes % 60 === 0
-                          ? `${shiftSummary.durationMinutes / 60} hrs`
-                          : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}
-                        {shiftSummary.isOvernight ? ' • Overnight' : ''}
-                      </Text>
-                    </View>
+                    <Badge
+                      variant="info"
+                      solid
+                      size="sm"
+                      shape="pill"
+                      label={`${shiftSummary.durationMinutes % 60 === 0
+                        ? `${shiftSummary.durationMinutes / 60} hrs`
+                        : `${Number(shiftSummary.durationHours.toFixed(1))} hrs`}${shiftSummary.isOvernight ? ' • Overnight' : ''}`}
+                    />
                   ) : null
                 }
               >
@@ -775,7 +811,7 @@ export default function SignupScreen() {
                   toggleLayout="side-by-side"
                 />
 
-                {(fieldErrors.shift_time || fieldErrors.shift_end_time) && (
+                {Boolean(fieldErrors.shift_time || fieldErrors.shift_end_time) && (
                   <Text variant="caption" style={styles.inlineSectionError}>
                     {fieldErrors.shift_time || fieldErrors.shift_end_time}
                   </Text>
@@ -967,6 +1003,189 @@ export default function SignupScreen() {
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
 
+                {/* Password Strength & Pattern Requirements Indicator */}
+                {password.length > 0 && (
+                  <View style={styles.passwordStrengthContainer}>
+                    <View style={styles.passwordStrengthRow}>
+                      <View style={styles.strengthSegments}>
+                        {[1, 2, 3, 4].map((seg) => (
+                          <View
+                            key={seg}
+                            style={[
+                              styles.strengthSegment,
+                              {
+                                backgroundColor:
+                                  passwordMetrics.score >= seg
+                                    ? passwordMetrics.strengthColor
+                                    : isDark
+                                      ? '#262626'
+                                      : '#e5e7eb',
+                              },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      <Text
+                        variant="micro"
+                        weight="semibold"
+                        style={[
+                          styles.strengthLabel,
+                          { color: passwordMetrics.strengthColor },
+                        ]}
+                      >
+                        {passwordMetrics.strengthLabel}
+                      </Text>
+                    </View>
+
+                    {/* Compact Requirement Pattern Chips */}
+                    <View style={styles.patternChipsRow}>
+                      <View
+                        style={[
+                          styles.patternChip,
+                          {
+                            backgroundColor: passwordMetrics.hasMinLen
+                              ? isDark
+                                ? '#064e3b33'
+                                : '#ecfdf5'
+                              : isDark
+                                ? '#1a1a1a'
+                                : '#f4f4f5',
+                            borderColor: passwordMetrics.hasMinLen
+                              ? isDark
+                                ? '#059669'
+                                : '#10b981'
+                              : isDark
+                                ? '#2e2e2e'
+                                : '#e5e7eb',
+                          },
+                        ]}
+                      >
+                        {passwordMetrics.hasMinLen ? (
+                          <Check size={10} color="#10b981" strokeWidth={2.5} />
+                        ) : (
+                          <View
+                            style={[
+                              styles.patternDot,
+                              { backgroundColor: isDark ? '#525252' : '#9ca3af' },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          variant="micro"
+                          weight={passwordMetrics.hasMinLen ? 'semibold' : 'normal'}
+                          style={{
+                            color: passwordMetrics.hasMinLen
+                              ? isDark
+                                ? '#34d399'
+                                : '#059669'
+                              : isDark
+                                ? '#737373'
+                                : '#8f8f8f',
+                          }}
+                        >
+                          8+ chars
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.patternChip,
+                          {
+                            backgroundColor: passwordMetrics.hasUpperLower
+                              ? isDark
+                                ? '#064e3b33'
+                                : '#ecfdf5'
+                              : isDark
+                                ? '#1a1a1a'
+                                : '#f4f4f5',
+                            borderColor: passwordMetrics.hasUpperLower
+                              ? isDark
+                                ? '#059669'
+                                : '#10b981'
+                              : isDark
+                                ? '#2e2e2e'
+                                : '#e5e7eb',
+                          },
+                        ]}
+                      >
+                        {passwordMetrics.hasUpperLower ? (
+                          <Check size={10} color="#10b981" strokeWidth={2.5} />
+                        ) : (
+                          <View
+                            style={[
+                              styles.patternDot,
+                              { backgroundColor: isDark ? '#525252' : '#9ca3af' },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          variant="micro"
+                          weight={passwordMetrics.hasUpperLower ? 'semibold' : 'normal'}
+                          style={{
+                            color: passwordMetrics.hasUpperLower
+                              ? isDark
+                                ? '#34d399'
+                                : '#059669'
+                              : isDark
+                                ? '#737373'
+                                : '#8f8f8f',
+                          }}
+                        >
+                          Upper & lower
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.patternChip,
+                          {
+                            backgroundColor: passwordMetrics.hasNum
+                              ? isDark
+                                ? '#064e3b33'
+                                : '#ecfdf5'
+                              : isDark
+                                ? '#1a1a1a'
+                                : '#f4f4f5',
+                            borderColor: passwordMetrics.hasNum
+                              ? isDark
+                                ? '#059669'
+                                : '#10b981'
+                              : isDark
+                                ? '#2e2e2e'
+                                : '#e5e7eb',
+                          },
+                        ]}
+                      >
+                        {passwordMetrics.hasNum ? (
+                          <Check size={10} color="#10b981" strokeWidth={2.5} />
+                        ) : (
+                          <View
+                            style={[
+                              styles.patternDot,
+                              { backgroundColor: isDark ? '#525252' : '#9ca3af' },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          variant="micro"
+                          weight={passwordMetrics.hasNum ? 'semibold' : 'normal'}
+                          style={{
+                            color: passwordMetrics.hasNum
+                              ? isDark
+                                ? '#34d399'
+                                : '#059669'
+                              : isDark
+                                ? '#737373'
+                                : '#8f8f8f',
+                          }}
+                        >
+                          1+ number
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
                 <Input
                   label="Confirm Password"
                   required
@@ -980,6 +1199,27 @@ export default function SignupScreen() {
                   error={fieldErrors.confirm_password}
                   leftIcon={<Lock size={15} color={iconColor} />}
                 />
+
+                {/* Confirm Password Real-time Match Indicator */}
+                {confirmPassword.length > 0 && (
+                  <View style={styles.confirmMatchContainer}>
+                    {confirmPassword === password ? (
+                      <View style={styles.confirmMatchRow}>
+                        <Check size={12} color="#10b981" strokeWidth={2.5} />
+                        <Text variant="caption" weight="medium" style={{ color: '#10b981' }}>
+                          Passwords match
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.confirmMatchRow}>
+                        <AlertCircle size={12} color="#ef4444" strokeWidth={2.5} />
+                        <Text variant="caption" weight="medium" style={{ color: '#ef4444' }}>
+                          Passwords do not match
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </MobileFormSectionCard>
 
               {/* Account Status Info Note Banner */}
@@ -987,20 +1227,20 @@ export default function SignupScreen() {
                 style={[
                   styles.noteBox,
                   {
-                    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : 'rgba(2, 132, 199, 0.08)',
-                    borderColor: isDark ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.2)',
+                    backgroundColor: isDark ? '#082f49' : '#f0f9ff',
+                    borderColor: isDark ? '#0284c7' : '#bae6fd',
                   },
                 ]}
               >
-                <Info size={15} color="#0284c7" style={{ marginTop: 2 }} />
+                <Info size={15} color={isDark ? '#38bdf8' : '#0284c7'} style={{ marginTop: 2 }} />
                 <Text
                   variant="caption"
                   style={[
                     styles.noteText,
-                    { color: isDark ? '#7dd3fc' : '#0369a1' },
+                    { color: isDark ? '#e0f2fe' : '#0369a1' },
                   ]}
                 >
-                  <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0369a1' }}>Note: </Text>
+                  <Text variant="label" style={{ color: isDark ? '#e0f2fe' : '#0369a1' }}>Note: </Text>
                   Account status will be “pending” until approved by an administrator.
                 </Text>
               </View>
@@ -1054,7 +1294,7 @@ export default function SignupScreen() {
                     .
                   </Text>
                 </Pressable>
-                {fieldErrors.terms && (
+                {Boolean(fieldErrors.terms) && (
                   <Text variant="caption" style={styles.termsErrorText}>
                     {fieldErrors.terms}
                   </Text>
@@ -1250,5 +1490,61 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     textAlign: 'center',
+  },
+  passwordStrengthContainer: {
+    width: '100%',
+    marginTop: -4,
+    marginBottom: 8,
+    gap: 6,
+  },
+  passwordStrengthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  strengthSegments: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  strengthSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+  },
+  strengthLabel: {
+    minWidth: 44,
+    textAlign: 'right',
+  },
+  patternChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  patternChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  patternDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  confirmMatchContainer: {
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  confirmMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
 });

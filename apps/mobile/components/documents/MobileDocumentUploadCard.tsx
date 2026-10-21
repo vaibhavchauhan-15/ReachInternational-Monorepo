@@ -150,7 +150,7 @@ export function MobileDocumentUploadCard({
               styles.dashedBox,
               {
                 borderColor: isDark ? '#262626' : '#e2e8f0',
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                backgroundColor: isDark ? '#141414' : '#f4f4f5',
                 borderStyle: 'solid',
               },
             ]}
@@ -173,7 +173,7 @@ export function MobileDocumentUploadCard({
                   : isDark
                   ? '#333333'
                   : '#d1d5db',
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
+                backgroundColor: isDark ? '#141414' : '#ffffff',
               },
             ]}
           >
@@ -202,8 +202,8 @@ export function MobileDocumentUploadCard({
           style={[
             styles.attachedRow,
             {
-              backgroundColor: isDark ? 'rgba(2, 132, 199, 0.1)' : 'rgba(2, 132, 199, 0.05)',
-              borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.2)',
+              backgroundColor: isDark ? '#0c2a4d' : '#f0f9ff',
+              borderColor: isDark ? '#0284c7' : '#bae6fd',
             },
           ]}
         >

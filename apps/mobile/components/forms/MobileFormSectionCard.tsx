@@ -39,11 +39,9 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#ffffff',
+          backgroundColor: isDark ? '#141414' : '#ffffff',
           borderColor: isCompleted && !isReadOnly
-            ? isDark
-              ? 'rgba(52, 211, 153, 0.8)'
-              : '#10b981'
+            ? '#10b981'
             : isDark
             ? '#262626'
             : '#ebebeb',
@@ -64,32 +62,32 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
                     ? '#10b981'
                     : isReadOnly
                     ? isDark
-                      ? 'rgba(255, 255, 255, 0.05)'
-                      : 'rgba(0, 0, 0, 0.04)'
+                      ? '#262626'
+                      : '#e4e4e7'
                     : isDark
-                    ? 'rgba(14, 165, 233, 0.15)'
-                    : 'rgba(14, 165, 233, 0.1)',
+                    ? '#0ea5e9'
+                    : '#0284c7',
                   borderColor: isCompleted && !isReadOnly
                     ? '#10b981'
                     : isReadOnly
-                    ? theme.colors.hairline
+                    ? (isDark ? '#3f3f46' : '#d4d4d8')
                     : isDark
-                    ? 'rgba(14, 165, 233, 0.3)'
-                    : 'rgba(14, 165, 233, 0.25)',
+                    ? '#38bdf8'
+                    : '#0284c7',
                 },
               ]}
             >
               <Text
+                variant="caption"
+                weight="bold"
                 style={[
                   styles.stepNumberText,
                   {
                     color: isCompleted && !isReadOnly
                       ? '#ffffff'
                       : isReadOnly
-                      ? theme.colors.mute
-                      : isDark
-                      ? '#38bdf8'
-                      : '#0284c7',
+                      ? (isDark ? '#a1a1aa' : '#71717a')
+                      : '#ffffff',
                   },
                 ]}
               >
@@ -104,7 +102,12 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
             </View>
           ) : null}
 
-          <Text style={[styles.title, { color: theme.colors.ink }]} numberOfLines={1}>
+          <Text
+            variant="subheading"
+            weight="semibold"
+            style={[styles.title, { color: theme.colors.ink }]}
+            numberOfLines={1}
+          >
             {title}
           </Text>
         </View>
@@ -118,29 +121,41 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
               style={[
                 styles.readOnlyBadge,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f3f4f6',
-                  borderColor: theme.colors.hairline,
+                  backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                  borderColor: isDark ? '#3f3f46' : '#e4e4e7',
                 },
               ]}
             >
-              <Lock size={10} color={theme.colors.mute} />
-              <Text variant="caption" style={[styles.readOnlyBadgeText, { color: theme.colors.mute }]}>View Only</Text>
+              <Lock size={10} color={isDark ? '#a1a1aa' : '#71717a'} />
+              <Text variant="caption" style={[styles.readOnlyBadgeText, { color: isDark ? '#a1a1aa' : '#71717a' }]}>
+                View Only
+              </Text>
             </View>
           ) : isCompleted && !headerAction && !hideCompletedBadge ? (
-            <View style={styles.completedBadge}>
-              <Check size={12} color="#10b981" strokeWidth={2.5} />
+            <View
+              style={[
+                styles.completedBadge,
+                {
+                  backgroundColor: '#10b981',
+                  borderColor: '#10b981',
+                },
+              ]}
+            >
+              <Check size={12} color="#ffffff" strokeWidth={2.5} />
             </View>
           ) : !isMandatory && !isCompleted ? (
             <View
               style={[
                 styles.optionalBadge,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f3f4f6',
-                  borderColor: theme.colors.hairline,
+                  backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                  borderColor: isDark ? '#3f3f46' : '#e4e4e7',
                 },
               ]}
             >
-              <Text style={[styles.optionalBadgeText, { color: theme.colors.mute }]}>Optional</Text>
+              <Text variant="caption" style={[styles.optionalBadgeText, { color: isDark ? '#a1a1aa' : '#71717a' }]}>
+                Optional
+              </Text>
             </View>
           ) : null}
         </View>
@@ -148,7 +163,7 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
 
       {/* Optional Description */}
       {description ? (
-        <Text style={[styles.description, { color: theme.colors.mute }]}>
+        <Text variant="caption" style={[styles.description, { color: theme.colors.mute }]}>
           {description}
         </Text>
       ) : null}
@@ -201,14 +216,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   completedBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   optionalBadge: {
     paddingHorizontal: 7,

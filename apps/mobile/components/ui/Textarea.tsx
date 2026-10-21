@@ -1,6 +1,9 @@
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { Platform, TextInput } from 'react-native';
+import { useTheme } from './ThemeProvider';
+import { useTypeStyle } from './Text';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 
 export type TextareaProps = React.ComponentPropsWithoutRef<typeof TextInput> & {
   placeholderClassName?: string;
@@ -18,11 +21,15 @@ const Textarea = React.forwardRef<React.ElementRef<typeof TextInput>, TextareaPr
       importantForAutofill = 'no',
       autoCorrect = false,
       spellCheck = false,
+      placeholderTextColor,
       style,
       ...props
     },
     ref
   ) => {
+    const { theme, isDark } = useTheme();
+    const bodyStyle = useTypeStyle('body');
+
     return (
       <TextInput
         ref={ref}
@@ -33,18 +40,26 @@ const Textarea = React.forwardRef<React.ElementRef<typeof TextInput>, TextareaPr
         spellCheck={spellCheck}
         aria-autocomplete="none"
         className={cn(
-          'text-foreground border-input dark:bg-input/20 flex min-h-20 w-full flex-row rounded-lg border bg-background px-3 py-2 text-base shadow-sm shadow-black/5 md:text-sm',
+          'flex min-h-20 w-full flex-row rounded-lg border px-3 py-2 text-base shadow-sm shadow-black/5 md:text-sm',
           Platform.select({
-            web: 'placeholder:text-muted-foreground focus:border-ring focus-visible:border-ring focus:ring-ring/50 focus-visible:ring-ring/50 outline-none focus:outline-none focus-visible:outline-none focus:ring-[2px] focus-visible:ring-[2px] disabled:cursor-not-allowed',
+            web: 'outline-none focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed',
           }),
           props.editable === false && 'opacity-50',
           className
         )}
         style={[
+          {
+            backgroundColor: isDark ? '#141414' : '#ffffff',
+            color: isDark ? '#fafafa' : '#171717',
+            borderColor: isDark ? '#262626' : '#ebebeb',
+            borderWidth: 1,
+            borderRadius: radiusNumeric.md,
+          },
+          bodyStyle,
           Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null,
           style,
         ]}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={placeholderTextColor || (isDark ? '#737373' : '#8f8f8f')}
         multiline={multiline}
         numberOfLines={numberOfLines}
         textAlignVertical="top"

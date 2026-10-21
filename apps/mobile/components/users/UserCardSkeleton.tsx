@@ -109,6 +109,31 @@ export const UserCardSkeleton: React.FC<UserCardSkeletonProps> = ({
           style={{ marginVertical: 1 }}
         />
       </View>
+
+      {/* Bottom Action Buttons: More, Assign Machine, Supervisor */}
+      <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
+        <Skeleton
+          width={64}
+          height={32}
+          borderRadius={radiusNumeric.pill}
+          animate={animate}
+          style={styles.noMargin}
+        />
+        <Skeleton
+          width={112}
+          height={32}
+          borderRadius={radiusNumeric.pill}
+          animate={animate}
+          style={styles.noMargin}
+        />
+        <Skeleton
+          width={96}
+          height={32}
+          borderRadius={radiusNumeric.pill}
+          animate={animate}
+          style={styles.noMargin}
+        />
+      </View>
     </View>
   );
 };
@@ -168,6 +193,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  cardActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
   },
   noMargin: {
     marginVertical: 0,

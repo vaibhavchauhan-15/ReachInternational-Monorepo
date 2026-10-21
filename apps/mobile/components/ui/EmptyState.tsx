@@ -171,9 +171,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       ) : null}
 
       {/* Action Buttons */}
-      {(resolvedActionLabel || secondaryActionLabel) && (
+      {Boolean(resolvedActionLabel || secondaryActionLabel) && (
         <View style={styles.actionRow}>
-          {resolvedActionLabel && resolvedOnAction && (
+          {Boolean(resolvedActionLabel && resolvedOnAction) && (
             <Pressable
               variant="buttonPrimary"
               haptic="select"
@@ -192,7 +192,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
             </Pressable>
           )}
 
-          {secondaryActionLabel && onSecondaryAction && (
+          {Boolean(secondaryActionLabel && onSecondaryAction) && (
             <Pressable
               variant="buttonGhost"
               haptic="tap"

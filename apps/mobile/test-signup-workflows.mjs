@@ -141,24 +141,24 @@ check('validation/auth.ts defines validateSignupFormData helper', () => {
   assert(validationAuthContent.includes('export function validateSignupFormData'));
 });
 
-check('validation/auth.ts contains concise name error: "Enter your full name."', () => {
-  assert(validationAuthContent.includes('Enter your full name.'));
+check('validation/auth.ts contains concise name error: "Full name required"', () => {
+  assert(validationAuthContent.includes('Full name required'));
 });
 
-check('validation/auth.ts contains concise email error: "Enter a valid email address."', () => {
-  assert(validationAuthContent.includes('Enter a valid email address.'));
+check('validation/auth.ts contains concise email error: "Valid email required"', () => {
+  assert(validationAuthContent.includes('Valid email required'));
 });
 
-check('validation/auth.ts contains concise phone error: "Enter a valid mobile number."', () => {
-  assert(validationAuthContent.includes('Enter a valid mobile number.'));
+check('validation/auth.ts contains concise phone error: "10-digit mobile number required"', () => {
+  assert(validationAuthContent.includes('10-digit mobile number required'));
 });
 
-check('validation/auth.ts contains concise supervisor error: "Select a supervisor."', () => {
-  assert(validationAuthContent.includes('Select a supervisor.'));
+check('validation/auth.ts contains concise supervisor error: "Supervisor required"', () => {
+  assert(validationAuthContent.includes('Supervisor required'));
 });
 
-check('validation/auth.ts contains shift timing error: "End time must be after start time."', () => {
-  assert(validationAuthContent.includes('End time must be after start time.'));
+check('validation/auth.ts contains shift timing error: "End time must be after start time"', () => {
+  assert(validationAuthContent.includes('End time must be after start time'));
 });
 
 check('validation/auth.ts superRefine conditionally requires supervisor only for operator role', () => {
@@ -172,8 +172,8 @@ check('validation/auth.ts superRefine validates shift start and end times using 
 });
 
 check('validation/auth.ts requires bank document and Aadhaar document flags', () => {
-  assert(validationAuthContent.includes('Upload your bank account document.'));
-  assert(validationAuthContent.includes('Upload your Aadhaar document.'));
+  assert(validationAuthContent.includes('Bank document required'));
+  assert(validationAuthContent.includes('Aadhaar document required'));
 });
 
 // ============================================================
@@ -186,7 +186,7 @@ check('authErrors.ts exports mapSignupError', () => {
 });
 
 check('authErrors.ts maps duplicate email to concise actionable message', () => {
-  assert(authErrorsContent.includes('This email is already registered. Sign in or reset your password.'));
+  assert(authErrorsContent.includes('Email already registered. Sign in instead.'));
 });
 
 check('authErrors.ts maps duplicate mobile number to concise message', () => {
@@ -194,15 +194,15 @@ check('authErrors.ts maps duplicate mobile number to concise message', () => {
 });
 
 check('authErrors.ts maps duplicate Aadhaar number to concise message', () => {
-  assert(authErrorsContent.includes('This Aadhaar number is already registered with another account.'));
+  assert(authErrorsContent.includes('Aadhaar number already registered.'));
 });
 
 check('authErrors.ts maps network drop / timeout to "Connection failed. Check your internet and try again."', () => {
-  assert(authErrorsContent.includes('Connection failed. Check your internet and try again.'));
+  assert(authErrorsContent.includes('Connection failed. Check your internet.'));
 });
 
 check('authErrors.ts maps rate limit (429) gracefully', () => {
-  assert(authErrorsContent.includes('Too many signup attempts. Please wait a few moments before trying again.'));
+  assert(authErrorsContent.includes('Too many signup attempts. Please wait a moment.'));
 });
 
 check('authErrors.ts sanitizes PostgreSQL error codes and stack traces', () => {

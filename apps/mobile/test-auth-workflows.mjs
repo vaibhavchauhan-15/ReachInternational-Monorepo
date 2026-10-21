@@ -138,7 +138,7 @@ check('authErrors.ts exports mapAuthError and formatAccountStatusNotice', () => 
 });
 
 check('Failed password / credential check ALWAYS returns generic message', () => {
-  const generic = 'Invalid email or password. Please verify your credentials and try again.';
+  const generic = 'Invalid email or password.';
   assert(authErrorsContent.includes(generic));
 });
 

@@ -161,20 +161,20 @@ export const MobileMachineCardSkeleton: React.FC<MobileMachineCardSkeletonProps>
         </View>
       </View>
 
-      {/* Card Action Footer: Left History squircle & Right Chevron squircle */}
+      {/* Card Action Footer: Left History squircle & Right Details pill */}
       <View style={[styles.cardFooter, { borderTopColor: theme.colors.hairline }]}>
         <Skeleton
           width={36}
           height={36}
-          borderRadius={10}
+          borderRadius={radiusNumeric.md}
           animate={animate}
           style={styles.noMargin}
         />
 
         <Skeleton
-          width={36}
+          width={84}
           height={36}
-          borderRadius={10}
+          borderRadius={radiusNumeric.pill}
           animate={animate}
           style={styles.noMargin}
         />

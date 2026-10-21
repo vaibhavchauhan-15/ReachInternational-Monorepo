@@ -71,11 +71,25 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // Debounce search query with 120ms delay for high-performance typing
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    if (!text.trim()) {
+      setDebouncedSearch('');
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setSelectedIndex(0);
+  };
+
+  // Debounce search query with 50ms delay for lightning-fast responsive typing
   useEffect(() => {
+    if (!search.trim()) return;
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-    }, 120);
+    }, 50);
     return () => clearTimeout(timer);
   }, [search]);
 
@@ -229,40 +243,49 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         visible={isOpen}
         onClose={onClose}
         variant={isWide ? 'center' : 'bottom'}
+        panelStyle={isWide ? styles.dialogPanelOverride : styles.sheetPanelOverride}
         testID="mobile-command-palette-modal"
       >
-        <View
-          style={[
-            styles.paletteCard,
-            isWide ? styles.paletteCardCenter : styles.paletteCardBottom,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          {/* Search Header Bar */}
+        <View style={styles.modalContent}>
+          {/* Search Header Bar with Fast Touch-Friendly Close Button */}
           <View style={styles.searchBarWrapper}>
-            <SearchInput
-              value={search}
-              onChangeText={setSearch}
-              onClear={() => {
-                setSearch('');
-                setDebouncedSearch('');
-              }}
-              placeholder="Search pages, settings, actions (e.g. theme, shift)..."
-              autoFocus
-              size="lg"
-              name="cmd_search_query"
-              id="cmd_search_query"
-              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-            />
+            <View style={styles.searchInputBox}>
+              <SearchInput
+                value={search}
+                onChangeText={handleSearchChange}
+                onClear={handleClearSearch}
+                placeholder="Search pages, settings, actions (e.g. theme, shift)..."
+                autoFocus
+                size="lg"
+                name="cmd_search_query"
+                id="cmd_search_query"
+                autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+              />
+            </View>
+            <Touchable
+              preset="icon"
+              variant="iconButton"
+              hitSlop={8}
+              onPress={onClose}
+              style={[
+                styles.closeBtn,
+                {
+                  backgroundColor: isDark ? '#262626' : '#f4f4f5',
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Close quick access palette"
+            >
+              <X size={16} color={theme.colors.mute} />
+            </Touchable>
           </View>
 
           {/* Results List */}
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
             style={styles.resultsScroll}
             contentContainerStyle={styles.scrollContent}
           >
@@ -288,11 +311,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
                 <View style={styles.emptyActionRow}>
                   <Touchable
                     preset="card"
-                    onPress={() => {
-                      haptics.select();
-                      setSearch('');
-                      setDebouncedSearch('');
-                    }}
+                    onPress={handleClearSearch}
                     style={[
                       styles.clearSearchBtn,
                       {
@@ -315,15 +334,27 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
 
                 return (
                   <View key={category} style={styles.categorySection}>
-                    <Text
-                      variant="caption"
-                      style={[
-                        styles.categoryLabel,
-                        { color: theme.colors.mute },
-                      ]}
-                    >
-                      {category.toUpperCase()}
-                    </Text>
+                    <View style={styles.categoryHeaderRow}>
+                      <Text
+                        variant="micro"
+                        weight="bold"
+                        style={[
+                          styles.categoryLabel,
+                          { color: theme.colors.mute },
+                        ]}
+                      >
+                        {category.toUpperCase()}
+                      </Text>
+                      <Text
+                        variant="micro"
+                        style={[
+                          styles.categoryCount,
+                          { color: theme.colors.mute },
+                        ]}
+                      >
+                        {items.length}
+                      </Text>
+                    </View>
 
                     <View
                       style={[
@@ -451,42 +482,58 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
 };
 
 const styles = StyleSheet.create({
-  paletteCard: {
-    paddingTop: 14,
-    paddingBottom: 16,
-    width: '100%',
+  sheetPanelOverride: {
+    maxHeight: '92%',
+    paddingBottom: 8,
   },
-  paletteCardBottom: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    maxHeight: '88%',
-  },
-  paletteCardCenter: {
+  dialogPanelOverride: {
     maxWidth: 580,
+    maxHeight: 560,
+    padding: 16,
     borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    maxHeight: 540,
     overflow: 'hidden',
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 48px -12px rgba(0, 0, 0, 0.35)',
+        boxShadow: '0 20px 48px -12px rgba(0, 0, 0, 0.45)',
       },
       default: {
         shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.28,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.32,
+        shadowRadius: 28,
         elevation: 24,
       },
     }),
   },
-  resultsScroll: {
-    maxHeight: 400,
+  modalContent: {
+    width: '100%',
+    flexShrink: 1,
+    paddingBottom: 4,
   },
   searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginHorizontal: spacingNumeric.md,
+    marginTop: 2,
     marginBottom: spacingNumeric.sm,
+  },
+  searchInputBox: {
+    flex: 1,
+  },
+  closeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  resultsScroll: {
+    maxHeight: 480,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingHorizontal: spacingNumeric.md,
@@ -530,8 +577,17 @@ const styles = StyleSheet.create({
   categorySection: {
     gap: 6,
   },
+  categoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
   categoryLabel: {
-    marginLeft: 4,
+    marginLeft: 2,
+  },
+  categoryCount: {
+    opacity: 0.7,
   },
   categoryCard: {
     borderRadius: radiusNumeric.md,
@@ -544,7 +600,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     gap: 12,
-    minHeight: 54,
+    minHeight: 52,
+    ...Platform.select({
+      web: {
+        transition: 'background-color 100ms ease',
+      } as any,
+    }),
   },
   iconContainer: {
     width: 36,
@@ -553,10 +614,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   itemTextCol: {
     flex: 1,
     gap: 2,
+    minWidth: 0,
   },
   breadcrumbRow: {
     flexDirection: 'row',

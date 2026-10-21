@@ -15,14 +15,15 @@ import {
 } from 'react-native';
 import { cn } from '@/lib/utils';
 import { Eye, EyeOff } from 'lucide-react-native';
-import { Text } from '@/components/ui/Text';
+import { Text, useTypeStyle } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 
 export interface InputProps extends TextInputProps {
   className?: string;
   containerClassName?: string;
   placeholderClassName?: string;
-  label?: string;
+  label?: string | React.ReactNode;
   required?: boolean;
   error?: string | boolean;
   helperText?: string;
@@ -59,13 +60,15 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       keyboardType,
       inputMode,
       focusBorderColor,
+      placeholderTextColor,
       onFocus,
       onBlur,
       ...props
     },
     ref
   ) => {
-    const { isDark } = useTheme();
+    const { theme, isDark } = useTheme();
+    const bodyStyle = useTypeStyle('body');
     const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
     const [isFocused, setIsFocused] = React.useState(false);
 
@@ -138,38 +141,77 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       ? '#ef4444'
       : (focusBorderColor || (isDark ? '#0ea5e9' : '#0284c7'));
 
-    const resolvedInputStyle = React.useMemo(() => {
-      const list: any[] = [style];
+    const inactiveBorderColor = hasError
+      ? (isDark ? '#f87171' : '#ee0000')
+      : (isDark ? '#262626' : '#ebebeb');
 
-      if (isFocused) {
-        list.push({
-          borderColor: activeBorderColor,
-        });
-      }
+    const effectiveBorderColor = isFocused ? activeBorderColor : inactiveBorderColor;
+    const inputBackgroundColor = isDark ? '#141414' : '#fafafa';
+    const inputTextColor = theme.colors.ink;
+    const effectivePlaceholderColor = placeholderTextColor || (isDark ? '#737373' : '#8f8f8f');
+
+    const resolvedInputStyle = React.useMemo(() => {
+      const baseStyle: any = {
+        backgroundColor: inputBackgroundColor,
+        color: inputTextColor,
+        borderColor: effectiveBorderColor,
+        borderWidth: 1,
+        borderRadius: radiusNumeric.md,
+        minHeight: 44,
+        paddingHorizontal: 14,
+        ...(leftIcon ? { paddingLeft: 40 } : {}),
+        ...(rightIcon || isPassword ? { paddingRight: 40 } : {}),
+        ...(props.editable === false ? { opacity: 0.6, backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' } : {}),
+      };
 
       if (Platform.OS === 'web') {
-        list.push({
-          outlineStyle: 'none',
-          outline: 'none',
-          ...(isFocused
-            ? {
-                boxShadow: `0 0 0 1px ${activeBorderColor}`,
-              }
-            : {}),
-        });
+        baseStyle.outlineStyle = 'none';
+        baseStyle.outline = 'none';
+        if (isFocused) {
+          baseStyle.boxShadow = `0 0 0 1px ${activeBorderColor}`;
+        }
       }
 
-      return list;
-    }, [style, isFocused, activeBorderColor]);
+      return [baseStyle, bodyStyle, style];
+    }, [
+      inputBackgroundColor,
+      inputTextColor,
+      effectiveBorderColor,
+      leftIcon,
+      rightIcon,
+      isPassword,
+      props.editable,
+      isDark,
+      isFocused,
+      activeBorderColor,
+      bodyStyle,
+      style,
+    ]);
 
     return (
       <View style={containerStyle} className={cn('w-full', label && 'mb-3', containerClassName)}>
         {label && (
-          <View className="flex-row items-center mb-1.5">
-            <Text variant="label" className="text-foreground">
-              {label}
-            </Text>
-            {required && <Text variant="label" className="text-destructive ml-1">*</Text>}
+          <View className="flex-row items-center mb-1.5" style={{ marginBottom: 6 }}>
+            {typeof label === 'string' ? (
+              <Text
+                variant="label"
+                weight="medium"
+                style={{ color: isDark ? '#fafafa' : '#171717' }}
+              >
+                {required ? label.replace(/\s*\*+$/, '') : label}
+              </Text>
+            ) : (
+              label
+            )}
+            {required && (
+              <Text
+                variant="label"
+                weight="semibold"
+                style={{ color: isDark ? '#f87171' : '#ee0000', marginLeft: 4 }}
+              >
+                *
+              </Text>
+            )}
           </View>
         )}
         <View className="relative flex-row items-center w-full">
@@ -188,12 +230,13 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
             spellCheck={effectiveSpellCheck}
             keyboardType={keyboardType}
             inputMode={effectiveInputMode}
+            placeholderTextColor={effectivePlaceholderColor}
             aria-autocomplete="none"
             onFocus={handleFocus}
             onBlur={handleBlur}
             {...webSecurityProps}
             className={cn(
-              'web:flex h-11 native:h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground web:outline-none web:focus:outline-none web:focus-visible:outline-none web:transition-[border-color,box-shadow] web:duration-150',
+              'web:flex h-11 native:h-12 w-full rounded-xl border px-3.5 text-base file:border-0 file:bg-transparent file:text-sm file:font-medium web:outline-none web:focus:outline-none web:focus-visible:outline-none web:transition-[border-color,box-shadow] web:duration-150',
               leftIcon && 'pl-10',
               (rightIcon || isPassword) && 'pr-10',
               hasError && 'border-destructive',
@@ -214,9 +257,9 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
               accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
             >
               {isPasswordVisible ? (
-                <EyeOff size={18} className="text-muted-foreground" color="#888888" />
+                <EyeOff size={18} color={isDark ? '#9ca3af' : '#888888'} />
               ) : (
-                <Eye size={18} className="text-muted-foreground" color="#888888" />
+                <Eye size={18} color={isDark ? '#9ca3af' : '#888888'} />
               )}
             </Pressable>
           ) : rightIcon ? (
@@ -226,9 +269,20 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
           ) : null}
         </View>
         {errorMessage ? (
-          <Text variant="caption" className="text-destructive mt-1 font-medium">{errorMessage}</Text>
+          <Text
+            variant="caption"
+            weight="medium"
+            style={{ color: isDark ? '#f87171' : '#ee0000', marginTop: 4 }}
+          >
+            {errorMessage}
+          </Text>
         ) : helperText ? (
-          <Text variant="caption" className="text-muted-foreground mt-1">{helperText}</Text>
+          <Text
+            variant="caption"
+            style={{ color: isDark ? '#a1a1aa' : '#737373', marginTop: 4 }}
+          >
+            {helperText}
+          </Text>
         ) : null}
       </View>
     );

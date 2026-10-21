@@ -1,5 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+  Easing,
+} from 'react-native-reanimated';
 import { Text, Badge, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -64,6 +71,29 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
   const [internalExpanded, setInternalExpanded] = useState<boolean>(true);
 
   const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const progress = useSharedValue(isExpanded ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(isExpanded ? 1 : 0, {
+      duration: 220,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    });
+  }, [isExpanded, progress]);
+
+  const chevronAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${progress.value * 180}deg` }],
+    };
+  });
+
+  const collapsibleAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: progress.value,
+      maxHeight: interpolate(progress.value, [0, 1], [0, 280]),
+      overflow: 'hidden' as const,
+    };
+  });
+
   const handleToggle = useCallback(() => {
     if (controlledToggle) {
       controlledToggle();
@@ -108,18 +138,13 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
           </View>
 
           <View style={styles.headerRight}>
-            <ChevronDown
-              size={16}
-              color={theme.colors.mute}
-              style={[
-                styles.chevron,
-                isExpanded && styles.chevronRotated,
-              ]}
-            />
+            <Animated.View style={chevronAnimatedStyle}>
+              <ChevronDown size={16} color={theme.colors.mute} />
+            </Animated.View>
           </View>
         </Pressable>
 
-        {isExpanded && (
+        <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
             {address ? (
               <View style={styles.metaRow}>
@@ -159,7 +184,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
               )}
             </View>
           </View>
-        )}
+        </Animated.View>
       </View>
     );
   }
@@ -235,18 +260,13 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
               </Pressable>
             )}
 
-            <ChevronDown
-              size={16}
-              color={theme.colors.mute}
-              style={[
-                styles.chevron,
-                isExpanded && styles.chevronRotated,
-              ]}
-            />
+            <Animated.View style={chevronAnimatedStyle}>
+              <ChevronDown size={16} color={theme.colors.mute} />
+            </Animated.View>
           </View>
         </Pressable>
 
-        {isExpanded && (
+        <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
             <View style={styles.statsRow}>
               {machine.manufacturer ? (
@@ -283,7 +303,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
               </View>
             </View>
           </View>
-        )}
+        </Animated.View>
       </View>
     );
   }
@@ -324,18 +344,13 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
             <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
               {Math.round(totalRunHours * 10) / 10} hrs
             </Text>
-            <ChevronDown
-              size={16}
-              color={theme.colors.mute}
-              style={[
-                styles.chevron,
-                isExpanded && styles.chevronRotated,
-              ]}
-            />
+            <Animated.View style={chevronAnimatedStyle}>
+              <ChevronDown size={16} color={theme.colors.mute} />
+            </Animated.View>
           </View>
         </Pressable>
 
-        {isExpanded && (
+        <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
             {operator.phone ? (
               <View style={styles.metaRow}>
@@ -365,7 +380,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
               </View>
             </View>
           </View>
-        )}
+        </Animated.View>
       </View>
     );
   }
@@ -379,6 +394,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     marginBottom: spacingNumeric.sm + 2,
+  },
+  collapsibleWrapper: {
+    overflow: 'hidden',
   },
   headerPressable: {
     flexDirection: 'row',
@@ -394,9 +412,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
-    flexWrap: 'wrap',
+    minWidth: 0,
   },
-  title: {},
+  title: {
+    flexShrink: 1,
+  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -411,12 +431,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
-  },
-  chevron: {
-    transform: [{ rotate: '0deg' }],
-  },
-  chevronRotated: {
-    transform: [{ rotate: '180deg' }],
   },
   expandedContent: {
     borderTopWidth: 1,

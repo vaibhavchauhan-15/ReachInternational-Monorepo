@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Platform,
   Pressable,
+  ScrollView,
   type StyleProp,
   type ViewStyle,
   type LayoutChangeEvent,
@@ -38,6 +39,7 @@ export interface SegmentedToggleProps<T extends string = string> {
   onChange: (value: T) => void;
   size?: SegmentedToggleSize;
   fullWidth?: boolean;
+  scrollable?: boolean;
   style?: StyleProp<ViewStyle>;
   itemStyle?: StyleProp<ViewStyle>;
   activeColor?: string;
@@ -88,8 +90,8 @@ const SIZE_CONFIGS = {
 } as const;
 
 /**
- * Snappy, fluid spring configuration adhering to Apple HIG & Vercel Geist motion standards.
- * Eliminates sluggish overshoot while preserving organic fluidity.
+ * Smooth, lightweight spring configuration adhering to Apple HIG & Vercel Geist motion standards.
+ * Eliminates sluggish overshoot while preserving organic fluidity and instant response.
  */
 const SPRING_CONFIG = {
   stiffness: 440,
@@ -259,6 +261,7 @@ function BaseSegmentedToggle<T extends string = string>({
   onChange,
   size = 'md',
   fullWidth = true,
+  scrollable = false,
   style,
   itemStyle,
   activeColor,
@@ -268,6 +271,8 @@ function BaseSegmentedToggle<T extends string = string>({
   const { isDark } = useTheme();
   const reduceMotion = useReducedMotion();
   const config = SIZE_CONFIGS[size] || SIZE_CONFIGS.md;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const effectiveFullWidth = scrollable ? false : fullWidth;
 
   // Optimistic active ID: responds synchronously to touch at 0ms, eliminating selection lag
   const [selectedId, setSelectedId] = useState<T>(value);
@@ -289,7 +294,7 @@ function BaseSegmentedToggle<T extends string = string>({
   const { targetX, targetWidth } = useMemo(() => {
     if (items.length === 0) return { targetX: 0, targetWidth: 0 };
 
-    if (fullWidth && containerWidth > 0) {
+    if (effectiveFullWidth && containerWidth > 0) {
       const availWidth = Math.max(0, containerWidth - config.padding * 2);
       const tabW = availWidth / items.length;
       return {
@@ -303,7 +308,7 @@ function BaseSegmentedToggle<T extends string = string>({
       return { targetX: measured.x, targetWidth: measured.width };
     }
 
-    if (containerWidth > 0) {
+    if (containerWidth > 0 && !scrollable) {
       const availWidth = Math.max(0, containerWidth - config.padding * 2);
       const tabW = availWidth / items.length;
       return {
@@ -313,7 +318,7 @@ function BaseSegmentedToggle<T extends string = string>({
     }
 
     return { targetX: 0, targetWidth: 0 };
-  }, [items.length, itemLayouts, activeIndex, containerWidth, config.padding, fullWidth]);
+  }, [items.length, itemLayouts, activeIndex, containerWidth, config.padding, effectiveFullWidth, scrollable]);
 
   // Reanimated shared values for high-frequency 60/120fps GPU sliding pill animation
   const animX = useSharedValue(0);
@@ -352,6 +357,13 @@ function BaseSegmentedToggle<T extends string = string>({
     }
   }, [targetX, targetWidth, activeIndex, reduceMotion, animX, animWidth]);
 
+  // Auto-scroll to active tab when scrollable
+  useEffect(() => {
+    if (!scrollable || targetWidth <= 0 || !scrollViewRef.current) return;
+    const scrollTarget = Math.max(0, targetX - 24);
+    scrollViewRef.current.scrollTo({ x: scrollTarget, animated: true });
+  }, [scrollable, targetX, targetWidth]);
+
   // High-performance animated style: animates purely on UI thread via transform matrix
   const pillAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: animX.value }],
@@ -372,7 +384,7 @@ function BaseSegmentedToggle<T extends string = string>({
       setSelectedId(item.id);
 
       // 2. Eagerly glide pill on UI thread immediately
-      if (fullWidth && containerWidth > 0) {
+      if (effectiveFullWidth && containerWidth > 0) {
         const availWidth = Math.max(0, containerWidth - config.padding * 2);
         const tabW = availWidth / items.length;
         const nextX = config.padding + index * tabW;
@@ -403,7 +415,7 @@ function BaseSegmentedToggle<T extends string = string>({
       // 3. Dispatch change callback to parent
       onChange(item.id);
     },
-    [selectedId, fullWidth, containerWidth, config.padding, items.length, reduceMotion, animX, animWidth, itemLayouts, onChange]
+    [selectedId, effectiveFullWidth, containerWidth, config.padding, items.length, reduceMotion, animX, animWidth, itemLayouts, onChange]
   );
 
   const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
@@ -425,7 +437,7 @@ function BaseSegmentedToggle<T extends string = string>({
   const resolvedActiveColor = activeColor || (isDark ? '#0ea5e9' : '#0284c7');
   const inactiveTextColor = isDark ? '#a1a1aa' : '#52525b';
 
-  return (
+  const toggleTrack = (
     <View
       onLayout={handleContainerLayout}
       accessibilityRole="tablist"
@@ -439,12 +451,12 @@ function BaseSegmentedToggle<T extends string = string>({
           backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f4f4f5',
           borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e4e4e7',
         },
-        fullWidth ? styles.fullWidth : styles.inline,
-        style,
+        effectiveFullWidth ? styles.fullWidth : styles.inline,
+        !scrollable && style,
       ]}
     >
       {/* 1. SLIDING ACTIVE INDICATOR PILL (Smooth GPU-accelerated spring glide on Native & Web) */}
-      {containerWidth > 0 && targetWidth > 0 && (
+      {(containerWidth > 0 || itemLayouts[activeIndex]) && targetWidth > 0 && (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -465,7 +477,7 @@ function BaseSegmentedToggle<T extends string = string>({
       {/* 2. TAB ITEMS */}
       {items.map((item, index) => {
         const isActive = item.id === selectedId;
-        const showFallbackPill = isActive && containerWidth === 0;
+        const showFallbackPill = isActive && containerWidth === 0 && !itemLayouts[index];
 
         return (
           <SegmentItem
@@ -475,18 +487,34 @@ function BaseSegmentedToggle<T extends string = string>({
             isActive={isActive}
             onSelect={handleSelect}
             config={config}
-            fullWidth={fullWidth}
+            fullWidth={effectiveFullWidth}
             isDark={isDark}
             itemStyle={itemStyle}
             resolvedActiveColor={resolvedActiveColor}
             inactiveTextColor={inactiveTextColor}
             showFallbackPill={showFallbackPill}
-            onMeasure={fullWidth ? undefined : handleMeasureItem}
+            onMeasure={effectiveFullWidth ? undefined : handleMeasureItem}
           />
         );
       })}
     </View>
   );
+
+  if (scrollable) {
+    return (
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        style={[styles.scrollWrapper, style]}
+      >
+        {toggleTrack}
+      </ScrollView>
+    );
+  }
+
+  return toggleTrack;
 }
 
 /**
@@ -501,6 +529,7 @@ function areSegmentedTogglePropsEqual<T extends string = string>(
   if (prev.value !== next.value) return false;
   if (prev.size !== next.size) return false;
   if (prev.fullWidth !== next.fullWidth) return false;
+  if (prev.scrollable !== next.scrollable) return false;
   if (prev.activeColor !== next.activeColor) return false;
   if (prev.accessibilityLabel !== next.accessibilityLabel) return false;
   if (prev.onChange !== next.onChange) return false;
@@ -536,6 +565,14 @@ export const SegmentedToggle = React.memo(
 ) as typeof BaseSegmentedToggle;
 
 const styles = StyleSheet.create({
+  scrollWrapper: {
+    width: '100%',
+  },
+  scrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 1,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',

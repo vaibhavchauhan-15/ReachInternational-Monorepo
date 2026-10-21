@@ -2,20 +2,24 @@
  * ReachInternational Mobile — Native In-App Document Viewer Modal
  *
  * Implements the hybrid Document Viewer architecture:
- * - JPG / PNG / WEBP: In-app image viewer with pinch-to-zoom, pan, and rotation.
- * - PDF: In-app native browser <iframe> (Web) or hardware-accelerated WebView (iOS/Android) with fallback.
+ * - JPG / PNG / WEBP: In-app image viewer with smooth zoom, pan, and header rotation.
+ * - PDF: In-app continuous multi-page PDF viewer with vertical scrolling
+ *   (Native: @kishannareshpal/expo-pdf via iOS PDFKit & Android PDFium; Web: continuous browser object/iframe).
+ *   Reuses the exact same local cached file across opening, downloading, and sharing.
+ *   Zero Google Drive or browser redirects.
  * - DOC / DOCX / XLS: System / external viewer with share & download.
  *
  * Features:
  * - High-priority full-screen Modal portaling above bottom navbar and tab bars
  * - Reactive light/dark theme support using useTheme()
- * - Header: Document title, Download button, Share button, and Close button
- * - Zero flicker: Stabilized image and document key dependencies
- * - Pinch-to-zoom & Pan via native ScrollView
+ * - Header: Title, Rotate button (for images only per feedback), Download button, Close button
+ * - Zero flicker: Stable image source, direct URL resolution, stable key dependencies
+ * - In-app fast downloads via Blob on Web and FileSystem on Native (no external browser redirects)
+ * - Multipage continuous PDF scrolling on both Web and Native platforms
  * - Min 44px touch targets conforming to mobile responsive rules
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -26,25 +30,25 @@ import {
   StatusBar,
   Modal,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
-import * as Linking from 'expo-linking';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   X,
-  Share2,
   RotateCw,
-  RotateCcw,
   FileText,
   Download,
-  ExternalLink,
 } from '../ui/icon';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { Pressable } from '@/components/ui/touch/Pressable';
-import { useToast } from '@/components/ui/overlay';
+import { showToast } from '@/components/ui/overlay';
 import { haptics } from '@/lib/haptics';
+import {
+  isDirectUrl,
+  resolveDocumentUrl,
+  ensureLocalDocumentFile,
+  downloadDocumentInApp,
+} from '@/lib/documentCache';
+import { NativePdfViewer } from './NativePdfViewer';
 
 export interface MobileViewerDoc {
   id?: string;
@@ -67,138 +71,142 @@ export function MobileDocumentViewerModal({
   document: doc,
   onClose,
 }: MobileDocumentViewerModalProps) {
-  const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const { toast } = useToast();
 
   const [rotation, setRotation] = useState(0);
   const [imageLoading, setImageLoading] = useState(true);
-  const [sharing, setSharing] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [pdfError, setPdfError] = useState(false);
+  const [localPdfUri, setLocalPdfUri] = useState<string>('');
+  const [isCachingPdf, setIsCachingPdf] = useState(false);
 
-  const docUrl = doc?.url || doc?.uri || '';
-  const docKey = doc ? `${doc.id || ''}_${doc.fileName || ''}_${docUrl}` : '';
+  const rawDocUrl = doc?.url || doc?.uri || '';
+  const docKey = doc ? `${doc.id || ''}_${doc.fileName || ''}_${rawDocUrl}` : '';
 
-  // Reset rotation and loading strictly when the active document identity changes
-  useEffect(() => {
-    if (doc) {
-      setRotation(0);
-      setImageLoading(true);
-      setPdfError(false);
-    }
-  }, [docKey]);
-
-  if (!doc) return null;
-
-  const isImage = Boolean(
-    doc.mimeType?.toLowerCase().startsWith('image/') ||
-    /\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(docUrl) ||
-    /\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(doc.fileName || '')
-  );
+  // Synchronous URL initialization to prevent initial empty-state re-render flash
+  const initialDirectUrl = isDirectUrl(rawDocUrl) ? rawDocUrl : '';
+  const [resolvedDocUrl, setResolvedDocUrl] = useState<string>(initialDirectUrl);
+  const [isResolvingUrl, setIsResolvingUrl] = useState<boolean>(!initialDirectUrl && Boolean(rawDocUrl));
+  const prevDocKeyRef = useRef<string>('');
 
   const isPdf = Boolean(
-    doc.mimeType?.toLowerCase() === 'application/pdf' ||
-    doc.mimeType?.toLowerCase() === 'application/x-pdf' ||
-    /\.pdf$/i.test(docUrl) ||
-    /\.pdf$/i.test(doc.fileName || '')
+    doc?.mimeType?.toLowerCase() === 'application/pdf' ||
+    doc?.mimeType?.toLowerCase() === 'application/x-pdf' ||
+    /\.pdf$/i.test(rawDocUrl) ||
+    /\.pdf$/i.test(doc?.fileName || '')
   );
 
-  // Dedicated Download Action
+  const isImage = Boolean(
+    doc?.mimeType?.toLowerCase().startsWith('image/') ||
+    /\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(rawDocUrl) ||
+    /\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(doc?.fileName || '')
+  );
+
+  // Synchronize and resolve secure Supabase storage URL when storage path is provided
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!doc || !rawDocUrl) {
+      setResolvedDocUrl('');
+      setIsResolvingUrl(false);
+      setLocalPdfUri('');
+      return;
+    }
+
+    // Only reset rotation and loader states when document identity changes
+    if (prevDocKeyRef.current !== docKey) {
+      prevDocKeyRef.current = docKey;
+      setRotation(0);
+      setImageLoading(true);
+      setLocalPdfUri('');
+    }
+
+    const prepareDocument = async () => {
+      let finalUrl = rawDocUrl;
+
+      // 1. Resolve storage path to signed URL if needed
+      if (!isDirectUrl(rawDocUrl)) {
+        setIsResolvingUrl(true);
+        try {
+          finalUrl = await resolveDocumentUrl(rawDocUrl);
+          if (isCancelled) return;
+          setResolvedDocUrl(finalUrl);
+        } catch (err: any) {
+          if (isCancelled) return;
+          setIsResolvingUrl(false);
+          showToast('error', 'Storage Access Error', err?.message || 'Unable to retrieve secure preview link.');
+          return;
+        } finally {
+          if (!isCancelled) setIsResolvingUrl(false);
+        }
+      } else {
+        setResolvedDocUrl(rawDocUrl);
+        setIsResolvingUrl(false);
+      }
+
+      // 2. On native mobile for PDFs: preload and cache locally so rendering, downloading, and sharing reuse the exact same file
+      if (isPdf && Platform.OS !== 'web' && finalUrl) {
+        setIsCachingPdf(true);
+        try {
+          const cachedUri = await ensureLocalDocumentFile({
+            url: finalUrl,
+            fileName: doc.fileName,
+            title: doc.title,
+            mimeType: doc.mimeType,
+          });
+          if (!isCancelled) {
+            setLocalPdfUri(cachedUri);
+          }
+        } catch {
+          // If caching fails, fall back to direct URL
+          if (!isCancelled) {
+            setLocalPdfUri(finalUrl);
+          }
+        } finally {
+          if (!isCancelled) setIsCachingPdf(false);
+        }
+      }
+    };
+
+    prepareDocument();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [docKey, rawDocUrl, isPdf]);
+
+  const docUrl = resolvedDocUrl || rawDocUrl;
+  const activeViewerPdfUri = Platform.OS === 'web' ? docUrl : (localPdfUri || docUrl);
+
+  // Memoized image source to prevent re-instantiation across renders
+  const imageSource = useMemo(() => ({ uri: docUrl }), [docUrl]);
+
+  // Fast In-App Download (reuses cached files, zero browser redirects)
   const handleDownload = async () => {
-    if (!docUrl || downloading) return;
+    if (!docUrl || downloading || !doc) return;
     setDownloading(true);
     try {
       haptics.select();
-      let filename = doc.fileName || doc.title || 'document';
-      const ext =
-        doc.fileName?.split('.').pop() ||
-        (isPdf ? 'pdf' : isImage ? 'jpg' : 'pdf');
-      if (!filename.includes('.')) {
-        filename = `${filename}.${ext}`;
-      }
-
-      // Web platform: native browser download via anchor click
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const link = document.createElement('a');
-        link.href = docUrl;
-        link.download = filename;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast('success', 'Download Started', `Downloading ${filename}`);
-        return;
-      }
-
-      // Native mobile: FileSystem download + Sharing dialog
-      const targetDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-      const localUri = `${targetDir}${filename}`;
-      const downloadRes = await FileSystem.downloadAsync(docUrl, localUri);
-
-      const isSharingAvailable = await Sharing.isAvailableAsync();
-      if (isSharingAvailable) {
-        await Sharing.shareAsync(downloadRes.uri, {
-          dialogTitle: `Download ${doc.title}`,
-          UTI: isPdf ? 'com.adobe.pdf' : 'public.image',
-          mimeType: doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'),
-        });
-        toast('success', 'Document Saved', `${doc.title} saved.`);
-      } else {
-        await Linking.openURL(docUrl);
-      }
+      await downloadDocumentInApp({
+        url: localPdfUri || docUrl,
+        fileName: doc.fileName,
+        title: doc.title,
+        mimeType: doc.mimeType,
+      });
     } catch (err: any) {
-      if (docUrl) {
-        Linking.openURL(docUrl).catch(() => {});
-      }
-      toast('error', 'Download Error', err?.message || 'Could not download document.');
+      showToast('error', 'Download Error', err?.message || 'Could not download document.');
     } finally {
       setDownloading(false);
     }
   };
 
-  // Dedicated Share Action
-  const handleShare = async () => {
-    if (!docUrl || sharing) return;
-    setSharing(true);
-    try {
-      haptics.select();
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable && FileSystem.cacheDirectory) {
-        const ext =
-          doc.fileName?.split('.').pop() ||
-          (isPdf ? 'pdf' : 'jpg');
-        const tempUri = `${FileSystem.cacheDirectory}shared_doc_${Date.now()}.${ext}`;
-        const downloadRes = await FileSystem.downloadAsync(docUrl, tempUri);
-        await Sharing.shareAsync(downloadRes.uri);
-      } else {
-        await Linking.openURL(docUrl);
-      }
-    } catch {
-      if (docUrl) {
-        await Linking.openURL(docUrl).catch(() => {});
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
 
+  // Rotate document (90 degrees clockwise)
   const handleRotate = () => {
     haptics.select();
     setRotation((r) => (r + 90) % 360);
   };
 
-  const handleResetRotation = () => {
-    haptics.select();
-    setRotation(0);
-  };
-
-  // Google Docs viewer URL for Android PDF in WebView
-  const pdfViewerUri: string = docUrl
-    ? Platform.OS === 'android'
-      ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(docUrl)}`
-      : docUrl
-    : '';
+  if (!doc) return null;
 
   return (
     <Modal
@@ -218,7 +226,7 @@ export function MobileDocumentViewerModal({
           style={styles.safeArea}
           edges={['top', 'bottom', 'left', 'right']}
         >
-          {/* ─── Top Control Header (Title on left, Download, Share & Close on right) ─── */}
+          {/* ─── Top Control Header (Title on left, Rotate/Download/Share/Close on right) ─── */}
           <View
             style={[
               styles.header,
@@ -247,9 +255,28 @@ export function MobileDocumentViewerModal({
               ) : null}
             </View>
 
-            {/* Header Action Buttons: Download, Share, and Close */}
+            {/* Header Action Buttons: Rotate (Images only per feedback, removed for PDFs), Download, and Close */}
             <View style={styles.headerActions}>
-              {/* 1. Download Icon Button */}
+              {/* 1. Rotate Button (Images only, removed for PDFs) */}
+              {isImage && (
+                <Pressable
+                  variant="plain"
+                  hitSlopToMin48
+                  onPress={handleRotate}
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityLabel="Rotate image 90 degrees"
+                >
+                  <RotateCw size={18} color={theme.colors.ink} />
+                </Pressable>
+              )}
+
+              {/* 2. Download Icon Button */}
               <Pressable
                 variant="plain"
                 hitSlopToMin48
@@ -268,28 +295,6 @@ export function MobileDocumentViewerModal({
                   <ActivityIndicator size="small" color={theme.colors.ink} />
                 ) : (
                   <Download size={18} color={theme.colors.ink} />
-                )}
-              </Pressable>
-
-              {/* 2. Share Icon Button */}
-              <Pressable
-                variant="plain"
-                hitSlopToMin48
-                onPress={handleShare}
-                disabled={sharing}
-                style={[
-                  styles.actionBtn,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                accessibilityLabel="Share document"
-              >
-                {sharing ? (
-                  <ActivityIndicator size="small" color={theme.colors.ink} />
-                ) : (
-                  <Share2 size={18} color={theme.colors.ink} />
                 )}
               </Pressable>
 
@@ -314,33 +319,84 @@ export function MobileDocumentViewerModal({
 
           {/* ─── Main Content Canvas ─── */}
           <View style={[styles.body, { backgroundColor: theme.colors.canvas }]}>
-            {/* 1. IMAGE VIEWER (Pinch-to-zoom, Pan, Rotate) */}
+            {/* 1. IMAGE VIEWER (Pinch-to-zoom, Pan, and Rotate) */}
             {isImage && (
               <View style={styles.imageWrapper}>
-                <ScrollView
-                  style={styles.scrollView}
-                  contentContainerStyle={styles.scrollContent}
-                  maximumZoomScale={4}
-                  minimumZoomScale={1}
-                  showsHorizontalScrollIndicator={false}
-                  showsVerticalScrollIndicator={false}
-                  centerContent
-                >
-                  <Image
-                    source={{ uri: docUrl }}
-                    style={[
-                      styles.image,
-                      {
-                        transform: [{ rotate: `${rotation}deg` }],
+                {Platform.OS === 'web' ? (
+                  /* Web Platform: Clean CSS transform zoom & rotation without ScrollView passive listener issues */
+                  <View style={styles.webImageContainer}>
+                    {React.createElement('img', {
+                      key: docUrl,
+                      src: docUrl,
+                      alt: doc.title,
+                      style: {
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                        objectFit: 'contain',
+                        transform: `rotate(${rotation}deg)`,
+                        transition: 'transform 0.2s ease-out',
+                        userSelect: 'none',
                       },
-                    ]}
-                    resizeMode="contain"
-                    onLoadStart={() => setImageLoading(true)}
-                    onLoadEnd={() => setImageLoading(false)}
-                  />
-                </ScrollView>
+                      onLoad: () => setImageLoading(false),
+                      onError: () => setImageLoading(false),
+                    })}
+                  </View>
+                ) : (
+                  /* Native Mobile: Hardware-accelerated ScrollView with native pinch-to-zoom & pan */
+                  <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    maximumZoomScale={4}
+                    minimumZoomScale={1}
+                    showsHorizontalScrollIndicator={false}
+                    showsVerticalScrollIndicator={false}
+                    centerContent
+                    bouncesZoom
+                  >
+                    <Image
+                      key={`${docUrl}_${rotation}`}
+                      source={imageSource}
+                      style={[
+                        styles.image,
+                        {
+                          transform: [{ rotate: `${rotation}deg` }],
+                        },
+                      ]}
+                      resizeMode="contain"
+                      onLoadStart={() => setImageLoading(true)}
+                      onLoadEnd={() => setImageLoading(false)}
+                    />
+                  </ScrollView>
+                )}
 
                 {imageLoading && (
+                  <View
+                    style={[
+                      styles.loaderOverlay,
+                      {
+                        backgroundColor: isDark
+                          ? 'rgba(10, 10, 10, 0.45)'
+                          : 'rgba(255, 255, 255, 0.45)',
+                        pointerEvents: 'none',
+                      },
+                    ]}
+                  >
+                    <ActivityIndicator size="large" color={theme.colors.link} />
+                    <Text
+                      variant="caption"
+                      style={[styles.loadingText, { color: theme.colors.mute }]}
+                    >
+                      Loading image...
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 2. IN-APP PDF VIEWER (Native @kishannareshpal/expo-pdf on iOS/Android & Continuous Browser Object on Web) */}
+            {isPdf && (
+              <View style={styles.pdfContainer}>
+                {isResolvingUrl || isCachingPdf ? (
                   <View
                     style={[
                       styles.loaderOverlay,
@@ -356,233 +412,17 @@ export function MobileDocumentViewerModal({
                       variant="caption"
                       style={[styles.loadingText, { color: theme.colors.mute }]}
                     >
-                      Loading image...
+                      {isCachingPdf ? 'Preparing in-app document...' : 'Loading document...'}
                     </Text>
-                  </View>
-                )}
-
-                {/* Floating Bottom Rotate Control Bar */}
-                <View
-                  style={[
-                    styles.floatingBar,
-                    {
-                      bottom: Math.max(insets.bottom, 16) + 16,
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <Pressable
-                    variant="buttonSecondary"
-                    onPress={handleRotate}
-                    style={[
-                      styles.floatingBtn,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    accessibilityLabel="Rotate 90 degrees"
-                  >
-                    <RotateCw size={16} color={theme.colors.ink} />
-                    <Text
-                      variant="label"
-                      style={[
-                        styles.floatingBtnText,
-                        { color: theme.colors.ink },
-                      ]}
-                    >
-                      Rotate
-                    </Text>
-                  </Pressable>
-
-                  {rotation !== 0 && (
-                    <Pressable
-                      variant="buttonSecondary"
-                      onPress={handleResetRotation}
-                      style={[
-                        styles.floatingBtn,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                      accessibilityLabel="Reset rotation"
-                    >
-                      <RotateCcw size={16} color={theme.colors.ink} />
-                      <Text
-                        variant="label"
-                        style={[
-                          styles.floatingBtnText,
-                          { color: theme.colors.ink },
-                        ]}
-                      >
-                        Reset
-                      </Text>
-                    </Pressable>
-                  )}
-
-                  <Text
-                    variant="caption"
-                    style={[styles.zoomNotice, { color: theme.colors.mute }]}
-                  >
-                    Pinch to zoom & pan
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* 2. PDF VIEWER (Smooth Web <iframe> & Native WebView with Error Fallback) */}
-            {isPdf && (
-              <View style={styles.pdfContainer}>
-                {Platform.OS === 'web' ? (
-                  /* Native browser PDF iframe on web for 60fps smooth zooming and rendering */
-                  <View style={styles.webPdfWrapper}>
-                    {React.createElement('iframe', {
-                      src: `${docUrl}#toolbar=1&navpanes=0&view=FitH`,
-                      title: doc.title,
-                      style: {
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                        backgroundColor: '#ffffff',
-                      },
-                    })}
-                  </View>
-                ) : pdfError ? (
-                  /* PDF Fallback Card if preview fails to load on native */
-                  <View style={styles.pdfFallbackCard}>
-                    <View
-                      style={[
-                        styles.pdfFallbackIconBox,
-                        {
-                          backgroundColor: 'rgba(225, 29, 72, 0.1)',
-                          borderColor: 'rgba(225, 29, 72, 0.25)',
-                        },
-                      ]}
-                    >
-                      <FileText size={40} color="#e11d48" />
-                    </View>
-                    <Text
-                      variant="heading"
-                      style={[styles.externalTitle, { color: theme.colors.ink }]}
-                    >
-                      {doc.title}
-                    </Text>
-                    <Text
-                      variant="caption"
-                      style={[styles.externalSubtitle, { color: theme.colors.mute }]}
-                    >
-                      {doc.fileName || 'PDF Document'}
-                    </Text>
-                    <Text
-                      variant="caption"
-                      style={[styles.externalNotice, { color: theme.colors.mute }]}
-                    >
-                      Preview could not be displayed directly in-app. You can open it in your device's PDF app or download it.
-                    </Text>
-                    <View style={styles.fallbackActionsRow}>
-                      <Pressable
-                        variant="buttonPrimary"
-                        onPress={() => Linking.openURL(docUrl)}
-                        style={styles.primaryActionBtn}
-                        accessibilityLabel="Open in device PDF app"
-                      >
-                        <ExternalLink size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                        <Text variant="label" style={styles.primaryActionText}>
-                          Open in PDF App
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        variant="buttonSecondary"
-                        onPress={handleDownload}
-                        style={[
-                          styles.secondaryActionBtn,
-                          {
-                            backgroundColor: theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
-                          },
-                        ]}
-                        accessibilityLabel="Download PDF"
-                      >
-                        <Download size={16} color={theme.colors.ink} style={{ marginRight: 6 }} />
-                        <Text variant="label" style={{ color: theme.colors.ink }}>
-                          Download
-                        </Text>
-                      </Pressable>
-                    </View>
                   </View>
                 ) : (
-                  /* Native iOS/Android WebView */
-                  <View style={styles.webViewWrapper}>
-                    <WebView
-                      source={{ uri: pdfViewerUri || 'about:blank' } as any}
-                      style={styles.webView}
-                      startInLoadingState
-                      renderLoading={() => (
-                        <View
-                          style={[
-                            styles.loaderOverlay,
-                            {
-                              backgroundColor: isDark
-                                ? 'rgba(10, 10, 10, 0.75)'
-                                : 'rgba(255, 255, 255, 0.75)',
-                            },
-                          ]}
-                        >
-                          <ActivityIndicator size="large" color={theme.colors.link} />
-                          <Text
-                            variant="caption"
-                            style={[styles.loadingText, { color: theme.colors.mute }]}
-                          >
-                            Loading PDF...
-                          </Text>
-                        </View>
-                      )}
-                      scalesPageToFit
-                      originWhitelist={['*']}
-                      mixedContentMode="always"
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                      allowFileAccess={true}
-                      allowUniversalAccessFromFileURLs={true}
-                      onError={() => setPdfError(true)}
-                      onHttpError={() => setPdfError(true)}
-                    />
-
-                    {/* Quick action bar to open in external device viewer */}
-                    <View
-                      style={[
-                        styles.pdfFloatingBar,
-                        {
-                          bottom: Math.max(insets.bottom, 16) + 16,
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <Pressable
-                        variant="buttonSecondary"
-                        onPress={() => Linking.openURL(docUrl)}
-                        style={[
-                          styles.floatingBtn,
-                          {
-                            backgroundColor: theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
-                          },
-                        ]}
-                        accessibilityLabel="Open in device PDF app"
-                      >
-                        <ExternalLink size={15} color={theme.colors.ink} />
-                        <Text
-                          variant="label"
-                          style={[styles.floatingBtnText, { color: theme.colors.ink }]}
-                        >
-                          Open in Device PDF App
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
+                  <NativePdfViewer
+                    uri={activeViewerPdfUri}
+                    title={doc.title}
+                    fileName={doc.fileName}
+                    rotation={rotation}
+                    onDownload={handleDownload}
+                  />
                 )}
               </View>
             )}
@@ -617,13 +457,13 @@ export function MobileDocumentViewerModal({
                   variant="caption"
                   style={[styles.externalNotice, { color: theme.colors.mute }]}
                 >
-                  This file format can be opened or shared to a compatible app on your device.
+                  This file format can be downloaded to view in a compatible app on your device.
                 </Text>
                 <Pressable
                   variant="buttonPrimary"
                   onPress={handleDownload}
                   style={styles.primaryActionBtn}
-                  accessibilityLabel="Download and open file"
+                  accessibilityLabel="Download file"
                 >
                   <Download
                     size={18}
@@ -631,7 +471,7 @@ export function MobileDocumentViewerModal({
                     style={{ marginRight: 8 }}
                   />
                   <Text variant="label" style={styles.primaryActionText}>
-                    Download & Open
+                    Download Document
                   </Text>
                 </Pressable>
               </View>
@@ -694,10 +534,20 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+    overflow: 'hidden',
   },
   imageWrapper: {
     flex: 1,
     position: 'relative',
+  },
+  webImageContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    padding: 16,
   },
   scrollView: {
     flex: 1,
@@ -722,90 +572,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   loadingText: {},
-  floatingBar: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  floatingBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    minHeight: 44,
-  },
-  floatingBtnText: {},
-  zoomNotice: {},
   pdfContainer: {
     flex: 1,
-  },
-  webPdfWrapper: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  webViewWrapper: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    position: 'relative',
-  },
-  webView: {
-    flex: 1,
-  },
-  pdfFloatingBar: {
-    position: 'absolute',
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: 24,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  pdfFallbackCard: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  pdfFallbackIconBox: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  fallbackActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 8,
-  },
-  secondaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    minHeight: 44,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
   },
   externalCard: {
     flex: 1,

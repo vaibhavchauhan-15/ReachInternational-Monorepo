@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Linking, useWindowDimensions } from 'react-native';
 import { AppModal, Button, Badge, Text, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import {
@@ -63,11 +63,34 @@ export const ClientDetailModal: React.FC<ClientDetailModalProps> = ({
   onOpenEdit,
 }) => {
   const { theme, isDark } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
 
   if (!client) return null;
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      showHandle={false}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
+    >
       <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, maxHeight: '92%' }]}>
         {/* Header: Summary */}
         <View style={styles.modalHeader}>
@@ -150,7 +173,7 @@ export const ClientDetailModal: React.FC<ClientDetailModalProps> = ({
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
                   Person: <Text variant="body" style={{ color: theme.colors.ink }}>{client.contact_person || '—'}</Text>
                 </Text>
-                {client.phone && (
+                {Boolean(client.phone) && (
                   <Pressable
                     variant="buttonGhost"
                     hitSlopToMin48
@@ -528,8 +551,6 @@ export const ClientDetailModal: React.FC<ClientDetailModalProps> = ({
 
 const styles = StyleSheet.create({
   modalContent: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
     padding: spacingNumeric.lg,
   },
   modalHeader: {

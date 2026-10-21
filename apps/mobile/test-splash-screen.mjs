@@ -1,12 +1,12 @@
 /**
  * Automated Verification Suite for Mobile Launch / Splash Screen
  * Tests:
- * 1. Zero Loading Spinner: Verifies ActivityIndicator and spinner styles are eradicated from splash.
- * 2. Industry Standard Logo Sizing: Asserts 144dp emblem (with 120dp compact screen fallback).
- * 3. Elevated Aesthetic: Verifies bordered={true} and whisper elevation tokens.
- * 4. Micro-Animation: Asserts GPU-accelerated FadeIn entrance on the logo mark.
- * 5. Lifecycle Coordination: Asserts SplashScreen.hideAsync() is called on auth resolution.
- * 6. Component Memoization: Asserts NativeGatewayScreen is wrapped with React.memo.
+ * 1. Complete Logo Eradication: Verifies ReachBrandEmblem and logo styles are completely removed from app/index.tsx.
+ * 2. Zero Loading Spinner: Verifies ActivityIndicator and spinner styles are eradicated from splash.
+ * 3. Minimalist Canvas & Design Tokens: Asserts clean theme canvas background and dynamic StatusBar.
+ * 4. Lifecycle Coordination: Asserts SplashScreen.hideAsync() is called on auth resolution.
+ * 5. Component Memoization: Asserts NativeGatewayScreen is wrapped with React.memo.
+ * 6. Native Config Eradication: Asserts app.json, styles.xml, and ic_launcher_background.xml have zero logo references.
  * 7. Zero Raw Typography: Validates no raw typography properties in StyleSheet.
  */
 
@@ -37,34 +37,49 @@ try {
   assert(fs.existsSync(indexFile), 'app/index.tsx gateway screen exists');
   const indexContent = fs.readFileSync(indexFile, 'utf8');
 
-  // 1. Zero Loading Spinner
+  // 1. Complete Logo Eradication from app/index.tsx
+  assert(!indexContent.includes('ReachBrandEmblem'), 'ReachBrandEmblem is completely eradicated from app/index.tsx');
+  assert(!indexContent.includes('logoSize'), 'logoSize calculations are completely removed from app/index.tsx');
+  assert(!indexContent.includes('logoContainer'), 'logoContainer style is completely removed from app/index.tsx');
+  assert(!indexContent.includes('logoLightElevation'), 'logoLightElevation is completely removed from app/index.tsx');
+  assert(!indexContent.includes('logoDarkElevation'), 'logoDarkElevation is completely removed from app/index.tsx');
+  assert(!indexContent.includes('Animated.View'), 'Animated.View wrapper for logo is removed from app/index.tsx');
+
+  // 2. Zero Loading Spinner
   assert(!indexContent.includes('ActivityIndicator'), 'ActivityIndicator is completely removed from app/index.tsx');
   assert(!indexContent.includes('styles.indicator'), 'styles.indicator is completely removed from app/index.tsx');
   assert(!indexContent.includes('indicator: {'), 'indicator style definition is removed from StyleSheet');
 
-  // 2. Industry Standard Logo Sizing
-  assert(indexContent.includes('144'), 'Logo size is set to industry standard 144dp');
-  assert(indexContent.includes('width < 360 ? 120 : 144'), 'Responsive sizing supports 120dp for ultra-compact viewports');
-  assert(indexContent.includes('size={logoSize}'), 'ReachBrandEmblem dynamically binds size={logoSize}');
-  assert(!indexContent.includes('size={84}'), 'Legacy tiny 84px logo size is eradicated');
+  // 3. Minimalist Canvas & Design Tokens
+  assert(indexContent.includes('theme.colors.canvas'), 'Renders clean theme canvas background');
+  assert(indexContent.includes("StatusBar style={isDark ? 'light' : 'dark'}"), 'StatusBar is synchronized to active colorScheme');
 
-  // 3. Elevated Aesthetic & Design Tokens
-  assert(indexContent.includes('bordered={true}'), 'ReachBrandEmblem specifies bordered={true} for 1px hairline border');
-  assert(indexContent.includes('logoLightElevation'), 'Configures tactile light mode elevation shadow');
-  assert(indexContent.includes('logoDarkElevation'), 'Configures tactile dark mode glow/elevation');
-
-  // 4. Smooth Micro-Animation
-  assert(indexContent.includes('FadeIn.duration(200)') || indexContent.includes('FadeIn'), 'GPU-accelerated FadeIn transition is applied to logo');
-  assert(indexContent.includes('Animated.View'), 'Animated.View wrapper surrounds emblem');
-
-  // 5. Coordinated Splash Lifecycle & StatusBar
+  // 4. Coordinated Splash Lifecycle
   assert(indexContent.includes('SplashScreen.hideAsync()'), 'SplashScreen.hideAsync() is called upon session resolution');
-  assert(indexContent.includes('StatusBar style={isDark ? \'light\' : \'dark\'}'), 'StatusBar is synchronized to active colorScheme');
 
-  // 6. Memoization & Clean Routing
+  // 5. Memoization & Clean Routing
   assert(indexContent.includes('const NativeGatewayScreen = memo('), 'NativeGatewayScreen is memoized to prevent re-render cascades');
   assert(indexContent.includes('getMobileRoleHomeRoute(role)'), 'Directly redirects authenticated users to role home route');
   assert(indexContent.includes('<Redirect href="/(auth)/login" />'), 'Redirects unauthenticated users to login');
+
+  // 6. Native Configuration Verification
+  const appJsonFile = path.join(__dirname, 'app.json');
+  assert(fs.existsSync(appJsonFile), 'app.json exists');
+  const appJsonContent = fs.readFileSync(appJsonFile, 'utf8');
+  assert(!appJsonContent.includes('"./assets/splash.png"'), 'app.json removes splash image from expo-splash-screen config');
+
+  const stylesXmlFile = path.join(__dirname, 'android/app/src/main/res/values/styles.xml');
+  if (fs.existsSync(stylesXmlFile)) {
+    const stylesXmlContent = fs.readFileSync(stylesXmlFile, 'utf8');
+    assert(stylesXmlContent.includes('@android:color/transparent'), 'styles.xml sets windowSplashScreenAnimatedIcon to @android:color/transparent');
+    assert(!stylesXmlContent.includes('@drawable/splashscreen_logo'), 'styles.xml no longer references @drawable/splashscreen_logo');
+  }
+
+  const launcherBgFile = path.join(__dirname, 'android/app/src/main/res/drawable/ic_launcher_background.xml');
+  if (fs.existsSync(launcherBgFile)) {
+    const launcherBgContent = fs.readFileSync(launcherBgFile, 'utf8');
+    assert(!launcherBgContent.includes('@drawable/splashscreen_logo'), 'ic_launcher_background.xml no longer references @drawable/splashscreen_logo');
+  }
 
   // 7. Zero Raw Typography
   assert(!/fontSize\s*:/.test(indexContent), 'Zero raw fontSize properties in app/index.tsx');

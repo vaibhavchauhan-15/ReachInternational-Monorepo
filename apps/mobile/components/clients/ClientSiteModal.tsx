@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { AppModal, Button, Input, Text, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { X } from '../ui/icon';
@@ -43,9 +43,32 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
   isSavingSite = false,
 }) => {
   const { theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      showHandle={false}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
+    >
       <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
         <View style={styles.modalHeader}>
           <View>
@@ -146,8 +169,6 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
 
 const styles = StyleSheet.create({
   modalContent: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
     padding: spacingNumeric.lg,
   },
   modalHeader: {

@@ -34,6 +34,7 @@ import { Icon } from './icon';
 import { Touchable } from './Touchable';
 import { AppModal } from './AppModal';
 import { ChevronDown, Search, X, Check } from './icon';
+import { Badge } from './Badge';
 
 export interface SelectOption {
   value: string;
@@ -277,9 +278,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setSearchQuery('');
   };
 
-  const cardBorder = isDark ? '#262626' : '#ebebeb';
-  const triggerBg = isDark ? '#121212' : '#fafafa';
-  const iconColor = isDark ? '#737373' : '#9ca3af';
+  const cardBorder = theme.colors.hairline;
+  const triggerBg = theme.colors.canvas;
+  const iconColor = theme.colors.mute;
 
   const isDropdownActive = presentation === 'dropdown' && isOpen;
   const hasSelectedSubtitle = Boolean(selectedOption?.description);
@@ -294,11 +295,17 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     >
       {label && (
         <View style={styles.labelRow}>
-          <Text variant="label" style={[{ color: isDark ? '#ffffff' : '#0f172a' }, labelStyle]}>
-            {label}
-            {required && <Text variant="label" style={{ color: '#ef4444' }}> *</Text>}
-          </Text>
-          {rightElement}
+          <View style={styles.labelLeft}>
+            <Text variant="label" style={[{ color: theme.colors.ink }, labelStyle]}>
+              {label}
+              {required && <Text variant="label" style={{ color: theme.colors.error }}> *</Text>}
+            </Text>
+          </View>
+          {rightElement && (
+            <View style={styles.labelRight}>
+              {rightElement}
+            </View>
+          )}
         </View>
       )}
 
@@ -315,9 +322,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             {
               backgroundColor: triggerBg,
               borderColor: error
-                ? '#ef4444'
+                ? theme.colors.error
                 : isDropdownActive
-                ? '#0284c7'
+                ? theme.colors.link
                 : cardBorder,
               opacity: disabled ? 0.6 : 1,
             },
@@ -337,12 +344,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     styles.triggerText,
                     {
                       color: selectedOption
-                        ? isDark
-                          ? '#f8fafc'
-                          : '#0f172a'
-                        : isDark
-                        ? '#71717a'
-                        : '#9ca3af',
+                        ? theme.colors.ink
+                        : theme.colors.mute,
                     },
                   ]}
                   numberOfLines={1}
@@ -350,78 +353,22 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   {selectedOption ? selectedOption.label : placeholder}
                 </Text>
                 {selectedOption?.code && (
-                  <View
-                    style={[
-                      styles.codeBadge,
-                      {
-                        backgroundColor: isDark
-                          ? 'rgba(2, 132, 199, 0.18)'
-                          : 'rgba(2, 132, 199, 0.10)',
-                        borderColor: isDark
-                          ? 'rgba(2, 132, 199, 0.35)'
-                          : 'rgba(2, 132, 199, 0.22)',
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="micro"
-                      weight="semibold"
-                      style={[
-                        styles.codeText,
-                        { color: isDark ? '#38bdf8' : '#0284c7' },
-                      ]}
-                    >
-                      {selectedOption.code}
-                    </Text>
-                  </View>
+                  <Badge
+                    variant="info"
+                    solid
+                    size="sm"
+                    shape="pill"
+                    label={selectedOption.code}
+                  />
                 )}
                 {selectedOption?.badge && (
-                  <View
-                    style={[
-                      styles.badgePill,
-                      {
-                        backgroundColor:
-                          selectedOption.badgeVariant === 'success'
-                            ? 'rgba(16, 185, 129, 0.08)'
-                            : selectedOption.badgeVariant === 'warning'
-                            ? 'rgba(245, 158, 11, 0.08)'
-                            : selectedOption.badgeVariant === 'info'
-                            ? 'rgba(2, 132, 199, 0.08)'
-                            : isDark
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.04)',
-                        borderColor:
-                          selectedOption.badgeVariant === 'success'
-                            ? 'rgba(16, 185, 129, 0.20)'
-                            : selectedOption.badgeVariant === 'warning'
-                            ? 'rgba(245, 158, 11, 0.20)'
-                            : selectedOption.badgeVariant === 'info'
-                            ? 'rgba(2, 132, 199, 0.20)'
-                            : isDark
-                            ? 'rgba(255, 255, 255, 0.08)'
-                            : 'rgba(0, 0, 0, 0.07)',
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="micro"
-                      style={[
-                        styles.badgeText,
-                        {
-                          color:
-                            selectedOption.badgeVariant === 'success'
-                              ? isDark ? 'rgba(52, 211, 153, 0.85)' : 'rgba(5, 150, 105, 0.85)'
-                              : selectedOption.badgeVariant === 'warning'
-                              ? isDark ? 'rgba(251, 191, 36, 0.85)' : 'rgba(217, 119, 6, 0.85)'
-                              : selectedOption.badgeVariant === 'info'
-                              ? isDark ? 'rgba(56, 189, 248, 0.85)' : 'rgba(2, 132, 199, 0.85)'
-                              : theme.colors.mute,
-                        },
-                      ]}
-                    >
-                      {selectedOption.badge}
-                    </Text>
-                  </View>
+                  <Badge
+                    variant={selectedOption.badgeVariant || 'neutral'}
+                    solid
+                    size="sm"
+                    shape="pill"
+                    label={selectedOption.badge}
+                  />
                 )}
                 {selectedOption?.description && inlineDescription && (
                   <Text
@@ -497,8 +444,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   left: dropdownPosition.left,
                   width: dropdownPosition.width,
                   maxHeight: dropdownPosition.maxHeight,
-                  backgroundColor: isDark ? '#171717' : '#ffffff',
-                  borderColor: cardBorder,
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
                   zIndex: 99999,
                   ...Platform.select({
                     web: {
@@ -526,8 +473,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     style={[
                       styles.dropdownSearchBox,
                       {
-                        backgroundColor: isDark ? '#121212' : '#f4f4f5',
-                        borderColor: cardBorder,
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
                       },
                     ]}
                   >
@@ -575,10 +522,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         onPress={() => handleSelect(item)}
                         style={[
                           styles.dropdownItemRow,
-                          { borderBottomColor: isDark ? '#222222' : '#f5f5f5' },
+                          { borderBottomColor: theme.colors.hairline },
                           isSelected && {
                             backgroundColor: isDark
-                              ? 'rgba(2, 132, 199, 0.15)'
+                              ? 'rgba(2, 132, 199, 0.18)'
                               : '#f0f9ff',
                           },
                         ]}
@@ -602,78 +549,22 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                 {item.label}
                               </Text>
                               {item.code && (
-                                <View
-                                  style={[
-                                    styles.codeBadge,
-                                    {
-                                      backgroundColor: isDark
-                                        ? 'rgba(2, 132, 199, 0.18)'
-                                        : 'rgba(2, 132, 199, 0.10)',
-                                      borderColor: isDark
-                                        ? 'rgba(2, 132, 199, 0.35)'
-                                        : 'rgba(2, 132, 199, 0.22)',
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    variant="micro"
-                                    weight="semibold"
-                                    style={[
-                                      styles.codeText,
-                                      { color: isDark ? '#38bdf8' : '#0284c7' },
-                                    ]}
-                                  >
-                                    {item.code}
-                                  </Text>
-                                </View>
+                                <Badge
+                                  variant="info"
+                                  solid
+                                  size="sm"
+                                  shape="pill"
+                                  label={item.code}
+                                />
                               )}
                               {item.badge && (
-                                <View
-                                  style={[
-                                    styles.badgePill,
-                                    {
-                                      backgroundColor:
-                                        item.badgeVariant === 'success'
-                                          ? 'rgba(16, 185, 129, 0.08)'
-                                          : item.badgeVariant === 'warning'
-                                          ? 'rgba(245, 158, 11, 0.08)'
-                                          : item.badgeVariant === 'info'
-                                          ? 'rgba(2, 132, 199, 0.08)'
-                                          : isDark
-                                          ? 'rgba(255, 255, 255, 0.05)'
-                                          : 'rgba(0, 0, 0, 0.04)',
-                                      borderColor:
-                                        item.badgeVariant === 'success'
-                                          ? 'rgba(16, 185, 129, 0.20)'
-                                          : item.badgeVariant === 'warning'
-                                          ? 'rgba(245, 158, 11, 0.20)'
-                                          : item.badgeVariant === 'info'
-                                          ? 'rgba(2, 132, 199, 0.20)'
-                                          : isDark
-                                          ? 'rgba(255, 255, 255, 0.08)'
-                                          : 'rgba(0, 0, 0, 0.07)',
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    variant="micro"
-                                    style={[
-                                      styles.badgeText,
-                                      {
-                                        color:
-                                          item.badgeVariant === 'success'
-                                            ? isDark ? 'rgba(52, 211, 153, 0.85)' : 'rgba(5, 150, 105, 0.85)'
-                                            : item.badgeVariant === 'warning'
-                                            ? isDark ? 'rgba(251, 191, 36, 0.85)' : 'rgba(217, 119, 6, 0.85)'
-                                            : item.badgeVariant === 'info'
-                                            ? isDark ? 'rgba(56, 189, 248, 0.85)' : 'rgba(2, 132, 199, 0.85)'
-                                            : theme.colors.mute,
-                                      },
-                                    ]}
-                                  >
-                                    {item.badge}
-                                  </Text>
-                                </View>
+                                <Badge
+                                  variant={item.badgeVariant || 'neutral'}
+                                  solid
+                                  size="sm"
+                                  shape="pill"
+                                  label={item.badge}
+                                />
                               )}
                             </View>
                             {item.description ? (
@@ -808,78 +699,22 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                               {item.label}
                             </Text>
                             {item.code && (
-                              <View
-                                style={[
-                                  styles.codeBadge,
-                                  {
-                                    backgroundColor: isDark
-                                      ? 'rgba(2, 132, 199, 0.18)'
-                                      : 'rgba(2, 132, 199, 0.10)',
-                                    borderColor: isDark
-                                      ? 'rgba(2, 132, 199, 0.35)'
-                                      : 'rgba(2, 132, 199, 0.22)',
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  variant="micro"
-                                  weight="semibold"
-                                  style={[
-                                    styles.codeText,
-                                    { color: isDark ? '#38bdf8' : '#0284c7' },
-                                  ]}
-                                >
-                                  {item.code}
-                                </Text>
-                              </View>
+                              <Badge
+                                variant="info"
+                                solid
+                                size="sm"
+                                shape="pill"
+                                label={item.code}
+                              />
                             )}
                             {item.badge && (
-                              <View
-                                style={[
-                                  styles.badgePill,
-                                  {
-                                    backgroundColor:
-                                      item.badgeVariant === 'success'
-                                        ? 'rgba(16, 185, 129, 0.08)'
-                                        : item.badgeVariant === 'warning'
-                                        ? 'rgba(245, 158, 11, 0.08)'
-                                        : item.badgeVariant === 'info'
-                                        ? 'rgba(2, 132, 199, 0.08)'
-                                        : isDark
-                                        ? 'rgba(255, 255, 255, 0.05)'
-                                        : 'rgba(0, 0, 0, 0.04)',
-                                    borderColor:
-                                      item.badgeVariant === 'success'
-                                        ? 'rgba(16, 185, 129, 0.20)'
-                                        : item.badgeVariant === 'warning'
-                                        ? 'rgba(245, 158, 11, 0.20)'
-                                        : item.badgeVariant === 'info'
-                                        ? 'rgba(2, 132, 199, 0.20)'
-                                        : isDark
-                                        ? 'rgba(255, 255, 255, 0.08)'
-                                        : 'rgba(0, 0, 0, 0.07)',
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  variant="micro"
-                                  style={[
-                                    styles.badgeText,
-                                    {
-                                      color:
-                                        item.badgeVariant === 'success'
-                                          ? isDark ? 'rgba(52, 211, 153, 0.85)' : 'rgba(5, 150, 105, 0.85)'
-                                          : item.badgeVariant === 'warning'
-                                          ? isDark ? 'rgba(251, 191, 36, 0.85)' : 'rgba(217, 119, 6, 0.85)'
-                                          : item.badgeVariant === 'info'
-                                          ? isDark ? 'rgba(56, 189, 248, 0.85)' : 'rgba(2, 132, 199, 0.85)'
-                                          : theme.colors.mute,
-                                    },
-                                  ]}
-                                >
-                                  {item.badge}
-                                </Text>
-                              </View>
+                              <Badge
+                                variant={item.badgeVariant || 'neutral'}
+                                solid
+                                size="sm"
+                                shape="pill"
+                                label={item.badge}
+                              />
                             )}
                           </View>
                           {item.description ? (
@@ -927,7 +762,20 @@ const styles: any = StyleSheet.create({
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+    gap: 8,
+  },
+  labelLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  labelRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   label: {},
   trigger: {

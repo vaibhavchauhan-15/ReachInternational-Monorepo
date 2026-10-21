@@ -122,6 +122,8 @@ export function toProfileView(
     {
       label: "Working Location",
       value: locationName || "Main Facility",
+      copyable: Boolean(locationName && locationName !== "Main Facility"),
+      copyValue: locationName || undefined,
     },
   ];
 

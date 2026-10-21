@@ -20,7 +20,8 @@ export type LogsViewMode = 'machine' | 'client' | 'operator';
 
 export interface RunningLogFilterPanelProps {
   viewMode: LogsViewMode;
-  onViewModeChange: (mode: LogsViewMode) => void;
+  onViewModeChange?: (mode: LogsViewMode) => void;
+  showToggle?: boolean;
   // Master data
   machines: MachineWithAssignments[];
   clients: ClientRecord[];
@@ -68,6 +69,7 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
   function RunningLogFilterPanel({
     viewMode,
     onViewModeChange,
+    showToggle = false,
     machines = [],
     clients = [],
     clientSites = [],
@@ -92,7 +94,7 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
   }) {
     const { theme, isDark } = useTheme();
 
-    // Client select options
+    // Client select options (code: CLI-xxx)
     const clientOptions = useMemo(() => {
       return clients.map((c) => {
         const address = [c.street, c.city, c.district, c.state, c.pincode]
@@ -101,42 +103,42 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
         return {
           value: c.id,
           label: c.company_name,
-          code: c.code || undefined,
+          code: c.code || 'CLI',
           description: address || undefined,
         };
       });
     }, [clients]);
 
-    // Filter sites for selected client
+    // Filter sites for selected client (code: site_code)
     const currentClientSites = useMemo(() => {
       if (!selectedClientId) return [];
       return clientSites.filter((s) => s.client_id === selectedClientId);
     }, [clientSites, selectedClientId]);
 
     const siteOptions = useMemo(() => {
-      const base = [{ value: 'all', label: 'All Sites & Locations' }];
+      const base = [{ value: 'all', label: 'All Sites & Locations', code: 'ALL' }];
       const dynamicSites = currentClientSites.map((s) => ({
         value: s.id || s.site_name,
-        label: s.site_name + (s.site_code ? ` (${s.site_code})` : ''),
+        label: s.site_name,
+        code: s.site_code || 'SITE',
         description: s.city || undefined,
       }));
       return [...base, ...dynamicSites];
     }, [currentClientSites]);
 
-    // Client machine options (with "All Machines" first)
+    // Client machine options (code: machine_id)
     const clientMachineOptions = useMemo(() => {
       const base = [
         {
           value: 'all',
           label: 'All Machines',
-          badge: `${clientMachines.length} Total`,
-          badgeVariant: 'neutral' as const,
+          code: 'ALL',
         },
       ];
       const machs = clientMachines.map((m) => ({
         value: m.id,
         label: m.model || 'Equipment',
-        code: m.machine_id || undefined,
+        code: m.machine_id || 'M/C',
         description: m.serial_number ? `S/N: ${m.serial_number}` : undefined,
       }));
       return [...base, ...machs];
@@ -147,17 +149,17 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
       return machines.map((m) => ({
         value: m.id,
         label: m.model || 'Equipment',
-        code: m.machine_id || undefined,
-        description: m.serial_number ? `(S/N: ${m.serial_number})` : undefined,
+        code: m.machine_id || 'M/C',
+        description: m.serial_number ? `S/N: ${m.serial_number}` : undefined,
       }));
     }, [machines]);
 
-    // Operator options for Operator View
+    // Operator options for Operator View (showing Operator EMP ID)
     const operatorOptions = useMemo(() => {
       return operators.map((o) => ({
         value: o.id,
         label: o.full_name,
-        code: 'OP',
+        code: o.employee_id || undefined,
         description: o.phone || undefined,
       }));
     }, [operators]);
@@ -172,24 +174,31 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
           },
         ]}
       >
-        {/* Top View Mode Switcher */}
-        <View style={styles.topRow}>
-          <SegmentedToggle<LogsViewMode>
-            items={[
-              { id: 'machine', label: 'Machine' },
-              { id: 'client', label: 'Clients' },
-              { id: 'operator', label: 'Operator' },
-            ]}
-            value={viewMode}
-            onChange={onViewModeChange}
-            fullWidth={false}
-            size="sm"
-            activeColor={isDark ? '#fafafa' : '#171717'}
-          />
-        </View>
+        {/* Optional Top View Mode Switcher */}
+        {showToggle && (
+          <View style={styles.topRow}>
+            <SegmentedToggle<LogsViewMode>
+              items={[
+                { id: 'machine', label: 'Machine' },
+                { id: 'client', label: 'Clients' },
+                { id: 'operator', label: 'Operator' },
+              ]}
+              value={viewMode}
+              onChange={onViewModeChange || (() => {})}
+              fullWidth={false}
+              size="sm"
+            />
+          </View>
+        )}
 
         {/* Filter Dropdowns Section */}
-        <View style={[styles.filterBody, { borderTopColor: theme.colors.hairline }]}>
+        <View
+          style={[
+            styles.filterBody,
+            showToggle ? styles.filterBodyWithToggle : styles.filterBodyNoToggle,
+            showToggle && { borderTopColor: theme.colors.hairline },
+          ]}
+        >
           {viewMode === 'client' && (
             <View style={styles.filterStack}>
               {/* Select Client */}
@@ -252,12 +261,21 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
               {/* Select Month */}
               <SearchableSelect
                 label="Select Month"
+                rightElement={
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    shape="rounded"
+                    label="2026"
+                  />
+                }
                 value={selectedMonth}
                 onChange={(val) => onSelectMonth(val)}
                 options={MONTH_OPTIONS}
                 placeholder="Select Month"
                 searchable={true}
                 searchPlaceholder="Search..."
+                inlineDescription={true}
               />
             </View>
           )}
@@ -286,12 +304,21 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
               {/* Select Month */}
               <SearchableSelect
                 label="Select Month"
+                rightElement={
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    shape="rounded"
+                    label="2026"
+                  />
+                }
                 value={selectedMonth}
                 onChange={(val) => onSelectMonth(val)}
                 options={MONTH_OPTIONS}
                 placeholder="Select Month"
                 searchable={true}
-                searchPlaceholder="Search..."
+                searchPlaceholder="Search month..."
+                inlineDescription={true}
               />
             </View>
           )}
@@ -320,33 +347,52 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
               {/* Select Month */}
               <SearchableSelect
                 label="Select Month"
+                rightElement={
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    shape="rounded"
+                    label="2026"
+                  />
+                }
                 value={selectedMonth}
                 onChange={(val) => onSelectMonth(val)}
                 options={MONTH_OPTIONS}
                 placeholder="Select Month"
                 searchable={true}
-                searchPlaceholder="Search..."
+                searchPlaceholder="Search month..."
+                inlineDescription={true}
               />
             </View>
           )}
 
-          {/* Custom Date Range Pickers (when "Custom Range" is selected) */}
+          {/* Custom Date Range Pickers (Separate Start Date & End Date using CustomDatePicker) */}
           {selectedMonth === 'custom' && (
             <View style={[styles.customRangeRow, { borderTopColor: theme.colors.hairline }]}>
               <View style={styles.datePickerCol}>
                 <CustomDatePicker
                   label="Start Date"
+                  outerLabel="Start Date"
+                  showPrefix={false}
                   value={customStartDate || ''}
                   onChange={(date) => onSelectCustomStartDate?.(date)}
                   placeholder="DD-MM-YYYY"
+                  allowAnyPast={true}
+                  allowAnyFuture={true}
+                  clearable={true}
                 />
               </View>
               <View style={styles.datePickerCol}>
                 <CustomDatePicker
                   label="End Date"
+                  outerLabel="End Date"
+                  showPrefix={false}
                   value={customEndDate || ''}
                   onChange={(date) => onSelectCustomEndDate?.(date)}
                   placeholder="DD-MM-YYYY"
+                  allowAnyPast={true}
+                  allowAnyFuture={true}
+                  clearable={true}
                 />
               </View>
             </View>
@@ -369,11 +415,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    marginBottom: spacingNumeric.xs,
   },
   filterBody: {
+    width: '100%',
+  },
+  filterBodyWithToggle: {
     borderTopWidth: 1,
     paddingTop: spacingNumeric.md,
     marginTop: spacingNumeric.sm + 2,
+  },
+  filterBodyNoToggle: {
+    paddingTop: 0,
+    marginTop: 0,
   },
   filterStack: {
     gap: spacingNumeric.md,

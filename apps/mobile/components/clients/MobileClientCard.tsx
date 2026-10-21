@@ -157,16 +157,16 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
       </View>
 
       {/* Tax Badges (GSTIN / PAN) */}
-      {(client.gstin || client.pan_number) && (
+      {Boolean(client.gstin || client.pan_number) && (
         <View style={styles.tagRow}>
-          {client.gstin && (
+          {Boolean(client.gstin) && (
             <View style={[styles.taxBadge, { backgroundColor: isDark ? 'rgba(168, 85, 247, 0.15)' : '#f3e8ff', borderColor: isDark ? 'rgba(168, 85, 247, 0.3)' : '#d8b4fe' }]}>
               <Text variant="mono" style={{ color: isDark ? '#c084fc' : '#7e22ce' }}>
                 GST: {client.gstin}
               </Text>
             </View>
           )}
-          {client.pan_number && (
+          {Boolean(client.pan_number) && (
             <View style={[styles.taxBadge, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe', borderColor: isDark ? 'rgba(14, 165, 233, 0.3)' : '#bae6fd' }]}>
               <Text variant="mono" style={{ color: isDark ? '#38bdf8' : '#0369a1' }}>
                 PAN: {client.pan_number}

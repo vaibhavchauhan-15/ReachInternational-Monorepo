@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { AppModal, Button, Input, Switch, Text, useTheme, useTypeStyle } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { Lock, X, Wrench, Sparkles, CheckCircle2 } from '../ui/icon';
@@ -121,9 +121,32 @@ export const ClientModal: React.FC<ClientModalProps> = ({
   onSave,
 }) => {
   const { theme, isDark } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
 
   return (
-    <AppModal visible={visible} onClose={onClose} variant="bottom">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      variant={isDesktop ? 'center' : 'bottom'}
+      showHandle={false}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '92%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
+    >
       <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
         <View style={styles.modalHeader}>
           <Text variant="heading" style={{ color: theme.colors.ink }}>
@@ -496,10 +519,8 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
 const styles = StyleSheet.create({
   modalContent: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
     padding: spacingNumeric.lg,
-    maxHeight: '90%',
+    maxHeight: '100%',
   },
   modalHeader: {
     flexDirection: 'row',

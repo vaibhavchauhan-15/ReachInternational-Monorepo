@@ -3,7 +3,7 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  KeyboardAvoidingView,
+  useWindowDimensions,
   Platform,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
@@ -46,6 +46,8 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
   onSelect,
 }) => {
   const { theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
   const bodyTypeStyle = useTypeStyle('body');
   const [search, setSearch] = useState('');
 
@@ -76,22 +78,34 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
     <AppModal
       visible={visible}
       onClose={onClose}
-      variant="bottom"
+      variant={isDesktop ? 'center' : 'bottom'}
+      showHandle={false}
+      panelStyle={
+        isDesktop
+          ? {
+              maxWidth: 580,
+              width: '100%',
+              alignSelf: 'center',
+              borderRadius: radiusNumeric.lg,
+              overflow: 'hidden',
+            }
+          : {
+              maxHeight: '88%',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+            }
+      }
       testID="client-select-modal"
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ width: '100%' }}
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+          },
+        ]}
       >
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
             <View>
@@ -227,7 +241,6 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
             )}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
     </AppModal>
   );
 };
@@ -242,16 +255,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
   },
   sheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    maxHeight: '85%',
-    minHeight: 460,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 16,
+    width: '100%',
+    maxHeight: '100%',
+    minHeight: 380,
   },
   header: {
     flexDirection: 'row',

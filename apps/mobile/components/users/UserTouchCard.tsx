@@ -141,7 +141,8 @@ function BaseUserTouchCard({
   const accentColor = getRoleAccentColor(u.role);
   const moreBtnRef = useRef<View>(null);
 
-  const handleMorePress = () => {
+  const handleMorePress = (e?: any) => {
+    e?.stopPropagation?.();
     haptics.select();
     if (Platform.OS === 'web' && moreBtnRef.current) {
       const rect = (moreBtnRef.current as any)?.getBoundingClientRect?.();
@@ -178,8 +179,14 @@ function BaseUserTouchCard({
   );
 
   return (
-    <View
-      style={[
+    <Pressable
+      variant="card"
+      haptic={false}
+      onPress={() => (isSelectMode ? onPress(u) : onViewDetails(u))}
+      onLongPress={() => onLongPress(u)}
+      accessibilityRole="button"
+      accessibilityLabel={`User ${u.full_name || 'Profile'}, role ${formatRoleName(u.role)}`}
+      style={(state) => [
         styles.userCard,
         {
           backgroundColor: theme.colors.canvasElevated,
@@ -193,33 +200,19 @@ function BaseUserTouchCard({
           borderLeftWidth: 4,
           backgroundColor: theme.colors.canvas,
         },
+        state.pressed && {
+          backgroundColor: isDark
+            ? 'rgba(255, 255, 255, 0.04)'
+            : 'rgba(0, 0, 0, 0.02)',
+        },
+        Platform.OS === 'web' && ({
+          cursor: 'pointer',
+          transition: 'background-color 150ms ease, opacity 150ms ease',
+        } as any),
       ]}
     >
-      {/* Clickable Card Body: Tapping anywhere opens user profile details */}
-      <Pressable
-        variant="card"
-        haptic={false}
-        onPress={() => (isSelectMode ? onPress(u) : onViewDetails(u))}
-        onLongPress={() => onLongPress(u)}
-        style={(state) => [
-          {
-            flex: 1,
-            backgroundColor: state.pressed
-              ? isDark
-                ? 'rgba(255, 255, 255, 0.04)'
-                : 'rgba(0, 0, 0, 0.02)'
-              : 'transparent',
-            ...Platform.select({
-              web: {
-                transition: 'background-color 150ms ease, opacity 150ms ease',
-              } as any,
-              default: {},
-            }),
-          },
-        ]}
-      >
-        {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side on right */}
-        <View style={styles.userCardHeader}>
+      {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side on right */}
+      <View style={styles.userCardHeader}>
           <View style={styles.userAvatarRow}>
             {isSelectMode ? (
               <View style={{ marginRight: 6 }}>
@@ -319,7 +312,7 @@ function BaseUserTouchCard({
               </View>
             ) : null}
 
-            {(u.city || u.district || u.state) && (
+            {Boolean(u.city || u.district || u.state) && (
               <View style={styles.metaChipRow}>
                 <MapPin size={12} color={theme.colors.mute} />
                 <HighlightText
@@ -332,7 +325,7 @@ function BaseUserTouchCard({
               </View>
             )}
 
-            {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
+            {Boolean((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
               <View style={styles.metaChipRow}>
                 <User size={12} color="#0d9488" />
                 <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
@@ -343,16 +336,16 @@ function BaseUserTouchCard({
               </View>
             )}
 
-            {u.assigned_machines && u.assigned_machines.length > 0 && (
+            {Boolean(u.assigned_machines && u.assigned_machines.length > 0) && (
               <View style={styles.metaChipRow}>
                 <Wrench size={12} color="#d97706" />
                 <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Machines: {u.assigned_machines.map((m) => m.machine_id).join(', ')}
+                  Machines: {u.assigned_machines?.map((m) => m.machine_id).join(', ')}
                 </Text>
               </View>
             )}
 
-            {u.shift_time && (
+            {Boolean(u.shift_time) && (
               <View style={styles.metaChipRow}>
                 <Clock size={12} color={theme.colors.mute} />
                 <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
@@ -362,7 +355,6 @@ function BaseUserTouchCard({
             )}
           </View>
         )}
-      </Pressable>
 
       {/* Action Buttons Toolbar at bottom: STRICTLY 3 actions (3-dot More, Assign Machine, Supervisor) */}
       <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
@@ -372,10 +364,16 @@ function BaseUserTouchCard({
             variant="buttonOutline"
             hitSlopToMin48
             onPress={handleMorePress}
-            style={[styles.actionPillBtn, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}
+            style={[
+              styles.actionPillBtn,
+              {
+                borderColor: isDark ? '#383838' : theme.colors.hairline,
+                backgroundColor: isDark ? '#262626' : '#ffffff',
+              },
+            ]}
           >
             <MoreVertical size={13} color={theme.colors.ink} />
-            <Text variant="caption" style={{ color: theme.colors.ink }}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
               More
             </Text>
           </Pressable>
@@ -391,10 +389,16 @@ function BaseUserTouchCard({
               haptics.select();
               onAssignMachine(u);
             }}
-            style={[styles.actionPillBtn, { borderColor: '#d9770640', backgroundColor: '#d9770612' }]}
+            style={[
+              styles.actionPillBtn,
+              {
+                borderColor: isDark ? '#383838' : theme.colors.hairline,
+                backgroundColor: isDark ? '#262626' : '#ffffff',
+              },
+            ]}
           >
-            <Wrench size={12} color="#d97706" />
-            <Text variant="caption" style={{ color: '#d97706' }}>
+            <Wrench size={12} color={theme.colors.ink} />
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
               Assign Machine
             </Text>
           </Pressable>
@@ -405,20 +409,27 @@ function BaseUserTouchCard({
           <Pressable
             variant="buttonOutline"
             hitSlopToMin48
-            onPress={() => {
+            onPress={(e?: any) => {
+              e?.stopPropagation?.();
               haptics.select();
               onAssignSupervisor(u);
             }}
-            style={[styles.actionPillBtn, { borderColor: '#0d948840', backgroundColor: '#0d948812' }]}
+            style={[
+              styles.actionPillBtn,
+              {
+                borderColor: isDark ? '#383838' : theme.colors.hairline,
+                backgroundColor: isDark ? '#262626' : '#ffffff',
+              },
+            ]}
           >
-            <ShieldCheck size={12} color="#0d9488" />
-            <Text variant="caption" style={{ color: '#0d9488' }}>
+            <ShieldCheck size={12} color={theme.colors.ink} />
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
               Supervisor
             </Text>
           </Pressable>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 

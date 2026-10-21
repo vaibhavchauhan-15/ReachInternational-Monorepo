@@ -264,7 +264,7 @@ try {
   const codeWithoutComments = savedEmailsContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
   assert(!codeWithoutComments.toLowerCase().includes('password'), 'savedEmails.ts contains zero password caching in executable code');
   assert(authErrorsContent.includes('export function mapAuthError'), 'authErrors.ts exports mapAuthError');
-  assert(authErrorsContent.includes('Invalid email or password. Please verify your credentials and try again.'), 'authErrors.ts defends against user enumeration attacks');
+  assert(authErrorsContent.includes("const genericMsg = 'Invalid email or password.';"), 'authErrors.ts defends against user enumeration attacks');
   assert(authErrorsContent.includes('export function formatAccountStatusNotice'), 'authErrors.ts exports formatAccountStatusNotice for post-auth status notices');
   assert(supabaseContent.includes('SECURE_CHUNK_SIZE') && supabaseContent.includes('SecureStore.setItemAsync(`${sanitizedKey}__chunk_'), 'supabase.ts implements encrypted hardware keystore chunking');
   assert(!supabaseContent.includes('AsyncStorage.setItem(`@secure_fallback_'), 'supabase.ts guarantees ZERO plaintext session token storage in AsyncStorage');
@@ -275,6 +275,10 @@ try {
   assert(loginContent.includes('visibleEmailSuggestions'), 'login.tsx renders non-sensitive email suggestions');
   assert(loginContent.includes('autoComplete="email"') && loginContent.includes('autoComplete="current-password"'), 'login.tsx configures OS-supported autofill');
   assert(inputContent.includes('hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}'), 'Input.tsx password toggle meets minimum 44px touch targets');
+  assert(inputContent.includes("color: isDark ? '#fafafa' : '#171717'"), 'Input.tsx enforces theme ink color on label for dark/light visibility');
+  assert(inputContent.includes("inputBackgroundColor = isDark ? '#141414' : '#fafafa'"), 'Input.tsx enforces theme-aware input background');
+  assert(inputContent.includes('inputTextColor = theme.colors.ink'), 'Input.tsx enforces theme ink color for input text');
+  assert(inputContent.includes('placeholderTextColor={effectivePlaceholderColor}'), 'Input.tsx binds theme-aware placeholderTextColor');
   assert(loginContent.includes('Remember me') && loginContent.includes('Forgot password?'), 'login.tsx renders Remember me and Forgot password options');
   assert(loginContent.includes('isDesktop') && loginContent.includes('desktopShowcasePanel'), 'login.tsx preserves 3-tier desktop showcase layout');
 
@@ -358,12 +362,13 @@ try {
   assert(migration171Content.includes('p_page int') && migration171Content.includes('p_page_size int'), 'Migration 171 implements paginated get_attendance_daily_detail');
   assert(migration171Content.includes("v_caller_role = 'operator'") && migration171Content.includes('42501'), 'Migration 171 enforces strict operator self-attendance isolation (42501)');
 
-  // Test 175: Validate Mobile Splash Screen & Gateway Optimizations
+  // Test 175: Validate Mobile Splash Screen & Gateway Minimalist Canvas (Logo Completely Removed)
   const splashIndexContent = fs.readFileSync(path.join(__dirname, 'app/index.tsx'), 'utf8');
+  assert(!splashIndexContent.includes('ReachBrandEmblem'), 'Splash screen completely removes logo (ReachBrandEmblem)');
   assert(!splashIndexContent.includes('ActivityIndicator'), 'Splash screen completely removes loading spinner (ActivityIndicator)');
   assert(!splashIndexContent.includes('styles.indicator'), 'Splash screen removes styles.indicator');
-  assert(splashIndexContent.includes('width < 360 ? 120 : 144'), 'Splash screen scales logo to industry standard 144dp (120dp compact fallback)');
-  assert(splashIndexContent.includes('FadeIn.duration(200)'), 'Splash screen applies GPU-accelerated FadeIn entrance animation');
+  assert(!splashIndexContent.includes('logoSize'), 'Splash screen removes logo sizing calculations');
+  assert(splashIndexContent.includes('theme.colors.canvas'), 'Splash screen renders clean theme canvas background');
   assert(splashIndexContent.includes('memo(function NativeGatewayScreen'), 'NativeGatewayScreen is memoized with React.memo');
   assert(splashIndexContent.includes('SplashScreen.hideAsync()'), 'Splash screen coordinates native splash dismissal upon auth resolution');
 
@@ -519,10 +524,12 @@ try {
   assert(badgeCheck183.includes('export function formatBadgeStatusLabel('), 'Badge exports formatBadgeStatusLabel helper');
   assert(badgeCheck183.includes("shape === 'rounded' ? radiusNumeric.sm : radiusNumeric.full"), 'Badge supports bimodal shapes (rounded & pill)');
   assert(badgeCheck183.includes('const staticBadgeStyles = StyleSheet.create({'), 'Badge allocates static base layout once via StyleSheet.create');
+  assert(badgeCheck183.includes('const isInteractive = hasPress'), 'Badge container is only interactive when onPress is provided');
+  assert(badgeCheck183.includes("accessibilityRole: hasRemove ? undefined : ('button' as const)"), 'Badge suppresses outer button role when onRemove exists to prevent nested button DOM hydration error');
   assert(badgeCheck183.includes("in_transit: 'info'"), 'Badge maps in_transit to info');
 
   const machineCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/machines/MobileMachineCard.tsx'), 'utf8');
-  assert(machineCardCheck183.includes('<Badge status="active" dot customLabel="Active"'), 'MobileMachineCard binds dot to Active health status badge');
+  assert(machineCardCheck183.includes('<Badge status="active" dot') && machineCardCheck183.includes('customLabel="Active"'), 'MobileMachineCard binds dot to Active health status badge');
   assert(machineCardCheck183.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard renders Rented/Available badge');
 
   const userTouchCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserTouchCard.tsx'), 'utf8');
@@ -539,6 +546,11 @@ try {
   const deleteDialogCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/DeleteUserConfirmDialog.tsx'), 'utf8');
   assert(deleteDialogCheck183.includes('<Badge\n              role={user.role}'), 'DeleteUserConfirmDialog reuses centralized Badge for user role');
   assert(deleteDialogCheck183.includes('<Badge\n              status={user.status'), 'DeleteUserConfirmDialog reuses centralized Badge for user status');
+
+  const clientsCheck183 = fs.readFileSync(path.join(__dirname, 'app/(app)/clients.tsx'), 'utf8');
+  assert(clientsCheck183.includes("variant={activeFilter === 'active' ? 'success' : 'warning'}"), 'clients.tsx reuses centralized Badge for status active filter chip');
+  assert(!clientsCheck183.includes('#064e3b26'), 'clients.tsx eradicates transparent #064e3b26 in favor of 100% solid opaque Badge');
+  assert(!clientsCheck183.includes('#78350f26'), 'clients.tsx eradicates transparent #78350f26 in favor of 100% solid opaque Badge');
 
   // Test 184: Running Logs Screen Redesign & Visual Parity with Web App
   const runningLogsScreenCheck184 = fs.readFileSync(path.join(__dirname, 'app/(app)/running-logs.tsx'), 'utf8');
@@ -571,6 +583,70 @@ try {
   assert(operationsDataHookCheck184.includes('export interface ClientSiteRecord'), 'useOperationsData exports ClientSiteRecord');
   assert(operationsDataHookCheck184.includes(".from('client_sites')"), 'useOperationsData queries client_sites table');
   assert(operationsDataHookCheck184.includes("clientSites,"), 'useOperationsData integrates clientSites in master data');
+
+  // Test 185: Attendance & Running Logs Feedback Polish: Operator EMP ID, Month Badges Removal, Separate Start/End CustomDatePicker, Quiet Empty State
+  assert(operationsDataHookCheck184.includes('employee_id?: string | null;'), 'useOperationsData defines employee_id on OperatorRecord');
+  assert(operationsDataHookCheck184.includes("select('id, employee_id, full_name"), 'useOperationsData queries employee_id in users query');
+
+  assert(filterPanelCheck184.includes('code: o.employee_id || undefined'), 'RunningLogFilterPanel displays operator EMP ID as code');
+  assert(!filterPanelCheck184.includes("code: 'OP'"), 'RunningLogFilterPanel eradicates hardcoded OP code badge');
+  assert(!filterPanelCheck184.includes("code: 'JAN'"), 'RunningLogFilterPanel eradicates code badges from MONTH_OPTIONS');
+  assert(!filterPanelCheck184.includes("code: 'CUST'"), 'RunningLogFilterPanel eradicates CUST badge from custom month option');
+
+  assert(!fs.existsSync(path.join(__dirname, 'components/ui/DateRangePicker.tsx')), 'DateRangePicker extra component is eradicated');
+
+  const uiIndexCheck185 = fs.readFileSync(path.join(__dirname, 'components/ui/index.ts'), 'utf8');
+  assert(!uiIndexCheck185.includes("export * from './DateRangePicker'"), 'components/ui/index.ts does not export DateRangePicker');
+  assert(uiIndexCheck185.includes("export * from './CustomDatePicker'"), 'components/ui/index.ts exports CustomDatePicker');
+
+  assert(!filterPanelCheck184.includes('<DateRangePicker'), 'RunningLogFilterPanel eradicates DateRangePicker extra component');
+  assert(filterPanelCheck184.includes('<CustomDatePicker'), 'RunningLogFilterPanel reuses canonical CustomDatePicker');
+  assert(filterPanelCheck184.includes('label="Start Date"'), 'RunningLogFilterPanel includes separate Start Date picker');
+  assert(filterPanelCheck184.includes('label="End Date"'), 'RunningLogFilterPanel includes separate End Date picker');
+
+  assert(runningLogsScreenCheck184.includes('quietEmptyCard'), 'running-logs.tsx renders clean quiet empty card on filtered results');
+  assert(runningLogsScreenCheck184.includes('RunningLogSummaryCard'), 'running-logs.tsx preserves summary card visibility during filtering');
+
+  // Test 200: Unparented Text Node & Empty String Children Prevention
+  const machineDetailViewCheck = fs.readFileSync(path.join(__dirname, 'components/machines/MachineDetailView.tsx'), 'utf8');
+  assert(machineDetailViewCheck.includes('(activeLogFilterCount > 0 || logSearch.length > 0)'), 'MachineDetailView uses boolean length check for logSearch active filters');
+  assert(!machineDetailViewCheck.includes('(activeLogFilterCount > 0 || logSearch) &&'), 'MachineDetailView eradicates unparented empty string condition');
+
+  const emptyStateCheck = fs.readFileSync(path.join(__dirname, 'components/ui/EmptyState.tsx'), 'utf8');
+  assert(emptyStateCheck.includes('Boolean(resolvedActionLabel || secondaryActionLabel)'), 'EmptyState uses Boolean check for actionRow');
+
+  const pressableCheck = fs.readFileSync(path.join(__dirname, 'components/ui/touch/Pressable.tsx'), 'utf8');
+  assert(pressableCheck.includes('sanitizedChildren'), 'Pressable implements sanitizedChildren defense-in-depth against empty strings');
+
+  const mobileMachineCardCheck = fs.readFileSync(path.join(__dirname, 'components/machines/MobileMachineCard.tsx'), 'utf8');
+  assert(mobileMachineCardCheck.includes('Boolean(machine.serial_number || machine.year_of_mfg)'), 'MobileMachineCard uses Boolean check for metadata row');
+
+  // Test 225: Optimized In-App Document & Native PDF Viewer (Zero Google Drive Redirects, @kishannareshpal/expo-pdf, Shared Cache)
+  const viewerModalCheck = fs.readFileSync(path.join(__dirname, 'components/documents/MobileDocumentViewerModal.tsx'), 'utf8');
+  assert(viewerModalCheck.includes('isDirectUrl(rawDocUrl)'), 'MobileDocumentViewerModal initializes direct URLs synchronously');
+  assert(!viewerModalCheck.includes('[docKey, rawDocUrl, doc, toast]'), 'MobileDocumentViewerModal removes unstable dependencies from useEffect');
+  assert(viewerModalCheck.includes('prevDocKeyRef.current !== docKey'), 'MobileDocumentViewerModal uses prevDocKeyRef to prevent state reset loops');
+  assert(viewerModalCheck.includes('handleRotate'), 'MobileDocumentViewerModal moves Rotate button to header actions row');
+  assert(!viewerModalCheck.includes('RotateCcw'), 'MobileDocumentViewerModal completely eradicates RotateCcw icon');
+  assert(!viewerModalCheck.includes('handleResetRotation'), 'MobileDocumentViewerModal completely eradicates handleResetRotation');
+  assert(!viewerModalCheck.includes('floatingBar:'), 'MobileDocumentViewerModal completely eradicates bottom floating control bar');
+  assert(!viewerModalCheck.includes('Pinch to zoom & pan'), 'MobileDocumentViewerModal completely eradicates bottom pinch to zoom notice');
+  assert(!viewerModalCheck.includes('docs.google.com/gview'), 'MobileDocumentViewerModal completely eradicates Google Drive / Docs viewer redirects');
+  assert(viewerModalCheck.includes('NativePdfViewer'), 'MobileDocumentViewerModal renders NativePdfViewer for in-app PDF display');
+
+  const nativePdfCheck = fs.readFileSync(path.join(__dirname, 'components/documents/NativePdfViewer.tsx'), 'utf8');
+  assert(nativePdfCheck.includes('@kishannareshpal/expo-pdf'), 'NativePdfViewer integrates @kishannareshpal/expo-pdf');
+  assert(nativePdfCheck.includes('fitMode="width"'), 'NativePdfViewer configures fitMode="width" for fit-to-width auto scaling');
+  assert(nativePdfCheck.includes('horizontal={false}'), 'NativePdfViewer enforces continuous vertical multipage scrolling');
+  assert(nativePdfCheck.includes('pagingEnabled={false}'), 'NativePdfViewer disables paging snapping for free vertical scrolling');
+  assert(nativePdfCheck.includes('doubleTapToZoom={true}'), 'NativePdfViewer enables smooth doubleTapToZoom');
+
+  const docCacheCheck = fs.readFileSync(path.join(__dirname, 'lib/documentCache.ts'), 'utf8');
+  assert(docCacheCheck.includes('ensureLocalDocumentFile'), 'documentCache exports ensureLocalDocumentFile shared cache resolver');
+  assert(docCacheCheck.includes('downloadDocumentInApp'), 'documentCache exports in-app download helper');
+  assert(!docCacheCheck.includes("a.target = '_blank'"), 'documentCache never uses target="_blank" to prevent browser redirects');
+  assert(docCacheCheck.includes('shareDocumentReliable'), 'documentCache exports reliable share helper');
+  assert(docCacheCheck.includes('localFileCache'), 'documentCache caches local files to avoid duplicate transfers');
 
   console.log(`\n✅ Verification Suite Passed: All ${passed}/${passed + failed} test scenarios verified!`);
   process.exit(failed > 0 ? 1 : 0);

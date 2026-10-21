@@ -25,7 +25,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   if (!error) {
     return {
       title: 'Sign In Failed',
-      message: 'An unexpected authentication error occurred. Please try again.',
+      message: 'Sign in failed. Please try again.',
       type: 'error',
     };
   }
@@ -47,7 +47,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   ) {
     return {
       title: 'Too Many Attempts',
-      message: 'Too many sign-in attempts. Please wait a few moments before trying again.',
+      message: 'Too many attempts. Please wait a moment.',
       type: 'warning',
     };
   }
@@ -64,7 +64,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   ) {
     return {
       title: 'Network Error',
-      message: 'Unable to connect to the authentication server. Please check your internet connection.',
+      message: 'Network error. Check your connection.',
       type: 'error',
     };
   }
@@ -73,7 +73,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('aborted')) {
     return {
       title: 'Connection Timed Out',
-      message: 'The sign-in request took too long to complete. Please check your connection and try again.',
+      message: 'Request timed out. Please try again.',
       type: 'error',
     };
   }
@@ -82,7 +82,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   if (status >= 500 || lower.includes('internal server error') || lower.includes('service unavailable')) {
     return {
       title: 'Service Unavailable',
-      message: 'The authentication service is temporarily unavailable. Please try again shortly.',
+      message: 'Service unavailable. Try again shortly.',
       type: 'error',
     };
   }
@@ -90,7 +90,7 @@ export function mapAuthError(error: unknown): MappedAuthError {
   // 5. Invalid Credentials & Enumeration Defense:
   // For any authentication check failure (including unconfirmed email, wrong password, user not found),
   // return generic invalid credentials to prevent attackers from discovering whether an email exists.
-  const genericMsg = 'Invalid email or password. Please verify your credentials and try again.';
+  const genericMsg = 'Invalid email or password.';
   return {
     title: 'Sign In Failed',
     message: genericMsg,
@@ -109,14 +109,14 @@ export function formatAccountStatusNotice(status: 'inactive' | 'pending'): Mappe
   if (status === 'inactive') {
     return {
       title: 'Account Deactivated',
-      message: 'Your account has been deactivated. Please contact your organization administrator for assistance.',
+      message: 'Account deactivated. Contact administrator.',
       type: 'error',
     };
   }
 
   return {
     title: 'Pending Approval',
-    message: 'Your account is pending administrator approval. Please wait for an administrator to approve your account.',
+    message: 'Account pending administrator approval.',
     type: 'info',
   };
 }
@@ -137,7 +137,7 @@ export function mapSignupError(error: unknown): MappedSignupError {
   if (!error) {
     return {
       title: 'Registration Failed',
-      message: 'An unexpected error occurred during registration. Please try again.',
+      message: 'Registration failed. Please try again.',
       type: 'error',
     };
   }
@@ -160,7 +160,7 @@ export function mapSignupError(error: unknown): MappedSignupError {
   ) {
     return {
       title: 'Rate Limit Reached',
-      message: 'Too many signup attempts. Please wait a few moments before trying again.',
+      message: 'Too many signup attempts. Please wait a moment.',
       type: 'warning',
     };
   }
@@ -177,7 +177,7 @@ export function mapSignupError(error: unknown): MappedSignupError {
   ) {
     return {
       title: 'Connection Issue',
-      message: 'Connection failed. Check your internet and try again.',
+      message: 'Connection failed. Check your internet.',
       type: 'error',
     };
   }
@@ -187,9 +187,9 @@ export function mapSignupError(error: unknown): MappedSignupError {
     if (lower.includes('email') || lower.includes('users_email_key') || lower.includes('public.users')) {
       return {
         title: 'Email Already Registered',
-        message: 'This email is already registered. Sign in or reset your password.',
+        message: 'Email already registered. Sign in instead.',
         type: 'error',
-        fieldErrors: { email: 'This email is already registered. Sign in or reset your password.' },
+        fieldErrors: { email: 'Email already registered.' },
       };
     }
 
@@ -205,9 +205,12 @@ export function mapSignupError(error: unknown): MappedSignupError {
     if (lower.includes('aadhaar') || lower.includes('users_aadhaar_number_key') || lower.includes('users_aadhaar_key')) {
       return {
         title: 'Aadhaar Already Registered',
-        message: 'This Aadhaar number is already registered with another account.',
+        message: 'Aadhaar number already registered.',
         type: 'error',
-        fieldErrors: { aadhaarNumber: 'This Aadhaar number is already registered with another account.' },
+        fieldErrors: {
+          aadhaarNumber: 'Aadhaar number already registered.',
+          aadhaar_number: 'Aadhaar number already registered.',
+        },
       };
     }
   }
@@ -220,7 +223,7 @@ export function mapSignupError(error: unknown): MappedSignupError {
     .trim();
 
   if (!cleanMsg || cleanMsg.includes('database error') || cleanMsg.includes('internal error')) {
-    cleanMsg = 'Unable to complete registration. Please verify your details and try again.';
+    cleanMsg = 'Registration failed. Please check details.';
   }
 
   return {

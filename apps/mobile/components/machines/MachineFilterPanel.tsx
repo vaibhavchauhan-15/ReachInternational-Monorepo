@@ -1,8 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
+  Platform,
+  Dimensions,
   type TextInput,
 } from 'react-native';
 import {
@@ -11,6 +13,7 @@ import {
   Badge,
   SearchInput,
   type FilterOption,
+  type PopoverCoords,
 } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { SlidersHorizontal, RotateCcw, X } from '../ui/icon';
@@ -54,6 +57,7 @@ export interface MachineFilterPanelProps {
   supervisorFilterOptions: FilterOption[];
   clientFilterOptions: FilterOption[];
   sortOptions: FilterOption[];
+  setFilterAnchorCoords?: (coords: PopoverCoords | null) => void;
 }
 
 export const MachineFilterPanel = React.memo(function MachineFilterPanel({
@@ -82,9 +86,11 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
   supervisorFilterOptions,
   clientFilterOptions,
   sortOptions,
+  setFilterAnchorCoords,
 }: MachineFilterPanelProps) {
   const { theme, isDark } = useTheme();
   const searchInputRef = useRef<TextInput>(null);
+  const filterBtnRef = useRef<View>(null);
 
   const currentRentalLabel =
     rentalFilterOptions.find((o) => o.id === rentalFilter)?.label || 'All Rental';
@@ -106,6 +112,41 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
       ? 'warning'
       : 'success';
 
+  const handleOpenFilterPopover = useCallback(() => {
+    if (filterPanelOpen) {
+      setFilterPanelOpen(false);
+      return;
+    }
+    haptics.select();
+    if (filterBtnRef.current && filterBtnRef.current.measureInWindow) {
+      filterBtnRef.current.measureInWindow((x, y, width, height) => {
+        const windowWidth =
+          Platform.OS === 'web' && typeof window !== 'undefined'
+            ? window.innerWidth
+            : Dimensions.get('window').width;
+        const windowHeight =
+          Platform.OS === 'web' && typeof window !== 'undefined'
+            ? window.innerHeight
+            : Dimensions.get('window').height;
+
+        const popoverWidth = Math.min(380, windowWidth - 24);
+        const rightEdge = x + width;
+        let left = rightEdge - popoverWidth;
+        if (left < 12) left = 12;
+        if (left + popoverWidth > windowWidth - 12) {
+          left = Math.max(12, windowWidth - popoverWidth - 12);
+        }
+        const top = y + height + 6;
+        const maxHeight = Math.max(280, Math.min(540, windowHeight - top - 20));
+
+        setFilterAnchorCoords?.({ top, left, width: popoverWidth, maxHeight });
+        setFilterPanelOpen(true);
+      });
+    } else {
+      setFilterPanelOpen(true);
+    }
+  }, [filterPanelOpen, setFilterPanelOpen, setFilterAnchorCoords]);
+
   return (
     <View style={styles.filterToolbar}>
       {/* Top Search & Filter Action Row */}
@@ -126,13 +167,14 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
           />
         </View>
 
-        {/* Filter Sidebar Trigger Button */}
+        {/* Filter Trigger Button (Opens Popover Anchored Below Button) */}
         <Pressable
+          ref={filterBtnRef}
           variant="buttonSecondary"
           haptic="select"
           hitSlopToMin48
           activeOpacity={1.0}
-          onPress={() => setFilterPanelOpen(true)}
+          onPress={handleOpenFilterPopover}
           style={[
             styles.filterToggleBtn,
             {
@@ -232,7 +274,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
         )}
       </View>
 
-      {/* Horizontal Active Filter Chips Strip */}
+      {/* Horizontal Active Filter Chips Strip: 100% Solid Opacity & Dismissible */}
       {activeFilterCount > 0 && (
         <ScrollView
           horizontal
@@ -241,152 +283,59 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
           style={styles.activeBadgesScroll}
         >
           {debouncedSearch.trim() !== '' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={handleClearSearch}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove search query ${debouncedSearch}`}
-            >
-              <Badge variant="outline" size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Search: "{debouncedSearch}"
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant="outline"
+              size="md"
+              label={`Search: "${debouncedSearch}"`}
+              onRemove={handleClearSearch}
+            />
           )}
 
           {rentalFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={() => setRentalFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove rental filter ${currentRentalLabel}`}
-            >
-              <Badge variant="info" size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: isDark ? '#bfdbfe' : '#1d4ed8' }}>
-                    Rental: {currentRentalLabel}
-                  </Text>
-                  <X size={12} color={isDark ? '#bfdbfe' : '#1d4ed8'} />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant="info"
+              solid
+              size="md"
+              label={`Rental: ${currentRentalLabel}`}
+              onRemove={() => setRentalFilter('all')}
+            />
           )}
 
           {healthFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={() => setHealthFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove health filter ${currentHealthLabel}`}
-            >
-              <Badge variant={healthVariant} size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        healthFilter === 'spare'
-                          ? isDark ? '#bfdbfe' : '#1d4ed8'
-                          : healthFilter === 'breakdown'
-                          ? isDark ? '#fca5a5' : '#b91c1c'
-                          : healthFilter === 'under_maintenance'
-                          ? isDark ? '#fde68a' : '#b45309'
-                          : isDark ? '#a7f3d0' : '#065f46',
-                    }}
-                  >
-                    Health: {currentHealthLabel}
-                  </Text>
-                  <X
-                    size={12}
-                    color={
-                      healthFilter === 'spare'
-                        ? isDark ? '#bfdbfe' : '#1d4ed8'
-                        : healthFilter === 'breakdown'
-                        ? isDark ? '#fca5a5' : '#b91c1c'
-                        : healthFilter === 'under_maintenance'
-                        ? isDark ? '#fde68a' : '#b45309'
-                        : isDark ? '#a7f3d0' : '#065f46'
-                    }
-                  />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant={healthVariant}
+              solid
+              size="md"
+              label={`Health: ${currentHealthLabel}`}
+              onRemove={() => setHealthFilter('all')}
+            />
           )}
 
           {supervisorFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={() => setSupervisorFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove supervisor filter ${currentSupervisorLabel}`}
-            >
-              <Badge variant="outline" size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Supervisor: {currentSupervisorLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant="outline"
+              size="md"
+              label={`Supervisor: ${currentSupervisorLabel}`}
+              onRemove={() => setSupervisorFilter('all')}
+            />
           )}
 
           {clientFilter !== 'all' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={() => setClientFilter('all')}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove client filter ${currentClientLabel}`}
-            >
-              <Badge variant="outline" size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Client: {currentClientLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant="outline"
+              size="md"
+              label={`Client: ${currentClientLabel}`}
+              onRemove={() => setClientFilter('all')}
+            />
           )}
 
           {sortBy !== 'machine_id_asc' && (
-            <Pressable
-              variant="chip"
-              haptic="select"
-              hitSlopToMin48
-              activeOpacity={1.0}
-              onPress={() => setSortBy('machine_id_asc')}
-              accessibilityRole="button"
-              accessibilityLabel={`Reset sort order ${currentSortLabel}`}
-            >
-              <Badge variant="outline" size="md">
-                <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
-                    Sort: {currentSortLabel}
-                  </Text>
-                  <X size={12} color={theme.colors.mute} />
-                </View>
-              </Badge>
-            </Pressable>
+            <Badge
+              variant="outline"
+              size="md"
+              label={`Sort: ${currentSortLabel}`}
+              onRemove={() => setSortBy('machine_id_asc')}
+            />
           )}
 
           <Pressable

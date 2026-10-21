@@ -189,6 +189,42 @@ function MobileWebScrollbarStyles() {
       input, textarea {
         outline: none !important;
       }
+      html.dark input:-webkit-autofill,
+      html.dark input:-webkit-autofill:hover,
+      html.dark input:-webkit-autofill:focus,
+      html.dark input:-webkit-autofill:active,
+      :root.dark input:-webkit-autofill,
+      :root.dark input:-webkit-autofill:hover,
+      :root.dark input:-webkit-autofill:focus,
+      :root.dark input:-webkit-autofill:active,
+      .dark input:-webkit-autofill,
+      .dark input:-webkit-autofill:hover,
+      .dark input:-webkit-autofill:focus,
+      .dark input:-webkit-autofill:active,
+      .dark textarea:-webkit-autofill,
+      .dark textarea:-webkit-autofill:hover,
+      .dark textarea:-webkit-autofill:focus,
+      .dark textarea:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0px 1000px #141414 inset !important;
+        -webkit-text-fill-color: #fafafa !important;
+        caret-color: #fafafa !important;
+        color: #fafafa !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
+      html:not(.dark) input:-webkit-autofill,
+      html:not(.dark) input:-webkit-autofill:hover,
+      html:not(.dark) input:-webkit-autofill:focus,
+      html:not(.dark) input:-webkit-autofill:active,
+      html:not(.dark) textarea:-webkit-autofill,
+      html:not(.dark) textarea:-webkit-autofill:hover,
+      html:not(.dark) textarea:-webkit-autofill:focus,
+      html:not(.dark) textarea:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0px 1000px #fafafa inset !important;
+        -webkit-text-fill-color: #171717 !important;
+        caret-color: #171717 !important;
+        color: #171717 !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
       /* Agentation Toolbar Floating Layer on Web */
       .reach-agentation-toolbar,
       [data-agentation-toolbar] {

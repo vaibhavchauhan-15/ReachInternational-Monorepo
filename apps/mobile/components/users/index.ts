@@ -1,4 +1,5 @@
 export * from './UserDetailModal';
+export * from './UserDetailView';
 export * from './CreateUserModal';
 export * from './UserEditModal';
 export * from './PasswordResetModal';

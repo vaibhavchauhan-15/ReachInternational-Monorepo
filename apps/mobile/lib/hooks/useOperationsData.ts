@@ -56,6 +56,7 @@ export interface ClientRecord {
 
 export interface OperatorRecord {
   id: string;
+  employee_id?: string | null;
   full_name: string;
   phone?: string;
   shift_time?: string | null;
@@ -187,7 +188,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
           .limit(200),
         supabase
           .from('users')
-          .select('id, full_name, phone, shift_start_time, shift_end_time')
+          .select('id, employee_id, full_name, phone, shift_start_time, shift_end_time')
           .eq('role', 'operator')
           .eq('status', 'active')
           .order('full_name'),

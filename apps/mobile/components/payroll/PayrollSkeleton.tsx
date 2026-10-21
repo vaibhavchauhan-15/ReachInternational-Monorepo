@@ -64,6 +64,13 @@ export const PayrollCardSkeleton: React.FC<PayrollCardSkeletonProps> = ({
           <Skeleton width={65} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 4 }} />
         </View>
       </View>
+
+      {/* Card Actions Footer Skeleton matching OperatorPayrollCard */}
+      <View style={styles.cardFooter}>
+        <Skeleton width={68} height={34} borderRadius={radiusNumeric.sm} animate={animate} />
+        <Skeleton width={56} height={34} borderRadius={radiusNumeric.sm} animate={animate} />
+        <Skeleton width={56} height={34} borderRadius={radiusNumeric.sm} animate={animate} />
+      </View>
     </Card>
   );
 };
@@ -231,5 +238,12 @@ const styles = StyleSheet.create({
   breakdownCol: {
     flex: 1,
     alignItems: 'center',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 4,
   },
 });

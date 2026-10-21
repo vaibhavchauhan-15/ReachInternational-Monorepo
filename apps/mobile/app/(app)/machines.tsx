@@ -21,6 +21,7 @@ import {
   ErrorState,
   PermissionDeniedView,
   SlowNetworkBanner,
+  type PopoverCoords,
 } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
@@ -169,6 +170,7 @@ export default function MachinesScreen() {
   );
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [filterAnchorCoords, setFilterAnchorCoords] = useState<PopoverCoords | null>(null);
 
   const handleSearchSubmit = () => {
     setSearch(search, true);
@@ -584,6 +586,7 @@ export default function MachinesScreen() {
           isSearching={isSearching}
           filterPanelOpen={filterPanelOpen}
           setFilterPanelOpen={setFilterPanelOpen}
+          setFilterAnchorCoords={setFilterAnchorCoords}
           activeFilterCount={activeFilterCount}
           handleResetAllFilters={handleResetAllFilters}
           rentalFilter={rentalFilter}
@@ -831,13 +834,57 @@ export default function MachinesScreen() {
           onMachineUpdated={(updatedMachine?: any) => {
             if (updatedMachine) {
               setSelectedMachine((prev: any) => ({ ...prev, ...updatedMachine }));
+              setMachines((prev) =>
+                prev.map((m) => (m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m))
+              );
+              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
+                if (old && Array.isArray(old.pages)) {
+                  return {
+                    ...old,
+                    pages: old.pages.map((page: any) => ({
+                      ...page,
+                      machines: page.machines.map((m: any) =>
+                        m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
+                      ),
+                    })),
+                  };
+                }
+                if (Array.isArray(old)) {
+                  return old.map((m: any) =>
+                    m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
+                  );
+                }
+                return old;
+              });
+            } else {
+              fetchMachines();
             }
-            fetchMachines();
           }}
-          onMachineDeleted={() => {
+          onMachineDeleted={(deletedId?: string) => {
+            const idToRemove = deletedId || selectedMachine?.id;
             setSelectedMachine(null);
             setDetailInitialTab('overview');
-            fetchMachines();
+            if (idToRemove) {
+              setMachines((prev) => prev.filter((m) => m.id !== idToRemove));
+              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
+                if (old && Array.isArray(old.pages)) {
+                  return {
+                    ...old,
+                    pages: old.pages.map((page: any) => ({
+                      ...page,
+                      machines: page.machines.filter((m: any) => m.id !== idToRemove),
+                      totalCount: Math.max(0, (page.totalCount || 0) - 1),
+                    })),
+                  };
+                }
+                if (Array.isArray(old)) {
+                  return old.filter((m: any) => m.id !== idToRemove);
+                }
+                return old;
+              });
+            } else {
+              fetchMachines();
+            }
           }}
           userRole={role}
         />
@@ -892,7 +939,35 @@ export default function MachinesScreen() {
               isEdit ? 'Machine Updated' : 'Machine Added',
               `Asset ${savedMachine.model || 'record'} (${savedMachine.serial_number || savedMachine.machine_id || ''}) saved successfully.`
             );
-            fetchMachines();
+            if (isEdit) {
+              setMachines((prev) =>
+                prev.map((m) => (m.id === savedMachine.id ? { ...m, ...savedMachine } : m))
+              );
+              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
+                if (old && Array.isArray(old.pages)) {
+                  return {
+                    ...old,
+                    pages: old.pages.map((page: any) => ({
+                      ...page,
+                      machines: page.machines.map((m: any) =>
+                        m.id === savedMachine.id ? { ...m, ...savedMachine } : m
+                      ),
+                    })),
+                  };
+                }
+                if (Array.isArray(old)) {
+                  return old.map((m: any) =>
+                    m.id === savedMachine.id ? { ...m, ...savedMachine } : m
+                  );
+                }
+                return old;
+              });
+              if (selectedMachine?.id === savedMachine.id) {
+                setSelectedMachine((prev: any) => ({ ...prev, ...savedMachine }));
+              }
+            } else {
+              fetchMachines();
+            }
           }
         }}
         machineToEdit={machineToEdit}
@@ -952,7 +1027,6 @@ export default function MachinesScreen() {
             haptics.confirm();
             toast('success', 'Machine Deleted', `Machine asset ${target.machine_id || 'record'} removed from active fleet.`);
             notifyMachineDeleted(target.machine_id || 'Machine');
-            fetchMachines();
           } catch (err: any) {
             setMachines(prevMachines);
             queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
@@ -1012,9 +1086,11 @@ export default function MachinesScreen() {
         />
       )}
 
-      {/* Category-Wise Filter Sidebar Drawer */}
+      {/* Category-Wise Filter Sidebar Drawer / Popover */}
       <MachineFilterSidebar
         visible={filterPanelOpen}
+        presentation="popover"
+        anchorCoords={filterAnchorCoords}
         onClose={() => setFilterPanelOpen(false)}
         activeFilterCount={activeFilterCount}
         totalFilteredCount={totalCount}
@@ -1051,7 +1127,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
-    paddingBottom: 90,
+    paddingBottom: 120,
   },
   listHeaderContainer: {
     gap: spacingNumeric.md,

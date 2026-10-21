@@ -181,11 +181,11 @@ export default function LoginScreen() {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      newFieldErrors.email = 'Email address is required.';
+      newFieldErrors.email = 'Email is required.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(trimmedEmail.toLowerCase())) {
-        newFieldErrors.email = 'Please enter a valid email address.';
+        newFieldErrors.email = 'Enter a valid email address.';
       }
     }
 
@@ -238,7 +238,7 @@ export default function LoginScreen() {
       }
     } catch {
       haptics.reject();
-      toast('error', 'Sign In Error', 'An unexpected error occurred during sign in. Please try again.');
+      toast('error', 'Sign In Error', 'Sign in failed. Please try again.');
     } finally {
       isSubmittingRef.current = false;
       setIsLoading(false);
@@ -469,8 +469,8 @@ export default function LoginScreen() {
                               style={[
                                 styles.suggestionChip,
                                 {
-                                  backgroundColor: isDark ? '#0284c722' : '#0284c712',
-                                  borderColor: isDark ? '#0284c744' : '#0284c728',
+                                  backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe',
+                                  borderColor: isDark ? '#0284c7' : '#bae6fd',
                                 },
                               ]}
                             >
@@ -482,10 +482,10 @@ export default function LoginScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel={`Autofill ${item}`}
                               >
-                                <Mail size={12} color={primarySkyBlue} />
+                                <Mail size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
                                 <Text
                                   variant="caption"
-                                  style={[styles.suggestionText, { color: primarySkyBlue }]}
+                                  style={[styles.suggestionText, { color: isDark ? '#ffffff' : '#0369a1' }]}
                                   numberOfLines={1}
                                 >
                                   {item}
@@ -500,7 +500,7 @@ export default function LoginScreen() {
                                 accessibilityLabel={`Remove ${item} suggestion`}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
-                                <X size={11} color={isDark ? '#a1a1aa' : '#888888'} />
+                                <X size={11} color={isDark ? '#cbd5e1' : '#64748b'} />
                               </Pressable>
                             </View>
                           ))}

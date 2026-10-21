@@ -32,6 +32,9 @@ import {
   type MobileViewerDoc,
 } from '../documents/MobileDocumentViewerModal';
 import {
+  fetchUserDocuments,
+} from '../../lib/documents';
+import {
   X,
   User,
   Mail,
@@ -106,6 +109,9 @@ export interface UserRecord {
     model?: string | null;
   }>;
   created_at?: string;
+  total_pl_quota?: number | null;
+  pl_used_as_on_date?: number | null;
+  doj?: string | null;
 }
 
 export interface UserDetailModalProps {
@@ -299,24 +305,8 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
       const isStaff = currentUserRole === 'super_admin' || currentUserRole === 'admin' || currentUserRole === 'hr';
       if (!isStaff) return;
       try {
-        const { data: docs } = await supabase
-          .from('user_documents')
-          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at')
-          .eq('user_id', user.id);
-
-        if (docs && docs.length > 0) {
-          const withUrls = await Promise.all(
-            docs.map(async (doc: any) => {
-              const { data: urlData } = await supabase.storage
-                .from('user_files')
-                .createSignedUrl(doc.storage_path, 300);
-              return { ...doc, signed_url: urlData?.signedUrl || null };
-            })
-          );
-          setUserDocuments(withUrls);
-        } else {
-          setUserDocuments([]);
-        }
+        const docs = await fetchUserDocuments(user.id);
+        setUserDocuments(docs || []);
       } catch {
         setUserDocuments([]);
       }
@@ -655,7 +645,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         </View>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
-          {actionErrorMessage && (
+          {Boolean(actionErrorMessage) && (
             <View
               style={[
                 styles.inlineErrorBanner,

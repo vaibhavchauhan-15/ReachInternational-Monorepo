@@ -327,8 +327,8 @@ export const AttendanceDetailSkeleton: React.FC<AttendanceDetailSkeletonProps> =
               },
             ]}
           >
-            <Skeleton width={24} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-            <Skeleton width={46} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 4 }} />
+            <Skeleton width={26} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={46} height={11} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 6, marginBottom: 0 }} />
           </View>
         ))}
       </View>
@@ -345,11 +345,12 @@ export const AttendanceDetailSkeleton: React.FC<AttendanceDetailSkeletonProps> =
       >
         <View style={styles.hoursCol}>
           <Skeleton width={70} height={11} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-          <Skeleton width={55} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 4 }} />
+          <Skeleton width={60} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 6, marginBottom: 0 }} />
         </View>
+        <View style={[styles.hoursDivider, { backgroundColor: theme.colors.hairline }]} />
         <View style={styles.hoursCol}>
           <Skeleton width={78} height={11} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-          <Skeleton width={48} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 4 }} />
+          <Skeleton width={50} height={20} borderRadius={radiusNumeric.xs} animate={animate} style={{ marginTop: 6, marginBottom: 0 }} />
         </View>
       </View>
 
@@ -358,8 +359,8 @@ export const AttendanceDetailSkeleton: React.FC<AttendanceDetailSkeletonProps> =
         <Skeleton width={180} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
       </View>
 
-      {/* 5. Daily Attendance Record Cards (3 cards) */}
-      {Array.from({ length: 3 }).map((_, idx) => (
+      {/* 5. Daily Attendance Record Cards (3 cards matching AttendanceDayCard structure) */}
+      {Array.from({ length: 4 }).map((_, idx) => (
         <View
           key={`day-card-skel-${idx}`}
           style={[
@@ -370,29 +371,22 @@ export const AttendanceDetailSkeleton: React.FC<AttendanceDetailSkeletonProps> =
             },
           ]}
         >
-          {/* Day Card Header */}
-          <View style={styles.dayCardHeader}>
+          {/* Day Card Header: Date & Day of Week on left, Status Badge on right */}
+          <View
+            style={[
+              styles.dayCardHeader,
+              { borderBottomColor: theme.colors.hairline },
+            ]}
+          >
             <View style={styles.dayCardDateGroup}>
-              <View
-                style={[
-                  styles.dayNumberPill,
-                  {
-                    backgroundColor: isDark ? '#262626' : '#f4f4f5',
-                  },
-                ]}
-              >
-                <Skeleton width={18} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-              </View>
-              <View style={{ marginLeft: 10, gap: 4 }}>
-                <Skeleton width={68} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-                <Skeleton width={52} height={11} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-              </View>
+              <Skeleton width={80} height={16} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+              <Skeleton width={48} height={12} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
             </View>
 
-            <Skeleton width={72} height={22} borderRadius={radiusNumeric.full} animate={animate} style={styles.noMargin} />
+            <Skeleton width={68} height={22} borderRadius={radiusNumeric.full} animate={animate} style={styles.noMargin} />
           </View>
 
-          {/* Day Card Content / Punches Well */}
+          {/* Day Card Content / Punches Well: Shift on left, Worked on right */}
           <View
             style={[
               styles.dayHoursWell,
@@ -403,12 +397,12 @@ export const AttendanceDetailSkeleton: React.FC<AttendanceDetailSkeletonProps> =
             ]}
           >
             <View style={{ gap: 4 }}>
-              <Skeleton width={60} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-              <Skeleton width={90} height={13} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+              <Skeleton width={44} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+              <Skeleton width={110} height={13} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
             </View>
             <View style={{ alignItems: 'flex-end', gap: 4 }}>
               <Skeleton width={50} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
-              <Skeleton width={44} height={13} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+              <Skeleton width={52} height={13} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
             </View>
           </View>
         </View>
@@ -587,6 +581,11 @@ const styles = StyleSheet.create({
   },
   hoursCol: {
     alignItems: 'center',
+    flex: 1,
+  },
+  hoursDivider: {
+    width: 1,
+    height: 36,
   },
   dayCard: {
     borderRadius: radiusNumeric.md,
@@ -599,11 +598,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
   },
   dayCardDateGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   dayNumberPill: {
     width: 38,

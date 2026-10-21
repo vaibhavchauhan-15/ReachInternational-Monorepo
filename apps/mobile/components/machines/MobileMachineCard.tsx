@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Badge, useTheme, HighlightText, Text, Touchable, showToast } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { haptics } from '../../lib/haptics';
 import {
@@ -96,9 +97,10 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {/* Machine ID Reusable Badge Chip */}
-          <Touchable
-            preset="icon"
+          <Pressable
+            variant="plain"
             activeOpacity={1.0}
+            hitSlopToMin48={false}
             onPress={handleCopyId}
             style={styles.codeBtn}
             accessibilityLabel={`Copy machine ID ${machine.machine_id}`}
@@ -131,7 +133,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 )}
               </View>
             </Badge>
-          </Touchable>
+          </Pressable>
 
           {machine.model && (
             <HighlightText
@@ -148,20 +150,21 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
         {/* Badges Column: Active / Health + Rented / Available */}
         <View style={styles.badgeWrap}>
           {machine.health_status === 'breakdown' && (
-            <Badge status="breakdown" dot customLabel="Breakdown" size="md" />
+            <Badge status="breakdown" dot solid customLabel="Breakdown" size="md" />
           )}
           {machine.health_status === 'under_maintenance' && (
-            <Badge status="under_maintenance" dot customLabel="Maintenance" size="md" />
+            <Badge status="under_maintenance" dot solid customLabel="Maintenance" size="md" />
           )}
           {machine.health_status === 'spare' && (
-            <Badge status="spare" dot customLabel="Spare" size="md" />
+            <Badge status="spare" dot solid customLabel="Spare" size="md" />
           )}
           {(!machine.health_status || machine.health_status === 'active') && (
-            <Badge status="active" dot customLabel="Active" size="md" />
+            <Badge status="active" dot solid customLabel="Active" size="md" />
           )}
 
           <Badge
             status={machine.status === 'rented' ? 'rented' : 'available'}
+            solid
             customLabel={machine.status === 'rented' ? 'Rented' : 'Available'}
             size="md"
           />
@@ -169,9 +172,9 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
       </View>
 
       {/* Sub Metadata Row: S/N and Year of Mfg */}
-      {(machine.serial_number || machine.year_of_mfg) && (
+      {Boolean(machine.serial_number || machine.year_of_mfg) && (
         <View style={styles.metaRow}>
-          {machine.serial_number && (
+          {Boolean(machine.serial_number) && (
             <Text variant="caption" style={{ color: theme.colors.body }}>
               S/N:{' '}
               <HighlightText
@@ -183,12 +186,12 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               />
             </Text>
           )}
-          {machine.serial_number && machine.year_of_mfg && (
+          {Boolean(machine.serial_number && machine.year_of_mfg) && (
             <Text variant="caption" style={{ color: theme.colors.mute }}>
               •
             </Text>
           )}
-          {machine.year_of_mfg && (
+          {Boolean(machine.year_of_mfg) && (
             <Text variant="caption" style={{ color: theme.colors.mute }}>
               Mfg: {machine.year_of_mfg}
             </Text>
@@ -211,7 +214,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
             <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Hour Meter (HMR):
             </Text>
-            <Text variant="mono" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
+            <Text variant="label" weight="semibold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
               {machine.hour_meter ?? 0} hrs
             </Text>
           </View>
@@ -221,7 +224,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               Assigned Client:
             </Text>
             <Text
-              variant="subheading"
+              variant="label"
+              weight="semibold"
               style={[styles.specValueClient, { color: theme.colors.ink }]}
               numberOfLines={1}
             >
@@ -254,14 +258,14 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 return (
                   <View key={s.id || idx} style={styles.personnelRow}>
                     <Text
-                      variant="caption"
+                      variant="label"
                       style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
                       {s.full_name}
                     </Text>
                     {isLast && remaining > 0 && (
-                      <Badge variant="neutral" size="md">
+                      <Badge variant="neutral" solid size="md">
                         +{remaining}
                       </Badge>
                     )}
@@ -291,14 +295,14 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 return (
                   <View key={o.id || idx} style={styles.personnelRow}>
                     <Text
-                      variant="caption"
+                      variant="label"
                       style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
                       {o.full_name}
                     </Text>
                     {isLast && remaining > 0 && (
-                      <Badge variant="neutral" size="md">
+                      <Badge variant="neutral" solid size="md">
                         +{remaining}
                       </Badge>
                     )}

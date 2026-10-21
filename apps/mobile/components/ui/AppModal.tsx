@@ -22,6 +22,7 @@ export interface AppModalProps {
   panelStyle?: StyleProp<ViewStyle>;
   persistent?: boolean;
   testID?: string;
+  showHandle?: boolean;
 }
 
 export function AppModal({
@@ -33,6 +34,7 @@ export function AppModal({
   panelStyle,
   persistent = false,
   testID,
+  showHandle,
 }: AppModalProps) {
   if (variant === 'bottom') {
     return (
@@ -43,6 +45,7 @@ export function AppModal({
         style={style}
         contentStyle={panelStyle}
         testID={testID}
+        showHandle={showHandle}
       >
         {children}
       </Sheet>

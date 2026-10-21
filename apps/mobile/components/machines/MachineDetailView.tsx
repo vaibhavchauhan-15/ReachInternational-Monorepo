@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,17 +7,39 @@ import {
   Linking,
   Platform,
   TextInput,
-  useWindowDimensions} from 'react-native';
+  useWindowDimensions,
+  Modal,
+  Dimensions,
+} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { AppModal } from '../ui/AppModal';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
-import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl, SegmentedToggle, MobileHeader, Text, showToast, type HeaderActionItem, KPICard, KPIGrid, Pagination, FilterSidebar, FilterCategoryCard, DropdownFilterSelector } from '../ui';
+import {
+  Badge,
+  useTheme,
+  SharedLinkPreviewCard,
+  AppRefreshControl,
+  SegmentedToggle,
+  MobileHeader,
+  Text,
+  showToast,
+  type HeaderActionItem,
+  KPICard,
+  KPIGrid,
+  Pagination,
+  FilterSidebar,
+  FilterCategoryCard,
+  DropdownFilterSelector,
+  EmptyState,
+} from '../ui';
+import { RunningLogShiftCard } from '../operations/RunningLogShiftCard';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { formatDate } from '@reachinternational/utils';
+import { formatDate, sanitizeDatabaseError } from '@reachinternational/utils';
 import { getWebAppUrl } from '../../lib/env';
+import { MACHINE_SELECT_COLUMNS } from '../../lib/hooks/useMachinesData';
 import {
   ChevronLeft,
   Edit2,
@@ -62,7 +84,7 @@ export interface MachineDetailViewProps {
   machine: any;
   onBack: () => void;
   onMachineUpdated?: (updatedMachine?: any) => void;
-  onMachineDeleted?: () => void;
+  onMachineDeleted?: (deletedId?: string) => void;
   userRole?: string | null;
   initialTab?: 'overview' | 'running_hours' | 'audit_trail';
 }
@@ -304,6 +326,24 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
   const [assignPersonnelModalVisible, setAssignPersonnelModalVisible] = useState(false);
   const [heroMenuVisible, setHeroMenuVisible] = useState(false);
+  const heroEditBtnRef = useRef<View>(null);
+  const [heroMenuCoords, setHeroMenuCoords] = useState<{ top: number; right: number } | null>(null);
+
+  const handleOpenHeroMenu = useCallback(() => {
+    if (heroEditBtnRef.current && (heroEditBtnRef.current as any).measureInWindow) {
+      (heroEditBtnRef.current as any).measureInWindow((x: number, y: number, width: number, height: number) => {
+        const screenWidth = Dimensions.get('window').width;
+        const right = Math.max(16, screenWidth - (x + width));
+        const top = y + height + 6;
+        setHeroMenuCoords({ top, right });
+        setHeroMenuVisible(true);
+      });
+    } else {
+      setHeroMenuCoords({ top: 120, right: 16 });
+      setHeroMenuVisible(true);
+    }
+  }, []);
+
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -504,9 +544,19 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
   // Audit Trail Fetcher & Caching
   const fetchAuditLogs = useCallback(async () => {
+    if (!machine.id) return;
     setIsLoadingAudit(true);
     setAuditError(null);
     try {
+      const orConditions = [
+        `entity_id.eq.${machine.id}`,
+        `metadata->>machineId.eq.${machine.id}`,
+        `metadata->>machine_id.eq.${machine.id}`,
+      ];
+      if (machine.machine_id) {
+        orConditions.push(`metadata->>machineCode.eq.${machine.machine_id}`);
+      }
+
       const { data, error } = await supabase
         .from('audit_logs')
         .select(`
@@ -526,7 +576,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           created_at,
           user:users(id, full_name, role)
         `)
-        .eq('entity_id', machine.id)
+        .or(orConditions.join(','))
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -540,7 +590,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     } finally {
       setIsLoadingAudit(false);
     }
-  }, [machine.id]);
+  }, [machine.id, machine.machine_id]);
 
   useEffect(() => {
     if (activeTab === 'audit_trail' && !hasLoadedAudit && !isLoadingAudit) {
@@ -614,6 +664,42 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     return `Client (${id.slice(0, 8)})`;
   }, [machine, client]);
 
+  const isAuditHourLog = useCallback((l: any) => {
+    const act = (l?.action || '').toLowerCase();
+    const et = (l?.entity_type || '').toLowerCase();
+    return (
+      act.includes('hour_logged') ||
+      act.includes('assisted_override') ||
+      (act === 'insert' && et === 'machine_hour_logs') ||
+      et === 'machine_hour_logs'
+    );
+  }, []);
+
+  const isAuditAssignment = useCallback((l: any) => {
+    const act = (l?.action || '').toLowerCase();
+    const et = (l?.entity_type || '').toLowerCase();
+    return (
+      act.includes('operator_shift_assigned') ||
+      act.includes('operators_updated') ||
+      act.includes('operator_assigned') ||
+      act.includes('reassigned_supervisor') ||
+      act.includes('supervisors_updated') ||
+      act.includes('assign') ||
+      et === 'operator_machine_assignment'
+    );
+  }, []);
+
+  const isAuditBreakdown = useCallback((l: any) => {
+    return Boolean(
+      l?.isBreakdown ||
+      l?.metadata?.is_breakdown === true ||
+      l?.metadata?.isBreakdown === true ||
+      (l?.metadata?.breakdownHours && Number(l.metadata.breakdownHours) > 0) ||
+      (l?.metadata?.breakdown_hours && Number(l.metadata.breakdown_hours) > 0) ||
+      (l?.action || '').toLowerCase().includes('breakdown')
+    );
+  }, []);
+
   // Enriched audit trail with previous vs updated details and deletions
   const enrichedAuditLogs = useMemo(() => {
     if (!auditLogs || auditLogs.length === 0) return [];
@@ -640,20 +726,33 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
     for (const log of chron) {
       const act = (log.action || '').toLowerCase();
-      const isHourLog = act.includes('hour_logged');
+      const entityType = (log.entity_type || '').toLowerCase();
+      const isHourLog =
+        act.includes('hour_logged') ||
+        act.includes('assisted_override') ||
+        (act === 'insert' && entityType === 'machine_hour_logs') ||
+        entityType === 'machine_hour_logs';
       const isBreakdown =
         act.includes('breakdown') ||
         log.metadata?.isBreakdown === true ||
         log.metadata?.is_breakdown === true ||
         (log.metadata?.breakdownDuration && String(log.metadata.breakdownDuration) !== '0' && String(log.metadata.breakdownDuration) !== '0h') ||
         (log.metadata?.breakdownHours && Number(log.metadata.breakdownHours) > 0) ||
+        (log.metadata?.breakdown_hours && Number(log.metadata.breakdown_hours) > 0) ||
         Boolean(log.metadata?.breakdownReason);
       const isOpEnded = act.includes('operator_assignment_ended') || act.includes('assignment_ended');
       const isDeleteEvent = act.includes('delete') || act.includes('deactivated');
-      const isOpUpdate = act.includes('operators_updated') || act.includes('operator_assigned');
+      const isOpUpdate =
+        act.includes('operator_shift_assigned') ||
+        act.includes('operators_updated') ||
+        act.includes('operator_assigned') ||
+        entityType === 'operator_machine_assignment';
       const isSupUpdate = act.includes('supervisors_updated') || act.includes('reassigned_supervisor');
       const isClientUpdate = act.includes('client_assignment_updated');
-      const isStatusUpdate = act.includes('operational_status') || act.includes('status');
+      const isStatusUpdate =
+        act.includes('health_status_changed') ||
+        act.includes('operational_status') ||
+        act.includes('status');
       const isInfoUpdate = act.includes('info_updated') || act.includes('updated');
 
       const diffs: { field: string; label: string; previous: string; updated: string }[] = [];
@@ -710,11 +809,104 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         }
       }
 
-      // Hour Meter Log (Update snapshot; do NOT duplicate in diffs per Item 3)
+      // Hour Meter Log
       if (isHourLog && log.metadata) {
-        const end = log.metadata.endMeter ?? log.metadata.end_meter;
-        if (end !== undefined) {
-          runningSnapshot.hour_meter = end;
+        const startM = log.metadata.start_meter ?? log.metadata.startMeter;
+        const endM = log.metadata.end_meter ?? log.metadata.endMeter;
+        const runH = log.metadata.running_hours ?? log.metadata.runningHours;
+        const shift = log.metadata.shift || (log.metadata.shift_code ? `Shift ${log.metadata.shift_code}` : undefined);
+        if (endM !== undefined) {
+          runningSnapshot.hour_meter = endM;
+        }
+        if (startM !== undefined && endM !== undefined) {
+          diffs.push({
+            field: 'meter_reading',
+            label: 'Meter Reading',
+            previous: `${startM} hrs`,
+            updated: `${endM} hrs (+${runH || (endM - startM)} hrs)`,
+          });
+        }
+        if (shift) {
+          diffs.push({
+            field: 'shift',
+            label: 'Work Shift',
+            previous: '—',
+            updated: shift,
+          });
+        }
+        const opId = log.metadata.operator_id || log.metadata.operatorId;
+        if (opId) {
+          diffs.push({
+            field: 'operator',
+            label: 'Logged By Operator',
+            previous: '—',
+            updated: resolveUserNameMobile(opId),
+          });
+        }
+        if (log.metadata.is_breakdown || (log.metadata.breakdown_hours && Number(log.metadata.breakdown_hours) > 0)) {
+          diffs.push({
+            field: 'breakdown',
+            label: 'Breakdown Hours',
+            previous: 'None',
+            updated: `${log.metadata.breakdown_hours || (log.metadata.breakdown_minutes ? log.metadata.breakdown_minutes / 60 : 0)} hrs`,
+          });
+        }
+      }
+
+      // Shift Assignment
+      if (act.includes('operator_shift_assigned') && log.metadata) {
+        const opName = log.metadata.operatorName || resolveUserNameMobile(log.metadata.operatorId);
+        diffs.push({
+          field: 'operator',
+          label: 'Assigned Operator',
+          previous: 'Unassigned',
+          updated: `${opName} (Shift ${log.metadata.shiftCode || 'A'})`,
+        });
+        if (log.metadata.shiftStart && log.metadata.shiftEnd) {
+          diffs.push({
+            field: 'shift_timing',
+            label: 'Shift Timing',
+            previous: '—',
+            updated: `${log.metadata.shiftStart} → ${log.metadata.shiftEnd}`,
+          });
+        }
+        if (log.metadata.notes) {
+          diffs.push({
+            field: 'notes',
+            label: 'Assignment Notes',
+            previous: '—',
+            updated: String(log.metadata.notes),
+          });
+        }
+      }
+
+      // Health status changed
+      if (act.includes('health_status_changed') && log.metadata) {
+        if (log.metadata.new_health_status) {
+          diffs.push({
+            field: 'health_status',
+            label: 'Health Status',
+            previous: formatDiffValueMobile(log.metadata.previous_health_status || 'active'),
+            updated: formatDiffValueMobile(log.metadata.new_health_status),
+          });
+          runningSnapshot.health_status = log.metadata.new_health_status;
+        }
+        if (log.metadata.new_status && log.metadata.new_status !== log.metadata.previous_status) {
+          diffs.push({
+            field: 'status',
+            label: 'Rental Status',
+            previous: formatDiffValueMobile(log.metadata.previous_status || 'available'),
+            updated: formatDiffValueMobile(log.metadata.new_status),
+          });
+          runningSnapshot.status = log.metadata.new_status;
+        }
+        if (log.metadata.reason) {
+          diffs.push({
+            field: 'reason',
+            label: 'Change Reason',
+            previous: '—',
+            updated: String(log.metadata.reason).replace(/_/g, ' '),
+          });
         }
       }
 
@@ -875,57 +1067,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     if (!enrichedAuditLogs) return { all: 0, hour_logs: 0, breakdowns: 0, assignments: 0, updates: 0 };
     return {
       all: enrichedAuditLogs.length,
-      hour_logs: enrichedAuditLogs.filter((l: any) => {
-        const act = (l.action || '').toLowerCase();
-        return act.includes('hour_logged') || act.includes('hmr') || act.includes('meter');
-      }).length,
-      breakdowns: enrichedAuditLogs.filter((l: any) => l.isBreakdown).length,
-      assignments: enrichedAuditLogs.filter((l: any) => {
-        const act = (l.action || '').toLowerCase();
-        return act.includes('assign') || act.includes('operator') || act.includes('supervisor');
-      }).length,
-      updates: enrichedAuditLogs.filter((l: any) => {
-        const act = (l.action || '').toLowerCase();
-        return (
-          !act.includes('hour_logged') &&
-          !act.includes('hmr') &&
-          !act.includes('meter') &&
-          !act.includes('assign') &&
-          !act.includes('operator') &&
-          !act.includes('supervisor')
-        );
-      }).length,
+      hour_logs: enrichedAuditLogs.filter(isAuditHourLog).length,
+      breakdowns: enrichedAuditLogs.filter(isAuditBreakdown).length,
+      assignments: enrichedAuditLogs.filter(isAuditAssignment).length,
+      updates: enrichedAuditLogs.filter(
+        (l) => !isAuditHourLog(l) && !isAuditAssignment(l) && !isAuditBreakdown(l)
+      ).length,
     };
-  }, [enrichedAuditLogs]);
+  }, [enrichedAuditLogs, isAuditHourLog, isAuditBreakdown, isAuditAssignment]);
 
   const filteredAuditLogs = useMemo(() => {
     if (!enrichedAuditLogs) return [];
     if (auditCategory === 'all') return enrichedAuditLogs;
-    if (auditCategory === 'breakdowns') return enrichedAuditLogs.filter((l: any) => l.isBreakdown);
-    if (auditCategory === 'hour_logs') {
-      return enrichedAuditLogs.filter((l: any) => {
-        const act = (l.action || '').toLowerCase();
-        return act.includes('hour_logged') || act.includes('hmr') || act.includes('meter');
-      });
-    }
-    if (auditCategory === 'assignments') {
-      return enrichedAuditLogs.filter((l: any) => {
-        const act = (l.action || '').toLowerCase();
-        return act.includes('assign') || act.includes('operator') || act.includes('supervisor');
-      });
-    }
-    return enrichedAuditLogs.filter((l: any) => {
-      const act = (l.action || '').toLowerCase();
-      return (
-        !act.includes('hour_logged') &&
-        !act.includes('hmr') &&
-        !act.includes('meter') &&
-        !act.includes('assign') &&
-        !act.includes('operator') &&
-        !act.includes('supervisor')
-      );
-    });
-  }, [enrichedAuditLogs, auditCategory]);
+    if (auditCategory === 'breakdowns') return enrichedAuditLogs.filter(isAuditBreakdown);
+    if (auditCategory === 'hour_logs') return enrichedAuditLogs.filter(isAuditHourLog);
+    if (auditCategory === 'assignments') return enrichedAuditLogs.filter(isAuditAssignment);
+    return enrichedAuditLogs.filter(
+      (l) => !isAuditHourLog(l) && !isAuditAssignment(l) && !isAuditBreakdown(l)
+    );
+  }, [enrichedAuditLogs, auditCategory, isAuditHourLog, isAuditBreakdown, isAuditAssignment]);
 
   const groupedAuditLogs = useMemo(() => {
     if (!filteredAuditLogs.length) return [];
@@ -1014,10 +1174,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
       const { error } = await supabase.from('machines').delete().eq('id', machine.id);
       if (error) throw error;
       setDeleteDialogVisible(false);
-      if (onMachineDeleted) onMachineDeleted();
+      showToast('success', 'Machine Deleted', `Machine asset ${machine.machine_id || ''} has been removed from the fleet.`);
+      if (onMachineDeleted) onMachineDeleted(machine.id);
       onBack();
     } catch (err: any) {
-      alert(err?.message || 'Failed to delete machine');
+      const sanitized = sanitizeDatabaseError(err);
+      showToast('error', 'Delete Failed', sanitized.error || 'Failed to delete machine');
     } finally {
       setIsDeleting(false);
     }
@@ -1124,8 +1286,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       {/* Top Standardized Mobile Header */}
       <MobileHeader
-        title="Machine Details"
-        subtitle={machine.machine_id ? `${machine.machine_id} • ${machine.model || 'Equipment'}` : undefined}
+        title={machine.model || 'Machine Details'}
+        subtitle={machine.machine_id}
         showBack={true}
         onPressBack={onBack}
         actions={headerActions}
@@ -1171,21 +1333,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
               {/* Title & Subtitle */}
               <View style={styles.heroTitleWrap}>
-                <Text style={[styles.heroTitle, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {displayTitle}
+                <Text variant="title" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                  {machine.model || 'Machine Model'}
                 </Text>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
-                    {machine.machine_id}
-                  </Text>
-                  {Boolean(machine.manufacturer) && (
-                    <>
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>•</Text>
-                      <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
-                        {machine.manufacturer}
-                      </Text>
-                    </>
+                  {Boolean(machine.serial_number) && (
+                    <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
+                      {machine.serial_number}
+                    </Text>
+                  )}
+                  {Boolean(machine.serial_number && machine.machine_id) && (
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>•</Text>
+                  )}
+                  {Boolean(machine.machine_id) && (
+                    <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
+                      {machine.machine_id}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -1193,21 +1357,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {/* Right Action Buttons: Edit & Delete */}
               <View style={styles.heroActionBtns}>
                 {canManage ? (
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={() => setHeroMenuVisible(true)}
-                    style={[
-                      styles.heroEditBtn,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    accessibilityLabel="Edit Machine Options"
-                  >
-                    <Edit2 size={13} color={theme.colors.ink} />
-                    <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Edit</Text>
-                    <ChevronDown size={11} color={theme.colors.mute} />
-                  </Pressable>
+                  <View ref={heroEditBtnRef} collapsable={false}>
+                    <Pressable variant="outline" haptic="tap"
+                      onPress={handleOpenHeroMenu}
+                      style={[
+                        styles.heroEditBtn,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                      accessibilityLabel="Edit Machine Options"
+                    >
+                      <Edit2 size={13} color={theme.colors.ink} />
+                      <Text variant="label" style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Edit</Text>
+                      <ChevronDown size={11} color={theme.colors.mute} />
+                    </Pressable>
+                  </View>
                 ) : isSupervisor ? (
                   <Pressable variant="outline" haptic="tap"
                     onPress={() => {
@@ -1223,7 +1389,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     accessibilityLabel="Assign Operator"
                   >
                     <UserCheck size={13} color="#0d9488" />
-                    <Text style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Assign</Text>
+                    <Text variant="label" style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Assign</Text>
                   </Pressable>
                 ) : null}
 
@@ -1252,20 +1418,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               ]}
             >
               {machine.health_status === 'breakdown' && (
-                <Badge status="breakdown" dot customLabel="Breakdown" />
+                <Badge status="breakdown" dot solid customLabel="Breakdown" />
               )}
               {machine.health_status === 'under_maintenance' && (
-                <Badge status="under_maintenance" dot customLabel="Under Maintenance" />
+                <Badge status="under_maintenance" dot solid customLabel="Under Maintenance" />
               )}
               {machine.health_status === 'spare' && (
-                <Badge status="spare" dot customLabel="Spare" />
+                <Badge status="spare" dot solid customLabel="Spare" />
               )}
               {(!machine.health_status || machine.health_status === 'active') && (
-                <Badge status="active" dot customLabel="Active" />
+                <Badge status="active" dot solid customLabel="Active" />
               )}
 
               <Badge
                 status={machine.status === 'rented' ? 'in_transit' : machine.status === 'under_maintenance' ? 'under_maintenance' : 'available'}
+                solid
                 customLabel={machine.status === 'rented' ? 'On Rent' : machine.status === 'under_maintenance' ? 'Under Maintenance' : 'Available'}
               />
             </View>
@@ -1296,29 +1463,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.cardHeaderLeft}>
                   <Info size={16} color="#0284c7" />
-                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="heading" style={{ color: theme.colors.ink }}>
                     Basic Info
                   </Text>
                 </View>
-                {canManage && (
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={() => {
-                      setEditSection('info');
-                      setEditModalVisible(true);
-                    }}
-                    style={[
-                      styles.headerActionBtnSm,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    accessibilityLabel="Edit Basic Info"
-                  >
-                    <Edit2 size={12} color={theme.colors.ink} />
-                    <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
-                  </Pressable>
-                )}
               </View>
 
               <View
@@ -1343,7 +1491,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   ]}
                 >
                   <View style={styles.specBoxHeader}>
-                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                       MACHINE ID
                     </Text>
                     <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)} accessibilityLabel="Copy Machine Code">
@@ -1354,7 +1502,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       )}
                     </Pressable>
                   </View>
-                  <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
+                  <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                     {machine.machine_id}
                   </Text>
                 </View>
@@ -1371,7 +1519,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   ]}
                 >
                   <View style={styles.specBoxHeader}>
-                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
+                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
                     {Boolean(machine.model) && (
                       <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.model, `Model "${machine.model}"`, setCopiedModel)} accessibilityLabel="Copy Model Name">
                         {copiedModel ? (
@@ -1382,7 +1530,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </Pressable>
                     )}
                   </View>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
                     {machine.model || '—'}
                   </Text>
                 </View>
@@ -1399,7 +1547,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   ]}
                 >
                   <View style={styles.specBoxHeader}>
-                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
+                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
                     {Boolean(machine.serial_number) && (
                       <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.serial_number, `Serial Number "${machine.serial_number}"`, setCopiedSerial)} accessibilityLabel="Copy Serial Number">
                         {copiedSerial ? (
@@ -1410,7 +1558,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </Pressable>
                     )}
                   </View>
-                  <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
+                  <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                     {machine.serial_number || '—'}
                   </Text>
                 </View>
@@ -1426,10 +1574,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     },
                   ]}
                 >
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     YEAR OF MFG (YUM)
                   </Text>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
+                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
                     {machine.year_of_mfg || '—'}
                   </Text>
                 </View>
@@ -1445,10 +1593,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     },
                   ]}
                 >
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     MANUFACTURER
                   </Text>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
                     {machine.manufacturer || '—'}
                   </Text>
                 </View>
@@ -1464,59 +1612,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     },
                   ]}
                 >
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
                     HOUR METER (HMR)
                   </Text>
-                  <Text style={[styles.specBoxValueHmr, { color: theme.colors.link }]}>
+                  <Text variant="mono" style={[styles.specBoxValueHmr, { color: theme.colors.link }]}>
                     {machine.hour_meter ?? 0} hrs
-                  </Text>
-                </View>
-
-                {/* 7. Supervisors */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <View style={styles.specBoxHeader}>
-                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SUPERVISORS</Text>
-                    {supervisors.length > 0 && (
-                      <View style={[styles.tabCountPill, { backgroundColor: '#0284c718' }]}>
-                        <Text style={[styles.tabCountText, { color: '#0284c7' }]}>{supervisors.length}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {supervisors.length > 0 ? supervisors.map((s: any) => s.full_name).join(', ') : '—'}
-                  </Text>
-                </View>
-
-                {/* 8. Operators */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <View style={styles.specBoxHeader}>
-                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>OPERATORS</Text>
-                    {operators.length > 0 && (
-                      <View style={[styles.tabCountPill, { backgroundColor: '#d9770618' }]}>
-                        <Text style={[styles.tabCountText, { color: '#d97706' }]}>{operators.length}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {operators.length > 0 ? operators.map((o: any) => o.full_name).join(', ') : '—'}
                   </Text>
                 </View>
               </View>
@@ -1535,7 +1635,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.cardHeaderLeft}>
                   <Users size={16} color="#0284c7" />
-                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="heading" style={{ color: theme.colors.ink }}>
                     Assigned Shift Personnel
                   </Text>
                 </View>
@@ -1556,7 +1656,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       accessibilityLabel="Manage Staff"
                     >
                       <Edit2 size={12} color={theme.colors.ink} />
-                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>
+                      <Text variant="label" style={{ color: theme.colors.ink }}>
                         {isSupervisor ? 'Assign' : 'Edit'}
                       </Text>
                     </Pressable>
@@ -1570,16 +1670,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
                       <Shield size={14} color="#0d9488" />
-                      <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
+                      <Text variant="subheading" style={{ color: theme.colors.ink }}>
                         Supervisors ({supervisors.length})
                       </Text>
                     </View>
                   </View>
 
                   {supervisors.length === 0 ? (
-                    <Text style={[styles.noStaffText, { color: theme.colors.mute }]}>
-                      No supervisors assigned to this machine.
-                    </Text>
+                    <EmptyState
+                      compact
+                      icon={<Shield size={20} color={theme.colors.mute} />}
+                      title="No Supervisors Assigned"
+                      description="Assign a site supervisor to monitor shifts and daily logs."
+                      actionLabel={canManage ? "Assign Supervisor" : undefined}
+                      onAction={canManage ? () => setAssignPersonnelModalVisible(true) : undefined}
+                    />
                   ) : (
                     supervisors.map((s: any, idx: number) => (
                       <View
@@ -1594,17 +1699,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       >
                         <View style={styles.personnelRowLeft}>
                           <View style={styles.personnelNameShiftRow}>
-                            <Text style={[styles.staffName, { color: theme.colors.ink }]}>
+                            <Text variant="body" style={{ color: theme.colors.ink }}>
                               {s.full_name}
                             </Text>
-                            <Text style={[styles.staffShiftTag, { color: theme.colors.mute }]}>
+                            <Text variant="micro" style={{ color: theme.colors.mute }}>
                               Shift {idx + 1}
                             </Text>
                           </View>
 
                           <View style={styles.clockRow}>
                             <Clock size={11} color="#0d9488" />
-                            <Text style={[styles.clockTimeText, { color: '#0d9488' }]}>
+                            <Text variant="micro" style={{ color: '#0d9488' }}>
                               {s.shift_time || '09:30 AM - 06:30 PM'}
                             </Text>
                           </View>
@@ -1645,16 +1750,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
                       <Wrench size={14} color="#d97706" />
-                      <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
+                      <Text variant="subheading" style={{ color: theme.colors.ink }}>
                         Operators ({operators.length})
                       </Text>
                     </View>
                   </View>
 
                   {operators.length === 0 ? (
-                    <Text style={[styles.noStaffText, { color: theme.colors.mute }]}>
-                      No operators assigned. Assign operators to enable 24h shift logging.
-                    </Text>
+                    <EmptyState
+                      compact
+                      icon={<Users size={20} color={theme.colors.mute} />}
+                      title="No Operators Assigned"
+                      description="Assign certified operators to log running hours for this machine."
+                      actionLabel={canAssignOperator ? "Assign Operator" : undefined}
+                      onAction={canAssignOperator ? () => setAssignPersonnelModalVisible(true) : undefined}
+                    />
                   ) : (
                     operators.map((o: any, idx: number) => (
                       <View
@@ -1669,17 +1779,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       >
                         <View style={styles.personnelRowLeft}>
                           <View style={styles.personnelNameShiftRow}>
-                            <Text style={[styles.staffName, { color: theme.colors.ink }]}>
+                            <Text variant="body" style={{ color: theme.colors.ink }}>
                               {o.full_name}
                             </Text>
-                            <Text style={[styles.staffShiftTag, { color: '#d97706' }]}>
+                            <Text variant="micro" style={{ color: '#d97706' }}>
                               {o.shift_code ? `Shift ${o.shift_code}` : `Shift ${idx + 1}`}
                             </Text>
                           </View>
 
                           <View style={styles.clockRow}>
                             <Clock size={11} color="#d97706" />
-                            <Text style={[styles.clockTimeText, { color: '#d97706' }]}>
+                            <Text variant="micro" style={{ color: '#d97706' }}>
                               {o.shift_time || '24h Rotating Shift'}
                             </Text>
                           </View>
@@ -1730,30 +1840,56 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.cardHeaderLeft}>
                   <Building2 size={16} color="#0284c7" />
-                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                  <Text variant="heading" style={{ color: theme.colors.ink }}>
                     Client Details
                   </Text>
                   {clientCode ? (
-                    <View style={styles.clientCodePill}>
-                      <Text style={styles.clientCodePillText}>{clientCode}</Text>
+                    <View
+                      style={[
+                        styles.clientCodePill,
+                        {
+                          backgroundColor: '#0284c7',
+                          borderColor: '#0284c7',
+                          borderWidth: 1,
+                          opacity: 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        variant="mono"
+                        style={[styles.clientCodePillText, { color: '#ffffff' }]}
+                      >
+                        {clientCode}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {fullSiteAddress ? (
-                    <Pressable variant="outline" haptic="tap"
+                    <Pressable
+                      variant="chip"
+                      haptic="select"
+                      activeOpacity={1.0}
+                      hitSlopToMin48
                       onPress={handleOpenMap}
                       style={[
                         styles.headerActionBtnSm,
                         {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
+                          backgroundColor: '#0284c7',
+                          borderColor: '#0284c7',
+                          borderWidth: 1,
+                          opacity: 1,
                         },
                       ]}
                       accessibilityLabel="Open Map Location"
                     >
-                      <MapPin size={12} color="#0284c7" />
-                      <Text style={[styles.headerActionBtnSmText, { color: '#0284c7' }]}>Map</Text>
+                      <MapPin size={12} color="#ffffff" />
+                      <Text
+                        variant="label"
+                        style={[styles.headerActionBtnSmText, { color: '#ffffff' }]}
+                      >
+                        Map
+                      </Text>
                     </Pressable>
                   ) : null}
                   {canManage && (
@@ -1772,7 +1908,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       accessibilityLabel="Edit Client Details"
                     >
                       <Edit2 size={12} color={theme.colors.ink} />
-                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
+                      <Text variant="label" style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>Edit</Text>
                     </Pressable>
                   )}
                 </View>
@@ -1783,70 +1919,76 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   <View
                     style={[
                       styles.clientGrid,
-                      Platform.OS === 'web' && ({
-                        display: 'grid',
-                        gridTemplateColumns: isMobile ? 'repeat(1, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))',
-                        gap: 10,
-                      } as any),
+                      Platform.OS === 'web'
+                        ? ({
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                            gap: 10,
+                          } as any)
+                        : {
+                            flexDirection: 'row',
+                            flexWrap: 'wrap',
+                            gap: 10,
+                          },
                     ]}
                   >
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
-                      <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CLIENT NAME</Text>
-                      <Text style={[styles.clientNameValue, { color: theme.colors.ink }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
+                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CLIENT NAME</Text>
+                      <Text variant="body" weight="medium" style={[styles.clientNameValue, { color: theme.colors.ink }]}>
                         {clientCompanyName}
                       </Text>
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
-                      <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
-                      <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
+                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
+                      <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
                         {clientContactPerson || '—'}
                       </Text>
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
-                      <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
+                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
                       {clientPhone ? (
                         <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={() => handleCall(clientPhone)}>
-                          <Text style={[styles.clickableLinkText, { color: theme.colors.link }]}>
+                          <Text variant="body" style={[styles.clickableLinkText, { color: theme.colors.link }]}>
                             {clientPhone}
                           </Text>
                         </Pressable>
                       ) : (
-                        <Text style={[styles.specBoxValue, { color: theme.colors.mute }]}>—</Text>
+                        <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.mute }]}>—</Text>
                       )}
                     </View>
 
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
-                      <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CITY & STATE</Text>
-                      <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
+                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
+                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CITY & STATE</Text>
+                      <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
                         {clientLocation || '—'}
                       </Text>
                     </View>
 
                     {clientGstin ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
-                          <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
+                          <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
                           <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientGstin, `GSTIN "${clientGstin}"`, setCopiedGstin)} accessibilityLabel="Copy GSTIN">
                             {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </Pressable>
                         </View>
-                        <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
+                        <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                           {clientGstin}
                         </Text>
                       </View>
                     ) : null}
 
                     {clientPan ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : isMobile ? '100%' : '48%' }]}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
                         <View style={styles.specBoxHeader}>
-                          <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
+                          <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
                           <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientPan, `PAN "${clientPan}"`, setCopiedPan)} accessibilityLabel="Copy PAN">
                             {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                           </Pressable>
                         </View>
-                        <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
+                        <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
                           {clientPan}
                         </Text>
                       </View>
@@ -1857,12 +1999,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   {fullSiteAddress ? (
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
-                        <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
+                        <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
                         <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(fullSiteAddress, 'Site Location', setCopiedSiteAddress)} accessibilityLabel="Copy Site Address">
                           {copiedSiteAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </Pressable>
                       </View>
-                      <Text style={[styles.addressText, { color: theme.colors.ink }]}>
+                      <Text variant="body" style={[styles.addressText, { color: theme.colors.ink }]}>
                         {fullSiteAddress}
                       </Text>
                     </View>
@@ -1872,61 +2014,29 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   {isBillingAddressDifferent && fullBillingAddress ? (
                     <View style={[styles.addressBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={styles.specBoxHeader}>
-                        <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>BILLING ADDRESS</Text>
+                        <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>BILLING ADDRESS</Text>
                         <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(fullBillingAddress, 'Billing Address', setCopiedBillingAddress)} accessibilityLabel="Copy Billing Address">
                           {copiedBillingAddress ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
                         </Pressable>
                       </View>
-                      <Text style={[styles.addressText, { color: theme.colors.ink }]}>
+                      <Text variant="body" style={[styles.addressText, { color: theme.colors.ink }]}>
                         {fullBillingAddress}
                       </Text>
                     </View>
                   ) : null}
-
-                  {/* Quick Action Touch Buttons (Call, WhatsApp) */}
-                  <View style={styles.quickTouchRow}>
-                    {clientPhone ? (
-                      <Pressable variant="outline" haptic="tap"
-                        onPress={() => handleCall(clientPhone)}
-                        style={[styles.touchActionBtn, { backgroundColor: '#16a34a', borderColor: '#16a34a' }]}
-                        accessibilityLabel="Call"
-                      >
-                        <Phone size={14} color="#ffffff" />
-                        <Text variant="label" style={[styles.touchActionText, { color: '#ffffff' }]}>Call</Text>
-                      </Pressable>
-                    ) : null}
-
-                    {clientPhone ? (
-                      <Pressable variant="outline" haptic="tap"
-                        onPress={() => handleWhatsApp(clientPhone)}
-                        style={[styles.touchActionBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}
-                        accessibilityLabel="WhatsApp"
-                      >
-                        <WhatsAppIcon size={14} color="#ffffff" />
-                        <Text variant="label" style={[styles.touchActionText, { color: '#ffffff' }]}>WhatsApp</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
                 </View>
               ) : (
-                <View style={styles.noClientBox}>
-                  <Building2 size={28} color={theme.colors.mute} />
-                  <Text style={[styles.noClientTitle, { color: theme.colors.ink, marginTop: 4 }]}>No Client Assigned</Text>
-                  <Text style={[styles.noClientSub, { color: theme.colors.mute }]}>
-                    This machine is currently available in the fleet inventory and has not been leased to a client account.
-                  </Text>
-                  {canManage && (
-                    <Pressable variant="outline" haptic="tap"
-                      onPress={() => {
-                        setEditSection('client');
-                        setEditModalVisible(true);
-                      }}
-                      style={[styles.headerActionBtnSm, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink, marginTop: 8, height: 34, paddingHorizontal: 12 }]}
-                    >
-                      <Text style={[styles.headerActionBtnSmText, { color: theme.colors.canvas }]}>Assign Client</Text>
-                    </Pressable>
-                  )}
-                </View>
+                <EmptyState
+                  compact
+                  icon={<Building2 size={24} color={theme.colors.mute} />}
+                  title="No Client Assigned"
+                  description="This machine is currently available in the fleet inventory and has not been leased to a client account."
+                  actionLabel={canManage ? "Assign Client" : undefined}
+                  onAction={canManage ? () => {
+                    setEditSection('client');
+                    setEditModalVisible(true);
+                  } : undefined}
+                />
               )}
             </View>
           </View>
@@ -1946,12 +2056,26 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             >
               {/* Header with Title and Total Hours Run Badge */}
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>
                   Hours Meter Logs
                 </Text>
                 {hasLoadedLogs && hourLogs && hourLogs.length > 0 && (
-                  <View style={[styles.totalHoursBadge, { backgroundColor: theme.colors.link + '18', borderColor: theme.colors.link + '35' }]}>
-                    <Text style={[styles.totalHoursText, { color: theme.colors.link }]}>
+                  <View
+                    style={[
+                      styles.totalHoursBadge,
+                      {
+                        backgroundColor: '#0284c7',
+                        borderColor: '#0284c7',
+                        borderWidth: 1,
+                        opacity: 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="micro"
+                      weight="semibold"
+                      style={[styles.totalHoursText, { color: '#ffffff' }]}
+                    >
                       +{totalHoursRun} hrs Run
                     </Text>
                   </View>
@@ -1962,27 +2086,33 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {isLoadingLogs && <MachineHMRSkeleton />}
 
               {/* Error State */}
-              {!isLoadingLogs && logsError && (
-                <View style={[styles.logsErrorBox, { backgroundColor: '#ef444415', borderColor: '#ef444430' }]}>
+              {!isLoadingLogs && Boolean(logsError) && (
+                <View
+                  style={[
+                    styles.logsErrorBox,
+                    {
+                      backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                      borderColor: isDark ? '#991b1b' : '#fecaca',
+                      borderWidth: 1,
+                      opacity: 1,
+                    },
+                  ]}
+                >
                   <AlertCircle size={15} color="#ef4444" />
-                  <Text style={styles.logsErrorText}>{logsError}</Text>
+                  <Text variant="caption" style={styles.logsErrorText}>{logsError}</Text>
                   <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={fetchHourLogs} style={styles.retryBtn}>
-                    <Text style={[styles.retryBtnText, { color: theme.colors.link }]}>Retry</Text>
+                    <Text variant="label" style={[styles.retryBtnText, { color: theme.colors.link }]}>Retry</Text>
                   </Pressable>
                 </View>
               )}
 
               {/* Empty State (No logs ever recorded) */}
               {!isLoadingLogs && !logsError && hasLoadedLogs && (!hourLogs || hourLogs.length === 0) && (
-                <View style={styles.emptyLogsWrap}>
-                  <Clock size={28} color={theme.colors.mute} />
-                  <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink }]}>
-                    No Running Meter Logs Logged
-                  </Text>
-                  <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
-                    Daily hour meter logbook entries recorded by machine operators will appear here.
-                  </Text>
-                </View>
+                <EmptyState
+                  icon={<Clock size={28} color={theme.colors.mute} />}
+                  title="No Running Meter Logs"
+                  description="Daily hour meter logbook entries recorded by machine operators will appear here."
+                />
               )}
 
               {/* Filter & Data Feed */}
@@ -2026,8 +2156,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       style={[
                         styles.filterToggleBtn,
                         (activeLogFilterCount > 0 || isFilterSidebarOpen) && {
-                          backgroundColor: isDark ? 'rgba(2, 132, 199, 0.22)' : '#e0f2fe',
+                          backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe',
                           borderColor: '#0284c7',
+                          opacity: 1,
                         },
                       ]}
                       accessibilityRole="button"
@@ -2041,17 +2172,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </View>
 
                   {/* Active Filter / Sort Chips Bar */}
-                  {(activeLogFilterCount > 0 || logSearch) && (
+                  {(activeLogFilterCount > 0 || logSearch.length > 0) && (
                     <View style={[styles.expandableFilters, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       {/* Date Preset Selector Chip */}
                       {logDatePreset !== 'all' && (
                         <Pressable variant="outline" haptic="tap"
                           onPress={() => setIsFilterSidebarOpen(true)}
-                          style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
+                          style={[styles.filterTriggerChip, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
                           accessibilityRole="button"
                           accessibilityLabel="Modify date filter"
                         >
-                          <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                          <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                             Date: {logDatePreset === '7d' ? '7 Days' : logDatePreset === '30d' ? '30 Days' : 'This Month'}
                           </Text>
                           <ChevronDown size={12} color={theme.colors.mute} />
@@ -2062,11 +2193,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       {logSortBy !== 'date_desc' && (
                         <Pressable variant="outline" haptic="tap"
                           onPress={() => setIsFilterSidebarOpen(true)}
-                          style={[styles.filterTriggerChip, { borderColor: theme.colors.hairline }]}
+                          style={[styles.filterTriggerChip, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
                           accessibilityRole="button"
                           accessibilityLabel="Modify sorting order"
                         >
-                          <Text style={[styles.filterChipText, { color: theme.colors.ink }]}>
+                          <Text variant="caption" style={[styles.filterChipText, { color: theme.colors.ink }]}>
                             Sort: {logSortBy === 'date_asc' ? 'Oldest' : logSortBy === 'hours_desc' ? 'High Hours' : 'Low Hours'}
                           </Text>
                           <ChevronDown size={12} color={theme.colors.mute} />
@@ -2079,82 +2210,33 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         accessibilityRole="button"
                         accessibilityLabel="Reset all filters"
                       >
-                        <Text style={[styles.resetFilterText, { color: theme.colors.error }]}>Reset</Text>
+                        <Text variant="caption" weight="medium" style={[styles.resetFilterText, { color: theme.colors.error }]}>Reset</Text>
                       </Pressable>
                     </View>
                   )}
 
                   {/* Log Cards List */}
                   {paginatedLogs.length === 0 ? (
-                    <View style={styles.emptyLogsWrap}>
-                      <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink }]}>
-                        No logs match your filter criteria
-                      </Text>
-                    </View>
+                    <EmptyState
+                      variant={logSearch ? 'no-results' : 'filtered'}
+                      title={logSearch ? "No Matching Logs" : "No Logs for Selected Filters"}
+                      description="Try resetting your search query or date range filters to view all hour meter records."
+                      actionLabel="Reset Filters"
+                      onAction={handleResetLogFilters}
+                    />
                   ) : (
-                    paginatedLogs.map((log: any) => (
-                      <View
-                        key={log.id}
-                        style={[
-                          styles.logCard,
-                          {
-                            backgroundColor: theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
-                          },
-                        ]}
-                      >
-                        <View style={styles.logCardTopRow}>
-                          <Text style={[styles.logDateText, { color: theme.colors.ink }]}>
-                            {formatDate(log.log_date)}
-                          </Text>
-                          <View style={[styles.logOperatorBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                            <Text style={[styles.logOperatorName, { color: theme.colors.ink }]}>
-                              {log.operator?.full_name || 'Operator'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Meter Box */}
-                        <View style={[styles.logMeterBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                          <View>
-                            <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>HOUR METER READINGS</Text>
-                            <Text style={[styles.logMeterNumbers, { color: theme.colors.ink }]}>
-                              {log.start_meter || 0} → {log.end_meter || 0}
-                            </Text>
-                          </View>
-                          <View style={styles.runningHoursBadge}>
-                            <Text style={styles.runningHoursBadgeText}>
-                              +{log.running_hours || 0} hrs
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Operating Hours & Breakdown Details */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderTopColor: theme.colors.hairline, borderBottomWidth: log.remarks ? 1 : 0, borderBottomColor: theme.colors.hairline }}>
-                          <Text variant="mono" style={{ color: theme.colors.ink }}>
-                            Worked: <Text>{log.running_hours || 0} hrs</Text>
-                          </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>Breakdown:</Text>
-                            {Boolean(log.is_breakdown || (Number(log.breakdown_hours) > 0)) ? (
-                              <Text variant="mono" style={{ color: '#e11d48' }}>
-                                {Number(log.breakdown_hours) > 0 ? `${log.breakdown_hours} hrs` : 'Breakdown'}
-                              </Text>
-                            ) : (
-                              <Text variant="mono" style={{ color: '#059669' }}>
-                                0
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Remarks */}
-                        {log.remarks ? (
-                          <Text style={[styles.logRemarksText, { color: theme.colors.mute, marginTop: 2 }]} numberOfLines={2}>
-                            &ldquo;{log.remarks}&rdquo;
-                          </Text>
-                        ) : null}
-                      </View>
+                    paginatedLogs.map((log: any, idx: number, arr: any[]) => (
+                      <RunningLogShiftCard
+                        key={log.id || idx}
+                        log={{
+                          ...log,
+                          machine: log.machine || machine,
+                          client: log.client || machine.client,
+                          machine_code: log.machine_code || machine.machine_id,
+                        }}
+                        logsViewMode="machine"
+                        isLast={idx === arr.length - 1}
+                      />
                     ))
                   )}
 
@@ -2195,7 +2277,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             >
               {/* Header with Title and Total Records Badge */}
               <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                <Text variant="heading" style={{ color: theme.colors.ink }}>
                   Machine Audit Trail
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -2204,23 +2286,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       style={[
                         styles.totalHoursBadge,
                         {
-                          backgroundColor: theme.colors.link + '18',
-                          borderColor: theme.colors.link + '35',
+                          backgroundColor: isDark ? '#1e3a8a' : '#eff6ff',
+                          borderColor: isDark ? '#2563eb' : '#bfdbfe',
                         },
                       ]}
                     >
-                      <Text style={[styles.totalHoursText, { color: theme.colors.link }]}>
+                      <Text variant="caption" style={[styles.totalHoursText, { color: isDark ? '#93c5fd' : '#1d4ed8' }]}>
                         {auditLogs.length} Records
                       </Text>
                     </View>
                   )}
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={fetchAuditLogs}
-                    disabled={isLoadingAudit}
-                    style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
-                  >
-                    <RefreshCw size={13} color={theme.colors.ink} />
-                  </Pressable>
                 </View>
               </View>
 
@@ -2228,100 +2303,218 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               <View style={[styles.auditControlsCard, { borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }]}>
                 {/* Filter Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditFilterStrip}>
-                  <Pressable variant="outline" haptic="tap"
+                  <Pressable
+                    variant="chip"
+                    haptic="select"
+                    activeOpacity={1.0}
+                    hitSlopToMin48
                     onPress={() => setAuditCategory('all')}
                     style={[
                       styles.auditFilterChip,
                       {
-                        backgroundColor: auditCategory === 'all' ? theme.colors.ink : theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
+                        backgroundColor:
+                          auditCategory === 'all'
+                            ? isDark
+                              ? '#fafafa'
+                              : '#171717'
+                            : isDark
+                            ? '#262626'
+                            : '#f4f4f5',
+                        borderColor:
+                          auditCategory === 'all'
+                            ? isDark
+                              ? '#fafafa'
+                              : '#171717'
+                            : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.auditFilterChipText,
-                        { color: auditCategory === 'all' ? theme.colors.canvas : theme.colors.mute },
+                        {
+                          color:
+                            auditCategory === 'all'
+                              ? isDark
+                                ? '#171717'
+                                : '#ffffff'
+                              : theme.colors.ink,
+                        },
                       ]}
                     >
                       All ({auditCategoryCounts.all})
                     </Text>
                   </Pressable>
 
-                  <Pressable variant="outline" haptic="tap"
+                  <Pressable
+                    variant="chip"
+                    haptic="select"
+                    activeOpacity={1.0}
+                    hitSlopToMin48
                     onPress={() => setAuditCategory('hour_logs')}
                     style={[
                       styles.auditFilterChip,
                       {
-                        backgroundColor: auditCategory === 'hour_logs' ? '#059669' : theme.colors.canvas,
-                        borderColor: auditCategory === 'hour_logs' ? '#059669' : theme.colors.hairline,
+                        backgroundColor:
+                          auditCategory === 'hour_logs'
+                            ? '#059669'
+                            : isDark
+                            ? '#262626'
+                            : '#f4f4f5',
+                        borderColor:
+                          auditCategory === 'hour_logs'
+                            ? isDark
+                              ? '#10b981'
+                              : '#059669'
+                            : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.auditFilterChipText,
-                        { color: auditCategory === 'hour_logs' ? '#ffffff' : theme.colors.mute },
+                        {
+                          color:
+                            auditCategory === 'hour_logs'
+                              ? '#ffffff'
+                              : theme.colors.ink,
+                        },
                       ]}
                     >
                       HMR Logs ({auditCategoryCounts.hour_logs})
                     </Text>
                   </Pressable>
 
-                  <Pressable variant="outline" haptic="tap"
+                  <Pressable
+                    variant="chip"
+                    haptic="select"
+                    activeOpacity={1.0}
+                    hitSlopToMin48
                     onPress={() => setAuditCategory('breakdowns')}
                     style={[
                       styles.auditFilterChip,
                       {
-                        backgroundColor: auditCategory === 'breakdowns' ? '#e11d48' : theme.colors.canvas,
-                        borderColor: auditCategory === 'breakdowns' ? '#e11d48' : theme.colors.hairline,
+                        backgroundColor:
+                          auditCategory === 'breakdowns'
+                            ? isDark
+                              ? '#be123c'
+                              : '#e11d48'
+                            : isDark
+                            ? '#262626'
+                            : '#f4f4f5',
+                        borderColor:
+                          auditCategory === 'breakdowns'
+                            ? isDark
+                              ? '#f43f5e'
+                              : '#e11d48'
+                            : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.auditFilterChipText,
-                        { color: auditCategory === 'breakdowns' ? '#ffffff' : theme.colors.mute },
+                        {
+                          color:
+                            auditCategory === 'breakdowns'
+                              ? '#ffffff'
+                              : theme.colors.ink,
+                        },
                       ]}
                     >
                       Breakdowns ({auditCategoryCounts.breakdowns})
                     </Text>
                   </Pressable>
 
-                  <Pressable variant="outline" haptic="tap"
+                  <Pressable
+                    variant="chip"
+                    haptic="select"
+                    activeOpacity={1.0}
+                    hitSlopToMin48
                     onPress={() => setAuditCategory('assignments')}
                     style={[
                       styles.auditFilterChip,
                       {
-                        backgroundColor: auditCategory === 'assignments' ? '#0284c7' : theme.colors.canvas,
-                        borderColor: auditCategory === 'assignments' ? '#0284c7' : theme.colors.hairline,
+                        backgroundColor:
+                          auditCategory === 'assignments'
+                            ? isDark
+                              ? '#0ea5e9'
+                              : '#0284c7'
+                            : isDark
+                            ? '#262626'
+                            : '#f4f4f5',
+                        borderColor:
+                          auditCategory === 'assignments'
+                            ? isDark
+                              ? '#38bdf8'
+                              : '#0284c7'
+                            : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.auditFilterChipText,
-                        { color: auditCategory === 'assignments' ? '#ffffff' : theme.colors.mute },
+                        {
+                          color:
+                            auditCategory === 'assignments'
+                              ? '#ffffff'
+                              : theme.colors.ink,
+                        },
                       ]}
                     >
                       Assignments ({auditCategoryCounts.assignments})
                     </Text>
                   </Pressable>
 
-                  <Pressable variant="outline" haptic="tap"
+                  <Pressable
+                    variant="chip"
+                    haptic="select"
+                    activeOpacity={1.0}
+                    hitSlopToMin48
                     onPress={() => setAuditCategory('updates')}
                     style={[
                       styles.auditFilterChip,
                       {
-                        backgroundColor: auditCategory === 'updates' ? '#d97706' : theme.colors.canvas,
-                        borderColor: auditCategory === 'updates' ? '#d97706' : theme.colors.hairline,
+                        backgroundColor:
+                          auditCategory === 'updates'
+                            ? '#d97706'
+                            : isDark
+                            ? '#262626'
+                            : '#f4f4f5',
+                        borderColor:
+                          auditCategory === 'updates'
+                            ? isDark
+                              ? '#f59e0b'
+                              : '#d97706'
+                            : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.auditFilterChipText,
-                        { color: auditCategory === 'updates' ? '#ffffff' : theme.colors.mute },
+                        {
+                          color:
+                            auditCategory === 'updates'
+                              ? '#ffffff'
+                              : theme.colors.ink,
+                        },
                       ]}
                     >
                       Updates ({auditCategoryCounts.updates})
@@ -2334,37 +2527,37 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {isLoadingAudit && <MachineAuditSkeleton />}
 
               {/* Error State */}
-              {!isLoadingAudit && auditError && (
+              {!isLoadingAudit && Boolean(auditError) && (
                 <View style={styles.emptyLogsWrap}>
                   <AlertCircle size={28} color="#e11d48" />
-                  <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink, marginTop: 6 }]}>
+                  <Text variant="heading" style={[styles.emptyLogsTitle, { color: theme.colors.ink, marginTop: 6 }]}>
                     Failed to load audit trail
                   </Text>
-                  <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
+                  <Text variant="caption" style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
                     {auditError}
                   </Text>
                   <Pressable variant="outline" haptic="tap"
                     onPress={fetchAuditLogs}
                     style={[styles.pageBtn, { borderColor: theme.colors.hairline, marginTop: 8 }]}
                   >
-                    <Text style={[styles.pageBtnText, { color: theme.colors.link }]}>Retry</Text>
+                    <Text variant="label" style={[styles.pageBtnText, { color: theme.colors.link }]}>Retry</Text>
                   </Pressable>
                 </View>
               )}
 
               {/* Empty State */}
               {!isLoadingAudit && !auditError && hasLoadedAudit && filteredAuditLogs.length === 0 && (
-                <View style={styles.emptyLogsWrap}>
-                  <Clock size={32} color={theme.colors.mute} />
-                  <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink }]}>
-                    {auditCategory !== 'all' ? 'No Matching Records' : 'No Audit History'}
-                  </Text>
-                  <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
-                    {auditCategory !== 'all'
-                      ? 'No audit logs matched your selected category filter.'
-                      : 'No audit records have been recorded for this machine.'}
-                  </Text>
-                </View>
+                <EmptyState
+                  variant={auditCategory !== 'all' ? 'filtered' : 'empty'}
+                  title={auditCategory !== 'all' ? 'No Matching Records' : 'No Audit History'}
+                  description={
+                    auditCategory !== 'all'
+                      ? `No audit logs matched category "${auditCategory.replace('_', ' ')}".`
+                      : 'No audit records have been recorded for this machine.'
+                  }
+                  actionLabel={auditCategory !== 'all' ? 'Show All Categories' : undefined}
+                  onAction={auditCategory !== 'all' ? () => setAuditCategory('all') : undefined}
+                />
               )}
 
               {/* Structured Audit Cards List Grouped by Date */}
@@ -2381,7 +2574,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
                           ]}
                         >
-                          <Text style={[styles.auditDateBadgeText, { color: theme.colors.ink }]}>
+                          <Text variant="caption" style={[styles.auditDateBadgeText, { color: theme.colors.ink }]}>
                             {group.dateLabel}
                           </Text>
                         </View>
@@ -2391,16 +2584,28 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       {/* Cards in group */}
                       <View style={styles.auditListWrap}>
                         {group.logs.map((log) => {
-                          const isHourLog = (log.action || '').toLowerCase().includes('hour_logged');
+                          const actLower = (log.action || '').toLowerCase();
+                          const entityLower = (log.entity_type || '').toLowerCase();
+
+                          const isHourLog =
+                            actLower.includes('hour_logged') ||
+                            actLower.includes('assisted_override') ||
+                            (actLower === 'insert' && entityLower === 'machine_hour_logs') ||
+                            entityLower === 'machine_hour_logs';
+
                           const isAssignLog =
-                            (log.action || '').toLowerCase().includes('operator_assigned') ||
-                            (log.action || '').toLowerCase().includes('operators_updated') ||
-                            (log.action || '').toLowerCase().includes('reassigned_supervisor') ||
-                            (log.action || '').toLowerCase().includes('supervisors_updated') ||
-                            (log.action || '').toLowerCase().includes('assign');
+                            actLower.includes('operator_shift_assigned') ||
+                            actLower.includes('operator_assigned') ||
+                            actLower.includes('operators_updated') ||
+                            actLower.includes('reassigned_supervisor') ||
+                            actLower.includes('supervisors_updated') ||
+                            actLower.includes('assign') ||
+                            entityLower === 'operator_machine_assignment';
+
                           const isStatusLog =
-                            (log.action || '').toLowerCase().includes('operational_status') ||
-                            (log.action || '').toLowerCase().includes('status');
+                            actLower.includes('health_status_changed') ||
+                            actLower.includes('operational_status') ||
+                            actLower.includes('status');
 
                           const actorName = log.actor_name || log.user?.full_name || 'System Operator';
                           const actorRole = log.actor_role || log.user?.role || 'Staff';
@@ -2409,14 +2614,28 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           const hasDiffs = log.diffs && log.diffs.length > 0;
                           const isPureRemoval = hasDeletions && (!hasDiffs || log.diffs.every((d: any) => d.updated === 'None'));
 
+                          const badgeBg = isHourLog
+                            ? '#059669'
+                            : isPureRemoval
+                            ? '#dc2626'
+                            : isAssignLog
+                            ? '#0284c7'
+                            : isStatusLog
+                            ? '#d97706'
+                            : '#475569';
+
                           return (
                             <View
                               key={log.id}
                               style={[
                                 styles.auditCard,
                                 {
-                                  backgroundColor: log.isDeletionEvent ? '#e11d4808' : theme.colors.canvas,
-                                  borderColor: log.isDeletionEvent ? '#e11d4830' : theme.colors.hairline,
+                                  backgroundColor: log.isDeletionEvent
+                                    ? (isDark ? '#450a0a' : '#fef2f2')
+                                    : (isDark ? '#171717' : '#ffffff'),
+                                  borderColor: log.isDeletionEvent
+                                    ? (isDark ? '#991b1b' : '#fecaca')
+                                    : theme.colors.hairline,
                                 },
                               ]}
                             >
@@ -2427,40 +2646,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                     style={[
                                       styles.runningHoursBadge,
                                       {
-                                        backgroundColor: isHourLog
-                                          ? '#05966918'
-                                          : isPureRemoval
-                                          ? '#e11d4818'
-                                          : isAssignLog
-                                          ? '#0284c718'
-                                          : isStatusLog
-                                          ? '#d9770618'
-                                          : theme.colors.hairline,
-                                        borderColor: isHourLog
-                                          ? '#05966935'
-                                          : isPureRemoval
-                                          ? '#e11d4835'
-                                          : isAssignLog
-                                          ? '#0284c735'
-                                          : isStatusLog
-                                          ? '#d9770635'
-                                          : theme.colors.hairline,
+                                        backgroundColor: badgeBg,
+                                        borderColor: badgeBg,
+                                        borderRadius: radiusNumeric.full,
+                                        borderWidth: 1,
+                                        opacity: 1,
                                       },
                                     ]}
                                   >
                                     <Text
+                                      variant="micro"
+                                      weight="semibold"
                                       style={[
                                         styles.runningHoursBadgeText,
                                         {
-                                          color: isHourLog
-                                            ? '#059669'
-                                            : isPureRemoval
-                                            ? '#e11d48'
-                                            : isAssignLog
-                                            ? '#0284c7'
-                                            : isStatusLog
-                                            ? '#d97706'
-                                            : theme.colors.ink,
+                                          color: '#ffffff',
                                         },
                                       ]}
                                     >
@@ -2476,11 +2676,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                     </Text>
                                   </View>
 
-                                  <Text style={[styles.auditCardActorName, { color: theme.colors.ink }]} numberOfLines={1}>
+                                  <Text variant="body" style={[styles.auditCardActorName, { color: theme.colors.ink }]} numberOfLines={1}>
                                     {actorName}
                                   </Text>
 
                                   <Text
+                                    variant="micro"
                                     style={[
                                       styles.auditCardActorRole,
                                       {
@@ -2497,14 +2698,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                               {/* ── DELETIONS (If anything was deleted/removed) ── */}
                               {hasDeletions && (
-                                <View style={[styles.auditDeletionBox, { backgroundColor: '#e11d480e', borderColor: '#e11d4825' }]}>
+                                <View style={[styles.auditDeletionBox, { backgroundColor: isDark ? '#450a0a' : '#fef2f2', borderColor: isDark ? '#991b1b' : '#fecaca' }]}>
                                   <View style={styles.auditDeletionHeader}>
                                     <Trash2 size={12} color="#e11d48" />
-                                    <Text style={styles.auditDeletionTitle}>Deleted / Removed Details</Text>
+                                    <Text variant="label" style={[styles.auditDeletionTitle, { color: '#e11d48' }]}>Deleted / Removed Details</Text>
                                   </View>
                                   <View style={{ gap: 4 }}>
                                     {log.deletions.map((del: any, dIdx: number) => (
-                                      <View key={dIdx} style={[styles.auditDeletionItem, { backgroundColor: theme.colors.canvasElevated, borderColor: '#e11d4820' }]}>
+                                      <View key={dIdx} style={[styles.auditDeletionItem, { backgroundColor: theme.colors.canvasElevated, borderColor: isDark ? '#991b1b' : '#fecaca' }]}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                           <Text variant="caption" style={{ color: '#e11d48', textTransform: 'uppercase' }}>
                                             {del.label}:
@@ -2529,18 +2730,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                 <View style={[styles.auditDiffBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                                   <View style={styles.auditDiffHeader}>
                                     <ArrowRight size={11} color={theme.colors.link} />
-                                    <Text style={[styles.auditDiffTitle, { color: theme.colors.mute }]}>Previous vs Updated Details</Text>
+                                    <Text variant="label" style={[styles.auditDiffTitle, { color: theme.colors.mute }]}>Previous vs Updated Details</Text>
                                   </View>
                                   <View style={{ gap: 4 }}>
                                     {log.diffs.map((diff: any, dfIdx: number) => (
                                       <View key={dfIdx} style={[styles.auditDiffRow, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                                        <Text style={[styles.auditDiffLabel, { color: theme.colors.ink }]}>{diff.label}:</Text>
+                                        <Text variant="caption" style={[styles.auditDiffLabel, { color: theme.colors.ink }]}>{diff.label}:</Text>
                                         <View style={styles.auditDiffValuesRow}>
-                                          <Text style={[styles.auditDiffPrevText, { color: theme.colors.mute }]}>
+                                          <Text variant="caption" style={[styles.auditDiffPrevText, { color: theme.colors.mute }]}>
                                             Prev: {diff.previous}
                                           </Text>
                                           <ArrowRight size={10} color="#059669" />
-                                          <Text style={styles.auditDiffUpdatedText}>
+                                          <Text variant="caption" style={[styles.auditDiffUpdatedText, { color: isDark ? '#34d399' : '#059669' }]}>
                                             Updated: {diff.updated}
                                           </Text>
                                         </View>
@@ -2551,7 +2752,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                               )}
 
                               {/* Meaningful Operational Content: Single Layout for Hour Log */}
-                              {isHourLog && log.metadata && (
+                              {Boolean(isHourLog && log.metadata) && (
                                 <View style={{ gap: 6 }}>
                                   {/* Single unified metrics strip (Worked : 4 hrs, Meter, Shift, Breakdown: 0 in green / time in red) */}
                                   <View
@@ -2581,7 +2782,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                       <Text variant="caption" style={{ color: theme.colors.mute }}>Meter:</Text>
                                       <Text variant="mono" style={{ color: theme.colors.ink }}>
                                         {log.metadata.startMeter ?? log.metadata.start_meter ?? '—'} →{' '}
-                                        <Text style={{ color: '#059669' }}>
+                                        <Text variant="mono" style={{ color: '#059669' }}>
                                           {log.metadata.endMeter ?? log.metadata.end_meter ?? '—'}
                                         </Text>
                                       </Text>
@@ -2615,25 +2816,26 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                   </View>
 
                                   {/* Breakdown reason single note */}
-                                  {log.metadata.isBreakdown && log.metadata.breakdownReason && (
+                                  {Boolean(log.metadata.isBreakdown && log.metadata.breakdownReason) && (
                                     <View
                                       style={[
                                         styles.auditBreakdownBanner,
-                                        { backgroundColor: '#e11d4812', borderColor: '#e11d4835' },
+                                        { backgroundColor: isDark ? '#450a0a' : '#fef2f2', borderColor: isDark ? '#991b1b' : '#fecaca' },
                                       ]}
                                     >
                                       <AlertCircle size={12} color="#e11d48" />
-                                      <Text style={[styles.auditBreakdownText, { color: '#e11d48' }]}>
+                                      <Text variant="caption" style={[styles.auditBreakdownText, { color: '#e11d48' }]}>
                                         Reason: {log.metadata.breakdownReason}
                                       </Text>
                                     </View>
                                   )}
 
                                   {/* Location */}
-                                  {log.metadata.location && (
+                                  {Boolean(log.metadata.location) && (
                                     <View style={styles.auditLocationRow}>
                                       <MapPin size={11} color={theme.colors.link} />
                                       <Text
+                                        variant="caption"
                                         style={[styles.auditLocationText, { color: theme.colors.mute }]}
                                         numberOfLines={1}
                                       >
@@ -2654,7 +2856,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                   <Clock size={10} color={theme.colors.mute} />
-                                  <Text style={[styles.auditCardTimeText, { color: theme.colors.mute }]}>
+                                  <Text variant="micro" style={[styles.auditCardTimeText, { color: theme.colors.mute }]}>
                                     {formatTimeWithSecondsMobile(log.created_at)}
                                   </Text>
                                 </View>
@@ -2671,7 +2873,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                   },
                                 ]}
                               >
-                                <Text style={[styles.viewDetailsBtnTextMobile, { color: '#FFFFFF' }]}>
+                                <Text variant="label" style={[styles.viewDetailsBtnTextMobile, { color: '#FFFFFF' }]}>
                                   View Details
                                 </Text>
                               </Pressable>
@@ -2704,26 +2906,29 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       styles.runningHoursBadge,
                       {
                         backgroundColor: selectedMobileAuditLog?.isBreakdown
-                          ? '#e11d4818'
+                          ? isDark ? '#450a0a' : '#fee2e2'
                           : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
-                          ? '#05966918'
-                          : theme.colors.hairline,
+                          ? isDark ? '#064e3b' : '#d1fae5'
+                          : theme.colors.canvas,
                         borderColor: selectedMobileAuditLog?.isBreakdown
-                          ? '#e11d4835'
+                          ? isDark ? '#991b1b' : '#fecaca'
                           : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
-                          ? '#05966935'
+                          ? isDark ? '#047857' : '#a7f3d0'
                           : theme.colors.hairline,
+                        opacity: 1,
                       },
                     ]}
                   >
                     <Text
+                      variant="micro"
+                      weight="semibold"
                       style={[
                         styles.runningHoursBadgeText,
                         {
                           color: selectedMobileAuditLog?.isBreakdown
-                            ? '#e11d48'
+                            ? isDark ? '#fca5a5' : '#b91c1c'
                             : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
-                            ? '#059669'
+                            ? isDark ? '#a7f3d0' : '#065f46'
                             : theme.colors.ink,
                         },
                       ]}
@@ -2735,7 +2940,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         : 'Audit Record'}
                     </Text>
                   </View>
-                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                  <Text variant="heading" style={{ color: theme.colors.ink }} numberOfLines={1}>
                     Audit Details
                   </Text>
                 </View>
@@ -2752,16 +2957,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             </View>
 
             {/* Scrollable Audit Details Body */}
-            {selectedMobileAuditLog && (
+            {Boolean(selectedMobileAuditLog) && (
               <ScrollView style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
                 <View style={{ gap: 12, paddingBottom: 24 }}>
                   {/* Level 1: Actor & Authorization */}
                   <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                    <Text variant="micro" style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
                       ACTOR & AUTHORIZATION
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: theme.colors.ink }}>
+                      <Text variant="body" weight="medium" style={{ color: theme.colors.ink }}>
                         {selectedMobileAuditLog.actor_name || selectedMobileAuditLog.user?.full_name || 'System Operator'}
                       </Text>
                       <Text variant="caption" style={{ color: theme.colors.mute, textTransform: 'capitalize' }}>
@@ -2772,7 +2977,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   {/* Level 2: Target Machine Info */}
                   <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                    <Text variant="micro" style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
                       TARGET MACHINE CONTEXT
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
@@ -2798,9 +3003,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </View>
 
                   {/* Level 3: Breakdown or Operational Shift & Meter */}
-                  {selectedMobileAuditLog.isBreakdown && (
-                    <View style={[styles.auditModalSection, { backgroundColor: '#e11d4812', borderColor: '#e11d4835' }]}>
-                      <Text style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
+                  {Boolean(selectedMobileAuditLog.isBreakdown) && (
+                    <View
+                      style={[
+                        styles.auditModalSection,
+                        {
+                          backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                          borderColor: isDark ? '#991b1b' : '#fecaca',
+                          borderWidth: 1,
+                        },
+                      ]}
+                    >
+                      <Text variant="micro" style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
                         BREAKDOWN INFORMATION
                       </Text>
                       <View style={{ gap: 6 }}>
@@ -2810,7 +3024,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             {selectedMobileAuditLog.metadata?.breakdownDuration || (selectedMobileAuditLog.metadata?.breakdownHours ? `${selectedMobileAuditLog.metadata.breakdownHours}h` : 'Breakdown')}
                           </Text>
                         </View>
-                        {selectedMobileAuditLog.metadata?.breakdownReason && (
+                        {Boolean(selectedMobileAuditLog.metadata?.breakdownReason) && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                             <Text variant="caption" style={{ color: theme.colors.mute }}>Reason:</Text>
                             <Text variant="caption" style={{ color: theme.colors.ink }}>
@@ -2822,9 +3036,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </View>
                   )}
 
-                  {(selectedMobileAuditLog.action || '').toLowerCase().includes('hour_logged') && selectedMobileAuditLog.metadata && (
+                  {Boolean((selectedMobileAuditLog.action || '').toLowerCase().includes('hour_logged') && selectedMobileAuditLog.metadata) && (
                     <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                      <Text variant="micro" style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
                         OPERATIONAL METRICS
                       </Text>
                       <View style={{ gap: 6 }}>
@@ -2838,7 +3052,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           <Text variant="caption" style={{ color: theme.colors.mute }}>Meter Range:</Text>
                           <Text variant="mono" style={{ color: theme.colors.ink }}>
                             {selectedMobileAuditLog.metadata.startMeter ?? selectedMobileAuditLog.metadata.start_meter ?? '—'} →{' '}
-                            <Text style={{ color: '#059669' }}>
+                            <Text variant="mono" style={{ color: '#059669' }}>
                               {selectedMobileAuditLog.metadata.endMeter ?? selectedMobileAuditLog.metadata.end_meter ?? '—'}
                             </Text>
                           </Text>
@@ -2855,7 +3069,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             {formatShiftTimingWithDateMobile(selectedMobileAuditLog.metadata)}
                           </Text>
                         </View>
-                        {selectedMobileAuditLog.metadata.location && (
+                        {Boolean(selectedMobileAuditLog.metadata?.location) && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text variant="caption" style={{ color: theme.colors.mute }}>Location:</Text>
                             <Text variant="caption" style={{ color: theme.colors.ink, maxWidth: '65%' }} numberOfLines={1}>
@@ -2868,9 +3082,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   )}
 
                   {/* Level 4: Diffs & Deletions */}
-                  {selectedMobileAuditLog.diffs && selectedMobileAuditLog.diffs.length > 0 && (
+                  {Boolean(selectedMobileAuditLog.diffs && selectedMobileAuditLog.diffs.length > 0) && (
                     <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                      <Text variant="micro" style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
                         CHANGED FIELDS COMPARISON
                       </Text>
                       <View style={{ gap: 6 }}>
@@ -2894,9 +3108,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </View>
                   )}
 
-                  {selectedMobileAuditLog.deletions && selectedMobileAuditLog.deletions.length > 0 && (
-                    <View style={[styles.auditModalSection, { backgroundColor: '#e11d4810', borderColor: '#e11d4825' }]}>
-                      <Text style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
+                  {Boolean(selectedMobileAuditLog.deletions && selectedMobileAuditLog.deletions.length > 0) && (
+                    <View
+                      style={[
+                        styles.auditModalSection,
+                        {
+                          backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                          borderColor: isDark ? '#991b1b' : '#fecaca',
+                          borderWidth: 1,
+                        },
+                      ]}
+                    >
+                      <Text variant="micro" style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
                         DELETED / REMOVED DETAILS
                       </Text>
                       <View style={{ gap: 6 }}>
@@ -2921,12 +3144,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                   {/* Level 5: Audit ID & System Info */}
                   <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                    <Text variant="micro" style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
                       AUDIT METADATA
                     </Text>
                     <View style={{ gap: 4 }}>
                       <Text variant="caption" style={{ color: theme.colors.mute }}>
-                        Action: <Text style={{ color: theme.colors.ink }}>{selectedMobileAuditLog.action}</Text>
+                        Action: <Text variant="caption" style={{ color: theme.colors.ink }}>{selectedMobileAuditLog.action}</Text>
                       </Text>
                       <Text variant="caption" style={{ color: theme.colors.mute }}>
                         Log ID: <Text variant="mono" style={{ color: theme.colors.ink }}>{selectedMobileAuditLog.id}</Text>
@@ -2943,7 +3166,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 onPress={() => setSelectedMobileAuditLog(null)}
                 style={[styles.pageBtn, { borderColor: theme.colors.hairline, width: '100%', minHeight: 44 }]}
               >
-                <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>
+                <Text variant="label" style={[styles.pageBtnText, { color: theme.colors.ink }]}>
                   Close
                 </Text>
               </Pressable>
@@ -3033,23 +3256,32 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         </FilterCategoryCard>
       </FilterSidebar>
 
-      {/* Hero Edit Options Modal Popup */}
-      <AppModal
+      {/* Hero Edit Options Anchored Popover */}
+      <Modal
         visible={heroMenuVisible}
-        onClose={() => setHeroMenuVisible(false)}
-        variant="bottom"
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setHeroMenuVisible(false)}
       >
-        <View
-          style={[
-            styles.heroMenuPopup,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
+        <Pressable
+          style={styles.heroMenuOverlay}
+          onPress={() => setHeroMenuVisible(false)}
         >
+          <View
+            style={[
+              styles.heroMenuPopover,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+                top: heroMenuCoords?.top ?? 120,
+                right: heroMenuCoords?.right ?? 16,
+              },
+            ]}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }}>
-              <Text style={[styles.heroMenuHeaderTitle, { color: theme.colors.mute }]}>
+              <Text variant="micro" style={[styles.heroMenuHeaderTitle, { color: theme.colors.mute }]}>
                 EDIT MACHINE OPTIONS
               </Text>
               <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setHeroMenuVisible(false)} accessibilityLabel="Close menu">
@@ -3065,11 +3297,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 setEditModalVisible(true);
               }}
             >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: '#f59e0b18' }]}>
+              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#78350f' : '#fef3c7', opacity: 1 }]}>
                 <Wrench size={16} color="#d97706" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
                   Edit Machine Info
                 </Text>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -3085,11 +3317,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 setAssignPersonnelModalVisible(true);
               }}
             >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: '#0d948818' }]}>
+              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#042f2e' : '#ccfbf1', opacity: 1 }]}>
                 <Shield size={16} color="#0d9488" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
                   Edit Personnel
                 </Text>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -3106,11 +3338,11 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 setEditModalVisible(true);
               }}
             >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: '#0284c718' }]}>
+              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#1e3a8a' : '#e0f2fe', opacity: 1 }]}>
                 <Building2 size={16} color="#0284c7" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
+                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
                   Edit Client Assignment
                 </Text>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -3119,7 +3351,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               </View>
             </Pressable>
           </View>
-      </AppModal>
+        </Pressable>
+      </Modal>
 
       {/* Shared Link Preview Modal */}
       <SharedLinkPreviewCard
@@ -3137,9 +3370,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         onClose={() => setAssignPersonnelModalVisible(false)}
         initialMachineId={machine.id}
         userRole={userRole || undefined}
-        onSuccess={() => {
-          handleRefresh();
-          if (onMachineUpdated) onMachineUpdated(machine);
+        onSuccess={async () => {
+          try {
+            const { data } = await supabase
+              .from('machines')
+              .select(MACHINE_SELECT_COLUMNS)
+              .eq('id', machine.id)
+              .maybeSingle();
+            if (data) {
+              const fullRecord = {
+                ...data,
+                supervisors: data.current_supervisor ? [data.current_supervisor] : [],
+                operators: data.current_operator ? [data.current_operator] : [],
+              };
+              setMachine((prev: any) => ({ ...prev, ...fullRecord }));
+              if (onMachineUpdated) onMachineUpdated(fullRecord);
+            } else if (onMachineUpdated) {
+              onMachineUpdated(machine);
+            }
+          } catch {
+            if (onMachineUpdated) onMachineUpdated(machine);
+          }
         }}
       />
     </View>
@@ -3156,7 +3407,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   stickyHeaderZone: {
     gap: spacingNumeric.sm,
@@ -3224,28 +3475,26 @@ const styles = StyleSheet.create({
   },
   heroMenuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
-  heroMenuPopup: {
-    width: '100%',
-    maxWidth: 320,
+  heroMenuPopover: {
+    position: 'absolute',
+    width: 270,
+    maxWidth: 300,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    padding: spacingNumeric.md,
-    gap: 8,
+    padding: spacingNumeric.sm,
+    gap: 4,
     ...Platform.select({
       web: {
-        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
       },
       default: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.2,
         shadowRadius: 12,
-        elevation: 6,
+        elevation: 8,
       },
     }),
   },
@@ -3350,15 +3599,16 @@ const styles = StyleSheet.create({
   cardHeaderTitle: {
   },
   clientCodePill: {
-    backgroundColor: '#0ea5e918',
-    borderColor: '#0ea5e935',
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: radiusNumeric.pill,
+    opacity: 1,
   },
   clientCodePillText: {
-    color: '#0ea5e9',
+    color: '#0284c7',
   },
   manageStaffBtn: {
     flexDirection: 'row',
@@ -3425,15 +3675,16 @@ const styles = StyleSheet.create({
   personnelSubTitle: {
   },
   oversightBadge: {
-    backgroundColor: '#10b98115',
-    borderColor: '#10b98135',
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    opacity: 1,
   },
   oversightBadgeText: {
-    color: '#10b981',
+    color: '#065f46',
   },
   noStaffText: {
     paddingVertical: 8,
@@ -3693,15 +3944,16 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   runningHoursBadge: {
-    backgroundColor: '#0ea5e918',
-    borderColor: '#0ea5e935',
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
     borderWidth: 1,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
+    opacity: 1,
   },
   runningHoursBadgeText: {
-    color: '#0ea5e9',
+    color: '#0284c7',
   },
   logRemarksText: {
   },
@@ -3747,13 +3999,15 @@ const styles = StyleSheet.create({
   auditFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radiusNumeric.md,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
+    minHeight: 32,
   },
   auditFilterChipText: {
+    textAlign: 'center',
   },
   auditListWrap: {
     padding: spacingNumeric.sm,

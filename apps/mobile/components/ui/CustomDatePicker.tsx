@@ -60,6 +60,10 @@ export interface CustomDatePickerProps {
   allowAnyPast?: boolean;
   /** If true, allows future dates (default: false) */
   allowAnyFuture?: boolean;
+  /** Optional outer label displayed above the picker (matches SearchableSelect) */
+  outerLabel?: string;
+  /** Whether date can be cleared when a value is selected (default: false) */
+  clearable?: boolean;
   /** Shows relative status badge like "Today", "Yesterday" */
   showRelativeBadge?: boolean;
   /** Popover alignment relative to trigger ('left' | 'right') */
@@ -118,6 +122,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   value,
   onChange,
   label = 'Date',
+  outerLabel,
   showPrefix = true,
   maxDaysOld = 365,
   allowFutureDays = 0,
@@ -127,6 +132,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   align = 'left',
   disabled = false,
   placeholder = 'Select date...',
+  clearable = false,
 }) => {
   const { theme, isDark } = useTheme();
   const [open, setOpen] = useState(false);
@@ -561,25 +567,56 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           </Text>
         </View>
 
-        <Pressable
-          variant="plain"
-          haptic="confirm"
-          hitSlopToMin48
-          onPress={handleSelectToday}
-          style={styles.selectTodayBtn}
-          accessibilityLabel="Select today's date"
-        >
-          <RotateCcw size={12} color="#0284c7" />
-          <Text variant="label" style={[styles.selectTodayBtnText, { color: '#0284c7' }]}>
-            Select Today
-          </Text>
-        </Pressable>
+        <View style={styles.footerActionsRight}>
+          {clearable && Boolean(value) && (
+            <Pressable
+              variant="plain"
+              haptic="select"
+              hitSlopToMin48
+              onPress={() => {
+                haptics.select();
+                onChange('');
+                setOpen(false);
+              }}
+              style={styles.clearBtn}
+              accessibilityLabel="Clear selected date"
+            >
+              <X size={12} color={theme.colors.mute} />
+              <Text variant="label" style={{ color: theme.colors.mute }}>
+                Clear
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            variant="plain"
+            haptic="confirm"
+            hitSlopToMin48
+            onPress={handleSelectToday}
+            style={styles.selectTodayBtn}
+            accessibilityLabel="Select today's date"
+          >
+            <RotateCcw size={12} color="#0284c7" />
+            <Text variant="label" style={[styles.selectTodayBtnText, { color: '#0284c7' }]}>
+              Select Today
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
+      {/* Optional Outer Label */}
+      {outerLabel ? (
+        <View style={styles.outerLabelRow}>
+          <Text variant="label" style={{ color: theme.colors.ink }}>
+            {outerLabel}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Anchor Trigger Button */}
       <View ref={buttonRef} collapsable={false}>
         <Pressable
@@ -601,7 +638,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           ]}
           accessibilityRole="combobox"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={`${label} filter: ${displayDateText}`}
+          accessibilityLabel={`${outerLabel || label} filter: ${displayDateText}`}
         >
           <View style={styles.triggerLeft}>
             <CalendarIcon
@@ -626,12 +663,29 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
               {displayDateText}
             </Text>
           </View>
-          <Icon
-            name="chevron-down"
-            size={13}
-            color={open || isFiltered ? '#0284c7' : theme.colors.mute}
-            state={open ? 'open' : 'closed'}
-          />
+          {clearable && Boolean(value) ? (
+            <Pressable
+              variant="plain"
+              haptic="select"
+              hitSlopToMin48
+              onPress={(e: any) => {
+                e?.stopPropagation?.();
+                haptics.select();
+                onChange('');
+              }}
+              style={styles.clearTriggerIcon}
+              accessibilityLabel={`Clear ${outerLabel || label || 'date'}`}
+            >
+              <X size={13} color={theme.colors.mute} />
+            </Pressable>
+          ) : (
+            <Icon
+              name="chevron-down"
+              size={13}
+              color={open || isFiltered ? '#0284c7' : theme.colors.mute}
+              state={open ? 'open' : 'closed'}
+            />
+          )}
         </Pressable>
       </View>
 
@@ -827,4 +881,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   selectTodayBtnText: {},
+  outerLabelRow: {
+    marginBottom: spacingNumeric.xs,
+  },
+  footerActionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.sm,
+  },
+  clearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  clearTriggerIcon: {
+    padding: 2,
+  },
 });

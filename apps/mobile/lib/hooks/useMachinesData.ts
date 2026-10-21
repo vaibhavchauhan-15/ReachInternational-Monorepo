@@ -24,6 +24,7 @@ export const MACHINE_SELECT_COLUMNS = `
   health_status,
   hour_meter,
   client_id,
+  site_id,
   current_supervisor_id,
   supervisor_ids,
   current_operator_id,

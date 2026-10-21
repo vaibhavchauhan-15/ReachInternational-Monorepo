@@ -1,11 +1,13 @@
-/**
- * ReachInternational Mobile — React Native Reusables Skeleton Component
- * Official RNR Skeleton primitive with animate-pulse and helper variants.
- */
-
 import { cn } from '@/lib/utils';
 import * as React from 'react';
-import { View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  View,
+  Animated,
+  Platform,
+  type ViewProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useTheme } from './ThemeProvider';
 
 export interface SkeletonProps extends ViewProps {
@@ -18,6 +20,29 @@ export interface SkeletonProps extends ViewProps {
   style?: StyleProp<ViewStyle>;
 }
 
+// Module-level shared pulse driver for Native (iOS / Android) to guarantee 60fps in-sync animation
+const sharedPulse = new Animated.Value(1);
+let pulseStarted = false;
+
+function ensurePulseAnimation() {
+  if (pulseStarted || Platform.OS === 'web') return;
+  pulseStarted = true;
+  Animated.loop(
+    Animated.sequence([
+      Animated.timing(sharedPulse, {
+        toValue: 0.45,
+        duration: 850,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sharedPulse, {
+        toValue: 1,
+        duration: 850,
+        useNativeDriver: true,
+      }),
+    ])
+  ).start();
+}
+
 function Skeleton({
   className,
   width,
@@ -28,25 +53,64 @@ function Skeleton({
   style,
   ...props
 }: SkeletonProps) {
+  const { theme, isDark } = useTheme();
+
+  React.useEffect(() => {
+    if (animate && Platform.OS !== 'web') {
+      ensurePulseAnimation();
+    }
+  }, [animate]);
+
+  // Authoritative theme-aware skeleton fill:
+  // Dark: #262626 (subtle hairline gray against #171717 card / #0a0a0a canvas)
+  // Light: #ebebeb (subtle hairline gray against #ffffff card / #fafafa canvas)
+  const defaultBg = isDark ? '#262626' : '#ebebeb';
+
   const dynamicStyle: ViewStyle = {};
   if (width !== undefined) dynamicStyle.width = width as any;
   if (height !== undefined) dynamicStyle.height = height;
   if (borderRadius !== undefined) dynamicStyle.borderRadius = borderRadius;
   if (variant === 'circle') dynamicStyle.borderRadius = 9999;
   if (variant === 'badge') dynamicStyle.borderRadius = 9999;
+  if (variant === 'text' && borderRadius === undefined) dynamicStyle.borderRadius = 4;
+
+  const baseContainerStyle: ViewStyle = {
+    backgroundColor: defaultBg,
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <View
+        className={cn(
+          'rounded-md',
+          animate && 'animate-pulse',
+          variant === 'circle' && 'rounded-full',
+          variant === 'badge' && 'rounded-full h-5 w-16',
+          variant === 'text' && 'h-4 w-full rounded',
+          className
+        )}
+        style={[baseContainerStyle, dynamicStyle, style]}
+        {...props}
+      />
+    );
+  }
 
   return (
-    <View
+    <Animated.View
       className={cn(
-        'rounded-md bg-muted',
-        animate && 'animate-pulse',
+        'rounded-md',
         variant === 'circle' && 'rounded-full',
         variant === 'badge' && 'rounded-full h-5 w-16',
         variant === 'text' && 'h-4 w-full rounded',
         className
       )}
-      style={[dynamicStyle, style]}
-      {...props}
+      style={[
+        baseContainerStyle,
+        dynamicStyle,
+        animate && { opacity: sharedPulse },
+        style,
+      ]}
+      {...(props as any)}
     />
   );
 }
@@ -120,8 +184,17 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
   const { theme } = useTheme();
   return (
     <View
-      className="rounded-xl border border-border bg-card p-4 mb-4"
-      style={[{ backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }, style]}
+      style={[
+        {
+          backgroundColor: theme.colors.canvasElevated,
+          borderColor: theme.colors.hairline,
+          borderRadius: 16,
+          borderWidth: 1,
+          padding: 16,
+          marginBottom: 16,
+        },
+        style,
+      ]}
     >
       {children}
     </View>
@@ -130,3 +203,4 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
 
 export { Skeleton };
 export default Skeleton;
+

@@ -240,7 +240,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                           {u.full_name}
                         </Text>
                         <View style={styles.userMeta}>
-                          {u.shift_time && (
+                          {Boolean(u.shift_time) && (
                             <View style={styles.shiftTag}>
                               <Clock size={10} color={theme.colors.success} />
                               <Text variant="mono" style={[styles.shiftText, { color: theme.colors.success }]}>
@@ -248,7 +248,7 @@ export const MultiUserSelectModal: React.FC<MultiUserSelectModalProps> = ({
                               </Text>
                             </View>
                           )}
-                          {u.phone && (
+                          {Boolean(u.phone) && (
                             <Text variant="caption" style={[styles.phoneText, { color: theme.colors.mute }]}>
                               {u.phone}
                             </Text>

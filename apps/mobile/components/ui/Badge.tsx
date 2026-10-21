@@ -104,6 +104,7 @@ export type BadgeProps = Omit<ViewProps, 'role'> &
     role?: string;
     userRole?: string;
     accentColor?: string;
+    solid?: boolean;
     size?: 'sm' | 'md' | 'lg';
     shape?: 'pill' | 'rounded';
     dot?: boolean;
@@ -193,8 +194,136 @@ export function resolveBadgeColors(
   theme: RNThemeType,
   isDark: boolean,
   role?: string,
-  accentColor?: string
+  accentColor?: string,
+  solid: boolean = true
 ): ResolvedBadgeColors {
+  // 0. Custom accent color takes precedence when explicitly provided (100% solid opacity)
+  if (accentColor) {
+    return {
+      background: isDark ? '#171717' : '#ffffff',
+      border: accentColor,
+      text: accentColor,
+      dot: accentColor,
+    };
+  }
+
+  // 1. Vibrant 100% solid opacity fills with crisp white text
+  if (solid) {
+    if (variant === 'outline') {
+      return {
+        background: theme.colors.canvasElevated,
+        border: isDark ? '#262626' : '#e4e4e7',
+        text: theme.colors.ink,
+        dot: theme.colors.ink,
+      };
+    }
+    if (variant === 'secondary') {
+      return {
+        background: isDark ? '#27272a' : '#f4f4f5',
+        border: isDark ? '#3f3f46' : '#e4e4e7',
+        text: theme.colors.ink,
+        dot: theme.colors.ink,
+      };
+    }
+
+    if (role) {
+      const r = String(role).trim().toLowerCase();
+      switch (r) {
+        case 'super_admin':
+          return {
+            background: isDark ? '#991b1b' : '#dc2626',
+            border: isDark ? '#dc2626' : '#991b1b',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        case 'admin':
+          return {
+            background: isDark ? '#a16207' : '#ca8a04',
+            border: isDark ? '#ca8a04' : '#a16207',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        case 'manager':
+          return {
+            background: isDark ? '#3730a3' : '#4f46e5',
+            border: isDark ? '#4f46e5' : '#3730a3',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        case 'supervisor':
+          return {
+            background: isDark ? '#0f766e' : '#0d9488',
+            border: isDark ? '#0d9488' : '#0f766e',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        case 'hr':
+          return {
+            background: isDark ? '#047857' : '#059669',
+            border: isDark ? '#059669' : '#047857',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        case 'operator':
+          return {
+            background: isDark ? '#b45309' : '#d97706',
+            border: isDark ? '#d97706' : '#b45309',
+            text: '#ffffff',
+            dot: '#ffffff',
+          };
+        default:
+          break;
+      }
+    }
+
+    switch (variant) {
+      case 'success':
+        return {
+          background: isDark ? '#059669' : '#10b981',
+          border: isDark ? '#10b981' : '#059669',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+      case 'info':
+        return {
+          background: isDark ? '#0ea5e9' : '#0284c7',
+          border: isDark ? '#38bdf8' : '#0284c7',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+      case 'warning':
+        return {
+          background: isDark ? '#d97706' : '#f59e0b',
+          border: isDark ? '#f59e0b' : '#d97706',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+      case 'error':
+      case 'destructive':
+        return {
+          background: isDark ? '#dc2626' : '#ef4444',
+          border: isDark ? '#f87171' : '#dc2626',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+      case 'neutral':
+        return {
+          background: isDark ? '#3f3f46' : '#64748b',
+          border: isDark ? '#52525b' : '#475569',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+      case 'default':
+      default:
+        return {
+          background: isDark ? '#0ea5e9' : '#0284c7',
+          border: isDark ? '#0ea5e9' : '#0284c7',
+          text: '#ffffff',
+          dot: '#ffffff',
+        };
+    }
+  }
+
   // 1. Custom accent color takes precedence when explicitly provided (100% solid opacity)
   if (accentColor) {
     return {
@@ -446,7 +575,7 @@ function renderBadgeChildren(
       <Text
         variant={textVariant}
         weight="semibold"
-        style={[{ color: textColor }, textStyle]}
+        style={[{ color: textColor, opacity: 1 }, textStyle]}
       >
         {children}
       </Text>
@@ -461,7 +590,7 @@ function renderBadgeChildren(
         <Text
           variant={textVariant}
           weight="semibold"
-          style={[{ color: textColor }, textStyle]}
+          style={[{ color: textColor, opacity: 1 }, textStyle]}
         >
           {children}
         </Text>
@@ -473,7 +602,7 @@ function renderBadgeChildren(
           <Text
             variant={textVariant}
             weight="semibold"
-            style={[{ color: textColor }, textStyle]}
+            style={[{ color: textColor, opacity: 1 }, textStyle]}
           >
             {child}
           </Text>
@@ -500,6 +629,7 @@ const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<Vi
       role,
       userRole,
       accentColor,
+      solid = true,
       label,
       customLabel,
       icon,
@@ -528,7 +658,7 @@ const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<Vi
     // Role auto-mapping
     const effectiveRole = userRole || role || (status && ['operator', 'supervisor', 'admin', 'super_admin', 'manager', 'hr'].includes(String(status).trim().toLowerCase()) ? String(status).trim().toLowerCase() : undefined);
 
-    const colors = resolveBadgeColors(effectiveVariant, theme, isDark, effectiveRole, accentColor);
+    const colors = resolveBadgeColors(effectiveVariant, theme, isDark, effectiveRole, accentColor, solid);
 
     const displayText = customLabel || label;
     const effectiveDisplayText =
@@ -539,20 +669,33 @@ const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<Vi
         ? formatBadgeStatusLabel(status)
         : undefined);
 
-    const isInteractive = Boolean(onPress || onRemove);
+    const hasRemove = Boolean(onRemove);
+    const hasPress = Boolean(onPress);
+    // Outer container is only interactive when onPress is explicitly passed.
+    // When only onRemove is passed, the outer badge is a static View container hosting
+    // the inner remove Pressable button. In HTML / React Native Web, rendering the outer container
+    // as <button> when an inner remove <button> exists causes fatal DOM nesting violations
+    // ('<button> cannot contain a nested <button>').
+    const isInteractive = hasPress;
     const Component = asChild ? Slot.View : isInteractive ? Pressable : View;
     const resolvedRadius = shape === 'rounded' ? radiusNumeric.sm : radiusNumeric.full;
     const textVariant = size === 'sm' ? 'micro' : size === 'lg' ? 'label' : 'caption';
 
     const interactiveProps = isInteractive && !asChild
       ? {
-          variant: 'chip' as const,
+          variant: hasRemove ? ('plain' as const) : ('chip' as const),
           haptic: 'select' as const,
-          hitSlopToMin48: true,
-          onPress: onPress || onRemove,
-          accessibilityRole: 'button' as const,
+          hitSlopToMin48: !hasRemove,
+          activeOpacity: 1.0,
+          onPress,
+          accessibilityRole: hasRemove ? undefined : ('button' as const),
         }
       : {};
+
+    const cleanProps = { ...props };
+    if (hasRemove && cleanProps.accessibilityRole === 'button') {
+      delete cleanProps.accessibilityRole;
+    }
 
     return (
       <TextClassContext.Provider
@@ -568,11 +711,12 @@ const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<Vi
               backgroundColor: colors.background,
               borderColor: colors.border,
               borderRadius: resolvedRadius,
+              opacity: 1,
             },
             style,
           ]}
           {...interactiveProps}
-          {...props}
+          {...cleanProps}
         >
           {dot && (
             <View

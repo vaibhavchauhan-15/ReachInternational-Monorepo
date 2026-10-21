@@ -213,8 +213,8 @@ export default function ForgotPasswordScreen() {
                 style={[
                   styles.iconBadge,
                   {
-                    backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : 'rgba(2, 132, 199, 0.10)',
-                    borderColor: isDark ? 'rgba(14, 165, 233, 0.25)' : 'rgba(2, 132, 199, 0.20)',
+                    backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe',
+                    borderColor: isDark ? '#0284c7' : '#bae6fd',
                   },
                 ]}
               >
