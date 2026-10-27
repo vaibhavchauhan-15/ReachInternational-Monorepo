@@ -163,16 +163,30 @@ const PersonnelCell = memo(function PersonnelCell({
 
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
-      className={`flex flex-col gap-0.5 min-w-0 py-0.5 justify-center ${onClick ? "cursor-pointer group hover:opacity-80 transition-opacity" : ""}`}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
+      } : undefined}
+      className={`flex flex-col gap-0.5 min-w-0 py-0.5 justify-center outline-none ${
+        onClick
+          ? "cursor-pointer group hover:opacity-85 focus-visible:ring-1 focus-visible:ring-sky-500 rounded-sm transition-opacity"
+          : ""
+      }`}
       title={onClick ? `${allNames} (Click to inspect shift coverage)` : allNames}
+      aria-label={onClick ? `${allNames} (inspect shift coverage)` : allNames}
     >
       {visible.map((p, idx) => {
         const isLastVisible = idx === visible.length - 1;
         return (
           <div key={p.id || idx} className="flex items-center gap-1 min-w-0">
             <span
-              className={`${textSizeClass} text-[var(--color-body)] truncate block ${
+              className={`${textSizeClass} text-[var(--color-body)] group-hover:text-[var(--color-ink)] transition-colors truncate block ${
                 remainingCount > 0 && isLastVisible ? "max-w-[85px]" : "max-w-[120px]"
               }`}
             >
@@ -180,7 +194,7 @@ const PersonnelCell = memo(function PersonnelCell({
             </span>
             {isLastVisible && remainingCount > 0 && (
               <span
-                className={`text-[9px] font-bold px-1 py-0.2 rounded border shrink-0 ${badgeColorClass}`}
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm border shrink-0 ${badgeColorClass}`}
                 title={`+${remainingCount} more: ${personnel.slice(3).map((u) => u.full_name).join(", ")}`}
               >
                 +{remainingCount}
@@ -265,7 +279,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
         onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
-        className={`w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border text-xs flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs ${
+        className={`w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border text-xs flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-canvas)] ${
           isFiltered
             ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
             : open
@@ -325,7 +339,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
             transition={{ duration: 0.15, ease: "easeOut" }}
             role="listbox"
             aria-label={ariaLabel}
-            className={`absolute top-full mt-1.5 z-50 min-w-full max-h-60 overflow-y-auto rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl pointer-events-auto ${
+            className={`absolute top-full mt-1.5 z-50 min-w-full max-w-[calc(100vw-24px)] max-h-60 overflow-y-auto rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl pointer-events-auto ${
               align === "right"
                 ? "right-0 left-auto sm:left-0 sm:right-auto sm:min-w-[200px]"
                 : "left-0 right-auto sm:left-0 sm:min-w-[220px]"
@@ -383,7 +397,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
                       onChange(opt.id);
                       setOpen(false);
                     }}
-                    className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
+                    className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-3 sm:px-2.5 py-2.5 sm:py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
                       isSelected
                         ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold shadow-xs"
                         : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
@@ -523,7 +537,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
         onMouseEnter={() => moreIconRef.current?.startAnimation?.()}
         onMouseLeave={() => moreIconRef.current?.stopAnimation?.()}
         aria-expanded={open}
-        className="h-9 w-9 sm:w-auto p-0 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shadow-xs inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+        className="h-9 w-9 sm:w-auto p-0 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shadow-xs inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-canvas)]"
         title="More options"
       >
         <AnimatedMoreVertical ref={moreIconRef as any} size={15} className="shrink-0" />
@@ -557,7 +571,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                         setOpen(false);
                         onOpenImport();
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                      className="w-full min-h-[36px] flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 transition-all cursor-pointer"
                     >
                       <AnimatedClipboardList size={15} className="text-sky-500" />
                       <span>Bulk Excel Import</span>
@@ -572,7 +586,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                     setOpen(false);
                     onExportExcel();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  className="w-full min-h-[36px] flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 transition-all cursor-pointer"
                 >
                   <FileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Export Excel (.xlsx)</span>
@@ -584,7 +598,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                     setOpen(false);
                     onExportCSV();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  className="w-full min-h-[36px] flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 transition-all cursor-pointer"
                 >
                   <FileText size={15} className="text-sky-600 dark:text-sky-400 shrink-0" />
                   <span>Export CSV (.csv)</span>
@@ -596,7 +610,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                     setOpen(false);
                     onExportPDF();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  className="w-full min-h-[36px] flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 transition-all cursor-pointer"
                 >
                   <Printer size={15} className="text-purple-600 dark:text-purple-400 shrink-0" />
                   <span>PDF Report / Print</span>
@@ -635,12 +649,12 @@ const SORT_OPTIONS = [
 ];
 
 const MobileMachineCardSkeletonList = memo(function MobileMachineCardSkeletonList({
-  count = 4,
+  count = 6,
 }: {
   count?: number;
 }) {
   return (
-    <div className="space-y-3" aria-label="Loading machine assets...">
+    <>
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -696,7 +710,7 @@ const MobileMachineCardSkeletonList = memo(function MobileMachineCardSkeletonLis
           </div>
         </div>
       ))}
-    </div>
+    </>
   );
 });
 
@@ -1586,7 +1600,7 @@ export function MachineListClient({
               e.stopPropagation();
               handleOpenDetail(row);
             }}
-            className="font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors font-mono text-xs hover:underline whitespace-nowrap cursor-pointer text-left"
+            className="font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors font-mono text-xs hover:underline whitespace-nowrap cursor-pointer text-left outline-none focus-visible:ring-1 focus-visible:ring-sky-500 rounded-sm"
             title="Open Machine Details"
           >
             <Highlight text={row.machine_id || row.machine_code || "—"} query={localSearchTerm} />
@@ -1598,7 +1612,7 @@ export function MachineListClient({
         header: "MODEL",
         accessorKey: "model" as const,
         sortable: true,
-        width: "12%",
+        width: "11%",
         cell: (row: Machine) => (
           <span className="font-semibold text-[var(--color-ink)] text-xs truncate block max-w-[120px]" title={row.model || ""}>
             <Highlight text={row.model || "—"} query={localSearchTerm} />
@@ -1609,7 +1623,7 @@ export function MachineListClient({
         id: "serial_number",
         header: "SERIAL NO",
         accessorKey: "serial_number" as const,
-        width: "12%",
+        width: "11%",
         cell: (row: Machine) => (
           <span className="font-mono text-[var(--color-mute)] text-xs truncate block max-w-[120px]" title={row.serial_number || ""}>
             <Highlight text={row.serial_number || "—"} query={localSearchTerm} />
@@ -1643,7 +1657,7 @@ export function MachineListClient({
         header: "HMR",
         accessorKey: "hour_meter" as const,
         sortable: true,
-        width: "7%",
+        width: "8%",
         cell: (row: Machine) => (
           <button
             type="button"
@@ -1652,9 +1666,9 @@ export function MachineListClient({
               handleOpenHistory(row);
             }}
             title="Click to view running logs on demand"
-            className="font-mono font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline text-xs text-left cursor-pointer transition-colors"
+            className="font-mono font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline text-xs text-left cursor-pointer transition-colors outline-none focus-visible:ring-1 focus-visible:ring-sky-500 rounded-sm"
           >
-            {row.hour_meter ?? 0}
+            {row.hour_meter ?? 0} hrs
           </button>
         ),
       },
@@ -1767,7 +1781,7 @@ export function MachineListClient({
   );
 
   return (
-    <div className="flex flex-col gap-5 pb-24 md:pb-6">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 pb-24 md:pb-6">
       {/* Canonical Page Header */}
       <PageHeader
         title={userRole === "operator" ? "Assigned Equipment" : "Machine Directory"}
@@ -1837,12 +1851,57 @@ export function MachineListClient({
         onResetFilters={handleResetAllFilters}
         onSubmitSearch={handleSearchSubmit}
         isLoading={isPending || isSearchLoading}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* View Switcher is strictly hidden on mobile viewports (≤640px) */}
+            <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-lg border border-[var(--color-hairline)] text-xs h-9 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode("auto")}
+                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
+                  viewMode === "auto"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                }`}
+                title="Auto responsive view (Table on desktop, Cards on mobile)"
+              >
+                Auto View
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
+                  viewMode === "cards"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                }`}
+                title="Cards view"
+              >
+                <AnimatedSlidersHorizontal size={13} />
+                <span>Cards</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
+                  viewMode === "table"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                }`}
+                title="Table view"
+              >
+                <AnimatedFileText size={13} />
+                <span>Table</span>
+              </button>
+            </div>
+          </div>
+        }
       >
         <div className="flex flex-col gap-3 w-full">
           {/* Responsive Custom Dropdown Filter Selectors for Status, Health, Client, Supervisor & Sort */}
-          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-2.5 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-center gap-2 sm:gap-2.5 w-full">
             {/* 1. Rental Status Selector */}
-            <div className="w-full sm:w-44 min-w-0">
+            <div className="w-full min-w-0">
               <CustomFilterSelector
                 label="Rental"
                 value={currentStatus}
@@ -1854,7 +1913,7 @@ export function MachineListClient({
             </div>
 
             {/* 2. Health Status Selector */}
-            <div className="w-full sm:w-48 min-w-0">
+            <div className="w-full min-w-0">
               <CustomFilterSelector
                 label="Health"
                 value={healthStatusFilter}
@@ -1869,7 +1928,7 @@ export function MachineListClient({
             </div>
 
             {/* 3. Client Selector */}
-            <div className="w-full sm:w-56 min-w-0" onMouseEnter={loadClients} onFocus={loadClients}>
+            <div className="w-full min-w-0" onMouseEnter={loadClients} onFocus={loadClients}>
               <CustomFilterSelector
                 label="Client"
                 value={clientFilter}
@@ -1885,7 +1944,7 @@ export function MachineListClient({
             </div>
 
             {/* 4. Supervisor Selector */}
-            <div className="w-full sm:w-52 min-w-0" onMouseEnter={loadSupervisors} onFocus={loadSupervisors}>
+            <div className="w-full min-w-0" onMouseEnter={loadSupervisors} onFocus={loadSupervisors}>
               <CustomFilterSelector
                 label="Supervisor"
                 value={supervisorFilter}
@@ -1901,7 +1960,7 @@ export function MachineListClient({
             </div>
 
             {/* 5. Sort By Selector */}
-            <div className="w-full sm:w-48 min-w-0">
+            <div className="w-full min-w-0">
               <CustomFilterSelector
                 label="Sort"
                 value={sortBy}
@@ -1934,7 +1993,7 @@ export function MachineListClient({
                   <button
                     type="button"
                     onClick={() => handleSearchChange("")}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
                     title="Clear search"
                   >
                     <X className="h-3 w-3" />
@@ -1947,7 +2006,8 @@ export function MachineListClient({
                   <button
                     type="button"
                     onClick={() => updateFilters({ status: "all", page: 1 })}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
+                    title="Clear rental status filter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1970,7 +2030,8 @@ export function MachineListClient({
                       setHealthStatusFilter("all");
                       updateFilters({ health_status: "all", page: 1 });
                     }}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
+                    title="Clear health status filter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1988,7 +2049,7 @@ export function MachineListClient({
                       setClientFilter("all");
                       updateFilters({ client_id: "all", page: 1 });
                     }}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
                     title="Remove client filter"
                   >
                     <X className="h-3 w-3" />
@@ -2007,7 +2068,8 @@ export function MachineListClient({
                       setSupervisorFilter("all");
                       updateFilters({ supervisor: "all", page: 1 });
                     }}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
+                    title="Remove supervisor filter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -2022,7 +2084,8 @@ export function MachineListClient({
                       setSortBy("machine_id_asc");
                       updateFilters({ sort: "machine_id_asc", page: 1 });
                     }}
-                    className="hover:text-rose-600 transition-colors cursor-pointer"
+                    className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 hover:text-rose-600 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
+                    title="Reset sort to default"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -2031,7 +2094,7 @@ export function MachineListClient({
               <button
                 type="button"
                 onClick={handleResetAllFilters}
-                className="text-[11px] font-bold text-[var(--color-link)] hover:underline ml-1 cursor-pointer"
+                className="text-[11px] font-bold text-[var(--color-link)] hover:underline ml-1 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-sky-500 rounded"
               >
                 Clear All
               </button>
@@ -2040,10 +2103,37 @@ export function MachineListClient({
         </div>
       </FilterToolbar>
 
-          {/* Main Table / Grid Display — Mutually Exclusive View Rendering (M6) */}
-          {effectiveView === "table" ? (
-            /* Table Only View: mounts solely EnterpriseTable (Cards are completely unmounted) */
-            <div className="w-full">
+      {/* Search & Filter Results Count Bar */}
+      <div className="flex items-center justify-between px-1 text-xs text-[var(--color-mute)]">
+        <div className="flex items-center gap-2">
+          <span>
+            Showing{" "}
+            <span className="font-semibold text-[var(--color-ink)]">
+              {activeMachines.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-[var(--color-ink)]">
+              {activeTotal}
+            </span>{" "}
+            {activeTotal === 1 ? "machine" : "machines"}
+          </span>
+          {isSearchActive && (
+            <span className="text-[11px] bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-medium border border-sky-500/20">
+              Filtered by &quot;{localSearchTerm}&quot;
+            </span>
+          )}
+        </div>
+        {selectedIds.length > 0 && (
+          <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+            {selectedIds.length} selected
+          </span>
+        )}
+      </div>
+
+      {/* Main Table / Grid Display — Mutually Exclusive View Rendering (M6) */}
+      {effectiveView === "table" ? (
+        /* Table Only View: mounts solely EnterpriseTable (Cards are completely unmounted) */
+        <div className="w-full">
               <EnterpriseTable
                 columns={tableColumns}
                 data={activeMachines}

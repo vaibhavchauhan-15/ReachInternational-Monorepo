@@ -38,6 +38,7 @@
         "EXPO_PUBLIC_SCHEME": "reachinternational",
         "EXPO_PUBLIC_APP_URL": "https://dashboard-reachinternational.vercel.app",
         "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://485f038dd1fa1ddc3d7c95f9c11b63d1@o4512202338729984.ingest.de.sentry.io/4512202428383312",
         "SENTRY_DISABLE_AUTO_UPLOAD": "false"
       },
       "android": {
@@ -61,6 +62,7 @@
         "EXPO_PUBLIC_SCHEME": "reachinternational",
         "EXPO_PUBLIC_APP_URL": "https://dashboard-reachinternational.vercel.app",
         "EXPO_PUBLIC_WEB_APP_URL": "https://dashboard-reachinternational.vercel.app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://485f038dd1fa1ddc3d7c95f9c11b63d1@o4512202338729984.ingest.de.sentry.io/4512202428383312",
         "SENTRY_DISABLE_AUTO_UPLOAD": "false"
       },
       "android": {

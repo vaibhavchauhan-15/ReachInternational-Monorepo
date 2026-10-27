@@ -127,11 +127,11 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
         </View>
 
         {/* Dialog Title */}
-        <Text variant="heading" style={[styles.dialogTitle, { color: theme.colors.ink }]}>
+        <Text variant="heading" weight="semibold" style={[styles.dialogTitle, { color: theme.colors.ink }]}>
           Delete User Account
         </Text>
 
-        <Text variant="body" style={[styles.subtitle, { color: theme.colors.mute }]}>
+        <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
           Please confirm account removal for this staff member.
         </Text>
 
@@ -155,17 +155,17 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
                 },
               ]}
             >
-              <Text variant="label" style={{ color: roleColor }}>
+              <Text variant="caption" weight="bold" style={{ color: roleColor }}>
                 {initials || 'U'}
               </Text>
             </View>
 
             <View style={styles.employeeMetaWrap}>
-              <Text variant="subheading" style={{ color: theme.colors.ink }} numberOfLines={1}>
+              <Text variant="subheading" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
                 {user.full_name}
               </Text>
               <View style={styles.idRow}>
-                <Text variant="caption" style={{ color: theme.colors.link }}>
+                <Text variant="mono" weight="semibold" style={{ color: theme.colors.link }}>
                   {user.employee_id || 'ID Pending'}
                 </Text>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -207,7 +207,7 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
         >
           <View style={styles.consequencesHeader}>
             <AlertTriangle size={15} color="#d97706" />
-            <Text variant="label" style={{ color: '#d97706' }}>
+            <Text variant="caption" weight="semibold" style={{ color: '#d97706' }}>
               Consequences &amp; Compliance Notice
             </Text>
           </View>
@@ -236,7 +236,7 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
           >
             <ShieldAlert size={16} color={theme.colors.error} />
             <View style={styles.errorTextCol}>
-              <Text variant="label" style={{ color: theme.colors.error }}>
+              <Text variant="caption" weight="semibold" style={{ color: theme.colors.error }}>
                 Deletion Failed
               </Text>
               <Text variant="caption" style={{ color: theme.colors.error }}>
@@ -262,7 +262,7 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
             accessibilityRole="button"
             accessibilityLabel="Cancel Deletion"
           >
-            <Text variant="label" style={{ color: theme.colors.ink }}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
               Cancel
             </Text>
           </Touchable>
@@ -284,12 +284,12 @@ export const DeleteUserConfirmDialog: React.FC<DeleteUserConfirmDialogProps> = (
             {isDeleting ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color="#ffffff" />
-                <Text variant="label" style={styles.deleteBtnText}>
+                <Text variant="caption" weight="semibold" style={styles.deleteBtnText}>
                   Deleting...
                 </Text>
               </View>
             ) : (
-              <Text variant="label" style={styles.deleteBtnText}>
+              <Text variant="caption" weight="semibold" style={styles.deleteBtnText}>
                 Delete User
               </Text>
             )}

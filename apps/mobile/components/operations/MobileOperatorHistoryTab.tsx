@@ -872,7 +872,8 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                   color={activeFilterCount > 0 ? '#0284c7' : theme.colors.mute}
                 />
                 <Text
-                  variant="label"
+                  variant="caption"
+                  weight="semibold"
                   style={[
                     styles.filterBtnText,
                     { color: activeFilterCount > 0 ? '#0284c7' : theme.colors.ink },
@@ -892,7 +893,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
                       paddingHorizontal: 4,
                     }}
                   >
-                    <Text variant="caption" style={{ color: '#ffffff' }}>
+                    <Text variant="micro" weight="bold" style={{ color: '#ffffff' }}>
                       {activeFilterCount}
                     </Text>
                   </View>

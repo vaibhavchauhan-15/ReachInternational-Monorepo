@@ -149,22 +149,29 @@ export const ClientModal: React.FC<ClientModalProps> = ({
     >
       <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
         <View style={styles.modalHeader}>
-          <Text variant="heading" style={{ color: theme.colors.ink }}>
-            {editingClient ? `Edit (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
-          </Text>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text variant="heading" weight="bold" style={{ color: theme.colors.ink }}>
+              {editingClient ? `Edit Client (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
+            </Text>
+            <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
+              {editingClient ? 'Update company records and site coordinates' : 'Register a new enterprise client account'}
+            </Text>
+          </View>
           <Pressable variant="iconButton" hitSlopToMin48 onPress={onClose} accessibilityLabel="Close modal">
             <X size={20} color={theme.colors.mute} />
           </Pressable>
         </View>
 
-        <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ maxHeight: 520 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.formSection}>
-            <Text variant="label" style={{ color: theme.colors.mute }}>Company & Tax Details</Text>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 6 }}>
+              Company & Tax Details
+            </Text>
 
             {editingClient && (
               <View style={styles.formGroup}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>Client ID</Text>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Client ID</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.canvas, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.colors.hairline }}>
                     <Lock size={10} color="#f59e0b" />
                     <Text variant="mono" style={{ color: theme.colors.mute }}>Permanent</Text>
@@ -173,77 +180,79 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                 <Input
                   value={editingClient.client_id || editingClient.code}
                   editable={false}
-                  style={[styles.modalInput, useTypeStyle('mono'), { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas }]}
+                  style={[styles.modalInput, useTypeStyle('mono'), { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, minHeight: 44 }]}
                 />
               </View>
             )}
 
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Company Name *</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Company Name *</Text>
               <Input
                 value={companyName}
                 onChangeText={setCompanyName}
                 placeholder="e.g. Pushpa Infracon Pvt Ltd"
                 placeholderTextColor={theme.colors.mute}
-                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Contact Person</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Contact Person</Text>
               <Input
                 value={contactPerson}
                 onChangeText={setContactPerson}
                 placeholder="e.g. Rajesh Sharma"
                 placeholderTextColor={theme.colors.mute}
-                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Phone Number</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Phone Number</Text>
               <Input
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="e.g. +91 98765 43210"
                 placeholderTextColor={theme.colors.mute}
                 keyboardType="phone-pad"
-                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
               />
             </View>
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>GSTIN Number</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>GSTIN Number</Text>
                 <Input
                   value={gstin}
                   onChangeText={(t: string) => setGstin(t.toUpperCase())}
                   placeholder="07AAAAA0000A1Z5"
                   placeholderTextColor={theme.colors.mute}
                   autoCapitalize="characters"
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                 />
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>PAN Number</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>PAN Number</Text>
                 <Input
                   value={panNumber}
                   onChangeText={(t: string) => setPanNumber(t.toUpperCase())}
                   placeholder="ABCDE1234F"
                   placeholderTextColor={theme.colors.mute}
                   autoCapitalize="characters"
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                 />
               </View>
             </View>
           </View>
 
           <View style={styles.formSection}>
-            <Text variant="label" style={{ color: theme.colors.mute, marginBottom: 8 }}>Site Location</Text>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 6 }}>
+              Site Location
+            </Text>
 
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Street / Area *</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Street / Area *</Text>
               <Input
                 value={address}
                 onChangeText={setAddress}
@@ -255,7 +264,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>City / Town / Village *</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>City / Town / Village *</Text>
                 <Input
                   value={city}
                   onChangeText={setCity}
@@ -266,7 +275,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>District</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>District</Text>
                 <Input
                   value={district}
                   onChangeText={setDistrict}
@@ -279,7 +288,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>State *</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>State *</Text>
                 <Input
                   value={stateName}
                   onChangeText={setStateName}
@@ -290,7 +299,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>Pincode</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Pincode</Text>
                 <Input
                   value={pincode}
                   onChangeText={setPincode}
@@ -306,9 +315,11 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
           <View style={styles.formSection}>
             <View style={styles.toggleRow}>
-              <Text variant="label" style={{ color: theme.colors.mute, marginBottom: 0 }}>Billing Address</Text>
+              <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 0 }}>
+                Billing Address
+              </Text>
               <View style={styles.switchWrapper}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>Different Address</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Different Address</Text>
                 <Switch
                   value={isBillingAddressDifferent}
                   onValueChange={setIsBillingAddressDifferent}
@@ -320,7 +331,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
             {isBillingAddressDifferent && (
               <View style={{ marginTop: 8 }}>
                 <View style={styles.formGroup}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>Billing Street / Area</Text>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Billing Street / Area</Text>
                   <Input
                     value={billingAddress}
                     onChangeText={setBillingAddress}
@@ -332,7 +343,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text variant="caption" style={{ color: theme.colors.ink }}>Billing City / Town / Village</Text>
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Billing City / Town / Village</Text>
                     <Input
                       value={billingCity}
                       onChangeText={setBillingCity}
@@ -343,7 +354,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                   </View>
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text variant="caption" style={{ color: theme.colors.ink }}>Billing District</Text>
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Billing District</Text>
                     <Input
                       value={billingDistrict}
                       onChangeText={setBillingDistrict}
@@ -356,7 +367,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text variant="caption" style={{ color: theme.colors.ink }}>Billing State</Text>
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Billing State</Text>
                     <Input
                       value={billingState}
                       onChangeText={setBillingState}
@@ -367,7 +378,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                   </View>
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text variant="caption" style={{ color: theme.colors.ink }}>Billing Pincode</Text>
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Billing Pincode</Text>
                     <Input
                       value={billingPincode}
                       onChangeText={setBillingPincode}
@@ -388,11 +399,13 @@ export const ClientModal: React.FC<ClientModalProps> = ({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Wrench size={14} color="#d97706" />
-                <Text variant="label" style={{ color: theme.colors.mute, marginBottom: 0 }}>Monthly Maintenance Allowance</Text>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 0 }}>
+                  Monthly Maintenance Allowance
+                </Text>
               </View>
               {(parseInt(allowanceHours, 10) > 0 || parseInt(allowanceMinutes, 10) > 0) && (
-                <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
-                  <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
+                <View style={{ backgroundColor: isDark ? '#451a03' : '#fef3c7', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 4, borderWidth: 1, borderColor: isDark ? '#78350f' : '#fcd34d' }}>
+                  <Text variant="caption" weight="semibold" style={{ color: isDark ? '#fde68a' : '#92400e' }}>
                     {parseInt(allowanceHours, 10) > 0 ? `${allowanceHours}h ` : ''}{parseInt(allowanceMinutes, 10) > 0 ? `${allowanceMinutes}m` : ''} / mo
                   </Text>
                 </View>
@@ -405,7 +418,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>Allowance Hours</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Allowance Hours</Text>
                 <Input
                   value={allowanceHours}
                   onChangeText={setAllowanceHours}
@@ -417,7 +430,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>Allowance Minutes</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Allowance Minutes</Text>
                 <Input
                   value={allowanceMinutes}
                   onChangeText={setAllowanceMinutes}
@@ -433,12 +446,12 @@ export const ClientModal: React.FC<ClientModalProps> = ({
           {!editingClient && (
             <View style={[styles.formSection, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text variant="label" style={{ color: theme.colors.ink }}>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink, textTransform: 'uppercase' }}>
                   Shift Templates (1-Click Presets)
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? '#082f49' : '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? '#0369a1' : '#bae6fd' }}>
                   <Sparkles size={10} color={isDark ? '#38bdf8' : '#0284c7'} />
-                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
+                  <Text variant="micro" weight="semibold" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
                     Auto Provision
                   </Text>
                 </View>
@@ -467,7 +480,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <Text variant="body" style={{ color: isSelected ? theme.colors.primary : theme.colors.ink }}>
+                        <Text variant="body" weight="semibold" style={{ color: isSelected ? theme.colors.primary : theme.colors.ink }}>
                           {preset.name}
                         </Text>
                         {isSelected ? (
@@ -493,7 +506,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                                 paddingVertical: 2,
                               }}
                             >
-                              <Text variant="mono" style={{ color: theme.colors.ink }}>
+                              <Text variant="mono" weight="semibold" style={{ color: theme.colors.ink }}>
                                 {s.code}: {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
                               </Text>
                             </View>
@@ -509,8 +522,8 @@ export const ClientModal: React.FC<ClientModalProps> = ({
         </ScrollView>
 
         <View style={styles.modalFooter}>
-          <Button label="Cancel" variant="outline" onPress={onClose} />
-          <Button label={editingClient ? 'Update Client' : 'Save Client'} variant="primary" onPress={onSave} />
+          <Button label="Cancel" variant="outline" onPress={onClose} style={{ minHeight: 44 }} />
+          <Button label={editingClient ? 'Update Client' : 'Save Client'} variant="primary" onPress={onSave} style={{ minHeight: 44 }} />
         </View>
       </View>
     </AppModal>
@@ -545,6 +558,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 44,
   },
   toggleRow: {
     flexDirection: 'row',

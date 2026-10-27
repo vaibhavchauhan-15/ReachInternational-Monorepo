@@ -8,7 +8,7 @@ interface DashboardShellProps {
 export function DashboardShell({ children, className = "" }: DashboardShellProps) {
   return (
     <div
-      className={`max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 space-y-6 sm:space-y-8 ${className}`}
+      className={`w-full max-w-7xl mx-auto space-y-5 sm:space-y-6 lg:space-y-7 ${className}`}
     >
       {children}
     </div>

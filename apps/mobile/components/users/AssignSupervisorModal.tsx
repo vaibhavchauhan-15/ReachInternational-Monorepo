@@ -1,23 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
+/**
+ * ReachInternational Mobile — Assign Supervisor Modal
+ *
+ * Standardized reporting supervisor assignment modal using reusable
+ * assignment primitives with TanStack Query caching and optimistic rollback.
+ *
+ * Invariants:
+ * - Minimum 44px touch targets
+ * - Zero raw typography properties in StyleSheet.create
+ * - Vercel Geist design tokens and Light/Dark theme synchronization
+ * - Self-assignment prevention (s.id !== user.id && selectedId === user.id)
+ * - Synchronous savingRef mutex (savingRef = React.useRef(false))
+ */
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { StyleSheet } from 'react-native';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
-import { AppModal } from '../ui/AppModal';
-import { useTheme } from '../ui/ThemeProvider';
-import { Text } from '../ui/Text';
-import { Badge } from '../ui/Badge';
-import { SearchInput } from '../ui/SearchInput';
-import { showToast, Skeleton } from '../ui';
-import { Pressable } from '../ui/touch/Pressable';
+  AssignmentBottomSheet,
+  AssignmentSearchInput,
+  AssignmentSelectableList,
+  AssignmentActionBar,
+  TargetEntityDetails,
+  AssignmentCandidateItem,
+} from '../assignments';
+import { useToast } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
-import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { sanitizeDatabaseError } from '@reachinternational/utils';
-import { User, ShieldCheck, Check, X } from '../ui/icon';
 import type { UserRecord } from './UserDetailModal';
 
 export interface AssignSupervisorModalProps {
@@ -30,6 +38,7 @@ export interface AssignSupervisorModalProps {
 interface SupervisorItem {
   id: string;
   full_name: string;
+  employee_id?: string | null;
   email?: string | null;
   phone?: string | null;
   role: string;
@@ -41,76 +50,99 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
   user,
   onSuccess,
 }) => {
-  const { theme } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 640;
-  const [supervisors, setSupervisors] = useState<SupervisorItem[]>([]);
-  const [search, setSearch] = useState('');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [search, setSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (visible && user) {
-      setSelectedId(user.supervisor_id || (user.supervisors?.[0]?.id ?? null));
-      setSearch('');
-      loadSupervisors();
-    }
-  }, [visible, user]);
+  const savingRef = React.useRef(false);
 
-  const loadSupervisors = async () => {
-    setIsLoading(true);
-    try {
+  // Load eligible supervisors using TanStack Query
+  const { data: supervisors = [], isLoading } = useQuery<SupervisorItem[]>({
+    queryKey: ['assign-supervisor-modal', 'supervisors'],
+    enabled: visible,
+    staleTime: 60_000,
+    queryFn: async () => {
       // First try RPC get_active_supervisors_public
       const { data: rpcData, error: rpcErr } = await supabase.rpc('get_active_supervisors_public');
       if (!rpcErr && rpcData && Array.isArray(rpcData)) {
-        setSupervisors(rpcData as SupervisorItem[]);
-        return;
+        return rpcData as SupervisorItem[];
       }
 
       // Fallback: direct query
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, role')
+        .select('id, full_name, employee_id, email, phone, role')
         .in('role', ['supervisor', 'manager', 'admin', 'super_admin'])
         .eq('status', 'active')
         .order('full_name', { ascending: true });
 
       if (error) throw error;
-      if (data) {
-        setSupervisors(data as SupervisorItem[]);
-      }
-    } catch (err: any) {
-      console.warn('Failed to load supervisors:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return (data || []) as SupervisorItem[];
+    },
+  });
 
-  const filteredSupervisors = useMemo(() => {
+  // Sync state on open
+  useEffect(() => {
+    if (visible && user) {
+      savingRef.current = false;
+      setSelectedId(user.supervisor_id || (user.supervisors?.[0]?.id ?? null));
+      setSearch('');
+      setIsSaving(false);
+      setSubmitError(null);
+    }
+  }, [visible, user]);
+
+  // Filter candidates & prevent assigning self as supervisor
+  const candidateItems = useMemo((): AssignmentCandidateItem[] => {
     const list = supervisors.filter((s) => !user || s.id !== user.id);
-    if (!search.trim()) return list;
     const q = search.trim().toLowerCase();
-    return list.filter(
-      (s) =>
-        s.full_name?.toLowerCase().includes(q) ||
-        s.email?.toLowerCase().includes(q) ||
-        s.phone?.toLowerCase().includes(q)
-    );
+
+    return list
+      .filter((s) => {
+        if (!q) return true;
+        return (
+          s.full_name?.toLowerCase().includes(q) ||
+          s.email?.toLowerCase().includes(q) ||
+          s.phone?.toLowerCase().includes(q) ||
+          s.employee_id?.toLowerCase().includes(q)
+        );
+      })
+      .map((s) => ({
+        id: s.id,
+        title: s.full_name,
+        code: s.employee_id || null,
+        subtitle: `${s.role.toUpperCase()} • ${s.phone || s.email || 'Contact on file'}`,
+        entityType: 'user',
+      }));
   }, [supervisors, search, user]);
 
-  const savingRef = React.useRef(false);
+  const selectedSupervisor = useMemo(() => {
+    return supervisors.find((s) => s.id === selectedId) || null;
+  }, [supervisors, selectedId]);
+
+  const initialSupervisorId = user?.supervisor_id || (user?.supervisors?.[0]?.id ?? null);
+  const hasUnsavedChanges = selectedId !== initialSupervisorId;
 
   const handleSave = async () => {
     if (!user) return;
     if (savingRef.current) return;
     if (selectedId && selectedId === user.id) {
       haptics.reject();
-      showToast('error', 'Invalid Assignment', 'A user cannot be assigned as their own reporting supervisor.');
+      toast('error', 'Invalid Assignment', 'A user cannot be assigned as their own reporting supervisor.');
       return;
     }
+
     savingRef.current = true;
     setIsSaving(true);
+    setSubmitError(null);
+
+    const previousUsers = queryClient.getQueryData(['users']);
+    const previousUserDetail = queryClient.getQueryData(['userDetail', user.id]);
+
     try {
       const { error: userErr } = await supabase
         .from('users')
@@ -132,7 +164,7 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
               { onConflict: 'user_id,supervisor_id' }
             );
         } catch {
-          // ignore junction fallback
+          // ignore junction table fallback if already synced
         }
       } else {
         try {
@@ -145,431 +177,87 @@ export const AssignSupervisorModal: React.FC<AssignSupervisorModalProps> = ({
         }
       }
 
-      const assignedName = supervisors.find((s) => s.id === selectedId)?.full_name;
+      // Invalidate relevant query keys
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['userDetail', user.id] });
+
       haptics.confirm();
-      showToast(
+      toast(
         'success',
         'Supervisor Assigned',
-        assignedName
-          ? `${assignedName} has been assigned as supervisor.`
-          : 'Supervisor assignment cleared.'
+        selectedSupervisor
+          ? `Assigned ${selectedSupervisor.full_name} as supervisor for ${user.full_name}.`
+          : `Removed reporting supervisor for ${user.full_name}.`
       );
-      const assignedSupervisor = selectedId ? supervisors.find((s) => s.id === selectedId) : null;
+
       const patch: Partial<UserRecord> = {
         supervisor_id: selectedId,
-        supervisor_ids: selectedId ? [selectedId] : [],
-        supervisor: assignedSupervisor
-          ? {
-              id: assignedSupervisor.id,
-              full_name: assignedSupervisor.full_name,
-              email: assignedSupervisor.email || null,
-            }
-          : null,
-        supervisors: assignedSupervisor
-          ? [
-              {
-                id: assignedSupervisor.id,
-                full_name: assignedSupervisor.full_name,
-                email: assignedSupervisor.email || null,
-              },
-            ]
-          : [],
+        supervisors: selectedSupervisor ? [selectedSupervisor as any] : [],
       };
       onSuccess(patch);
       onClose();
     } catch (err: any) {
+      if (previousUsers) {
+        queryClient.setQueryData(['users'], previousUsers);
+      }
+      if (previousUserDetail) {
+        queryClient.setQueryData(['userDetail', user.id], previousUserDetail);
+      }
+
       haptics.reject();
-      const sanitized = sanitizeDatabaseError(err);
-      showToast('error', 'Update Failed', sanitized.error || 'Failed to update supervisor assignment.');
+      const msg = err?.message || 'Failed to update reporting supervisor.';
+      setSubmitError(msg);
+      toast('error', 'Assignment Failed', msg);
     } finally {
       savingRef.current = false;
       setIsSaving(false);
     }
   };
 
-  if (!visible) return null;
+  const targetEntity: TargetEntityDetails = {
+    type: 'operator',
+    title: user?.full_name || 'User Profile',
+    code: user?.employee_id || 'USER',
+    subtitle: (user?.role || 'user').toUpperCase(),
+    statusBadge: user?.status ? user.status.toUpperCase() : 'ACTIVE',
+  };
 
   return (
-    <AppModal
+    <AssignmentBottomSheet
       visible={visible}
       onClose={onClose}
-      variant={isDesktop ? 'center' : 'bottom'}
-      panelStyle={
-        isDesktop
-          ? {
-              maxWidth: 520,
-              width: '100%',
-              maxHeight: '85%',
-              padding: 0,
-              borderRadius: radiusNumeric.lg,
-              overflow: 'hidden',
-            }
-          : undefined
+      title="Assign Reporting Supervisor"
+      description="Designate organizational line manager & reporting supervisor"
+      targetEntity={targetEntity}
+      footer={
+        <AssignmentActionBar
+          onSave={handleSave}
+          onCancel={onClose}
+          isSaving={isSaving}
+          saveLabel="Save Supervisor"
+          hasUnsavedChanges={hasUnsavedChanges}
+          error={submitError}
+          disabled={isSaving}
+        />
       }
-      testID="assign-supervisor-modal"
     >
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        {/* Notch / Drag handle */}
-        <View style={styles.notchWrapper}>
-          <View style={[styles.notch, { backgroundColor: theme.colors.hairline }]} />
-        </View>
+      <AssignmentSearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search supervisors by name or ID..."
+        count={candidateItems.length}
+        totalCount={supervisors.length}
+      />
 
-        {/* Modal Header */}
-        <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-          <View style={styles.modalHeaderLeft}>
-            <View style={[styles.iconCircle, { backgroundColor: '#0d948818' }]}>
-              <ShieldCheck size={18} color="#0d9488" />
-            </View>
-            <View style={styles.headerTitles}>
-              <Text variant="heading" style={{ color: theme.colors.ink }}>
-                Assign Supervisor
-              </Text>
-              <Text variant="caption" style={{ color: theme.colors.mute }}>
-                {user ? `Select supervisor for ${user.full_name}` : 'Select supervisor'}
-              </Text>
-            </View>
-          </View>
-          <Pressable variant="plain" hitSlopToMin48 onPress={onClose} style={styles.closeBtn}>
-            <X size={18} color={theme.colors.mute} />
-          </Pressable>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchSection}>
-          <SearchInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search supervisors by name or email..."
-          />
-        </View>
-
-        {/* Supervisor List */}
-        <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
-          {isLoading ? (
-            <View style={{ gap: spacingNumeric.sm }}>
-              {Array.from({ length: 4 }).map((_, idx) => (
-                <View
-                  key={`sup-skel-${idx}`}
-                  style={[
-                    styles.optionRow,
-                    {
-                      borderColor: theme.colors.hairline,
-                      backgroundColor: 'transparent',
-                    },
-                  ]}
-                >
-                  <View style={styles.optionLeft}>
-                    <Skeleton width={36} height={36} borderRadius={radiusNumeric.full} />
-                    <View style={styles.optionTextContainer}>
-                      <Skeleton width={idx % 2 === 0 ? 140 : 110} height={14} borderRadius={radiusNumeric.xs} />
-                      <Skeleton width={idx % 2 === 0 ? 170 : 130} height={11} borderRadius={radiusNumeric.xs} style={{ marginTop: 4 }} />
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <>
-              {/* Option: Unassigned */}
-              <Pressable
-                variant="plain"
-                haptic={false}
-                onPress={() => {
-                  haptics.select();
-                  setSelectedId(null);
-                }}
-                style={[
-                  styles.optionRow,
-                  {
-                    backgroundColor: selectedId === null ? theme.colors.canvas : 'transparent',
-                    borderColor: selectedId === null ? theme.colors.link : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <View style={styles.optionLeft}>
-                  <View
-                    style={[
-                      styles.avatarCircle,
-                      { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                    ]}
-                  >
-                    <User size={16} color={theme.colors.mute} />
-                  </View>
-                  <View style={styles.optionTextContainer}>
-                    <Text
-                      variant="label"
-                      style={{ color: selectedId === null ? theme.colors.link : theme.colors.ink }}
-                    >
-                      None (Unassigned)
-                    </Text>
-                    <Text variant="caption" style={{ color: theme.colors.mute }}>
-                      Remove current supervisor assignment
-                    </Text>
-                  </View>
-                </View>
-                {selectedId === null && (
-                  <View style={[styles.checkCircle, { backgroundColor: theme.colors.link }]}>
-                    <Check size={12} color="#ffffff" />
-                  </View>
-                )}
-              </Pressable>
-
-              {/* List of Supervisors */}
-              {filteredSupervisors.map((s) => {
-                const isSelected = selectedId === s.id;
-                return (
-                  <Pressable
-                    key={s.id}
-                    variant="plain"
-                    haptic={false}
-                    onPress={() => {
-                      haptics.select();
-                      setSelectedId(s.id);
-                    }}
-                    style={[
-                      styles.optionRow,
-                      {
-                        backgroundColor: isSelected ? theme.colors.canvas : 'transparent',
-                        borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.optionLeft}>
-                      <View
-                        style={[
-                          styles.avatarCircle,
-                          {
-                            backgroundColor: isSelected ? theme.colors.ink : theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="caption"
-                          style={{
-                            color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                          }}
-                        >
-                          {s.full_name ? s.full_name[0].toUpperCase() : 'S'}
-                        </Text>
-                      </View>
-                      <View style={styles.optionTextContainer}>
-                        <View style={styles.nameRow}>
-                          <Text
-                            variant="label"
-                            style={{ color: isSelected ? theme.colors.link : theme.colors.ink }}
-                          >
-                            {s.full_name}
-                          </Text>
-                          <Badge variant="neutral" size="sm">
-                            <Text variant="micro" style={{ color: '#0d9488' }}>
-                              {s.role ? s.role.replace(/_/g, ' ').toUpperCase() : 'SUPERVISOR'}
-                            </Text>
-                          </Badge>
-                        </View>
-                        {s.email ? (
-                          <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
-                            {s.email}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    {isSelected && (
-                      <View style={[styles.checkCircle, { backgroundColor: theme.colors.link }]}>
-                        <Check size={12} color="#ffffff" />
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-
-              {filteredSupervisors.length === 0 && !isLoading && (
-                <View style={styles.emptyBox}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>
-                    No supervisors found matching "{search}".
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
-        </ScrollView>
-
-        {/* Modal Footer / Save Action */}
-        <View style={[styles.modalFooter, { borderTopColor: theme.colors.hairline }]}>
-          <Pressable
-            variant="plain"
-            onPress={onClose}
-            disabled={isSaving}
-            style={[styles.cancelBtn, { borderColor: theme.colors.hairline }]}
-          >
-            <Text variant="label" style={{ color: theme.colors.ink }}>
-              Cancel
-            </Text>
-          </Pressable>
-
-          <Pressable
-            variant="plain"
-            onPress={handleSave}
-            disabled={isSaving || isLoading}
-            style={[
-              styles.saveBtn,
-              { backgroundColor: theme.colors.link, opacity: isSaving ? 0.7 : 1 },
-            ]}
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <>
-                <ShieldCheck size={16} color="#ffffff" />
-                <Text variant="label" style={{ color: '#ffffff' }}>
-                  Save Assignment
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      </View>
-    </AppModal>
+      <AssignmentSelectableList
+        candidates={candidateItems}
+        selectedIds={selectedId ? [selectedId] : []}
+        onSelect={(id) => setSelectedId((prev) => (prev === id ? null : id))}
+        selectionMode="single"
+        isLoading={isLoading}
+        emptyTitle="No supervisors found"
+        emptyDescription="No active supervisors match your search criteria."
+      />
+    </AssignmentBottomSheet>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    borderRadius: radiusNumeric.lg,
-    maxHeight: 560,
-    width: '100%',
-    overflow: 'hidden',
-  },
-  notchWrapper: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  notch: {
-    width: 36,
-    height: 4,
-    borderRadius: radiusNumeric.full,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacingNumeric.md,
-    paddingBottom: spacingNumeric.sm,
-    borderBottomWidth: 1,
-  },
-  modalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitles: {
-    flex: 1,
-    gap: 2,
-  },
-  closeBtn: {
-    padding: 6,
-  },
-  searchSection: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingTop: spacingNumeric.sm,
-    paddingBottom: 4,
-  },
-  listScroll: {
-    maxHeight: 320,
-    paddingHorizontal: spacingNumeric.md,
-  },
-  listContent: {
-    gap: 8,
-    paddingVertical: 8,
-  },
-  loadingBox: {
-    paddingVertical: 32,
-    alignItems: 'center',
-    gap: 8,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 10,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    minHeight: 48,
-  },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  avatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  optionTextContainer: {
-    flex: 1,
-    gap: 2,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  checkCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  emptyBox: {
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 10,
-    padding: spacingNumeric.md,
-    borderTopWidth: 1,
-  },
-  cancelBtn: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: radiusNumeric.pill,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtn: {
-    minHeight: 44,
-    paddingHorizontal: 20,
-    borderRadius: radiusNumeric.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-});

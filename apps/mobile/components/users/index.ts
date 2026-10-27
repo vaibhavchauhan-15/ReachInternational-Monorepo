@@ -8,6 +8,7 @@ export * from './UserExportModal';
 export * from './AssignSupervisorModal';
 export * from './AssignMachineModal';
 export * from './UserCardSkeleton';
+export * from './UserDetailSkeletons';
 export * from './DeleteUserConfirmDialog';
 export * from './UserTouchCard';
 export * from './UserActionsPopover';

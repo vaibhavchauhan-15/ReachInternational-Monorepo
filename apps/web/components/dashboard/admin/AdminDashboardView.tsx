@@ -40,7 +40,7 @@ export async function AdminDashboardView({
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-7">
       <DashboardHeader
         userName={userName}
         role="admin"
@@ -51,7 +51,7 @@ export async function AdminDashboardView({
 
       {/* Core Fleet & Organization KPIs */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Fleet & Personnel Summary
         </h2>
         <KPIGrid columns={5}>
@@ -95,7 +95,7 @@ export async function AdminDashboardView({
 
       {/* Operational Telemetry & Exceptions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Today&apos;s Operational Exceptions
         </h2>
         <KPIGrid columns={3}>
@@ -125,10 +125,10 @@ export async function AdminDashboardView({
 
       {/* Quick Action Navigation */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Quick Management
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <PrimaryAction
             title="Operations Hub & Running Logs"
             description="Review daily operator submissions, meter readings, and client worksites"

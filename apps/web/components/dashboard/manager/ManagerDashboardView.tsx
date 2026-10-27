@@ -37,7 +37,7 @@ export async function ManagerDashboardView({
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-7">
       <DashboardHeader
         userName={userName}
         role="manager"
@@ -48,7 +48,7 @@ export async function ManagerDashboardView({
 
       {/* Fleet Utilization KPIs */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Fleet Utilization Breakdown
         </h2>
         <KPIGrid columns={5}>
@@ -92,10 +92,10 @@ export async function ManagerDashboardView({
 
       {/* Today's Operational Running Hours */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Today&apos;s Production &amp; Running Meter
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <KPICard
             label="Total Logs Submitted Today"
             value={todayLogs}
@@ -115,10 +115,10 @@ export async function ManagerDashboardView({
 
       {/* Primary Management Actions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Operations Management
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <PrimaryAction
             title="Daily Operations Review"
             description="Examine shift logs, running hours, and site location records"

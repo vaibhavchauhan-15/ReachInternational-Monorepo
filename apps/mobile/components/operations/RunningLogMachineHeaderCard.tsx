@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text, useTheme } from '../ui';
+import { Text, Badge, useTheme } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatHoursWithUnit } from './RunningLogShiftCard';
 
@@ -24,53 +24,56 @@ export const RunningLogMachineHeaderCard = React.memo<RunningLogMachineHeaderCar
   }) {
     const { theme } = useTheme();
 
-    const snDisplay = serialNumber || machineCode;
+    const snDisplay = machineCode || serialNumber;
 
     return (
       <View
         style={[
           styles.container,
           {
-            backgroundColor: theme.colors.canvas,
+            backgroundColor: theme.colors.canvasElevated,
             borderColor: theme.colors.hairline,
           },
         ]}
       >
         <View style={styles.topRow}>
           <Text variant="subheading" weight="bold" style={[styles.title, { color: theme.colors.ink }]}>
-            {model || 'Equipment'}{' '}
-            {snDisplay ? (
-              <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-                (SN: {snDisplay})
-              </Text>
-            ) : null}
+            {model || 'Equipment'}
           </Text>
+          {Boolean(snDisplay) && (
+            <Badge
+              variant="outline"
+              size="sm"
+              shape="pill"
+              label={`SN: ${snDisplay}`}
+            />
+          )}
         </View>
 
         <View style={[styles.metricsRow, { borderTopColor: theme.colors.hairline }]}>
           <View style={styles.metricItem}>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.mute }}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
               DAYS:{' '}
             </Text>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+            <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
               {totalDays}
             </Text>
           </View>
 
           <View style={styles.metricItem}>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.mute }}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
               M/C RT:{' '}
             </Text>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+            <Text variant="mono" weight="bold" style={{ color: theme.colors.link }}>
               {formatHoursWithUnit(totalRunHours)}
             </Text>
           </View>
 
           <View style={styles.metricItem}>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.mute }}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
               WH:{' '}
             </Text>
-            <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+            <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
               {formatHoursWithUnit(totalWorkingHours)}
             </Text>
           </View>
@@ -84,7 +87,7 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    padding: spacingNumeric.sm + 2,
+    padding: spacingNumeric.sm + 4,
     marginBottom: spacingNumeric.sm,
     gap: spacingNumeric.xs + 2,
   },
@@ -92,14 +95,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacingNumeric.xs,
   },
-  title: {},
+  title: {
+    flexShrink: 1,
+  },
   metricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    paddingTop: spacingNumeric.xs + 2,
+    paddingTop: spacingNumeric.xs + 3,
   },
   metricItem: {
     flexDirection: 'row',

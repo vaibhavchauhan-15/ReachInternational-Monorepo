@@ -61,9 +61,10 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          FLEET UTILIZATION BREAKDOWN
+          Fleet Utilization Breakdown
         </Text>
         <KPIGrid columns={5}>
           <KPICard
@@ -108,9 +109,10 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          TODAY'S PRODUCTION & RUNNING METER
+          Today's Production & Running Meter
         </Text>
         <KPIGrid columns={2}>
           <KPICard
@@ -134,9 +136,10 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          OPERATIONS MANAGEMENT
+          Operations Management
         </Text>
         <View style={styles.actionList}>
           <PrimaryAction
@@ -168,7 +171,7 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 4,
+    marginBottom: spacingNumeric.sm,
   },
   actionList: {
     gap: spacingNumeric.sm,

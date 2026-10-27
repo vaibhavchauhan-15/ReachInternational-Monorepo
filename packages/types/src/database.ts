@@ -1220,12 +1220,34 @@ export interface CRMClient {
   }[];
   /** Count of operational sites for this client */
   site_count?: number;
+  /** Primary supervisor assigned at the client account level */
+  supervisor_id?: string | null;
+  /** All supervisors assigned at the client account level */
+  supervisor_ids?: string[] | null;
+  /** Hydrated supervisors associated with this client */
+  supervisors?: ClientSupervisor[];
   /** @deprecated Backward compatibility alias mapped from company_name */
   client_name?: string;
   /** @deprecated Backward compatibility optional alias */
   email?: string | null;
   /** @deprecated Backward compatibility optional alias */
   notes?: string | null;
+}
+
+export interface ClientSupervisor {
+  id: string;
+  client_id: string;
+  supervisor_id: string;
+  assigned_by?: string | null;
+  assigned_at: string;
+  created_at: string;
+  supervisor?: {
+    id: string;
+    full_name: string;
+    email?: string | null;
+    phone?: string | null;
+    status: string;
+  };
 }
 
 export interface Vendor {

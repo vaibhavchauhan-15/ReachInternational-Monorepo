@@ -68,8 +68,10 @@ function AlertItem({ alert }: { alert: DashboardAlert }) {
     <div
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`flex items-start justify-between gap-2.5 p-3 sm:p-3.5 md:p-4 rounded-[var(--radius-md)] border transition-all duration-200 ${config.bg} ${config.border} ${
-        alert.actionUrl ? "hover:border-[var(--color-ink)]/30 hover:shadow-sm cursor-pointer" : ""
+      className={`group flex items-start justify-between gap-2.5 p-3 sm:p-3.5 md:p-4 rounded-[var(--radius-md)] border transition-all duration-200 ${config.bg} ${config.border} ${
+        alert.actionUrl
+          ? "hover:border-[var(--color-ink)]/30 hover:shadow-whisper active:scale-[0.99] cursor-pointer"
+          : ""
       }`}
     >
       <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
@@ -92,7 +94,7 @@ function AlertItem({ alert }: { alert: DashboardAlert }) {
             {alert.title}
           </h4>
           {alert.description && (
-            <p className={`text-[11px] sm:text-xs mt-1 line-clamp-2 ${config.descText}`}>
+            <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed line-clamp-2 ${config.descText}`}>
               {alert.description}
             </p>
           )}
@@ -100,9 +102,9 @@ function AlertItem({ alert }: { alert: DashboardAlert }) {
       </div>
 
       {alert.actionUrl && (
-        <div className="shrink-0 flex items-center text-xs font-medium text-[var(--color-ink)] gap-1 pt-1">
+        <div className="shrink-0 flex items-center text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-primary)] gap-1 pt-1 transition-colors">
           <span className="hidden sm:inline">View</span>
-          <ArrowUpRight size={14} className="w-3.5 h-3.5" />
+          <ArrowUpRight size={14} className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:group-hover:translate-x-0" />
         </div>
       )}
     </div>
@@ -112,7 +114,7 @@ function AlertItem({ alert }: { alert: DashboardAlert }) {
     return (
       <Link
         href={alert.actionUrl}
-        className="block"
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] rounded-[var(--radius-md)]"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -126,7 +128,7 @@ function AlertItem({ alert }: { alert: DashboardAlert }) {
 
 export function AlertWidget({
   alerts,
-  title = "Alert",
+  title = "Operational Alerts",
   showCount = false,
   className = "",
 }: AlertWidgetProps) {
@@ -135,7 +137,7 @@ export function AlertWidget({
   return (
     <div className={`space-y-2.5 ${className}`}>
       {title && (
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider">
           {title}{showCount ? ` (${alerts.length})` : ""}
         </h2>
       )}

@@ -6,6 +6,7 @@ import { Clock, Shield, Users, Phone, AlertCircle } from "lucide-react";
 import { AnimatedLoader } from "@/components/ui/animated-icons";
 import { getMachineAssignmentsAction } from "@/app/actions/machines";
 import type { Machine, OperatorMachineAssignment } from "@/lib/types/database";
+import { getUserInitials } from "@reachinternational/utils";
 
 interface MachineAssignmentsQuickModalProps {
   machine: Machine | null;
@@ -153,8 +154,8 @@ export function MachineAssignmentsQuickModal({
                         className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-[var(--color-hairline-soft-surface)]/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-8 w-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 font-bold text-amber-600 dark:text-amber-400 text-xs">
-                            {idx + 1}
+                          <div className="h-8 w-8 rounded-lg bg-[var(--color-ink)] text-white dark:bg-white dark:text-[#171717] border border-[var(--color-hairline)] flex items-center justify-center shrink-0 font-mono font-bold text-xs shadow-2xs">
+                            {getUserInitials(operator?.full_name)}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">

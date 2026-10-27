@@ -4,7 +4,7 @@
  * Provides a clean, polished search input adhering to Vercel Geist design tokens:
  * - Edge border highlighting on focus: #0284c7 (brand blue) / #38bdf8 (dark mode)
  * - Seamless inner TextInput with zero border, zero browser inset outlines, zero background bleed
- * - Responsive 38px / 40px touch-friendly height with crisp hairline borders
+ * - Responsive 36px / 38px / 44px touch-friendly height with crisp hairline borders
  * - Built-in Search icon and animated/interactive clear 'X' button
  * - Cross-platform parity across iOS, Android, and Web
  */
@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Search, X } from './icon';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric } from '@reachinternational/design-tokens';
+import { radiusNumeric, type TypeVariant } from '@reachinternational/design-tokens';
 import { useTypeStyle } from './Text';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from './touch/Pressable';
@@ -40,6 +40,7 @@ export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   rightIcon?: React.ReactNode;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
+  textVariant?: TypeVariant;
   variant?: 'default' | 'pill' | 'rounded';
   size?: 'sm' | 'md' | 'lg';
   name?: string;
@@ -58,6 +59,7 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
   rightIcon,
   containerStyle,
   inputStyle,
+  textVariant,
   variant = 'default',
   size = 'md',
   onFocus,
@@ -67,6 +69,9 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
   const { theme, isDark } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  const textVariantResolved: TypeVariant = textVariant || (size === 'lg' ? 'body' : 'caption');
+  const typeStyleObj = useTypeStyle(textVariantResolved);
 
   React.useImperativeHandle(ref, () => inputRef.current as TextInput);
 
@@ -91,7 +96,7 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
   const inactiveBorderColor = theme.colors.hairline;
   const effectiveBorderColor = isFocused ? activeBorderColor : inactiveBorderColor;
 
-  const height = size === 'sm' ? 34 : size === 'lg' ? 44 : 38;
+  const height = size === 'sm' ? 34 : size === 'lg' ? 44 : 36;
   const borderRadius = variant === 'pill' ? radiusNumeric.full : radiusNumeric.lg;
 
   const isFlexLayout = React.useMemo(() => {
@@ -171,7 +176,7 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
           : {})}
         style={[
           styles.input,
-          useTypeStyle('body'),
+          typeStyleObj,
           {
             color: theme.colors.ink,
           },

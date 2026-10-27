@@ -45,6 +45,18 @@ export function verifyClientSecurityEnvironment(): { secure: boolean; errors: st
  * Deep-link route sanitizer: Prevents arbitrary route injection attacks via deep links.
  */
 export function sanitizeDeepLinkRoute(incomingRoute: string, role?: UserRole): string {
+  // Support parameterized client detail routes: /clients/[id] and /(app)/clients/[id]
+  const CLIENT_DETAIL_REGEX = /^(\/(app))?\/clients\/[A-Za-z0-9_-]+$/;
+  if (CLIENT_DETAIL_REGEX.test(incomingRoute)) {
+    const normalizedRole = (role || 'operator').toLowerCase();
+    const canAccessClients = ['super_admin', 'admin', 'manager', 'supervisor'].includes(normalizedRole);
+    if (!canAccessClients) {
+      console.warn(`[Security] Blocked unauthorized deep-link to client details for role '${role}'. Redirecting to role home.`);
+      return getMobileRoleHomeRoute(role);
+    }
+    return incomingRoute;
+  }
+
   const ALLOWED_ROUTES = [
     '/dashboard',
     '/(app)/dashboard',

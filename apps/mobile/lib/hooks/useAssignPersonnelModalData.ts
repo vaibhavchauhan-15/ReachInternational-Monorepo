@@ -154,7 +154,24 @@ export function useAssignPersonnelMachines({
         .abortSignal(signal);
 
       if (isSupervisorRole && supervisorId) {
-        query = query.or(`current_supervisor_id.eq.${supervisorId},supervisor_ids.cs.{${supervisorId}}`);
+        // Fetch clients supervised by this user to include inherited machinery
+        const { data: clientSupervisors } = await supabase
+          .from('client_supervisors')
+          .select('client_id')
+          .eq('supervisor_id', supervisorId)
+          .abortSignal(signal);
+
+        const supervisedClientIds = (clientSupervisors || [])
+          .map((cs: any) => cs.client_id)
+          .filter(Boolean);
+
+        if (supervisedClientIds.length > 0) {
+          query = query.or(
+            `current_supervisor_id.eq.${supervisorId},supervisor_ids.cs.{${supervisorId}},client_id.in.(${supervisedClientIds.join(',')})`
+          );
+        } else {
+          query = query.or(`current_supervisor_id.eq.${supervisorId},supervisor_ids.cs.{${supervisorId}}`);
+        }
       }
 
       if (search && search.trim()) {

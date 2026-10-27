@@ -20,6 +20,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
     "user.view", "user.create", "user.edit", "user.assign_role", "user.activate", "user.assign_supervisor", "user.bulk_manage",
+    "client.assign_supervisor", "client.remove_supervisor",
     "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view", "settings.view"
   ],
@@ -40,6 +41,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
     "user.view", "user.create", "user.edit",
+    "client.assign_supervisor", "client.remove_supervisor",
     "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view", "settings.view"
   ],

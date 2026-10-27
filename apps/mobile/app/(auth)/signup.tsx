@@ -61,6 +61,7 @@ import {
   Info,
   RotateCw,
   AlertCircle,
+  ArrowLeft,
 } from '../../components/ui/icon';
 
 const SIGNUP_ROLES = [
@@ -75,6 +76,15 @@ export default function SignupScreen() {
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
   const { width: windowWidth } = useWindowDimensions();
+
+  const handleNavigateBack = useCallback(() => {
+    haptics.select();
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(auth)/login');
+    }
+  }, [router]);
 
   // Section 1: Account & Role
   const [fullName, setFullName] = useState('');
@@ -637,6 +647,22 @@ export default function SignupScreen() {
                 },
               ]}
             >
+              {/* Back to Sign In Action */}
+              <Pressable
+                variant="plain"
+                haptic="select"
+                hitSlopToMin48={true}
+                onPress={handleNavigateBack}
+                style={styles.backRow}
+                accessibilityRole="button"
+                accessibilityLabel="Back to sign in"
+              >
+                <ArrowLeft size={14} color={isDark ? '#a1a1aa' : '#64748b'} />
+                <Text variant="caption" weight="medium" style={{ color: isDark ? '#a1a1aa' : '#64748b' }}>
+                  Back to sign in
+                </Text>
+              </Pressable>
+
               {/* Reach International Brand Wordmark & Official Tagline */}
               <View style={styles.logoContainer}>
                 <ReachInternationalLogo variant="full" size={26} showIcon={false} />
@@ -1392,6 +1418,14 @@ const styles = StyleSheet.create({
         elevation: 3,
       },
     }),
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    minHeight: 36,
   },
   logoContainer: {
     alignItems: 'center',

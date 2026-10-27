@@ -10,7 +10,7 @@ import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Badge } from '../../ui/Badge';
 import { useTheme } from '../../ui/ThemeProvider';
-import { spacingNumeric } from '@reachinternational/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { ArrowRight } from '../../ui/icon';
 
 export interface PrimaryActionProps {
@@ -65,7 +65,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
     <Card
       onPress={handlePress}
       className="p-3.5 sm:p-4 rounded-2xl border border-border bg-card flex-row items-center justify-between"
-      style={style}
+      style={[styles.card, style]}
     >
       <View style={styles.leftRow}>
         <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
@@ -76,6 +76,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
           <View style={styles.titleRow}>
             <Text
               variant="subheading"
+              weight="semibold"
               style={[
                 styles.title,
                 { color: isDark ? '#f8fafc' : '#171717' },
@@ -113,11 +114,18 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
 };
 
 const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacingNumeric.md,
+    borderRadius: radiusNumeric.lg,
+  },
   leftRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: spacingNumeric.sm + 2,
+    gap: spacingNumeric.sm + 4,
     minWidth: 0,
   },
   iconCircle: {
@@ -141,7 +149,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   arrowContainer: {
-    paddingLeft: spacingNumeric.xs,
+    paddingLeft: spacingNumeric.sm,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -71,8 +71,8 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
     >
       <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
         <View style={styles.modalHeader}>
-          <View>
-            <Text variant="heading" style={{ color: theme.colors.ink }}>Add Operating Site</Text>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text variant="heading" weight="bold" style={{ color: theme.colors.ink }}>Add Operating Site</Text>
             <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
               {siteTargetClientId
                 ? (targetClientName || 'Existing Client')
@@ -84,10 +84,10 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
           </Pressable>
         </View>
 
-        <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.formSection}>
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Site Name *</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Site Name *</Text>
               <Input
                 value={siteFormName}
                 onChangeText={setSiteFormName}
@@ -98,7 +98,7 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
             </View>
 
             <View style={styles.formGroup}>
-              <Text variant="caption" style={{ color: theme.colors.ink }}>Street / Area *</Text>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Street / Area *</Text>
               <Input
                 value={siteFormStreet}
                 onChangeText={setSiteFormStreet}
@@ -110,7 +110,7 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>City / Town *</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>City / Town *</Text>
                 <Input
                   value={siteFormCity}
                   onChangeText={setSiteFormCity}
@@ -121,7 +121,7 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>District *</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>District *</Text>
                 <Input
                   value={siteFormDistrict}
                   onChangeText={setSiteFormDistrict}
@@ -134,7 +134,7 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
 
             <View style={styles.rowInputs}>
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>State (Default: MH)</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>State (Default: MH)</Text>
                 <Input
                   value="Maharashtra"
                   editable={false}
@@ -143,7 +143,7 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
               </View>
 
               <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text variant="caption" style={{ color: theme.colors.ink }}>Pincode (6 digits) *</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>Pincode (6 digits) *</Text>
                 <Input
                   value={siteFormPincode}
                   onChangeText={setSiteFormPincode}
@@ -159,8 +159,8 @@ export const ClientSiteModal: React.FC<ClientSiteModalProps> = ({
         </ScrollView>
 
         <View style={styles.modalFooter}>
-          <Button label="Cancel" variant="outline" onPress={onClose} disabled={isSavingSite} />
-          <Button label={isSavingSite ? 'Saving...' : 'Save Site'} variant="primary" onPress={onSaveSite} disabled={isSavingSite} />
+          <Button label="Cancel" variant="outline" onPress={onClose} disabled={isSavingSite} style={{ minHeight: 44 }} />
+          <Button label={isSavingSite ? 'Saving...' : 'Save Site'} variant="primary" onPress={onSaveSite} disabled={isSavingSite} style={{ minHeight: 44 }} />
         </View>
       </View>
     </AppModal>
@@ -176,6 +176,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacingNumeric.md,
+  },
+  modalScroll: {
+    maxHeight: 520,
   },
   formSection: {
     marginBottom: spacingNumeric.md,
@@ -194,6 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 44,
   },
   modalFooter: {
     flexDirection: 'row',

@@ -28,7 +28,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.titleContainer}>
-        <Text variant="title" style={[styles.greetingText, { color: theme.colors.ink }]}>
+        <Text variant="title" weight="bold" style={[styles.greetingText, { color: theme.colors.ink }]}>
           {greeting}, {userName}
         </Text>
         {subtitle ? (

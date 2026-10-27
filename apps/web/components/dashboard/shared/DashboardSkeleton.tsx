@@ -8,7 +8,7 @@ export function DashboardShellSkeleton({
   kpiCount?: number;
 }) {
   return (
-    <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 space-y-6 sm:space-y-8 animate-pulse">
+    <div className="w-full max-w-7xl mx-auto space-y-5 sm:space-y-6 lg:space-y-7 animate-pulse">
       {/* Header Skeleton */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-[var(--color-hairline)]">
         <div>

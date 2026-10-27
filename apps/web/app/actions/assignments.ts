@@ -1091,10 +1091,10 @@ export async function getAssignableMachinesAction(): Promise<{
   error?: string;
 }> {
   try {
-    await requireRole("admin", "super_admin", "manager", "supervisor");
+    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = createSupabaseAdminClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("machines")
       .select(`
         id,
@@ -1109,6 +1109,27 @@ export async function getAssignableMachinesAction(): Promise<{
         client:clients(id, company_name)
       `)
       .order("machine_id", { ascending: true });
+
+    if (caller.role === "supervisor") {
+      const { data: clientSupervisors } = await supabase
+        .from("client_supervisors")
+        .select("client_id")
+        .eq("supervisor_id", caller.id);
+
+      const supervisedClientIds = (clientSupervisors || []).map((cs) => cs.client_id);
+
+      if (supervisedClientIds.length > 0) {
+        query = query.or(
+          `client_id.in.(${supervisedClientIds.join(",")}),supervisor_ids.cs.{${caller.id}},current_supervisor_id.eq.${caller.id}`
+        );
+      } else {
+        query = query.or(
+          `supervisor_ids.cs.{${caller.id}},current_supervisor_id.eq.${caller.id}`
+        );
+      }
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return { success: false, machines: [], error: error.message };

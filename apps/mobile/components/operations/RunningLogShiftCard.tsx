@@ -145,7 +145,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
   const remarksAnimatedStyle = useAnimatedStyle(() => {
     return {
       opacity: remarksProgress.value,
-      maxHeight: interpolate(remarksProgress.value, [0, 1], [0, 220]),
+      maxHeight: interpolate(remarksProgress.value, [0, 1], [0, 360]),
       overflow: 'hidden' as const,
     };
   });
@@ -232,6 +232,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
               variant="icon"
               haptic="select"
               onPress={handleToggleRemarks}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={styles.inlineIconBtn}
               accessibilityLabel="Toggle remarks"
             >
@@ -243,6 +244,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
               variant="icon"
               haptic="select"
               onPress={handleConflictPress}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={styles.inlineIconBtn}
               accessibilityLabel="Conflict detected in shift"
             >
@@ -266,22 +268,24 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
       {/* Row 2: Shift & Secondary Entity (Operator or Client) */}
       <View style={styles.metadataRow}>
         <View style={styles.shiftTagWrapper}>
-          <Text variant="caption" style={{ color: theme.colors.mute }}>
+          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
             Shift:{' '}
           </Text>
-          <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+          <Text variant="mono" weight="bold" style={{ color: theme.colors.link }}>
             {shiftCode}
           </Text>
         </View>
 
         <View style={styles.operatorWrapper}>
-          <Text variant="caption" style={{ color: theme.colors.mute }}>
+          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
             {secondaryEntityLabel}
           </Text>
           <HighlightText
+            variant="caption"
+            weight="semibold"
             text={secondaryEntityValue}
             query={searchTerm}
-            style={[{ color: theme.colors.ink }]}
+            style={{ color: theme.colors.ink }}
             numberOfLines={1}
           />
         </View>
@@ -309,10 +313,10 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
             },
           ]}
         >
-          <Text variant="caption" weight="bold" style={[styles.metricLabel, { color: theme.colors.mute }]}>
+          <Text variant="micro" weight="bold" style={[styles.metricLabel, { color: theme.colors.mute }]}>
             M/C RT
           </Text>
-          <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
+          <Text variant="mono" weight="bold" style={{ color: theme.colors.link }}>
             {runningHoursFormatted}
           </Text>
         </View>
@@ -327,10 +331,10 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
             },
           ]}
         >
-          <Text variant="caption" weight="bold" style={[styles.metricLabel, { color: theme.colors.mute }]}>
+          <Text variant="micro" weight="bold" style={[styles.metricLabel, { color: theme.colors.mute }]}>
             WH
           </Text>
-          <Text variant="body" weight="bold" style={{ color: theme.colors.ink }}>
+          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
             {workingHoursFormatted}
           </Text>
         </View>
@@ -345,11 +349,18 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
             },
           ]}
         >
-          <Text variant="caption" weight="bold" style={[styles.metricLabel, { color: theme.colors.mute }]}>
+          <Text
+            variant="micro"
+            weight="bold"
+            style={[
+              styles.metricLabel,
+              { color: breakdownHours > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute },
+            ]}
+          >
             B/D
           </Text>
           <Text
-            variant="body"
+            variant="mono"
             weight="bold"
             style={{
               color: breakdownHours > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute,
@@ -396,9 +407,10 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                   ]}
                 >
                   <HighlightText
+                    variant="caption"
                     text={log.remarks || ''}
                     query={searchTerm}
-                    style={[{ color: theme.colors.ink }]}
+                    style={{ color: theme.colors.ink, fontStyle: 'italic' }}
                   />
                 </View>
               )}
@@ -415,9 +427,9 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                 >
                   <View style={styles.stoppageHeader}>
                     <AlertTriangle size={12} color="#f59e0b" />
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute }}>
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
                       Total Stoppage:{' '}
-                      <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                      <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
                         {breakdownHoursFormatted}
                       </Text>
                     </Text>
@@ -426,7 +438,7 @@ export const RunningLogShiftCard = React.memo<RunningLogShiftCardProps>(function
                   {Boolean(log.breakdown_start_time || log.breakdown_end_time) && (
                     <View style={styles.stoppageTimingRow}>
                       <Clock size={11} color={theme.colors.link} />
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
                         {log.breakdown_start_time || '00:00'} → {log.breakdown_end_time || '00:00'}
                       </Text>
                     </View>
@@ -474,7 +486,11 @@ const styles = StyleSheet.create({
   },
   dateText: {},
   inlineIconBtn: {
-    padding: 2,
+    padding: 4,
+    minWidth: 32,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerRight: {
     flex: 1,
@@ -543,7 +559,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     alignSelf: 'flex-start',
-    minHeight: 28,
+    minHeight: 44,
   },
   expandedDetailsContainer: {
     marginTop: spacingNumeric.xs,

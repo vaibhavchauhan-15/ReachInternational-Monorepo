@@ -5,6 +5,7 @@ import {
   ScrollView,
   RefreshControl,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -49,6 +50,8 @@ export default function RunningLogsScreen() {
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWide = width > 640;
 
   // Guard: Restrict operator role from accessing Daily Running Logs
   const isOperator = (role || '').toLowerCase() === 'operator';
@@ -56,7 +59,11 @@ export default function RunningLogsScreen() {
   if (role && isOperator) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <MobileHeader title="Running logs" showBack={false} />
+        <MobileHeader
+          title="Daily Running Logs"
+          showBack={true}
+          backRoute="/dashboard"
+        />
         <PermissionDeniedView
           featureName="Daily Running Logs"
           currentRole={role}
@@ -434,11 +441,11 @@ export default function RunningLogsScreen() {
 
       {/* Main Header with Back Arrow, Title, Search Icon, 3-Dot More Menu */}
       <MobileHeader
-        title="Running logs"
+        title="Daily Running Logs"
         showBack={true}
         showQuickAccess={false}
         showMoreMenu={true}
-        onPressBack={() => router.back()}
+        backRoute="/dashboard"
         actions={headerActions}
         onSearchPress={() => setIsSearchVisible((prev) => !prev)}
       />
@@ -464,18 +471,21 @@ export default function RunningLogsScreen() {
         </View>
       )}
 
-      {/* 2. Top Navbar: Segmented Mode Toggle (Clients | Machine | Operator) - 100% operations.tsx parity */}
+      {/* 2. Top Navbar: Segmented Mode Toggle (Clients | Machine | Operator) */}
       <View style={styles.segmentedToggleWrapper}>
-        <SegmentedToggle<LogsViewMode>
-          items={[
-            { id: 'client', label: 'Clients' },
-            { id: 'machine', label: 'Machine' },
-            { id: 'operator', label: 'Operator' },
-          ]}
-          value={logsViewMode}
-          onChange={(mode) => setLogsViewMode(mode)}
-          size="md"
-        />
+        <View style={[styles.segmentedToggleInner, isWide && styles.segmentedToggleInnerWide]}>
+          <SegmentedToggle<LogsViewMode>
+            items={[
+              { id: 'client', label: 'Clients' },
+              { id: 'machine', label: 'Machine' },
+              { id: 'operator', label: 'Operator' },
+            ]}
+            value={logsViewMode}
+            onChange={(mode) => setLogsViewMode(mode)}
+            size="md"
+            fullWidth={!isWide}
+          />
+        </View>
       </View>
 
       {/* Main Scrollable Body */}
@@ -524,6 +534,19 @@ export default function RunningLogsScreen() {
           onSelectCustomEndDate={(d) => setCustomEndDate(d)}
         />
 
+        {/* Results Count Summary */}
+        {!isLogsLoading && logs.length > 0 && (
+          <View style={styles.resultsCountRow}>
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              Showing{' '}
+              <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                {filteredLogs.length}
+              </Text>
+              {' '}{filteredLogs.length === 1 ? 'shift log' : 'shift logs'}
+            </Text>
+          </View>
+        )}
+
         {/* View Mode Content Feeds */}
         {isLogsLoading && logs.length === 0 ? (
           <OperationLogListSkeleton count={4} />
@@ -563,7 +586,7 @@ export default function RunningLogsScreen() {
                       },
                     ]}
                   >
-                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                    <Text variant="body" weight="medium" style={{ color: theme.colors.mute, textAlign: 'center' }}>
                       {debouncedSearch.trim()
                         ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
                         : 'No daily running hour logs found matching active filters.'}
@@ -624,7 +647,7 @@ export default function RunningLogsScreen() {
                       },
                     ]}
                   >
-                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                    <Text variant="body" weight="medium" style={{ color: theme.colors.mute, textAlign: 'center' }}>
                       {debouncedSearch.trim()
                         ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
                         : 'No daily running hour logs found matching active filters.'}
@@ -667,7 +690,7 @@ export default function RunningLogsScreen() {
                       },
                     ]}
                   >
-                    <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
+                    <Text variant="body" weight="medium" style={{ color: theme.colors.mute, textAlign: 'center' }}>
                       {debouncedSearch.trim()
                         ? `No daily running hour logs matched "${debouncedSearch.trim()}".`
                         : 'No daily running hour logs found matching active filters.'}
@@ -745,11 +768,27 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 6,
     backgroundColor: 'transparent',
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  segmentedToggleInner: {
+    width: '100%',
+  },
+  segmentedToggleInnerWide: {
+    maxWidth: 420,
+  },
+  resultsCountRow: {
+    paddingHorizontal: 2,
+    marginBottom: spacingNumeric.sm,
   },
   searchBarWrapper: {
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm,
     borderBottomWidth: 1,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
   },
   contentScroll: {
     flex: 1,
@@ -757,9 +796,13 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: spacingNumeric.md,
     paddingBottom: 110,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
   },
   feedWrapper: {
     gap: spacingNumeric.xs,
+    width: '100%',
   },
   machineGroupBlock: {
     marginBottom: spacingNumeric.md,

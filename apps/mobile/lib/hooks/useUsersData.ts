@@ -448,9 +448,54 @@ export function useUsersInfiniteQuery({
         .from('users')
         .select(USER_SELECT_COLUMNS, { count: 'exact' });
 
-      // Supervisor scoping: limit to supervised operators
+      // Supervisor scoping: limit to supervised operators (direct reporting or operational assignments on supervised clients)
       if (effectiveSupervisorId) {
-        query = query.eq('supervisor_id', effectiveSupervisorId);
+        // Query supervised clients and active operators deployed on client machines
+        const { data: csList } = await supabase
+          .from('client_supervisors')
+          .select('client_id')
+          .eq('supervisor_id', effectiveSupervisorId)
+          .abortSignal(signal);
+
+        const clientIds = (csList || []).map((c: any) => c.client_id).filter(Boolean);
+
+        let inheritedOperatorIds: string[] = [];
+        if (clientIds.length > 0) {
+          const { data: clientMachines } = await supabase
+            .from('machines')
+            .select('id')
+            .in('client_id', clientIds)
+            .abortSignal(signal);
+
+          const mIds = (clientMachines || []).map((m: any) => m.id).filter(Boolean);
+          if (mIds.length > 0) {
+            const { data: omas } = await supabase
+              .from('operator_machine_assignments')
+              .select('operator_id')
+              .in('machine_id', mIds)
+              .eq('is_active', true)
+              .abortSignal(signal);
+
+            inheritedOperatorIds = (omas || []).map((o: any) => o.operator_id).filter(Boolean);
+          }
+        }
+
+        // Also resolve user_supervisors junction table
+        const { data: usJunction } = await supabase
+          .from('user_supervisors')
+          .select('user_id')
+          .eq('supervisor_id', effectiveSupervisorId)
+          .abortSignal(signal);
+
+        const junctionUserIds = (usJunction || []).map((u: any) => u.user_id).filter(Boolean);
+        const combinedScopedIds = Array.from(new Set([...inheritedOperatorIds, ...junctionUserIds]));
+
+        if (combinedScopedIds.length > 0) {
+          query = query.or(`supervisor_id.eq.${effectiveSupervisorId},id.in.(${combinedScopedIds.join(',')})`);
+        } else {
+          query = query.eq('supervisor_id', effectiveSupervisorId);
+        }
+
         if (roleFilter !== 'all') {
           query = query.eq('role', roleFilter);
         } else {
@@ -648,8 +693,7 @@ export async function fetchSingleUserRecord(userId: string): Promise<UserRecord 
 
     const hydrated = await hydrateUserSlice([u]);
     return hydrated[0] || null;
-  } catch (err) {
-    console.warn('Error fetching single user record:', err);
+  } catch {
     return null;
   }
 }

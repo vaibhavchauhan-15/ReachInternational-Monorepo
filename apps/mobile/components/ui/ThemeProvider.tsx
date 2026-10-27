@@ -38,28 +38,15 @@ const getInitialMode = (): 'light' | 'dark' | 'system' => {
   return 'system';
 };
 
-// Atomically apply theme to DOM on Web with transition lock
-const applyDomTheme = (isDark: boolean, lockTransitions = true) => {
+// Atomically apply theme to DOM on Web in 0ms
+const applyDomTheme = (isDark: boolean) => {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
 
   const root = document.documentElement;
-
-  if (lockTransitions) {
-    root.classList.add('theme-changing');
-  }
-
   root.classList.toggle('dark', isDark);
   root.style.colorScheme = isDark ? 'dark' : 'light';
   if (document.body) {
     document.body.style.backgroundColor = isDark ? '#09090b' : '#fafafa';
-  }
-
-  if (lockTransitions) {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        root.classList.remove('theme-changing');
-      });
-    });
   }
 };
 
@@ -110,7 +97,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Initial synchronization
   useEffect(() => {
     if (Platform.OS === 'web') {
-      applyDomTheme(isDark, false);
+      applyDomTheme(isDark);
       try {
         colorScheme.set(mode);
       } catch {}
@@ -134,12 +121,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const nextIsDark = newMode === 'system' ? systemIsDark : newMode === 'dark';
 
     // 1. Instant 0ms atomic DOM synchronization on Web
-    applyDomTheme(nextIsDark, true);
+    applyDomTheme(nextIsDark);
 
-    // 2. Synchronize NativeWind once
-    try {
-      colorScheme.set(newMode);
-    } catch {}
+    // 2. Synchronize NativeWind non-blockingly on next frame so current gesture & animation render at 60/120fps
+    requestAnimationFrame(() => {
+      try {
+        colorScheme.set(newMode);
+      } catch {}
+    });
 
     // 3. Persist asynchronously
     AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});

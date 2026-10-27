@@ -14,7 +14,7 @@ import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
 import { formatTo12Hour, parseTimeToMinutes, sanitizeDatabaseError } from '@reachinternational/utils';
-import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus } from '../ui/icon';
+import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus, ShieldCheck } from '../ui/icon';
 import { type SelectableUser } from './MultiUserSelectModal';
 import { type SelectableClient } from './ClientSelectModal';
 
@@ -349,6 +349,47 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       isMounted = false;
     };
   }, [selectedClient?.id, visible]);
+
+  // Load inherited supervisors for target client dynamically
+  const [inheritedSupervisors, setInheritedSupervisors] = useState<{ id: string; full_name: string }[]>([]);
+
+  useEffect(() => {
+    const targetClientId = selectedClient?.id || machineToEdit?.client_id;
+    if (!targetClientId) {
+      setInheritedSupervisors([]);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('client_supervisors')
+          .select(`
+            supervisor_id,
+            supervisor:users!client_supervisors_supervisor_id_fkey(id, full_name)
+          `)
+          .eq('client_id', targetClientId);
+
+        if (isMounted && data && !error) {
+          const names = data.map((d: any) => {
+            const sup = Array.isArray(d.supervisor) ? d.supervisor[0] : d.supervisor;
+            return {
+              id: d.supervisor_id,
+              full_name: sup?.full_name || 'Supervisor',
+            };
+          });
+          setInheritedSupervisors(names);
+        } else if (isMounted) {
+          setInheritedSupervisors([]);
+        }
+      } catch {
+        if (isMounted) setInheritedSupervisors([]);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClient?.id, machineToEdit?.client_id, visible]);
 
   const maxMobileShifts = clientShifts.length > 0 ? clientShifts.length : 3;
 
@@ -1086,6 +1127,28 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       style={styles.fieldGroup}
                       {...({ 'data-dropdown-container': 'true' } as any)}
                     >
+                      {inheritedSupervisors.length > 0 && (
+                        <View
+                          style={[
+                            styles.inheritedSupervisorBanner,
+                            {
+                              backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
+                              borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+                            },
+                          ]}
+                        >
+                          <View style={styles.inheritedSupervisorBannerHeader}>
+                            <ShieldCheck size={13} color="#0284c7" />
+                            <Text variant="caption" weight="bold" style={{ color: '#0284c7' }}>
+                              Client-Inherited Supervision Active
+                            </Text>
+                          </View>
+                          <Text variant="caption" style={{ color: isDark ? '#bae6fd' : '#0369a1', marginTop: 2 }}>
+                            Supervised by {inheritedSupervisors.map((s) => s.full_name).join(', ')} (Inherited from {selectedClient?.company_name || 'Client'}). Machine-level supervisor assignment below is an optional override.
+                          </Text>
+                        </View>
+                      )}
+
                       <View style={styles.labelRow}>
                         <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                           Assigned Supervisors
@@ -1105,7 +1168,9 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         <View style={styles.selectedPillsWrap}>
                           {selectedSupervisors.length === 0 ? (
                             <Text variant="body" style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                              Search & assign supervisors...
+                              {inheritedSupervisors.length > 0
+                                ? 'Optional override (Inherited from client)...'
+                                : 'Search & assign supervisors...'}
                             </Text>
                           ) : (
                             selectedSupervisors.map((s) => (
@@ -1768,6 +1833,17 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.sm,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+  },
+  inheritedSupervisorBanner: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginBottom: spacingNumeric.xs,
+  },
+  inheritedSupervisorBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   errorBannerText: {
     color: '#ef4444',

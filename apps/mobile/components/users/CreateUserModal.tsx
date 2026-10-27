@@ -311,8 +311,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 <UserPlus size={18} color={theme.colors.link} />
               </View>
               <View>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>Add Employee / User</Text>
-                <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                <Text variant="heading" weight="semibold" style={[styles.title, { color: theme.colors.ink }]}>Add Employee / User</Text>
+                <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                   Create authenticated system account
                 </Text>
               </View>
@@ -325,7 +325,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           {/* Direct Activation Notice */}
           <View style={[styles.activationBanner, { backgroundColor: '#10b98112', borderColor: '#10b98133' }]}>
             <CheckCircle2 size={15} color="#10b981" />
-            <Text style={[styles.activationBannerText, { color: '#047857' }]}>
+            <Text variant="caption" style={[styles.activationBannerText, { color: '#047857' }]}>
               Direct Account Activation: Account is instantly verified and activated upon creation. The employee can immediately log in.
             </Text>
           </View>

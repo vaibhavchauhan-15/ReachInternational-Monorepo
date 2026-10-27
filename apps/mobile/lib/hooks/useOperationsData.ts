@@ -289,9 +289,8 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled
             };
           });
         }
-      } catch (rpcErr) {
+      } catch {
         // Fallback gracefully to direct PostgREST query
-        console.warn('get_operation_logs RPC fallback:', rpcErr);
       }
 
       // 2. Resilient Direct PostgREST Query Fallback
@@ -504,7 +503,6 @@ export function useTodayShiftSummary(
 
       if (error) {
         if (isAbortError(error)) return { total: 0, entered: 0, pending: 0, unassigned: 0 };
-        console.error('[useTodayShiftSummary] RPC Error:', error);
         throw error;
       }
 
@@ -613,7 +611,6 @@ export function useTodayShiftMonitorInfiniteQuery({
             rows: [],
           };
         }
-        console.warn('[useTodayShiftMonitorInfiniteQuery] Paginated RPC error, falling back to legacy:', err);
         // Fallback to legacy unpaginated query with client slicing
         const { data: legacyRows, error: legacyErr } = await supabase.rpc('get_today_shift_log_monitor', {
           p_actor_id: actorId,
@@ -694,8 +691,8 @@ export async function fetchOperatorHistoryLogs(
         } as HourLogRecord;
       });
     }
-  } catch (err) {
-    console.warn('[fetchOperatorHistoryLogs] Relational query exception, using flat fallback:', err);
+  } catch {
+    // Relational query exception, using flat fallback
   }
 
   // Flat query fallback with explicit column projection
@@ -708,7 +705,6 @@ export async function fetchOperatorHistoryLogs(
     .limit(30);
 
   if (flatError) {
-    console.error('[fetchOperatorHistoryLogs] Flat fallback error:', flatError);
     throw flatError;
   }
 
@@ -939,7 +935,6 @@ export function useOperatorHistoryInfiniteQuery({
         if (isAbortError(err, signal)) {
           return { logs: [], totalCount: 0, hasMore: false };
         }
-        console.warn('[useOperatorHistoryInfiniteQuery] Relational query exception, using flat fallback:', err);
 
         // Fallback to flat query
         let fallbackQuery = supabase
@@ -1040,7 +1035,6 @@ export function useOperationsMachinesLazy(enabled: boolean = true) {
         if (isAbortError(error, signal)) {
           return [] as LazyMachineOption[];
         }
-        console.error('[useOperationsMachinesLazy] Error:', error);
         throw error;
       }
 
@@ -1074,7 +1068,6 @@ export function useOperationsClientsLazy(enabled: boolean = true) {
         if (isAbortError(error, signal)) {
           return [] as LazyClientOption[];
         }
-        console.error('[useOperationsClientsLazy] Error:', error);
         throw error;
       }
 
@@ -1121,7 +1114,6 @@ export function useOperationsClientShifts(clientId?: string | null) {
         if (isAbortError(error, signal)) {
           return [] as ClientShiftCode[];
         }
-        console.error('[useOperationsClientShifts] Error:', error);
         throw error;
       }
 

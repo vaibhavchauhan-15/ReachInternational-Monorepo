@@ -149,3 +149,16 @@ export const UpsertClientShiftCodeSchema = z.object({
 
 export type UpsertClientShiftCodeInput = z.infer<typeof UpsertClientShiftCodeSchema>;
 
+export const AssignClientSupervisorSchema = z.object({
+  clientId: z.string().uuid("Invalid client ID"),
+  supervisorId: z.string().uuid("Invalid supervisor ID"),
+});
+
+export type AssignClientSupervisorInput = z.infer<typeof AssignClientSupervisorSchema>;
+
+export const RemoveClientSupervisorSchema = z.object({
+  clientId: z.string().uuid("Invalid client ID"),
+  supervisorId: z.string().uuid("Invalid supervisor ID"),
+});
+
+export type RemoveClientSupervisorInput = z.infer<typeof RemoveClientSupervisorSchema>;

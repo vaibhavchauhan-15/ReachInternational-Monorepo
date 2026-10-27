@@ -1049,7 +1049,30 @@ export function TodayShiftMonitorTab({
         machines={combinedMachines}
         operators={operators}
         initialMachineId={assignModalMachineId}
-        onSuccess={() => {
+        onSuccess={(result) => {
+          // Fine-grained optimistic update: update only affected machine row values immediately
+          if (result?.machineId && Array.isArray(result?.operators)) {
+            setRows((prevRows) =>
+              prevRows.map((r) => {
+                if (r.machine_id !== result.machineId) return r;
+                const matchingOp =
+                  result.operators.find((o: any) => o.shift_code === r.shift_code) ||
+                  result.operators[0];
+                if (matchingOp) {
+                  return {
+                    ...r,
+                    operator_id: matchingOp.id,
+                    operator_name: matchingOp.full_name,
+                    shift_code: matchingOp.shift_code || r.shift_code,
+                    shift_name: matchingOp.shift_name || r.shift_name,
+                    shift_start: matchingOp.shift_start_time || r.shift_start,
+                    shift_end: matchingOp.shift_end_time || r.shift_end,
+                  };
+                }
+                return r;
+              })
+            );
+          }
           fetchData(selectedDate, undefined, true);
         }}
       />

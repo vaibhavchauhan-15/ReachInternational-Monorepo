@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { useTheme } from '../../ui/ThemeProvider';
-import { spacingNumeric } from '@reachinternational/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import type { DashboardAlert } from '@reachinternational/types';
 import {
   AlertCircle,
@@ -114,11 +114,13 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
     <Card
       onPress={targetRoute ? handlePress : undefined}
       className="p-3.5 rounded-2xl flex-row items-start justify-between"
-      style={{
-        backgroundColor: isDark ? config.cardBgDark : config.cardBgLight,
-        borderColor: isDark ? config.borderDark : config.borderLight,
-        borderWidth: 1,
-      }}
+      style={[
+        styles.card,
+        {
+          backgroundColor: isDark ? config.cardBgDark : config.cardBgLight,
+          borderColor: isDark ? config.borderDark : config.borderLight,
+        },
+      ]}
     >
       <View style={styles.leftRow}>
         <View
@@ -138,6 +140,7 @@ export const AlertItem: React.FC<{ alert: DashboardAlert }> = ({ alert }) => {
         <View style={styles.textContainer}>
           <Text
             variant="subheading"
+            weight="semibold"
             style={[
               styles.alertTitle,
               { color: isDark ? config.titleColorDark : config.titleColorLight },
@@ -185,7 +188,7 @@ export const AlertWidget: React.FC<AlertWidgetProps> = ({
   return (
     <View style={[styles.container, style]}>
       {title ? (
-        <Text variant="caption" style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+        <Text variant="caption" weight="semibold" style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
           {title}
           {showCount ? ` (${alerts.length})` : ''}
         </Text>
@@ -202,6 +205,14 @@ export const AlertWidget: React.FC<AlertWidgetProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: spacingNumeric.md,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: spacingNumeric.sm + 4,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
   },
   eyebrowHeader: {
     textTransform: 'uppercase',

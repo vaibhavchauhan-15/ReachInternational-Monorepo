@@ -13,4 +13,6 @@ export { LocationHierarchySelector } from "./LocationHierarchySelector";
 export { ClientRowActionsMenu } from "./ClientRowActionsMenu";
 export { ClientDetailClient } from "./ClientDetailClient";
 export { ClientShiftCodesTab } from "./ClientShiftCodesTab";
+export { ClientSupervisorModal } from "./ClientSupervisorModal";
 export { ClientsPageShellLoading } from "./ClientsPageShellLoading";
+

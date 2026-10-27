@@ -29,6 +29,7 @@ import {
   useToast,
   EmptyState,
   ErrorState,
+  Skeleton,
 } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { UserDetailView, type UserRecord } from '../../components/users';
@@ -1261,7 +1262,7 @@ export default function UsersScreen() {
       return (
         <View style={styles.paginationFooterContainer}>
           <ActivityIndicator size="small" color={theme.colors.link} />
-          <Text variant="caption" style={[styles.paginationFooterText, { color: theme.colors.mute }]}>
+          <Text variant="caption" weight="medium" style={[styles.paginationFooterText, { color: theme.colors.mute }]}>
             Loading more staff...
           </Text>
         </View>
@@ -1272,7 +1273,7 @@ export default function UsersScreen() {
       return (
         <View style={[styles.paginationErrorCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
           <View style={styles.paginationErrorRow}>
-            <Text variant="caption" style={[styles.paginationErrorText, { color: theme.colors.error }]}>
+            <Text variant="caption" weight="medium" style={[styles.paginationErrorText, { color: theme.colors.error }]}>
               Unable to load more staff records.
             </Text>
             <Pressable
@@ -1282,7 +1283,7 @@ export default function UsersScreen() {
               style={[styles.retryLoadMoreBtn, { backgroundColor: theme.colors.ink }]}
             >
               <RotateCcw size={12} color={theme.colors.canvas} />
-              <Text variant="caption" style={[styles.retryLoadMoreBtnText, { color: theme.colors.canvas }]}>
+              <Text variant="caption" weight="semibold" style={[styles.retryLoadMoreBtnText, { color: theme.colors.canvas }]}>
                 Retry
               </Text>
             </Pressable>
@@ -1298,7 +1299,7 @@ export default function UsersScreen() {
             <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
             <View style={styles.endOfListContent}>
               <Check size={12} color={theme.colors.mute} />
-              <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+              <Text variant="caption" weight="medium" style={[styles.endOfListText, { color: theme.colors.mute }]}>
                 All {totalUsersCount} staff members loaded
               </Text>
             </View>
@@ -1353,6 +1354,8 @@ export default function UsersScreen() {
         <>
           <MobileHeader
             title="User Management"
+            showBack={true}
+            backRoute="/dashboard"
             actions={headerActions}
           />
 
@@ -1432,11 +1435,26 @@ export default function UsersScreen() {
 
             {/* Results count indicator */}
             <View style={styles.resultsCountRow}>
-              <Text variant="caption" style={[styles.resultsCountText, { color: theme.colors.mute }]}>
-                Showing {users.length} {users.length === 1 ? 'staff member' : 'staff members'}
-                {totalUsersCount > 0 ? ` of ${totalUsersCount}` : ''}
-                {activeFilterCount > 0 ? ' (filtered)' : ''}
-              </Text>
+              {showLoading && users.length === 0 ? (
+                <Skeleton width={160} height={14} borderRadius={radiusNumeric.sm} style={{ marginVertical: 0 }} />
+              ) : (
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  Showing{' '}
+                  <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                    {users.length}
+                  </Text>{' '}
+                  of{' '}
+                  <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                    {totalUsersCount}
+                  </Text>{' '}
+                  {users.length === 1 ? 'staff member' : 'staff members'}
+                  {activeFilterCount > 0 && totalUsersCount > users.length && (
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      {' '}(filtered)
+                    </Text>
+                  )}
+                </Text>
+              )}
             </View>
 
             {/* Profile Detail Change Requests Section */}
@@ -1489,7 +1507,12 @@ export default function UsersScreen() {
         <View
           style={[
             styles.mobileBulkBar,
-            { backgroundColor: theme.colors.ink, shadowColor: '#000' },
+            {
+              backgroundColor: isDark ? theme.colors.canvasElevated : theme.colors.ink,
+              borderColor: isDark ? theme.colors.hairline : 'transparent',
+              borderWidth: isDark ? 1 : 0,
+              shadowColor: '#000',
+            },
           ]}
         >
           <View style={styles.bulkCountRow}>
@@ -1503,21 +1526,37 @@ export default function UsersScreen() {
               style={styles.bulkCloseBtn}
               accessibilityLabel="Cancel selection mode"
             >
-              <X size={15} color="#ffffff" />
+              <X size={15} color={isDark ? theme.colors.ink : '#ffffff'} />
             </Pressable>
             <View style={[styles.bulkBadge, { backgroundColor: theme.colors.link }]}>
-              <Text variant="micro" style={styles.bulkBadgeText}>{selectedIds.length}</Text>
+              <Text variant="micro" weight="bold" style={styles.bulkBadgeText}>{selectedIds.length}</Text>
             </View>
-            <Text variant="caption" style={styles.bulkSelectedText}>selected</Text>
+            <Text
+              variant="caption"
+              weight="medium"
+              style={[styles.bulkSelectedText, { color: isDark ? theme.colors.mute : 'rgba(255, 255, 255, 0.8)' }]}
+            >
+              selected
+            </Text>
           </View>
 
           <View style={styles.bulkActionsRow}>
             <Pressable
               variant="buttonSecondary"
               onPress={handleSelectAll}
-              style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
+              style={[
+                styles.bulkBtnSecondary,
+                {
+                  borderColor: isDark ? theme.colors.hairline : 'rgba(255,255,255,0.2)',
+                  backgroundColor: isDark ? theme.colors.canvas : 'transparent',
+                },
+              ]}
             >
-              <Text variant="caption" style={styles.bulkBtnSecondaryText}>
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={[styles.bulkBtnSecondaryText, { color: isDark ? theme.colors.ink : '#ffffff' }]}
+              >
                 {selectedIds.length === users.length ? 'Deselect' : 'All'}
               </Text>
             </Pressable>
@@ -1525,10 +1564,22 @@ export default function UsersScreen() {
             <Pressable
               variant="buttonSecondary"
               onPress={() => setExportModalVisible(true)}
-              style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
+              style={[
+                styles.bulkBtnSecondary,
+                {
+                  borderColor: isDark ? theme.colors.hairline : 'rgba(255,255,255,0.2)',
+                  backgroundColor: isDark ? theme.colors.canvas : 'transparent',
+                },
+              ]}
             >
               <FileSpreadsheet size={13} color="#10b981" />
-              <Text variant="caption" style={styles.bulkBtnSecondaryText}>Export</Text>
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={[styles.bulkBtnSecondaryText, { color: isDark ? theme.colors.ink : '#ffffff' }]}
+              >
+                Export
+              </Text>
             </Pressable>
 
             <Pressable
@@ -1538,7 +1589,7 @@ export default function UsersScreen() {
               style={[styles.bulkBtnDanger, { backgroundColor: theme.colors.error }]}
             >
               <Trash2 size={13} color="#ffffff" />
-              <Text variant="caption" style={styles.bulkBtnDangerText}>Delete</Text>
+              <Text variant="caption" weight="semibold" style={styles.bulkBtnDangerText}>Delete</Text>
             </Pressable>
           </View>
         </View>

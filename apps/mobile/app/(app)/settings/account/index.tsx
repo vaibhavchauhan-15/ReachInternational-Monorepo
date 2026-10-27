@@ -13,7 +13,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, Text } from '../../../../components/ui';
+import { useAuth } from '../../../../lib/auth/useAuth';
+import { useTheme, Text, Badge, Card } from '../../../../components/ui';
 import { Pressable } from '../../../../components/ui/touch/Pressable';
 import { SettingsScreenContainer } from '../../../../components/settings';
 import { radiusNumeric } from '@reachinternational/design-tokens';
@@ -70,6 +71,7 @@ function AccountNavCard({
       <View style={styles.textColumn}>
         <Text
           variant="subheading"
+          weight="semibold"
           style={[
             styles.cardTitle,
             { color: isDestructive ? theme.colors.error : theme.colors.ink },
@@ -81,7 +83,7 @@ function AccountNavCard({
         <Text
           variant="caption"
           style={[styles.cardSubtitle, { color: theme.colors.mute }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {subtitle}
         </Text>
@@ -98,11 +100,17 @@ function AccountNavCard({
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
+  const { theme, isDark } = useTheme();
+  const { user, userProfile, role } = useAuth();
 
   const handleBack = () => {
     router.replace('/settings');
   };
+
+  const displayName = userProfile?.full_name || user?.user_metadata?.full_name || 'Operator';
+  const displayEmail = userProfile?.email || user?.email || '';
+  const employeeId = userProfile?.employee_id || '';
+  const initialLetter = displayName.charAt(0).toUpperCase() || 'U';
 
   return (
     <SettingsScreenContainer
@@ -112,6 +120,100 @@ export default function AccountSettingsScreen() {
       onPressBack={handleBack}
       contentContainerStyle={styles.containerContent}
     >
+      {/* 0. User Profile Summary Header */}
+      <Card
+        variant="elevated"
+        style={[
+          styles.profileCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View style={styles.profileRow}>
+          <View
+            style={[
+              styles.avatarBox,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(2, 132, 199, 0.2)'
+                  : '#e0f2fe',
+              },
+            ]}
+          >
+            <Text
+              variant="caption"
+              weight="bold"
+              style={{ color: isDark ? '#38bdf8' : '#0284c7' }}
+            >
+              {initialLetter}
+            </Text>
+          </View>
+          <View style={styles.profileInfoCol}>
+            <View style={styles.nameRow}>
+              <Text
+                variant="subheading"
+                weight="semibold"
+                style={[styles.profileName, { color: theme.colors.ink }]}
+                numberOfLines={1}
+              >
+                {displayName}
+              </Text>
+              {role ? (
+                <Badge
+                  role={role}
+                  size="sm"
+                  solid={false}
+                />
+              ) : null}
+            </View>
+            <View style={styles.metaRow}>
+              {employeeId ? (
+                <Text
+                  variant="mono"
+                  weight="semibold"
+                  style={{ color: theme.colors.link }}
+                >
+                  {employeeId}
+                </Text>
+              ) : null}
+              {employeeId && displayEmail ? (
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  •
+                </Text>
+              ) : null}
+              {displayEmail ? (
+                <Text
+                  variant="caption"
+                  style={{ color: theme.colors.mute }}
+                  numberOfLines={1}
+                >
+                  {displayEmail}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Card>
+
+      {/* Section 1: Profile & Credentials */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          PROFILE & CREDENTIALS
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Manage your operator profile, secure password, and verified email address.
+        </Text>
+      </View>
+
       {/* 1. Profile Details Card */}
       <AccountNavCard
         icon={<User size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
@@ -152,6 +254,23 @@ export default function AccountSettingsScreen() {
         accessibilityLabel="Navigate to Change Email"
       />
 
+      {/* Section 2: Danger Zone */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.error }]}
+        >
+          DANGER ZONE
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Permanent account termination and statutory operator data deletion.
+        </Text>
+      </View>
+
       {/* 5. Delete Account Card */}
       <AccountNavCard
         icon={<Trash2 size={20} color="#e11d48" />}
@@ -169,6 +288,54 @@ export default function AccountSettingsScreen() {
 const styles = StyleSheet.create({
   containerContent: {
     gap: 12,
+  },
+  profileCard: {
+    padding: 16,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radiusNumeric.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileInfoCol: {
+    flex: 1,
+    gap: 4,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  profileName: {
+    flexShrink: 1,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  sectionHeader: {
+    marginTop: 10,
+    marginBottom: 2,
+    paddingHorizontal: 4,
+    gap: 2,
+  },
+  sectionTitle: {
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    marginTop: 1,
   },
   navCard: {
     minHeight: 64,

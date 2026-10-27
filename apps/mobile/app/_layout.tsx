@@ -515,16 +515,20 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 
 import * as Sentry from '@sentry/react-native';
 
+const mobileSentryDsn = getSentryDsn();
+const isMobileProduction = process.env.NODE_ENV === 'production' && !__DEV__;
+
+// Sentry is strictly activated for production releases and completely disabled during local development
 Sentry.init({
-  dsn: getSentryDsn(),
-  // Only capture traces in production to save quota
-  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 0,
+  dsn: mobileSentryDsn,
+  enabled: isMobileProduction && Boolean(mobileSentryDsn),
+  tracesSampleRate: isMobileProduction ? 0.05 : 0,
   integrations: [
     Sentry.reactNativeTracingIntegration(),
   ],
   _experiments: {
-    // Enable performance tracing for Expo Router
-    profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 0,
+    // Enable performance tracing for Expo Router strictly in production
+    profilesSampleRate: isMobileProduction ? 0.05 : 0,
   },
 });
 

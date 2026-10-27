@@ -37,7 +37,7 @@ export async function SuperAdminDashboardView({
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-7">
       <DashboardHeader
         userName={userName}
         role="super_admin"
@@ -48,7 +48,7 @@ export async function SuperAdminDashboardView({
 
       {/* Primary KPI Grid (6 metrics) */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Platform Fleet & Identity Metrics
         </h2>
         <KPIGrid columns={6}>
@@ -99,10 +99,10 @@ export async function SuperAdminDashboardView({
 
       {/* Quick Governance Actions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Governance & System Controls
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5 lg:gap-4">
           <PrimaryAction
             title="System Audit Trail"
             description="Inspect recent administrative mutations and security events"

@@ -63,18 +63,6 @@
 }
 
 /* ============================================
-   Temporary Transition Lock During Theme Switching
-   Disables all per-element CSS transitions during theme change,
-   guaranteeing 0ms parallel updates across all components.
-   ============================================ */
-html.theme-changing *:not([data-theme-toggle]):not([data-theme-toggle] *),
-html.theme-changing *:not([data-theme-toggle]):not([data-theme-toggle] *)::before,
-html.theme-changing *:not([data-theme-toggle]):not([data-theme-toggle] *)::after {
-  transition: none !important;
-  animation: none !important;
-}
-
-/* ============================================
    Agentation Floating Toolbar Responsiveness & Visibility
    ============================================ */
 .reach-agentation-toolbar,

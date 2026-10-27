@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { PdfView } from '@kishannareshpal/expo-pdf';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { Pressable } from '@/components/ui/touch/Pressable';
@@ -19,19 +19,54 @@ export interface NativePdfViewerProps {
   onShare?: () => void;
 }
 
+// Lazy-loaded native PdfView reference (avoids crashing at module evaluation if KJExpoPdf is unlinked)
+let cachedPdfView: React.ComponentType<any> | null = null;
+let isNativePdfChecked = false;
+
+function getNativePdfView(): React.ComponentType<any> | null {
+  if (isNativePdfChecked) {
+    return cachedPdfView;
+  }
+  isNativePdfChecked = true;
+
+  try {
+    // 1. Safely check if the native module 'KJExpoPdf' is installed in the current native runtime
+    // Using requireOptionalNativeModule from 'expo' ensures zero exceptions when running in Expo Go or dev clients without the module
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const expo = require('expo');
+    const hasNativeModule =
+      typeof expo.requireOptionalNativeModule === 'function'
+        ? expo.requireOptionalNativeModule('KJExpoPdf')
+        : null;
+
+    if (hasNativeModule) {
+      // 2. Only require @kishannareshpal/expo-pdf if the native module is actually present in the binary
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const expoPdf = require('@kishannareshpal/expo-pdf');
+      cachedPdfView = expoPdf?.PdfView || null;
+    } else {
+      cachedPdfView = null;
+    }
+  } catch {
+    cachedPdfView = null;
+  }
+
+  return cachedPdfView;
+}
+
 /**
  * Native Mobile In-App PDF Viewer (iOS & Android)
  *
  * Built with @kishannareshpal/expo-pdf:
- * - iOS: Apple PDFKit native rendering engine
- * - Android: Native PDFium rendering engine
+ * - iOS: Apple PDFKit native rendering engine (or Safari WebView fallback)
+ * - Android: Native PDFium rendering engine (or safe fallback card when native module is unlinked)
  *
  * Supports:
  * - Continuous vertical multipage scrolling (horizontal={false}, pagingEnabled={false})
  * - Fit-to-width auto scaling (fitMode="width", autoScale={true})
  * - Smooth double-tap zoom & pinch gestures (doubleTapToZoom={true})
  * - Multipage position tracking (onPageChanged, onLoadComplete)
- * - Safe fallback handling when native module is unavailable
+ * - Safe fallback handling when native module is unavailable (e.g. Expo Go / uncompiled dev clients)
  */
 export function NativePdfViewer({
   uri,
@@ -52,6 +87,8 @@ export function NativePdfViewer({
   const [errorMessage, setErrorMessage] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
+
+  const PdfViewComponent = useMemo(() => getNativePdfView(), []);
 
   useEffect(() => {
     setLoading(true);
@@ -82,7 +119,60 @@ export function NativePdfViewer({
     onError?.(new Error(payload.message || 'Unable to open PDF document.'));
   };
 
-  if (!uri || hasError) {
+  // iOS Safari / WebKit native PDF rendering fallback when KJExpoPdf native module is not compiled into the binary
+  if (Platform.OS === 'ios' && !PdfViewComponent && uri && !hasError) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <View
+          style={[
+            styles.viewerWrapper,
+            rotation
+              ? {
+                  transform: [{ rotate: `${rotation}deg` }],
+                }
+              : null,
+          ]}
+        >
+          <WebView
+            source={{ uri }}
+            style={styles.pdfView}
+            originWhitelist={['*']}
+            onLoadStart={() => {
+              setLoading(true);
+              onLoadStart?.();
+            }}
+            onLoadEnd={() => {
+              setLoading(false);
+              onLoadComplete?.(1);
+            }}
+            onError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              handleError({ code: 'WEBVIEW_ERROR', message: nativeEvent.description });
+            }}
+          />
+        </View>
+
+        {loading && (
+          <View
+            style={[
+              styles.loaderOverlay,
+              {
+                backgroundColor: isDark ? 'rgba(10, 10, 10, 0.65)' : 'rgba(255, 255, 255, 0.65)',
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <ActivityIndicator size="large" color={theme.colors.link} />
+            <Text variant="caption" style={[styles.loaderText, { color: theme.colors.mute }]}>
+              Loading PDF document...
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  if (!uri || hasError || !PdfViewComponent) {
     return (
       <View style={[styles.fallbackContainer, { backgroundColor: theme.colors.canvas }]}>
         <View
@@ -103,7 +193,10 @@ export function NativePdfViewer({
           {fileName || 'document.pdf'}
         </Text>
         <Text variant="caption" style={[styles.fallbackNotice, { color: theme.colors.mute }]}>
-          {errorMessage || 'PDF preview could not be displayed directly. You can download the file to view it in an external app.'}
+          {errorMessage ||
+            (!PdfViewComponent
+              ? 'PDF preview requires a native build with PDF modules enabled. You can download the PDF to view it in an external app.'
+              : 'PDF preview could not be displayed directly. You can download the file to view it in an external app.')}
         </Text>
         <View style={styles.actionRow}>
           {onDownload && (
@@ -136,7 +229,7 @@ export function NativePdfViewer({
             : null,
         ]}
       >
-        <PdfView
+        <PdfViewComponent
           uri={uri}
           fitMode="width"
           horizontal={false}

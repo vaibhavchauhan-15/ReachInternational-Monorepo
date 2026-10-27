@@ -111,6 +111,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
       <View style={styles.topRow}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[
             styles.eyebrow,
             { color: isDark ? '#94a3b8' : '#64748b' },
@@ -142,6 +143,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
           <View style={styles.textContainer}>
             <Text
               variant={monoValue ? 'mono' : 'subheading'}
+              weight="semibold"
               style={[
                 styles.label,
                 { color: isDark ? config.labelColorDark : config.labelColorLight },

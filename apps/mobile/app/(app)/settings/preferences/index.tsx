@@ -17,7 +17,6 @@ import {
   Text,
   Switch,
   SegmentedToggle,
-  useToast,
 } from '../../../../components/ui';
 import { Pressable } from '../../../../components/ui/touch/Pressable';
 import { SettingsScreenContainer } from '../../../../components/settings';
@@ -43,7 +42,6 @@ export default function PreferencesSettingsScreen() {
   const { theme, isDark, mode, setMode } = useTheme();
   const { hapticsEnabled, setHapticsEnabled } = usePreferences();
   const { preset } = useTypeScale();
-  const { toast } = useToast();
 
   const handleBack = () => {
     router.replace('/settings');
@@ -53,13 +51,12 @@ export default function PreferencesSettingsScreen() {
     setMode(newMode as 'light' | 'dark' | 'system');
   }, [setMode]);
 
-  const handleToggleHaptics = (val: boolean) => {
+  const handleToggleHaptics = useCallback((val: boolean) => {
     setHapticsEnabled(val);
     if (val) {
       haptics.confirm();
     }
-    toast('success', `Haptic feedback ${val ? 'enabled' : 'disabled'}`);
-  };
+  }, [setHapticsEnabled]);
 
   const fontLabel = {
     small: 'Small (92%)',
@@ -75,6 +72,23 @@ export default function PreferencesSettingsScreen() {
       onPressBack={handleBack}
       contentContainerStyle={styles.containerContent}
     >
+      {/* Section 1: Appearance & Typography */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          APPEARANCE & TYPOGRAPHY
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Calibrate visual appearance, theme mode, and reading typography scaling.
+        </Text>
+      </View>
+
       {/* 1. Theme Card */}
       <Card
         variant="elevated"
@@ -102,13 +116,16 @@ export default function PreferencesSettingsScreen() {
           <View style={styles.textColumn}>
             <Text
               variant="subheading"
+              weight="semibold"
               style={[styles.cardTitle, { color: theme.colors.ink }]}
+              numberOfLines={1}
             >
               Theme Mode
             </Text>
             <Text
               variant="caption"
               style={[styles.cardSubtitle, { color: theme.colors.mute }]}
+              numberOfLines={2}
             >
               Synchronize with device OS or force dark/light appearance
             </Text>
@@ -155,6 +172,7 @@ export default function PreferencesSettingsScreen() {
         <View style={styles.textColumn}>
           <Text
             variant="subheading"
+            weight="semibold"
             style={[styles.cardTitle, { color: theme.colors.ink }]}
             numberOfLines={1}
           >
@@ -172,6 +190,23 @@ export default function PreferencesSettingsScreen() {
           <ChevronRight size={18} color={theme.colors.mute} />
         </View>
       </Pressable>
+
+      {/* Section 2: Tactile & Touch Ergonomics */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          TACTILE & TOUCH ERGONOMICS
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Physical vibration feedback during button presses and shift log submissions.
+        </Text>
+      </View>
 
       {/* 3. Haptic Feedback Card */}
       <View
@@ -198,6 +233,7 @@ export default function PreferencesSettingsScreen() {
         <View style={styles.textColumn}>
           <Text
             variant="subheading"
+            weight="semibold"
             style={[styles.cardTitle, { color: theme.colors.ink }]}
             numberOfLines={1}
           >
@@ -206,7 +242,7 @@ export default function PreferencesSettingsScreen() {
           <Text
             variant="caption"
             style={[styles.cardSubtitle, { color: theme.colors.mute }]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             Tactile vibration feedback on interactions and confirmations
           </Text>
@@ -215,6 +251,7 @@ export default function PreferencesSettingsScreen() {
           <Switch
             value={hapticsEnabled}
             onValueChange={handleToggleHaptics}
+            haptic={false}
             accessibilityLabel="Toggle Haptic Feedback"
           />
         </View>
@@ -226,6 +263,18 @@ export default function PreferencesSettingsScreen() {
 const styles = StyleSheet.create({
   containerContent: {
     gap: 12,
+  },
+  sectionHeader: {
+    marginTop: 10,
+    marginBottom: 2,
+    paddingHorizontal: 4,
+    gap: 2,
+  },
+  sectionTitle: {
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    marginTop: 1,
   },
   themeCard: {
     padding: 16,

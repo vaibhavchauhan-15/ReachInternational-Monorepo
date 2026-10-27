@@ -74,6 +74,7 @@ function SettingsNavCard({
       <View style={styles.textColumn}>
         <Text
           variant="subheading"
+          weight="semibold"
           style={[styles.cardTitle, { color: theme.colors.ink }]}
           numberOfLines={1}
         >
@@ -82,7 +83,7 @@ function SettingsNavCard({
         <Text
           variant="caption"
           style={[styles.cardSubtitle, { color: theme.colors.mute }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {subtitle}
         </Text>
@@ -126,7 +127,8 @@ export default function SettingsHomeScreen() {
   return (
     <SettingsScreenContainer
       title="Settings"
-      showBack={false}
+      showBack={true}
+      backRoute="/dashboard"
       contentContainerStyle={styles.containerContent}
     >
       {/* 1. Account Card */}

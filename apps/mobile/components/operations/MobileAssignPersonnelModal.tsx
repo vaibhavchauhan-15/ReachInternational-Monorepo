@@ -32,7 +32,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import {
   useTheme,
   ShiftCardSelector,
@@ -62,11 +62,13 @@ import {
   Plus,
   Search,
   Shield,
+  ShieldCheck,
   Lock,
 } from '../ui/icon';
 import {
   formatTo12Hour,
   parseTimeToMinutes,
+  getUserInitials,
 } from '@reachinternational/utils';
 import {
   useAssignPersonnelModalData,
@@ -401,6 +403,38 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   // 2. Fetch client shift codes cached per client_id with 60s TTL
   const { data: clientShiftsData } = useClientShiftCodes(activeMachine?.client_id, visible);
   const clientShifts = useMemo(() => clientShiftsData || DEFAULT_MODAL_SHIFTS, [clientShiftsData]);
+
+  // Fetch client supervisor for the active machine's client (inherited client-level RBAC)
+  const { data: activeMachineClientSupervisors = [] } = useQuery({
+    queryKey: ['activeMachineClientSupervisors', activeMachine?.client_id],
+    enabled: Boolean(visible && activeMachine?.client_id),
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      if (!activeMachine?.client_id) return [];
+      const { data, error } = await supabase
+        .from('client_supervisors')
+        .select(`
+          id,
+          supervisor_id,
+          supervisor:users!client_supervisors_supervisor_id_fkey(id, full_name, employee_id)
+        `)
+        .eq('client_id', activeMachine.client_id);
+      if (error) return [];
+      return (data || []).map((row: any) => {
+        const sup = Array.isArray(row.supervisor) ? row.supervisor[0] : row.supervisor;
+        return {
+          id: row.id,
+          supervisor_id: row.supervisor_id,
+          name: sup?.full_name || 'Supervisor',
+          employee_id: sup?.employee_id || null,
+        };
+      });
+    },
+  });
+
+  const inheritedClientSupervisorNames = useMemo(() => {
+    return activeMachineClientSupervisors.map((s) => s.name).join(', ');
+  }, [activeMachineClientSupervisors]);
 
   // Resolve initial target machine
   useEffect(() => {
@@ -1340,6 +1374,29 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   </View>
                 )}
 
+                {/* Inherited Client Supervisor Informational Banner */}
+                {Boolean(inheritedClientSupervisorNames) && (
+                  <View
+                    style={[
+                      styles.inheritedSupervisorBanner,
+                      {
+                        backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
+                        borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#bae6fd',
+                      },
+                    ]}
+                  >
+                    <ShieldCheck size={14} color={theme.colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="caption" weight="semibold" style={{ color: theme.colors.primary }}>
+                        Supervised by {inheritedClientSupervisorNames} (Inherited from {activeMachine?.client?.company_name || 'Client'})
+                      </Text>
+                      <Text variant="micro" style={{ color: isDark ? '#bae6fd' : '#0369a1', marginTop: 1 }}>
+                        Inherited through client assignment. Machine-level assignment below is an optional override.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Supervisor Multi-Select Trigger */}
                 <Pressable
                   variant="card"
@@ -1360,7 +1417,11 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   <View style={styles.supervisorChipsContainer}>
                     {selectedSupervisorIds.length === 0 ? (
                       <Text variant="caption" style={{ color: theme.colors.mute }}>
-                        {canEditSupervisor ? 'Search & assign supervisors...' : 'No supervisors assigned'}
+                        {inheritedClientSupervisorNames
+                          ? `Optional Override (Supervised by ${inheritedClientSupervisorNames})`
+                          : canEditSupervisor
+                          ? 'Search & assign supervisors...'
+                          : 'No supervisors assigned'}
                       </Text>
                     ) : (
                       selectedSupervisorIds.map((sId) => {
@@ -1640,6 +1701,27 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                               >
                                 <Text variant="caption" style={{ color: '#d97706' }}>
                                   {idx + 1}
+                                </Text>
+                              </View>
+
+                              {/* Monochromatic Initials Avatar Token */}
+                              <View
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 14,
+                                  backgroundColor: isDark ? '#ffffff' : '#171717',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  marginRight: 4,
+                                }}
+                              >
+                                <Text
+                                  variant="micro"
+                                  weight="bold"
+                                  style={{ color: isDark ? '#171717' : '#ffffff' }}
+                                >
+                                  {getUserInitials(item.operatorName)}
                                 </Text>
                               </View>
 
@@ -2083,6 +2165,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
+    marginBottom: 8,
+  },
+  inheritedSupervisorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
     marginBottom: 8,
   },
 

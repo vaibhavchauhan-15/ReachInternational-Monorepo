@@ -32,7 +32,7 @@ export async function HRDashboardView({
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-7">
       <DashboardHeader
         userName={userName}
         role="hr"
@@ -43,7 +43,7 @@ export async function HRDashboardView({
 
       {/* Personnel Overview */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Personnel & Operations Roster
         </h2>
         <KPIGrid columns={4}>
@@ -80,10 +80,10 @@ export async function HRDashboardView({
 
       {/* HR Actions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Personnel Actions
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <PrimaryAction
             title="Profile Change Requests"
             description="Review and approve operator contact details, banking info, and document updates"

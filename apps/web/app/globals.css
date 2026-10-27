@@ -108,6 +108,7 @@
   --color-ink: #171717;           /* Near-black — headings, primary text, logo */
   --color-canvas: #fafafa;        /* Near-white page background */
   --color-canvas-elevated: #ffffff; /* Pure white cards, buttons, inputs */
+  --color-surface: var(--color-canvas-elevated); /* Alias for elevated surfaces */
 
   /* Text Ladder */
   --color-body: #4d4d4d;          /* Standard paragraph, nav links */
@@ -182,6 +183,50 @@
   --text-card-title-line: 22px;
   --text-caption-size: 12px;
   --text-caption-line: 16px;
+
+  /* ============================================
+     Marketing Platform Tokens (Reach International)
+     ============================================ */
+  --brand-blue: #008cfc;
+  --brand-charcoal: #202329;
+  --brand-white: #ffffff;
+
+  --surface-base: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f6f9;
+  --surface-tint: #e8f3ff;
+  --surface-inverse: #202329;
+  --surface-overlay: rgba(0, 0, 0, 0.48);
+
+  --text-primary: #202329;
+  --text-secondary: #444c59;
+  --text-muted: #5b6472;
+  --text-inverse: #ffffff;
+  --text-link: #005aa3;
+
+  --border-subtle: #e3e7ed;
+  --border-strong: #8590a0;
+  --border-focus: #005aa3;
+
+  --action-primary-bg: #008cfc;
+  --action-primary-fg: #ffffff;
+  --action-primary-hover: #0076d6;
+  --action-secondary-bg: transparent;
+  --action-secondary-border: #8590a0;
+  --action-ghost-hover: #f4f6f9;
+
+  --badge-fg: #00447a;
+  --icon-accent: #008cfc;
+
+  --header-height: 72px;
+  --scroll-margin: calc(var(--header-height) + 16px);
+
+  --hero-card-bg: linear-gradient(135deg, #f0f6ff 0%, #ffffff 50%, #ebf4ff 100%);
+  --hero-card-border: #e0edff;
+  --hero-card-glow: #008cfc;
+  --hero-card-glow-opacity: 0.35;
+  --hero-floating-bg: rgba(255, 255, 255, 0.95);
+  --hero-floating-border: #e3e7ed;
 }
 
 /* Mobile bottom nav height (56px bar + safe-area for notched devices) */
@@ -300,6 +345,7 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
   --color-ink: #fafafa;           /* Near-white text */
   --color-canvas: #0a0a0a;        /* Deep near-black background */
   --color-canvas-elevated: #171717; /* Elevated card surface */
+  --color-surface: var(--color-canvas-elevated); /* Alias for elevated surfaces */
 
   --color-body: #a3a3a3;          /* Standard paragraph (lighter grey) */
   --color-mute: #737373;          /* Captions, metadata */
@@ -332,6 +378,77 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
   --shadow-whisper: 0px 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-floating: 0px 8px 24px -4px rgba(0, 0, 0, 0.5),
                      0px 2px 6px -1px rgba(0, 0, 0, 0.3);
+
+  /* Marketing Platform Tokens (Dark Theme) */
+  --surface-base: #14171c;
+  --surface-raised: #1a1e24;
+  --surface-sunken: #0f1215;
+  --surface-tint: #0c2744;
+  --surface-inverse: #202329;
+  --surface-overlay: rgba(0, 0, 0, 0.64);
+
+  --text-primary: #f3f5f8;
+  --text-secondary: #b6bdc8;
+  --text-muted: #98a1ae;
+  --text-inverse: #f3f5f8;
+  --text-link: #4db1ff;
+
+  --border-subtle: #2a2f37;
+  --border-strong: #6b7482;
+  --border-focus: #4db1ff;
+
+  --action-primary-bg: #008cfc;
+  --action-primary-fg: #ffffff;
+  --action-primary-hover: #3da9ff;
+  --action-secondary-bg: transparent;
+  --action-secondary-border: #6b7482;
+  --action-ghost-hover: #1a1e24;
+
+  --badge-fg: #8fcdff;
+  --icon-accent: #008cfc;
+
+  --hero-card-bg: linear-gradient(135deg, #161d29 0%, #131922 50%, #0f141c 100%);
+  --hero-card-border: rgba(255, 255, 255, 0.08);
+  --hero-card-glow: #008cfc;
+  --hero-card-glow-opacity: 0.2;
+  --hero-floating-bg: rgba(26, 30, 36, 0.95);
+  --hero-floating-border: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] {
+  --surface-base: #14171c;
+  --surface-raised: #1a1e24;
+  --surface-sunken: #0f1215;
+  --surface-tint: #0c2744;
+  --surface-inverse: #202329;
+  --surface-overlay: rgba(0, 0, 0, 0.64);
+
+  --text-primary: #f3f5f8;
+  --text-secondary: #b6bdc8;
+  --text-muted: #98a1ae;
+  --text-inverse: #f3f5f8;
+  --text-link: #4db1ff;
+
+  --border-subtle: #2a2f37;
+  --border-strong: #6b7482;
+  --border-focus: #4db1ff;
+
+  --action-primary-bg: #008cfc;
+  --action-primary-fg: #ffffff;
+  --action-primary-hover: #3da9ff;
+  --action-secondary-bg: transparent;
+  --action-secondary-border: #6b7482;
+  --action-ghost-hover: #1a1e24;
+
+  --badge-fg: #8fcdff;
+  --icon-accent: #008cfc;
+
+  --hero-card-bg: linear-gradient(135deg, #161d29 0%, #131922 50%, #0f141c 100%);
+  --hero-card-border: rgba(255, 255, 255, 0.08);
+  --hero-card-glow: #008cfc;
+  --hero-card-glow-opacity: 0.2;
+  --hero-floating-bg: rgba(26, 30, 36, 0.95);
+  --hero-floating-border: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================
@@ -365,6 +482,11 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
   --color-border: var(--color-hairline);
   --color-input: var(--color-hairline);
   --color-ring: var(--color-link);
+
+  /* Max width container tokens for marketing & layout */
+  --max-width-wide: 1360px;
+  --max-width-default: 1200px;
+  --max-width-narrow: 720px;
 
   /* Radius scale for rounded-* utilities */
   --radius-sm: 6px;
@@ -414,6 +536,24 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
 @keyframes meshFloat {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+
+/* ============================================
+   Reach Logo Theme Switching
+   ============================================ */
+.reach-logo-on-light {
+  display: block;
+}
+.reach-logo-on-dark {
+  display: none;
+}
+.dark .reach-logo-on-light,
+[data-theme="dark"] .reach-logo-on-light {
+  display: none !important;
+}
+.dark .reach-logo-on-dark,
+[data-theme="dark"] .reach-logo-on-dark {
+  display: block !important;
 }
 
 /* ============================================

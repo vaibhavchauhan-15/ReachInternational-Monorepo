@@ -2106,7 +2106,7 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
       allUserIds.length > 0
         ? supabaseAdmin
             .from("users")
-            .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
+            .select("id, full_name, phone, email, shift_start_time, shift_end_time, role, employee_id")
             .in("id", allUserIds)
         : Promise.resolve({ data: [] }),
       opIds.length > 0
@@ -2173,6 +2173,7 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
         return {
           id: assign.operator_id,
           full_name: u?.full_name || "Operator",
+          employee_id: u?.employee_id || null,
           phone: u?.phone || null,
           email: u?.email || null,
           shift_time,
@@ -2200,6 +2201,7 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
           return {
             id: u.id,
             full_name: u.full_name || "Operator",
+            employee_id: u.employee_id || null,
             phone: u.phone || null,
             email: u.email || null,
             shift_time,

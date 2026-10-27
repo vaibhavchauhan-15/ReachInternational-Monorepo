@@ -421,9 +421,20 @@ function BaseSegmentedToggle<T extends string = string>({
   const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w > 0 && Math.abs(w - containerWidth) > 0.5) {
+      if (!isInitializedRef.current && items.length > 0) {
+        if (effectiveFullWidth) {
+          const availWidth = Math.max(0, w - config.padding * 2);
+          const tabW = availWidth / items.length;
+          const initialX = config.padding + activeIndex * tabW;
+          animX.value = initialX;
+          animWidth.value = tabW;
+          isInitializedRef.current = true;
+          lastAnimatedIndexRef.current = activeIndex;
+        }
+      }
       setContainerWidth(w);
     }
-  }, [containerWidth]);
+  }, [containerWidth, items.length, effectiveFullWidth, config.padding, activeIndex, animX, animWidth]);
 
   const handleMeasureItem = useCallback((index: number, x: number, width: number) => {
     setItemLayouts((prev) => {
@@ -463,7 +474,7 @@ function BaseSegmentedToggle<T extends string = string>({
             styles.slidingPill,
             {
               top: config.padding,
-              bottom: config.padding,
+              height: config.minHeight,
               borderRadius: config.pillRadius,
               backgroundColor: resolvedActiveColor,
               borderColor: resolvedActiveColor,
@@ -572,6 +583,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 1,
+    minWidth: '100%',
+    flexGrow: 1,
   },
   container: {
     flexDirection: 'row',
@@ -579,12 +592,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     position: 'relative',
     overflow: 'hidden',
+    minWidth: '100%',
   },
   fullWidth: {
     width: '100%',
   },
   inline: {
     alignSelf: 'flex-start',
+    minWidth: '100%',
   },
   slidingPill: {
     position: 'absolute',
@@ -631,11 +646,12 @@ const styles = StyleSheet.create({
   itemFullWidth: {
     flex: 1,
     flexBasis: 0,
-    width: '100%',
+    minWidth: 0,
   },
   itemInline: {
     flexGrow: 0,
     flexShrink: 0,
+    minWidth: 64,
   },
   itemText: {
     textAlign: 'center',

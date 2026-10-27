@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   StyleSheet,
@@ -76,7 +77,7 @@ import {
 } from '../ui/icon';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
-import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
+import { AssignOperatorToMachineModal } from '../assignments/AssignOperatorToMachineModal';
 import { MachineHMRSkeleton } from './MachineHMRSkeleton';
 import { MachineAuditSkeleton } from './MachineAuditSkeleton';
 
@@ -238,6 +239,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   userRole,
   initialTab,
 }) => {
+  const router = useRouter();
   const { theme, isDark } = useTheme();
   const [machine, setMachine] = useState<any>(initialMachine);
 
@@ -291,6 +293,58 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         }
       });
   }, [machine.client_id]);
+
+  // Client-Level Inherited Supervisors State
+  const [clientSupervisors, setClientSupervisors] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!machine.client_id) {
+      setClientSupervisors([]);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('client_supervisors')
+          .select(`
+            id,
+            supervisor_id,
+            assigned_at,
+            supervisor:users!client_supervisors_supervisor_id_fkey(
+              id,
+              full_name,
+              employee_id,
+              phone,
+              email
+            )
+          `)
+          .eq('client_id', machine.client_id);
+
+        if (!error && data && isMounted) {
+          const formatted = data.map((row: any) => {
+            const sup = Array.isArray(row.supervisor) ? row.supervisor[0] : row.supervisor;
+            return {
+              id: row.supervisor_id,
+              full_name: sup?.full_name || 'Supervisor',
+              employee_id: sup?.employee_id || null,
+              phone: sup?.phone || null,
+              email: sup?.email || null,
+              is_inherited: true,
+              client_name: fullClient?.company_name || machine.client?.company_name || 'Client',
+            };
+          });
+          setClientSupervisors(formatted);
+        }
+      } catch {
+        // non-blocking fallback
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [machine.client_id, fullClient?.company_name, machine.client?.company_name]);
 
   const normalizedRole = (userRole || '').toLowerCase();
   const isAdminOrManager =
@@ -454,16 +508,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const fullBillingAddress = [billingAddress, [billingCity, billingDistrict, billingState].filter(Boolean).join(', '), billingPincode ? `PIN: ${billingPincode}` : ''].filter(Boolean).join(', ');
   const hasLinkedClient = Boolean(clientCompanyName || fullSiteAddress || clientPhone);
 
-  // Supervisors & Operators
+  // Supervisors & Operators (Direct machine assignments + Inherited client-level supervisors)
   const supervisors = useMemo(() => {
+    const list: any[] = [];
     if (Array.isArray(machine.supervisors) && machine.supervisors.length > 0) {
-      return machine.supervisors.filter((s: any) => Boolean(s?.full_name));
+      machine.supervisors.forEach((s: any) => {
+        if (s?.full_name) list.push({ ...s, is_inherited: false });
+      });
+    } else if (machine.current_supervisor?.full_name) {
+      list.push({ ...machine.current_supervisor, is_inherited: false });
     }
-    if (machine.current_supervisor?.full_name) {
-      return [machine.current_supervisor];
+
+    if (clientSupervisors.length > 0) {
+      clientSupervisors.forEach((cs: any) => {
+        if (!list.some((existing) => existing.id === cs.id)) {
+          list.push(cs);
+        }
+      });
     }
-    return [];
-  }, [machine.supervisors, machine.current_supervisor]);
+
+    return list;
+  }, [machine.supervisors, machine.current_supervisor, clientSupervisors]);
 
   const operators = useMemo(() => {
     if (Array.isArray(machine.operators) && machine.operators.length > 0) {
@@ -1680,10 +1745,24 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <EmptyState
                       compact
                       icon={<Shield size={20} color={theme.colors.mute} />}
-                      title="No Supervisors Assigned"
-                      description="Assign a site supervisor to monitor shifts and daily logs."
-                      actionLabel={canManage ? "Assign Supervisor" : undefined}
-                      onAction={canManage ? () => setAssignPersonnelModalVisible(true) : undefined}
+                      title={machine.client_id ? "No Client Supervisors Assigned" : "No Supervisors Assigned"}
+                      description={
+                        machine.client_id
+                          ? "Supervisors assigned to this client will automatically inherit operational oversight."
+                          : "Assign a site supervisor to monitor shifts and daily logs."
+                      }
+                      actionLabel={canManage ? (machine.client_id ? "Assign to Client" : "Assign Supervisor") : undefined}
+                      onAction={
+                        canManage
+                          ? () => {
+                              if (machine.client_id) {
+                                router.push(`/clients/${machine.client_id}?action=assign-supervisor` as any);
+                              } else {
+                                setAssignPersonnelModalVisible(true);
+                              }
+                            }
+                          : undefined
+                      }
                     />
                   ) : (
                     supervisors.map((s: any, idx: number) => (
@@ -1702,16 +1781,31 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             <Text variant="body" style={{ color: theme.colors.ink }}>
                               {s.full_name}
                             </Text>
-                            <Text variant="micro" style={{ color: theme.colors.mute }}>
-                              Shift {idx + 1}
-                            </Text>
+                            {s.is_inherited ? (
+                              <Badge status="active" size="sm" customLabel="INHERITED" />
+                            ) : (
+                              <Text variant="micro" style={{ color: theme.colors.mute }}>
+                                Shift {idx + 1}
+                              </Text>
+                            )}
                           </View>
 
                           <View style={styles.clockRow}>
-                            <Clock size={11} color="#0d9488" />
-                            <Text variant="micro" style={{ color: '#0d9488' }}>
-                              {s.shift_time || '09:30 AM - 06:30 PM'}
-                            </Text>
+                            {s.is_inherited ? (
+                              <>
+                                <Building2 size={11} color="#0284c7" />
+                                <Text variant="micro" style={{ color: '#0284c7' }}>
+                                  Inherited from {s.client_name || 'Client'}
+                                </Text>
+                              </>
+                            ) : (
+                              <>
+                                <Clock size={11} color="#0d9488" />
+                                <Text variant="micro" style={{ color: '#0d9488' }}>
+                                  {s.shift_time || '09:30 AM - 06:30 PM'}
+                                </Text>
+                              </>
+                            )}
                           </View>
                         </View>
 
@@ -3365,10 +3459,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
       />
 
       {/* Assign Personnel Modal */}
-      <MobileAssignPersonnelModal
+      <AssignOperatorToMachineModal
         visible={assignPersonnelModalVisible}
         onClose={() => setAssignPersonnelModalVisible(false)}
-        initialMachineId={machine.id}
+        machine={machine}
         userRole={userRole || undefined}
         onSuccess={async () => {
           try {

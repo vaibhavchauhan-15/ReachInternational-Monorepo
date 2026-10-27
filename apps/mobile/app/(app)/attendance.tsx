@@ -719,7 +719,11 @@ export default function AttendanceScreen() {
   if (!isAllowed) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <MobileHeader title={isOperator ? 'My Attendance' : 'Attendance'} />
+        <MobileHeader
+          title={isOperator ? 'My Attendance' : 'Attendance'}
+          showBack={true}
+          backRoute="/dashboard"
+        />
         <PermissionDeniedView
           featureName="Attendance Roster"
           currentRole={role}
@@ -733,6 +737,8 @@ export default function AttendanceScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <MobileHeader
         title={isOperator ? 'My Attendance' : 'Attendance'}
+        showBack={true}
+        backRoute="/dashboard"
         actions={headerActions}
       />
 

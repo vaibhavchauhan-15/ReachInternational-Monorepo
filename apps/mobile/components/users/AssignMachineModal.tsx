@@ -1,4 +1,5 @@
 import React from 'react';
+import { AssignMachineToOperatorModal } from '../assignments/AssignMachineToOperatorModal';
 import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
 import type { UserRecord } from './UserDetailModal';
 
@@ -12,9 +13,8 @@ export interface AssignMachineModalProps {
 
 /**
  * AssignMachineModal — Focused assignment modal for users roster.
- * Replaces legacy checkbox drawer with canonical MobileAssignPersonnelModal.
- * Supports Supervisor, Machine, and Shift dropdowns with client/site configuration,
- * overnight shift intervals, multi-machine disjoint overlap validation, and atomic concurrency locks.
+ * Delegates to the standardized AssignMachineToOperatorModal for operators
+ * while maintaining canonical MobileAssignPersonnelModal fallback for backwards compatibility.
  */
 export const AssignMachineModal: React.FC<AssignMachineModalProps> = ({
   visible,
@@ -24,6 +24,18 @@ export const AssignMachineModal: React.FC<AssignMachineModalProps> = ({
   onSuccess,
 }) => {
   if (!visible) return null;
+
+  // Use dedicated operator machine assignment modal when targeting an operator
+  if (user?.role === 'operator') {
+    return (
+      <AssignMachineToOperatorModal
+        visible={visible}
+        onClose={onClose}
+        operator={user}
+        onSuccess={onSuccess}
+      />
+    );
+  }
 
   return (
     <MobileAssignPersonnelModal

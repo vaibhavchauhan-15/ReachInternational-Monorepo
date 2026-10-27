@@ -1,25 +1,32 @@
 # Current Task
 
-## Task: 230 — Android Production Play Store Release (.aab) Build & Release Notes
+## Task: 260 — Screen Entry Point Migration & Optimistic Standardization: Assignment UI — Native React Native / Expo App
 **Status**: 🟢 COMPLETED
-**Date**: 2026-10-21
+**Date**: 2026-10-23
+**Target Scope**:
+- `apps/mobile/components/machines/MachineDetailView.tsx`
+- `apps/mobile/components/users/AssignMachineModal.tsx`
+- `apps/mobile/components/users/UserDetailView.tsx`
+- `apps/mobile/components/clients/ClientDetailView.tsx`
+- `apps/mobile/components/clients/AssignClientSupervisorModal.tsx`
+- `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`
+- `apps/mobile/components/assignments/AssignOperatorToMachineModal.tsx`
+- `apps/mobile/lib/hooks/useClientDetailData.ts`
+- `apps/mobile/test/test-standardized-assignment-ui.mjs`
 
-**User Objectives & Implementation**:
-1. **Expo Doctor Verification (`npx expo-doctor`)**:
-   - Executed full 20-point diagnostic sweep across `apps/mobile`.
-   - Result: **20/20 checks passed** (0 issues detected).
-2. **Local Native Bundling & Type Safety Verification**:
-   - Bundled 4,772 JavaScript modules and 36 static assets in 70.7s via Gradle without errors.
-   - Identified and resolved TypeScript strict null-checks on `createSignedUrls` returns (`item.path` and `found.path`) in `apps/mobile/lib/documents.ts` and `apps/web/app/actions/documents.ts`.
-   - Validated complete monorepo typecheck: 7/7 packages passed cleanly with 0 errors (`pnpm typecheck`).
-   - Ran automated test suite: 357/357 test scenarios verified (100% pass rate).
-   - Enforced zero raw typography violations: `check-typography.mjs` passed cleanly.
-3. **Google Play Store Release Documentation**:
-   - `apps/mobile/store-assets/release-notes-en-US.txt`: Updated to Google Play's 500-character constraint.
-   - `apps/mobile/RELEASE_NOTES_v1.3.0.md`: Authored comprehensive release documentation detailing in-app PDF viewer, profile document pipeline, dark theme autofill fixes, password strength meters, and Android 15/16 edge-to-edge support.
-4. **Production EAS Build (.aab)**:
-   - Profile: `production` (`buildType: "app-bundle"`, channel: `production`, Target SDK: 36).
-   - Automated Version Increment: `versionCode` incremented from 16 to 17.
-   - Remote Credential Signing: Production keystore (`Build Credentials -qwYO0cEyL`) injected securely via EAS Cloud Vault.
-   - Output Artifact: [07UhHchIFo2LtQLERXJWrzlHIs5UmN21wPlpd8_mS8A.aab](https://expo.dev/artifacts/eas/07UhHchIFo2LtQLERXJWrzlHIs5UmN21wPlpd8_mS8A.aab)
-   - EAS Build Dashboard: [Build 887b3af0-082b-4dd4-b34c-405f2d7b0337](https://expo.dev/accounts/vaibhavchauhan_15/projects/reachinternational-monorepo/builds/887b3af0-082b-4dd4-b34c-405f2d7b0337)
+**Key Migration & Standardization Deliverables**:
+1. **Screen Entry Point Migrations**:
+   - `MachineDetailView.tsx`: Migrated directly to `AssignOperatorToMachineModal`, showing target entity banner (Machine ID badge, Model, S/N), inherited client-supervisor callout, 24h capacity counter (`2 / 3 Shifts Assigned`), monochromatic `getUserInitials` avatar tokens, and automatic snapshot rollback.
+   - `UserDetailView.tsx`: Migrated "Assign Equipment" action in Tab 1 (Fleet), Tab 3 (Assignments), and contextual menu to mount `AssignMachineModal` with operator delegation to `AssignMachineToOperatorModal`.
+   - `AssignMachineModal.tsx`: Enhanced to detect operator roles and delegate to `AssignMachineToOperatorModal` for dedicated operator equipment assignment while preserving `MobileAssignPersonnelModal` fallback.
+   - `ClientDetailView.tsx`: Upgraded "Assigned Client Supervisors" section with monochromatic `getUserInitials` avatar tokens (`#171717` ink / `#ffffff` elevated / hairline border) and optimistic rollback on supervisor removal.
+   - `AssignClientSupervisorModal.tsx`: Upgraded candidate and currently assigned supervisor items with monochromatic `getUserInitials` avatar tokens.
+   - `MobileAssignPersonnelModal.tsx`: Modernized operator roster card display with monochromatic `getUserInitials` avatar tokens.
+2. **Optimistic Updates & Reliable Cache Rollback**:
+   - `useClientDetailData.ts`: Enhanced `assignSupervisorMutation` and `removeSupervisorMutation` with `onMutate` query cancellation, previous cache snapshotting, optimistic cache population/filtering, and automatic rollback in `onError`.
+3. **Automated Verification**:
+   - Expanded `apps/mobile/test/test-standardized-assignment-ui.mjs` with Section 6 verifying all screen entry point migrations, optimistic rollback in `useClientDetailData`, and monochromatic `getUserInitials` tokens across `ClientDetailView`, `AssignClientSupervisorModal`, `MachineDetailView`, and `UserDetailView`.
+   - `node apps/mobile/test/index.mjs`: Clean pass across all 34 / 34 mobile test suites (100%).
+   - `node apps/mobile/run-tests.mjs`: Clean pass across all 357 / 357 test scenarios (100%).
+   - `node scripts/check-typography.mjs`: Clean pass (0 raw typography property violations).
+   - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).

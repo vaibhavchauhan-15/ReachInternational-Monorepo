@@ -14,7 +14,6 @@ import {
   Text,
   Switch,
   useToast,
-  Badge,
   Card,
   Button,
   Pressable,
@@ -93,6 +92,7 @@ function NotificationToggleCard({
       <View style={styles.textColumn}>
         <Text
           variant="subheading"
+          weight="semibold"
           style={[styles.cardTitle, { color: theme.colors.ink }]}
           numberOfLines={1}
         >
@@ -223,16 +223,19 @@ export default function NotificationsSettingsScreen() {
             />
           </View>
           <View style={styles.textColumn}>
-            <View style={styles.badgeRow}>
-              <Text variant="subheading" style={{ color: theme.colors.ink }}>
-                Allow Push Notifications
-              </Text>
-              <Badge
-                status={isMasterPushOn ? 'active' : 'neutral'}
-                customLabel={isMasterPushOn ? 'ACTIVE' : 'MUTED'}
-              />
-            </View>
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
+            <Text
+              variant="subheading"
+              weight="semibold"
+              style={[styles.cardTitle, { color: theme.colors.ink }]}
+              numberOfLines={1}
+            >
+              Allow Push Notifications
+            </Text>
+            <Text
+              variant="caption"
+              style={[styles.cardSubtitle, { color: theme.colors.mute }]}
+              numberOfLines={2}
+            >
               Master switch for all mobile device alerts, shift reminders, and fleet notices.
             </Text>
           </View>
@@ -262,10 +265,18 @@ export default function NotificationsSettingsScreen() {
           <View style={styles.bannerRow}>
             <ShieldAlert size={20} color="#dc2626" />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="label" style={{ color: isDark ? '#f87171' : '#b91c1c' }}>
-                System Notifications Disabled
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={{ color: isDark ? '#f87171' : '#b91c1c' }}
+              >
+                System Notifications Blocked
               </Text>
-              <Text variant="caption" style={{ color: isDark ? '#fca5a5' : '#991b1b' }}>
+              <Text
+                variant="caption"
+                style={{ color: isDark ? '#fca5a5' : '#991b1b' }}
+                numberOfLines={2}
+              >
                 Notification permissions are blocked at the device operating system level.
               </Text>
             </View>
@@ -285,8 +296,18 @@ export default function NotificationsSettingsScreen() {
 
       {/* Section Header: Alert Channels */}
       <View style={styles.sectionHeader}>
-        <Text variant="label" style={{ color: theme.colors.mute }}>
-          ALERT CHANNELS
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          OPERATIONAL ALERT CHANNELS
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Configure real-time push alerts for shift reminders, breakdown flags, and log submission approvals.
         </Text>
       </View>
 
@@ -365,13 +386,7 @@ const styles = StyleSheet.create({
   masterHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 14,
   },
   permissionBanner: {
     padding: 14,
@@ -385,9 +400,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionHeader: {
-    marginTop: 8,
+    marginTop: 12,
     marginBottom: 2,
     paddingHorizontal: 4,
+    gap: 2,
+  },
+  sectionTitle: {
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    marginTop: 1,
   },
   toggleCard: {
     minHeight: 64,

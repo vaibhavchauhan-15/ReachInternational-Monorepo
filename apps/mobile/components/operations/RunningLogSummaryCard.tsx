@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,7 +10,16 @@ import Animated, {
 import { Text, Badge, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { ChevronDown, Clock, MapPin, Phone, Mail, AlertTriangle, ShieldCheck } from '../ui/icon';
+import {
+  ChevronDown,
+  Clock,
+  MapPin,
+  Phone,
+  Mail,
+  AlertTriangle,
+  UserCheck,
+  Calendar,
+} from '../ui/icon';
 
 export interface RunningLogSummaryCardProps {
   viewMode: 'machine' | 'client' | 'operator';
@@ -68,6 +77,9 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
   onToggleExpand: controlledToggle,
 }) {
   const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
+
   const [internalExpanded, setInternalExpanded] = useState<boolean>(true);
 
   const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -75,7 +87,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
 
   useEffect(() => {
     progress.value = withTiming(isExpanded ? 1 : 0, {
-      duration: 220,
+      duration: 240,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     });
   }, [isExpanded, progress]);
@@ -86,10 +98,11 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
     };
   });
 
+  // Generous max height interpolation (600) prevents any clipping across all viewport sizes & font scales
   const collapsibleAnimatedStyle = useAnimatedStyle(() => {
     return {
       opacity: progress.value,
-      maxHeight: interpolate(progress.value, [0, 1], [0, 280]),
+      maxHeight: interpolate(progress.value, [0, 1], [0, 600]),
       overflow: 'hidden' as const,
     };
   });
@@ -102,6 +115,10 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
     }
   }, [controlledToggle]);
 
+  const roundedRunHours = Math.round(totalRunHours * 10) / 10;
+  const roundedWorkingHours = Math.round(totalWorkingHours * 10) / 10;
+
+  // 1. CLIENT VIEW
   if (viewMode === 'client') {
     if (!client) return null;
     const address = [client.street, client.city, client.district, client.pincode]
@@ -138,6 +155,9 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
           </View>
 
           <View style={styles.headerRight}>
+            <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+              {roundedRunHours} hrs
+            </Text>
             <Animated.View style={chevronAnimatedStyle}>
               <ChevronDown size={16} color={theme.colors.mute} />
             </Animated.View>
@@ -146,42 +166,152 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
 
         <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
-            {address ? (
-              <View style={styles.metaRow}>
-                <MapPin size={12} color={theme.colors.mute} />
-                <Text variant="caption" style={{ color: theme.colors.mute, flex: 1 }}>
-                  {address}
-                </Text>
+            {/* Meta Strip: Address & Contact */}
+            {(Boolean(address) || Boolean(client.phone) || Boolean(client.email)) && (
+              <View style={styles.metaStrip}>
+                {Boolean(address) && (
+                  <View style={styles.metaRow}>
+                    <MapPin size={13} color={theme.colors.link} />
+                    <Text variant="caption" style={{ color: theme.colors.mute, flex: 1 }}>
+                      {address}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.contactRow}>
+                  {Boolean(client.phone) && (
+                    <Pressable
+                      variant="ghost"
+                      onPress={() => Linking.openURL(`tel:${client.phone}`)}
+                      style={styles.contactItem}
+                      accessibilityLabel={`Call ${client.phone}`}
+                    >
+                      <Phone size={12} color="#10b981" />
+                      <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                        {client.phone}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {Boolean(client.email) && (
+                    <Pressable
+                      variant="ghost"
+                      onPress={() => Linking.openURL(`mailto:${client.email}`)}
+                      style={styles.contactItem}
+                      accessibilityLabel={`Email ${client.email}`}
+                    >
+                      <Mail size={12} color="#6366f1" />
+                      <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                        {client.email}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
-            ) : null}
+            )}
 
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  TOTAL RUN TIME
-                </Text>
-                <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
-                  {Math.round(totalRunHours * 10) / 10}h
-                </Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  LOGGED DAYS
-                </Text>
-                <Text variant="body" weight="bold" style={{ color: theme.colors.ink }}>
-                  {totalDays} {totalDays === 1 ? 'day' : 'days'}
-                </Text>
-              </View>
-              {totalBreakdowns > 0 && (
-                <View style={styles.statCol}>
-                  <Text variant="caption" style={{ color: '#ee0000' }}>
-                    BREAKDOWNS
-                  </Text>
-                  <Text variant="body" weight="bold" style={{ color: '#ee0000' }}>
-                    {totalBreakdowns}
+            {/* Standardized 4-Metric Mini KPI Grid (2 cols mobile, 4 cols tablet/desktop) */}
+            <View style={styles.kpiGrid}>
+              {/* Card 1: Run Hours */}
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Clock size={13} color={theme.colors.link} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    RUN HOURS
                   </Text>
                 </View>
-              )}
+                <Text variant="title" weight="bold" style={{ color: theme.colors.link }}>
+                  {roundedRunHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
+                </Text>
+              </View>
+
+              {/* Card 2: Working Hours */}
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <UserCheck size={13} color="#10b981" />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    WORK HOURS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: '#10b981' }}>
+                  {roundedWorkingHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
+                </Text>
+              </View>
+
+              {/* Card 3: Breakdowns */}
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <AlertTriangle size={13} color={totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    BREAKDOWNS
+                  </Text>
+                </View>
+                <Text
+                  variant="title"
+                  weight="bold"
+                  style={{
+                    color: totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute,
+                  }}
+                >
+                  {totalBreakdowns}
+                </Text>
+              </View>
+
+              {/* Card 4: Logged Days */}
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Calendar size={13} color={theme.colors.ink} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    LOGGED DAYS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: theme.colors.ink }}>
+                  {totalDays}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    {totalDays === 1 ? 'day' : 'days'}
+                  </Text>
+                </Text>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -189,6 +319,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
     );
   }
 
+  // 2. MACHINE VIEW
   if (viewMode === 'machine') {
     if (!machine) return null;
     const model = machine.model || 'Equipment';
@@ -260,6 +391,10 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
               </Pressable>
             )}
 
+            <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+              {roundedRunHours} hrs
+            </Text>
+
             <Animated.View style={chevronAnimatedStyle}>
               <ChevronDown size={16} color={theme.colors.mute} />
             </Animated.View>
@@ -268,37 +403,116 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
 
         <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
-            <View style={styles.statsRow}>
-              {machine.manufacturer ? (
-                <View style={styles.statCol}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>
-                    MANUFACTURER
-                  </Text>
+            {/* Manufacturer Tag if Available */}
+            {Boolean(machine.manufacturer) && (
+              <View style={styles.metaRow}>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                  Manufacturer:{' '}
                   <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
                     {machine.manufacturer}
                   </Text>
-                </View>
-              ) : null}
-
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  TOTAL RUN TIME
                 </Text>
-                <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
-                  {Math.round(totalRunHours * 10) / 10}h
+              </View>
+            )}
+
+            {/* Standardized 4-Metric Mini KPI Grid */}
+            <View style={styles.kpiGrid}>
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Clock size={13} color={theme.colors.link} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    RUN HOURS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: theme.colors.link }}>
+                  {roundedRunHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
                 </Text>
               </View>
 
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  BREAKDOWN EVENTS
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <UserCheck size={13} color="#10b981" />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    WORK HOURS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: '#10b981' }}>
+                  {roundedWorkingHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
                 </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <AlertTriangle size={13} color={totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    BREAKDOWNS
+                  </Text>
+                </View>
                 <Text
-                  variant="body"
+                  variant="title"
                   weight="bold"
-                  style={{ color: totalBreakdowns > 0 ? '#ee0000' : theme.colors.mute }}
+                  style={{
+                    color: totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute,
+                  }}
                 >
                   {totalBreakdowns}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Calendar size={13} color={theme.colors.ink} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    LOGGED DAYS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: theme.colors.ink }}>
+                  {totalDays}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    {totalDays === 1 ? 'day' : 'days'}
+                  </Text>
                 </Text>
               </View>
             </View>
@@ -308,6 +522,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
     );
   }
 
+  // 3. OPERATOR VIEW
   if (viewMode === 'operator') {
     if (!operator) return null;
 
@@ -341,8 +556,8 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
           </View>
 
           <View style={styles.headerRight}>
-            <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
-              {Math.round(totalRunHours * 10) / 10} hrs
+            <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+              {roundedRunHours} hrs
             </Text>
             <Animated.View style={chevronAnimatedStyle}>
               <ChevronDown size={16} color={theme.colors.mute} />
@@ -352,30 +567,136 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
 
         <Animated.View style={[styles.collapsibleWrapper, collapsibleAnimatedStyle]}>
           <View style={[styles.expandedContent, { borderTopColor: theme.colors.hairline }]}>
-            {operator.phone ? (
-              <View style={styles.metaRow}>
-                <Phone size={12} color={theme.colors.mute} />
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  {operator.phone}
-                </Text>
+            {/* Meta Strip: Phone & Email */}
+            {(Boolean(operator.phone) || Boolean(operator.email)) && (
+              <View style={styles.contactRow}>
+                {Boolean(operator.phone) && (
+                  <Pressable
+                    variant="ghost"
+                    onPress={() => Linking.openURL(`tel:${operator.phone}`)}
+                    style={styles.contactItem}
+                    accessibilityLabel={`Call ${operator.phone}`}
+                  >
+                    <Phone size={12} color="#10b981" />
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                      {operator.phone}
+                    </Text>
+                  </Pressable>
+                )}
+                {Boolean(operator.email) && (
+                  <Pressable
+                    variant="ghost"
+                    onPress={() => Linking.openURL(`mailto:${operator.email}`)}
+                    style={styles.contactItem}
+                    accessibilityLabel={`Email ${operator.email}`}
+                  >
+                    <Mail size={12} color="#6366f1" />
+                    <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                      {operator.email}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
-            ) : null}
+            )}
 
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  TOTAL RUN TIME
-                </Text>
-                <Text variant="body" weight="bold" style={{ color: theme.colors.link }}>
-                  {Math.round(totalRunHours * 10) / 10}h
+            {/* Standardized 4-Metric Mini KPI Grid */}
+            <View style={styles.kpiGrid}>
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Clock size={13} color={theme.colors.link} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    RUN HOURS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: theme.colors.link }}>
+                  {roundedRunHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
                 </Text>
               </View>
-              <View style={styles.statCol}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  WORKING DAYS
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <UserCheck size={13} color="#10b981" />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    WORK HOURS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: '#10b981' }}>
+                  {roundedWorkingHours}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    hrs
+                  </Text>
                 </Text>
-                <Text variant="body" weight="bold" style={{ color: theme.colors.ink }}>
-                  {totalDays} {totalDays === 1 ? 'day' : 'days'}
+              </View>
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <Calendar size={13} color={theme.colors.ink} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    WORKING DAYS
+                  </Text>
+                </View>
+                <Text variant="title" weight="bold" style={{ color: theme.colors.ink }}>
+                  {totalDays}{' '}
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+                    {totalDays === 1 ? 'day' : 'days'}
+                  </Text>
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  isTabletOrDesktop ? styles.kpiCardQuarter : styles.kpiCardHalf,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.kpiLabelRow}>
+                  <AlertTriangle size={13} color={totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute} />
+                  <Text variant="micro" weight="bold" style={[styles.kpiLabelText, { color: theme.colors.mute }]}>
+                    BREAKDOWNS
+                  </Text>
+                </View>
+                <Text
+                  variant="title"
+                  weight="bold"
+                  style={{
+                    color: totalBreakdowns > 0 ? (isDark ? '#f87171' : '#ee0000') : theme.colors.mute,
+                  }}
+                >
+                  {totalBreakdowns}
                 </Text>
               </View>
             </View>
@@ -404,7 +725,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacingNumeric.md,
     paddingVertical: spacingNumeric.sm + 2,
-    minHeight: 46,
+    minHeight: 48,
     gap: spacingNumeric.xs,
   },
   headerLeft: {
@@ -420,7 +741,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flexShrink: 0,
   },
   historyBtn: {
@@ -431,25 +752,56 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
+    minHeight: 32,
   },
   expandedContent: {
     borderTopWidth: 1,
     padding: spacingNumeric.md,
-    gap: spacingNumeric.sm,
+    gap: spacingNumeric.sm + 2,
+  },
+  metaStrip: {
+    gap: spacingNumeric.xs + 2,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  statsRow: {
+  contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacingNumeric.sm,
+    gap: spacingNumeric.md,
     flexWrap: 'wrap',
   },
-  statCol: {
-    gap: 2,
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacingNumeric.sm,
+  },
+  kpiCard: {
+    padding: spacingNumeric.sm + 2,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    gap: 4,
+  },
+  kpiCardHalf: {
+    width: '48.5%',
+  },
+  kpiCardQuarter: {
+    flex: 1,
+    minWidth: 120,
+  },
+  kpiLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  kpiLabelText: {
   },
 });

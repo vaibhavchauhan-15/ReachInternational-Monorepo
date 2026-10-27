@@ -80,12 +80,12 @@ export const UserActionsPopover: React.FC<UserActionsPopoverProps> = ({
           <View style={[styles.popoverUserHeader, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.popoverHeaderInfo}>
               <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink, width: 26, height: 26 }]}>
-                <Text variant="label" style={{ color: theme.colors.canvas }}>
+                <Text variant="caption" weight="bold" style={{ color: theme.colors.canvas }}>
                   {user.full_name ? user.full_name[0].toUpperCase() : 'U'}
                 </Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text variant="label" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
                   {user.full_name}
                 </Text>
                 <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
@@ -120,7 +120,7 @@ export const UserActionsPopover: React.FC<UserActionsPopoverProps> = ({
                 <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.1)' }]}>
                   <Edit2 size={14} color={theme.colors.link} />
                 </View>
-                <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Edit User Details</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink, flex: 1 }}>Edit User Details</Text>
               </Pressable>
             )}
 
@@ -143,7 +143,7 @@ export const UserActionsPopover: React.FC<UserActionsPopoverProps> = ({
                 <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)' }]}>
                   <KeyRound size={14} color="#f59e0b" />
                 </View>
-                <Text variant="label" style={{ color: theme.colors.ink, flex: 1 }}>Reset Password</Text>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.ink, flex: 1 }}>Reset Password</Text>
               </Pressable>
             )}
 
@@ -178,7 +178,8 @@ export const UserActionsPopover: React.FC<UserActionsPopoverProps> = ({
                   )}
                 </View>
                 <Text
-                  variant="label"
+                  variant="caption"
+                  weight="medium"
                   style={{
                     flex: 1,
                     color: user.status === 'active' ? theme.colors.error : '#10b981',
@@ -203,7 +204,7 @@ export const UserActionsPopover: React.FC<UserActionsPopoverProps> = ({
                 <View style={[styles.popoverActionIconBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }]}>
                   <Trash2 size={14} color={theme.colors.error} />
                 </View>
-                <Text variant="label" style={{ color: theme.colors.error, flex: 1 }}>
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.error, flex: 1 }}>
                   Delete User
                 </Text>
               </Pressable>

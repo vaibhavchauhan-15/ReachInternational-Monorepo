@@ -264,7 +264,7 @@ export default function OperationsScreen() {
       <MobileHeader
         title="Operations"
         showBack={true}
-        onPressBack={() => router.back()}
+        backRoute="/dashboard"
         actions={headerActions}
       />
 

@@ -27,7 +27,8 @@ export function SettingsSection({
       {title ? (
         <View style={styles.headerBox}>
           <Text
-            variant="label"
+            variant="caption"
+            weight="semibold"
             style={[styles.title, { color: theme.colors.mute }]}
           >
             {title.toUpperCase()}

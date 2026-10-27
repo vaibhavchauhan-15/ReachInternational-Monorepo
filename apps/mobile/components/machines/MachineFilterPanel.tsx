@@ -205,7 +205,8 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             }
           />
           <Text
-            variant="label"
+            variant="caption"
+            weight="semibold"
             style={{
               color:
                 filterPanelOpen || activeFilterCount > 0
@@ -232,6 +233,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             >
               <Text
                 variant="micro"
+                weight="bold"
                 style={{
                   color:
                     filterPanelOpen || activeFilterCount > 0
@@ -267,7 +269,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             accessibilityLabel="Reset all filters"
           >
             <RotateCcw size={13} color={theme.colors.ink} />
-            <Text variant="caption" style={{ color: theme.colors.ink }}>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
               Reset
             </Text>
           </Pressable>
@@ -347,7 +349,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
             accessibilityLabel="Reset all active filters"
           >
             <RotateCcw size={11} color={theme.colors.link} />
-            <Text variant="caption" style={{ color: theme.colors.link }}>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
               Clear all
             </Text>
           </Pressable>

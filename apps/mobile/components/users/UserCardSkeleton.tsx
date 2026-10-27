@@ -23,44 +23,44 @@ export const UserCardSkeleton: React.FC<UserCardSkeletonProps> = ({
         },
       ]}
     >
-      {/* Top Header: Avatar + Name/Email + Status Badge */}
+      {/* Top Header: Avatar + Name + Badges */}
       <View style={styles.cardHeader}>
         <View style={styles.avatarRow}>
           {/* Avatar Circle */}
           <Skeleton
-            width={36}
-            height={36}
-            borderRadius={18}
+            width={32}
+            height={32}
+            borderRadius={16}
             animate={animate}
             style={styles.noMargin}
           />
-          {/* User Name & Email Stack */}
-          <View style={styles.nameEmailStack}>
-            <Skeleton
-              width={125}
-              height={15}
-              borderRadius={radiusNumeric.sm}
-              animate={animate}
-              style={styles.noMargin}
-            />
-            <Skeleton
-              width={160}
-              height={12}
-              borderRadius={radiusNumeric.sm}
-              animate={animate}
-              style={{ marginTop: 4, marginBottom: 0 }}
-            />
-          </View>
+          {/* User Name */}
+          <Skeleton
+            width={140}
+            height={16}
+            borderRadius={radiusNumeric.sm}
+            animate={animate}
+            style={styles.noMargin}
+          />
         </View>
 
-        {/* Status Badge Placeholder */}
-        <Skeleton
-          width={64}
-          height={22}
-          borderRadius={radiusNumeric.sm}
-          animate={animate}
-          style={styles.noMargin}
-        />
+        {/* Compact Badges Row Placeholder (Role + Status) */}
+        <View style={styles.badgeRow}>
+          <Skeleton
+            width={72}
+            height={20}
+            borderRadius={radiusNumeric.full}
+            animate={animate}
+            style={styles.noMargin}
+          />
+          <Skeleton
+            width={56}
+            height={20}
+            borderRadius={radiusNumeric.full}
+            animate={animate}
+            style={styles.noMargin}
+          />
+        </View>
       </View>
 
       {/* Metadata Well Box */}
@@ -114,21 +114,21 @@ export const UserCardSkeleton: React.FC<UserCardSkeletonProps> = ({
       <View style={[styles.cardActionsContainer, { borderTopColor: theme.colors.hairline }]}>
         <Skeleton
           width={64}
-          height={32}
+          height={36}
           borderRadius={radiusNumeric.pill}
           animate={animate}
           style={styles.noMargin}
         />
         <Skeleton
-          width={112}
-          height={32}
+          width={120}
+          height={36}
           borderRadius={radiusNumeric.pill}
           animate={animate}
           style={styles.noMargin}
         />
         <Skeleton
           width={96}
-          height={32}
+          height={36}
           borderRadius={radiusNumeric.pill}
           animate={animate}
           style={styles.noMargin}
@@ -180,13 +180,18 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   nameEmailStack: {
     flex: 1,
   },
   metaBox: {
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    padding: 8,
+    padding: spacingNumeric.sm,
     gap: 6,
   },
   metaRow: {
@@ -197,9 +202,9 @@ const styles = StyleSheet.create({
   cardActionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacingNumeric.sm,
     marginTop: 4,
-    paddingTop: 8,
+    paddingTop: spacingNumeric.sm,
     borderTopWidth: 1,
   },
   noMargin: {

@@ -9,4 +9,5 @@ export * from "./client-locations";
 export * from "./client-sites";
 export * from "./client-mutations";
 export * from "./client-export";
+export * from "./client-supervisors";
 export { getClientOptions, type ClientOptionItem } from "@/lib/queries/clients";

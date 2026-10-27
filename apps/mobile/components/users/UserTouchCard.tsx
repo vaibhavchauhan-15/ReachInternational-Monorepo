@@ -9,6 +9,7 @@ import { Badge, Text, HighlightText, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { getUserInitials } from '@reachinternational/utils';
 import {
   User,
   Phone,
@@ -223,31 +224,32 @@ function BaseUserTouchCard({
                 )}
               </View>
             ) : (
-              <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                <Text variant="label" style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                  {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
+              <View style={[styles.avatarCircle, { backgroundColor: isDark ? '#ffffff' : '#171717' }]}>
+                <Text variant="caption" weight="bold" style={[styles.avatarLetter, { color: isDark ? '#171717' : '#ffffff' }]}>
+                  {getUserInitials(u.full_name)}
                 </Text>
               </View>
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
               <HighlightText
-                text={truncateText(u.full_name, 28)}
+                text={truncateText(u.full_name, 32)}
                 query={searchTerm}
-                variant="label"
+                variant="subheading"
+                weight="semibold"
                 style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
                 numberOfLines={1}
               />
             </View>
           </View>
 
-          {/* Header Right: Standardized 24px Role Badge & Status Badge in ONE ROW */}
+          {/* Header Right: Standardized Compact Role & Status Badges */}
           <View style={styles.headerRightActions}>
             <View style={styles.headerBadgesCluster}>
               {/* Role Badge (centralized Badge with theme tokens) */}
               <Badge
                 role={u.role}
                 label={formatRoleName(u.role)}
-                size="md"
+                size="sm"
               />
 
               {/* Status Badge (centralized Badge with status dot) */}
@@ -255,7 +257,7 @@ function BaseUserTouchCard({
                 status={u.status}
                 dot
                 label={u.status === 'active' ? 'Active' : (u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1).toLowerCase() : 'Inactive')}
-                size="md"
+                size="sm"
               />
             </View>
           </View>
@@ -281,6 +283,7 @@ function BaseUserTouchCard({
                     text={u.employee_id}
                     query={searchTerm}
                     variant="mono"
+                    weight="semibold"
                     style={{ color: theme.colors.ink }}
                   />
                 </Badge>
@@ -294,6 +297,7 @@ function BaseUserTouchCard({
                   text={u.email}
                   query={searchTerm}
                   variant="caption"
+                  weight="medium"
                   style={[styles.metaChipText, { color: theme.colors.ink }]}
                   numberOfLines={1}
                 />
@@ -307,6 +311,7 @@ function BaseUserTouchCard({
                   text={u.phone}
                   query={searchTerm}
                   variant="mono"
+                  weight="medium"
                   style={[styles.metaChipText, { color: theme.colors.ink }]}
                 />
               </View>
@@ -328,10 +333,13 @@ function BaseUserTouchCard({
             {Boolean((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
               <View style={styles.metaChipRow}>
                 <User size={12} color="#0d9488" />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Supervisor: {u.supervisors && u.supervisors.length > 0
-                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                    : u.supervisor?.full_name}
+                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervisor: </Text>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                    {u.supervisors && u.supervisors.length > 0
+                      ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                      : u.supervisor?.full_name}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -339,8 +347,11 @@ function BaseUserTouchCard({
             {Boolean(u.assigned_machines && u.assigned_machines.length > 0) && (
               <View style={styles.metaChipRow}>
                 <Wrench size={12} color="#d97706" />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                  Machines: {u.assigned_machines?.map((m) => m.machine_id).join(', ')}
+                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Machines: </Text>
+                  <Text variant="mono" weight="medium" style={{ color: theme.colors.ink }}>
+                    {u.assigned_machines?.map((m) => m.machine_id).join(', ')}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -348,8 +359,11 @@ function BaseUserTouchCard({
             {Boolean(u.shift_time) && (
               <View style={styles.metaChipRow}>
                 <Clock size={12} color={theme.colors.mute} />
-                <Text variant="caption" style={[styles.metaChipText, { color: theme.colors.mute }]}>
-                  Shift: {u.shift_time}
+                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Shift: </Text>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                    {u.shift_time}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -494,11 +508,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   cardMetaBox: {
-    padding: spacingNumeric.xs,
+    padding: spacingNumeric.sm,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     marginTop: spacingNumeric.xs,
-    gap: 4,
+    gap: 6,
   },
   metaChipRow: {
     flexDirection: 'row',
@@ -514,18 +528,18 @@ const styles = StyleSheet.create({
   cardActionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacingNumeric.xs,
-    paddingTop: spacingNumeric.xs,
+    gap: spacingNumeric.sm,
+    paddingTop: spacingNumeric.sm,
     borderTopWidth: 1,
   },
   actionPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    height: 32,
-    minHeight: 44,
-    borderRadius: 16,
+    gap: 5,
+    paddingHorizontal: 12,
+    height: 36,
+    minHeight: 36,
+    borderRadius: radiusNumeric.pill,
     borderWidth: 1,
   },
 });

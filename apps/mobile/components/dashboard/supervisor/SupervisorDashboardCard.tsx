@@ -57,9 +57,10 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          MY SUPERVISED FLEET & TEAM
+          My Supervised Fleet & Team
         </Text>
         <KPIGrid columns={4}>
           <KPICard
@@ -97,9 +98,10 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          FIELD EXCEPTIONS & SHIFT METRICS
+          Field Exceptions & Shift Metrics
         </Text>
         <KPIGrid columns={2}>
           <StatusCard
@@ -141,6 +143,6 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 4,
+    marginBottom: spacingNumeric.sm,
   },
 });

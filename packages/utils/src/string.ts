@@ -28,6 +28,24 @@ export function formatEmployeeId(id: string | number): string {
   return `EMP-${str.padStart(3, '0')}`;
 }
 
+/**
+ * Extracts initials from an employee's or user's full name.
+ * Extracts the starting letter of the first name and the starting letter of the surname / last name (e.g. "John Doe" -> "JD").
+ * For single names, uses the first two characters or first character (e.g. "Operator" -> "OP").
+ */
+export function getUserInitials(name?: string | null): string {
+  if (!name || !name.trim()) return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) {
+    const single = parts[0];
+    return single.length >= 2 ? single.substring(0, 2).toUpperCase() : single[0].toUpperCase();
+  }
+  const firstLetter = parts[0][0];
+  const lastLetter = parts[parts.length - 1][0];
+  return (firstLetter + lastLetter).toUpperCase();
+}
+
 export function formatChallanNumber(num: string | number): string {
   if (!num) return '';
   const str = String(num);

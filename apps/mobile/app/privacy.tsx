@@ -49,15 +49,15 @@ export default function PrivacyPolicyScreen({ onPressBack, backRoute }: PrivacyP
       onPressBack();
       return;
     }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+      return;
+    }
     if (backRoute) {
       router.replace(backRoute as any);
       return;
     }
-    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/settings' as any);
-    }
+    router.replace('/settings' as any);
   }, [onPressBack, backRoute, router]);
 
   useEffect(() => {

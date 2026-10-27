@@ -312,6 +312,7 @@ export default function FontSizeScreen() {
                 <View style={styles.optionTextCol}>
                   <Text
                     variant="subheading"
+                    weight="semibold"
                     style={{ color: theme.colors.ink }}
                   >
                     {opt.title}
@@ -352,9 +353,16 @@ export default function FontSizeScreen() {
         <View style={styles.previewHeaderRow}>
           <Text
             variant="subheading"
+            weight="semibold"
             style={[styles.previewHeaderTitle, { color: theme.colors.ink }]}
           >
-            Preview
+            Live Shift Log Preview
+          </Text>
+          <Text
+            variant="caption"
+            style={{ color: theme.colors.mute, marginTop: 2 }}
+          >
+            Real-time preview of telemetry data at your selected font scaling.
           </Text>
         </View>
 

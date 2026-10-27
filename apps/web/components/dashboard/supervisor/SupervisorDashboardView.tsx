@@ -36,7 +36,7 @@ export async function SupervisorDashboardView({
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-7">
       <DashboardHeader
         userName={userName}
         role="supervisor"
@@ -47,7 +47,7 @@ export async function SupervisorDashboardView({
 
       {/* Team Scope & Shift Submissions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           My Supervised Fleet & Team
         </h2>
         <KPIGrid columns={4}>
@@ -84,10 +84,10 @@ export async function SupervisorDashboardView({
 
       {/* Daily Field Exceptions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Field Exceptions & Shift Metrics
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <StatusCard
             title="Breakdown Incidents"
             status={breakdowns > 0 ? "warning" : "success"}
@@ -110,10 +110,10 @@ export async function SupervisorDashboardView({
 
       {/* Supervisor Actions */}
       <div>
-        <h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
           Supervisor Field Actions
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">
           <PrimaryAction
             title="Review Daily Shift Logs"
             description="Examine operator entries, verify start/end meter readings, and approve logs"

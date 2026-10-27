@@ -173,8 +173,17 @@ export function DashboardSkeleton() {
 
 export function MachinesSkeleton() {
   return (
-    <div className="flex flex-col gap-6" aria-label="Loading machine directory...">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 pb-24 md:pb-6" aria-label="Loading machine directory...">
       <SkeletonHeader hasEyebrow hasSubtitle hasAction />
+
+      {/* KPI Cards Row Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl hidden lg:block" />
+      </div>
 
       <Card padding="md" className="flex flex-col gap-4">
         {/* Search and Filters bar */}

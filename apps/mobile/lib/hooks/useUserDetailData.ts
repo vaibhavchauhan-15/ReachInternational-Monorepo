@@ -5,7 +5,7 @@
  * explicit column projections (zero SELECT *), offline caching, and strict RBAC.
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { getAppUrl } from '../env';
 import type { UserRecord } from '../../components/users/UserDetailModal';
@@ -88,6 +88,51 @@ export interface UserAuditItem {
   before_state: Record<string, any> | null;
   after_state: Record<string, any> | null;
   created_at: string;
+}
+
+export interface UserMachinesPageChunk {
+  machines: UserMachineItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface UserRunningLogsPageChunk {
+  logs: UserRunningLogItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface UserAssignmentsPageChunk {
+  assignments: UserAssignmentItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface UserAttendancePageChunk {
+  totalActiveWorkDays: number;
+  totalShiftRunningTime: number;
+  shiftSchedule: string;
+  logs: any[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface UserDocumentsPageChunk {
+  documents: UserDocumentItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface UserAuditLogsPageChunk {
+  logs: UserAuditItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
 }
 
 export const USER_DETAIL_COLUMNS = `
@@ -255,6 +300,86 @@ export function useUserDetailMachines(userId?: string, enabled = false) {
 }
 
 /**
+ * Hook 2b: Assigned Machinery Fleet with Infinite Pagination (Chunked 20 per page)
+ */
+export function useUserDetailMachinesInfinite(userId?: string, enabled = false, pageSize = 20) {
+  return useInfiniteQuery<UserMachinesPageChunk>({
+    queryKey: ['user_detail', userId, 'machines_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserMachinesPageChunk> => {
+      if (!userId) return { machines: [], totalCount: 0, page: 1, hasMore: false };
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const [directMachinesRes, activeAssignmentsRes] = await Promise.all([
+        supabase
+          .from('machines')
+          .select('id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter')
+          .or(`current_operator_id.eq.${userId},operator_ids.cs.{${userId}},current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`)
+          .order('machine_id'),
+        supabase
+          .from('operator_machine_assignments')
+          .select(`
+            machine_id,
+            machines (id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter)
+          `)
+          .eq('operator_id', userId)
+          .eq('is_active', true),
+      ]);
+
+      const machineMap = new Map<string, UserMachineItem>();
+
+      (directMachinesRes.data || []).forEach((m: any) => {
+        machineMap.set(m.id, {
+          id: m.id,
+          machine_id: m.machine_id,
+          machine_name: m.machine_name,
+          model: m.model,
+          status: m.status,
+          serial_number: m.serial_number,
+          manufacturer: m.manufacturer,
+          year_of_mfg: m.year_of_mfg,
+          hour_meter: m.hour_meter,
+        });
+      });
+
+      (activeAssignmentsRes.data || []).forEach((item: any) => {
+        const m = Array.isArray(item.machines) ? item.machines[0] : item.machines;
+        if (m && !machineMap.has(m.id)) {
+          machineMap.set(m.id, {
+            id: m.id,
+            machine_id: m.machine_id,
+            machine_name: m.machine_name,
+            model: m.model,
+            status: m.status,
+            serial_number: m.serial_number,
+            manufacturer: m.manufacturer,
+            year_of_mfg: m.year_of_mfg,
+            hour_meter: m.hour_meter,
+          });
+        }
+      });
+
+      const all = Array.from(machineMap.values());
+      const totalCount = all.length;
+      const paged = all.slice(from, to + 1);
+
+      return {
+        machines: paged,
+        totalCount,
+        page: currentPage,
+        hasMore: to + 1 < totalCount,
+      };
+    },
+  });
+}
+
+/**
  * Hook 3: Shift Running Logs (Lazy Loaded on Running Logs Tab)
  */
 export function useUserDetailRunningLogs(userId?: string, enabled = false, limit = 50) {
@@ -306,6 +431,76 @@ export function useUserDetailRunningLogs(userId?: string, enabled = false, limit
 }
 
 /**
+ * Hook 3b: Shift Running Logs with Server-Side Infinite Pagination
+ */
+export function useUserDetailRunningLogsInfinite(
+  userId?: string,
+  enabled = false,
+  pageSize = 20
+) {
+  return useInfiniteQuery<UserRunningLogsPageChunk>({
+    queryKey: ['user_detail', userId, 'logs_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserRunningLogsPageChunk> => {
+      if (!userId) return { logs: [], totalCount: 0, page: 1, hasMore: false };
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, count, error } = await supabase
+        .from('machine_hour_logs')
+        .select(`
+          id, machine_id, log_date, start_time, end_time, start_meter, end_meter,
+          running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, created_at,
+          machines (id, machine_id, machine_name, model)
+        `, { count: 'exact' })
+        .or(`operator_id.eq.${userId},supervisor_id.eq.${userId}`)
+        .order('log_date', { ascending: false })
+        .range(from, to);
+
+      if (error || !data) {
+        return { logs: [], totalCount: count || 0, page: currentPage, hasMore: false };
+      }
+
+      const totalCount = count || 0;
+      const logs = data.map((log: any) => {
+        const machine = Array.isArray(log.machines) ? log.machines[0] : log.machines;
+        return {
+          id: log.id,
+          machine_id: log.machine_id,
+          machine_code: machine?.machine_id || '—',
+          machine_name: machine?.machine_name || 'Machine',
+          model: machine?.model || '',
+          log_date: log.log_date,
+          start_time: log.start_time,
+          end_time: log.end_time,
+          start_meter: log.start_meter,
+          end_meter: log.end_meter,
+          running_hours: Number(log.running_hours) || 0,
+          normal_working_hours: log.normal_working_hours != null ? Number(log.normal_working_hours) : null,
+          overtime_hours: log.overtime_hours != null ? Number(log.overtime_hours) : null,
+          is_breakdown: Boolean(log.is_breakdown),
+          location: log.location || null,
+          remarks: log.remarks || null,
+          created_at: log.created_at,
+        };
+      });
+
+      return {
+        logs,
+        totalCount,
+        page: currentPage,
+        hasMore: from + logs.length < totalCount,
+      };
+    },
+  });
+}
+
+/**
  * Hook 4: Machine Assignment History (Lazy Loaded on Assignments Tab)
  */
 export function useUserDetailAssignments(userId?: string, enabled = false) {
@@ -350,6 +545,69 @@ export function useUserDetailAssignments(userId?: string, enabled = false) {
 }
 
 /**
+ * Hook 4b: Machine Assignment History with Server-Side Infinite Pagination
+ */
+export function useUserDetailAssignmentsInfinite(
+  userId?: string,
+  enabled = false,
+  pageSize = 20
+) {
+  return useInfiniteQuery<UserAssignmentsPageChunk>({
+    queryKey: ['user_detail', userId, 'assignments_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserAssignmentsPageChunk> => {
+      if (!userId) return { assignments: [], totalCount: 0, page: 1, hasMore: false };
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, count, error } = await supabase
+        .from('operator_machine_assignments')
+        .select(`
+          id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, assigned_at, ended_at,
+          machines (id, machine_id, machine_name, model)
+        `, { count: 'exact' })
+        .eq('operator_id', userId)
+        .order('assigned_at', { ascending: false })
+        .range(from, to);
+
+      if (error || !data) {
+        return { assignments: [], totalCount: count || 0, page: currentPage, hasMore: false };
+      }
+
+      const totalCount = count || 0;
+      const assignments = data.map((item: any) => {
+        const machine = Array.isArray(item.machines) ? item.machines[0] : item.machines;
+        return {
+          id: item.id,
+          machine_id: item.machine_id,
+          machine_code: machine?.machine_id || '—',
+          machine_name: machine?.machine_name || 'Machine',
+          model: machine?.model || '',
+          shift_code: item.shift_code || null,
+          shift_start_time: item.shift_start_time,
+          shift_end_time: item.shift_end_time,
+          is_active: Boolean(item.is_active),
+          assigned_at: item.assigned_at,
+          ended_at: item.ended_at,
+        };
+      });
+
+      return {
+        assignments,
+        totalCount,
+        page: currentPage,
+        hasMore: from + assignments.length < totalCount,
+      };
+    },
+  });
+}
+
+/**
  * Hook 5: Attendance Telemetry & Schedule (Lazy Loaded on Attendance Tab)
  */
 export function useUserDetailAttendance(userId?: string, enabled = false) {
@@ -389,6 +647,82 @@ export function useUserDetailAttendance(userId?: string, enabled = false) {
         totalShiftRunningTime: Math.round(totalHours * 10) / 10,
         shiftSchedule: '06:00 AM - 02:00 PM',
         recentLogs: logs.slice(0, 20),
+      };
+    },
+  });
+}
+
+/**
+ * Hook 5b: Attendance Telemetry with Infinite Paginated Logs
+ */
+export function useUserDetailAttendanceInfinite(
+  userId?: string,
+  enabled = false,
+  pageSize = 20
+) {
+  return useInfiniteQuery<UserAttendancePageChunk>({
+    queryKey: ['user_detail', userId, 'attendance_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserAttendancePageChunk> => {
+      if (!userId) {
+        return {
+          totalActiveWorkDays: 0,
+          totalShiftRunningTime: 0,
+          shiftSchedule: '06:00 AM - 02:00 PM',
+          logs: [],
+          totalCount: 0,
+          page: 1,
+          hasMore: false,
+        };
+      }
+
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // 1. Fetch aggregate metrics
+      const { data: allLogs } = await supabase
+        .from('machine_hour_logs')
+        .select('running_hours, log_date')
+        .or(`operator_id.eq.${userId},supervisor_id.eq.${userId}`);
+
+      const aggLogs = allLogs || [];
+      const totalHours = aggLogs.reduce((acc, row) => acc + (Number(row.running_hours) || 0), 0);
+      const dates = new Set(aggLogs.map((l) => l.log_date).filter(Boolean));
+
+      // 2. Fetch paginated slice of logs
+      const { data: pagedLogs, count, error } = await supabase
+        .from('machine_hour_logs')
+        .select('id, log_date, start_time, end_time, running_hours, overtime_hours, normal_working_hours, remarks', { count: 'exact' })
+        .or(`operator_id.eq.${userId},supervisor_id.eq.${userId}`)
+        .order('log_date', { ascending: false })
+        .range(from, to);
+
+      if (error || !pagedLogs) {
+        return {
+          totalActiveWorkDays: dates.size,
+          totalShiftRunningTime: Math.round(totalHours * 10) / 10,
+          shiftSchedule: '06:00 AM - 02:00 PM',
+          logs: [],
+          totalCount: count || 0,
+          page: currentPage,
+          hasMore: false,
+        };
+      }
+
+      const totalCount = count || 0;
+      return {
+        totalActiveWorkDays: dates.size,
+        totalShiftRunningTime: Math.round(totalHours * 10) / 10,
+        shiftSchedule: '06:00 AM - 02:00 PM',
+        logs: pagedLogs,
+        totalCount,
+        page: currentPage,
+        hasMore: from + pagedLogs.length < totalCount,
       };
     },
   });
@@ -451,6 +785,78 @@ export function useUserDetailDocuments(userId?: string, enabled = false) {
 }
 
 /**
+ * Hook 6b: KYC & Identity Documents with Infinite Pagination
+ */
+export function useUserDetailDocumentsInfinite(
+  userId?: string,
+  enabled = false,
+  pageSize = 20
+) {
+  return useInfiniteQuery<UserDocumentsPageChunk>({
+    queryKey: ['user_detail', userId, 'documents_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserDocumentsPageChunk> => {
+      if (!userId) return { documents: [], totalCount: 0, page: 1, hasMore: false };
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const [docsRes, typesRes] = await Promise.all([
+        supabase
+          .from('user_documents')
+          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at', { count: 'exact' })
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+        supabase
+          .from('user_document_types')
+          .select('code, label'),
+      ]);
+
+      const typeMap = new Map<string, string>();
+      (typesRes.data || []).forEach((t: any) => {
+        typeMap.set(t.code, t.label);
+      });
+
+      const docsList = docsRes.data || [];
+      const withSignedUrls = await Promise.all(
+        docsList.map(async (doc: any) => {
+          let signedUrl: string | null = null;
+          if (doc.storage_path) {
+            try {
+              const cleanPath = doc.storage_path.replace(/^\/+/, '');
+              const { data: signedData } = await supabase.storage
+                .from('user_files')
+                .createSignedUrl(cleanPath, 3600);
+              signedUrl = signedData?.signedUrl || null;
+            } catch {
+              // Storage fallback
+            }
+          }
+          return {
+            ...doc,
+            type_label: typeMap.get(doc.document_type_code) || doc.document_type_code,
+            signed_url: signedUrl,
+          };
+        })
+      );
+
+      const totalCount = docsRes.count || 0;
+      return {
+        documents: withSignedUrls,
+        totalCount,
+        page: currentPage,
+        hasMore: from + docsList.length < totalCount,
+      };
+    },
+  });
+}
+
+/**
  * Hook 7: Audit Trail (Lazy Loaded on Audit Tab, RBAC Guarded)
  */
 export function useUserDetailAuditLogs(userId?: string, enabled = false) {
@@ -485,6 +891,62 @@ export function useUserDetailAuditLogs(userId?: string, enabled = false) {
         after_state: log.after_state,
         created_at: log.created_at,
       }));
+    },
+  });
+}
+
+/**
+ * Hook 7b: Audit Trail with Server-Side Infinite Pagination
+ */
+export function useUserDetailAuditLogsInfinite(
+  userId?: string,
+  enabled = false,
+  pageSize = 20
+) {
+  return useInfiniteQuery<UserAuditLogsPageChunk>({
+    queryKey: ['user_detail', userId, 'audit_infinite', pageSize],
+    enabled: Boolean(userId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserAuditLogsPageChunk> => {
+      if (!userId) return { logs: [], totalCount: 0, page: 1, hasMore: false };
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, count, error } = await supabase
+        .from('audit_logs')
+        .select('id, action, entity_type, entity_id, actor_name, actor_role, severity, category, details, before_state, after_state, created_at', { count: 'exact' })
+        .or(`user_id.eq.${userId},entity_id.eq.${userId}`)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error || !data) return { logs: [], totalCount: count || 0, page: currentPage, hasMore: false };
+
+      const totalCount = count || 0;
+      const logs = data.map((log: any) => ({
+        id: log.id,
+        action: log.action || 'User Activity',
+        entity_type: log.entity_type || 'user',
+        entity_id: log.entity_id,
+        actor_name: log.actor_name,
+        actor_role: log.actor_role,
+        severity: log.severity || 'info',
+        category: log.category,
+        details: log.details,
+        before_state: log.before_state,
+        after_state: log.after_state,
+        created_at: log.created_at,
+      }));
+
+      return {
+        logs,
+        totalCount,
+        page: currentPage,
+        hasMore: from + logs.length < totalCount,
+      };
     },
   });
 }

@@ -178,12 +178,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const handleBackPress =
     onPressBack ||
     (() => {
-      if (backRoute) {
-        router.replace(backRoute as any);
-        return;
-      }
+      haptics.select();
       if (typeof router.canGoBack === 'function' && router.canGoBack()) {
         router.back();
+      } else if (backRoute) {
+        router.replace(backRoute as any);
       } else {
         router.replace('/dashboard');
       }

@@ -395,7 +395,7 @@ export async function POST(
       }
 
       // 2. Generate formatted password: userfirstname@random4digitnumber (e.g. "Rohit@4821")
-      const newPassword = generateUserFormattedPassword(targetUser.full_name);
+      const newPassword = await generateUserFormattedPassword(targetUser.full_name);
 
       // 3. Update password in auth database using admin client
       const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {

@@ -224,7 +224,7 @@ export function useMachinesInfiniteQuery({
             .abortSignal(signal);
 
           if (omaErr && !isAbortError(omaErr, signal)) {
-            console.warn('[useMachinesData] Operator assignment check warning:', omaErr);
+            // Silently handled non-fatal assignment check warning
           }
 
           const assignedMachineIds = (omaList || [])
@@ -241,7 +241,24 @@ export function useMachinesInfiniteQuery({
             );
           }
         } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && userId) {
-          query = query.or(`current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`);
+          // Fetch clients supervised by this user to include inherited fleet equipment
+          const { data: clientSupervisors } = await supabase
+            .from('client_supervisors')
+            .select('client_id')
+            .eq('supervisor_id', userId)
+            .abortSignal(signal);
+
+          const supervisedClientIds = (clientSupervisors || [])
+            .map((cs: any) => cs.client_id)
+            .filter(Boolean);
+
+          if (supervisedClientIds.length > 0) {
+            query = query.or(
+              `current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}},client_id.in.(${supervisedClientIds.join(',')})`
+            );
+          } else {
+            query = query.or(`current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`);
+          }
         }
 
         // Full-fleet search across trigram-indexed columns (machine_id, model, serial_number)
@@ -353,10 +370,8 @@ export function useMachinesInfiniteQuery({
             (usersData || []).forEach((u: any) => {
               if (u?.id && u?.full_name) knownUsersCache.set(u.id, u);
             });
-          } catch (uErr) {
-            if (!isAbortError(uErr, signal)) {
-              console.warn('[useMachinesData] User hydration notice:', uErr);
-            }
+          } catch {
+            // Silently handled non-fatal user hydration fallback
           }
         }
 

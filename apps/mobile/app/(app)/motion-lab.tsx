@@ -86,7 +86,7 @@ export default function MotionLabScreen() {
         title="Motion Lab"
         subtitle="Android 16 Expressive Tuning"
         showBack={true}
-        onPressBack={() => router.back()}
+        backRoute="/dashboard"
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

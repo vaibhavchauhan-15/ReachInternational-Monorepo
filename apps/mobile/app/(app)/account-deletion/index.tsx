@@ -230,6 +230,7 @@ export default function AccountDeletionScreen() {
       <MobileHeader
         title="Account Deletion"
         showBack={true}
+        backRoute="/settings/account"
       />
 
       <KeyboardAvoidingView

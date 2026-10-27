@@ -13,3 +13,4 @@ export * from './RunningLogMachineHeaderCard';
 export * from './RunningLogFilterPanel';
 export * from './OperationsConflictBanner';
 export * from './MobileTodayShiftCard';
+export * from './TodayShiftMonitorKPIStrip';

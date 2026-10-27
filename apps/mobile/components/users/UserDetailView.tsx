@@ -27,8 +27,6 @@ import { supabase } from '../../lib/supabase';
 import {
   MobileHeader,
   type HeaderActionItem,
-  SegmentedToggle,
-  type SegmentedToggleItem,
   KPICard,
   KPIGrid,
   AppRefreshControl,
@@ -41,6 +39,7 @@ import {
   formatTimeAgo,
   maskAadhaar,
   formatLicenseNumber,
+  getUserInitials,
 } from '@reachinternational/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { RunningLogShiftCard } from '../operations/RunningLogShiftCard';
@@ -48,7 +47,7 @@ import { DeleteUserConfirmDialog } from './DeleteUserConfirmDialog';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { UserEditModal } from './UserEditModal';
 import { AssignSupervisorModal } from './AssignSupervisorModal';
-import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
+import { AssignMachineModal } from './AssignMachineModal';
 import { PasswordResetModal } from './PasswordResetModal';
 import {
   MobileDocumentViewerModal,
@@ -56,12 +55,12 @@ import {
 } from '../documents/MobileDocumentViewerModal';
 import {
   useUserDetailOverview,
-  useUserDetailMachines,
-  useUserDetailRunningLogs,
-  useUserDetailAssignments,
-  useUserDetailAttendance,
-  useUserDetailDocuments,
-  useUserDetailAuditLogs,
+  useUserDetailMachinesInfinite,
+  useUserDetailRunningLogsInfinite,
+  useUserDetailAssignmentsInfinite,
+  useUserDetailAttendanceInfinite,
+  useUserDetailDocumentsInfinite,
+  useUserDetailAuditLogsInfinite,
   resetUserPasswordMobile,
   fetchUpdatedUserRecord,
   type UserMachineItem,
@@ -70,6 +69,14 @@ import {
   type UserDocumentItem,
   type UserAuditItem,
 } from '../../lib/hooks/useUserDetailData';
+import {
+  UserMachinesSkeleton,
+  UserLogsSkeleton,
+  UserAssignmentsSkeleton,
+  UserAttendanceSkeleton,
+  UserDocumentsSkeleton,
+  UserAuditSkeleton,
+} from './UserDetailSkeletons';
 import type { UserRecord } from './UserDetailModal';
 import {
   User,
@@ -100,6 +107,7 @@ import {
   ShieldAlert,
   AlertTriangle,
   RotateCcw,
+  ChevronDown,
 } from '../ui/icon';
 
 export type UserDetailTabKey = 'machines' | 'logs' | 'assignments' | 'attendance' | 'documents' | 'audit';
@@ -130,58 +138,124 @@ function formatShiftTime(start?: string | null, end?: string | null): string {
 }
 
 function getInitials(name?: string): string {
-  if (!name) return 'U';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return getUserInitials(name);
 }
 
 function getRoleAvatarColors(role?: string, isDark?: boolean) {
-  switch (role) {
-    case 'super_admin':
-      return {
-        bg: isDark ? '#450a0a' : '#fee2e2',
-        border: isDark ? '#991b1b' : '#fca5a5',
-        text: isDark ? '#fca5a5' : '#b91c1c',
-      };
-    case 'admin':
-      return {
-        bg: isDark ? '#451a03' : '#fef3c7',
-        border: isDark ? '#92400e' : '#fcd34d',
-        text: isDark ? '#fde68a' : '#b45309',
-      };
-    case 'manager':
-      return {
-        bg: isDark ? '#1e1b4b' : '#e0e7ff',
-        border: isDark ? '#3730a3' : '#c7d2fe',
-        text: isDark ? '#c7d2fe' : '#4338ca',
-      };
-    case 'supervisor':
-      return {
-        bg: isDark ? '#134e4a' : '#ccfbf1',
-        border: isDark ? '#115e59' : '#99f6e4',
-        text: isDark ? '#99f6e4' : '#0f766e',
-      };
-    case 'hr':
-      return {
-        bg: isDark ? '#064e3b' : '#d1fae5',
-        border: isDark ? '#047857' : '#a7f3d0',
-        text: isDark ? '#a7f3d0' : '#065f46',
-      };
-    case 'operator':
-      return {
-        bg: isDark ? '#451a03' : '#fef3c7',
-        border: isDark ? '#92400e' : '#fde68a',
-        text: isDark ? '#fde68a' : '#b45309',
-      };
-    default:
-      return {
-        bg: isDark ? '#27272a' : '#f4f4f5',
-        border: isDark ? '#3f3f46' : '#e4e4e7',
-        text: isDark ? '#d4d4d8' : '#52525b',
-      };
-  }
+  return {
+    bg: isDark ? '#ffffff' : '#171717',
+    border: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)',
+    text: isDark ? '#171717' : '#ffffff',
+  };
 }
+
+interface TabPaginationFooterProps {
+  currentCount: number;
+  totalCount: number;
+  label: string;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
+}
+
+const paginationStyles = StyleSheet.create({
+  tabPaginationFooter: {
+    marginTop: 16,
+    paddingTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMorePillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  endOfListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  endOfListLine: {
+    flex: 1,
+    height: 1,
+  },
+  endOfListBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+});
+
+const TabPaginationFooter: React.FC<TabPaginationFooterProps> = ({
+  currentCount,
+  totalCount,
+  label,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+}) => {
+  const { theme } = useTheme();
+
+  if (currentCount === 0) return null;
+
+  return (
+    <View style={paginationStyles.tabPaginationFooter}>
+      {hasNextPage ? (
+        <Pressable
+          variant="outline"
+          haptic="tap"
+          hitSlopToMin48
+          disabled={isFetchingNextPage}
+          onPress={onLoadMore}
+          style={[
+            paginationStyles.loadMorePillBtn,
+            {
+              backgroundColor: theme.colors.canvas,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+          accessibilityLabel={`Load more ${label}`}
+        >
+          {isFetchingNextPage ? (
+            <ActivityIndicator size="small" color={theme.colors.ink} />
+          ) : (
+            <>
+              <ChevronDown size={14} color={theme.colors.ink} />
+              <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                Load More {label}
+              </Text>
+              <Text variant="micro" style={{ color: theme.colors.mute }}>
+                ({currentCount} of {totalCount})
+              </Text>
+            </>
+          )}
+        </Pressable>
+      ) : totalCount > 0 ? (
+        <View style={paginationStyles.endOfListRow}>
+          <View style={[paginationStyles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
+          <View style={paginationStyles.endOfListBadge}>
+            <Check size={12} color="#10b981" />
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              All {totalCount} {label} loaded
+            </Text>
+          </View>
+          <View style={[paginationStyles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
+        </View>
+      ) : null}
+    </View>
+  );
+};
 
 export const UserDetailView: React.FC<UserDetailViewProps> = ({
   user: initialUser,
@@ -233,36 +307,83 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     }
   }, [overviewData?.user]);
 
-  // 2. Tab Hooks: Strictly Lazy Loaded on Tab Activation!
+  // 2. Tab Hooks: Strictly Lazy Loaded on Tab Activation with Infinite Pagination!
   const {
-    data: machines = [],
+    data: machinesInfiniteData,
     isLoading: isMachinesLoading,
+    isFetchingNextPage: isFetchingNextMachines,
+    hasNextPage: hasNextMachines,
+    fetchNextPage: fetchNextMachines,
     refetch: refetchMachines,
-  } = useUserDetailMachines(user.id, visitedTabs.machines);
+  } = useUserDetailMachinesInfinite(user.id, visitedTabs.machines, 20);
+
+  const machines = useMemo(() => {
+    return machinesInfiniteData?.pages.flatMap((p) => p.machines) || [];
+  }, [machinesInfiniteData?.pages]);
+  const totalMachinesCount = machinesInfiniteData?.pages[0]?.totalCount ?? machines.length;
 
   const {
-    data: runningLogs = [],
+    data: logsInfiniteData,
     isLoading: isLogsLoading,
+    isFetchingNextPage: isFetchingNextLogs,
+    hasNextPage: hasNextLogs,
+    fetchNextPage: fetchNextLogs,
     refetch: refetchLogs,
-  } = useUserDetailRunningLogs(user.id, visitedTabs.logs, 50);
+  } = useUserDetailRunningLogsInfinite(user.id, visitedTabs.logs, 20);
+
+  const runningLogs = useMemo(() => {
+    return logsInfiniteData?.pages.flatMap((p) => p.logs) || [];
+  }, [logsInfiniteData?.pages]);
+  const totalLogsCount = logsInfiniteData?.pages[0]?.totalCount ?? runningLogs.length;
 
   const {
-    data: assignments = [],
+    data: assignmentsInfiniteData,
     isLoading: isAssignmentsLoading,
+    isFetchingNextPage: isFetchingNextAssignments,
+    hasNextPage: hasNextAssignments,
+    fetchNextPage: fetchNextAssignments,
     refetch: refetchAssignments,
-  } = useUserDetailAssignments(user.id, visitedTabs.assignments);
+  } = useUserDetailAssignmentsInfinite(user.id, visitedTabs.assignments, 20);
+
+  const assignments = useMemo(() => {
+    return assignmentsInfiniteData?.pages.flatMap((p) => p.assignments) || [];
+  }, [assignmentsInfiniteData?.pages]);
+  const totalAssignmentsCount = assignmentsInfiniteData?.pages[0]?.totalCount ?? assignments.length;
 
   const {
-    data: attendanceData,
+    data: attendanceInfiniteData,
     isLoading: isAttendanceLoading,
+    isFetchingNextPage: isFetchingNextAttendance,
+    hasNextPage: hasNextAttendance,
+    fetchNextPage: fetchNextAttendance,
     refetch: refetchAttendance,
-  } = useUserDetailAttendance(user.id, visitedTabs.attendance);
+  } = useUserDetailAttendanceInfinite(user.id, visitedTabs.attendance, 20);
+
+  const attendanceData = useMemo(() => {
+    const firstPage = attendanceInfiniteData?.pages[0];
+    const allLogs = attendanceInfiniteData?.pages.flatMap((p) => p.logs) || [];
+    return {
+      totalActiveWorkDays: firstPage?.totalActiveWorkDays ?? 0,
+      totalShiftRunningTime: firstPage?.totalShiftRunningTime ?? 0,
+      shiftSchedule: firstPage?.shiftSchedule ?? '06:00 AM - 02:00 PM',
+      recentLogs: allLogs,
+      totalCount: firstPage?.totalCount ?? allLogs.length,
+    };
+  }, [attendanceInfiniteData?.pages]);
 
   const {
-    data: documents = [],
+    data: documentsInfiniteData,
     isLoading: isDocumentsLoading,
+    isFetchingNextPage: isFetchingNextDocs,
+    hasNextPage: hasNextDocs,
+    fetchNextPage: fetchNextDocs,
     refetch: refetchDocuments,
-  } = useUserDetailDocuments(user.id, visitedTabs.documents);
+  } = useUserDetailDocumentsInfinite(user.id, visitedTabs.documents, 20);
+
+  const documents = useMemo(() => {
+    return documentsInfiniteData?.pages.flatMap((p) => p.documents) || [];
+  }, [documentsInfiniteData?.pages]);
+  const totalDocumentsCount = documentsInfiniteData?.pages[0]?.totalCount ?? documents.length;
 
   // 3. RBAC Permissions Matrix
   const normalizedRole = (currentUserRole || '').toLowerCase();
@@ -286,10 +407,18 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const canViewAudit = canManageUsers;
 
   const {
-    data: auditLogs = [],
+    data: auditInfiniteData,
     isLoading: isAuditLoading,
+    isFetchingNextPage: isFetchingNextAudit,
+    hasNextPage: hasNextAudit,
+    fetchNextPage: fetchNextAudit,
     refetch: refetchAudit,
-  } = useUserDetailAuditLogs(user.id, visitedTabs.audit && canViewAudit);
+  } = useUserDetailAuditLogsInfinite(user.id, visitedTabs.audit && canViewAudit, 20);
+
+  const auditLogs = useMemo(() => {
+    return auditInfiniteData?.pages.flatMap((p) => p.logs) || [];
+  }, [auditInfiniteData?.pages]);
+  const totalAuditCount = auditInfiniteData?.pages[0]?.totalCount ?? auditLogs.length;
 
   // Pull-to-refresh
   const [refreshing, setRefreshing] = useState(false);
@@ -627,40 +756,75 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     handleToggleStatus,
   ]);
 
-  // Tab Definitions for SegmentedToggle (Shortened labels, no total numbering for mobile screen fit)
-  const segmentedTabItems = useMemo<SegmentedToggleItem[]>(() => {
-    const items: SegmentedToggleItem[] = [
+  const kpis = overviewData?.kpis || {
+    assignedMachinesCount: 0,
+    totalRunningHours: 0,
+    totalDaysWorked: 0,
+    documentsCount: 0,
+  };
+
+  // Tab Definitions for Horizontal Chips Tab Strip (100% Client Details & Web Parity)
+  const tabChips = useMemo(() => {
+    const tabs: Array<{
+      id: UserDetailTabKey;
+      label: string;
+      icon: React.ComponentType<{ size?: number; color?: string }>;
+      count: number;
+    }> = [
       {
         id: 'machines',
         label: 'Machines',
+        icon: Truck,
+        count: totalMachinesCount || kpis.assignedMachinesCount || 0,
       },
       {
         id: 'logs',
-        label: 'Logs',
+        label: 'Running Logs',
+        icon: Clock,
+        count: totalLogsCount || 0,
       },
       {
         id: 'assignments',
-        label: 'Assigns',
+        label: 'Assignments',
+        icon: UserCheck,
+        count: totalAssignmentsCount || 0,
       },
       {
         id: 'attendance',
         label: 'Attendance',
+        icon: Calendar,
+        count: attendanceData.totalActiveWorkDays || kpis.totalDaysWorked || 0,
       },
       {
         id: 'documents',
-        label: 'Docs',
+        label: 'Documents',
+        icon: FileText,
+        count: totalDocumentsCount || kpis.documentsCount || 0,
       },
     ];
 
     if (canViewAudit) {
-      items.push({
+      tabs.push({
         id: 'audit',
         label: 'Audit',
+        icon: ShieldCheck,
+        count: totalAuditCount || 0,
       });
     }
 
-    return items;
-  }, [canViewAudit]);
+    return tabs;
+  }, [
+    totalMachinesCount,
+    kpis.assignedMachinesCount,
+    totalLogsCount,
+    totalAssignmentsCount,
+    attendanceData.totalActiveWorkDays,
+    kpis.totalDaysWorked,
+    totalDocumentsCount,
+    kpis.documentsCount,
+    canViewAudit,
+    totalAuditCount,
+  ]);
 
   const filteredMachines = machines;
   const filteredLogs = runningLogs;
@@ -668,12 +832,9 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const filteredAuditLogs = auditLogs;
 
   const roleAvatarStyle = getRoleAvatarColors(user.role, isDark);
-  const kpis = overviewData?.kpis || {
-    assignedMachinesCount: 0,
-    totalRunningHours: 0,
-    totalDaysWorked: 0,
-    documentsCount: 0,
-  };
+  const avatarBg = isDark ? '#ffffff' : '#171717';
+  const avatarText = isDark ? '#171717' : '#ffffff';
+  const avatarBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)';
   const shiftDisplay = formatShiftTime(user.shift_start_time, user.shift_end_time);
   const supervisorDisplay = overviewData?.supervisorName || user.supervisor?.full_name || 'Unassigned';
 
@@ -710,18 +871,18 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           <View style={[styles.heroRibbon, { backgroundColor: theme.colors.link }]} />
 
           <View style={styles.heroMainRow}>
-            {/* Initials Avatar Box */}
+            {/* Initials Avatar Box (100% Black & White, Dark & Light Optimized) */}
             <View
               style={[
                 styles.avatarBox,
                 {
-                  backgroundColor: roleAvatarStyle.bg,
-                  borderColor: roleAvatarStyle.border,
+                  backgroundColor: avatarBg,
+                  borderColor: avatarBorder,
                 },
               ]}
             >
-              <Text variant="subheading" weight="bold" style={{ color: roleAvatarStyle.text }}>
-                {getInitials(user.full_name)}
+              <Text variant="subheading" weight="bold" style={{ color: avatarText }}>
+                {getUserInitials(user.full_name)}
               </Text>
             </View>
 
@@ -731,32 +892,17 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                 {user.full_name}
               </Text>
 
+              {/* Small, low opacity Employee ID directly below the user name (no copy icon) */}
+              <Text
+                variant="caption"
+                weight="medium"
+                style={[styles.heroEmpId, { color: theme.colors.mute }]}
+              >
+                {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
+              </Text>
+
               {/* Badges Row */}
               <View style={styles.heroBadgeRow}>
-                {/* 1-Click Clipboard EMP ID Badge */}
-                <Pressable
-                  variant="plain"
-                  haptic="tap"
-                  onPress={() => handleCopy(user.employee_id || user.id, 'Employee ID')}
-                  style={[
-                    styles.empIdBadge,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                  accessibilityLabel="Copy Employee ID"
-                >
-                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                    {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-                  </Text>
-                  {copiedKey === 'Employee ID' ? (
-                    <Check size={11} color="#10b981" />
-                  ) : (
-                    <Copy size={11} color={theme.colors.mute} />
-                  )}
-                </Pressable>
-
                 <Badge role={user.role} />
 
                 <Badge
@@ -764,10 +910,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                   dot
                   customLabel={user.status === 'active' ? 'Active' : 'Inactive'}
                 />
-              </View>
 
-              {/* Secondary Details: Shift & Location */}
-              <View style={styles.heroSecondaryRow}>
                 {shiftDisplay !== '—' && (
                   <View style={styles.heroSecondaryItem}>
                     <Clock size={12} color="#f59e0b" />
@@ -776,40 +919,8 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                     </Text>
                   </View>
                 )}
-
-                {(user.city || user.district || user.state) && (
-                  <View style={styles.heroSecondaryItem}>
-                    <MapPin size={12} color="#0284c7" />
-                    <Text variant="caption" numberOfLines={1} style={{ color: theme.colors.mute }}>
-                      {[user.city, user.district, user.state].filter(Boolean).join(', ')}
-                    </Text>
-                  </View>
-                )}
               </View>
             </View>
-
-            {/* Quick Edit CTA (Consistent Design System Outline Pill) */}
-            {canEditUsers && (
-              <Pressable
-                variant="outline"
-                haptic="tap"
-                hitSlopToMin48
-                onPress={() => setEditModalVisible(true)}
-                style={[
-                  styles.editProfileBtn,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                accessibilityLabel="Edit Profile"
-              >
-                <Edit2 size={13} color={theme.colors.ink} />
-                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                  Edit Profile
-                </Text>
-              </Pressable>
-            )}
           </View>
         </View>
 
@@ -922,9 +1033,29 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             <View style={styles.infoCardBody}>
               <View style={styles.infoRow}>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>Employee ID</Text>
-                <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                  {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-                </Text>
+                <View style={styles.infoValueRow}>
+                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                    {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
+                  </Text>
+                  <Pressable
+                    variant="plain"
+                    haptic="tap"
+                    hitSlopToMin48
+                    onPress={() =>
+                      handleCopy(
+                        user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`,
+                        'Employee ID'
+                      )
+                    }
+                    accessibilityLabel="Copy Employee ID"
+                  >
+                    {copiedKey === 'Employee ID' ? (
+                      <Check size={12} color="#10b981" />
+                    ) : (
+                      <Copy size={12} color={theme.colors.mute} />
+                    )}
+                  </Pressable>
+                </View>
               </View>
 
               <View style={styles.infoRow}>
@@ -1069,20 +1200,48 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           </KPIGrid>
         </View>
 
-        {/* ─── 5. TAB NAVIGATION TOGGLE ─── */}
-        <View style={styles.tabNavbarWrapper}>
-          <SegmentedToggle
-            items={segmentedTabItems}
-            value={activeTab}
-            onChange={handleTabChange}
-            size="sm"
-            scrollable={!isTablet && !isDesktop}
-            fullWidth={isTablet || isDesktop}
-            itemStyle={!isTablet && !isDesktop ? { paddingHorizontal: 12, minHeight: 38 } : { minHeight: 38 }}
-          />
-        </View>
+        {/* ─── 5. HORIZONTAL TAB STRIP (CHIPS) ─── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabStripContent}
+          style={styles.tabStripContainer}
+        >
+          {tabChips.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const IconComponent = tab.icon;
+            return (
+              <Pressable
+                key={tab.id}
+                variant="chip"
+                haptic="select"
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`${tab.label} tab${tab.count > 0 ? `, ${tab.count} items` : ''}`}
+                onPress={() => handleTabChange(tab.id)}
+                style={[
+                  styles.tabChip,
+                  {
+                    backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
+                    borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
+                    minHeight: 44,
+                  },
+                ]}
+              >
+                <IconComponent size={13} color={isActive ? '#ffffff' : theme.colors.mute} />
+                <Text
+                  variant="caption"
+                  weight="semibold"
+                  style={{ color: isActive ? '#ffffff' : theme.colors.ink }}
+                >
+                  {tab.label} {tab.count > 0 ? `(${tab.count})` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-        {/* ─── 6. TAB CONTENT PANELS WITH LAZY LOADING ─── */}
+        {/* ─── 6. TAB CONTENT PANELS WITH LAZY LOADING & INFINITE PAGINATION ─── */}
 
         {/* TAB 1: Assigned Machinery Fleet */}
         {activeTab === 'machines' && (
@@ -1105,7 +1264,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
 
               <View style={styles.panelHeaderRight}>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Showing {filteredMachines.length} of {machines.length} machines
+                  Showing {filteredMachines.length} of {totalMachinesCount} machines
                 </Text>
                 {canAssignMachineUsers && (
                   <Pressable
@@ -1131,77 +1290,83 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             </View>
 
             {isMachinesLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading assigned machines...
-                </Text>
-              </View>
+              <UserMachinesSkeleton count={2} />
             ) : filteredMachines.length === 0 ? (
               <EmptyState
                 title="No Machines Found"
                 description="No machinery currently assigned to this user."
               />
             ) : (
-              <View style={styles.cardsList}>
-                {filteredMachines.map((m) => (
-                  <View
-                    key={m.id}
-                    style={[
-                      styles.machineListItem,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.machineItemHeader}>
-                      <View style={styles.machineItemHeaderLeft}>
-                        <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                          {m.machine_id}
-                        </Text>
-                        <Badge
-                          status={m.status === 'rented' ? 'rented' : 'available'}
-                          customLabel={m.status === 'rented' ? 'Rented' : 'Available'}
-                        />
+              <>
+                <View style={styles.cardsList}>
+                  {filteredMachines.map((m) => (
+                    <View
+                      key={m.id}
+                      style={[
+                        styles.machineListItem,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.machineItemHeader}>
+                        <View style={styles.machineItemHeaderLeft}>
+                          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                            {m.machine_id}
+                          </Text>
+                          <Badge
+                            status={m.status === 'rented' ? 'rented' : 'available'}
+                            customLabel={m.status === 'rented' ? 'Rented' : 'Available'}
+                          />
+                        </View>
+
+                        <Pressable
+                          variant="plain"
+                          haptic="tap"
+                          hitSlopToMin48
+                          onPress={() => {
+                            showToast('info', `Inspecting ${m.machine_id}`);
+                          }}
+                          style={styles.inspectBtn}
+                        >
+                          <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
+                            Inspect
+                          </Text>
+                          <ExternalLink size={12} color={theme.colors.link} />
+                        </Pressable>
                       </View>
 
-                      <Pressable
-                        variant="plain"
-                        haptic="tap"
-                        hitSlopToMin48
-                        onPress={() => {
-                          showToast('info', `Inspecting ${m.machine_id}`);
-                        }}
-                        style={styles.inspectBtn}
-                      >
-                        <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
-                          Inspect
+                      <View style={styles.machineItemDetails}>
+                        <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
+                          {m.machine_name} {m.model ? `· ${m.model}` : ''}
                         </Text>
-                        <ExternalLink size={12} color={theme.colors.link} />
-                      </Pressable>
-                    </View>
 
-                    <View style={styles.machineItemDetails}>
-                      <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
-                        {m.machine_name} {m.model ? `· ${m.model}` : ''}
-                      </Text>
-
-                      <View style={styles.machineItemSpecsRow}>
-                        <Text variant="caption" style={{ color: theme.colors.mute }}>
-                          S/N: {m.serial_number || '—'}
-                        </Text>
-                        <Text variant="caption" style={{ color: theme.colors.mute }}>
-                          MFR: {m.manufacturer || '—'}
-                        </Text>
-                        <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                          {m.hour_meter != null ? `${m.hour_meter} h` : '—'}
-                        </Text>
+                        <View style={styles.machineItemSpecsRow}>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>
+                            S/N: {m.serial_number || '—'}
+                          </Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>
+                            MFR: {m.manufacturer || '—'}
+                          </Text>
+                          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                            {m.hour_meter != null ? `${m.hour_meter} h` : '—'}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+
+                <TabPaginationFooter
+                  currentCount={filteredMachines.length}
+                  totalCount={totalMachinesCount}
+                  label="machines"
+                  hasNextPage={Boolean(hasNextMachines)}
+                  isFetchingNextPage={Boolean(isFetchingNextMachines)}
+                  onLoadMore={() => fetchNextMachines()}
+                />
+              </>
             )}
           </View>
         )}
@@ -1226,54 +1391,60 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               </View>
 
               <Text variant="caption" style={{ color: theme.colors.mute }}>
-                Showing {filteredLogs.length} of {runningLogs.length} logs
+                Showing {filteredLogs.length} of {totalLogsCount} logs
               </Text>
             </View>
 
             {isLogsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading shift running logs...
-                </Text>
-              </View>
+              <UserLogsSkeleton count={3} />
             ) : filteredLogs.length === 0 ? (
               <EmptyState
                 title="No Running Logs"
                 description="No telemetry running logs recorded for this operator."
               />
             ) : (
-              <View style={styles.cardsList}>
-                {filteredLogs.map((log) => (
-                  <RunningLogShiftCard
-                    key={log.id}
-                    log={{
-                      id: log.id,
-                      machine_code: log.machine_code || '—',
-                      log_date: log.log_date,
-                      start_time: log.start_time ?? undefined,
-                      end_time: log.end_time ?? undefined,
-                      start_meter: log.start_meter ?? 0,
-                      end_meter: log.end_meter ?? 0,
-                      running_hours: log.running_hours ?? 0,
-                      normal_working_hours: log.normal_working_hours ?? undefined,
-                      overtime_hours: log.overtime_hours ?? undefined,
-                      is_breakdown: Boolean(log.is_breakdown),
-                      location: log.location ?? undefined,
-                      remarks: log.remarks ?? undefined,
-                      created_at: log.created_at ?? undefined,
-                      machine: {
-                        machine_id: log.machine_code || '—',
-                        model: log.model ?? undefined,
-                      },
-                      operator: {
-                        full_name: user.full_name,
-                      },
-                    } as any}
-                    logsViewMode="operator"
-                  />
-                ))}
-              </View>
+              <>
+                <View style={styles.cardsList}>
+                  {filteredLogs.map((log) => (
+                    <RunningLogShiftCard
+                      key={log.id}
+                      log={{
+                        id: log.id,
+                        machine_code: log.machine_code || '—',
+                        log_date: log.log_date,
+                        start_time: log.start_time ?? undefined,
+                        end_time: log.end_time ?? undefined,
+                        start_meter: log.start_meter ?? 0,
+                        end_meter: log.end_meter ?? 0,
+                        running_hours: log.running_hours ?? 0,
+                        normal_working_hours: log.normal_working_hours ?? undefined,
+                        overtime_hours: log.overtime_hours ?? undefined,
+                        is_breakdown: Boolean(log.is_breakdown),
+                        location: log.location ?? undefined,
+                        remarks: log.remarks ?? undefined,
+                        created_at: log.created_at ?? undefined,
+                        machine: {
+                          machine_id: log.machine_code || '—',
+                          model: log.model ?? undefined,
+                        },
+                        operator: {
+                          full_name: user.full_name,
+                        },
+                      } as any}
+                      logsViewMode="operator"
+                    />
+                  ))}
+                </View>
+
+                <TabPaginationFooter
+                  currentCount={filteredLogs.length}
+                  totalCount={totalLogsCount}
+                  label="shift logs"
+                  hasNextPage={Boolean(hasNextLogs)}
+                  isFetchingNextPage={Boolean(isFetchingNextLogs)}
+                  onLoadMore={() => fetchNextLogs()}
+                />
+              </>
             )}
           </View>
         )}
@@ -1299,7 +1470,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
 
               <View style={styles.panelHeaderRight}>
                 <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Showing {filteredAssignments.length} of {assignments.length} assignments
+                  Showing {filteredAssignments.length} of {totalAssignmentsCount} assignments
                 </Text>
                 {canAssignMachineUsers && (
                   <Pressable
@@ -1326,64 +1497,70 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             </View>
 
             {isAssignmentsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading assignment history...
-                </Text>
-              </View>
+              <UserAssignmentsSkeleton count={2} />
             ) : filteredAssignments.length === 0 ? (
               <EmptyState
                 title="No Assignments Found"
                 description="No past or active machine assignments recorded."
               />
             ) : (
-              <View style={styles.assignmentsGrid}>
-                {filteredAssignments.map((a) => (
-                  <View
-                    key={a.id}
-                    style={[
-                      styles.assignmentCard,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                        width: isDesktop ? '31.5%' : isTablet ? '48.5%' : '100%',
-                      },
-                    ]}
-                  >
-                    <View style={styles.assignmentTopRow}>
-                      <View>
-                        <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                          {a.machine_code}
-                        </Text>
-                        <Text variant="caption" style={{ color: theme.colors.mute }}>
-                          {a.model || a.machine_name}
+              <>
+                <View style={styles.assignmentsGrid}>
+                  {filteredAssignments.map((a) => (
+                    <View
+                      key={a.id}
+                      style={[
+                        styles.assignmentCard,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                          width: isDesktop ? '31.5%' : isTablet ? '48.5%' : '100%',
+                        },
+                      ]}
+                    >
+                      <View style={styles.assignmentTopRow}>
+                        <View>
+                          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                            {a.machine_code}
+                          </Text>
+                          <Text variant="caption" style={{ color: theme.colors.mute }}>
+                            {a.model || a.machine_name}
+                          </Text>
+                        </View>
+
+                        <Badge
+                          status={a.is_active ? 'active' : 'inactive'}
+                          customLabel={a.is_active ? 'Active Duty' : 'Ended'}
+                        />
+                      </View>
+
+                      <View style={styles.assignmentMetaRow}>
+                        <Text variant="caption" style={{ color: theme.colors.mute }}>Shift</Text>
+                        <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                          {a.shift_code ? `Shift ${a.shift_code} · ` : ''}
+                          {formatShiftTime(a.shift_start_time, a.shift_end_time)}
                         </Text>
                       </View>
 
-                      <Badge
-                        status={a.is_active ? 'active' : 'inactive'}
-                        customLabel={a.is_active ? 'Active Duty' : 'Ended'}
-                      />
+                      <View style={styles.assignmentMetaRow}>
+                        <Text variant="caption" style={{ color: theme.colors.mute }}>Assigned At</Text>
+                        <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                          {formatDate(a.assigned_at)}
+                        </Text>
+                      </View>
                     </View>
+                  ))}
+                </View>
 
-                    <View style={styles.assignmentMetaRow}>
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Shift</Text>
-                      <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                        {a.shift_code ? `Shift ${a.shift_code} · ` : ''}
-                        {formatShiftTime(a.shift_start_time, a.shift_end_time)}
-                      </Text>
-                    </View>
-
-                    <View style={styles.assignmentMetaRow}>
-                      <Text variant="caption" style={{ color: theme.colors.mute }}>Assigned At</Text>
-                      <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                        {formatDate(a.assigned_at)}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
+                <TabPaginationFooter
+                  currentCount={filteredAssignments.length}
+                  totalCount={totalAssignmentsCount}
+                  label="assignments"
+                  hasNextPage={Boolean(hasNextAssignments)}
+                  isFetchingNextPage={Boolean(isFetchingNextAssignments)}
+                  onLoadMore={() => fetchNextAssignments()}
+                />
+              </>
             )}
           </View>
         )}
@@ -1423,12 +1600,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             </View>
 
             {isAttendanceLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading attendance statistics...
-                </Text>
-              </View>
+              <UserAttendanceSkeleton />
             ) : (
               <View style={styles.attendanceCardsRow}>
                 {/* 1. Total Active Work Days */}
@@ -1521,78 +1693,84 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               </View>
 
               <Text variant="caption" style={{ color: theme.colors.mute }}>
-                {documents.length} verified files
+                Showing {documents.length} of {totalDocumentsCount} verified files
               </Text>
             </View>
 
             {isDocumentsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading verified documents...
-                </Text>
-              </View>
+              <UserDocumentsSkeleton count={2} />
             ) : documents.length === 0 ? (
               <EmptyState
                 title="No Identity Documents"
                 description="No statutory identity or compliance documents have been verified for this account."
               />
             ) : (
-              <View style={styles.cardsList}>
-                {documents.map((doc) => (
-                  <View
-                    key={doc.id}
-                    style={[
-                      styles.docListItem,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.docLeftRow}>
-                      <View style={[styles.docIconBox, { backgroundColor: theme.colors.canvasElevated }]}>
-                        <FileText size={16} color="#0d9488" />
-                      </View>
-                      <View>
-                        <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
-                          {doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()}
-                        </Text>
-                        <Text variant="micro" style={{ color: theme.colors.mute }}>
-                          Uploaded {formatDate(doc.created_at)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Pressable
-                      variant="outline"
-                      haptic="tap"
-                      hitSlopToMin48
-                      disabled={openingDocId === doc.id}
-                      onPress={() => handleViewDocument(doc)}
+              <>
+                <View style={styles.cardsList}>
+                  {documents.map((doc) => (
+                    <View
+                      key={doc.id}
                       style={[
-                        styles.viewDocBtn,
+                        styles.docListItem,
                         {
-                          backgroundColor: theme.colors.canvasElevated,
+                          backgroundColor: theme.colors.canvas,
                           borderColor: theme.colors.hairline,
                         },
                       ]}
-                      accessibilityLabel={`View ${doc.type_label || 'Document'}`}
                     >
-                      {openingDocId === doc.id ? (
-                        <ActivityIndicator size="small" color={theme.colors.ink} />
-                      ) : (
-                        <>
-                          <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                            View Document
+                      <View style={styles.docLeftRow}>
+                        <View style={[styles.docIconBox, { backgroundColor: theme.colors.canvasElevated }]}>
+                          <FileText size={16} color="#0d9488" />
+                        </View>
+                        <View>
+                          <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
+                            {doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()}
                           </Text>
-                          <ChevronRight size={12} color={theme.colors.mute} />
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
+                          <Text variant="micro" style={{ color: theme.colors.mute }}>
+                            Uploaded {formatDate(doc.created_at)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Pressable
+                        variant="outline"
+                        haptic="tap"
+                        hitSlopToMin48
+                        disabled={openingDocId === doc.id}
+                        onPress={() => handleViewDocument(doc)}
+                        style={[
+                          styles.viewDocBtn,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                        accessibilityLabel={`View ${doc.type_label || 'Document'}`}
+                      >
+                        {openingDocId === doc.id ? (
+                          <ActivityIndicator size="small" color={theme.colors.ink} />
+                        ) : (
+                          <>
+                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                              View Document
+                            </Text>
+                            <ChevronRight size={12} color={theme.colors.mute} />
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+
+                <TabPaginationFooter
+                  currentCount={documents.length}
+                  totalCount={totalDocumentsCount}
+                  label="documents"
+                  hasNextPage={Boolean(hasNextDocs)}
+                  isFetchingNextPage={Boolean(isFetchingNextDocs)}
+                  onLoadMore={() => fetchNextDocs()}
+                />
+              </>
             )}
           </View>
         )}
@@ -1617,58 +1795,64 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               </View>
 
               <Text variant="caption" style={{ color: theme.colors.mute }}>
-                Showing {filteredAuditLogs.length} of {auditLogs.length} logs
+                Showing {filteredAuditLogs.length} of {totalAuditCount} logs
               </Text>
             </View>
 
             {isAuditLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.link} />
-                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 8 }}>
-                  Loading audit trail...
-                </Text>
-              </View>
+              <UserAuditSkeleton count={2} />
             ) : filteredAuditLogs.length === 0 ? (
               <EmptyState
                 title="No Audit Records"
                 description="No administrative changes or profile updates recorded."
               />
             ) : (
-              <View style={styles.cardsList}>
-                {filteredAuditLogs.map((log) => (
-                  <View
-                    key={log.id}
-                    style={[
-                      styles.auditLogItem,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.auditLogTopRow}>
-                      <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
-                        {log.action.replace(/_/g, ' ').toUpperCase()}
-                      </Text>
-                      <Text variant="micro" style={{ color: theme.colors.mute }}>
-                        {formatTimeAgo(log.created_at)}
-                      </Text>
-                    </View>
-
-                    <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
-                      By: {log.actor_name || 'System'} ({log.actor_role || 'System'})
-                    </Text>
-
-                    {log.details && (
-                      <View style={[styles.auditDetailsWell, { backgroundColor: theme.colors.canvasElevated }]}>
-                        <Text variant="mono" style={{ color: theme.colors.ink }}>
-                          {JSON.stringify(log.details, null, 2)}
+              <>
+                <View style={styles.cardsList}>
+                  {filteredAuditLogs.map((log) => (
+                    <View
+                      key={log.id}
+                      style={[
+                        styles.auditLogItem,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.auditLogTopRow}>
+                        <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
+                          {log.action.replace(/_/g, ' ').toUpperCase()}
+                        </Text>
+                        <Text variant="micro" style={{ color: theme.colors.mute }}>
+                          {formatTimeAgo(log.created_at)}
                         </Text>
                       </View>
-                    )}
-                  </View>
-                ))}
-              </View>
+
+                      <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                        By: {log.actor_name || 'System'} ({log.actor_role || 'System'})
+                      </Text>
+
+                      {log.details && (
+                        <View style={[styles.auditDetailsWell, { backgroundColor: theme.colors.canvasElevated }]}>
+                          <Text variant="mono" style={{ color: theme.colors.ink }}>
+                            {JSON.stringify(log.details, null, 2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+
+                <TabPaginationFooter
+                  currentCount={filteredAuditLogs.length}
+                  totalCount={totalAuditCount}
+                  label="audit entries"
+                  hasNextPage={Boolean(hasNextAudit)}
+                  isFetchingNextPage={Boolean(isFetchingNextAudit)}
+                  onLoadMore={() => fetchNextAudit()}
+                />
+              </>
             )}
           </View>
         )}
@@ -1715,10 +1899,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       />
 
       {/* Assign Equipment Modal */}
-      <MobileAssignPersonnelModal
+      <AssignMachineModal
         visible={assignMachineVisible}
         onClose={() => setAssignMachineVisible(false)}
-        initialOperatorId={user.id}
+        user={user}
+        userRole={currentUserRole || undefined}
         onSuccess={() => {
           refetchMachines();
           refetchAssignments();
@@ -1824,6 +2009,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 6,
   },
+  heroEmpId: {
+    opacity: 0.7,
+    marginTop: -2,
+    marginBottom: 4,
+  },
   heroBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1852,14 +2042,21 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   editProfileBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: radiusNumeric.pill,
     borderWidth: 1,
     minHeight: 36,
+    zIndex: 10,
+  },
+  heroDetailsWithEdit: {
+    paddingRight: 110,
   },
   metadataGrid: {
     flexDirection: 'row',
@@ -1908,9 +2105,22 @@ const styles = StyleSheet.create({
   kpiContainer: {
     marginBottom: 16,
   },
-  tabNavbarWrapper: {
-    gap: 10,
+  tabStripContainer: {
+    maxHeight: 48,
     marginBottom: 16,
+  },
+  tabStripContent: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  tabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
   },
   tabPanelCard: {
     borderRadius: radiusNumeric.lg,

@@ -92,7 +92,20 @@ export function MobileMachineCard({
           router.push(`/machines/${machine.id}`);
         }
       }}
-      className={`p-3.5 sm:p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden group cursor-pointer ${getAccentBorder()}`}
+      tabIndex={0}
+      role="article"
+      aria-label={`Machine ${machine.machine_id}: ${machine.model || "Asset"}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (onViewDetails) {
+            onViewDetails(machine);
+          } else {
+            router.push(`/machines/${machine.id}`);
+          }
+        }
+      }}
+      className={`p-3.5 sm:p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${getAccentBorder()}`}
     >
       {/* Top Hairline Sheen on Hover */}
       <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/40 dark:via-sky-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -104,7 +117,7 @@ export function MobileMachineCard({
             <button
               onClick={handleCopyCode}
               type="button"
-              className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold uppercase text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 min-h-[36px] sm:min-h-[28px] h-7 px-2.5 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold uppercase text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 active:scale-95 transition-all cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
               title="Click to copy Machine ID"
             >
               <span>
@@ -239,7 +252,7 @@ export function MobileMachineCard({
                           {s.full_name}
                         </span>
                         {isLast && remaining > 0 && (
-                          <span className="text-xs font-bold px-1 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
                             +{remaining}
                           </span>
                         )}
@@ -278,7 +291,7 @@ export function MobileMachineCard({
                           {o.full_name}
                         </span>
                         {isLast && remaining > 0 && (
-                          <span className="text-xs font-bold px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                             +{remaining}
                           </span>
                         )}
@@ -315,11 +328,11 @@ export function MobileMachineCard({
               onViewHistory={onViewHistory}
               onViewDetails={onViewDetails}
               align="left"
-              triggerClassName="h-8 w-8 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
+              triggerClassName="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] sm:h-8 sm:w-8 rounded-lg text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             />
           )}
 
-          {/* Logs Button (Replacing previous Edit button per user feedback) */}
+          {/* Logs Button */}
           <button
             type="button"
             onClick={(e) => {
@@ -330,11 +343,11 @@ export function MobileMachineCard({
                 router.push(`/machines/${machine.id}?tab=running_hours`);
               }
             }}
-            className="h-8 w-8 sm:w-auto sm:px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center sm:gap-1.5 cursor-pointer shadow-2xs"
+            className="min-h-[44px] sm:min-h-[32px] sm:h-8 px-3 rounded-lg text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             title="View Machine Running Logs (HMR)"
           >
             <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-            <span className="hidden sm:inline">Logs</span>
+            <span className="inline text-xs font-semibold">Logs</span>
           </button>
         </div>
 
@@ -342,19 +355,19 @@ export function MobileMachineCard({
           <button
             type="button"
             onClick={() => onViewDetails(machine)}
-            className="h-8 w-8 sm:w-auto px-0 sm:px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+            className="min-h-[44px] sm:min-h-[32px] sm:h-8 px-3.5 rounded-lg text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             title="View Machine Details"
           >
-            <span className="hidden sm:inline">View Details</span>
+            <span className="inline text-xs font-semibold">View Details</span>
             <AnimatedChevronRight size={14} className="shrink-0" />
           </button>
         ) : (
           <Link
             href={`/machines/${machine.id}`}
-            className="h-8 w-8 sm:w-auto px-0 sm:px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1 shadow-2xs"
+            className="min-h-[44px] sm:min-h-[32px] sm:h-8 px-3.5 rounded-lg text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-2xs outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             title="View Machine Details"
           >
-            <span className="hidden sm:inline">View Details</span>
+            <span className="inline text-xs font-semibold">View Details</span>
             <AnimatedChevronRight size={14} className="shrink-0" />
           </Link>
         )}

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import {
   SearchableSelect,
   SegmentedToggle,
@@ -93,6 +93,12 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
     onSelectCustomEndDate,
   }) {
     const { theme, isDark } = useTheme();
+    const { width } = useWindowDimensions();
+    const isTablet = width > 640 && width < 1024;
+    const isDesktop = width >= 1024;
+    const isWide = width > 640;
+
+    const currentYear = useMemo(() => String(new Date().getFullYear()), []);
 
     // Client select options (code: CLI-xxx)
     const clientOptions = useMemo(() => {
@@ -191,7 +197,7 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
           </View>
         )}
 
-        {/* Filter Dropdowns Section */}
+        {/* Filter Dropdowns Section (Responsive: 1 col on mobile, 2 col on tablet, 4 col on desktop) */}
         <View
           style={[
             styles.filterBody,
@@ -200,169 +206,204 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
           ]}
         >
           {viewMode === 'client' && (
-            <View style={styles.filterStack}>
+            <View
+              style={[
+                styles.responsiveGrid,
+                isDesktop
+                  ? styles.grid4Cols
+                  : isTablet
+                  ? styles.grid2Cols
+                  : styles.grid1Col,
+              ]}
+            >
               {/* Select Client */}
-              <SearchableSelect
-                label="Select Client"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label={`${clients.length} Total`}
-                  />
-                }
-                value={selectedClientId}
-                onChange={(val) => onSelectClient(val)}
-                options={clientOptions}
-                placeholder="Search or select client..."
-                searchPlaceholder="Search by Client Name, Location..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isDesktop ? styles.colQuarter : isTablet ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Client"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={`${clients.length} Total`}
+                    />
+                  }
+                  value={selectedClientId}
+                  onChange={(val) => onSelectClient(val)}
+                  options={clientOptions}
+                  placeholder="Search or select client..."
+                  searchPlaceholder="Search by Client Name, Location..."
+                  inlineDescription={true}
+                />
+              </View>
 
               {/* Select Location */}
-              <SearchableSelect
-                label="Select Location"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label={`${Math.max(1, currentClientSites.length || 1)} Total`}
-                  />
-                }
-                value={selectedSite || 'all'}
-                onChange={(val) => onSelectSite(val === 'all' ? '' : val)}
-                options={siteOptions}
-                placeholder="All Sites & Locations"
-                searchPlaceholder="Search site or location..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isDesktop ? styles.colQuarter : isTablet ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Location"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={`${Math.max(1, currentClientSites.length || 1)} Total`}
+                    />
+                  }
+                  value={selectedSite || 'all'}
+                  onChange={(val) => onSelectSite(val === 'all' ? '' : val)}
+                  options={siteOptions}
+                  placeholder="All Sites & Locations"
+                  searchPlaceholder="Search site or location..."
+                  inlineDescription={true}
+                />
+              </View>
 
               {/* Select Machine */}
-              <SearchableSelect
-                label="Select Machine"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label={`${clientMachines.length} Total`}
-                  />
-                }
-                value={selectedClientMachineId || 'all'}
-                onChange={(val) => onSelectClientMachine(val)}
-                options={clientMachineOptions}
-                placeholder="All Machines"
-                searchPlaceholder="Search by Model, Code, S/N..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isDesktop ? styles.colQuarter : isTablet ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Machine"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={`${clientMachines.length} Total`}
+                    />
+                  }
+                  value={selectedClientMachineId || 'all'}
+                  onChange={(val) => onSelectClientMachine(val)}
+                  options={clientMachineOptions}
+                  placeholder="All Machines"
+                  searchPlaceholder="Search by Model, Code, S/N..."
+                  inlineDescription={true}
+                />
+              </View>
 
               {/* Select Month */}
-              <SearchableSelect
-                label="Select Month"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label="2026"
-                  />
-                }
-                value={selectedMonth}
-                onChange={(val) => onSelectMonth(val)}
-                options={MONTH_OPTIONS}
-                placeholder="Select Month"
-                searchable={true}
-                searchPlaceholder="Search..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isDesktop ? styles.colQuarter : isTablet ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Month"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={currentYear}
+                    />
+                  }
+                  value={selectedMonth}
+                  onChange={(val) => onSelectMonth(val)}
+                  options={MONTH_OPTIONS}
+                  placeholder="Select Month"
+                  searchable={true}
+                  searchPlaceholder="Search..."
+                  inlineDescription={true}
+                />
+              </View>
             </View>
           )}
 
           {viewMode === 'machine' && (
-            <View style={styles.filterStack}>
+            <View
+              style={[
+                styles.responsiveGrid,
+                isWide ? styles.grid2Cols : styles.grid1Col,
+              ]}
+            >
               {/* Select Machine */}
-              <SearchableSelect
-                label="Select Machine"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label={`${machines.length} Total`}
-                  />
-                }
-                value={selectedMachineId}
-                onChange={(val) => onSelectMachine(val)}
-                options={machineOptions}
-                placeholder="Search or select machine..."
-                searchPlaceholder="Search by Model, Code, S/N..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isWide ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Machine"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={`${machines.length} Total`}
+                    />
+                  }
+                  value={selectedMachineId}
+                  onChange={(val) => onSelectMachine(val)}
+                  options={machineOptions}
+                  placeholder="Search or select machine..."
+                  searchPlaceholder="Search by Model, Code, S/N..."
+                  inlineDescription={true}
+                />
+              </View>
 
               {/* Select Month */}
-              <SearchableSelect
-                label="Select Month"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label="2026"
-                  />
-                }
-                value={selectedMonth}
-                onChange={(val) => onSelectMonth(val)}
-                options={MONTH_OPTIONS}
-                placeholder="Select Month"
-                searchable={true}
-                searchPlaceholder="Search month..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isWide ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Month"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={currentYear}
+                    />
+                  }
+                  value={selectedMonth}
+                  onChange={(val) => onSelectMonth(val)}
+                  options={MONTH_OPTIONS}
+                  placeholder="Select Month"
+                  searchable={true}
+                  searchPlaceholder="Search month..."
+                  inlineDescription={true}
+                />
+              </View>
             </View>
           )}
 
           {viewMode === 'operator' && (
-            <View style={styles.filterStack}>
+            <View
+              style={[
+                styles.responsiveGrid,
+                isWide ? styles.grid2Cols : styles.grid1Col,
+              ]}
+            >
               {/* Select Operator */}
-              <SearchableSelect
-                label="Select Operator"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label={`${operators.length} Total`}
-                  />
-                }
-                value={selectedOperatorId}
-                onChange={(val) => onSelectOperator(val)}
-                options={operatorOptions}
-                placeholder="Search or select operator..."
-                searchPlaceholder="Search by Operator Name, Phone..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isWide ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Operator"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={`${operators.length} Total`}
+                    />
+                  }
+                  value={selectedOperatorId}
+                  onChange={(val) => onSelectOperator(val)}
+                  options={operatorOptions}
+                  placeholder="Search or select operator..."
+                  searchPlaceholder="Search by Operator Name, Phone..."
+                  inlineDescription={true}
+                />
+              </View>
 
               {/* Select Month */}
-              <SearchableSelect
-                label="Select Month"
-                rightElement={
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    shape="rounded"
-                    label="2026"
-                  />
-                }
-                value={selectedMonth}
-                onChange={(val) => onSelectMonth(val)}
-                options={MONTH_OPTIONS}
-                placeholder="Select Month"
-                searchable={true}
-                searchPlaceholder="Search month..."
-                inlineDescription={true}
-              />
+              <View style={[styles.filterCol, isWide ? styles.colHalf : styles.colFull]}>
+                <SearchableSelect
+                  label="Select Month"
+                  rightElement={
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      shape="rounded"
+                      label={currentYear}
+                    />
+                  }
+                  value={selectedMonth}
+                  onChange={(val) => onSelectMonth(val)}
+                  options={MONTH_OPTIONS}
+                  placeholder="Select Month"
+                  searchable={true}
+                  searchPlaceholder="Search month..."
+                  inlineDescription={true}
+                />
+              </View>
             </View>
           )}
 
@@ -429,17 +470,47 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     marginTop: 0,
   },
-  filterStack: {
+  responsiveGrid: {
+    width: '100%',
+  },
+  grid1Col: {
+    flexDirection: 'column',
     gap: spacingNumeric.md,
+  },
+  grid2Cols: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacingNumeric.md,
+  },
+  grid4Cols: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacingNumeric.md,
+  },
+  filterCol: {
+    minWidth: 0,
+  },
+  colFull: {
+    width: '100%',
+  },
+  colHalf: {
+    flex: 1,
+    minWidth: 260,
+  },
+  colQuarter: {
+    flex: 1,
+    minWidth: 200,
   },
   customRangeRow: {
     flexDirection: 'row',
-    gap: spacingNumeric.sm,
+    gap: spacingNumeric.sm + 4,
     borderTopWidth: 1,
-    paddingTop: spacingNumeric.sm + 2,
-    marginTop: spacingNumeric.sm,
+    paddingTop: spacingNumeric.md,
+    marginTop: spacingNumeric.md,
+    flexWrap: 'wrap',
   },
   datePickerCol: {
     flex: 1,
+    minWidth: 220,
   },
 });

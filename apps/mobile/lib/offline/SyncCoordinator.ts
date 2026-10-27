@@ -46,7 +46,7 @@ const SCREEN_QUERY_PREFIXES: Record<string, string[][]> = {
   attendance: [['attendance']],
   payroll: [['payroll']],
   users: [['users']],
-  clients: [['clients']],
+  clients: [['clients'], ['clientDetail']],
   profile: [['profile'], ['user']],
   'running-logs': [['running-logs'], ['operations', 'logs']],
   settings: [['settings'], ['preferences']],

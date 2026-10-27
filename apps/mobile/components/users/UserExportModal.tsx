@@ -404,10 +404,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                     )}
                   </View>
                   <View>
-                    <Text style={[styles.title, { color: theme.colors.ink }]}>
+                    <Text variant="heading" weight="semibold" style={[styles.title, { color: theme.colors.ink }]}>
                       Export Directory
                     </Text>
-                    <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                       {exportFormat === 'csv'
                         ? 'Generate clean CSV spreadsheet'
                         : 'Generate landscape A4 PDF report'}
@@ -450,6 +450,8 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       color={exportFormat === 'csv' ? '#0284c7' : theme.colors.mute}
                     />
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.formatToggleText,
                         {
@@ -457,7 +459,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                             exportFormat === 'csv'
                               ? theme.colors.ink
                               : theme.colors.mute,
-                          },
+                        },
                       ]}
                     >
                       CSV (.csv)
@@ -480,6 +482,8 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       color={exportFormat === 'pdf' ? '#e11d48' : theme.colors.mute}
                     />
                     <Text
+                      variant="caption"
+                      weight="medium"
                       style={[
                         styles.formatToggleText,
                         {
@@ -487,7 +491,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                             exportFormat === 'pdf'
                               ? theme.colors.ink
                               : theme.colors.mute,
-                          },
+                        },
                       ]}
                     >
                       PDF (.pdf)
@@ -495,7 +499,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                   </Touchable>
                 </View>
 
-                <Text style={[styles.metaText, { color: theme.colors.mute }]}>
+                <Text variant="micro" weight="medium" style={[styles.metaText, { color: theme.colors.mute }]}>
                   {exportFormat === 'csv' ? 'Excel / Sheets' : 'Print / Save'}
                 </Text>
               </View>
@@ -535,10 +539,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                     )}
                   </View>
                   <View style={styles.optionContent}>
-                    <Text style={[styles.optionTitle, { color: theme.colors.ink }]}>
+                    <Text variant="subheading" weight="semibold" style={[styles.optionTitle, { color: theme.colors.ink }]}>
                       Current Page Only
                     </Text>
-                    <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.optionDesc, { color: theme.colors.mute }]}>
                       Page {currentPage} of {totalPages || 1}
                     </Text>
                   </View>
@@ -551,7 +555,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       },
                     ]}
                   >
-                    <Text style={[styles.countBadgeText, { color: theme.colors.ink }]}>
+                    <Text variant="micro" weight="bold" style={[styles.countBadgeText, { color: theme.colors.ink }]}>
                       {currentPageUsers.length}{' '}
                       {currentPageUsers.length === 1 ? 'user' : 'users'}
                     </Text>
@@ -583,10 +587,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                     )}
                   </View>
                   <View style={styles.optionContent}>
-                    <Text style={[styles.optionTitle, { color: theme.colors.ink }]}>
+                    <Text variant="subheading" weight="semibold" style={[styles.optionTitle, { color: theme.colors.ink }]}>
                       All Matching Users
                     </Text>
-                    <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
+                    <Text variant="caption" style={[styles.optionDesc, { color: theme.colors.mute }]}>
                       {activeFilterCount > 0
                         ? 'Filtered dataset across all pages'
                         : 'Entire directory across all pages'}
@@ -601,7 +605,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       },
                     ]}
                   >
-                    <Text style={[styles.countBadgeText, { color: theme.colors.ink }]}>
+                    <Text variant="micro" weight="bold" style={[styles.countBadgeText, { color: theme.colors.ink }]}>
                       {totalMatchingCount}{' '}
                       {totalMatchingCount === 1 ? 'user' : 'users'}
                     </Text>
@@ -632,10 +636,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       )}
                     </View>
                     <View style={styles.optionContent}>
-                      <Text style={[styles.optionTitle, { color: theme.colors.ink }]}>
+                      <Text variant="subheading" weight="semibold" style={[styles.optionTitle, { color: theme.colors.ink }]}>
                         Selected Users
                       </Text>
-                      <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
+                      <Text variant="caption" style={[styles.optionDesc, { color: theme.colors.mute }]}>
                         Checked rows on current page
                       </Text>
                     </View>
@@ -645,7 +649,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                         { backgroundColor: '#fef3c7', borderColor: '#fde68a' },
                       ]}
                     >
-                      <Text style={[styles.countBadgeText, { color: '#92400e' }]}>
+                      <Text variant="micro" weight="bold" style={[styles.countBadgeText, { color: '#92400e' }]}>
                         {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
                       </Text>
                     </View>
@@ -660,7 +664,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                   onPress={onClose}
                   disabled={isExporting}
                 >
-                  <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
+                  <Text variant="caption" weight="medium" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
                     Close
                   </Text>
                 </Touchable>
@@ -795,7 +799,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -169,7 +169,8 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             }
           />
           <Text
-            variant="label"
+            variant="caption"
+            weight="semibold"
             style={{
               color:
                 filterPanelOpen || activeFilterCount > 0
@@ -196,6 +197,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Text
                 variant="micro"
+                weight="bold"
                 style={{
                   color:
                     filterPanelOpen || activeFilterCount > 0
@@ -231,7 +233,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             accessibilityLabel="Reset all filters"
           >
             <RotateCcw size={13} color={theme.colors.ink} />
-            <Text variant="caption" style={{ color: theme.colors.ink }}>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
               Reset
             </Text>
           </Pressable>
@@ -258,7 +260,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="outline" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
                     Search: "{debouncedSearch}"
                   </Text>
                   <X size={12} color={theme.colors.mute} />
@@ -279,7 +281,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="info" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: isDark ? '#bfdbfe' : '#1d4ed8' }}>
+                  <Text variant="caption" weight="medium" style={{ color: isDark ? '#bfdbfe' : '#1d4ed8' }}>
                     Role: {currentRoleLabel}
                   </Text>
                   <X size={12} color={isDark ? '#bfdbfe' : '#1d4ed8'} />
@@ -305,6 +307,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
                 <View style={styles.filterBadgeContent}>
                   <Text
                     variant="caption"
+                    weight="medium"
                     style={{
                       color:
                         statusFilter === 'active'
@@ -343,7 +346,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="outline" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
                     State: {currentStateLabel}
                   </Text>
                   <X size={12} color={theme.colors.mute} />
@@ -364,7 +367,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="outline" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
                     KYC: {currentKycLabel}
                   </Text>
                   <X size={12} color={theme.colors.mute} />
@@ -385,7 +388,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="outline" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
                     Joined: {currentJoinedLabel}
                   </Text>
                   <X size={12} color={theme.colors.mute} />
@@ -406,7 +409,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             >
               <Badge variant="outline" size="md">
                 <View style={styles.filterBadgeContent}>
-                  <Text variant="caption" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
                     Sort: {currentSortLabel}
                   </Text>
                   <X size={12} color={theme.colors.mute} />
@@ -424,7 +427,7 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             accessibilityLabel="Reset all active filters"
           >
             <RotateCcw size={11} color={theme.colors.link} />
-            <Text variant="caption" style={{ color: theme.colors.link }}>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
               Clear all
             </Text>
           </Pressable>

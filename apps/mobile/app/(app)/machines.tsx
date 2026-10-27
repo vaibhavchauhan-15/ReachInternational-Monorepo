@@ -612,12 +612,16 @@ export default function MachinesScreen() {
             <Skeleton width={160} height={14} borderRadius={radiusNumeric.sm} style={{ marginVertical: 0 }} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.resultsCountText, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={{ color: theme.colors.mute }}>
                 Showing{' '}
-                <Text variant="label" style={{ color: theme.colors.ink }}>
+                <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
                   {machines.length}
                 </Text>{' '}
-                of {totalCount} machine assets
+                of{' '}
+                <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                  {totalCount}
+                </Text>{' '}
+                machines
                 {activeFilterCount > 0 && totalCount > machines.length && (
                   <Text variant="caption" style={{ color: theme.colors.mute }}>
                     {' '}(filtered)
@@ -642,6 +646,11 @@ export default function MachinesScreen() {
     isDark,
     kpis,
     isKPIsLoading,
+    rentalFilter,
+    healthFilter,
+    role,
+    setRentalFilter,
+    setHealthFilter,
     search,
     setSearch,
     debouncedSearch,
@@ -650,10 +659,6 @@ export default function MachinesScreen() {
     filterPanelOpen,
     activeFilterCount,
     handleResetAllFilters,
-    rentalFilter,
-    setRentalFilter,
-    healthFilter,
-    setHealthFilter,
     supervisorFilter,
     setSupervisorFilter,
     clientFilter,
@@ -701,6 +706,7 @@ export default function MachinesScreen() {
         <EmptyState
           variant="no-results"
           title={`No machines matching "${debouncedSearch.trim()}"`}
+          description=""
           actionLabel="Clear Search"
           onAction={handleClearSearch}
         />
@@ -724,7 +730,7 @@ export default function MachinesScreen() {
         <EmptyState
           variant="empty"
           title="No Assigned Machinery"
-          description="You currently have no equipment assigned to your operator account. Contact your site supervisor."
+          description=""
         />
       );
     }
@@ -734,7 +740,7 @@ export default function MachinesScreen() {
         <EmptyState
           variant="empty"
           title="No Supervised Machinery"
-          description="No equipment assets are currently assigned to your supervisor account."
+          description=""
         />
       );
     }
@@ -743,7 +749,7 @@ export default function MachinesScreen() {
       <EmptyState
         variant="empty"
         title="Fleet Directory Empty"
-        description="Your equipment fleet is currently empty. Add your first boom lift, scissor lift, or telehandler to begin tracking operations."
+        description=""
         actionLabel="+ Add New Machine"
         onAction={() => {
           setMachineToEdit(null);
@@ -788,7 +794,7 @@ export default function MachinesScreen() {
         ) : (
           <View style={styles.endOfListRow}>
             <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
-            <Text variant="caption" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+            <Text variant="caption" weight="medium" style={[styles.endOfListText, { color: theme.colors.mute }]}>
               All {totalCount} machines loaded
             </Text>
             <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
@@ -809,7 +815,11 @@ export default function MachinesScreen() {
   if (role && isHr) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <MobileHeader title="Fleet Machines" showBack={false} />
+        <MobileHeader
+          title="Fleet Machines"
+          showBack={true}
+          backRoute="/dashboard"
+        />
         <PermissionDeniedView
           featureName="Fleet Management"
           currentRole={role}
@@ -894,7 +904,7 @@ export default function MachinesScreen() {
           <MobileHeader
             title="Machines"
             showBack={true}
-            onPressBack={() => router.back()}
+            backRoute="/dashboard"
             actions={headerActions}
           />
 

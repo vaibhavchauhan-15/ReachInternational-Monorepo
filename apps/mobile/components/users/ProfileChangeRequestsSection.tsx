@@ -70,7 +70,7 @@ export function ProfileChangeRequestsSection({
       <View style={[styles.changeReqsHeader, { borderBottomColor: '#6366f120' }]}>
         <View style={styles.titleRow}>
           <View style={[styles.alertDot, { backgroundColor: '#6366f1' }]} />
-          <Text variant="label" style={{ color: theme.colors.ink }}>
+          <Text variant="subheading" weight="semibold" style={{ color: theme.colors.ink }}>
             Profile Change Requests ({requests.length})
           </Text>
         </View>
@@ -82,7 +82,7 @@ export function ProfileChangeRequestsSection({
             onPress={onApproveAll}
             disabled={isBulkApprovingProfile}
           >
-            <Text variant="caption" style={styles.miniActionBtnTextWhite}>
+            <Text variant="caption" weight="semibold" style={styles.miniActionBtnTextWhite}>
               Accept All
             </Text>
           </Pressable>
@@ -93,7 +93,7 @@ export function ProfileChangeRequestsSection({
             onPress={onRejectAll}
             disabled={isBulkRejectingProfile}
           >
-            <Text variant="caption" style={{ color: theme.colors.ink }}>
+            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
               Reject All
             </Text>
           </Pressable>
@@ -114,12 +114,12 @@ export function ProfileChangeRequestsSection({
             <View style={styles.changeReqCardHeader}>
               <View style={styles.userMetaRow}>
                 <View style={[styles.avatarCircle, { backgroundColor: '#6366f115', borderColor: '#6366f130' }]}>
-                  <Text variant="label" style={{ color: '#6366f1' }}>
+                  <Text variant="caption" weight="bold" style={{ color: '#6366f1' }}>
                     {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
                   </Text>
                 </View>
                 <View style={styles.flex1}>
-                  <Text variant="label" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
                     {reqUser.full_name || 'Staff Member'}
                   </Text>
                   <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
@@ -212,7 +212,7 @@ export function ProfileChangeRequestsSection({
                 {isApproving ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text variant="label" style={styles.whiteText}>Approve</Text>
+                  <Text variant="caption" weight="semibold" style={styles.whiteText}>Approve</Text>
                 )}
               </Pressable>
               <Pressable
@@ -222,7 +222,7 @@ export function ProfileChangeRequestsSection({
                 onPress={() => onReject(pr)}
                 disabled={isApproving}
               >
-                <Text variant="label" style={{ color: theme.colors.error }}>Reject...</Text>
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.error }}>Reject...</Text>
               </Pressable>
             </View>
           </View>

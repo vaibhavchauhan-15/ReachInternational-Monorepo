@@ -198,15 +198,15 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
       onPressBack();
       return;
     }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+      return;
+    }
     if (backRoute) {
       router.replace(backRoute as any);
       return;
     }
-    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/settings/account' as any);
-    }
+    router.replace('/dashboard' as any);
   }, [onPressBack, backRoute, router]);
 
   useEffect(() => {

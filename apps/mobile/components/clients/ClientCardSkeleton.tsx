@@ -22,56 +22,36 @@ export const ClientCardSkeleton: React.FC<ClientCardSkeletonProps> = ({
         },
       ]}
     >
-      {/* Top Header Row: Client ID Code on left, Status Badge on right */}
+      {/* 1. Header: Client Name, ID and Status on the same compact header area */}
       <View style={styles.cardHeader}>
-        <Skeleton
-          width={72}
-          height={26}
-          borderRadius={radiusNumeric.sm}
-          animate={animate}
-          style={styles.noMargin}
-        />
+        <View style={styles.headerLeft}>
+          <Skeleton
+            width={160}
+            height={18}
+            borderRadius={radiusNumeric.xs}
+            animate={animate}
+            style={styles.noMargin}
+          />
+          <Skeleton
+            width={65}
+            height={13}
+            borderRadius={radiusNumeric.xs}
+            animate={animate}
+            style={styles.noMargin}
+          />
+        </View>
 
-        {/* Status Badge */}
+        {/* Status Pill Skeleton */}
         <Skeleton
-          width={65}
-          height={22}
+          width={68}
+          height={24}
           borderRadius={radiusNumeric.full}
           animate={animate}
           style={styles.noMargin}
         />
       </View>
 
-      {/* Company Name */}
-      <View style={styles.companyRow}>
-        <Skeleton
-          width={180}
-          height={18}
-          borderRadius={radiusNumeric.xs}
-          animate={animate}
-          style={styles.noMargin}
-        />
-      </View>
-
-      {/* Tax Badges */}
-      <View style={styles.tagRow}>
-        <Skeleton
-          width={105}
-          height={18}
-          borderRadius={4}
-          animate={animate}
-          style={styles.noMargin}
-        />
-        <Skeleton
-          width={90}
-          height={18}
-          borderRadius={4}
-          animate={animate}
-          style={styles.noMargin}
-        />
-      </View>
-
-      {/* Inset Specs Well */}
+      {/* 2. Inset Specs Well: 2-Column Grid (3 rows, 12dp padding, 12dp gap) */}
       <View
         style={[
           styles.specsWell,
@@ -81,52 +61,63 @@ export const ClientCardSkeleton: React.FC<ClientCardSkeletonProps> = ({
           },
         ]}
       >
+        {/* Row 1: GST | PAN */}
         <View style={styles.twoColGrid}>
-          <View style={{ flex: 1 }}>
-            <Skeleton width={85} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
-            <Skeleton width={110} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
+          <View style={styles.gridCol}>
+            <Skeleton width={50} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={110} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
           </View>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <Skeleton width={80} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
-            <Skeleton width={95} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
+          <View style={styles.gridCol}>
+            <Skeleton width={50} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={95} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
           </View>
         </View>
 
-        <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
-
-        <View style={{ gap: 4 }}>
-          <Skeleton width={75} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
-          <Skeleton width="70%" height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
+        {/* Row 2: Contact Person | Contact Number */}
+        <View style={styles.twoColGrid}>
+          <View style={styles.gridCol}>
+            <Skeleton width={90} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={115} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
+          </View>
+          <View style={styles.gridCol}>
+            <Skeleton width={95} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={105} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
+          </View>
         </View>
 
-        <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Skeleton width={100} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.microMargin} />
-          <Skeleton width={60} height={18} borderRadius={radiusNumeric.sm} animate={animate} style={styles.microMargin} />
+        {/* Row 3: Sites | Maintenance Allowance */}
+        <View style={styles.twoColGrid}>
+          <View style={styles.gridCol}>
+            <Skeleton width={70} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={120} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
+          </View>
+          <View style={styles.gridCol}>
+            <Skeleton width={120} height={10} borderRadius={radiusNumeric.xs} animate={animate} style={styles.noMargin} />
+            <Skeleton width={45} height={14} borderRadius={radiusNumeric.xs} animate={animate} style={styles.fieldIndent} />
+          </View>
         </View>
       </View>
 
-      {/* Touch Action Buttons Row (Edit, Add Site, Delete) */}
-      <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
+      {/* 3. Touch Action Buttons: Assign Supervisor, Assign Machine, 3-Dot Menu */}
+      <View style={styles.cardActions}>
         <Skeleton
-          width={72}
-          height={34}
-          borderRadius={radiusNumeric.sm}
+          width="43%"
+          height={44}
+          borderRadius={radiusNumeric.md}
           animate={animate}
           style={styles.noMargin}
         />
         <Skeleton
-          width={88}
-          height={34}
-          borderRadius={radiusNumeric.sm}
+          width="43%"
+          height={44}
+          borderRadius={radiusNumeric.md}
           animate={animate}
           style={styles.noMargin}
         />
         <Skeleton
-          width={72}
-          height={34}
-          borderRadius={radiusNumeric.sm}
+          width={44}
+          height={44}
+          borderRadius={radiusNumeric.md}
           animate={animate}
           style={styles.noMargin}
         />
@@ -159,52 +150,47 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   clientCard: {
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.md,
-    gap: spacingNumeric.sm,
-    marginBottom: spacingNumeric.sm,
+    padding: 14,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    gap: 12,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  companyRow: {
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 6,
-    flexWrap: 'wrap',
+  headerLeft: {
+    flex: 1,
+    gap: 4,
   },
   specsWell: {
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    padding: 10,
-    gap: 6,
+    padding: 12,
+    gap: 12,
   },
   twoColGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacingNumeric.sm,
+    gap: 12,
   },
-  specsDivider: {
-    height: 1,
-    marginVertical: 2,
+  gridCol: {
+    flex: 1,
+    gap: 4,
+  },
+  fieldIndent: {
+    marginLeft: 18,
+    marginVertical: 0,
   },
   cardActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    alignItems: 'center',
     gap: 8,
-    borderTopWidth: 1,
-    paddingTop: 8,
+    marginTop: 2,
   },
   noMargin: {
     marginVertical: 0,
-  },
-  microMargin: {
-    marginVertical: 2,
   },
 });

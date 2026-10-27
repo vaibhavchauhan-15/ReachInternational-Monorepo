@@ -40,9 +40,9 @@ export interface SwitchProps {
 }
 
 const SPRING_CONFIG = {
-  damping: 18,
-  stiffness: 180,
-  mass: 0.8,
+  damping: 24,
+  stiffness: 420,
+  mass: 0.6,
 };
 
 export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
@@ -67,6 +67,11 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
   const prefersReducedMotion = useReducedMotion();
 
   const isChecked = Boolean(checked ?? value ?? false);
+  const [localChecked, setLocalChecked] = React.useState(isChecked);
+
+  React.useEffect(() => {
+    setLocalChecked(isChecked);
+  }, [isChecked]);
 
   const isSmall = size === 'sm';
   const trackWidth = isSmall ? 40 : 50;
@@ -91,7 +96,7 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
   useEffect(() => {
     const target = isChecked ? 1 : 0;
     if (prefersReducedMotion) {
-      progress.value = withTiming(target, { duration: 100 });
+      progress.value = withTiming(target, { duration: 80 });
     } else {
       progress.value = withSpring(target, SPRING_CONFIG);
     }
@@ -111,7 +116,17 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
 
   const handlePress = () => {
     if (disabled) return;
-    const nextVal = !isChecked;
+    const nextVal = !localChecked;
+    setLocalChecked(nextVal);
+
+    // 0ms instant UI-thread spring glide without waiting for parent state cycle
+    const target = nextVal ? 1 : 0;
+    if (prefersReducedMotion) {
+      progress.value = withTiming(target, { duration: 80 });
+    } else {
+      progress.value = withSpring(target, SPRING_CONFIG);
+    }
+
     if (haptic) {
       haptics.select();
     }
@@ -125,8 +140,8 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
       role="switch"
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ checked: isChecked, disabled }}
-      aria-checked={isChecked}
+      accessibilityState={{ checked: localChecked, disabled }}
+      aria-checked={localChecked}
       android_ripple={null}
       disabled={disabled}
       onPress={handlePress}

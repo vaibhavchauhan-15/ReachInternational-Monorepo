@@ -64,6 +64,7 @@ const Card: React.ForwardRefExoticComponent<CardProps & React.RefAttributes<View
           ref={ref as any}
           variant="card"
           onPress={onPress}
+          className={className}
           style={(state) => {
             const resolved = typeof style === 'function' ? style(state) : style;
             const resolvedList = Array.isArray(resolved) ? resolved : [resolved];

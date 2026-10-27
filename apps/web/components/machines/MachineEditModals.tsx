@@ -224,7 +224,7 @@ export function MachineInfoModal({
               label={
                 <span className="flex items-center gap-1.5 cursor-not-allowed">
                   <span>Machine Code / ID</span>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] px-1.5 py-0.2 rounded border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)] uppercase tracking-wider select-none">
+                  <span className="text-[10px] font-semibold text-[var(--color-mute)] px-1.5 py-0.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)] uppercase tracking-wider select-none">
                     Locked
                   </span>
                 </span>

@@ -62,9 +62,10 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          FLEET & PERSONNEL SUMMARY
+          Fleet & Personnel Summary
         </Text>
         <KPIGrid columns={5}>
           <KPICard
@@ -109,9 +110,10 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          TODAY'S OPERATIONAL EXCEPTIONS
+          Today's Operational Exceptions
         </Text>
         <KPIGrid columns={3}>
           <KPICard
@@ -142,9 +144,10 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          QUICK MANAGEMENT
+          Quick Management
         </Text>
         <View style={styles.actionList}>
           <PrimaryAction
@@ -176,7 +179,7 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 4,
+    marginBottom: spacingNumeric.sm,
   },
   actionList: {
     gap: spacingNumeric.sm,

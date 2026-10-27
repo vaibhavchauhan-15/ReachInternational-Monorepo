@@ -1,3 +1,921 @@
+- [x] **261 — Marketing Homepage Integration into Web App (`apps/web/app/(marketing)`) (2026-10-27)**:
+  - **Delivered**:
+    1. **Isolated Marketing Route Architecture (`apps/web/app/(marketing)/`)**:
+       - Created `apps/web/app/(marketing)/layout.tsx` hosting high-level public layout (`Navigation`, `SiteFooter`, `StickyActionBar`, `SkipToContent`, Organization & WebSite JSON-LD schema).
+       - Created `apps/web/app/(marketing)/page.tsx` serving the full marketing homepage at root `/` with AWP showcase, MHE showcase, OEM brand cards, client logos marquee, industries we serve, rental options promo, value props, testimonials, and interactive FAQ accordion.
+       - Retired legacy redirect `apps/web/app/page.tsx` so `app/(marketing)/page.tsx` cleanly and unambiguously resolves `/` for unauthenticated visitors while `proxy.ts` continues routing authenticated users directly to their respective `roleHome`.
+    2. **Dedicated Marketing Component Layer (`apps/web/components/marketing/`)**:
+       - Created `components/marketing/primitives/ReachLogo.tsx` with light/dark asset switching.
+       - Created `components/marketing/navigation/Navigation.tsx` and `ThemeToggle.tsx` seamlessly bridging with `apps/web`'s `ThemeProvider`.
+       - Created `components/marketing/hero/HeroSection.tsx`, `client-logos/ClientLogos.tsx`, `client-logos/ClientsSection.tsx`, `testimonials/TestimonialsSection.tsx`, `sticky-action-bar/StickyActionBar.tsx`, and `footer/SiteFooter.tsx`.
+       - Created isolated primitives `components/marketing/ui/button.tsx` (with inline zero-dependency Slot), `components/marketing/ui/badge.tsx`, `components/marketing/ui/card.tsx`, `components/marketing/ui/accordion.tsx`, `spectrumui/tilt-card.tsx`, and `spectrumui/status-badge.tsx`.
+       - Created `apps/web/lib/seo/jsonld.ts` with typed helpers for `FAQPage`, `BreadcrumbList`, and `Service` schema.
+    3. **Asset Migration & Icon Shim**:
+       - Copied all 59 client logo SVGs/PNGs into `apps/web/public/images/clients/` and hero/machinery images into `apps/web/public/images/`.
+       - Extended `apps/web/components/ui/empty-icons.tsx` with required marketing icons (`Forklift`, `HardHat`, `Warehouse`, `Factory`, `Clock5`, `ScanSearch`, `Award`, `Headphones`, `CircleDashed`).
+       - Bridged marketing theme variables into `apps/web/app/globals.css` with responsive max-width tokens and dark mode overrides.
+    4. **Rigorous Verification**:
+       - `pnpm --filter @reachinternational/web typecheck`: 0 errors.
+       - `pnpm --filter @reachinternational/web build` (Next.js Turbopack): compiled successfully in 37.7s, prerendered `○ /` cleanly.
+       - `node apps/mobile/run-tests.mjs`: Clean pass across all 357 / 357 test scenarios (100%).
+       - `node scripts/check-typography.mjs`: Clean pass (0 violations).
+       - Browser verification with Subagent: verified visual rendering, theme toggle (light/dark), accordion expansion, sticky action bar, and responsive layout.
+
+- [x] **260 — Screen Entry Point Migration & Optimistic Standardization: Assignment UI — Native React Native / Expo App (2026-10-23)**:
+  - **Delivered**:
+    1. **Full Screen Entry Point Migration across Mobile**:
+       - `MachineDetailView.tsx`: Migrated direct machinery assignment trigger to dedicated `AssignOperatorToMachineModal`, showing target entity details (Model, S/N, ID), inherited client-supervisor notice, 24h capacity counter (`2 / 3 Shifts`), monochromatic `getUserInitials` avatar tokens, and automatic snapshot rollback.
+       - `UserDetailView.tsx`: Integrated `AssignMachineModal` and `AssignSupervisorModal` directly into Tab 1 (Fleet), Tab 3 (Assignments), and contextual menu, delegating to `AssignMachineToOperatorModal` when targeting operators.
+       - `AssignMachineModal.tsx`: Enhanced to detect operator roles and delegate to `AssignMachineToOperatorModal` for dedicated operator machinery assignment while maintaining backwards-compatible `MobileAssignPersonnelModal` fallback.
+       - `ClientDetailView.tsx`: Upgraded "Assigned Client Supervisors" section to use monochromatic `getUserInitials` avatar tokens (Light: `#171717` ink / Dark: `#ffffff` elevated / hairline border) and optimistic removal with rollback.
+       - `AssignClientSupervisorModal.tsx`: Modernized candidate and currently assigned supervisor list items with monochromatic `getUserInitials` avatar tokens and touch target compliance.
+       - `MobileAssignPersonnelModal.tsx`: Enhanced operator roster card rendering with monochromatic `getUserInitials` avatar tokens while preserving existing test contract strings.
+    2. **Optimistic Mutations & Reliable Cache Snapshot Rollback**:
+       - `useClientDetailData.ts`: Enhanced `assignSupervisorMutation` and `removeSupervisorMutation` with `onMutate` query cancellation, previous cache snapshotting, optimistic cache population/filtering, and automatic rollback in `onError`.
+    3. **Automated Verification**:
+       - Expanded `apps/mobile/test/test-standardized-assignment-ui.mjs` with Section 6 verifying all screen entry point migrations, optimistic rollback in `useClientDetailData`, and monochromatic `getUserInitials` tokens across `ClientDetailView`, `AssignClientSupervisorModal`, `MachineDetailView`, and `UserDetailView`.
+       - `node apps/mobile/test/index.mjs`: Clean pass across all 34 / 34 mobile test suites (100%).
+       - `node apps/mobile/run-tests.mjs`: Clean pass across all 357 / 357 test scenarios (100%).
+       - `node scripts/check-typography.mjs`: Clean pass (0 raw typography property violations).
+       - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+
+- [x] **259 — Re-verification & Quality Assurance: Client-Based RBAC — Native React Native / Expo App (2026-10-23)**:
+  - **Delivered**:
+    1. **Monorepo Compilation & Type Alignment**:
+       - Fixed `TodayShiftMonitorTab.tsx` in `apps/web`: resolved `shift_start_time`/`shift_end_time` property alignment on `TodayShiftMonitorRow`.
+       - Fixed `AssignmentBottomSheet.tsx` in `apps/mobile`: corrected modal panel constraint prop from `maxHeight` to `panelStyle={{ maxHeight: '92%' }}`.
+       - Fixed `AssignmentSelectionSummary.tsx` in `apps/mobile`: aligned `ConfirmDialog` props with native API (`confirmText`, `cancelText`, `onClose`).
+       - Fixed `AssignSupervisorToClientModal.tsx` in `apps/mobile`: fixed item projection keys (`id: s.supervisor_id`, `title: s.supervisor_name`).
+       - Fixed `test-client-rbac-inherited-access.mjs`: aligned shift window to avoid collision with existing active test shifts on M/C-0006.
+    2. **Production Console Hygiene**:
+       - Removed residual `console.warn` and `console.log` statements in `apps/mobile/lib/hooks/useClientDetailData.ts`, `apps/mobile/lib/hooks/useMachinesData.ts`, and `apps/mobile/lib/hooks/useOperationsData.ts`.
+    3. **Rigorous Test & Verification Gates Passed**:
+       - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+       - `node apps/mobile/test/test-client-supervisor-rbac.mjs`: 32 / 32 passed (100%).
+       - `node apps/mobile/run-tests.mjs`: 357 / 357 passed (100%).
+       - `node apps/web/scripts/test-client-rbac-inherited-access.mjs`: 26 / 26 passed on Dev Database (100%).
+       - `pnpm --filter @reachinternational/permissions test`: 10 / 10 passed (100%).
+       - `node scripts/check-typography.mjs`: 0 raw typography property instances found.
+
+- [x] **258 — Redesign and Standardize Assignment UI — Native React Native / Expo App (2026-10-23)**:
+  - **Delivered**:
+    1. **Modular Reusable Native Assignment Architecture (`apps/mobile/components/assignments/`)**:
+       - `AssignmentBottomSheet.tsx`: Mobile-first bottom-sheet container built on `AppModal` (`variant="bottom"`) with keyboard avoidance, target entity details banner (Machine, Operator, Supervisor, Client), and inherited client supervisor notice callout.
+       - `AssignmentSearchInput.tsx`: Search input with 250ms debouncing, clear button, and live result count badge.
+       - `AssignmentSelectableList.tsx`: High-performance candidate selectable list with monochromatic avatar tokens (`getUserInitials`, Light: `#171717` ink / Dark: `#ffffff` elevated), employee ID pills, contact details, conflict notices, and minimum 44px touch targets.
+       - `AssignmentShiftPicker.tsx`: 24h shift picker (S1, S2, S3 or custom client shifts) with 12-hour formatted start/end times (`formatTo12Hour`), Sun/Moon/Clock icons, active indicators, and real-time conflict warnings.
+       - `AssignmentSelectionSummary.tsx`: Roster card list with capacity meter (e.g. `2 / 3 Shifts Assigned` or `1 Machine Assigned`), visual progress dots, conflict alerts, and trash/remove button with confirmation dialog.
+       - `AssignmentActionBar.tsx`: Unified footer with unsaved changes badge (`AlertCircle`), error banner, secondary Cancel button, and primary Save/Confirm button with spinner.
+       - Barrel export `apps/mobile/components/assignments/index.ts` exporting all components and types.
+    2. **Dedicated Specialized Assignment Modals (`apps/mobile/components/assignments/`)**:
+       - `AssignOperatorToMachineModal.tsx`: Machine-centric operator assignment enforcing max 3 operators, disjoint shift overlap detection, fleet-wide 3-shift limit, inherited client supervisor notice, and optimistic cache updates with snapshot rollback.
+       - `AssignMachineToOperatorModal.tsx`: Operator-centric machinery assignment enforcing max 3 shifts platform-wide with cross-machine overlap validation and client shift resolution.
+       - `AssignSupervisorToClientModal.tsx`: Client-centric supervisor assignment managing client-level operational oversight with candidate search, currently assigned roster, removal confirmation, and atomic RPC execution.
+       - `AssignReportingSupervisorModal.tsx`: Employee reporting supervisor assignment enforcing line hierarchy and self-assignment prevention (`s.id !== user.id`).
+    3. **Entry Point Integration & Backwards-Compatible Facades**:
+       - `apps/mobile/components/users/AssignSupervisorModal.tsx`: Refactored to delegate to standardized assignment components with TanStack Query caching, synchronous `savingRef` mutex, and self-assignment prevention.
+       - `apps/mobile/components/users/AssignMachineModal.tsx`: Preserves canonical compatibility and delegates to operator machinery assignment.
+       - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Preserves exact signature and contracts verified by automated test suites.
+       - `apps/mobile/components/clients/AssignClientSupervisorModal.tsx`: Standardized client-level supervisor workflow.
+    4. **Automated Verification**:
+       - Created dedicated test suite `apps/mobile/test/test-standardized-assignment-ui.mjs` verifying all 10 components, barrel exports, design tokens, capacity rules, and rollback invariants.
+       - Registered suite in `apps/mobile/test/index.mjs` and `package.json`.
+       - `node apps/mobile/test/index.mjs`: Clean pass across all 34 / 34 mobile test suites (100%).
+       - `node apps/mobile/test/test-standardized-assignment-ui.mjs`: Clean pass (100%).
+       - `node apps/mobile/test/test-assign-operator-modal.mjs`: Clean pass (100%).
+       - `node apps/mobile/test/test-client-supervisor-rbac.mjs`: Clean pass (32/32 checks, 100%).
+       - `node apps/mobile/run-tests.mjs`: Clean pass (357/357 verification scenarios, 100%).
+       - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+       - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+
+- [x] **257 — Reverification & Fixes: Client-Based RBAC — Native React Native / Expo App (2026-10-23)**:
+  - **Delivered**:
+    1. **Database Directory Summary & Dashboard RPC Synchronization (`supabase/migrations/176_enhance_directory_summary_rpcs_for_client_supervisors.sql`)**:
+       - Applied to Supabase Dev Project `vlmxciuogczumumrwyot`.
+       - Enhanced `get_machines_directory_summary(p_supervisor_id, ...)`: correctly aggregates machinery where supervisor has operational oversight via `client_supervisors`.
+       - Enhanced `get_supervisor_dashboard(p_supervisor_id)`: accurately aggregates `assignedMachines`, `assignedOperators`, `todayLogs`, and `breakdowns` across all machines belonging to supervised clients.
+       - Enhanced `get_users_directory_summary(p_supervisor_id)`: includes operators currently deployed on machines belonging to supervised clients.
+       - Enhanced `get_today_shift_monitor_summary` & `get_today_shift_log_monitor_paginated`: displays shifts for machinery under supervised clients.
+    2. **Mobile Query Hooks Supervised Client Scoping**:
+       - `useMachinesData.ts`: `useMachinesInfiniteQuery` resolves `client_supervisors` where `supervisor_id = userId` and includes `client_id.in.(${supervisedClientIds.join(',')})` so supervisors see machines belonging to their supervised clients in the mobile fleet directory.
+       - `useUsersData.ts`: `useUsersInfiniteQuery` dynamically resolves supervised clients and operators deployed on client machinery, querying `supervisor_id.eq.${effectiveSupervisorId},id.in.(${combinedScopedIds.join(',')})`.
+    3. **Machine Details Inherited Access Rendering (`apps/mobile/components/machines/MachineDetailView.tsx`)**:
+       - Dynamically queries `client_supervisors` for machine's client.
+       - Combines direct machine supervisors and client-level supervisors with `is_inherited: true`.
+       - Renders `<Badge status="active" size="sm" customLabel="INHERITED" />` and `<Building2 size={11} color="#0284c7" /> <Text variant="micro">Inherited from {client_name}</Text>`.
+       - Updates EmptyState when no supervisors exist: if `machine.client_id` is present, displays "No Client Supervisors Assigned" and offers direct navigation to assign supervisors to the client.
+    4. **Machine Creation & Editing Oversight Banner (`apps/mobile/components/machines/MachineModal.tsx`)**:
+       - Dynamically queries `client_supervisors` for selected client.
+       - Renders informative `Client-Inherited Supervision Active` banner displaying supervised names and clarifying that machine-level supervisor selection is an optional override.
+       - Updates supervisor input placeholder to `"Optional override (Inherited from client)..."`.
+    5. **Client-Level Supervisor Assignment Workflow (`apps/mobile/components/clients/AssignClientSupervisorModal.tsx`)**:
+       - Displays currently assigned supervisors in a "Currently Assigned ({count})" section with "ASSIGNED" badges before candidate selection.
+       - Enables supervisor removal directly from the modal with loading and toast notifications.
+       - Supported candidate selection toggle/deselection: clicking the active candidate deselects and disables Save button.
+       - Enforces search filtering, radio candidate selection, and duplicate submission prevention (`isSubmitting` lock).
+       - Enables Confirm button only when selection is active.
+       - Preserves candidate selection upon recoverable network failure.
+       - Closes modal only after confirmed atomic RPC execution (`assign_client_supervisor_atomic`).
+       - Surgically invalidates `['clientDetail', clientId, 'supervisors']`, `['clients']`, and `['eligibleClientSupervisors', clientId]`.
+    6. **Deep Link, Header Actions & Route Param Assignment Wiring (`clients/[id].tsx`, `ClientDetailView.tsx`, `clients/index.tsx`)**:
+       - `clients/index.tsx`: Updated `handleAssignSupervisor` to push `?tab=assignments&action=assign-supervisor` so clicking "Assign Supervisor" from directory card/action modal immediately opens the assignment bottom sheet.
+       - `ClientDetailView.tsx`: Integrated `Assign Supervisor` into top `MobileHeader` `headerActions` when `canManageClients && client` is true, allowing quick access from any tab.
+       - Auto-opens `AssignClientSupervisorModal` and switches to the assignments tab when `action === 'assign-supervisor'`.
+    7. **Canonical Re-export Compatibility (`apps/mobile/components/clients/MobileAssignPersonnelModal.tsx`)**:
+       - Created re-export wrapper in `components/clients/MobileAssignPersonnelModal.tsx` targeting `components/operations/MobileAssignPersonnelModal.tsx` and exported via barrel `components/clients/index.ts`.
+    8. **Automated Verification**:
+       - `apps/mobile/test/test-client-supervisor-rbac.mjs`: 32 / 32 test scenarios passing (100%).
+       - `apps/mobile/run-tests.mjs`: 357 / 357 test scenarios passing (100%).
+       - `apps/web/scripts/test-client-rbac-inherited-access.mjs`: 26 / 26 Dev Database integration tests passing (100%).
+       - `pnpm --filter @reachinternational/permissions test`: 10 / 10 tests passing (100%).
+       - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+       - `scripts/check-typography.mjs`: 0 raw typography property violations found.
+
+- [x] **256 — Redesign and Standardize Assignment UI — Web App (2026-10-23)**:
+  - **Delivered**:
+    1. **Reusable Assignment Components Architecture (`apps/web/components/assignments/`)**:
+       - `AssignmentDialog.tsx`: Modal shell wrapping `@/components/ui/Modal` with responsive target entity header (icon, code pill, model/details, capacity counter), optional inherited client supervisor notice banner, and custom footer.
+       - `AssignmentSearch.tsx`: Searchable, debounced input (250ms) with result count pills, clear (×) button, and animated loading indicators.
+       - `AssignmentSelectableList.tsx`: Rich candidate selection list with monochromatic avatar tokens (`getUserInitials`), employee ID pills, contact details, status pills, keyboard navigation, and conflict notices. Accessible with `role="radiogroup"` / `role="listbox"` and min 44px touch targets.
+       - `AssignmentShiftPicker.tsx`: 24h shift picker (S1, S2, S3 or client-specific shift codes) with start/end time formatting, Sun/Moon iconography, active pulse indicator, and real-time conflict warnings.
+       - `AssignmentSelectionSummary.tsx`: Roster card list with capacity meter (e.g., 2 / 3 shifts), visual progress dots, conflict alerts, and removal buttons.
+       - `AssignmentActions.tsx`: Unified footer with unsaved changes badge (`AnimatedAlertCircle`), error banner, secondary Cancel button, and primary Save button.
+       - `AssignSupervisorToClientDialog.tsx`: Dedicated client supervisor assignment dialog with search, candidate list, inherited access callout, and optimistic updates.
+       - `AssignOperatorToMachineDialog.tsx`: Dedicated machine operator assignment dialog enforcing max 3 operators, shift overlap detection, client inherited supervisor notice, and snapshot rollback.
+       - `AssignMachineToOperatorDialog.tsx`: Dedicated operator equipment assignment dialog for `/users/[id]` enforcing max 3 shifts with cross-machine overlap validation.
+       - `index.ts`: Central barrel export for all assignment components and dialogs.
+    2. **Frontend Entry Point Migrations**:
+       - `apps/web/components/clients/ClientSupervisorModal.tsx`: Refactored to delegate cleanly to `AssignSupervisorToClientDialog`, preserving exact prop signature and backwards compatibility.
+       - `apps/web/components/clients/ClientDetailClient.tsx`:
+         - Eradicated browser window `confirm()` for supervisor removal; replaced with `@/components/ui/ConfirmationDialog` (`variant="danger"`).
+         - Added safe optimistic removal with snapshot rollback.
+         - Upgraded supervisor table and mobile touch card avatars to monochromatic `getUserInitials`.
+       - `apps/web/components/machines/AssignPersonnelModal.tsx`:
+         - Refactored 2041-line monolith to compose `AssignOperatorToMachineDialog` and `AssignMachineToOperatorDialog` with backward-compatible props and types (`OperatorAssignmentItem`, `MachineAssignmentItem`, `AssignPersonnelModalProps`).
+       - `apps/web/components/machines/MachineAssignmentsQuickModal.tsx`:
+         - Upgraded avatar representation from arbitrary numbered circles to monochromatic `getUserInitials` with `#171717` ink / `#ffffff` elevated tokens.
+    3. **Performance, Optimistic Updates & Security Invariants**:
+       - Snapshot-based rollback restores previous state on mutation failures without requiring full-page reloads.
+       - Client-based RBAC enforced: machines belonging to a client inherit supervisors from `client_supervisors`; direct per-machine supervisor assignments are preserved only for unallocated yard fleet (`client_id == null`).
+       - 24h capacity limits strictly guarded: maximum 3 active operators per machine; maximum 3 shifts per operator platform-wide.
+       - Shift collision detection checks minute ranges via `shiftToMinuteRanges` and `doRangesOverlap`.
+    4. **Automated Verification**:
+       - Created verification script `apps/web/scripts/test-assignment-standardization.mjs` verifying all 14 assertions (barrel exports, debounced search, selectable listbox, shift picker, capacity meter, actions footer, dialog wrapper, dedicated dialogs, entry point migrations, and monochromatic avatars).
+       - `apps/web/scripts/test-assignment-standardization.mjs`: Clean pass (14/14 checks, 100%).
+       - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Clean pass (0 errors).
+       - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations).
+       - `pnpm --filter @reachinternational/permissions test`: Clean pass (10/10 tests passed).
+       - `pnpm typecheck`: Clean pass across all 7 workspace packages (Tasks: 7 successful, 7 total).
+
+- [x] **255 — Client-Based RBAC — Native React Native / Expo App (2026-10-23)**:
+  - **Delivered**:
+    1. **Assign Client Supervisor Bottom-Sheet Modal (`apps/mobile/components/clients/AssignClientSupervisorModal.tsx`)**:
+       - Implemented touch-ergonomic bottom sheet modal (`AppModal` variant="bottom") utilizing Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ebebeb` hairline border, Reach sky blue `#0284c7`).
+       - Integrated `SearchInput` to filter eligible active supervisors by name, employee ID, or phone number.
+       - Rendered informative callout explaining inherited operational access over client fleet without repetitive per-machine assignments.
+       - Enforced strict touch ergonomics (min 44px on interactive rows, `hitSlopToMin48`), tactile haptics (`haptics.select()`, `haptics.confirm()`, `haptics.reject()`), and zero raw typography properties.
+       - Submits through atomic RPC `assign_client_supervisor_atomic` with duplicate submission locking and selection preservation on error.
+    2. **Mobile Data Layer (`apps/mobile/lib/hooks/useClientDetailData.ts`)**:
+       - Added and exported `ClientSupervisorItem` and `CandidateSupervisorItem` types.
+       - Extended `useClientDetailData` with `supervisors` query against `client_supervisors` join `users!client_supervisors_supervisor_id_fkey`.
+       - Added `assignSupervisor` and `removeSupervisor` mutations with surgical TanStack Query invalidation (`['clientDetail', clientId, 'supervisors']`, `['clientDetail', clientId]`, `['clients']`, `['eligibleClientSupervisors', clientId]`).
+       - Exported standalone `useEligibleClientSupervisors` query hook filtering out already-assigned supervisors.
+    3. **Client Details Screen Parity (`apps/mobile/components/clients/ClientDetailView.tsx`)**:
+       - Re-architected Assignments tab into two clean sections:
+         - **Section 1: Assigned Client Supervisors**: Header with count badge, "Assign Supervisor" button (manager-tier gated), monochromatic avatar initials, contact phone and email action links, "INHERITED" access badge, and remove supervisor action via `ConfirmDialog` (`variant="danger"`).
+         - **Section 2: Equipment & Operator Deployments**: Active operator and machine shift deployments.
+       - Tab strip dynamically reflects combined assignment count `(supervisors.length + assignments.length)`.
+       - Wired `initialTab` routing parameter so direct links to `?tab=assignments` open straight to the assignments tab.
+    4. **Directory Navigation & Role Guard Alignment (`apps/mobile/app/(app)/clients/`)**:
+       - In `clients/index.tsx` and `clients/[id].tsx`: updated `canAccessClients` to include `supervisor` role (enforced at RLS database boundary so supervisors only see their assigned clients).
+       - Restricted client creation, editing, and soft-deletion strictly to `canManageClients` (`super_admin`, `admin`, `manager`).
+    5. **Machine Personnel Assignment Redundancy Elimination (`MobileAssignPersonnelModal.tsx` & `useAssignPersonnelModalData.ts`)**:
+       - Updated `useAssignPersonnelMachines` so supervisors automatically inherit machinery belonging to any client they supervise via `client_supervisors`.
+       - In `MobileAssignPersonnelModal.tsx`: when active machine belongs to a client with an assigned supervisor, displays informative banner: `"Supervised by {ClientSupervisorName} (Inherited from {ClientName})"`.
+       - Made machine-level supervisor picker an optional override instead of a forced duplicate selection.
+    6. **Monorepo Automated Verification & Zero Typography Violations**:
+       - Created test suite `apps/mobile/test/test-client-supervisor-rbac.mjs` verifying all 21 test assertions.
+       - Registered suite in `apps/mobile/test/index.mjs`.
+       - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography instances.
+       - `pnpm --filter @reachinternational/mobile typecheck`: 0 TypeScript errors.
+       - `pnpm typecheck`: Clean pass across all 7 monorepo packages (Tasks: 7 successful, 7 total).
+       - `node apps/mobile/run-tests.mjs`: All 357/357 verification scenarios pass.
+
+- [x] **254 — Client-Based RBAC and Secure Assignment Architecture: Web App + Backend + Database (2026-10-23)**:
+  - **Delivered**:
+    1. **Client Supervisors Architecture & Database Migration (`supabase/migrations/175_client_supervisors_and_inherited_rbac.sql`)**:
+       - Created sequential, forward-only migration `175_client_supervisors_and_inherited_rbac.sql` on Development Project (`vlmxciuogczumumrwyot`).
+       - Normalized `public.client_supervisors` relationship with unique `(client_id, supervisor_id)` constraint, foreign keys to `clients` and `users`, and validation trigger `trg_validate_client_supervisor` ensuring active supervisor status.
+       - Executed idempotent historical backfill linking 5 active clients (Afcons, Reliance Infrastructure, NCC, L&T ECC, Tata Projects) to active supervisor Vikram Singh.
+       - Implemented atomic RPCs `assign_client_supervisor_atomic` and `remove_client_supervisor_atomic` with audit logging and privilege verification (`super_admin`, `admin`, `manager`).
+       - Implemented recursion-free security definer helpers: `check_user_can_access_client` and `check_user_can_access_machine`.
+       - Scoped least-privilege RLS policies on `client_supervisors`, `clients`, `client_sites`, `machines`, `operator_machine_assignments`, `machine_hour_logs`, and `users`.
+    2. **BOLA & Authorization Vulnerability Fixes in Privileged RPCs**:
+       - Discovered and fixed critical vulnerability where `v_caller_id := COALESCE(auth.uid(), p_assigned_by)` allowed anonymous callers to supply arbitrary user UUIDs. Hardened caller derivation in `assign_client_supervisor_atomic`, `remove_client_supervisor_atomic`, `assign_operator_machine_atomic`, and `end_operator_machine_assignment_atomic` to derive caller strictly from `auth.uid()`, accepting `p_assigned_by` only when `auth.role() = 'service_role'`.
+       - Revoked execute privileges from `anon` and `PUBLIC` on all 4 privileged atomic RPCs and client access helpers (`GRANT EXECUTE ... TO authenticated, service_role`).
+       - In `assign_operator_machine_atomic`, enforced that supervisors must hold an active assignment to the target client in `client_supervisors` to assign operators to client machinery. Blocks unauthorized cross-client assignments at the database boundary (`CLIENT_ACCESS_DENIED`).
+       - In `end_operator_machine_assignment_atomic`, rejected unauthenticated/forged callers (`CALLER_INACTIVE`), restricted shift termination to authorized roles, and enforced that supervisors can only terminate assignments within their authorized client scope.
+    3. **Shared Packages (`packages/*`)**:
+       - `packages/types`: Added `ClientSupervisor` data model.
+       - `packages/validation`: Added `AssignClientSupervisorSchema` and `RemoveClientSupervisorSchema`.
+       - `packages/permissions`: Added `CLIENT_ASSIGN_SUPERVISOR` and `CLIENT_REMOVE_SUPERVISOR` permissions to constants and role-permission matrix (assigned to `admin` and `manager`). Added unit tests in `src/client-rbac.test.ts` (10/10 passed).
+    4. **Web Data Access Layer & Server Actions (`apps/web`)**:
+       - Created `lib/data/clients/client-supervisors.ts` with cached `getClientSupervisors`, `getAvailableSupervisors`, and `checkSupervisorClientAccess`.
+       - Created `app/actions/client-supervisors.ts` with `assignClientSupervisorAction`, `removeClientSupervisorAction`, `getAvailableSupervisorsAction`, and `getClientSupervisorsAction`.
+       - Hardened `app/actions/client-detail.ts`: all client actions verify supervisor client authorization via `checkSupervisorClientAccess`.
+       - Updated `app/(app)/clients/[id]/page.tsx` with supervisor client-level gating (renders Access Restricted `EmptyState` if unassigned) and concurrent supervisor fetching.
+       - Scoped `getAssignableMachinesAction` in `apps/web/app/actions/assignments.ts` so supervisors only receive machines belonging to their supervised clients (plus unallocated yard machines where directly assigned).
+    5. **Client Details & Machine Assignment UI (`apps/web/components`)**:
+       - Created `ClientSupervisorModal.tsx` for searching and assigning eligible supervisors to clients.
+       - Upgraded `ClientDetailClient.tsx`: in the Assignments tab, rendered the "Assigned Client Supervisors" section with supervisor cards (desktop table + mobile touch cards), active status pills, remove action with confirmation, and assignment modal trigger.
+       - Updated `AssignPersonnelModal.tsx`: when an assigned machine has `client_id`, displays the "Supervisors Inherited from Client ([Client Name])" banner and pills, removing redundant per-machine supervisor selection controls while retaining yard fleet direct assignment for unallocated machinery.
+    6. **Native Mobile App Parity (`apps/mobile`)**:
+       - Verified 100% parity across `useClientDetailData.ts` and `ClientDetailView.tsx` with `client_supervisors` queries, `AssignClientSupervisorModal`, touch cards, and removal confirmation.
+    7. **Automated Verification**:
+       - Integration test suite `apps/web/scripts/test-client-rbac-inherited-access.mjs`: verified 26/26 test assertions on Dev database (`vlmxciuogczumumrwyot`) including anonymous execution rejection (42501), cross-client BOLA rejection, authorized assignment, caller spoofing protection, and immediate access revocation.
+       - Monorepo typecheck: All 7 packages passed (0 errors, 26s).
+       - Permissions tests: 10/10 passed.
+       - Mobile test suite: 357/357 passed (zero regressions).
+       - Typography check: 0 raw typography properties found across mobile.
+
+- [x] **253 — Native Mobile /users UI Feedback Standardization: Header Banner Ergonomics, Monochromatic Avatar & Employee ID Copy (2026-10-22)**:
+  - **Delivered**:
+    1. **Edit Profile Button Eradication from Hero Banner (`UserDetailView.tsx`)**:
+       - Removed the prominent floating outline `editProfileBtn` from the top-right of the user hero card banner.
+       - Preserved full "Edit Profile" management capability seamlessly via the top `MobileHeader` 3-dot action menu item (`headerActions`) and `UserEditModal`.
+       - Eradicated obsolete `heroDetailsWithEdit` right padding (110dp), restoring full horizontal breathing room.
+    2. **Header Address Removal (`UserDetailView.tsx`)**:
+       - Removed `[user.city, user.district, user.state]` and MapPin icon from the hero banner header.
+       - Prevented duplicate location presentation, keeping full address details cleanly segregated in Card 4 ("LOCATION & ADDRESS") with state, district, and street.
+    3. **Sub-Username Small Low-Opacity Employee ID (`UserDetailView.tsx`)**:
+       - Removed the copy icon badge from the hero card header.
+       - Rendered the Employee ID directly below the user full name with small typography (`variant="caption"`, `weight="medium"`), low opacity (70% opacity, `theme.colors.mute`), and zero copy button clutter.
+    4. **Employment Details 1-Click Employee ID Clipboard Copy (`UserDetailView.tsx` & `UserDetailClient.tsx`)**:
+       - In Card 2 ("EMPLOYMENT DETAILS"), upgraded the static Employee ID text to an interactive copyable row with a dedicated `Pressable` copy button (`min-h-[48px]` hit-slop).
+       - Wired clipboard copy with tactile haptic trigger, visual checkmark feedback (`#10b981`), and toast notification.
+       - Synchronized 100% parity to Web in `apps/web/app/(app)/users/[id]/UserDetailClient.tsx`.
+    5. **Monochromatic Theme-Optimized Avatar & Initials Formatter (`@reachinternational/utils`, `UserDetailView.tsx`, `UserTouchCard.tsx`)**:
+       - Implemented canonical shared helper `getUserInitials(name?: string | null)` in `@reachinternational/utils` extracting the employee's first name starting letter and surname/last name starting letter (e.g. "John Doe" -> "JD", "Amit Kumar Singh" -> "AS", "Operator" -> "OP").
+       - Updated both `UserDetailView.tsx` and `UserTouchCard.tsx` to use `getUserInitials`.
+       - Standardized avatars to 100% black and white, optimized for light and dark themes:
+         - Light mode: Deep `#171717` black ink background, `#ffffff` crisp white lettering, subtle hairline border.
+         - Dark mode: Radiant `#ffffff` background, deep `#171717` black ink lettering, subtle hairline border.
+  - **Verification**:
+    - `pnpm typecheck` (root monorepo): Clean pass across all 7 packages (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 errors).
+    - `pnpm --filter @reachinternational/web typecheck`: Clean pass (0 errors).
+    - `pnpm --filter @reachinternational/utils typecheck`: Clean pass (0 errors).
+    - `node apps/mobile/test/test-users-detail-infinite-pagination.mjs`: Clean pass (16/16 assertions, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (32/32 mobile test suites passed, 100%).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+- [x] **252 — User Details Page: Segmented Navigation Toggle Eradication & Horizontal Tab Chips Parity (2026-10-22)**:
+  - **Delivered**:
+    1. **Segmented Toggle Eradication (`UserDetailView.tsx`)**:
+       - Resolved feedback on `/users` detail view (`<BaseSegmentedToggle> [Segmented navigation toggle] -> remove this and use chip here`).
+       - Completely removed `SegmentedToggle` and `type SegmentedToggleItem` from `apps/mobile/components/users/UserDetailView.tsx`.
+       - Replaced cramped segmented toggle with a native horizontally scrollable chip tab strip matching `ClientDetailView.tsx` and 100% Web parity (`UserDetailClient.tsx`).
+    2. **Tab Chips Architecture & Metrics Integration**:
+       - Built `tabChips` memo providing rich tab metadata:
+         - `Machines`: `Truck` icon + live count (`totalMachinesCount || kpis.assignedMachinesCount || 0`)
+         - `Running Logs`: `Clock` icon + live count (`totalLogsCount || 0`)
+         - `Assignments`: `UserCheck` icon + live count (`totalAssignmentsCount || 0`)
+         - `Attendance`: `Calendar` icon + live count (`attendanceData.totalActiveWorkDays || kpis.totalDaysWorked || 0`)
+         - `Documents`: `FileText` icon + live count (`totalDocumentsCount || kpis.documentsCount || 0`)
+         - `Audit`: `ShieldCheck` icon + live count (`totalAuditCount || 0`, role-gated via `canViewAudit`)
+       - Synchronized count formatting: displays label + count in parentheses when count > 0 (e.g. `Machines (2)`), and clean label when count is 0 (e.g. `Assignments`), matching user screenshot reference 100%.
+    3. **Design System & Touch Ergonomics**:
+       - Vercel Geist design tokens: active chip filled with `theme.colors.primary` (Reach sky blue `#0284c7`), white icon, white semibold text; inactive chip with `theme.colors.canvasElevated`, `theme.colors.hairline` border, `theme.colors.mute` icon, `theme.colors.ink` text.
+       - Enforced minimum 44px touch targets (`minHeight: 44`) on all tab chips.
+       - Preserved `haptics.select()` feedback on tab selection and synchronized on-demand lazy loading via `handleTabChange`.
+       - Accessible roles (`accessibilityRole="tab"`, `accessibilityState={{ selected: isActive }}`).
+       - Zero raw typography properties in `StyleSheet.create` (100% `<Text variant="...">`).
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 errors).
+    - `node apps/mobile/test/test-users-detail-infinite-pagination.mjs`: Clean pass (16/16 assertions, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (32/32 mobile test suites passed, 100%).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/permissions test`: Clean pass (5/5 tests passed).
+    - `pnpm --filter @reachinternational/utils test`: Clean pass (25/25 tests passed).
+
+- [x] **251 — Native Mobile /clients UI Standardization: Infinite Pagination, KPI Spacing & Client Card Redesign (2026-10-22)**:
+  - **Delivered**:
+    1. **Total Eradication of `<Pagination>` & Virtualized Infinite Scrolling**:
+       - Replaced `<ScrollView>` and obsolete numerical `<Pagination>` with high-performance virtualized `<FlatList>`.
+       - Wired `onEndReached={handleLoadMore}` and `onEndReachedThreshold={0.4}` with `onMomentumScrollBegin` anti-duplicate momentum lock.
+       - Built resilient chunk-based pagination handler loading 15 clients per batch with deduplication by ID.
+       - Implemented dynamic footer: ActivityIndicator while fetching next page, "Scroll to load more clients" hint, or high-contrast "All {totalCount} clients loaded" divider.
+       - Synchronized results count indicator: displays `Showing 1–{clients.length} of {totalCount} clients`.
+    2. **KPI Grid to Search Box Vertical Spacing**:
+       - Fixed the layout defect where the search input and Filter button were touching the bottom of the KPI metric cards.
+       - Wrapped `<KPIGrid>` in `styles.kpiContainer` with `marginBottom: spacingNumeric.md` (16dp), establishing clean, consistent Geist breathing room.
+    3. **High-End Client Card Redesign (`MobileClientCard.tsx`)**:
+       - **Compact Unified Header**: Client company name prominently displayed with truncated single line and high-contrast ink color; Client ID (`CLI-0050`) directly beneath in `variant="caption"` mute color; compact status pill on top right featuring a live colored dot indicator (`#10b981` Active, `#f59e0b` Inactive, `#ef4444` Soft Deleted).
+       - **2-Column Details Grid**: 
+         - Row 1: `GST` (FileText icon) | `PAN` (FileText icon)
+         - Row 2: `Contact Person` (User icon) | `Contact Number` (Phone icon)
+         - Row 3: `Sites` (MapPin icon with live count badge) | `Maintenance allowance` (Clock icon with formatted allowance hours)
+       - **Ergonomic Spacing**: Inner padding standardized to 14dp (12–16 dp per spec); row vertical gaps set to 12dp; eradicated all oversized horizontal dividers. Responsive flex wrapping for narrow phone screens (<340dp).
+       - **Tactile Pressed Feedback**: Integrated `Pressable` with tactile haptic trigger, card press elevation, and subtle surface highlighting.
+    4. **Action Buttons Toolbar & 3-Dot Menu (`MobileClientCard.tsx`, `ClientActionsModal.tsx`)**:
+       - Placed "Assign Supervisor" and "Assign Machine" side-by-side with 44px min touch targets and blue accent icons.
+       - Sized 3-dot action menu into a compact square button (`44×44dp`) with `MoreVertical` icon.
+       - Built `ClientActionsModal.tsx` bottom sheet modal: renders Client title/ID header and dedicated action rows: "View Client Profile & Fleet", "Assign Supervisor", "Assign Machine", "Edit Client Information", "Add Operational Site", "Copy Client Identifier", and "Archive Client Account".
+    5. **CLS-Free Skeleton Alignment (`ClientCardSkeleton.tsx`)**:
+       - Layout-matched skeleton matching the new compact header, 3-row 2-column details well, and side-by-side buttons to eliminate Cumulative Layout Shift.
+    6. **Sample/Illustrative Footers Audit**:
+       - Audited the entire repository and verified zero occurrences of "Illustrative layout" or "sample client data".
+  - **Verification**:
+    - `node apps/mobile/test/test-client-directory-standardization.mjs`: Clean pass (8/8 assertions, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (32/32 mobile test suites passed, 100%).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 errors).
+    - `pnpm typecheck` (root): Clean pass across all 7 packages (0 errors).
+
+- [x] **250 — Native Client Details Page: Dedicated Deep-Linkable Route & Modal Eradication (2026-10-22)**:
+  - **Delivered**:
+    1. **Dedicated Route & Deep Linking (`/(app)/clients/[id]`)**:
+       - Created dedicated route `apps/mobile/app/(app)/clients/[id].tsx` reading `id` param from `useLocalSearchParams<{ id: string }>()`.
+       - Implemented identifier resolution (`resolveClientId`) supporting UUIDs, canonical identifiers (e.g. `CLI-0050`), and custom client codes.
+       - Integrated route into `apps/mobile/app/(app)/_layout.tsx` (`href: null` in bottom tab bar) and updated deep-link sanitizer in `apps/mobile/lib/security.ts` (`CLIENT_DETAIL_REGEX = /^(\/(app))?\/clients\/[A-Za-z0-9_-]+$/`).
+       - Configured safe back navigation fallback to `/(app)/clients`.
+    2. **Complete Modal Eradication & Directory Migration**:
+       - Completely removed obsolete bottom sheet modal `apps/mobile/components/clients/ClientDetailModal.tsx` (~400 lines of modal code, local state, and unused handlers).
+       - Migrated directory listing from `apps/mobile/app/(app)/clients.tsx` to `apps/mobile/app/(app)/clients/index.tsx`.
+       - Updated client card tap handler to navigate via `router.push('/(app)/clients/' + (client.client_id || client.id))`.
+       - Removed modal state (`isDetailOpen`, `selectedDetailClient`) and modal imports from client directory.
+    3. **Instant UI-First Skeletons & Performance (`ClientDetailSkeleton.tsx`)**:
+       - Built layout-matched skeleton shell (`HeroCardSkeleton`, `KPIGridSkeleton`, `TabStripSkeleton`, `ContactCardSkeleton`, `TaxCardSkeleton`, `AddressCardSkeleton`) eliminating Cumulative Layout Shift (CLS).
+       - Static shell renders immediately on navigation before network requests complete.
+    4. **Client Information Architecture & 7 Lazy Tabs (`ClientDetailView.tsx`)**:
+       - **Hero Card**: Client name, code badge, account status pill, and maintenance allowance pill (`allowance_minutes`).
+       - **Key Metrics (KPIGrid)**: 4 parallel-queried summary cards (Total Fleet, Active Sites, Operational Logs, Active Staff).
+       - **Quick Info Cards**: Primary Contact with direct phone/email native intent triggers, Tax Identifiers (GSTIN, PAN) with one-tap clipboard copy, and Full Billing & Site Addresses.
+       - **7 On-Demand Lazy Loaded Tabs**: `machines` (associated fleet with status), `sites` (operational sites with site modal), `logs` (recent machine operational logs), `assignments` (active operators/supervisors), `shifts` (shift assignments), `history` (activity history), and `audit` (audit logs).
+       - Integrated `ClientModal` (editing client details) and `ClientSiteModal` (adding operational sites) with surgical cache invalidation.
+    5. **Optimized Data Fetching & Caching (`useClientDetailData.ts`)**:
+       - TanStack Query integration with 30s default `staleTime`, garbage collection time of 5 minutes (`gcTime: 1000 * 60 * 5`).
+       - Exact PostgREST column projections matching authoritative database schema (resolved 400 Bad Request caused by selecting dropped/nonexistent `email` and `address` columns; synthesized `address: raw.street || ''` in client mapping).
+       - Parallel execution of client overview and 4 KPI metric counts.
+       - Secondary tab queries execute only when that specific tab becomes active (`enabled: activeTab === '...'`).
+       - Surgical cache invalidation: mutating client or adding site invalidates only `['clientDetail', 'overview', clientId]` and `['clients']`, preventing full-screen refetches.
+       - Integrated with `SyncCoordinator.ts` for offline reconnect revalidation (`['clientDetail']`).
+    6. **Design System & Touch Ergonomics**:
+       - 100% adherence to Vercel Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb`/`#262626` borders, Reach sky blue `#0284c7`).
+       - Enforced minimum 44px touch targets on buttons, tabs, copy pills, and cards.
+       - Tactile haptic feedback via `haptics.select()` on tab changes.
+       - Zero raw typography properties in `StyleSheet.create` (100% `<Text variant="...">`).
+  - **Verification**:
+    - Direct Supabase PostgREST query on client `1114121d-71ae-4b51-a2b0-1a1553e2ce9d` (`Afcons Infrastructure` / `CLI-0050`): **SUCCESS (error: null, all fields populated)**.
+    - `node apps/mobile/test/test-client-details-workflows.mjs`: Clean pass (23/23 assertions, 100%).
+    - `node apps/mobile/test/run-tests.mjs`: Clean pass (357/357 assertions, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (31/31 mobile test suites passed, 100%).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 errors).
+
+- [x] **249 — Standardize UI, Typography & Responsive Sizing — /dashboard (All Roles) (2026-10-22)**:
+  - **Delivered**:
+    1. **Design System & Token Foundation (`apps/web/app/globals.css`)**:
+       - Identified missing `--color-surface` variable in both `:root` and `.dark` blocks causing transparent background bugs on widgets and cards.
+       - Standardized `--color-surface: var(--color-canvas-elevated);` to guarantee solid high-contrast card backgrounds across dark (`#171717`) and light (`#ffffff`) themes in compliance with Vercel Geist specifications.
+    2. **Viewport Containment & Double Padding Elimination (`DashboardShell.tsx`, `DashboardSkeleton.tsx`)**:
+       - Removed nested `px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7` from `DashboardShell` which caused duplicate padding with `<main id="main-content">` (which already applies `px-3 sm:px-6 pt-2 md:pt-6 pb-24 md:pb-8`).
+       - Standardized container to `w-full max-w-7xl mx-auto space-y-5 sm:space-y-6 lg:space-y-7` in both `DashboardShell.tsx` and `DashboardSkeleton.tsx`.
+    3. **Dashboard Header & Role Identification (`DashboardHeader.tsx`)**:
+       - Added canonical role badges via `@reachinternational/permissions` role colors (`ROLE_METADATA`).
+       - Added role-tailored default subtitles when no custom subtitle is supplied.
+       - Refined calendar date pill to `bg-[var(--color-canvas-elevated)]` with `tabular-nums` date display.
+    4. **KPI Cards, Grid & Micro-interactions (`KPICard.tsx`, `KPIGrid.tsx`)**:
+       - Replaced broken `from-[var(--color-surface)]` gradients with `bg-[var(--color-canvas-elevated)]` and soft tinted surfaces.
+       - Implemented rendering for `subtitle` and `trend` (`↑`/`↓` pills) which were declared in `KPICardProps` but never rendered.
+       - Added `tabular-nums` to animated counters, `-translate-y-0.5` hover elevation, `:active:scale-[0.99]` touch feedback, and accessible keyboard focus rings (`focus-visible:ring-2 focus-visible:ring-[var(--color-link)]`).
+       - Standardized `KPIGrid` responsive column scaling (2, 3, 4, 5, 6 columns) with unified `gap-3 sm:gap-3.5 lg:gap-4`.
+    5. **Primary Actions & Widgets (`PrimaryAction.tsx`, `AlertWidget.tsx`, `StatusCard.tsx`, `ActivityWidget.tsx`, `WidgetSkeleton.tsx`, `ErrorState.tsx`)**:
+       - Standardized primary actions to Geist card tokens with `min-h-[56px] sm:min-h-[64px]` touch ergonomics and hover arrow slide (`group-hover:translate-x-1`).
+       - Standardized widget headers to `font-mono text-xs uppercase tracking-wider`.
+       - Standardized `StatusCard` to `bg-[var(--color-canvas-elevated)]` and tabular-nums for telemetry.
+       - Updated `DashboardErrorState` with 44px touch-target retry button.
+    6. **All 6 Role Dashboard Views (`SuperAdminDashboardView.tsx`, `AdminDashboardView.tsx`, `ManagerDashboardView.tsx`, `SupervisorDashboardView.tsx`, `HRDashboardView.tsx`, `OperatorDashboardView.tsx`)**:
+       - Standardized section headers to `font-mono text-xs uppercase tracking-wider mb-3` and gaps to `gap-3 sm:gap-3.5 lg:gap-4`.
+       - Resolved critical dark mode button contrast bug in `OperatorDashboardView.tsx` (`bg-[var(--color-ink)] text-white` produced white text on `#fafafa` background; standardized to `bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary)]/90` with `min-h-[44px]` touch target).
+  - **Verification**:
+    - `node apps/web/scripts/test-dashboard-standardization.mjs`: Clean pass (12/12 checks, 100%).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Clean pass (0 TypeScript errors).
+    - `pnpm --filter @reachinternational/permissions test`: Clean pass (5/5 tests passed).
+    - `pnpm --filter @reachinternational/utils test`: Clean pass (25/25 tests passed).
+
+- [x] **248 — Standardize UI, Typography & Responsive Sizing — /machines (2026-10-22)**:
+  - **Delivered**:
+    1. **Typography & Design System Standardization**:
+       - Standardized typography hierarchy, weights, and colors across `MachineKPIStrip.tsx`, `MobileMachineCard.tsx`, `MachineRowActionsMenu.tsx`, `MachineEditModals.tsx`, and `MachineListClient.tsx` using Vercel Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, Reach sky blue `#0284c7` / `#0ea5e9`).
+       - Fixed invalid CSS `py-0.2` on badges in `MobileMachineCard.tsx`, `MachineEditModals.tsx`, and `MachineListClient.tsx` to valid `px-1.5 py-0.5 rounded-sm`.
+       - Formatted HMR column and card displays with explicit unit label `{row.hour_meter ?? 0} hrs`.
+    2. **Layout & Responsive Containment (Desktop, Tablet, Mobile)**:
+       - Contained the page on ultra-wide viewports (including user's 1536×695 viewport) using `w-full max-w-7xl mx-auto flex flex-col gap-5 pb-24 md:pb-6`.
+       - Refactored filter selectors container from awkward fixed widths (`sm:w-44`, `sm:w-48`, `sm:w-56`, etc.) into a responsive CSS grid: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-center gap-2 sm:gap-2.5 w-full`.
+       - Fixed `MobileMachineCardSkeletonList` grid collapse: replaced the nested `space-y-3` wrapper with a React fragment `<>` so skeleton cards align into individual responsive grid cells without stacking in column 1.
+       - Enhanced `MachinesSkeleton` in `Skeleton.tsx` with a matching `max-w-7xl` wrapper and KPI cards row skeleton to eliminate Cumulative Layout Shift (CLS) on initial page load.
+    3. **View Switcher & Results Feedback**:
+       - Connected the segmented presentation switcher (`Auto View`, `Cards`, `Table`) to `FilterToolbar` actions, restoring user ability to toggle between Table and Card views on desktop while maintaining mobile-optimized touch cards on mobile viewports.
+       - Added live Results Count Bar (`Showing X of Y machines` + active filter badge + selection count) directly above the table/cards view for immediate operational visibility.
+    4. **Touch Ergonomics, Focus & Micro-interactions**:
+       - Expanded mobile card buttons from cramped 32px targets (`h-8 w-8`) to touch-ergonomic targets (`min-h-[44px] sm:min-h-[32px]`) with tactile pressed states (`active:scale-95`).
+       - Standardized explicit labels on mobile cards: "Logs" and "View Details" are clearly visible.
+       - Added keyboard accessibility and visible focus rings (`outline-none focus-visible:ring-2 focus-visible:ring-sky-500`) to KPI cards, HeaderMoreMenu trigger/items, filter dropdown buttons/options, active filter chip dismiss buttons, and table action buttons.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Clean pass (0 TypeScript errors).
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/permissions test`: Clean pass (all 5/5 role & navigation tests passed).
+
+- [x] **247 — Native Mobile Android KJExpoPdf Unhandled Native Module Error & Route Evaluation Fallback Resolution (2026-10-22)**:
+  - **Delivered**:
+    1. **Root Cause Analysis (`NativePdfViewer.tsx` & `@kishannareshpal/expo-pdf`)**:
+       - Identified that `NativePdfViewer.tsx` statically imported `import { PdfView } from '@kishannareshpal/expo-pdf'`.
+       - On Android devices/emulators (e.g. Expo Go or dev builds without `KJExpoPdf` compiled into the binary), `@kishannareshpal/expo-pdf` unconditionally invoked `requireNativeModule('KJExpoPdf')` at module load time, throwing an unhandled exception: `[Error: Cannot find native module 'KJExpoPdf']`.
+       - Because `MobileDocumentViewerModal.tsx` and `MobileDocumentUploadCard.tsx` transitively import `NativePdfViewer`, every route using them (`./(app)/users.tsx`, `./(app)/profile/edit.tsx`, `./(app)/profile/index.tsx`, `./(app)/settings/account/profile.tsx`, `./(auth)/onboarding.tsx`, `./(auth)/signup.tsx`) crashed during route evaluation, triggering `WARN Route "..." is missing the required default export`.
+    2. **Safe Lazy Loading & Resilient Fallback Architecture (`NativePdfViewer.tsx`)**:
+       - Replaced unconditional static top-level import with defensive runtime inspection using `requireOptionalNativeModule('KJExpoPdf')` from `expo`.
+       - When `KJExpoPdf` is not present in the native binary (e.g. Expo Go or uncompiled dev builds), `getNativePdfView()` returns `null` safely without throwing an exception or aborting module evaluation.
+       - When `KJExpoPdf` is compiled into the binary (e.g. custom EAS development client or production APK), `getNativePdfView()` cleanly loads `PdfView` from `@kishannareshpal/expo-pdf` for high-performance Apple PDFKit (iOS) and PDFium (Android) rendering.
+       - On iOS without the custom native module, seamlessly falls back to native Safari/WebKit PDF rendering via `react-native-webview`.
+       - On Android without the custom native module, displays the high-contrast Geist fallback container with document title, filename, and a direct `Download PDF` primary button.
+    3. **Route Export Restoration**:
+       - All 6 affected routes (`users.tsx`, `profile/edit.tsx`, `profile/index.tsx`, `settings/account/profile.tsx`, `onboarding.tsx`, `signup.tsx`) now evaluate smoothly with zero runtime errors and zero missing export warnings.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `node apps/mobile/test/test-document-viewer-workflows.mjs`: Clean pass (all 43/43 assertions passed, 100%).
+    - `pnpm --filter @reachinternational/mobile test:all`: Clean pass (all 30/30 mobile test suites passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 TypeScript errors).
+    - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+
+- [x] **246 — Native Mobile Expo SDK 57 Dependency Modernization & Patch Resolution (2026-10-22)**:
+  - **Delivered**:
+    1. **Obsolete Patch Elimination (`pnpm-workspace.yaml`)**:
+       - Removed `expo-router@57.0.28: patches/expo-router@57.0.28.patch` from `patchedDependencies` in `pnpm-workspace.yaml`.
+       - Verified that upstream `expo-router@57.0.29` natively resolves the `BottomTabView.js` activity state and screen transition interpolation issue, eliminating the need for custom patching.
+    2. **Expo SDK 57 Dependencies Synchronization (`apps/mobile/package.json`)**:
+       - Upgraded `expo` from `~57.0.30` to `~57.0.31`.
+       - Upgraded `expo-router` from `~57.0.28` to `~57.0.29`.
+       - Upgraded `expo-sharing` from `~57.0.23` to `~57.0.24`.
+       - Standardized `expo-haptics` to `~57.0.3` and `expo-linear-gradient` to `~57.0.2` in accordance with Expo SDK 57 bundled native module specifications.
+    3. **Dependency & Bundler Validation**:
+       - `npx expo install --check`: Succeeded with code 0 (`Dependencies are up to date`).
+       - `pnpm install`: Clean lockfile update with 0 patch errors.
+       - Metro server startup: Verified clean boot on port 8081 with zero update warnings or version mismatch notices.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `pnpm --filter @reachinternational/mobile test:all`: Clean pass (all 30/30 mobile test suites passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 TypeScript errors).
+    - `pnpm typecheck`: Clean pass across all 7 workspace packages.
+
+- [x] **245 — Native Mobile Settings Hub & Sub-Pages UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Responsive Viewport Containment (`SettingsScreenContainer.tsx`)**:
+       - Enforced `maxWidth: 896, width: '100%', alignSelf: 'center'` on `scrollContent`.
+       - Resolved wide viewport stretching (1536×695) across `/settings/about`, `/settings/notifications`, `/settings/account`, and `/settings/preferences` while preserving 100% full-width on mobile viewports.
+    2. **Notifications Screen Standardization & Feedback Resolution (`notifications.tsx`)**:
+       - Removed the redundant active/muted `<Badge>` from the Master Push Card (`Feedback: remove this status`).
+       - Upgraded section headers to small, informative format: `<Text variant="caption" weight="semibold">` uppercase title ("OPERATIONAL ALERT CHANNELS") + informative subtitle ("Configure real-time push alerts for shift reminders, breakdown flags, and log submission approvals.") (`Feedback: make all the heading small and informative`).
+       - Standardized Master Push Card and all 5 toggle cards (`Shift Reminders`, `Machinery Breakdown`, `Equipment Fleet Assignments`, `Overtime Authorization`, `Daily Log Confirmations`) with `<Text variant="subheading" weight="semibold">` titles and 2-line wrapped `<Text variant="caption">` subtitles.
+    3. **About App Hub Screen Standardization (`about/index.tsx`)**:
+       - Added elevated app identity banner card with Reach logo icon, title in `<Text variant="subheading" weight="semibold">`, platform subtitle, and build/version pill (`v1.3.0`).
+       - Grouped cards into 3 small, informative sections: "APPLICATION & RELEASE", "GOVERNANCE & COMPLIANCE", and "SUPPORT & OPERATIONS".
+       - Standardized all navigation cards with `weight="semibold"` titles and `numberOfLines={2}` subtitles.
+    4. **Account Settings Screen Standardization (`account/index.tsx`)**:
+       - Added user profile identity card at the top (initial letter avatar, full name `<Text variant="subheading" weight="semibold">`, employee ID in `<Text variant="mono" weight="semibold">`, email, and role badge via `<Badge role={role} size="sm" solid={false} />`).
+       - Grouped navigation cards into two informative sections: "PROFILE & CREDENTIALS" and "DANGER ZONE".
+       - Standardized card titles and allowed 2-line subtitle wrapping.
+    5. **Preferences & Font Size Standardization (`preferences/index.tsx`, `preferences/font-size.tsx`)**:
+       - Grouped into two small informative sections: "APPEARANCE & TYPOGRAPHY" and "TACTILE & TOUCH ERGONOMICS".
+       - Standardized card titles with `weight="semibold"` and allowed 2-line subtitle wrapping.
+       - Standardized option titles and preview cards in `font-size.tsx` with `<Text variant="subheading" weight="semibold">` and informative subtitle.
+    6. **Settings Hub & Section Title Standardization (`settings/index.tsx`, `SettingsSection.tsx`)**:
+       - Standardized `SettingsSection.tsx` section titles to `<Text variant="caption" weight="semibold">` with `title.toUpperCase()` and theme muted color.
+       - Standardized `SettingsNavCard` titles to `weight="semibold"` and allowed 2-line subtitle wrapping.
+    7. **Automated Verification Suite (`test-settings-workflows.mjs`)**:
+       - Added Group 8 assertions covering responsive width containment, section title styling, status badge removal, small informative headings, and card component invariants.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `node apps/mobile/test/test-settings-workflows.mjs`: Clean pass (all 50+ assertions passed, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (all 30/30 suites passed, 100%).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (0 type errors, exited with code 0).
+
+- [x] **244 — Native Mobile /payroll UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Responsive Viewport Containment & Layout (`payroll.tsx`)**:
+       - Enforced `maxWidth: 1200, width: '100%', alignSelf: 'center'` on `styles.content`, resolving wide viewport stretching (1536×695).
+       - Eradicated `marginHorizontal: 16` double-indentation bug on SearchInput; wrapped in clean `styles.searchContainer: { width: '100%' }` for crisp edge alignment.
+       - Standardized dynamic month list anchored to active year; updated `monthPill` to `<Text variant="caption" weight={active ? 'semibold' : 'medium'}>` and `hitSlopToMin48` (≥44px touch ergonomics).
+       - Standardized payout filter chips with strict Geist tokens, theme-aware canvas/ink active states, and `hitSlopToMin48`.
+       - Added live Results Count indicator row (`Showing X of Y operators (filtered)`).
+       - Eradicated over 60 lines of dead obsolete legacy styles in `payroll.tsx`.
+    2. **Responsive 4-Column KPI Grid Strip (`payroll.tsx`, `KPICard.tsx`)**:
+       - Upgraded from hardcoded 2 columns to responsive `<KPIGrid columns={4}>` matching web `PayrollKPIStrip`:
+         - Card 1: `Gross Payroll` (CreditCard icon, `variant="default"`)
+         - Card 2: `Net Payable` (Banknote icon, `variant="success"`)
+         - Card 3: `Disbursed vs Unpaid` (Clock icon, `variant="warning"`, subtitle `Bal: ₹{balance}`)
+         - Card 4: `Attended & OT Days` (Calendar icon, `variant="info"`, subtitle `OT: {otDays}d`)
+       - Standardized `KPICard.tsx` to cleanly render `subtitle` in `<Text variant="micro" weight="medium">` and unified typography tokens (`caption` medium label, `title` bold value).
+    3. **Operator Payroll Card Typography & Web Parity (`OperatorPayrollCard.tsx`)**:
+       - Eradicated all 15 instances of invalid `variant="small"` that previously bypassed `TYPE_VARIANTS` and fell back to unstyled text.
+       - Operator full name standardized to `<HighlightText variant="subheading" weight="bold">` (14px Geist-SemiBold).
+       - Serial number badge standardized to `<Text variant="mono" weight="bold">`.
+       - Net Pay metric upgraded to `<Text variant="heading" weight="bold">` (16px bold in emerald `#059669`) with uppercase `<Text variant="micro" weight="medium">` label.
+       - Added Payout Status badge row achieving 100% web parity with `PayrollMobileCard`: displays `<Badge variant="success" size="sm">` ("Paid in Full"), `<Badge variant="warning" size="sm">` ("Partial (bal ₹X)"), or `<Badge variant="neutral" size="sm">` ("Pending").
+       - Quick Stat Tiles (Attended Days, Gross Pay, Unpaid Bal) standardized with uppercase `<Text variant="micro" weight="medium">` labels and tabular `<Text variant="caption" weight="semibold">` values.
+       - Expandable Accordion Drawer rows standardized to `<Text variant="caption" style={{ color: theme.colors.mute }}>` and `<Text variant="caption" weight="medium">`.
+       - Action buttons standardized to `minHeight: 38` with `hitSlopToMin48` (≥44px touch ergonomics) and `<Text variant="caption" weight="semibold">`.
+    4. **Skeleton Loader Alignment (`PayrollSkeleton.tsx`)**:
+       - Aligned root container to `maxWidth: 1200, width: '100%', alignSelf: 'center'`.
+       - Updated KPI skeleton to responsive 4-column `<KPIGrid columns={4}>` with subtitle skeletons to eliminate layout shifts on load.
+       - Added Payout Status row skeleton and aligned card action button skeletons to height 38 with `radiusNumeric.md`.
+    5. **Modals Ergonomics & Typography Standardizations (`payroll.tsx`)**:
+       - Constrained `modalCard` to `maxWidth: 560, width: '100%', alignSelf: 'center'` to eliminate modal width blowout on tablet and desktop viewports.
+       - `Salary Slip Modal`: Standardized modal header to `variant="heading" weight="bold"`, company title to `variant="caption" weight="bold"` uppercase, bank account and IFSC to `variant="mono" weight="medium"`, attendance days to `variant="mono" weight="bold"`, financial breakdown to tabular `variant="caption"` rows, net pay to `variant="title" weight="bold"`, and Close button to `minHeight: 44` with `variant="caption" weight="semibold"`.
+       - `Edit Statement Modal`: Standardized header to `variant="heading" weight="bold"`, field labels to `variant="caption" weight="medium"`, inputs to `minHeight: 44`, live net pay preview to `variant="heading" weight="bold"`, and Cancel / Save action buttons to `minHeight: 44` with `variant="caption" weight="semibold"`.
+    6. **Automated Verification Suite (`test-payroll-workflows.mjs`)**:
+       - Created comprehensive verification suite with 23 targeted assertions covering viewport containment, KPI grid parity, month/filter pills, card typography, status badges, skeleton alignment, and modal ergonomics.
+       - Registered `payroll` suite into central test runner `apps/mobile/test/index.mjs`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `node apps/mobile/test/test-payroll-workflows.mjs`: Clean pass (all 23/23 assertions passed, 100%).
+    - `node apps/mobile/test/index.mjs`: Clean pass (all 30/30 suites passed, 100%).
+    - `node apps/mobile/run-tests.mjs`: Clean pass (all 357/357 verification scenarios passed).
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Clean pass (0 type errors, exited with code 0).
+
+- [x] **243 — Native Mobile /settings/preferences: Theme Toggle Overlap, Switching Optimization & Instant Haptic Response (2026-10-21)**:
+  - **Delivered**:
+    1. **SegmentedToggle Production Build Overlap Elimination (`SegmentedToggle.tsx`)**:
+       - Fixed `styles.itemFullWidth`: replaced conflicting `width: '100%'` with `flex: 1, flexBasis: 0, minWidth: 0`. Eradicated CSS flex row overlapping and layout overflow in production builds.
+       - Sized sliding indicator pill with explicit `height: config.minHeight` and `top: config.padding` (replacing `bottom: config.padding`), ensuring deterministic sub-pixel height regardless of parent container layout resolution.
+       - Synchronized initial layout measurement: positioned Reanimated shared values (`animX.value = initialX`, `animWidth.value = tabW`, `isInitializedRef.current = true`) synchronously in `handleContainerLayout` on frame 0, preventing the pill from flashing at (0,0) or jumping across tabs on initial paint.
+    2. **Theme Toggle Performance & Zero-Delay Synchronization (`ThemeProvider.tsx` & `global.css`)**:
+       - Removed catastrophic universal selector `html.theme-changing *:not(...)` from `global.css` that triggered full-DOM style recalculations and 1-2 second UI thread freezing on every theme switch.
+       - Streamlined `applyDomTheme` in `ThemeProvider.tsx` to atomically update `.dark` class, `colorScheme`, and canvas background in 0ms without transition locks.
+       - Scheduled NativeWind `colorScheme.set(newMode)` via `requestAnimationFrame`, allowing the active segment highlight, tactile feedback, and Reanimated spring glide to execute immediately on frame 0 without being blocked by NativeWind tree recalculation.
+    3. **Haptic Toggle Instant Response & Feedback Synchronization (`Switch.tsx` & `preferences/index.tsx`)**:
+       - Integrated optimistic local state (`localChecked`) in `Switch.tsx`, immediately flipping state and launching the UI-thread spring glide at 0ms upon touch.
+       - Upgraded switch spring physics from sluggish `stiffness: 180, damping: 18` to snappy `stiffness: 420, damping: 24, mass: 0.6` (iOS/Geist standard ~100ms settling time).
+       - Removed screen-blocking `toast()` notification and duplicate vibration triggers from `handleToggleHaptics` in `preferences/index.tsx`, making enable/disable transitions instantaneous and clean.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations).
+    - `node apps/mobile/test/test-segmented-toggle.mjs`: 18/18 checks passed (100%).
+    - `node apps/mobile/test/test-settings-workflows.mjs`: All assertions passed (100%).
+    - `pnpm --filter @reachinternational/mobile test:all`: All 30/30 test suites passed (100% pass rate in 2.4s).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+
+- [x] **244 — Native Mobile Settings Hub & Sub-Screens (/settings/about, /settings/notifications, /settings/account, /settings/preferences) UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Responsive Viewport Containment (`SettingsScreenContainer.tsx`)**:
+       - Resolved wide viewport stretching (such as 1536×695 reported in feedback) across all settings screens by enforcing `maxWidth: 896, width: '100%', alignSelf: 'center'` on `scrollContent` (matching web's `max-w-4xl mx-auto`).
+       - Settings pages remain 100% full width on phones while displaying comfortably centered and proportioned on tablets and wide monitor viewports.
+    2. **Notifications Screen Standardization (`/settings/notifications`)**:
+       - Removed redundant status badge from Master Push Card (Feedback #2: "remove this status"), relying on the canonical toggle switch.
+       - Upgraded section header to small, informative layout (Feedback #3: "make all the heading small and informative"): title in `<Text variant="caption" weight="semibold">` uppercase with informative subtitle describing real-time push alert channels.
+       - Standardized Master Push Card and all 5 toggle cards (`Shift Reminders`, `Machinery Breakdown`, `Equipment Fleet Assignments`, `Overtime Authorization`, `Daily Log Confirmations`) with `<Text variant="subheading" weight="semibold">` titles and 2-line wrapped `<Text variant="caption">` subtitles.
+       - Standardized System Permission Blocked banner typography to `<Text variant="caption" weight="semibold">` and caption text.
+    3. **About App Screen Standardization (`/settings/about`)**:
+       - Added elevated hero application identity card with Reach logo icon, title in `<Text variant="subheading" weight="semibold">`, platform subtitle, and build/version pill (`v1.3.0`).
+       - Replaced flat unorganized list with 3 small informative sections: "APPLICATION & RELEASE", "GOVERNANCE & COMPLIANCE", and "SUPPORT & OPERATIONS", each with small uppercase semibold headers and informative descriptions.
+       - Upgraded all navigation cards (`What's New`, `About Us`, `App Information`, `Privacy Policy`, `Terms & Conditions`, `Cookies & Storage`, `Support & Contact`) to `<Text variant="subheading" weight="semibold">` titles with 2-line wrapped subtitles.
+    4. **Account Settings Screen Standardization (`/settings/account`)**:
+       - Added user profile identity card at top featuring initial letter avatar, full name in `<Text variant="subheading" weight="semibold">`, employee ID in `<Text variant="mono" weight="semibold">`, verified email, and canonical role badge via `<Badge role={role} size="sm" />` (matching web `UserProfileHeaderCard` parity).
+       - Grouped navigation cards into two distinct informative sections: "PROFILE & CREDENTIALS" and "DANGER ZONE".
+       - Standardized card titles to `<Text variant="subheading" weight="semibold">` with 2-line subtitle wrapping without clipping.
+    5. **Preferences Settings Screen Standardization (`/settings/preferences`)**:
+       - Grouped preferences into two small informative sections: "APPEARANCE & TYPOGRAPHY" and "TACTILE & TOUCH ERGONOMICS", each with informative subtitles.
+       - Standardized Theme Mode card title and subtitle with 2-line wrapping; standardized Font Size card and Haptic Feedback card to `<Text variant="subheading" weight="semibold">` titles and Geist captions.
+       - In `font-size.tsx`: standardized option titles to `weight="semibold"` and upgraded preview header to "Live Shift Log Preview" with informative subtitle.
+       - In root `settings/index.tsx`: standardized `SettingsNavCard` titles to `weight="semibold"` and allowed 2-line subtitle wrapping to eliminate ellipsis truncation on narrow mobile screens.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography property violations found.
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass with 0 TypeScript errors across the mobile workspace.
+    - `node apps/mobile/test/index.mjs`: All 30/30 test suites passed (100% pass rate in 3.13s).
+    - `node apps/mobile/run-tests.mjs`: 357/357 core verification assertions passed.
+
+- [x] **242 — Native Mobile /users UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **User Touch Card Ergonomics & Typography (`UserTouchCard.tsx`)**:
+       - Standardized user full name to `<HighlightText variant="subheading" weight="semibold">` (14px Geist-SemiBold).
+       - Standardized avatar initial letter to `<Text variant="caption" weight="bold">`.
+       - Scaled header role and status badges to compact `size="sm"` (min-height 20px, 11px font) to reclaim ~40px horizontal space on narrow screens (360–427px) and prevent name truncation.
+       - Upgraded Employee ID badge to `<HighlightText variant="mono" weight="semibold">`.
+       - Refined metadata box (`cardMetaBox`): updated padding to `spacingNumeric.sm` (8px), gap to 6. Explicitly separated labels (`color: theme.colors.mute`) and values (`color: theme.colors.ink`, `weight="medium"`) across Email, Phone, Supervisor, Machines, and Shift rows.
+       - Standardized bottom action pills (`styles.actionPillBtn`): `height: 36, minHeight: 36, borderRadius: radiusNumeric.pill`, `gap: 5, paddingHorizontal: 12`, with `weight="medium"` text and `hitSlopToMin48` (ensuring ≥44px touch ergonomics).
+    2. **Skeleton Loader Alignment (`UserCardSkeleton.tsx`)**:
+       - Aligned header skeleton (avatar 32×32, name height 16, compact badge pills 72×20 and 56×20).
+       - Updated metadata well box padding and action pill skeletons to height 36 with `radiusNumeric.pill`.
+    3. **Filter Panel Standardization (`UserFiltersPanel.tsx`)**:
+       - Standardized Filters toggle button text to `<Text variant="caption" weight="semibold">` (matching `MachineFilterPanel.tsx` and web standard).
+       - Standardized active count badge to `<Text variant="micro" weight="bold">`.
+       - Standardized quick reset button text to `<Text variant="caption" weight="semibold">`.
+       - Standardized active filter chips in horizontal strip to `<Text variant="caption" weight="medium">` and Clear All link to `<Text variant="caption" weight="semibold">`.
+    4. **Main Screen & Floating Multi-Select Bulk Bar (`users.tsx`)**:
+       - Standardized `resultsCountRow`: added loading skeleton state and bold numeric counts for `users.length` and `totalUsersCount` with `theme.colors.ink`, with muted descriptive text.
+       - Standardized `renderListFooter`: `paginationFooterText` (`weight="medium"`), `paginationErrorText` (`weight="medium"`), `retryLoadMoreBtnText` (`weight="semibold"`), `endOfListText` (`weight="medium"`).
+       - Upgraded floating multi-select bulk bar (`mobileBulkBar`): theme-aware canvas elevated background and hairline borders in dark mode (`theme.colors.canvasElevated`, `theme.colors.hairline`), high-contrast ink/canvas text weights (`bulkBadgeText` weight="bold", `bulkSelectedText` weight="medium", buttons weight="semibold"), and tactile buttons.
+    5. **Section Components Typography Standardization**:
+       - `ProfileChangeRequestsSection.tsx`: Standardized section header to `<Text variant="subheading" weight="semibold">`, buttons "Accept All" & "Reject All" to `<Text variant="caption" weight="semibold">`, avatar initial to `<Text variant="caption" weight="bold">`, name to `<Text variant="caption" weight="semibold">`, diff row labels & values to `<Text variant="caption" weight="medium">`, and card action buttons to `<Text variant="caption" weight="semibold">`.
+       - `AccountDeletionRequestsSection.tsx`: Standardized header to `<Text variant="subheading" weight="semibold">`, pill badge to `<Text variant="micro" weight="semibold">`, avatar initial to `<Text variant="caption" weight="bold">`, name to `<Text variant="caption" weight="semibold">`, source badge to `<Text variant="micro" weight="medium">`, reason label to `<Text variant="micro" weight="medium">`, and action buttons to `<Text variant="caption" weight="semibold">`.
+    6. **Modal Components Typography & Touch Standardization**:
+       - `UserActionsPopover.tsx`: Standardized popover header avatar initial to `<Text variant="caption" weight="bold">`, user name to `<Text variant="caption" weight="semibold">`, and action items to `<Text variant="caption" weight="medium">` with `minHeight: 44`.
+       - `UserExportModal.tsx`: Standardized header title to `<Text variant="heading" weight="semibold">`, subtitle to `<Text variant="caption">`, format toggle buttons to `<Text variant="caption" weight="medium">`, option cards to `<Text variant="subheading" weight="semibold">` and `<Text variant="caption">`, count badges to `<Text variant="micro" weight="bold">`, and footer close button to `<Text variant="caption" weight="medium">` with `minHeight: 44`.
+       - `RejectReasonModal.tsx`: Standardized header title to `<Text variant="heading" weight="semibold">`, subtitle to `<Text variant="caption">`, info banner to `<Text variant="caption">`, label to `<Text variant="caption" weight="medium">`, and action buttons to `<Text variant="caption" weight="medium">` (Cancel) and `<Text variant="caption" weight="semibold">` (Confirm Rejection) with `minHeight: 44`.
+       - `CreateUserModal.tsx`: Standardized header title to `<Text variant="heading" weight="semibold">`, subtitle to `<Text variant="caption">`, and direct activation notice to `<Text variant="caption">`.
+       - `DeleteUserConfirmDialog.tsx`: Standardized dialog title to `<Text variant="heading" weight="semibold">`, subtitle to `<Text variant="caption">`, avatar to `<Text variant="caption" weight="bold">`, employee name to `<Text variant="subheading" weight="semibold">`, employee ID to `<Text variant="mono" weight="semibold">`, consequences title to `<Text variant="caption" weight="semibold">`, error title to `<Text variant="caption" weight="semibold">`, cancel button to `<Text variant="caption" weight="medium">`, and delete button to `<Text variant="caption" weight="semibold">`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass (0 raw typography violations monorepo-wide).
+    - `node apps/mobile/test/test-users-workflows.mjs`: Clean pass (all 42/42 workflow assertions verified, 100%).
+    - `node apps/mobile/run-tests.mjs`: Clean pass (all 357/357 verification scenarios passed).
+    - `pnpm --filter @reachinternational/mobile typecheck`: Clean pass (`tsc --noEmit` exited code 0, 0 type errors).
+
+- [x] **241 — Native Mobile /clients UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Responsive Viewport Containment & Layout (`clients.tsx`)**:
+       - Enforced `maxWidth: 1200, width: '100%', alignSelf: 'center'` on `scrollContent` with `paddingHorizontal: spacingNumeric.md`, `paddingTop: spacingNumeric.sm`, and `paddingBottom: 120` to prevent floating bottom navigation overlap on pagination controls and final client cards.
+       - Synchronized KPI card labels to web parity ("Total Accounts", "Active Accounts", "Inactive Accounts", "Covered Locations") with Title Case.
+       - Added Results Count indicator row (`Showing X of Y clients`) above the cards list.
+       - Standardized active filter chips header to `<Text variant="caption" weight="semibold">` and reset link button with haptics and touch ergonomics.
+       - Standardized empty state actions (`actionLabel="Add New Client"` with `onAction={handleOpenAdd}`) for crisp zero-state cards.
+       - Cleaned up obsolete inline modal and pagination style rules.
+    2. **Client Card Typography & High-Contrast Tokens (`MobileClientCard.tsx`)**:
+       - Company name standardized to `<Text variant="subheading" weight="bold">` (16px bold) and client ID to `<Text variant="mono" weight="bold">` with tactile haptic feedback.
+       - Eradicated translucent washes; applied 100% solid high-contrast surfaces for GST (`#f3e8ff`/`#3b0764`) and PAN (`#e0f2fe`/`#082f49`) with `<Text variant="micro" weight="semibold">`.
+       - Replaced oversized 16px body values in specs well with high-density `<Text variant="caption" weight="semibold">` Geist tokens; labels standardized to `<Text variant="micro" weight="semibold">` uppercase.
+       - Standardized monthly maintenance allowance badge with solid surfaces (`#fef3c7`/`#451a03` and `#fff1f2`/`#4c0519`) and `<Text variant="caption" weight="semibold">`.
+       - Action buttons standardized to `minHeight: 38` with `hitSlopToMin48` (48px touch ergonomics), and card padding unified to `spacingNumeric.sm + 4` (12px).
+    3. **Client Card Skeleton Alignment (`ClientCardSkeleton.tsx`)**:
+       - Aligned skeleton action buttons to `height={38}` and `borderRadius={radiusNumeric.md}` (matching card's 38px buttons).
+       - Aligned card padding to `spacingNumeric.sm + 4` (12px) for 100% layout parity.
+    4. **Modals Ergonomics & Typography Standardizations**:
+       - `ClientModal.tsx`: Standardized modal header to `variant="heading" weight="bold"` with informative subtitle; removed hardcoded `maxHeight: 420` restriction on ScrollView (replaced with flexible phone/tablet sizing up to 520px); standardized section headers to `variant="caption" weight="semibold"` uppercase; field labels to `variant="caption" weight="medium"`; and enforced `minHeight: 44` across all inputs and footer buttons.
+       - `ClientSiteModal.tsx`: Updated header to `variant="heading" weight="bold"` with descriptive subtitle; removed hardcoded maxHeight restriction; standardized field labels to `variant="caption" weight="medium"`; and enforced `minHeight: 44` on all inputs and footer buttons.
+       - `ClientDetailModal.tsx`: Standardized modal header to `variant="heading" weight="bold"` and code to `variant="mono" weight="bold"`; maintenance allowance pill to solid surfaces with `variant="micro" weight="semibold"`; section headers to uppercase `variant="caption" weight="semibold"`; replaced arbitrary text styles across tabs (Machines, Sites, Running Logs, Assignments, History, Audit) with strict Geist typography tokens; and enforced `minHeight: 44` on footer action buttons.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography property violations found monorepo-wide.
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm --filter @reachinternational/mobile typecheck`: 0 TypeScript errors across the mobile workspace.
+
+- [x] **240 — Consolidate, Organize and Standardize Mobile Test Suites in apps/mobile/test (2026-10-21)**:
+  - **Delivered**:
+    1. **Central Test Directory Architecture (`apps/mobile/test/`)**:
+       - Consolidated all 29 test suites into canonical `apps/mobile/test/` directory, eradicating test script sprawl across `apps/mobile/` root.
+       - Migrated all suites across 8 functional categories: Core Verification (`run-tests.mjs`), Auth & Security (`test-auth-workflows.mjs`, `test-signup-workflows.mjs`), Operations & Fleet (`test-shift-workflows.mjs`, `test-machines-workflows.mjs`, `test-running-logs-workflows.mjs`, `test-assign-operator-modal.mjs`, `test-operator-dashboard-optimizations.mjs`, `test-dashboard-states.mjs`), User Management (`test-users-workflows.mjs`, `test-users-detail-infinite-pagination.mjs`), Documents & Media (`test-document-crud-workflows.mjs`, `test-document-viewer-workflows.mjs`), Offline & Persistence (`test-offline-duplicate-prevention.mjs`), Navigation & Transitions (`test-header-back-navigation.mjs`, `test-navigation-transitions.mjs`, `test-splash-screen.mjs`, `test-quick-access.mjs`), and UI System & Components (`test-badge-component.mjs`, `test-button-optimizations.mjs`, `test-press-feedback.mjs`, `test-search-filter-layout.mjs`, `test-segmented-toggle.mjs`, `test-timepicker-workflows.mjs`, `test-optimized-filter-components.mjs`, `test-ui-states.mjs`, `test-about-and-longlogo.mjs`, `test-whats-new-system.mjs`, `test-settings-workflows.mjs`).
+    2. **Unified Test Runner CLI (`apps/mobile/test/index.mjs`)**:
+       - Built categorized, high-performance CLI test runner supporting: full suite execution with timing and summary table (`pnpm test:all` / `node test/index.mjs`), category filtering via `--category=<name>` or `-c`, regex/keyword filtering (`node test/index.mjs machines`), and suite discovery via `--list`.
+    3. **Deterministic Path Resolution Across Monorepo**:
+       - Replaced fragile `process.cwd()` and local `__dirname` assumptions with deterministic `fileURLToPath(import.meta.url)` path anchors.
+       - Resolved path errors in `test-document-crud-workflows.mjs` and `test-document-viewer-workflows.mjs` that previously failed when invoked from `apps/mobile`. All 29 suites now execute cleanly from root, `apps/mobile/`, or `apps/mobile/test/`.
+    4. **Backward Compatibility & Root Hygiene**:
+       - Added lightweight forwarder at `apps/mobile/run-tests.mjs` delegating to `test/run-tests.mjs` to preserve existing scripts, CI, and runbooks.
+       - Cleaned up 28 loose test files from `apps/mobile/` root (reducing root file count from 49 to 22).
+       - Updated `apps/mobile/package.json` test scripts to target `test/`.
+       - Created comprehensive `apps/mobile/test/README.md` with full suite registry table and execution guidelines.
+  - **Verification**:
+    - `pnpm --filter @reachinternational/mobile test`: 357/357 core verification assertions passed (100%).
+    - `pnpm --filter @reachinternational/mobile test:all`: 29/29 test suites passed (100% pass rate in 5.3s).
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography violations monorepo-wide.
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+
+- [x] **239 — Native Mobile /running-logs UI, Typography & Responsive Sizing Standardization (2026-10-21)**:
+  - **Delivered**:
+    1. **Responsive Viewport Containment & Layout (`running-logs.tsx`)**:
+       - Resolved wide viewport stretching (e.g. 1536×695 reported in feedback) by enforcing `maxWidth: 1200, width: '100%', alignSelf: 'center'` on `segmentedToggleWrapper`, `searchBarWrapper`, and `contentContainer`.
+       - Standardized page header title to Title Case `"Daily Running Logs"` in both main view and permission guard view.
+       - Refined segmented mode toggle presentation (`fullWidth={!isWide}`) and results count indicator (`Showing X shift logs`).
+       - Upgraded empty state cards (`quietEmptyCard`) from small 12px caption to `<Text variant="body" weight="medium">` across all 3 view modes (clients, machine, operator).
+    2. **Summary Cards Typography & Metric Hierarchy (`RunningLogSummaryCard.tsx`)**:
+       - Upgraded header titles from 14px `subheading` to 16px `<Text variant="heading" weight="bold">` across all 3 view modes (`client`, `machine`, `operator`).
+       - Standardized `headerPressable` to `minHeight: 48` for touch target compliance (≥44px) and added `flexWrap: 'wrap'` to `headerLeft` to eliminate badge clipping on small screens.
+       - Added persistent total run time pill (`{totalRunHours} hrs` in `body` bold) to `headerRight` in Client and Machine views, mirroring Operator view and web `OperationsClientView`.
+       - Eradicated forced uppercase labels ("TOTAL RUN TIME", "LOGGED DAYS", "BREAKDOWNS", "WORKING DAYS", "MANUFACTURER") in favor of standard Title Case ("Total Run Time", "Logged Days" / "Working Days", "Breakdowns", "Manufacturer").
+       - Upgraded metric values in expanded content to `<Text variant="title" weight="bold">` (20px bold) for strong visual hierarchy.
+       - Expanded collapsible `maxHeight` interpolation from 280 to 360 to guarantee zero content clipping across all OS font scales and wrapped layouts.
+    3. **Machine Header Card Typography & Contrast (`RunningLogMachineHeaderCard.tsx`)**:
+       - Elevated background to `theme.colors.canvasElevated` with 1px hairline border for crisp contrast above page canvas.
+       - Replaced uppercase metric labels ("DAYS: ", "M/C RT: ", "WH: ") with Title Case: "Days:", "Run Time:", "Work Hours:" in `<Text variant="caption" weight="medium">`.
+       - Bound metric values to `<Text variant="mono" weight="bold">` for clean tabular numerical alignment.
+    4. **Shift Card Typography & Touch Targets (`RunningLogShiftCard.tsx`)**:
+       - Standardized metadata row: eliminated font size mismatch between "Operator:" (`variant="caption"`, 12px) and name (`HighlightText variant="caption" weight="semibold"`, 12px), and bound shift codes to `<Text variant="mono" weight="bold">`.
+       - Enforced 44px touch targets on Remarks and Conflict icon buttons (`minWidth: 32, minHeight: 32`, `hitSlop: 12px`) and expanded remarks toggle button (`minHeight: 44`).
+       - Standardized metric boxes: labels in `<Text variant="micro" weight="bold">` and values in `<Text variant="mono" weight="bold">`.
+       - Refined remarks callout to italic caption and stoppage details to clean tabular layout.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography property violations found monorepo-wide.
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm --filter @reachinternational/permissions test`: 5/5 tests passed (100%).
+    - `pnpm --filter @reachinternational/utils test`: 25/25 tests passed (100%).
+
+- [x] **238 — Native Mobile Header Back Button Standardization & Route Optimization (2026-10-21)**:
+  - **Delivered**:
+    1. **MobileHeader.tsx & SettingsScreenContainer.tsx Stack History Awareness & Safe Fallbacks**:
+       - `apps/mobile/components/ui/MobileHeader.tsx`: Upgraded `handleBackPress` to check `router.canGoBack()` first, unwinding the native navigation stack (`router.back()`). If no stack history exists (e.g. direct deep links or tab switching), seamlessly falls back to `backRoute`, defaulting gracefully to `/dashboard`. Added tactile haptic feedback (`haptics.select()`) and min 48px touch ergonomics.
+       - `apps/mobile/components/settings/SettingsScreenContainer.tsx`: Standardized `handleBack` to prioritize `router.canGoBack()` before falling back to `backRoute`, defaulting to `/settings`.
+    2. **Back Button Added to All Pages, Tabs, and Subtabs (Except Home)**:
+       - **Home Exception strictly preserved**: `dashboard.tsx` retains `showBack={false}` as the root home landing page.
+       - Enabled `showBack={true}` and `backRoute="/dashboard"` on `attendance.tsx` (main view & permission gate), `clients.tsx` (main view & permission gate), `payroll.tsx` (main view & permission gate), `users.tsx` (main view), `machines.tsx` (main view & permission gate), `operations.tsx`, `running-logs.tsx` (main view & permission gate), `motion-lab.tsx`, and `settings/index.tsx`.
+       - Added explicit `backRoute` to `account-deletion/index.tsx` (`/settings/account`) and `account-deletion/guide.tsx` (`/account-deletion`).
+       - Synchronized `privacy.tsx`, `terms.tsx`, and `profile/index.tsx` to safely check stack history before fallback navigation.
+       - In `(auth)/signup.tsx`, added a top "Back to sign in" touchable with `ArrowLeft` icon, min 44px touch ergonomics, and safe fallback navigation to `/(auth)/login`.
+  - **Verification**:
+    - `node apps/mobile/test-header-back-navigation.mjs`: 26/26 assertions passed (100%).
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography property violations found.
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+
+- [x] **237 — Native Mobile /operations Page Feedback: Typography Standardization, KPIGrid & Card Web Parity (2026-10-21)**:
+  - **Delivered**:
+    1. **TodayShiftMonitorKPIStrip & KPIGrid Web Parity (Feedback #1: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/operations/TodayShiftMonitorKPIStrip.tsx`: Created dedicated KPI strip matching web `TodayShiftMonitorKPIStrip.tsx` with 100% visual, token, and typography parity:
+         - 4-column responsive grid via `KPIGrid` (`columns={4}`) auto-reflowing to 4 cols on desktop ≥1024px and tablet 641-1023px, and 2 cols on mobile ≤640px.
+         - Card 1: `Total Roster` (`theme.colors.canvasElevated`, hairline border, `theme.colors.mute` caption label, `theme.colors.ink` title bold value).
+         - Card 2: `Entered` (emerald tinted surface `isDark ? 'rgba(5, 150, 105, 0.12)' : 'rgba(16, 185, 129, 0.08)'` and border, `UserCheck` size 13 icon inline with label, emerald title bold value).
+         - Card 3: `Pending` (amber tinted surface `isDark ? 'rgba(217, 119, 6, 0.12)' : 'rgba(245, 158, 11, 0.08)'` and border, `Clock` size 13 icon inline with label, amber title bold value).
+         - Card 4: `Unassigned` (rose tinted surface `isDark ? 'rgba(220, 38, 38, 0.12)' : 'rgba(239, 68, 68, 0.08)'` and border, `AlertCircle` size 13 icon inline with label, rose title bold value).
+         - Eradicated mismatched icons, oversized 32px circular icon badges, and hardcoded `KPICard` overrides.
+    2. **SearchInput Typography & Height (Feedback #2: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/ui/SearchInput.tsx`:
+         - Eradicated 3 raw typography properties (`fontFamily`, `fontSize`, `lineHeight`) that violated `check-typography.mjs`.
+         - Standardized default `textVariant` to `'caption'` (12px, matching web's `text-xs`) for `sm` and `md`, and `'body'` (14px) for `lg`.
+         - Standardized container height to 36px for `md` (matching web's `h-9` 36px filter toolbar input).
+         - Cleanly integrated `useTypeStyle(textVariantResolved)` for zero-drift cross-platform typography.
+    3. **MobileTodayShiftCard Redesign & Web Parity (Feedback #3: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/operations/MobileTodayShiftCard.tsx`:
+         - **Removed clunky 34px avatar circle**: Freed horizontal space so operator name renders full-width at `<Text variant="subheading" weight="bold">` without clipping.
+         - **Added Operator Subtitle Row**: Injected employee ID (`<HighlightText variant="caption" weight="semibold">` in sky blue) and phone (`<HighlightText variant="caption">` in mute text) separated by `•`, achieving 100% web parity.
+         - **Standardized Status Badge**: Replaced ALL CAPS (`ENTERED`, `PENDING`) with web Title Case (`Entered`, `Pending`, `Unassigned`, `Breakdown`, `Maintenance`), `size="sm"`, and soft-tinted surfaces (`solid={false}`).
+         - **Redesigned Specs Grid**: Replaced inner boxed `cardMetaBox` with clean `borderTop` hairline grid containing 5 key-value spec rows with left labels (`variant="caption" weight="medium"`) and right values with `<Text variant="mono" weight="bold">` for Machine code, Shift code, and HMR meter. Added shift timing `(6:00 AM – 2:00 PM)` in parentheses.
+         - **Clean Attribution Row**: Rendered `Entered by {row.entered_by_name}` with `UserCheck` icon and optional entry source badge.
+    4. **Active Filter Badges (Feedback #4: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Standardized all active filter badges to `size="sm"` and `solid={false}` with soft-tinted pastel backgrounds, matching web's filter chips.
+       - Standardized `filterToggleBtn` text and `quickResetBtn` text to `<Text variant="caption" weight="semibold">` with 36px height (`h-9`).
+    5. **Results Count Row & Responsive Layout (Feedback #5: "Standardize UI, Typography & Responsive Sizing")**:
+       - Injected live results count line above shift roster: `Showing <Text variant="caption" weight="bold">X</Text> of <Text variant="caption" weight="bold">Y</Text> shifts (filtered)`.
+       - Verified 3-tier viewport responsiveness across mobile (≤640px), tablet (641-1023px), and desktop (1536×695).
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography property violations found.
+    - `node apps/mobile/test-shift-workflows.mjs`: 28/28 assertions passed (100%).
+    - `node apps/mobile/test-badge-component.mjs`: 61/61 assertions passed (100%).
+    - `node apps/mobile/test-search-filter-layout.mjs`: 30/30 assertions passed (100%).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+
+- [x] **236 — Native Mobile /users Feedback: Hero CTA Top-Right Placement, SegmentedToggle APK Shrink Fix, Infinite Pagination & Skeleton Loaders (2026-10-21)**:
+  - **Delivered**:
+    1. **Edit Profile CTA Placement (Feedback #1: "remove this btn" & Feedback #2: "place this btn at top right")**:
+       - Removed `editProfileBtn` from the inline `heroMainRow` content stream in `apps/mobile/components/users/UserDetailView.tsx`.
+       - Anchored `editProfileBtn` to the absolute top-right of `heroCard` (`position: 'absolute', top: 14, right: 14, zIndex: 10`) with `minHeight: 36`, outline pill styling, and hitSlop to 48px.
+       - Added `heroDetailsWithEdit: { paddingRight: 110 }` to guarantee zero text collision with the top-right CTA.
+    2. **SegmentedToggle APK Production Shrink Prevention (Feedback #3 & #6: "currently this toggle are shrink during the production build apk make sure this toggle proper fit in the mobile screen")**:
+       - `apps/mobile/components/ui/SegmentedToggle.tsx`: Upgraded `styles.scrollContent` (`minWidth: '100%', flexGrow: 1`), `styles.container` (`minWidth: '100%'`), `styles.inline` (`minWidth: '100%'`), and `styles.itemInline` (`minWidth: 64`).
+       - Eradicated APK release shrink bugs where horizontal `ScrollView` with `alignSelf: 'flex-start'` collapsed the scrollable container. Guarantees edge-to-edge mobile fit while preserving smooth horizontal scrolling.
+       - In `UserDetailView.tsx`, passed `itemStyle={!isTablet && !isDesktop ? { minWidth: 76, paddingHorizontal: 14, minHeight: 40 } : { minHeight: 40 }}` for optimal touch target ergonomics.
+    3. **Infinite Pagination for Large Datasets (Feedback #3 & #6: "for the every tab use infinite pagination if the data are too large so infinite pagination can handle it efficiently")**:
+       - `apps/mobile/lib/hooks/useUserDetailData.ts`: Built and exported 6 server-side infinite query hooks using `@tanstack/react-query` `useInfiniteQuery`:
+         - `useUserDetailMachinesInfinite` (pageSize: 20)
+         - `useUserDetailRunningLogsInfinite` (pageSize: 20)
+         - `useUserDetailAssignmentsInfinite` (pageSize: 20)
+         - `useUserDetailAttendanceInfinite` (pageSize: 20)
+         - `useUserDetailDocumentsInfinite` (pageSize: 20)
+         - `useUserDetailAuditLogsInfinite` (pageSize: 20)
+       - Exported typed page chunks (`UserMachinesPageChunk`, `UserRunningLogsPageChunk`, etc.) with `hasMore`, `nextCursor`, and total count metadata.
+       - Built `TabPaginationFooter` component in `UserDetailView.tsx` with tactile "Load More" triggers, loaded progress indicators `({current} of {total})`, and end-of-list completion checkmarks.
+    4. **Theme-Aware Skeleton Loading (Feedback #4 & #5: "remove the loading spinner and use skeleton loading instead")**:
+       - Created `apps/mobile/components/users/UserDetailSkeletons.tsx` exporting dedicated skeleton loaders for all tabs: `UserMachinesSkeleton`, `UserLogsSkeleton`, `UserAssignmentsSkeleton`, `UserAttendanceSkeleton`, `UserDocumentsSkeleton`, and `UserAuditSkeleton`.
+       - Replaced all raw `<ActivityIndicator>` spinners across all tab panels with theme-aware skeleton loaders conforming to Vercel Geist design tokens.
+  - **Verification**:
+    - `node apps/mobile/test-users-detail-infinite-pagination.mjs`: 14/14 checks passed (100%).
+    - `node apps/mobile/test-segmented-toggle.mjs`: 18/18 checks passed (100%).
+    - `node apps/mobile/test-users-workflows.mjs`: 42/42 checks passed (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations found.
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+
+- [x] **235 — Native Mobile /dashboard Feedback: Arrow Placement in Quick Management & Monorepo Typography Alignment (2026-10-21)**:
+  - **Delivered**:
+    1. **Quick Management Arrow Placement (Feedback #4: "in the quick management place the arrow icon properly")**:
+       - `apps/mobile/components/dashboard/shared/PrimaryAction.tsx`: Fixed card layout where missing explicit row styles caused the arrow container to collapse below the icon column into an awkward vertical stack. Configured `styles.card` with `flexDirection: 'row'`, `alignItems: 'center'`, `justifyContent: 'space-between'`, and `padding: spacingNumeric.md`.
+       - Centered and padded the arrow icon on the far right (`styles.arrowContainer`), aligning 100% with web's `PrimaryAction` component.
+       - `apps/mobile/components/ui/Card.tsx`: Forwarded `className={className}` to `<Pressable>` when `isInteractive` is true, ensuring Tailwind / NativeWind utility classes are preserved.
+    2. **KPICard Typography & Web Casing Alignment (Feedback #2 & #3: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/dashboard/shared/KPICard.tsx`:
+         - **Removed forced uppercase transformation**: Eradicated `{ textTransform: 'uppercase' }` on KPI labels. Labels now render in natural Title Case ("Total Machines", "Active Users", "Clients", "Active Shifts", "Logs Today", "Breakdowns Reported", "Overtime Entries", "Schedule Conflicts"), matching the website exactly.
+         - **Standardized label font variant**: Defaulted `labelVariant` to `'caption'` (12px) with `labelWeight="medium"` (matching web's `text-xs font-medium`).
+         - **Balanced metric value size**: Defaulted `valueVariant` to `'title'` (20px) with `valueWeight="bold"`, replacing the oversized 28px `display` numbers that crowded mobile cards and aligning with web's `text-xl font-bold` on mobile viewports.
+         - **Refined spacing & padding**: Updated `styles.kpiCard` to `padding: spacingNumeric.sm + 4` (12px), `minHeight: 84`, with clean vertical distribution.
+    3. **Dashboard Section Eyebrow Headers & Greeting Alignment (Feedback #1: "currently this text size and typography are not proper fix this and make sure it should be consistent to overall website")**:
+       - `apps/mobile/components/dashboard/admin/AdminDashboardCard.tsx`: Standardized section headers (`Fleet & Personnel Summary`, `Today's Operational Exceptions`, `Quick Management`) to `<Text variant="caption" weight="semibold">` with `textTransform: 'uppercase'` and `marginBottom: spacingNumeric.sm` (8px), matching web's `<h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider mb-3">`.
+       - `apps/mobile/components/dashboard/shared/DashboardHeader.tsx`: Added `weight="bold"` to `greetingText` (`Good afternoon, {userName}`) to match web's `text-xl sm:text-2xl font-bold`.
+       - `apps/mobile/components/dashboard/shared/AlertWidget.tsx`: Added `weight="semibold"` to eyebrow header and alert title; ensured explicit row layout on `AlertItem`.
+       - `apps/mobile/components/dashboard/shared/StatusCard.tsx`: Added `weight="semibold"` to eyebrow header and status label.
+       - Synchronized eyebrow headers across `SuperAdminDashboardCard.tsx`, `ManagerDashboardCard.tsx`, `SupervisorDashboardCard.tsx`, `HRDashboardCard.tsx`, and `OperatorDashboardCard.tsx`.
+  - **Verification**:
+    - `node scripts/check-typography.mjs`: Clean pass with 0 raw typography violations monorepo-wide.
+    - `pnpm typecheck`: Clean pass across all 7 workspace packages (0 errors).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm --filter @reachinternational/permissions test`: 5/5 tests passed (100%).
+    - `pnpm --filter @reachinternational/utils test`: 25/25 tests passed (100%).
+
+- [x] **234 — Native Mobile /machines Page Feedback: EmptyState Description Removal & Cross-Platform Typography Alignment (2026-10-21)**:
+  - **Delivered**:
+    1. **EmptyState Description Removal (Feedback #1: "remove this")**:
+       - Cleared description paragraph (`description=""`) across all `EmptyState` instances on `/machines` (`no-results`, `filtered`, `operator`, `supervisor`, `empty`).
+       - Completely removes the redundant subtitle paragraph text, keeping the empty state cards clean, minimal, and focused on the title and primary action.
+    2. **Results Count Typography Standardization (Feedback #2 & #3)**:
+       - Standardized `resultsCountRow` in `apps/mobile/app/(app)/machines.tsx` to enforce `variant="caption"` (12px) across all text elements (`Showing <Text variant="caption" weight="bold">X</Text> of <Text variant="caption" weight="bold">Y</Text> machines`).
+       - Eradicated default unstyled 16px raw text jumping, aligning 100% with the web's `text-xs font-medium` and `text-[var(--color-ink)] font-bold` standard.
+    3. **MachineKPIStrip & KPICard Cross-Platform Alignment (Feedback #4)**:
+       - Upgraded `MachineKPIStrip.tsx` to use responsive `columns={4}` on `KPIGrid` (auto-reflowing to 4 columns on desktop ≥1024px and tablet 641-1023px, and 2 columns on mobile ≤640px).
+       - Applied web-synchronized title case labels: `Total Fleet` (or `Assigned Fleet` for operators), `Available`, `On Rent`, `Breakdown Events`.
+       - Supported `labelVariant` (defaults to `micro` / 11px uppercase tracking-wider) and `valueVariant` (defaults to `title` / 20px-24px bold) in `KPICard.tsx`, replacing oversized 28px `display` metrics and removing artificial `minHeight: 28` label padding.
+       - Synchronized status-specific label colors (`labelColorLight` and `labelColorDark`) for high-contrast accessibility.
+    4. **Filter Toolbar & Machine Card Typography Alignment (Feedback #2, #3 & #5)**:
+       - Standardized Filters button text in `MachineFilterPanel.tsx` to `variant="caption"` `weight="semibold"`, matching Reset and Clear All buttons and web toolbar styling (`text-xs font-semibold`).
+       - Standardized specs well HMR to `<Text variant="mono" weight="bold">`, client value to `<Text variant="caption" weight="bold">`, personnel names to `<Text variant="caption" weight="semibold">`, and footer Details button to `<Text variant="caption" weight="semibold">` in `MobileMachineCard.tsx`.
+  - **Verification**:
+    - `node apps/mobile/test-machines-workflows.mjs`: 30/30 assertions verified (100% pass).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations found.
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `pnpm --filter @reachinternational/permissions test`: 5/5 tests passed (100%).
+    - `pnpm --filter @reachinternational/utils test`: 25/25 tests passed (100%).
+
+- [x] **233 — Seamless Native Splash Screen Logo Fade-In and Fade-Out Animation (2026-10-21)**:
+  - **Delivered**:
+    1. **Seamless Logo Fade-In and Fade-Out Animation**:
+       - Fade-In: Opacity `0 → 1` over 700ms with smooth cubic bezier easing (`Easing.bezier(0.23, 1, 0.32, 1)`).
+       - Visual Hold: Keeps the logo stably centered without premature dismissal or flickering while app initializes.
+       - Fade-Out: Opacity `1 → 0` over 700ms with smooth native-driver compatible transition upon session resolution.
+       - Timing: 700ms per transition within the requested 600–800ms window.
+    2. **Native-Driver Compatible Performance & Layout Stability**:
+       - Reanimated UI-thread execution (`useAnimatedStyle`, `useSharedValue`) strictly animating `opacity`.
+       - Centered alignment in `styles.container` with authentic 2:1 aspect ratio (`longLogoWidth`, `longLogoHeight`).
+       - Zero layout shifts, scale distortions, or vertical jumps during transitions.
+    3. **Synchronized Lifecycle & Anti-Flicker Architecture**:
+       - `SplashScreen.hideAsync()` invoked synchronously on mount to seamlessly hand off from native OS splash to animated canvas.
+       - `minHoldElapsed` gate (1100ms) guarantees the logo fade-in completes gracefully before fade-out initiates.
+       - `MAX_SPLASH_TIMEOUT_MS` (4000ms) safety fallback ensures graceful navigation even under delayed network conditions.
+       - Navigation (`<Redirect />`) strictly deferred until fade-out animation completes (`isAnimationComplete`).
+    4. **Resource Cleanup & Duplicate Prevention**:
+       - `fadeInStartedRef` and `fadeOutStartedRef` guards eliminate duplicate animation triggers across state updates.
+       - `isMountedRef` and `cancelAnimation(opacity)` cleanup active animations and timers on unmount.
+       - Fixed raw `letterSpacing` property in `KPICard.tsx:200` to maintain 0 typography violations monorepo-wide.
+  - **Verification**:
+    - `node apps/mobile/test-splash-screen.mjs`: 34/34 assertions passed (100%).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations found.
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `pnpm --filter @reachinternational/mobile test:all`: All test suites passed cleanly.
+
+- [x] **232 — Theme-Aware Optimized Animated Splash Screen with LongLogo (Dark & Light) (2026-10-21)**:
+  - **Delivered**:
+    1. **Selected Theme Logo Integration**:
+       - `Reach International Dark Theme LongLogo.png` and `Reach International Light Theme LongLogo.png` linked and rendered with authentic 2:1 aspect ratio via `ReachLongLogo`.
+       - Enhanced `ReachLongLogo` with `fadeDuration={0}` default on Android to eliminate native Android image fade latency.
+    2. **Selected Theme Adaptation**:
+       - Integrated `useTheme()` hook in `apps/mobile/app/index.tsx`.
+       - Dynamically selects dark theme logo when `isDark` is true, and light theme logo when `isDark` is false.
+       - Synchronized canvas background with `theme.colors.canvas` (`#0a0a0a` / `#fafafa`) and dynamic status bar (`isDark ? 'light' : 'dark'`).
+    3. **Optimized 60fps GPU Animation**:
+       - Implemented UI-thread Reanimated worklets (`useAnimatedStyle`, `useSharedValue`).
+       - Sizing: dynamically scales to 72% screen width clamped between 240dp and 320dp with 2:1 ratio.
+       - Entrance: GPU-accelerated cubic bezier curve (`Easing.bezier(0.23, 1, 0.32, 1)`) scaling from 0.94 -> 1.0 and opacity 0 -> 1 over 550-650ms.
+       - Ambient pulse: subtle breathing sequence while awaiting auth resolution.
+       - Exit dissolve: smooth fade-out and 1.03 scale expansion over 220ms before seamless routing handoff.
+       - Accessibility: respects system `useReducedMotion()`, bypassing scale and breathing when motion sensitivity is enabled.
+    4. **Coordinated Splash Lifecycle**:
+       - Calls `SplashScreen.hideAsync()` on mount to hand off from native splash to animated canvas.
+       - `MIN_SPLASH_DISPLAY_MS = 950` ensures entrance completes gracefully without jarring instant flashes.
+       - `MAX_SPLASH_TIMEOUT_MS = 3500` provides safety guard against delayed networks or slow storage.
+  - **Verification**:
+    - `node apps/mobile/test-splash-screen.mjs`: 33/33 assertions passed (100%).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations found.
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `pnpm --filter @reachinternational/mobile test:all`: All test suites passed cleanly.
+
+- [x] **231 — Isolate Sentry to Production (Web & Native Mobile) & Deactivate in Local Dev (2026-10-21)**:
+  - **Delivered**:
+    1. **Deactivate Sentry in Local Development**:
+       - `apps/mobile/.env`: Purged `EXPO_PUBLIC_SENTRY_DSN` so mobile development runtime does not load or connect to Sentry.
+       - `apps/web/.env`: Purged `NEXT_PUBLIC_SENTRY_DSN` so local Next.js dev server runs with zero Sentry overhead.
+    2. **Strict Production Gating in Native Mobile (`apps/mobile`)**:
+       - `apps/mobile/eas.json`: Injected `EXPO_PUBLIC_SENTRY_DSN` into `production.env` and `preview.env` build profiles. Kept `development.env` with `SENTRY_DISABLE_AUTO_UPLOAD: "true"` and no DSN.
+       - `apps/mobile/app/_layout.tsx`: Configured Sentry initialization with strict production guards: `enabled: isMobileProduction && Boolean(mobileSentryDsn)` where `isMobileProduction = process.env.NODE_ENV === 'production' && !__DEV__`. Deactivates SDK completely during development.
+    3. **Strict Production Gating in Web (`apps/web`)**:
+       - `apps/web/sentry.client.config.ts`: Enforced `if (isProduction && SENTRY_DSN)` with `enabled: true` and `environment: "production"`.
+       - `apps/web/sentry.server.config.ts`: Enforced `if (isProduction && SENTRY_DSN)` with `enabled: true` and `environment: "production"`.
+       - `apps/web/sentry.edge.config.ts`: Enforced `if (isProduction && SENTRY_DSN)` with `enabled: true` and `environment: "production"`.
+       - `apps/web/next.config.ts`: Ensured `silent: !process.env.CI` and clean build configuration.
+    4. **Server Action & Turbopack Build Hygiene**:
+       - Resolved Next.js Server Action requirement in `apps/web/app/actions/users.ts`: converted `generateUserFormattedPassword` to an `async` function and awaited calls in `users.ts` and `api/users/[id]/route.ts`.
+  - **Verification**:
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `pnpm --filter @reachinternational/web build`: Turbopack production build compiled successfully (exited with code 0).
+    - `node apps/mobile/run-tests.mjs`: 357/357 test scenarios verified (100% pass rate).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations found.
+
 - [x] **230 — Android Production Play Store Release (.aab) Build & Release Notes (2026-10-21)**:
   - **Delivered**:
     1. **Expo Doctor Sweep (`npx expo-doctor`)**: Ran full 20-check verification across native dependencies, plugins, and app configuration (20/20 checks passed).

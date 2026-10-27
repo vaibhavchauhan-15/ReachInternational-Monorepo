@@ -73,9 +73,10 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          TODAY'S SHIFT STATUS
+          Today's Shift Status
         </Text>
         <View style={styles.oneColCol}>
           <StatusCard
@@ -130,12 +131,13 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
             <Layers size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
             <Text
               variant="caption"
+              weight="semibold"
               style={[
                 styles.eyebrowHeader,
                 { color: isDark ? '#94a3b8' : theme.colors.mute, marginBottom: 0 },
               ]}
             >
-              SHIFT COVERAGE ({submittedCount}/{totalAssignedCount})
+              Shift Coverage ({submittedCount}/{totalAssignedCount})
             </Text>
           </View>
 
@@ -286,12 +288,13 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
             <Layers size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
             <Text
               variant="caption"
+              weight="semibold"
               style={[
                 styles.eyebrowHeader,
                 { color: isDark ? '#94a3b8' : theme.colors.mute, marginBottom: 0 },
               ]}
             >
-              SHIFT COVERAGE
+              Shift Coverage
             </Text>
           </View>
           <View style={styles.oneColCol}>
@@ -315,9 +318,10 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          EQUIPMENT & WORKSITE ASSIGNMENT
+          Equipment & Worksite Assignment
         </Text>
         <View style={styles.oneColCol}>
           {/* Machine Card */}

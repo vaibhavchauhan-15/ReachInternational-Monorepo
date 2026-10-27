@@ -14,7 +14,7 @@ export function WidgetSkeleton({
   className = "",
 }: WidgetSkeletonProps) {
   return (
-    <Card className={`p-4 sm:p-5 border-[var(--color-hairline)] bg-[var(--color-surface)] ${className}`}>
+    <Card className={`p-4 sm:p-5 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] ${className}`}>
       <div className="flex items-center justify-between mb-4">
         {title ? (
           <span className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider">

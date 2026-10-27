@@ -35,6 +35,8 @@ export interface ReachLongLogoProps {
   containerStyle?: StyleProp<ViewStyle>;
   /** Image resizing strategy; defaults to 'contain'. */
   resizeMode?: 'contain' | 'cover' | 'stretch' | 'center';
+  /** Android image fade duration in ms. Defaults to 0 for instant, smooth custom animation. */
+  fadeDuration?: number;
   /** Accessibility text description for screen readers. */
   alt?: string;
   /** Testing identifier for automated QA suites. */
@@ -51,6 +53,7 @@ export const ReachLongLogo = memo(function ReachLongLogo({
   style,
   containerStyle,
   resizeMode = 'contain',
+  fadeDuration = 0,
   alt = 'Reach International — Reaching All Heights',
   testID = 'reach-long-logo',
 }: ReachLongLogoProps) {
@@ -80,6 +83,7 @@ export const ReachLongLogo = memo(function ReachLongLogo({
     >
       <Image
         source={imageSource}
+        fadeDuration={fadeDuration}
         style={[
           {
             width: defaultWidth,

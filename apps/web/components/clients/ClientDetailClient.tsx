@@ -16,6 +16,11 @@ import {
   ArrowRight,
   Search,
   Wrench,
+  UserPlus,
+  Trash2,
+  ShieldCheck,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
 import { formatAllowance, hasMaintenanceAllowance, formatDate, formatExactTimestamp } from "@reachinternational/utils";
 import {
@@ -51,8 +56,12 @@ import {
   KPIGrid,
 } from "@/components/ui";
 import { ClientModal } from "@/components/clients/ClientModal";
+import { ClientSupervisorModal } from "./ClientSupervisorModal";
 import { ClientShiftCodesTab } from "./ClientShiftCodesTab";
 import { SitesList } from "./SitesList";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { getUserInitials } from "@reachinternational/utils";
+import { removeClientSupervisorAction } from "@/app/actions/client-supervisors";
 import type { CRMClient } from "@/lib/types/database";
 import type { ClientShiftCode } from "@reachinternational/types";
 import type {
@@ -64,6 +73,7 @@ import type {
   ClientHistoryItem,
   ClientAuditItem,
   ClientSite,
+  ClientSupervisorItem,
 } from "@/lib/data/clients";
 import type { AddressState } from "./AddressFields";
 
@@ -78,6 +88,7 @@ export interface ClientDetailClientProps {
   initialAuditLogs: ClientAuditItem[];
   initialShiftCodes?: ClientShiftCode[];
   initialSites?: ClientSite[];
+  initialSupervisors?: ClientSupervisorItem[];
   states?: AddressState[];
   currentUserRole?: string;
 }
@@ -95,6 +106,7 @@ export function ClientDetailClient({
   initialAuditLogs = [],
   initialShiftCodes = [],
   initialSites = [],
+  initialSupervisors = [],
   states = [],
   currentUserRole = "super_admin",
 }: ClientDetailClientProps) {
@@ -110,8 +122,62 @@ export function ClientDetailClient({
 
   const [activeTab, setActiveTab] = useState<ClientDetailTabKey>("machines");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSupervisorModalOpen, setIsSupervisorModalOpen] = useState(false);
+  const [supervisors, setSupervisors] = useState<ClientSupervisorItem[]>(initialSupervisors);
+  const [removingSupervisorId, setRemovingSupervisorId] = useState<string | null>(null);
+  const [supervisorToDelete, setSupervisorToDelete] = useState<{ id: string; name: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [tabSearch, setTabSearch] = useState("");
+
+  const handleRequestRemoveSupervisor = useCallback((supervisorId: string, supervisorName: string) => {
+    setSupervisorToDelete({ id: supervisorId, name: supervisorName });
+  }, []);
+
+  const handleConfirmRemoveSupervisor = useCallback(async () => {
+    if (!supervisorToDelete) return;
+    const { id: supervisorId, name: supervisorName } = supervisorToDelete;
+    setRemovingSupervisorId(supervisorId);
+    setSupervisorToDelete(null);
+
+    // Snapshot previous state for rollback
+    const previousSupervisors = [...supervisors];
+
+    // Safe optimistic removal
+    setSupervisors((prev) => prev.filter((s) => s.supervisor_id !== supervisorId));
+
+    try {
+      const res = await removeClientSupervisorAction({
+        clientId: client.id,
+        supervisorId,
+      });
+      if (res.error) {
+        // Rollback on mutation error
+        setSupervisors(previousSupervisors);
+        toast("error", "Removal failed", res.error);
+      } else {
+        toast("success", `Removed ${supervisorName} from client supervisors`);
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      // Rollback on unexpected failure
+      setSupervisors(previousSupervisors);
+      const msg = err instanceof Error ? err.message : "Failed to remove supervisor";
+      toast("error", "Removal failed", msg);
+    } finally {
+      setRemovingSupervisorId(null);
+    }
+  }, [supervisorToDelete, supervisors, client.id, toast, router]);
+
+  const filteredSupervisors = useMemo(() => {
+    if (!tabSearch.trim()) return supervisors;
+    const q = tabSearch.toLowerCase().trim();
+    return supervisors.filter(
+      (s) =>
+        s.supervisor_name.toLowerCase().includes(q) ||
+        (s.supervisor_phone && s.supervisor_phone.includes(q)) ||
+        (s.supervisor_email && s.supervisor_email.toLowerCase().includes(q))
+    );
+  }, [supervisors, tabSearch]);
 
   const canManage = ["super_admin", "admin", "manager"].includes(currentUserRole);
 
@@ -804,7 +870,7 @@ export function ClientDetailClient({
                 : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
-            Assignments ({initialAssignments.length})
+            Assignments ({supervisors.length + initialAssignments.length})
           </button>
 
           <button
@@ -1133,122 +1199,293 @@ export function ClientDetailClient({
             </div>
           )}
 
-          {/* TAB 3: OPERATOR ASSIGNMENTS */}
+          {/* TAB 3: ASSIGNMENTS (CLIENT SUPERVISORS + OPERATORS) */}
           {activeTab === "assignments" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--color-ink)]">
-                    Operator Machine Assignments
-                  </h3>
-                  <p className="text-xs text-[var(--color-mute)]">
-                    Operators currently and historically allocated to machines under this client
-                  </p>
+            <div className="space-y-8">
+              {/* SECTION A: CLIENT SUPERVISORS */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[var(--color-hairline)]">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                      <h3 className="text-sm font-bold text-[var(--color-ink)]">
+                        Assigned Client Supervisors
+                      </h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                        {supervisors.length}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--color-mute)] mt-0.5">
+                      Supervisors who hold inherited operational oversight and assignment authority over this client&apos;s fleet
+                    </p>
+                  </div>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSupervisorModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span>Assign Supervisor</span>
+                    </button>
+                  )}
                 </div>
-                <span className="text-xs font-mono text-[var(--color-mute)]">
-                  {filteredAssignments.length} assignments
-                </span>
+
+                {filteredSupervisors.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-[var(--color-hairline)] p-6 text-center bg-[var(--color-canvas)] space-y-2">
+                    <UserCheck className="h-8 w-8 text-[var(--color-mute)] mx-auto opacity-50" />
+                    <p className="text-xs font-semibold text-[var(--color-ink)]">
+                      {tabSearch ? `No supervisors matching "${tabSearch}"` : "No Supervisors Assigned to This Client"}
+                    </p>
+                    <p className="text-[11px] text-[var(--color-mute)] max-w-md mx-auto">
+                      Assigning a supervisor grants them inherited operational access over all machines and operator logs deployed under this client account.
+                    </p>
+                    {canManage && !tabSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setIsSupervisorModalOpen(true)}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-ink)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>Assign First Supervisor</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Supervisor Name</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Contact Phone</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Email</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Assigned Date</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operational Scope</TableHead>
+                            {canManage && (
+                              <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Action</TableHead>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredSupervisors.map((s) => (
+                            <TableRow
+                              key={s.id}
+                              className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
+                            >
+                              <TableCell className="py-3 px-3 font-semibold text-[var(--color-ink)]">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-7 w-7 rounded-lg bg-[var(--color-ink)] text-white dark:bg-white dark:text-[#171717] border border-[var(--color-hairline)] flex items-center justify-center text-xs font-mono font-bold shadow-2xs">
+                                    {getUserInitials(s.supervisor_name)}
+                                  </div>
+                                  <span>{s.supervisor_name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
+                                {s.supervisor_phone || "—"}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 font-mono text-xs text-[var(--color-mute)]">
+                                {s.supervisor_email || "—"}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 text-xs text-[var(--color-mute)]">
+                                <span suppressHydrationWarning>{s.assigned_at ? formatDate(s.assigned_at) : "—"}</span>
+                              </TableCell>
+                              <TableCell className="py-3 px-3">
+                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold border bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800">
+                                  <ShieldCheck className="h-2.5 w-2.5" />
+                                  INHERITED
+                                </span>
+                              </TableCell>
+                              {canManage && (
+                                <TableCell className="py-3 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRequestRemoveSupervisor(s.supervisor_id, s.supervisor_name)}
+                                    disabled={removingSupervisorId === s.supervisor_id}
+                                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors disabled:opacity-50 cursor-pointer"
+                                    title="Remove supervisor assignment"
+                                    aria-label={`Remove supervisor ${s.supervisor_name}`}
+                                  >
+                                    {removingSupervisorId === s.supervisor_id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Touch Cards View */}
+                    <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+                      {filteredSupervisors.map((s) => (
+                        <div
+                          key={s.id}
+                          className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="h-7 w-7 rounded-lg bg-[var(--color-ink)] text-white dark:bg-white dark:text-[#171717] border border-[var(--color-hairline)] flex items-center justify-center text-xs font-mono font-bold shadow-2xs">
+                                {getUserInitials(s.supervisor_name)}
+                              </div>
+                              <span className="font-semibold text-xs text-[var(--color-ink)]">
+                                {s.supervisor_name}
+                              </span>
+                            </div>
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold border bg-sky-50 text-sky-700 border-sky-200">
+                              INHERITED
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[var(--color-mute)] space-y-0.5 font-mono">
+                            {s.supervisor_phone && <div>Phone: {s.supervisor_phone}</div>}
+                            {s.supervisor_email && <div className="truncate">Email: {s.supervisor_email}</div>}
+                          </div>
+                          {canManage && (
+                            <div className="flex justify-end pt-1 border-t border-[var(--color-hairline)]">
+                              <button
+                                type="button"
+                                onClick={() => handleRequestRemoveSupervisor(s.supervisor_id, s.supervisor_name)}
+                                disabled={removingSupervisorId === s.supervisor_id}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:underline cursor-pointer"
+                                aria-label={`Remove supervisor ${s.supervisor_name}`}
+                              >
+                                {removingSupervisorId === s.supervisor_id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                                <span>Remove</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
-              {filteredAssignments.length === 0 ? (
-                <EmptyState
-                  title="No Operator Assignments"
-                  description={
-                    tabSearch
-                      ? `No operators matching "${tabSearch}" were found.`
-                      : "No operators are currently assigned to equipment allocated to this client."
-                  }
-                />
-              ) : (
-                <>
-                  {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operator Name</TableHead>
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Contact</TableHead>
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine Code</TableHead>
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Shift Schedule</TableHead>
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Assigned Date</TableHead>
-                          <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredAssignments.map((a) => (
-                          <TableRow
-                            key={a.id}
-                            className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
-                          >
-                            <TableCell className="py-3 px-3 font-semibold text-[var(--color-ink)]">
-                              {a.operator_name}
-                            </TableCell>
-                            <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
-                              {a.operator_phone || "—"}
-                            </TableCell>
-                            <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
-                              {a.machine_code}
-                            </TableCell>
-                            <TableCell className="py-3 px-3 font-mono text-[var(--color-mute)]">
-                              {a.shift_start_time?.slice(0, 5)} – {a.shift_end_time?.slice(0, 5)}
-                            </TableCell>
-                            <TableCell className="py-3 px-3 text-[var(--color-mute)]">
-                              <span suppressHydrationWarning>{a.assigned_at ? formatDate(a.assigned_at) : "—"}</span>
-                            </TableCell>
-                            <TableCell className="py-3 px-3 text-right">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold border ${
-                                  a.is_active
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                    : "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-neutral-800 dark:text-neutral-300"
-                                }`}
-                              >
-                                {a.is_active ? "ACTIVE" : "ENDED"}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+              {/* SECTION B: OPERATOR MACHINE ASSIGNMENTS */}
+              <div className="space-y-4 pt-4 border-t border-[var(--color-hairline)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-[var(--color-ink)]">
+                      Operator Machine Assignments
+                    </h3>
+                    <p className="text-xs text-[var(--color-mute)]">
+                      Operators currently and historically allocated to machines under this client
+                    </p>
                   </div>
+                  <span className="text-xs font-mono text-[var(--color-mute)]">
+                    {filteredAssignments.length} assignments
+                  </span>
+                </div>
 
-                  {/* Mobile Touch Cards View */}
-                  <div className="grid grid-cols-1 gap-2.5 sm:hidden">
-                    {filteredAssignments.map((a) => (
-                      <div
-                        key={a.id}
-                        className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-xs text-[var(--color-ink)]">
-                            {a.operator_name}
-                          </span>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[9px] font-bold border ${
-                              a.is_active
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-neutral-100 text-neutral-600 border-neutral-200"
-                            }`}
-                          >
-                            {a.is_active ? "ACTIVE" : "ENDED"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)]">
-                          <span className="font-mono text-sky-600">{a.machine_code}</span>
-                          <span className="font-mono">
-                            {a.shift_start_time?.slice(0, 5)} – {a.shift_end_time?.slice(0, 5)}
-                          </span>
-                        </div>
-                        {a.operator_phone && (
-                          <div className="text-[10px] font-mono text-[var(--color-mute)]">
-                            Phone: {a.operator_phone}
+                {filteredAssignments.length === 0 ? (
+                  <EmptyState
+                    title="No Operator Assignments"
+                    description={
+                      tabSearch
+                        ? `No operators matching "${tabSearch}" were found.`
+                        : "No operators are currently assigned to equipment allocated to this client."
+                    }
+                  />
+                ) : (
+                  <>
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 select-none">
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operator Name</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Contact</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine Code</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Shift Schedule</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Assigned Date</TableHead>
+                            <TableHead className="py-2.5 px-3 text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider text-right">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAssignments.map((a) => (
+                            <TableRow
+                              key={a.id}
+                              className="border-b border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-colors"
+                            >
+                              <TableCell className="py-3 px-3 font-semibold text-[var(--color-ink)]">
+                                {a.operator_name}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 font-mono text-[var(--color-body)]">
+                                {a.operator_phone || "—"}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
+                                {a.machine_code}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 font-mono text-[var(--color-mute)]">
+                                {a.shift_start_time?.slice(0, 5)} – {a.shift_end_time?.slice(0, 5)}
+                              </TableCell>
+                              <TableCell className="py-3 px-3 text-[var(--color-mute)]">
+                                <span suppressHydrationWarning>{a.assigned_at ? formatDate(a.assigned_at) : "—"}</span>
+                              </TableCell>
+                              <TableCell className="py-3 px-3 text-right">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold border ${
+                                    a.is_active
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                      : "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-neutral-800 dark:text-neutral-300"
+                                  }`}
+                                >
+                                  {a.is_active ? "ACTIVE" : "ENDED"}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Touch Cards View */}
+                    <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+                      {filteredAssignments.map((a) => (
+                        <div
+                          key={a.id}
+                          className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-xs text-[var(--color-ink)]">
+                              {a.operator_name}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[9px] font-bold border ${
+                                a.is_active
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                              }`}
+                            >
+                              {a.is_active ? "ACTIVE" : "ENDED"}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                          <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)]">
+                            <span className="font-mono text-sky-600">{a.machine_code}</span>
+                            <span className="font-mono">
+                              {a.shift_start_time?.slice(0, 5)} – {a.shift_end_time?.slice(0, 5)}
+                            </span>
+                          </div>
+                          {a.operator_phone && (
+                            <div className="text-[10px] font-mono text-[var(--color-mute)]">
+                              Phone: {a.operator_phone}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -1443,6 +1680,39 @@ export function ClientDetailClient({
           }}
         />
       )}
+
+      {/* ─── 8. ASSIGN CLIENT SUPERVISOR MODAL ─── */}
+      <ClientSupervisorModal
+        isOpen={isSupervisorModalOpen}
+        onClose={() => setIsSupervisorModalOpen(false)}
+        clientId={client.id}
+        clientName={client.company_name || client.client_name || "Client"}
+        onSuccess={(newSupervisor) => {
+          setSupervisors((prev) => [newSupervisor, ...prev]);
+          toast("success", `Assigned ${newSupervisor.supervisor_name} to this client`);
+          router.refresh();
+        }}
+        onError={(err) => {
+          toast("error", err);
+        }}
+      />
+
+      {/* ─── 9. REMOVE CLIENT SUPERVISOR CONFIRMATION DIALOG ─── */}
+      <ConfirmationDialog
+        isOpen={Boolean(supervisorToDelete)}
+        onClose={() => setSupervisorToDelete(null)}
+        onConfirm={handleConfirmRemoveSupervisor}
+        title="Remove Client Supervisor"
+        description={
+          supervisorToDelete
+            ? `Are you sure you want to remove supervisor "${supervisorToDelete.name}" from ${client.company_name || "this client"}? They will lose inherited operational access to all equipment and operator shifts under this client.`
+            : ""
+        }
+        confirmLabel="Remove Supervisor"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={Boolean(removingSupervisorId)}
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ import {
   useTheme,
   KPICard,
   KPIGrid,
+  Skeleton,
   DropdownFilterSelector,
   CustomDatePicker,
   FilterSidebar,
@@ -42,6 +43,7 @@ import {
   Badge,
 } from '../ui';
 import { SearchInput } from '../ui/SearchInput';
+import { TodayShiftMonitorKPIStrip } from './TodayShiftMonitorKPIStrip';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import {
   useTodayShiftMonitorInfiniteQuery,
@@ -407,14 +409,15 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     if (activeFilterCount === 0 && searchQuery.trim() === '') return null;
     return (
       <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
-        <Text variant="caption" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+        <Text variant="caption" weight="medium" style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
           Active Filters:
         </Text>
 
         {clientFilter !== 'all' && (
           <Badge
             variant="info"
-            size="md"
+            size="sm"
+            solid={false}
             label={`Client: ${currentClientLabel}`}
             onRemove={() => setClientFilter('all')}
           />
@@ -423,7 +426,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {searchQuery.trim() !== '' && (
           <Badge
             variant="outline"
-            size="md"
+            size="sm"
+            solid={false}
             label={`Search: "${searchQuery}"`}
             onRemove={() => {
               setSearchQuery('');
@@ -435,7 +439,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {selectedDate !== todayStr && (
           <Badge
             variant="info"
-            size="md"
+            size="sm"
+            solid={false}
             label={`Date: ${selectedDateLabel}`}
             onRemove={() => setSelectedDate(todayStr)}
           />
@@ -444,7 +449,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {statusFilter !== 'all' && (
           <Badge
             variant={statusFilter === 'entered' ? 'success' : 'warning'}
-            size="md"
+            size="sm"
+            solid={false}
             label={`Status: ${currentStatusLabel}`}
             onRemove={() => setStatusFilter('all')}
           />
@@ -453,7 +459,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {shiftFilter !== 'all' && (
           <Badge
             variant="info"
-            size="md"
+            size="sm"
+            solid={false}
             label={`Shift: ${currentShiftLabel}`}
             onRemove={() => setShiftFilter('all')}
           />
@@ -462,7 +469,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         {sortBy !== 'default' && (
           <Badge
             variant="outline"
-            size="md"
+            size="sm"
+            solid={false}
             label={`Sort: ${currentSortLabel}`}
             onRemove={() => setSortBy('default')}
           />
@@ -476,7 +484,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           style={styles.resetAllLink}
         >
           <RotateCcw size={11} color={theme.colors.link} />
-          <Text variant="caption" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+          <Text variant="caption" weight="semibold" style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
             Reset all
           </Text>
         </Pressable>
@@ -582,33 +590,11 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           </View>
         )}
 
-        {/* 1. KPI COUNTER SUMMARY CARDS — Powered by dedicated sub-2ms RPC */}
-        <KPIGrid columns={4}>
-          <KPICard
-            label="Total Shifts"
-            value={summary.total}
-            icon={Clock}
-            variant="default"
-          />
-          <KPICard
-            label="Entered"
-            value={summary.entered}
-            icon={CheckCircle2}
-            variant="success"
-          />
-          <KPICard
-            label="Pending"
-            value={summary.pending}
-            icon={AlertCircle}
-            variant={summary.pending > 0 ? 'warning' : 'default'}
-          />
-          <KPICard
-            label="Unassigned"
-            value={summary.unassigned}
-            icon={UserX}
-            variant={summary.unassigned > 0 ? 'error' : 'default'}
-          />
-        </KPIGrid>
+        {/* 1. KPI COUNTER SUMMARY CARDS — 100% Web Parity */}
+        <TodayShiftMonitorKPIStrip
+          summary={summary}
+          isLoading={isLoading && flatRows.length === 0}
+        />
 
         {/* 2. SEARCH & FILTER TOOLBAR */}
         <View style={styles.toolbarContainer}>
@@ -619,6 +605,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               <SearchInput
                 ref={searchInputRef}
                 placeholder="Search operator, machine, client..."
+                placeholderTextColor={theme.colors.mute}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onClear={() => {
@@ -626,6 +613,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   setDebouncedSearchQuery('');
                 }}
                 isLoading={isFetching && debouncedSearchQuery !== searchQuery}
+                size="md"
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
 
@@ -662,7 +653,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 }
               />
               <Text
-                variant="label"
+                variant="caption"
+                weight="semibold"
                 style={[
                   styles.filterToggleBtnText,
                   {
@@ -688,7 +680,8 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   ]}
                 >
                   <Text
-                    variant="caption"
+                    variant="micro"
+                    weight="bold"
                     style={[
                       styles.activeCountBadgeText,
                       {
@@ -722,7 +715,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 accessibilityLabel="Reset all filters"
               >
                 <RotateCcw size={13} color={theme.colors.mute} />
-                <Text variant="caption" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
+                <Text variant="caption" weight="semibold" style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
                   Reset
                 </Text>
               </Pressable>
@@ -731,6 +724,32 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
           {/* Active Filter Badges */}
           {renderActiveFilterBadges()}
+        </View>
+
+        {/* 3. RESULTS COUNT LINE (100% Web & Machines Page Parity) */}
+        <View style={styles.resultsCountRow}>
+          {isLoading && flatRows.length === 0 ? (
+            <Skeleton width={160} height={14} borderRadius={radiusNumeric.sm} />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text variant="caption" style={{ color: theme.colors.mute }}>
+                Showing{' '}
+                <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                  {flatRows.length}
+                </Text>{' '}
+                of{' '}
+                <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                  {totalCount}
+                </Text>{' '}
+                shifts
+                {activeFilterCount > 0 && totalCount > flatRows.length && (
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>
+                    {' '}(filtered)
+                  </Text>
+                )}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     ),
@@ -874,7 +893,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           ]}
           accessibilityLabel={`Load ${remaining} more shifts`}
         >
-          <Text variant="label" style={{ color: '#0284c7' }}>
+          <Text variant="caption" weight="semibold" style={{ color: '#0284c7' }}>
             Load more shifts ({remaining} remaining)
           </Text>
         </Pressable>
@@ -1014,7 +1033,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
             {/* Sheet Header */}
             <View style={styles.sheetHeader}>
-              <Text variant="subheading" style={[styles.sheetTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+              <Text variant="body" weight="bold" style={[styles.sheetTitle, { color: theme.colors.ink }]} numberOfLines={1}>
                 {menuRow?.operator_name || 'Operator Shift'}
               </Text>
               <Text variant="caption" style={[styles.sheetSubtitle, { color: theme.colors.mute }]} numberOfLines={1}>
@@ -1046,7 +1065,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     <Edit2 size={16} color="#ffffff" />
                   </View>
                   <View style={styles.sheetActionTextCol}>
-                    <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
+                    <Text variant="body" weight="semibold" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
                       Edit Shift Log
                     </Text>
                     <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -1076,7 +1095,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                     <User size={16} color="#ffffff" />
                   </View>
                   <View style={styles.sheetActionTextCol}>
-                    <Text variant="label" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
+                    <Text variant="body" weight="semibold" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
                       Enter Shift Log
                     </Text>
                     <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -1101,7 +1120,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                 },
               ]}
             >
-              <Text variant="label" style={{ color: theme.colors.mute }}>
+              <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
                 Cancel
               </Text>
             </Pressable>
@@ -1274,7 +1293,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 38,
+    height: 36,
     paddingHorizontal: 12,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
@@ -1294,13 +1313,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 38,
+    height: 36,
     paddingHorizontal: 10,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     flexShrink: 0,
   },
   quickResetBtnText: {},
+  resultsCountRow: {
+    paddingHorizontal: 2,
+    marginTop: 2,
+    marginBottom: 2,
+  },
 
   activeBadgesRow: {
     flexDirection: 'row',

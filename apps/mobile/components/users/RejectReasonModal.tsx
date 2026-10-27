@@ -64,10 +64,10 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
               <AlertTriangle size={16} color={theme.colors.error} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>
+              <Text variant="heading" weight="semibold" style={[styles.title, { color: theme.colors.ink }]}>
                 Reject Change Request
               </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+              <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
                 Decline profile changes for {userName}
               </Text>
             </View>
@@ -94,13 +94,13 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
               },
             ]}
           >
-            <Text style={[styles.infoBannerText, { color: theme.colors.error }]}>
+            <Text variant="caption" style={[styles.infoBannerText, { color: theme.colors.error }]}>
               The user&apos;s active profile will remain unchanged. You may optionally enter a rejection reason below.
             </Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.ink }]}>
+            <Text variant="caption" weight="medium" style={[styles.label, { color: theme.colors.ink }]}>
               Rejection Reason (Optional)
             </Text>
             <Textarea
@@ -133,7 +133,7 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
             onPress={onClose}
             disabled={isSubmitting}
           >
-            <Text style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
+            <Text variant="caption" weight="medium" style={[styles.cancelBtnText, { color: theme.colors.ink }]}>
               Cancel
             </Text>
           </Touchable>
@@ -152,7 +152,7 @@ export const RejectReasonModal: React.FC<RejectReasonModalProps> = ({
             {isSubmitting ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text style={styles.confirmBtnText}>Confirm Rejection</Text>
+              <Text variant="caption" weight="semibold" style={styles.confirmBtnText}>Confirm Rejection</Text>
             )}
           </Touchable>
         </View>
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingNumeric.lg,
     paddingVertical: 9,
     borderRadius: radiusNumeric.md,
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },

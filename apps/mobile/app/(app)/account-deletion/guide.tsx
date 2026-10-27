@@ -34,7 +34,7 @@ export default function AccountDeletionGuideScreen() {
       <MobileHeader
         title="Account Deletion Guide"
         showBack={true}
-        onPressBack={() => router.back()}
+        backRoute="/account-deletion"
       />
 
       <ScrollView

@@ -14,6 +14,8 @@ import {
   getClientAuditLogs,
   getClientShiftCodes,
   getClientSites,
+  getClientSupervisors,
+  checkSupervisorClientAccess,
 } from "@/lib/data/clients";
 import { INDIAN_STATES } from "@reachinternational/utils";
 import { EmptyState } from "@/components/ui";
@@ -68,6 +70,29 @@ export default async function ClientDetailPage(props: {
     );
   }
 
+  // Enforce supervisor client-level assignment authorization
+  if (user.role === "supervisor") {
+    const hasAccess = await checkSupervisorClientAccess(clientId, user.id);
+    if (!hasAccess) {
+      return (
+        <div className="py-16 max-w-xl mx-auto px-4">
+          <EmptyState
+            title="Access Restricted"
+            description="You are not assigned as a supervisor for this client. Contact an administrator to request access."
+            action={
+              <Link
+                href="/clients"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm bg-[var(--color-ink)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 transition-opacity"
+              >
+                Back to Client Directory
+              </Link>
+            }
+          />
+        </div>
+      );
+    }
+  }
+
   // High-performance concurrent queries: all light section lookups in parallel
   const [
     detailRes,
@@ -80,6 +105,7 @@ export default async function ClientDetailPage(props: {
     auditLogs,
     shiftCodes,
     sites,
+    supervisors,
   ] = await Promise.all([
     getClientDetail(clientId),
     getClientDetailLocation(clientId),
@@ -91,6 +117,7 @@ export default async function ClientDetailPage(props: {
     getClientAuditLogs(clientId, 50),
     getClientShiftCodes(clientId),
     getClientSites(clientId),
+    getClientSupervisors(clientId),
   ]);
 
   if (!detailRes.client) {
@@ -124,8 +151,10 @@ export default async function ClientDetailPage(props: {
       initialAuditLogs={auditLogs}
       initialShiftCodes={shiftCodes}
       initialSites={sites}
+      initialSupervisors={supervisors}
       states={[...INDIAN_STATES]}
       currentUserRole={user.role}
     />
   );
 }
+

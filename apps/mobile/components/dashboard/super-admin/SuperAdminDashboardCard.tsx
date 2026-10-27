@@ -61,9 +61,10 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          PLATFORM FLEET & IDENTITY METRICS
+          Platform Fleet & Identity Metrics
         </Text>
         <KPIGrid columns={6}>
           <KPICard
@@ -115,9 +116,10 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          GOVERNANCE & SYSTEM CONTROLS
+          Governance & System Controls
         </Text>
         <View style={styles.actionList}>
           <PrimaryAction
@@ -156,7 +158,7 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 4,
+    marginBottom: spacingNumeric.sm,
   },
   actionList: {
     gap: spacingNumeric.sm,

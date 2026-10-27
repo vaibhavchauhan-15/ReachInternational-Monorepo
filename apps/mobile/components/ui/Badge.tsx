@@ -195,7 +195,7 @@ export function resolveBadgeColors(
   isDark: boolean,
   role?: string,
   accentColor?: string,
-  solid: boolean = true
+  solid: boolean = false
 ): ResolvedBadgeColors {
   // 0. Custom accent color takes precedence when explicitly provided (100% solid opacity)
   if (accentColor) {
@@ -629,7 +629,7 @@ const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<Vi
       role,
       userRole,
       accentColor,
-      solid = true,
+      solid = false,
       label,
       customLabel,
       icon,

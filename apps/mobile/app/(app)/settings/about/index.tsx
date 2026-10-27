@@ -13,7 +13,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, Text } from '../../../../components/ui';
+import Constants from 'expo-constants';
+import { useTheme, Text, Card } from '../../../../components/ui';
 import { Pressable } from '../../../../components/ui/touch/Pressable';
 import { SettingsScreenContainer } from '../../../../components/settings';
 import { radiusNumeric } from '@reachinternational/design-tokens';
@@ -26,6 +27,7 @@ import {
   Mail,
   Shield,
   ChevronRight,
+  Layers,
 } from '../../../../components/ui/icon';
 
 interface AboutNavCardProps {
@@ -68,6 +70,7 @@ function AboutNavCard({
       <View style={styles.textColumn}>
         <Text
           variant="subheading"
+          weight="semibold"
           style={[styles.cardTitle, { color: theme.colors.ink }]}
           numberOfLines={1}
         >
@@ -76,7 +79,7 @@ function AboutNavCard({
         <Text
           variant="caption"
           style={[styles.cardSubtitle, { color: theme.colors.mute }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {subtitle}
         </Text>
@@ -90,11 +93,13 @@ function AboutNavCard({
 
 export default function AboutAppHomeScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const handleBack = () => {
     router.replace('/settings');
   };
+
+  const appVersion = Constants.expoConfig?.version || '1.3.0';
 
   return (
     <SettingsScreenContainer
@@ -104,6 +109,87 @@ export default function AboutAppHomeScreen() {
       onPressBack={handleBack}
       contentContainerStyle={styles.containerContent}
     >
+      {/* App Identity Banner Card */}
+      <Card
+        variant="elevated"
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View style={styles.heroRow}>
+          <View
+            style={[
+              styles.heroIconBox,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(2, 132, 199, 0.2)'
+                  : '#e0f2fe',
+              },
+            ]}
+          >
+            <Layers size={22} color={isDark ? '#38bdf8' : '#0284c7'} />
+          </View>
+          <View style={styles.heroTextCol}>
+            <View style={styles.heroTitleRow}>
+              <Text
+                variant="subheading"
+                weight="semibold"
+                style={{ color: theme.colors.ink }}
+              >
+                Reach International
+              </Text>
+              <View
+                style={[
+                  styles.versionPill,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : '#f4f4f5',
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <Text
+                  variant="micro"
+                  weight="medium"
+                  style={{ color: theme.colors.mute }}
+                >
+                  v{appVersion}
+                </Text>
+              </View>
+            </View>
+            <Text
+              variant="caption"
+              style={{ color: theme.colors.mute }}
+              numberOfLines={2}
+            >
+              Enterprise machinery fleet operations, telemetry & running log management.
+            </Text>
+          </View>
+        </View>
+      </Card>
+
+      {/* Section 1: Application & Release */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          APPLICATION & RELEASE
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Release notes, corporate background, and device runtime specifications.
+        </Text>
+      </View>
+
       {/* 0. What's New */}
       <AboutNavCard
         icon={<Sparkles size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
@@ -134,7 +220,24 @@ export default function AboutAppHomeScreen() {
         accessibilityLabel="Navigate to App Information"
       />
 
-      {/* 2. Privacy Policy */}
+      {/* Section 2: Governance & Compliance */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          GOVERNANCE & COMPLIANCE
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Operational shift telemetry and statutory KYC protection policies.
+        </Text>
+      </View>
+
+      {/* 3. Privacy Policy */}
       <AboutNavCard
         icon={<FileText size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
         iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
@@ -144,7 +247,7 @@ export default function AboutAppHomeScreen() {
         accessibilityLabel="Navigate to Privacy Policy"
       />
 
-      {/* 3. Terms & Conditions */}
+      {/* 4. Terms & Conditions */}
       <AboutNavCard
         icon={<ClipboardList size={20} color={isDark ? '#818cf8' : '#4f46e5'} />}
         iconBg={isDark ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff'}
@@ -152,16 +255,6 @@ export default function AboutAppHomeScreen() {
         subtitle="Enterprise fleet usage rules & HMR integrity standards"
         onPress={() => router.push('/settings/about/terms' as any)}
         accessibilityLabel="Navigate to Terms and Conditions"
-      />
-
-      {/* 4. Support & Contact */}
-      <AboutNavCard
-        icon={<Mail size={20} color={isDark ? '#60a5fa' : '#2563eb'} />}
-        iconBg={isDark ? 'rgba(59, 130, 246, 0.15)' : '#dbeafe'}
-        title="Support & Contact"
-        subtitle="Enterprise technical help desk and official website"
-        onPress={() => router.push('/settings/about/support' as any)}
-        accessibilityLabel="Navigate to Support and Contact"
       />
 
       {/* 5. Cookies & Storage Policy */}
@@ -173,6 +266,33 @@ export default function AboutAppHomeScreen() {
         onPress={() => router.push('/settings/about/cookies' as any)}
         accessibilityLabel="Navigate to Cookie Policy"
       />
+
+      {/* Section 3: Support & Operations */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          SUPPORT & OPERATIONS
+        </Text>
+        <Text
+          variant="caption"
+          style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
+        >
+          Enterprise technical help desk and official company contact.
+        </Text>
+      </View>
+
+      {/* 6. Support & Contact */}
+      <AboutNavCard
+        icon={<Mail size={20} color={isDark ? '#60a5fa' : '#2563eb'} />}
+        iconBg={isDark ? 'rgba(59, 130, 246, 0.15)' : '#dbeafe'}
+        title="Support & Contact"
+        subtitle="Enterprise technical help desk and official website"
+        onPress={() => router.push('/settings/about/support' as any)}
+        accessibilityLabel="Navigate to Support and Contact"
+      />
     </SettingsScreenContainer>
   );
 }
@@ -180,6 +300,51 @@ export default function AboutAppHomeScreen() {
 const styles = StyleSheet.create({
   containerContent: {
     gap: 12,
+  },
+  heroCard: {
+    padding: 16,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  heroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTextCol: {
+    flex: 1,
+    gap: 4,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  versionPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1,
+  },
+  sectionHeader: {
+    marginTop: 10,
+    marginBottom: 2,
+    paddingHorizontal: 4,
+    gap: 2,
+  },
+  sectionTitle: {
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    marginTop: 1,
   },
   navCard: {
     minHeight: 64,

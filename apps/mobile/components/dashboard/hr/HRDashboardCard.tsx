@@ -54,9 +54,10 @@ export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          PERSONNEL & OPERATIONS ROSTER
+          Personnel & Operations Roster
         </Text>
         <KPIGrid columns={4}>
           <KPICard
@@ -94,9 +95,10 @@ export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
       <View style={styles.section}>
         <Text
           variant="caption"
+          weight="semibold"
           style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
         >
-          PERSONNEL ACTIONS
+          Personnel Actions
         </Text>
         <View style={styles.actionList}>
           <PrimaryAction
@@ -129,7 +131,7 @@ const styles = StyleSheet.create({
   },
   eyebrowHeader: {
     textTransform: 'uppercase',
-    marginBottom: spacingNumeric.xs + 4,
+    marginBottom: spacingNumeric.sm,
   },
   actionList: {
     gap: spacingNumeric.sm,

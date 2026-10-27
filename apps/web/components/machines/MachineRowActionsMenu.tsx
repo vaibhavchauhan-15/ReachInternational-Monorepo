@@ -227,7 +227,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
           aria-expanded={open}
           className={
             triggerClassName ||
-            "p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+            "p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           }
           aria-label="More actions"
         >
@@ -259,7 +259,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   <button
                     type="button"
                     onClick={handleEditMachineAction}
-                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                   >
                     <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
                     <span>Edit Machine</span>
@@ -271,7 +271,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   <button
                     type="button"
                     onClick={handleEditPersonnelAction}
-                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                   >
                     <Users size={14} className="text-teal-600 dark:text-teal-400 shrink-0" />
                     <span>Edit Supervisor & Operator</span>
@@ -283,7 +283,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   <button
                     type="button"
                     onClick={handleEditClientAction}
-                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                   >
                     <Building2 size={14} className="text-sky-500 shrink-0" />
                     <span>Edit Client</span>
@@ -296,7 +296,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                 <button
                   type="button"
                   onClick={handleViewAuditAction}
-                  className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                  className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                 >
                   <Shield size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
                   <span>Audit</span>
@@ -306,7 +306,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                 <button
                   type="button"
                   onClick={handleViewLogsAction}
-                  className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                  className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                 >
                   <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                   <span>Running Logs</span>
@@ -322,7 +322,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                         setOpen(false);
                         onDelete(machine);
                       }}
-                      className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+                      className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
                     >
                       <AnimatedTrash size={14} className="text-rose-500 shrink-0" />
                       <span>Delete Machine</span>

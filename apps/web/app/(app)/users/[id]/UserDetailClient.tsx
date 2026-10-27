@@ -49,6 +49,7 @@ import {
   formatTimeAgo,
   maskAadhaar,
   formatLicenseNumber,
+  getUserInitials,
 } from "@reachinternational/utils";
 import {
   toggleUserStatus,
@@ -169,10 +170,7 @@ function getRoleAvatarStyle(role?: string): string {
 }
 
 function getInitials(name?: string): string {
-  if (!name) return "U";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return getUserInitials(name);
 }
 
 export function UserDetailClient({
@@ -928,9 +926,23 @@ export function UserDetailClient({
           <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
             <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
               <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Employee ID</span>
-              <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
-                {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-              </span>
+              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
+                <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
+                  {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`, "Employee ID")}
+                  className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
+                  title="Copy Employee ID"
+                >
+                  {copiedKey === "Employee ID" ? (
+                    <AnimatedCheck size={12} className="text-emerald-500" />
+                  ) : (
+                    <AnimatedCopy size={12} />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">

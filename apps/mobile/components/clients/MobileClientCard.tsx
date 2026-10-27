@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { Badge, useTheme, HighlightText, Text, Touchable } from '../ui';
+import { useTheme, HighlightText, Text } from '../ui';
+import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  Edit2,
-  Trash2,
-  Copy,
-  Check,
-  Wrench,
+  FileText,
+  User,
+  Phone,
   MapPin,
+  Clock,
+  UserPlus,
+  Settings,
+  MoreVertical,
 } from '../ui/icon';
-import * as Clipboard from 'expo-clipboard';
+import { haptics } from '../../lib/haptics';
 
 export interface MobileClientCardProps {
   client: {
@@ -38,7 +42,6 @@ export interface MobileClientCardProps {
     billing_district?: string;
     billing_state?: string;
     billing_pincode?: string;
-    /** Monthly maintenance allowance in minutes per machine. 0 = no allowance. */
     maintenance_allowance_minutes?: number;
     status: 'active' | 'inactive';
     deleted_at?: string | null;
@@ -51,6 +54,9 @@ export interface MobileClientCardProps {
   onEdit: (client: any) => void;
   onDelete: (client: any) => void;
   onAddSite?: (client: any) => void;
+  onAssignSupervisor?: (client: any) => void;
+  onAssignMachine?: (client: any) => void;
+  onOpenActions?: (client: any) => void;
 }
 
 export const MobileClientCard: React.FC<MobileClientCardProps> = ({
@@ -61,149 +67,249 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
   onEdit,
   onDelete,
   onAddSite,
+  onAssignSupervisor,
+  onAssignMachine,
+  onOpenActions,
 }: MobileClientCardProps) => {
   const { theme, isDark } = useTheme();
-  const [copied, setCopied] = useState(false);
-  const displayId = client.client_id || client.code;
+  const { width } = useWindowDimensions();
+  const isUltraNarrow = width < 340;
 
-  const handleCopyCode = async () => {
-    if (!displayId) return;
-    try {
-      if (Clipboard && Clipboard.setStringAsync) {
-        await Clipboard.setStringAsync(displayId);
-      }
-    } catch {
-      // Graceful fallback
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
+  const displayId = client.client_id || client.code;
 
   const isSoftDeleted = Boolean(client.deleted_at);
   const isActive = client.status === 'active' && !isSoftDeleted;
-  const accentBorderColor = isSoftDeleted
-    ? '#ef4444'
-    : isActive
-    ? '#10b981'
-    : '#f59e0b';
 
-  // Format maintenance allowance for display
+  // Format maintenance allowance
   const allowanceMin = client.maintenance_allowance_minutes ?? 0;
   const allowanceH = Math.floor(allowanceMin / 60);
   const allowanceM = allowanceMin % 60;
-  const allowanceLabel = allowanceMin > 0
-    ? `${allowanceH > 0 ? `${allowanceH}h` : ''}${allowanceH > 0 && allowanceM > 0 ? ' ' : ''}${allowanceM > 0 ? `${allowanceM}m` : ''}`
-    : null;
+  const allowanceLabel =
+    allowanceMin > 0
+      ? `${allowanceH > 0 ? `${allowanceH}h` : ''}${allowanceH > 0 && allowanceM > 0 ? ' ' : ''}${allowanceM > 0 ? `${allowanceM}m` : ''}`
+      : '0h';
+
+  // Format site count & summary string
+  const sitesList = Array.isArray(client.client_sites) ? client.client_sites : [];
+  const siteCount = client.site_count ?? sitesList.length;
+  const siteNames = sitesList
+    .map((s) => s.site_name || s.city)
+    .filter(Boolean)
+    .slice(0, 2);
+  const sitesSummary =
+    siteNames.length > 0
+      ? siteNames.join(' · ')
+      : client.city || client.state || '—';
+
+  const handleCardPress = () => {
+    haptics.select();
+    onViewDetails(client);
+  };
+
+  const handleAssignSupervisorPress = (e?: any) => {
+    e?.stopPropagation?.();
+    haptics.select();
+    if (onAssignSupervisor) {
+      onAssignSupervisor(client);
+    } else {
+      onViewDetails(client);
+    }
+  };
+
+  const handleAssignMachinePress = (e?: any) => {
+    e?.stopPropagation?.();
+    haptics.select();
+    if (onAssignMachine) {
+      onAssignMachine(client);
+    } else {
+      onViewDetails(client);
+    }
+  };
+
+  const handleThreeDotPress = (e?: any) => {
+    e?.stopPropagation?.();
+    haptics.select();
+    if (onOpenActions) {
+      onOpenActions(client);
+    } else {
+      onEdit(client);
+    }
+  };
 
   return (
-    <Touchable
-      preset="card"
-      onPress={() => onViewDetails(client)}
-      style={[
+    <Pressable
+      variant="card"
+      haptic={false}
+      onPress={handleCardPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Client ${client.company_name}, ID ${displayId}`}
+      style={(state) => [
         styles.card,
         {
           backgroundColor: theme.colors.canvasElevated,
           borderColor: theme.colors.hairline,
-          borderLeftColor: accentBorderColor,
         },
+        state.pressed && {
+          backgroundColor: isDark
+            ? 'rgba(255, 255, 255, 0.04)'
+            : 'rgba(0, 0, 0, 0.02)',
+        },
+        Platform.OS === 'web' && ({
+          cursor: 'pointer',
+          transition: 'background-color 150ms ease, opacity 150ms ease, transform 150ms ease',
+        } as any),
       ]}
     >
-      {/* Top Header Row: Client ID Copy Pill + Status Badge */}
-      <View style={styles.headerRow}>
+      {/* 1. Header: Client Name, ID and Status on the same compact header area */}
+      <View style={styles.headerArea}>
         <View style={styles.headerLeft}>
-          <Touchable
-            preset="icon"
-            onPress={handleCopyCode}
+          <HighlightText
+            text={client.company_name}
+            query={searchTerm}
+            variant="subheading"
+            weight="bold"
+            style={{ color: theme.colors.ink }}
+            matchStyle={{ color: isDark ? '#38bdf8' : '#0284c7' }}
+            numberOfLines={1}
+          />
+          {Boolean(displayId) && (
+            <Text
+              variant="caption"
+              weight="medium"
+              style={{ color: theme.colors.mute }}
+              numberOfLines={1}
+            >
+              {displayId}
+            </Text>
+          )}
+        </View>
+
+        {/* Compact Status Pill */}
+        <View
+          style={[
+            styles.statusPill,
+            {
+              backgroundColor: isSoftDeleted
+                ? (isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)')
+                : isActive
+                ? (isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)')
+                : (isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)'),
+              borderColor: isSoftDeleted
+                ? (isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.25)')
+                : isActive
+                ? (isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)')
+                : (isDark ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.25)'),
+            },
+          ]}
+        >
+          <View
             style={[
-              styles.codeBtn,
+              styles.statusDot,
               {
-                backgroundColor: theme.colors.canvas,
-                borderColor: theme.colors.hairline,
+                backgroundColor: isSoftDeleted
+                  ? '#ef4444'
+                  : isActive
+                  ? '#10b981'
+                  : '#f59e0b',
               },
             ]}
-            accessibilityLabel={`Copy client ID ${displayId}`}
+          />
+          <Text
+            variant="micro"
+            weight="semibold"
+            style={{
+              color: isSoftDeleted
+                ? '#ef4444'
+                : isActive
+                ? '#10b981'
+                : '#f59e0b',
+            }}
           >
-            <HighlightText
-              text={displayId}
-              query={searchTerm}
-              variant="mono"
-              style={{ color: theme.colors.ink }}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
-            />
-            {copied ? (
-              <Check size={12} color={theme.colors.success} strokeWidth={2.5} />
-            ) : (
-              <Copy size={12} color={theme.colors.mute} />
-            )}
-          </Touchable>
+            {isSoftDeleted ? 'Soft Deleted' : isActive ? 'Active' : 'Inactive'}
+          </Text>
         </View>
-
-        <Badge
-          status={isSoftDeleted ? 'inactive' : client.status}
-          customLabel={isSoftDeleted ? 'SOFT DELETED' : client.status.toUpperCase()}
-        />
       </View>
 
-      {/* Company Name Row */}
-      <View style={styles.companyRow}>
-        <HighlightText
-          text={client.company_name}
-          query={searchTerm}
-          variant="heading"
-          style={{ color: theme.colors.ink }}
-          matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
-          numberOfLines={2}
-        />
-      </View>
-
-      {/* Tax Badges (GSTIN / PAN) */}
-      {Boolean(client.gstin || client.pan_number) && (
-        <View style={styles.tagRow}>
-          {Boolean(client.gstin) && (
-            <View style={[styles.taxBadge, { backgroundColor: isDark ? 'rgba(168, 85, 247, 0.15)' : '#f3e8ff', borderColor: isDark ? 'rgba(168, 85, 247, 0.3)' : '#d8b4fe' }]}>
-              <Text variant="mono" style={{ color: isDark ? '#c084fc' : '#7e22ce' }}>
-                GST: {client.gstin}
-              </Text>
-            </View>
-          )}
-          {Boolean(client.pan_number) && (
-            <View style={[styles.taxBadge, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe', borderColor: isDark ? 'rgba(14, 165, 233, 0.3)' : '#bae6fd' }]}>
-              <Text variant="mono" style={{ color: isDark ? '#38bdf8' : '#0369a1' }}>
-                PAN: {client.pan_number}
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Inset Specs Well (2x2 Grid) */}
+      {/* 2. Details: 2-Column Grid (12-16dp padding, 12-16dp vertical gaps, zero oversized dividers) */}
       <View
         style={[
-          styles.specsWell,
+          styles.detailsWell,
           {
-            backgroundColor: theme.colors.canvas,
+            backgroundColor: isDark
+              ? 'rgba(255, 255, 255, 0.02)'
+              : 'rgba(0, 0, 0, 0.015)',
             borderColor: theme.colors.hairline,
           },
         ]}
       >
-        <View style={styles.specGridRow}>
-          <View style={styles.specCol}>
-            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
+        {/* Row 1: GST | PAN */}
+        <View style={[styles.gridRow, isUltraNarrow && styles.gridRowStacked]}>
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <FileText size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                GST
+              </Text>
+            </View>
+            <Text
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
+              numberOfLines={1}
+            >
+              {client.gstin || '—'}
+            </Text>
+          </View>
+
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <FileText size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                PAN
+              </Text>
+            </View>
+            <Text
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
+              numberOfLines={1}
+            >
+              {client.pan_number || '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Row 2: Contact Person | Contact Number */}
+        <View style={[styles.gridRow, isUltraNarrow && styles.gridRowStacked]}>
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <User size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                Contact Person
+              </Text>
+            </View>
             <HighlightText
               text={client.contact_person || '—'}
               query={searchTerm}
-              variant="body"
-              style={{ color: theme.colors.ink }}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
+              matchStyle={{ color: isDark ? '#38bdf8' : '#0284c7' }}
               numberOfLines={1}
             />
           </View>
 
-          <View style={styles.specCol}>
-            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>PHONE NUMBER</Text>
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <Phone size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                Contact Number
+              </Text>
+            </View>
             <Text
-              variant="mono"
-              style={{ color: theme.colors.ink }}
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
               numberOfLines={1}
             >
               {client.phone || '—'}
@@ -211,104 +317,114 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
           </View>
         </View>
 
-        <View style={[styles.specDivider, { backgroundColor: theme.colors.hairline }]} />
-
-        <View style={styles.specGridRow}>
-          <View style={styles.specCol}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
-              {Boolean(client.site_count && client.site_count > 1) && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(14, 165, 233, 0.3)' : '#bae6fd' }}>
-                  <MapPin size={9} color={isDark ? '#38bdf8' : '#0284c7'} />
-                  <Text variant="caption" style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
-                    {client.site_count} Sites
-                  </Text>
-                </View>
-              )}
+        {/* Row 3: Sites | Maintenance Allowance */}
+        <View style={[styles.gridRow, isUltraNarrow && styles.gridRowStacked]}>
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <MapPin size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                Sites{siteCount > 0 ? ` · ${siteCount}` : ''}
+              </Text>
             </View>
-            <HighlightText
-              text={client.city || client.district || client.address || '—'}
-              query={searchTerm}
-              variant="body"
-              style={{ color: theme.colors.ink }}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
+            <Text
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
               numberOfLines={1}
-            />
+            >
+              {sitesSummary}
+            </Text>
           </View>
-        </View>
 
-        {/* Monthly Maintenance Allowance row */}
-        <View style={[styles.specDivider, { backgroundColor: theme.colors.hairline }]} />
-        <View style={styles.specGridRow}>
-          <View style={[styles.specCol, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-            <Wrench size={13} color={allowanceLabel ? (isDark ? '#fbbf24' : '#d97706') : '#ef4444'} />
-            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>MAINT. ALLOWANCE</Text>
+          <View style={styles.gridCol}>
+            <View style={styles.fieldLabelRow}>
+              <Clock size={13} color={theme.colors.mute} />
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                Maintenance allowance
+              </Text>
+            </View>
+            <Text
+              variant="caption"
+              weight="semibold"
+              style={[styles.fieldValue, { color: theme.colors.ink }]}
+              numberOfLines={1}
+            >
+              {allowanceLabel}
+            </Text>
           </View>
-          {allowanceLabel ? (
-            <View style={[styles.allowanceBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }]}>
-              <Text variant="caption" style={{ color: isDark ? '#fbbf24' : '#92400e' }}>
-                {allowanceLabel}
-              </Text>
-            </View>
-          ) : (
-            <View style={[styles.allowanceBadge, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fff1f2', borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecdd3' }]}>
-              <Text variant="caption" style={{ color: '#e11d48' }}>
-                Not Allowed
-              </Text>
-            </View>
-          )}
         </View>
       </View>
 
-      {/* Touch Action Buttons Row (min 44px targets) */}
-      {canManageClients && (
-        <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
-          <Touchable
-            preset="button"
-            style={[
-              styles.actionBtn,
-              styles.iconActionBtn,
-              { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-            ]}
-            onPress={() => onEdit(client)}
-            accessibilityLabel={`Edit ${client.company_name}`}
+      {/* 3. Actions: Keep Assign Supervisor and Assign Machine side by side, with 3-dot menu in compact square */}
+      <View style={styles.actionsRow}>
+        {/* Assign Supervisor */}
+        <Pressable
+          variant="buttonOutline"
+          hitSlopToMin48
+          onPress={handleAssignSupervisorPress}
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: theme.colors.canvas,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+          accessibilityLabel={`Assign supervisor for ${client.company_name}`}
+        >
+          <UserPlus size={15} color={isDark ? '#38bdf8' : '#0284c7'} />
+          <Text
+            variant="caption"
+            weight="semibold"
+            style={{ color: theme.colors.ink }}
+            numberOfLines={1}
           >
-            <Edit2 size={14} color={theme.colors.ink} />
-            <Text variant="label" style={{ color: theme.colors.ink }}>Edit</Text>
-          </Touchable>
+            Assign Supervisor
+          </Text>
+        </Pressable>
 
-          {onAddSite && (
-            <Touchable
-              preset="button"
-              style={[
-                styles.actionBtn,
-                styles.iconActionBtn,
-                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-              ]}
-              onPress={() => onAddSite(client)}
-              accessibilityLabel={`Add Site to ${client.company_name}`}
-            >
-              <MapPin size={14} color="#10b981" />
-              <Text variant="label" style={{ color: theme.colors.ink }}>Add Site</Text>
-            </Touchable>
-          )}
-
-          <Touchable
-            preset="button"
-            style={[
-              styles.actionBtn,
-              styles.iconActionBtn,
-              { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fff1f2' },
-            ]}
-            onPress={() => onDelete(client)}
-            accessibilityLabel={`Delete ${client.company_name}`}
+        {/* Assign Machine */}
+        <Pressable
+          variant="buttonOutline"
+          hitSlopToMin48
+          onPress={handleAssignMachinePress}
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: theme.colors.canvas,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+          accessibilityLabel={`Assign machine for ${client.company_name}`}
+        >
+          <Settings size={15} color={isDark ? '#38bdf8' : '#0284c7'} />
+          <Text
+            variant="caption"
+            weight="semibold"
+            style={{ color: theme.colors.ink }}
+            numberOfLines={1}
           >
-            <Trash2 size={14} color="#e11d48" />
-            <Text variant="label" style={{ color: '#e11d48' }}>Delete</Text>
-          </Touchable>
-        </View>
-      )}
-    </Touchable>
+            Assign Machine
+          </Text>
+        </Pressable>
+
+        {/* Three-Dot Menu (Compact Square Button) */}
+        <Pressable
+          variant="buttonOutline"
+          hitSlopToMin48
+          onPress={handleThreeDotPress}
+          style={[
+            styles.threeDotButton,
+            {
+              backgroundColor: theme.colors.canvas,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+          accessibilityLabel={`More actions for ${client.company_name}`}
+        >
+          <MoreVertical size={16} color={theme.colors.ink} />
+        </Pressable>
+      </View>
+    </Pressable>
   );
 };
 
@@ -316,100 +432,92 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    borderLeftWidth: 3,
-    padding: spacingNumeric.sm + 2,
-    gap: spacingNumeric.xs + 2,
+    padding: 14,
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  codeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  companyRow: {
-    paddingVertical: 1,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  taxBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  specsWell: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    gap: 8,
-    marginTop: 2,
-  },
-  specGridRow: {
+  headerArea: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 8,
   },
-  specCol: {
+  headerLeft: {
     flex: 1,
     gap: 2,
   },
-  specLabel: {
-    textTransform: 'uppercase',
-  },
-  specDivider: {
-    height: 1,
-    width: '100%',
-  },
-  allowanceBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radiusNumeric.sm,
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  cardActions: {
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  detailsWell: {
+    padding: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    gap: 12,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  gridRowStacked: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  gridCol: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  fieldValue: {
+    paddingLeft: 18,
+  },
+  actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
     marginTop: 2,
   },
-  actionBtn: {
+  actionButton: {
+    flex: 1,
     minHeight: 44,
     borderRadius: radiusNumeric.md,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
-  iconActionBtn: {
+  threeDotButton: {
+    width: 44,
+    minWidth: 44,
+    height: 44,
+    minHeight: 44,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

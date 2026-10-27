@@ -214,7 +214,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
             <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
               Hour Meter (HMR):
             </Text>
-            <Text variant="label" weight="semibold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
+            <Text variant="mono" weight="bold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
               {machine.hour_meter ?? 0} hrs
             </Text>
           </View>
@@ -224,8 +224,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               Assigned Client:
             </Text>
             <Text
-              variant="label"
-              weight="semibold"
+              variant="caption"
+              weight="bold"
               style={[styles.specValueClient, { color: theme.colors.ink }]}
               numberOfLines={1}
             >
@@ -258,7 +258,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 return (
                   <View key={s.id || idx} style={styles.personnelRow}>
                     <Text
-                      variant="label"
+                      variant="caption"
+                      weight="semibold"
                       style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
@@ -295,7 +296,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 return (
                   <View key={o.id || idx} style={styles.personnelRow}>
                     <Text
-                      variant="label"
+                      variant="caption"
+                      weight="semibold"
                       style={[{ color: theme.colors.ink, flexShrink: 1 }]}
                       numberOfLines={1}
                     >
@@ -358,7 +360,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           ]}
           accessibilityLabel="View Machine Details"
         >
-          <Text variant="label" style={{ color: '#ffffff' }}>
+          <Text variant="caption" weight="semibold" style={{ color: '#ffffff' }}>
             Details
           </Text>
           <ChevronRight size={14} color="#ffffff" strokeWidth={2.5} />

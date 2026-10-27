@@ -46,15 +46,15 @@ export function SettingsScreenContainer({
       onPressBack();
       return;
     }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+      return;
+    }
     if (backRoute) {
       router.replace(backRoute as any);
       return;
     }
-    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/settings' as any);
-    }
+    router.replace('/settings' as any);
   }, [onPressBack, backRoute, router]);
 
   // Intercept Android hardware back button
@@ -118,6 +118,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    width: '100%',
+    maxWidth: 896,
+    alignSelf: 'center',
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
     paddingBottom: 96,

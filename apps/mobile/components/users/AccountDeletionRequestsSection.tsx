@@ -55,13 +55,13 @@ export function AccountDeletionRequestsSection({
       <View style={[styles.header, { borderBottomColor: isDark ? '#7f1d1d40' : '#fee2e2' }]}>
         <View style={styles.titleRow}>
           <View style={[styles.alertDot, { backgroundColor: '#ef4444' }]} />
-          <Text variant="label" style={{ color: theme.colors.ink }}>
+          <Text variant="subheading" weight="semibold" style={{ color: theme.colors.ink }}>
             Account Deletion Requests ({requests.length})
           </Text>
         </View>
         <View style={[styles.deletionCountPill, { backgroundColor: isDark ? '#7f1d1d66' : '#fee2e2' }]}>
           <AlertTriangle size={11} color="#ef4444" />
-          <Text variant="micro" style={{ color: '#dc2626' }}>
+          <Text variant="micro" weight="semibold" style={{ color: '#dc2626' }}>
             Action Required
           </Text>
         </View>
@@ -100,13 +100,13 @@ export function AccountDeletionRequestsSection({
                     },
                   ]}
                 >
-                  <Text variant="label" style={{ color: '#ef4444' }}>
+                  <Text variant="caption" weight="bold" style={{ color: '#ef4444' }}>
                     {displayName ? displayName[0].toUpperCase() : 'D'}
                   </Text>
                 </View>
                 <View style={styles.flex1}>
                   <View style={styles.nameBadgeRow}>
-                    <Text variant="label" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
                       {displayName}
                     </Text>
                     <View
@@ -131,6 +131,7 @@ export function AccountDeletionRequestsSection({
                       )}
                       <Text
                         variant="micro"
+                        weight="medium"
                         style={{ color: isWebPortal ? theme.colors.link : '#7c3aed' }}
                       >
                         {isWebPortal ? 'Web Portal' : 'Mobile App'}
@@ -158,7 +159,7 @@ export function AccountDeletionRequestsSection({
                 },
               ]}
             >
-              <Text variant="micro" style={{ color: theme.colors.mute }}>
+              <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
                 Reason for deletion:
               </Text>
               <Text variant="caption" style={{ color: theme.colors.ink }}>
@@ -178,7 +179,7 @@ export function AccountDeletionRequestsSection({
                 {isApproving ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text variant="label" style={styles.whiteText}>
+                  <Text variant="caption" weight="semibold" style={styles.whiteText}>
                     Approve & Deactivate
                   </Text>
                 )}
@@ -199,7 +200,7 @@ export function AccountDeletionRequestsSection({
                 {isRejecting ? (
                   <ActivityIndicator size="small" color={theme.colors.mute} />
                 ) : (
-                  <Text variant="label" style={{ color: theme.colors.ink }}>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
                     Decline
                   </Text>
                 )}

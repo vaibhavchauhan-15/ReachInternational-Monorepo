@@ -1,5 +1,6 @@
 import React from 'react';
 import { KPIGrid, KPICard } from '../ui';
+import { useAuth } from '../../lib/auth/useAuth';
 
 export interface MachineKPIStats {
   totalCount: number;
@@ -13,32 +14,46 @@ export interface MachineKPIStripProps {
   isLoading?: boolean;
 }
 
-export function MachineKPIStrip({ stats, isLoading = false }: MachineKPIStripProps) {
+export function MachineKPIStrip({
+  stats,
+  isLoading = false,
+}: MachineKPIStripProps) {
+  const { role } = useAuth();
+  const isOperator = (role || '').toLowerCase() === 'operator';
+
   return (
-    <KPIGrid columns={2}>
+    <KPIGrid columns={4}>
       <KPICard
-        label="ASSIGNED FLEET"
+        label={isOperator ? 'Assigned Fleet' : 'Total Fleet'}
         value={stats.totalCount}
         isLoading={isLoading}
         variant="default"
+        labelVariant="micro"
+        valueVariant="title"
       />
       <KPICard
-        label="AVAILABLE"
+        label="Available"
         value={stats.availableCount}
         isLoading={isLoading}
         variant="success"
+        labelVariant="micro"
+        valueVariant="title"
       />
       <KPICard
-        label="ON RENT"
+        label="On Rent"
         value={stats.rentedCount}
         isLoading={isLoading}
         variant="info"
+        labelVariant="micro"
+        valueVariant="title"
       />
       <KPICard
-        label="BREAKDOWN EVENTS"
+        label="Breakdown Events"
         value={stats.breakdownCount}
         isLoading={isLoading}
         variant={stats.breakdownCount > 0 ? 'error' : 'default'}
+        labelVariant="micro"
+        valueVariant="title"
       />
     </KPIGrid>
   );
