@@ -39,6 +39,9 @@ import {
   AnimatedEdit,
   AnimatedCalendar,
   AnimatedHistory,
+  AnimatedUserPlus,
+  AnimatedPower,
+  AnimatedTrash2,
 } from "@/components/ui/animated-icons";
 import {
   Button,
@@ -50,7 +53,6 @@ import {
   TableRow,
   TableHead,
   TableCell,
-  SearchBox,
   useToast,
   KPICard,
   KPIGrid,
@@ -62,6 +64,8 @@ import { SitesList } from "./SitesList";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { getUserInitials } from "@reachinternational/utils";
 import { removeClientSupervisorAction } from "@/app/actions/client-supervisors";
+import { toggleClientStatusAction, deleteClientAction } from "@/app/actions/clients";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { CRMClient } from "@/lib/types/database";
 import type { ClientShiftCode } from "@reachinternational/types";
 import type {
@@ -126,8 +130,131 @@ export function ClientDetailClient({
   const [supervisors, setSupervisors] = useState<ClientSupervisorItem[]>(initialSupervisors);
   const [removingSupervisorId, setRemovingSupervisorId] = useState<string | null>(null);
   const [supervisorToDelete, setSupervisorToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [confirmToggleStatusOpen, setConfirmToggleStatusOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [tabSearch, setTabSearch] = useState("");
+
+  const canManage = ["super_admin", "admin", "manager"].includes(currentUserRole);
+  const isSuperAdmin = currentUserRole === "super_admin";
+
+  // Toggle client status (active <-> inactive)
+  const handleToggleStatus = useCallback(async () => {
+    setIsTogglingStatus(true);
+    try {
+      const res = await toggleClientStatusAction(client.id);
+      if (res.error) {
+        toast("error", "Failed to update status", res.error);
+      } else {
+        const nextStatus = res.newStatus || (client.status === "active" ? "inactive" : "active");
+        setClient((prev) => ({
+          ...prev,
+          status: nextStatus,
+          deleted_at: nextStatus === "inactive" ? new Date().toISOString() : null,
+        }));
+        toast("success", "Client Status Updated", `Account marked as ${nextStatus}.`);
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to toggle status";
+      toast("error", "Status update failed", msg);
+    } finally {
+      setIsTogglingStatus(false);
+      setConfirmToggleStatusOpen(false);
+    }
+  }, [client.id, client.status, toast, router]);
+
+  // Delete client
+  const handleDeleteClient = useCallback(async () => {
+    setIsDeletingClient(true);
+    try {
+      const res = await deleteClientAction(client.id);
+      if (res.error) {
+        toast("error", "Failed to delete client", res.error);
+        setIsDeletingClient(false);
+        setConfirmDeleteOpen(false);
+      } else {
+        toast("success", "Client Deleted", `${client.company_name || "Client"} has been removed.`);
+        router.push("/clients");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete client";
+      toast("error", "Delete failed", msg);
+      setIsDeletingClient(false);
+      setConfirmDeleteOpen(false);
+    }
+  }, [client.id, client.company_name, toast, router]);
+
+  // Register mobile header contextual actions
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        customActions: [
+          ...(canManage
+            ? [
+                {
+                  id: "edit-client",
+                  label: "Edit Profile",
+                  icon: <AnimatedEdit size={16} className="text-sky-500 shrink-0" />,
+                  run: () => setIsEditModalOpen(true),
+                },
+                {
+                  id: "assign-supervisor",
+                  label: "Assign Supervisor",
+                  icon: <AnimatedUserPlus size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />,
+                  run: () => setIsSupervisorModalOpen(true),
+                },
+                {
+                  id: "toggle-status",
+                  label: client.status === "active" ? "Deactivate Client" : "Activate Client",
+                  icon: (
+                    <AnimatedPower
+                      size={16}
+                      className={client.status === "active" ? "text-amber-500 shrink-0" : "text-emerald-500 shrink-0"}
+                    />
+                  ),
+                  run: () => setConfirmToggleStatusOpen(true),
+                },
+              ]
+            : []),
+          ...(isSuperAdmin
+            ? [
+                {
+                  id: "delete-client",
+                  label: "Delete Client",
+                  icon: <AnimatedTrash2 size={16} className="text-red-600 shrink-0" />,
+                  run: () => setConfirmDeleteOpen(true),
+                  variant: "danger" as const,
+                },
+              ]
+            : []),
+        ],
+      }),
+      [canManage, isSuperAdmin, client.status]
+    )
+  );
+
+  // Dual-binding event listeners for MobilePageHeader
+  useEffect(() => {
+    const handleEditEvent = () => setIsEditModalOpen(true);
+    const handleAssignEvent = () => setIsSupervisorModalOpen(true);
+    const handleToggleEvent = () => setConfirmToggleStatusOpen(true);
+    const handleDeleteEvent = () => setConfirmDeleteOpen(true);
+
+    window.addEventListener("reach:client-edit", handleEditEvent);
+    window.addEventListener("reach:client-assign-supervisor", handleAssignEvent);
+    window.addEventListener("reach:client-toggle-status", handleToggleEvent);
+    window.addEventListener("reach:client-delete", handleDeleteEvent);
+
+    return () => {
+      window.removeEventListener("reach:client-edit", handleEditEvent);
+      window.removeEventListener("reach:client-assign-supervisor", handleAssignEvent);
+      window.removeEventListener("reach:client-toggle-status", handleToggleEvent);
+      window.removeEventListener("reach:client-delete", handleDeleteEvent);
+    };
+  }, []);
 
   const handleRequestRemoveSupervisor = useCallback((supervisorId: string, supervisorName: string) => {
     setSupervisorToDelete({ id: supervisorId, name: supervisorName });
@@ -168,19 +295,6 @@ export function ClientDetailClient({
     }
   }, [supervisorToDelete, supervisors, client.id, toast, router]);
 
-  const filteredSupervisors = useMemo(() => {
-    if (!tabSearch.trim()) return supervisors;
-    const q = tabSearch.toLowerCase().trim();
-    return supervisors.filter(
-      (s) =>
-        s.supervisor_name.toLowerCase().includes(q) ||
-        (s.supervisor_phone && s.supervisor_phone.includes(q)) ||
-        (s.supervisor_email && s.supervisor_email.toLowerCase().includes(q))
-    );
-  }, [supervisors, tabSearch]);
-
-  const canManage = ["super_admin", "admin", "manager"].includes(currentUserRole);
-
   const handleCopy = useCallback((text: string, key: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -191,72 +305,14 @@ export function ClientDetailClient({
     }, 2000);
   }, [toast]);
 
-  // Filtered Tab Items
-  const filteredMachines = useMemo(() => {
-    if (!tabSearch.trim()) return initialMachines;
-    const q = tabSearch.toLowerCase().trim();
-    return initialMachines.filter(
-      (m) =>
-        m.machine_id.toLowerCase().includes(q) ||
-        m.model.toLowerCase().includes(q) ||
-        (m.serial_number && m.serial_number.toLowerCase().includes(q)) ||
-        m.status.toLowerCase().includes(q)
-    );
-  }, [initialMachines, tabSearch]);
-
-  const filteredLogs = useMemo(() => {
-    if (!tabSearch.trim()) return initialLogs;
-    const q = tabSearch.toLowerCase().trim();
-    return initialLogs.filter(
-      (l) =>
-        (l.machine_code && l.machine_code.toLowerCase().includes(q)) ||
-        (l.operator_name && l.operator_name.toLowerCase().includes(q)) ||
-        l.log_date.includes(q)
-    );
-  }, [initialLogs, tabSearch]);
-
-  const filteredAssignments = useMemo(() => {
-    if (!tabSearch.trim()) return initialAssignments;
-    const q = tabSearch.toLowerCase().trim();
-    return initialAssignments.filter(
-      (a) =>
-        a.operator_name.toLowerCase().includes(q) ||
-        a.machine_code.toLowerCase().includes(q) ||
-        (a.operator_phone && a.operator_phone.includes(q))
-    );
-  }, [initialAssignments, tabSearch]);
-
-  const filteredShiftCodes = useMemo(() => {
-    if (!tabSearch.trim()) return initialShiftCodes;
-    const q = tabSearch.toLowerCase().trim();
-    return initialShiftCodes.filter(
-      (s) =>
-        s.code.toLowerCase().includes(q) ||
-        (s.name && s.name.toLowerCase().includes(q))
-    );
-  }, [initialShiftCodes, tabSearch]);
-
-  const filteredHistory = useMemo(() => {
-    if (!tabSearch.trim()) return initialHistory;
-    const q = tabSearch.toLowerCase().trim();
-    return initialHistory.filter(
-      (h) =>
-        h.title.toLowerCase().includes(q) ||
-        h.description.toLowerCase().includes(q) ||
-        (h.actor_name && h.actor_name.toLowerCase().includes(q))
-    );
-  }, [initialHistory, tabSearch]);
-
-  const filteredAuditLogs = useMemo(() => {
-    if (!tabSearch.trim()) return initialAuditLogs;
-    const q = tabSearch.toLowerCase().trim();
-    return initialAuditLogs.filter(
-      (a) =>
-        a.action.toLowerCase().includes(q) ||
-        (a.actor_name && a.actor_name.toLowerCase().includes(q)) ||
-        (a.actor_role && a.actor_role.toLowerCase().includes(q))
-    );
-  }, [initialAuditLogs, tabSearch]);
+  // Tab items (direct projection without redundant search input)
+  const filteredSupervisors = supervisors;
+  const filteredMachines = initialMachines;
+  const filteredLogs = initialLogs;
+  const filteredAssignments = initialAssignments;
+  const filteredShiftCodes = initialShiftCodes;
+  const filteredHistory = initialHistory;
+  const filteredAuditLogs = initialAuditLogs;
 
   // Derived aggregates
   const totalRunningHours = useMemo(() => {
@@ -332,28 +388,24 @@ export function ClientDetailClient({
         </span>
       </nav>
 
-      {/* ─── 2. MASTER HERO BANNER CARD (Optimized for Mobile and Desktop) ─── */}
-      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-2xs relative overflow-hidden transition-all">
+      {/* ─── 2. MASTER HERO BANNER CARD (Unified Responsive Design) ─── */}
+      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-5 md:p-6 shadow-2xs relative overflow-hidden transition-all">
         {/* Subtle top hairline gradient accent */}
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/50 to-transparent pointer-events-none" />
 
-        {/* ── Mobile Layout (≤640px) ── */}
-        <div className="flex flex-col gap-3 sm:hidden">
-          {/* Row 1: Brand Icon + Title & ID copy */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
-              <Building2 className="h-5 w-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+            <div className="flex h-11 w-11 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
+              <Building2 className="h-5 w-5 sm:h-7 sm:w-7" />
             </div>
 
-            <div className="flex flex-col min-w-0 flex-1">
-              <h1 className="text-base font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">
-                {client.company_name || client.client_name}
-              </h1>
-              <div className="flex items-center gap-1.5 mt-1">
+            <div className="flex flex-col min-w-0 space-y-1">
+              {/* Badges Row */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleCopy(clientIdentifier, "Client ID")}
-                  className="inline-flex items-center gap-1 h-5 px-2 rounded bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] text-[11px] font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer active:scale-95"
+                  className="inline-flex items-center gap-1 h-5 sm:h-6 px-2 sm:px-2.5 rounded sm:rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-[11px] sm:text-xs font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer transition-colors active:scale-95"
                   title="Click to copy Client ID"
                 >
                   <span>{clientIdentifier}</span>
@@ -363,132 +415,31 @@ export function ClientDetailClient({
                     <AnimatedCopy size={11} className="text-[var(--color-mute)] shrink-0" />
                   )}
                 </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Status & Feature Badges */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {client.deleted_at ? (
-              <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
-                SOFT DELETED
-              </span>
-            ) : client.status === "active" ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                ACTIVE
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-neutral-100 dark:bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
-                INACTIVE
-              </span>
-            )}
-
-            {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                <Wrench size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>Maint: {formatAllowance(client.maintenance_allowance_minutes ?? 0)}/mo</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
-                <AlertCircle size={10} className="text-red-600 dark:text-red-400 shrink-0" />
-                <span>Maint: None</span>
-              </span>
-            )}
-
-            {client.is_billing_address_different && (
-              <span className="inline-flex items-center rounded-full bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                Separate Billing
-              </span>
-            )}
-          </div>
-
-          {/* Row 3: Touch Action Buttons */}
-          <div className="flex items-center gap-2 pt-0.5">
-            {canManage && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setIsEditModalOpen(true)}
-                className="flex-1 min-h-[40px] text-xs font-semibold rounded-md inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <AnimatedEdit size={14} />
-                <span>Edit Profile</span>
-              </Button>
-            )}
-
-            {cleanPhone && (
-              <a
-                href={`tel:${cleanPhone}`}
-                className="flex-1 min-h-[40px] px-3 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] inline-flex items-center justify-center gap-1.5 active:bg-[var(--color-hairline-soft-surface)]"
-                title="Call Client"
-              >
-                <Phone size={14} className="text-[var(--color-mute)]" />
-                <span>Call</span>
-              </a>
-            )}
-
-            {whatsappUrl && (
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 min-h-[40px] px-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center justify-center gap-1.5 active:bg-emerald-500/20"
-                title="WhatsApp Client"
-              >
-                <span>WhatsApp</span>
-              </a>
-            )}
-          </div>
-        </div>
-
-        {/* ── Desktop / Tablet Layout (>640px) ── */}
-        <div className="hidden sm:flex sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
-              <Building2 className="h-7 w-7" />
-            </div>
-
-            <div className="flex flex-col min-w-0 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleCopy(clientIdentifier, "Client ID")}
-                  className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer transition-colors active:scale-95"
-                  title="Click to copy Client ID"
-                >
-                  <span>{clientIdentifier}</span>
-                  {copiedKey === "Client ID" ? (
-                    <AnimatedCheck size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  ) : (
-                    <AnimatedCopy size={12} className="text-[var(--color-mute)] shrink-0" />
-                  )}
-                </button>
 
                 {client.deleted_at ? (
-                  <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
+                  <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
                     SOFT DELETED
                   </span>
                 ) : client.status === "active" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     ACTIVE
                   </span>
                 ) : (
-                  <span className="inline-flex items-center rounded-full bg-neutral-100 dark:bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
+                  <span className="inline-flex items-center rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
                     INACTIVE
                   </span>
                 )}
 
                 {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                     <Wrench size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                    <span>Maint. Allowed: {formatAllowance(client.maintenance_allowance_minutes ?? 0)} / mo</span>
+                    <span>Maint: {formatAllowance(client.maintenance_allowance_minutes ?? 0)}/mo</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
                     <AlertCircle size={10} className="text-red-600 dark:text-red-400 shrink-0" />
-                    <span>Maintenance: Not Allowed</span>
+                    <span>Maint: None</span>
                   </span>
                 )}
 
@@ -499,13 +450,14 @@ export function ClientDetailClient({
                 )}
               </div>
 
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">
                 {client.company_name || client.client_name}
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Desktop Right Action Bar (On mobile, actions are cleanly in the top header 3-dot menu per Feedback #8) */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             {canManage && (
               <Button
                 variant="primary"
@@ -544,12 +496,12 @@ export function ClientDetailClient({
         </div>
       </div>
 
-      {/* ─── 3. 4-CARD HIGH-DENSITY METADATA GRID (Constituent to User & Machine Pages) ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      {/* ─── 3. 4-CARD HIGH-DENSITY METADATA STRIP (Mobile Smooth Snap-Scroll, Desktop Grid) ─── */}
+      <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 sm:pb-0 sm:grid sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar sm:overflow-visible touch-pan-x -mx-1 px-1 sm:mx-0 sm:px-0">
         {/* Card 1: Contact Person */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="w-[84vw] max-w-[320px] shrink-0 snap-start sm:w-auto sm:shrink rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 shadow-2xs space-y-2 sm:space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -611,7 +563,7 @@ export function ClientDetailClient({
         {/* Card 2: Tax & Statutory Compliance */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="w-[84vw] max-w-[320px] shrink-0 snap-start sm:w-auto sm:shrink rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 shadow-2xs space-y-2 sm:space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -679,7 +631,7 @@ export function ClientDetailClient({
         {/* Card 3: Operational Site Address */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="w-[84vw] max-w-[320px] shrink-0 snap-start sm:w-auto sm:shrink rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 shadow-2xs space-y-2 sm:space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -703,7 +655,7 @@ export function ClientDetailClient({
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] lowercase font-normal text-sky-600 hover:underline flex items-center gap-0.5"
+                  className="text-[10px] lowercase font-normal text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-0.5"
                   title="Open in Google Maps"
                 >
                   <ExternalLink size={10} />
@@ -740,7 +692,7 @@ export function ClientDetailClient({
         {/* Card 4: Registered Billing Address */}
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+          className="w-[84vw] max-w-[320px] shrink-0 snap-start sm:w-auto sm:shrink rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 shadow-2xs space-y-2 sm:space-y-2.5 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
         >
           <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
@@ -809,168 +761,77 @@ export function ClientDetailClient({
         />
       </KPIGrid>
 
-      {/* ─── 5. TAB STRIP & SEARCH TOOLBAR (Consistent with Users/Machines Page) ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">
-        {/* Scrollable Tab Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-nowrap pb-1 sm:pb-0">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("machines");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "machines"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Machines ({initialMachines.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("sites");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "sites"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Sites ({initialSites.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("logs");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "logs"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Running Logs ({initialLogs.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("assignments");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "assignments"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Assignments ({supervisors.length + initialAssignments.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("shifts");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "shifts"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Shift Codes ({initialShiftCodes.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("history");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "history"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            History ({initialHistory.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("audit");
-              setTabSearch("");
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "audit"
-                ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            Audit Trail ({initialAuditLogs.length})
-          </button>
-        </div>
-
-        {/* Search Bar - Reusing SearchBox primitive */}
-        <div className="w-full sm:w-72">
-          <SearchBox
-            value={tabSearch}
-            onChange={(val) => setTabSearch(val)}
-            placeholder={`Filter ${
-              activeTab === "machines"
-                ? "machines"
-                : activeTab === "logs"
-                ? "logs"
-                : activeTab === "assignments"
-                ? "assignments"
-                : activeTab === "shifts"
-                ? "shifts"
-                : activeTab === "history"
-                ? "history"
-                : "audit trail"
-            }...`}
-            size="sm"
-          />
+      {/* ─── 5. TAB STRIP TOOLBAR ─── */}
+      <div className="border-b border-[var(--color-hairline)] pb-2.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-nowrap touch-pan-x -mx-1 px-1 sm:mx-0 sm:px-0">
+          {(
+            [
+              { key: "machines" as const, label: "Machines", count: initialMachines.length },
+              { key: "sites" as const, label: "Sites", count: initialSites.length },
+              { key: "logs" as const, label: "Running Logs", count: initialLogs.length },
+              {
+                key: "assignments" as const,
+                label: "Assignments",
+                count: supervisors.length + initialAssignments.length,
+              },
+              { key: "shifts" as const, label: "Shift Codes", count: initialShiftCodes.length },
+              { key: "history" as const, label: "History", count: initialHistory.length },
+              { key: "audit" as const, label: "Audit Trail", count: initialAuditLogs.length },
+            ]
+          ).map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
+                  isActive
+                    ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-xs font-bold"
+                    : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono transition-colors ${
+                    isActive
+                      ? "bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                      : "bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-        {/* ─── 6. TAB CONTENT PANELS ─── */}
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs min-h-[300px]">
-          {/* TAB 1: MACHINES */}
-          {activeTab === "machines" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--color-ink)]">
-                    Deployed Fleet Equipment
-                  </h3>
-                  <p className="text-xs text-[var(--color-mute)]">
-                    Machinery actively or historically deployed to this client
-                  </p>
-                </div>
-                <span className="text-xs font-mono text-[var(--color-mute)]">
-                  {filteredMachines.length} of {initialMachines.length} units
+      {/* ─── 6. TAB CONTENT PANELS ─── */}
+      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-5 shadow-2xs min-h-[260px] overflow-hidden">
+        {/* TAB 1: MACHINES */}
+        {activeTab === "machines" && (
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
+                  Deployed Fleet Equipment
+                </h3>
+                <span className="hidden sm:inline text-xs text-[var(--color-mute)]">
+                  • Machinery actively or historically deployed to this client
                 </span>
               </div>
+              <span className="text-[11px] sm:text-xs font-mono text-[var(--color-mute)] shrink-0 font-medium">
+                {initialMachines.length} {initialMachines.length === 1 ? "unit" : "units"}
+              </span>
+            </div>
 
-              {filteredMachines.length === 0 ? (
-                <EmptyState
-                  title="No Machinery Found"
-                  description={
-                    tabSearch
-                      ? `No machines matching "${tabSearch}" were found for this client.`
-                      : "No equipment units are currently allocated to this client account."
-                  }
-                />
-              ) : (
+            {filteredMachines.length === 0 ? (
+              <EmptyState
+                title="No Machinery Found"
+                description="No equipment units are currently allocated to this client account."
+              />
+            ) : (
                 <>
                   {/* Desktop Table View */}
                   <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
@@ -1026,7 +887,7 @@ export function ClientDetailClient({
                             <TableCell className="py-3 px-3 text-right">
                               <Link
                                 href={`/machines/${m.id}`}
-                                className="text-xs font-semibold text-sky-600 hover:text-sky-700 hover:underline inline-flex items-center gap-1"
+                                className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline inline-flex items-center gap-1"
                               >
                                 <span>Inspect</span>
                                 <ArrowRight size={12} />
@@ -1047,12 +908,12 @@ export function ClientDetailClient({
                         className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 block hover:border-sky-500/50 transition-colors"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-sky-600">{m.machine_id}</span>
+                          <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{m.machine_id}</span>
                           <span
                             className={`rounded-full px-2 py-0.5 text-[9px] font-bold border ${
                               m.status === "active" || m.status === "rented"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                                : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700"
                             }`}
                           >
                             {m.status.toUpperCase()}
@@ -1085,17 +946,17 @@ export function ClientDetailClient({
 
           {/* TAB 2: RUNNING LOGS */}
           {activeTab === "logs" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--color-ink)]">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
                     Shift Running Hours & HMR Logs
                   </h3>
-                  <p className="text-xs text-[var(--color-mute)]">
-                    Machine meter entries logged during operator shifts
-                  </p>
+                  <span className="hidden sm:inline text-xs text-[var(--color-mute)]">
+                    • Machine meter entries logged during operator shifts
+                  </span>
                 </div>
-                <span className="text-xs font-mono text-[var(--color-mute)]">
+                <span className="text-[11px] sm:text-xs font-mono text-[var(--color-mute)] shrink-0 font-medium">
                   {filteredLogs.length} entries
                 </span>
               </div>
@@ -1103,11 +964,7 @@ export function ClientDetailClient({
               {filteredLogs.length === 0 ? (
                 <EmptyState
                   title="No Running Logs Recorded"
-                  description={
-                    tabSearch
-                      ? `No shift logs matching "${tabSearch}" were found.`
-                      : "No shift running hours have been logged for this client account yet."
-                  }
+                  description="No shift running hours have been logged for this client account yet."
                 />
               ) : (
                 <>
@@ -1151,11 +1008,11 @@ export function ClientDetailClient({
                             </TableCell>
                             <TableCell className="py-3 px-3 text-right">
                               {log.is_breakdown ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[9px] font-bold text-red-700 dark:text-red-300 border border-red-200">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[9px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
                                   <AlertCircle size={10} /> Breakdown
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200">
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                   Normal
                                 </span>
                               )}
@@ -1204,47 +1061,43 @@ export function ClientDetailClient({
             <div className="space-y-8">
               {/* SECTION A: CLIENT SUPERVISORS */}
               <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[var(--color-hairline)]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                      <h3 className="text-sm font-bold text-[var(--color-ink)]">
-                        Assigned Client Supervisors
-                      </h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-                        {supervisors.length}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                      Supervisors who hold inherited operational oversight and assignment authority over this client&apos;s fleet
-                    </p>
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                    <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
+                      Assigned Client Supervisors
+                    </h3>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 shrink-0">
+                      {supervisors.length}
+                    </span>
                   </div>
                   {canManage && (
                     <button
                       type="button"
                       onClick={() => setIsSupervisorModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
-                      <span>Assign Supervisor</span>
+                      <span className="hidden sm:inline">Assign Supervisor</span>
+                      <span className="sm:hidden">Assign</span>
                     </button>
                   )}
                 </div>
 
                 {filteredSupervisors.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[var(--color-hairline)] p-6 text-center bg-[var(--color-canvas)] space-y-2">
-                    <UserCheck className="h-8 w-8 text-[var(--color-mute)] mx-auto opacity-50" />
+                  <div className="rounded-xl border border-dashed border-[var(--color-hairline)] p-4 sm:p-6 text-center bg-[var(--color-canvas)] space-y-2">
+                    <UserCheck className="h-7 w-7 text-[var(--color-mute)] mx-auto opacity-50" />
                     <p className="text-xs font-semibold text-[var(--color-ink)]">
-                      {tabSearch ? `No supervisors matching "${tabSearch}"` : "No Supervisors Assigned to This Client"}
+                      No Supervisors Assigned to This Client
                     </p>
                     <p className="text-[11px] text-[var(--color-mute)] max-w-md mx-auto">
                       Assigning a supervisor grants them inherited operational access over all machines and operator logs deployed under this client account.
                     </p>
-                    {canManage && !tabSearch && (
+                    {canManage && (
                       <button
                         type="button"
                         onClick={() => setIsSupervisorModalOpen(true)}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-ink)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer"
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
                         <span>Assign First Supervisor</span>
@@ -1337,7 +1190,7 @@ export function ClientDetailClient({
                                 {s.supervisor_name}
                               </span>
                             </div>
-                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold border bg-sky-50 text-sky-700 border-sky-200">
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold border bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800">
                               INHERITED
                             </span>
                           </div>
@@ -1371,29 +1224,25 @@ export function ClientDetailClient({
               </div>
 
               {/* SECTION B: OPERATOR MACHINE ASSIGNMENTS */}
-              <div className="space-y-4 pt-4 border-t border-[var(--color-hairline)]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-[var(--color-ink)]">
+              <div className="space-y-3 sm:space-y-4 pt-3 border-t border-[var(--color-hairline)]">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
                       Operator Machine Assignments
                     </h3>
-                    <p className="text-xs text-[var(--color-mute)]">
-                      Operators currently and historically allocated to machines under this client
-                    </p>
+                    <span className="hidden sm:inline text-xs text-[var(--color-mute)]">
+                      • Operators allocated to machines
+                    </span>
                   </div>
-                  <span className="text-xs font-mono text-[var(--color-mute)]">
-                    {filteredAssignments.length} assignments
+                  <span className="text-[11px] sm:text-xs font-mono text-[var(--color-mute)] shrink-0 font-medium">
+                    {filteredAssignments.length} {filteredAssignments.length === 1 ? "assignment" : "assignments"}
                   </span>
                 </div>
 
                 {filteredAssignments.length === 0 ? (
                   <EmptyState
                     title="No Operator Assignments"
-                    description={
-                      tabSearch
-                        ? `No operators matching "${tabSearch}" were found.`
-                        : "No operators are currently assigned to equipment allocated to this client."
-                    }
+                    description="No operators are currently assigned to equipment allocated to this client."
                   />
                 ) : (
                   <>
@@ -1462,8 +1311,8 @@ export function ClientDetailClient({
                             <span
                               className={`rounded-full px-2 py-0.5 text-[9px] font-bold border ${
                                 a.is_active
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700"
                               }`}
                             >
                               {a.is_active ? "ACTIVE" : "ENDED"}
@@ -1501,17 +1350,17 @@ export function ClientDetailClient({
 
           {/* TAB 5: ACCOUNT TIMELINE HISTORY */}
           {activeTab === "history" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--color-ink)]">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
                     Client Account Timeline
                   </h3>
-                  <p className="text-xs text-[var(--color-mute)]">
-                    Historical registration, fleet deployment, and operational milestones
-                  </p>
+                  <span className="hidden sm:inline text-xs text-[var(--color-mute)]">
+                    • Operational milestones
+                  </span>
                 </div>
-                <span className="text-xs font-mono text-[var(--color-mute)]">
+                <span className="text-[11px] sm:text-xs font-mono text-[var(--color-mute)] shrink-0 font-medium">
                   {filteredHistory.length} milestones
                 </span>
               </div>
@@ -1554,17 +1403,17 @@ export function ClientDetailClient({
 
           {/* TAB 6: SECURITY AUDIT TRAIL */}
           {activeTab === "audit" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-[var(--color-ink)]">
-                    Append-Only Security Audit Trail
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate">
+                    Security Audit Trail
                   </h3>
-                  <p className="text-xs text-[var(--color-mute)]">
-                    Tamper-proof event logs tracking profile edits and administrative modifications
-                  </p>
+                  <span className="hidden sm:inline text-xs text-[var(--color-mute)]">
+                    • Tamper-proof event logs
+                  </span>
                 </div>
-                <span className="text-xs font-mono text-[var(--color-mute)]">
+                <span className="text-[11px] sm:text-xs font-mono text-[var(--color-mute)] shrink-0 font-medium">
                   {filteredAuditLogs.length} events
                 </span>
               </div>
@@ -1638,12 +1487,12 @@ export function ClientDetailClient({
                         <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-sky-600">{a.action}</span>
                           <span
-                            className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase ${
+                            className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase border ${
                               a.severity === "critical"
-                                ? "bg-red-50 text-red-700"
+                                ? "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-800"
                                 : a.severity === "warning"
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-sky-50 text-sky-700"
+                                ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                                : "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800"
                             }`}
                           >
                             {a.severity}
@@ -1687,9 +1536,10 @@ export function ClientDetailClient({
         onClose={() => setIsSupervisorModalOpen(false)}
         clientId={client.id}
         clientName={client.company_name || client.client_name || "Client"}
+        clientCode={clientIdentifier}
+        initialSites={initialSites}
         onSuccess={(newSupervisor) => {
           setSupervisors((prev) => [newSupervisor, ...prev]);
-          toast("success", `Assigned ${newSupervisor.supervisor_name} to this client`);
           router.refresh();
         }}
         onError={(err) => {
@@ -1712,6 +1562,36 @@ export function ClientDetailClient({
         cancelLabel="Cancel"
         variant="danger"
         loading={Boolean(removingSupervisorId)}
+      />
+
+      {/* ─── 10. TOGGLE CLIENT STATUS CONFIRMATION DIALOG ─── */}
+      <ConfirmationDialog
+        isOpen={confirmToggleStatusOpen}
+        onClose={() => setConfirmToggleStatusOpen(false)}
+        onConfirm={handleToggleStatus}
+        title={client.status === "active" ? "Deactivate Client" : "Activate Client"}
+        description={
+          client.status === "active"
+            ? `Are you sure you want to deactivate "${client.company_name || client.client_name || "this client"}"? Active assignments and equipment allocations will be paused.`
+            : `Are you sure you want to reactivate "${client.company_name || client.client_name || "this client"}"?`
+        }
+        confirmLabel={client.status === "active" ? "Deactivate" : "Activate"}
+        cancelLabel="Cancel"
+        variant={client.status === "active" ? "warning" : "info"}
+        loading={isTogglingStatus}
+      />
+
+      {/* ─── 11. DELETE CLIENT CONFIRMATION DIALOG ─── */}
+      <ConfirmationDialog
+        isOpen={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDeleteClient}
+        title="Delete Client"
+        description={`Are you sure you want to permanently remove "${client.company_name || client.client_name || "this client"}"? All assigned supervisors and active allocations will be archived.`}
+        confirmLabel="Delete Client"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={isDeletingClient}
       />
     </div>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedX } from "@/components/ui/animated-icons";
-import { ReachInternationalLogo } from "@/components/ui";
+import { ReachLogo } from "@/components/branding/ReachLogo";
 import type { User } from "@/lib/types/database";
 import type { NavItem } from "./types";
 import { UserProfileDropdown } from "./UserProfileDropdown";
@@ -70,8 +70,8 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)] h-16">
-              <Link href="/dashboard" onClick={onClose} className="flex items-center">
-                <ReachInternationalLogo variant="full" size={24} />
+              <Link href="/dashboard" onClick={onClose} className="flex items-center p-1 -ml-1">
+                <ReachLogo height={36} priority className="shrink-0" />
               </Link>
 
               <button

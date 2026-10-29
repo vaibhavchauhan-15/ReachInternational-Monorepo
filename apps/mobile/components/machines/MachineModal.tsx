@@ -330,8 +330,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           .order('site_name', { ascending: true });
         if (isMounted && data) {
           setClientSites(data);
-          // Retain siteId if it belongs to this client's sites; otherwise clear it
-          setSiteId((prev) => (prev && data.some((s) => s.id === prev) ? prev : ''));
+          if (data.length === 1) {
+            setSiteId(data[0].id);
+          } else {
+            // Retain siteId if it belongs to this client's sites; otherwise clear it
+            setSiteId((prev) => (prev && data.some((s) => s.id === prev) ? prev : ''));
+          }
         } else if (isMounted) {
           setClientSites([]);
           setSiteId('');
@@ -610,7 +614,70 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     }
   };
 
+  const isDirty = useMemo(() => {
+    if (!machineToEdit) return true;
+
+    const initialClientId = machineToEdit.client_id || '';
+    const currentClientId = selectedClient?.id || '';
+    if (initialClientId !== currentClientId) return true;
+
+    const initialSiteId = machineToEdit.site_id ? String(machineToEdit.site_id) : '';
+    if (initialSiteId !== (siteId || '')) return true;
+
+    if (initialSection === 'client') {
+      return false;
+    }
+
+    if (model !== (machineToEdit.model ? String(machineToEdit.model) : '')) return true;
+    if (serialNumber !== (machineToEdit.serial_number ? String(machineToEdit.serial_number) : '')) return true;
+    if (manufacturer !== (machineToEdit.manufacturer ? String(machineToEdit.manufacturer) : '')) return true;
+    if (yearOfMfg !== (machineToEdit.year_of_mfg != null ? String(machineToEdit.year_of_mfg) : '')) return true;
+    if (hourMeter !== String(machineToEdit.hour_meter ?? 0)) return true;
+    if (healthStatus !== (machineToEdit.health_status || 'active')) return true;
+
+    if (initialSection === 'info') {
+      return false;
+    }
+
+    // Personnel: supervisors and operators
+    const initialSups = Array.isArray(machineToEdit.supervisor_ids)
+      ? machineToEdit.supervisor_ids
+      : machineToEdit.current_supervisor_id || machineToEdit.supervisor_id
+      ? [machineToEdit.current_supervisor_id || machineToEdit.supervisor_id]
+      : [];
+    if (supervisorIds.length !== initialSups.length || supervisorIds.some((id) => !initialSups.includes(id))) {
+      return true;
+    }
+
+    const initialOps = Array.isArray(machineToEdit.operator_ids)
+      ? machineToEdit.operator_ids
+      : machineToEdit.current_operator_id || machineToEdit.operator_id
+      ? [machineToEdit.current_operator_id || machineToEdit.operator_id]
+      : [];
+    if (operatorIds.length !== initialOps.length || operatorIds.some((id) => !initialOps.includes(id))) {
+      return true;
+    }
+
+    return false;
+  }, [
+    machineToEdit,
+    initialSection,
+    selectedClient,
+    siteId,
+    model,
+    serialNumber,
+    manufacturer,
+    yearOfMfg,
+    hourMeter,
+    healthStatus,
+    supervisorIds,
+    operatorIds,
+  ]);
+
+  const isSaveDisabled = isSaving || (Boolean(isEdit) && !isDirty);
+
   const handleSave = async () => {
+    if (isSaveDisabled) return;
     setFieldErrors({});
     setFormError('');
 
@@ -1685,6 +1752,36 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                 </View>
 
                 <View style={styles.sectionFields}>
+                  {/* Machinery Unit Info Card when focused on client assignment */}
+                  {initialSection === 'client' && machineToEdit && (
+                    <View style={styles.fieldGroup}>
+                      <Text variant="label" weight="medium" style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                        Machinery Unit
+                      </Text>
+                      <View
+                        style={[
+                          styles.singleSelectTrigger,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <View style={styles.selectLeft}>
+                          <View style={[styles.statusDot, { backgroundColor: '#0284c7' }]} />
+                          <Text variant="body" weight="medium" style={[styles.selectValueText, { color: theme.colors.ink }]}>
+                            {machineToEdit.machine_id} • {machineToEdit.model || 'Machinery Unit'}
+                          </Text>
+                          {machineToEdit.serial_number && (
+                            <Text variant="caption" style={[styles.assignedCountText, { color: theme.colors.mute, marginLeft: 6 }]}>
+                              (S/N: {machineToEdit.serial_number})
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
                   {/* Assigned Client */}
                   <View style={styles.fieldGroup}>
                     <SearchableSelect
@@ -1707,8 +1804,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     />
                   </View>
 
-                  {/* Client Deployment Site */}
-                  {selectedClient ? (
+                  {/* Client Deployment Site — Only shown if client has more than 1 site */}
+                  {selectedClient && clientSites.length > 1 ? (
                     <View style={styles.fieldGroup}>
                       <SearchableSelect
                         label="Client Deployment Site"
@@ -1727,6 +1824,28 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         modalTitle="Select Deployment Site"
                         disabled={isLoadingSites || isSaving}
                       />
+                    </View>
+                  ) : null}
+
+                  {/* Single Site Notice — Shown when client has exactly 1 active site */}
+                  {selectedClient && clientSites.length === 1 ? (
+                    <View style={styles.fieldGroup}>
+                      <View
+                        style={[
+                          styles.singleSelectTrigger,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <View style={styles.selectLeft}>
+                          <View style={[styles.statusDot, { backgroundColor: '#0ea5e9' }]} />
+                          <Text variant="caption" weight="medium" style={[styles.selectValueText, { color: theme.colors.ink }]}>
+                            Primary Site: {clientSites[0].site_name} ({clientSites[0].site_code})
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   ) : null}
 
@@ -1773,7 +1892,17 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
             {/* Bottom Actions (Screenshot 1 Match) */}
             <View style={styles.bottomButtonsWrap}>
-              <Pressable variant="primary" haptic="none" onPress={handleSave} disabled={isSaving} style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}>
+              <Pressable
+                variant="primary"
+                haptic="none"
+                onPress={handleSave}
+                disabled={isSaveDisabled}
+                style={[
+                  styles.primaryActionBtn,
+                  { backgroundColor: theme.colors.primary },
+                  isSaveDisabled && { opacity: 0.5 },
+                ]}
+              >
                 {isSaving ? (
                   <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                 ) : (

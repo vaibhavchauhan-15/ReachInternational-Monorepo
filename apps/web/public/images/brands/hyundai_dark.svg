@@ -1,0 +1,8 @@
+<svg viewBox="0 0 170 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#008CFC">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M25 8C13 8 3 14.5 3 22.5C3 30.5 13 37 25 37C37 37 47 30.5 47 22.5C47 14.5 37 8 25 8ZM25 10.8C14.5 10.8 6 16 6 22.5C6 29 14.5 34.2 25 34.2C35.5 34.2 44 29 44 22.5C44 16 35.5 10.8 25 10.8Z" />
+    <path d="M15 15H20L21.5 21H28L29.5 15H34.5L32 30H27L25.5 23.5H19L17.5 30H12.5L15 15Z" />
+  </g>
+  <text x="56" y="29" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="19" letter-spacing="1.5">HYUNDAI</text>
+</svg>
+

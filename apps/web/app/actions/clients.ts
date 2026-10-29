@@ -651,5 +651,55 @@ export async function getClientOptionsAction() {
   return getClientOptions();
 }
 
+/**
+ * Server Action: Toggle Client Active/Inactive Status
+ */
+export async function toggleClientStatusAction(
+  clientId: string
+): Promise<{ success?: boolean; newStatus?: "active" | "inactive"; error?: string }> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { error: "Authentication required. Please log in to perform this action." };
+    }
+
+    const { data: currentClient, error: fetchErr } = await supabase
+      .from("clients")
+      .select("id, status, deleted_at")
+      .eq("id", clientId)
+      .single();
+
+    if (fetchErr || !currentClient) {
+      return { error: "Client not found." };
+    }
+
+    if (currentClient.status === "active" && !currentClient.deleted_at) {
+      const res = await deactivateClient(clientId, user.id, "Status toggled to inactive");
+      if (!res.success) return { error: res.error };
+      return { success: true, newStatus: "inactive" };
+    } else {
+      const res = await restoreClient(clientId, user.id);
+      if (!res.success) return { error: res.error };
+      return { success: true, newStatus: "active" };
+    }
+  } catch (err: any) {
+    console.error("toggleClientStatusAction exception:", err);
+    return { error: err.message || "Failed to toggle client status." };
+  }
+}
+
+/**
+ * Server Action: Delete client record (soft-delete with cascade invalidation)
+ */
+export async function deleteClientAction(
+  clientId: string
+): Promise<{ success?: boolean; error?: string }> {
+  return softDeleteClientAction(clientId);
+}
+
 
 

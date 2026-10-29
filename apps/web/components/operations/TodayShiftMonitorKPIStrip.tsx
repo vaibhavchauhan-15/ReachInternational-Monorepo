@@ -20,7 +20,7 @@ export function TodayShiftMonitorKPIStrip({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4">
-        <div className="text-xs text-muted-foreground font-medium">Total Roster</div>
+        <div className="text-xs text-muted-foreground font-medium">Total Shift</div>
         <div className="text-2xl font-bold text-[var(--color-ink)] mt-1">{summary.total}</div>
       </div>
       <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 sm:p-4">

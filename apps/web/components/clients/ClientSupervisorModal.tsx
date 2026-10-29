@@ -3,9 +3,9 @@
 import React from "react";
 import {
   AssignSupervisorToClientDialog,
-  type AssignSupervisorToClientDialogProps,
 } from "@/components/assignments/AssignSupervisorToClientDialog";
 import type { ClientSupervisorItem } from "@/lib/data/clients";
+import type { ClientSite } from "@/lib/data/clients/client-sites";
 
 export interface ClientSupervisorModalProps {
   isOpen: boolean;
@@ -13,6 +13,7 @@ export interface ClientSupervisorModalProps {
   clientId: string;
   clientName: string;
   clientCode?: string;
+  initialSites?: ClientSite[];
   onSuccess: (newAssignment: ClientSupervisorItem) => void;
   onError?: (errorMessage: string) => void;
 }

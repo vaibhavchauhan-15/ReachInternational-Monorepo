@@ -24,6 +24,9 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
     effectiveCols = Math.min(columns, 2);
   }
 
+  const validChildren = React.Children.toArray(children).filter(Boolean);
+  const totalCount = validChildren.length;
+
   if (Platform.OS === 'web') {
     return (
       <View
@@ -37,7 +40,17 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
           style,
         ]}
       >
-        {children}
+        {validChildren.map((child, index) => {
+          const isLastOdd = effectiveCols === 2 && index === totalCount - 1 && totalCount % 2 === 1;
+          return (
+            <View
+              key={index}
+              style={isLastOdd ? ({ gridColumn: 'span 2' } as any) : undefined}
+            >
+              {child}
+            </View>
+          );
+        })}
       </View>
     );
   }
@@ -58,10 +71,11 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
 
   return (
     <View style={[styles.nativeGrid, style]}>
-      {React.Children.map(children, (child) => {
-        if (!child) return null;
+      {validChildren.map((child, index) => {
+        const isLastOdd = effectiveCols === 2 && index === totalCount - 1 && totalCount % 2 === 1;
+        const width = isLastOdd ? '100%' : itemPercent;
         return (
-          <View style={{ width: itemPercent, minHeight: 92 }}>
+          <View key={index} style={{ width, minHeight: 92 }}>
             {child}
           </View>
         );

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Section } from "./_shared/Section";
+import { User } from "lucide-react";
 
 // Role-based representative quotes — no fabricated company names.
 const TESTIMONIALS = [
@@ -10,21 +11,18 @@ const TESTIMONIALS = [
       "We went from chasing maintenance on spreadsheets to zero missed services in a quarter. The reminders alone paid for it.",
     name: "Service Manager",
     role: "Manufacturing plant, 300+ machines",
-    avatar: "/images/avatars/avatar-1.jpg",
   },
   {
     quote:
       "Logging a job from my phone in the field — photos, parts, sign-off — takes two minutes now instead of paperwork at the end of the day.",
     name: "Field Engineer",
     role: "Regional service team",
-    avatar: "/images/avatars/avatar-2.jpg",
   },
   {
     quote:
       "The audit trail and analytics gave our leadership the visibility they never had. We can prove SLA compliance on demand.",
     name: "Operations Director",
     role: "Multi-site industrial group",
-    avatar: "/images/avatars/avatar-3.jpg",
   },
 ];
 
@@ -49,11 +47,12 @@ export function TestimonialsSection() {
               “{t.quote}”
             </blockquote>
             <figcaption className="flex items-center gap-3">
-              <img
-                src={t.avatar}
-                alt={t.name}
-                className="w-10 h-10 rounded-full object-cover border border-[var(--color-hairline)] shadow-[var(--shadow-whisper)]"
-              />
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center border border-[var(--color-hairline)] bg-[var(--surface-tint)] text-sky-600 dark:text-sky-400 shadow-[var(--shadow-whisper)] shrink-0"
+                aria-label={`Avatar placeholder for ${t.name}`}
+              >
+                <User className="w-5 h-5" strokeWidth={1.75} />
+              </div>
               <span>
                 <span className="block body-md font-medium text-[var(--color-ink)]">{t.name}</span>
                 <span className="block body-sm text-[var(--color-mute)]">{t.role}</span>

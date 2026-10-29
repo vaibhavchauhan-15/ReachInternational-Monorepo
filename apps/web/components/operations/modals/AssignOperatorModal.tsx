@@ -4,9 +4,11 @@ import React from "react";
 import {
   AssignPersonnelModal,
   type AssignPersonnelModalProps,
+  type AssignPersonnelSuccessResult,
 } from "@/components/machines/AssignPersonnelModal";
 
 export type AssignOperatorModalProps = AssignPersonnelModalProps;
+export type { AssignPersonnelSuccessResult };
 
 /**
  * AssignOperatorModal — Unified Shift & Equipment Personnel Assignment Dialog

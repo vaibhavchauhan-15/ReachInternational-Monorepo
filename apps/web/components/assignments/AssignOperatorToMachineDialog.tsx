@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   Clock,
@@ -263,6 +264,42 @@ export function AssignOperatorToMachineDialog({
         const sups = fresh.supervisor_ids || (currentMachine?.supervisor_ids as string[]) || [];
         setYardSupervisorIds(sups);
 
+        // Properly sync client shifts from the database
+        let activeShifts: ClientShiftCode[] = [];
+        const resolvedClientId = fresh.client_id || null;
+        if (fresh.client_shifts && fresh.client_shifts.length > 0) {
+          activeShifts = fresh.client_shifts
+            .filter((s: any) => s.is_active !== false)
+            .map((s: any) => ({
+              ...s,
+              raw_start_time: s.start_time,
+              raw_end_time: s.end_time,
+              start_time: formatTo12Hour(s.start_time) || s.start_time,
+              end_time: formatTo12Hour(s.end_time) || s.end_time,
+            }));
+          setClientShifts(activeShifts);
+          if (resolvedClientId) {
+            setCachedClientShifts(resolvedClientId, activeShifts);
+          }
+        } else if (resolvedClientId) {
+          getClientShiftCodesAction(resolvedClientId).then((cRes) => {
+            if (!mounted) return;
+            if (cRes.success && cRes.data && cRes.data.length > 0) {
+              const formatted: ClientShiftCode[] = cRes.data
+                .filter((s: any) => s.is_active !== false)
+                .map((s: any) => ({
+                  ...s,
+                  raw_start_time: s.start_time,
+                  raw_end_time: s.end_time,
+                  start_time: formatTo12Hour(s.start_time) || s.start_time,
+                  end_time: formatTo12Hour(s.end_time) || s.end_time,
+                }));
+              setClientShifts(formatted);
+              setCachedClientShifts(resolvedClientId, formatted);
+            }
+          });
+        }
+
         const loadedRoster: OperatorRosterItem[] = (fresh.operators || []).map((o: any, idx: number) => {
           const shiftCode = o.shift_code || o.shiftCode || `S${(idx % 3) + 1}`;
           return {
@@ -287,7 +324,8 @@ export function AssignOperatorToMachineDialog({
 
         // Set default shift to first open code
         const takenCodes = new Set(loadedRoster.map((r) => r.shiftCode.trim().toUpperCase()));
-        const availableShift = (clientShifts.length > 0 ? clientShifts : DEFAULT_CLIENT_SHIFTS).find(
+        const shiftPool = activeShifts.length > 0 ? activeShifts : (clientShifts.length > 0 ? clientShifts : DEFAULT_CLIENT_SHIFTS);
+        const availableShift = shiftPool.find(
           (s) => !takenCodes.has(s.code.trim().toUpperCase())
         );
         if (availableShift) {
@@ -310,13 +348,41 @@ export function AssignOperatorToMachineDialog({
   }, [roster]);
 
   // Eligible Candidate Operators formatted for UserSelect
+  // Allows the same operator to be assigned to up to 3 shifts on each machine
+  // (fleet-wide operator capacity limit is 3 active shifts or 24h total)
   const candidateUserSelectItems = useMemo(() => {
-    const assignedIds = new Set(roster.map((r) => r.operatorId));
     return lazyOperators
-      .filter((o) => !assignedIds.has(o.id))
       .map((o) => {
-        const other = otherAssignments.filter((a) => a.operatorId === o.id);
-        const isMax = other.length >= 3;
+        const shiftsOnThisMachine = roster.filter((r) => r.operatorId === o.id).length;
+        const other = otherAssignments.filter(
+          (a) => a.operatorId === o.id && a.machineId !== selectedMachineId
+        );
+        const shiftsOnOtherMachines = other.length;
+        const totalShifts = shiftsOnThisMachine + shiftsOnOtherMachines;
+        const isMaxTotal = totalShifts >= 3;
+        const isMaxThisMachine = shiftsOnThisMachine >= 3;
+        const isDisabled = isMaxTotal || isMaxThisMachine;
+
+        let badge: string | null = null;
+        let badgeVariant: "default" | "info" | "warning" | "success" | "neutral" = "default";
+        let badgeTitle: string | null = null;
+        let disabledReason: string | null = null;
+
+        if (isMaxTotal) {
+          badge = "3/3 Max";
+          badgeVariant = "warning";
+          disabledReason = "Max 3 shifts (24h) reached";
+          badgeTitle = "Max 3 shifts (24h) reached fleet-wide";
+        } else if (shiftsOnThisMachine > 0) {
+          badge = `${shiftsOnThisMachine}/3`;
+          badgeVariant = "info";
+          badgeTitle = `${shiftsOnThisMachine}/3 shifts assigned on this machine`;
+        } else if (shiftsOnOtherMachines > 0) {
+          badge = `${shiftsOnOtherMachines}/3 other`;
+          badgeVariant = "warning";
+          badgeTitle = `${shiftsOnOtherMachines}/3 shifts assigned on other machines`;
+        }
+
         return {
           id: o.id,
           full_name: o.full_name || o.name || "Operator",
@@ -325,10 +391,19 @@ export function AssignOperatorToMachineDialog({
           phone: o.phone || null,
           email: o.email || null,
           role: "operator",
-          disabled: isMax,
+          badge,
+          badgeVariant,
+          badgeTitle,
+          disabled: isDisabled,
+          disabledReason,
         };
+      })
+      .sort((a, b) => {
+        // Active/eligible operators first, disabled at bottom
+        if (a.disabled !== b.disabled) return a.disabled ? 1 : -1;
+        return (a.full_name || "").localeCompare(b.full_name || "");
       });
-  }, [lazyOperators, roster, otherAssignments]);
+  }, [lazyOperators, roster, otherAssignments, selectedMachineId]);
 
   // Shift conflict checking on candidate selection
   const shiftConflictNotice = useMemo(() => {
@@ -336,7 +411,10 @@ export function AssignOperatorToMachineDialog({
     const selectedOp = lazyOperators.find((o) => o.id === selectedCandidateId);
     if (!selectedOp) return notices;
 
-    const opOther = otherAssignments.filter((a) => a.operatorId === selectedOp.id);
+    const opRoster = roster.filter((r) => r.operatorId === selectedOp.id);
+    const opOther = otherAssignments.filter(
+      (a) => a.operatorId === selectedOp.id && a.machineId !== selectedMachineId
+    );
 
     clientShifts.forEach((shift) => {
       // 1. Is shift taken on this machine?
@@ -345,8 +423,18 @@ export function AssignOperatorToMachineDialog({
         return;
       }
 
-      // 2. Does shift collide with another machine shift for this operator?
       const targetRanges = shiftToMinuteRanges(shift.start_time, shift.end_time);
+
+      // 2. Does shift collide with another shift on THIS machine for this operator?
+      for (const here of opRoster) {
+        const hereRanges = shiftToMinuteRanges(here.shiftStartTime, here.shiftEndTime);
+        if (doRangesOverlap(targetRanges, hereRanges)) {
+          notices[shift.code] = `Overlaps with Shift ${here.shiftCode} on this machine`;
+          return;
+        }
+      }
+
+      // 3. Does shift collide with another machine shift for this operator?
       for (const other of opOther) {
         const otherRanges = shiftToMinuteRanges(other.shiftStartTime, other.shiftEndTime);
         if (doRangesOverlap(targetRanges, otherRanges)) {
@@ -357,7 +445,7 @@ export function AssignOperatorToMachineDialog({
     });
 
     return notices;
-  }, [selectedCandidateId, lazyOperators, otherAssignments, clientShifts, takenShiftCodes]);
+  }, [selectedCandidateId, lazyOperators, roster, otherAssignments, clientShifts, takenShiftCodes, selectedMachineId]);
 
   // Handle adding candidate to roster upon selecting an operator
   const handleSelectCandidate = (opId: string) => {
@@ -376,12 +464,35 @@ export function AssignOperatorToMachineDialog({
       return;
     }
 
-    // Cross-machine interval collision check
+    // Check operator total shifts cap across platform (max 3 shifts)
+    const opHere = roster.filter((r) => r.operatorId === op.id);
+    const opOther = otherAssignments.filter(
+      (a) => a.operatorId === op.id && a.machineId !== selectedMachineId
+    );
+    if (opHere.length >= 3) {
+      toast("warning", "Shift limit reached", `${op.full_name || "Operator"} is already assigned to all 3 shifts on this machine.`);
+      return;
+    }
+    if (opHere.length + opOther.length >= 3) {
+      toast("warning", "Shift limit reached", `${op.full_name || "Operator"} is already assigned to 3 active shifts (24h maximum).`);
+      return;
+    }
+
     const shift = clientShifts.find(
       (s) => s.code.trim().toUpperCase() === selectedShiftCode.trim().toUpperCase()
     );
-    const opOther = otherAssignments.filter((a) => a.operatorId === op.id);
     const targetRanges = shiftToMinuteRanges(shift?.start_time, shift?.end_time);
+
+    // Overlap check with operator's existing shifts on THIS machine
+    for (const here of opHere) {
+      const hereRanges = shiftToMinuteRanges(here.shiftStartTime, here.shiftEndTime);
+      if (doRangesOverlap(targetRanges, hereRanges)) {
+        toast("error", "Shift Conflict", `Shift ${selectedShiftCode} overlaps with operator's Shift ${here.shiftCode} on this machine.`);
+        return;
+      }
+    }
+
+    // Cross-machine interval collision check
     for (const other of opOther) {
       const otherRanges = shiftToMinuteRanges(other.shiftStartTime, other.shiftEndTime);
       if (doRangesOverlap(targetRanges, otherRanges)) {
@@ -438,6 +549,7 @@ export function AssignOperatorToMachineDialog({
         id: r.operatorId,
         title: r.operatorName,
         subtitle: r.employeeId ? formatEmployeeId(r.employeeId) : formatEmployeeId(r.operatorId),
+        employeeId: r.employeeId ? formatEmployeeId(r.employeeId) : formatEmployeeId(r.operatorId),
         shiftCode: r.shiftCode,
         shiftName: shiftName && shiftName.toLowerCase() !== `shift ${r.shiftCode}`.toLowerCase() ? shiftName : null,
         shiftTiming: timingStr,
@@ -553,7 +665,6 @@ export function AssignOperatorToMachineDialog({
       open={isOpen}
       onClose={onClose}
       title="Assign Operator to Shift"
-      description="Manage 24h operator shift coverage and equipment personnel assignments."
       size="lg"
       footer={
         <AssignmentActions
@@ -574,7 +685,7 @@ export function AssignOperatorToMachineDialog({
           <label className="text-xs font-semibold text-[var(--color-ink)] flex items-center justify-between select-none">
             <span className="flex items-center gap-1.5">
               <Truck className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-              Select Machinery Equipment
+              Equipment
             </span>
             {clientName ? (
               <span className="text-[11px] font-medium text-sky-600 dark:text-sky-400">
@@ -620,69 +731,77 @@ export function AssignOperatorToMachineDialog({
                 type="button"
                 onClick={() => setIsAddingToShift(true)}
                 disabled={!selectedMachineId || isSaving || isLoadingMachinePersonnel}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-dashed border-[var(--color-hairline)] hover:border-[var(--color-primary)] hover:bg-[var(--color-hairline-soft-surface)]/50 transition-all text-xs group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-between p-3 sm:p-3.5 min-h-[44px] rounded-xl border border-neutral-300 dark:border-neutral-700 [html:not(.dark)_&]:border-neutral-300 bg-[var(--color-canvas)] hover:border-[var(--color-primary)] dark:hover:border-[var(--color-primary)] active:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all text-xs group cursor-pointer touch-manipulation select-none disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
-                <span className="flex items-center gap-2 font-bold text-[var(--color-ink)] group-hover:text-[var(--color-primary)]">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
-                    <Plus className="h-4 w-4" />
+                <span className="flex items-center gap-2 text-xs font-medium text-[var(--color-ink)] group-hover:text-[var(--color-primary)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[var(--color-primary)]/10 text-[var(--color-primary)] shrink-0">
+                    <Plus className="h-3.5 w-3.5" />
                   </span>
-                  Assign Operator to Shift
-                </span>
-                <span className="text-[11px] font-mono text-[var(--color-mute)]">
-                  {3 - roster.length} shift slot{3 - roster.length === 1 ? "" : "s"} open
+                  <span>Assign Operator to Shift</span>
                 </span>
               </button>
             ) : (
-              <div className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[var(--color-ink)] flex items-center gap-1.5">
-                    <Plus className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                    Assign Operator to Shift
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingToShift(false);
-                      setSelectedCandidateId("");
-                    }}
-                    className="p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
-                    title="Close"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+              <AnimatePresence initial={false}>
+                <motion.div
+                  key="add-operator-form"
+                  initial={{ opacity: 0, height: 0, y: -8 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -8 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-3 sm:p-4 rounded-xl border border-neutral-300 dark:border-neutral-700 [html:not(.dark)_&]:border-neutral-300 bg-[var(--color-canvas)] space-y-3 sm:space-y-3.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-[var(--color-ink)] flex items-center gap-1.5">
+                        <Plus className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+                        Assign Operator to Shift
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingToShift(false);
+                          setSelectedCandidateId("");
+                        }}
+                        className="h-8 w-8 sm:h-7 sm:w-7 flex items-center justify-center rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 transition-all cursor-pointer touch-manipulation"
+                        title="Close"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
 
-                {/* Shift Picker — Displays shift code, shift name, and shift time */}
-                <AssignmentShiftPicker
-                  shifts={clientShifts}
-                  selectedCode={selectedShiftCode}
-                  onSelectShift={setSelectedShiftCode}
-                  disabledCodes={Array.from(takenShiftCodes)}
-                  conflictNotice={shiftConflictNotice}
-                  disabled={isSaving}
-                />
+                    {/* Shift Picker — Displays shift code, shift name, and shift time */}
+                    <AssignmentShiftPicker
+                      shifts={clientShifts}
+                      selectedCode={selectedShiftCode}
+                      onSelectShift={setSelectedShiftCode}
+                      disabledCodes={Array.from(takenShiftCodes)}
+                      conflictNotice={shiftConflictNotice}
+                      disabled={isSaving}
+                    />
 
-                {/* Operator Dropdown Selection */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[var(--color-ink)] flex items-center justify-between">
-                    <span>Select Operator for Shift {selectedShiftCode}</span>
-                    <span className="text-[10px] font-mono text-[var(--color-mute)]">
-                      {candidateUserSelectItems.length} available
-                    </span>
-                  </label>
-                  <UserSelect
-                    users={candidateUserSelectItems}
-                    value={selectedCandidateId}
-                    onChange={(opId) => {
-                      setSelectedCandidateId(opId);
-                      handleSelectCandidate(opId);
-                    }}
-                    placeholder="Search or select operator by name, employee ID..."
-                    roleFilter={["operator"]}
-                    disabled={isSaving}
-                  />
-                </div>
-              </div>
+                    {/* Operator Dropdown Selection */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-[var(--color-ink)] flex items-center justify-between">
+                        <span>Select Operator for Shift {selectedShiftCode}</span>
+                        <span className="text-[10px] font-mono text-[var(--color-mute)]">
+                          {candidateUserSelectItems.length} available
+                        </span>
+                      </label>
+                      <UserSelect
+                        users={candidateUserSelectItems}
+                        value={selectedCandidateId}
+                        onChange={(opId) => {
+                          setSelectedCandidateId(opId);
+                          handleSelectCandidate(opId);
+                        }}
+                        placeholder="Search or select operator by name, employee ID..."
+                        roleFilter={["operator"]}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
             )}
           </div>
         )}

@@ -160,7 +160,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [assignedShiftCodes, setAssignedShiftCodes] = useState<string[]>(() => initialAssignedShiftCodes || []);
   const [todayLoggedCodes, setTodayLoggedCodes] = useState<string[]>([]);
   const [todayLogs, setTodayLogs] = useState<Array<{ shift_code: string; end_meter: number; running_hours: number }>>([]);
-  const [showManualTimes, setShowManualTimes] = useState(false);
 
   const fetchTodayLogs = async (mId?: string, opId?: string) => {
     const activeMachineId = mId || machineId;
@@ -659,11 +658,67 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       if (isAssisted && userId) {
         const callerRole = currentUserRole || (await supabase.from('users').select('role').eq('id', userId).single()).data?.role;
-        if (callerRole && !['super_admin', 'admin', 'manager'].includes(callerRole)) {
-          reportError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
+        if (callerRole && !['super_admin', 'admin', 'manager', 'supervisor'].includes(callerRole)) {
+          reportError('Only supervisors, managers, and administrators can enter logs on behalf of operators.');
           submittingRef.current = false;
           setIsSubmitting(false);
           return;
+        }
+
+        if (callerRole === 'supervisor' && effectiveOperatorId) {
+          let isUnderSupervisor = false;
+          try {
+            const { data: rpcCheck, error: rpcCheckErr } = await supabase.rpc('is_operator_under_supervisor', {
+              p_supervisor_id: userId,
+              p_operator_id: effectiveOperatorId,
+            });
+            if (!rpcCheckErr && typeof rpcCheck === 'boolean') {
+              isUnderSupervisor = rpcCheck;
+            } else {
+              const { data: opData } = await supabase
+                .from('users')
+                .select('supervisor_id, supervisor_ids')
+                .eq('id', effectiveOperatorId)
+                .single();
+              if (
+                opData?.supervisor_id === userId ||
+                (Array.isArray(opData?.supervisor_ids) && opData.supervisor_ids.includes(userId))
+              ) {
+                isUnderSupervisor = true;
+              } else {
+                const { data: mData } = await supabase
+                  .from('machines')
+                  .select('current_supervisor_id, supervisor_ids, client_id')
+                  .eq('id', machineId)
+                  .single();
+                if (
+                  mData?.current_supervisor_id === userId ||
+                  (Array.isArray(mData?.supervisor_ids) && mData.supervisor_ids.includes(userId))
+                ) {
+                  isUnderSupervisor = true;
+                } else if (mData?.client_id || selectedClientId) {
+                  const cId = mData?.client_id || selectedClientId;
+                  const { count: csCount } = await supabase
+                    .from('client_supervisors')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('supervisor_id', userId)
+                    .eq('client_id', cId);
+                  if (csCount && csCount > 0) {
+                    isUnderSupervisor = true;
+                  }
+                }
+              }
+            }
+          } catch {
+            isUnderSupervisor = true;
+          }
+
+          if (!isUnderSupervisor) {
+            reportError('Supervisors can only fill shift entries for operators assigned under their supervision.');
+            submittingRef.current = false;
+            setIsSubmitting(false);
+            return;
+          }
         }
       }
 
@@ -875,6 +930,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             rpcMsg.includes('maintenance or') ||
             rpcMsg.includes('inactive') ||
             rpcMsg.includes('unauthorized operator') ||
+            rpcMsg.includes('not authorized to submit shift log') ||
             rpcMsg.includes('client id does not match') ||
             rpcMsg.includes('previous 7 days') ||
             rpcMsg.includes('assigned to shift') ||
@@ -905,6 +961,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           catchMsg.includes('maintenance or') ||
           catchMsg.includes('inactive') ||
           catchMsg.includes('unauthorized operator') ||
+          catchMsg.includes('not authorized to submit shift log') ||
           catchMsg.includes('client id does not match') ||
           catchMsg.includes('previous 7 days') ||
           catchMsg.includes('assigned to shift') ||
@@ -1145,495 +1202,485 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     <AppModal visible={visible} onClose={onClose} variant="bottom">
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-            <View style={styles.headerLeft}>
-              <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
-                <Clock size={18} color={theme.colors.link} />
-              </View>
-              <View>
-                <Text variant="heading" style={{ color: theme.colors.ink }}>
-                  {targetOperatorName
-                    ? 'Assisted Shift Entry'
-                    : existingLog
-                    ? 'Edit Machine Running Hours'
-                    : 'Log Machine Running Hours'}
-                </Text>
-                <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
-                  {targetOperatorName ? `Operator: ${targetOperatorName} • ` : ''}
-                  {model || machineCode} {serialNumber ? `• S/N: ${serialNumber}` : ''}
-                </Text>
-              </View>
-            </View>
+        <View style={styles.headerLeft}>
+          <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
+            <Clock size={18} color={theme.colors.link} />
+          </View>
+          <View>
+            <Text variant="heading" style={{ color: theme.colors.ink }}>
+              {targetOperatorName
+                ? 'Assisted Shift Entry'
+                : existingLog
+                  ? 'Edit Machine Running Hours'
+                  : 'Log Machine Running Hours'}
+            </Text>
+            <Text variant="caption" style={[styles.subtitle, { color: theme.colors.mute }]}>
+              {targetOperatorName ? `Operator: ${targetOperatorName} • ` : ''}
+              {model || machineCode} {serialNumber ? `• S/N: ${serialNumber}` : ''}
+            </Text>
+          </View>
+        </View>
 
-            <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
-              <X size={20} color={theme.colors.mute} />
-            </Touchable>
+        <Touchable preset="icon" onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
+          <X size={20} color={theme.colors.mute} />
+        </Touchable>
+      </View>
+
+      {Boolean(targetOperatorName) && (
+        <View
+          style={{
+            marginHorizontal: spacingNumeric.sm,
+            marginTop: spacingNumeric.xs,
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            borderRadius: radiusNumeric.sm,
+            backgroundColor: theme.colors.link + '15',
+            borderWidth: 1,
+            borderColor: theme.colors.link + '30',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <User size={14} color={theme.colors.link} />
+          <Text variant="caption" style={{ color: theme.colors.link, flex: 1 }}>
+            Logging shift on behalf of {targetOperatorName}
+          </Text>
+        </View>
+      )}
+
+      <ScrollView style={styles.formScroll} contentContainerStyle={{ gap: spacingNumeric.xs }} showsVerticalScrollIndicator={false}>
+        {/* Log Date Selector Strip (Today + Past 7 Days) */}
+        <View style={styles.inputGroup}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <Text variant="label" style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Select Date *</Text>
+            <Text variant="caption" style={{ color: theme.colors.link }}>Allowed: 7 days window</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
+            {pastDates.map((item) => {
+              const isSelected = item.str === logDate;
+              return (
+                <Touchable
+                  key={item.str}
+                  preset="card"
+                  haptic="select"
+                  onPress={() => setLogDate(item.str)}
+                  style={[
+                    styles.dateChip,
+                    {
+                      backgroundColor: isSelected ? theme.colors.link : theme.colors.canvas,
+                      borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <Text variant="label" style={{ color: isSelected ? '#ffffff' : theme.colors.ink }}>
+                    {item.label}
+                  </Text>
+                  <Text variant="caption" style={[styles.dateChipSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : theme.colors.mute }]}>
+                    {item.subLabel}
+                  </Text>
+                </Touchable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Client Selector */}
+        <SearchableSelect
+          label="Client / Customer Site"
+          options={clientOptions}
+          value={selectedClientId || ''}
+          onChange={(val) => {
+            const found = clients.find((c) => c.id === val);
+            if (found) {
+              handleSelectClient(found);
+            } else {
+              setSelectedClientId(val || null);
+            }
+          }}
+          placeholder="Select assigned client..."
+          modalTitle="Select Customer / Client"
+          leftIcon={<Building2 size={15} color={theme.colors.mute} />}
+          containerStyle={{ marginBottom: 14 }}
+        />
+
+        <Input
+          label="Site Location / Address"
+          placeholder="e.g. Jhajjar, Haryana"
+          value={location}
+          onChangeText={setLocation}
+          name="site_location_input"
+          id="site_location_input"
+          autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+          textContentType="none"
+          importantForAutofill="no"
+          autoCorrect={false}
+          spellCheck={false}
+          aria-autocomplete="none"
+        />
+
+        {/* Meter Inputs */}
+        <View style={styles.rowInputs}>
+          <View style={{ flex: 1 }}>
+            <Input
+              label="Start Meter (hrs) *"
+              value={startMeter}
+              onChangeText={handleStartMeterChange}
+              keyboardType="numeric"
+              inputMode="decimal"
+              name="start_meter_val"
+              id="start_meter_val"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Input
+              label="End Meter (hrs) *"
+              value={endMeter}
+              onChangeText={handleEndMeterChange}
+              keyboardType="numeric"
+              inputMode="decimal"
+              name="end_meter_val"
+              id="end_meter_val"
+              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect={false}
+              spellCheck={false}
+              aria-autocomplete="none"
+            />
+          </View>
+        </View>
+
+        {/* Calculated Running Hours Box */}
+        <View style={[styles.calcBox, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
+          <Text variant="label" style={{ color: theme.colors.mute }}>Calculated Running Hours:</Text>
+          <Text variant="heading" style={{ color: theme.colors.link }}>{runningHours.toFixed(1)} hrs</Text>
+        </View>
+
+        {/* Shift Timing Section */}
+        <View style={{ gap: 8, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift</Text>
+            {shiftStats.durationMinutes > 0 ? (
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 12,
+                backgroundColor: shiftStats.isOvernight ? 'rgba(99, 102, 241, 0.12)' : theme.colors.hairlineSoft,
+              }}>
+                <Text
+                  variant="mono"
+                  style={{
+                    color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
+                  }}
+                >
+                  {shiftStats.isOvernight ? `🌙 Overnight · ${shiftStats.durationFormatted}` : shiftStats.durationFormatted}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
-          {Boolean(targetOperatorName) && (
-            <View
-              style={{
-                marginHorizontal: spacingNumeric.sm,
-                marginTop: spacingNumeric.xs,
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: radiusNumeric.sm,
-                backgroundColor: theme.colors.link + '15',
-                borderWidth: 1,
-                borderColor: theme.colors.link + '30',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <User size={14} color={theme.colors.link} />
-              <Text variant="caption" style={{ color: theme.colors.link, flex: 1 }}>
-                Logging shift on behalf of {targetOperatorName}
+          {/* Client Shift Codes Horizontal Touch Strip */}
+          {shiftCodes.length > 0 && (
+            <View style={{ marginVertical: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text variant="caption" style={{ color: theme.colors.mute }}>
+                  Select Shift *
+                </Text>
+              </View>
+              <ShiftCardSelector
+                shiftCodes={shiftCodes}
+                selectedCode={selectedShiftCode || undefined}
+                onSelect={(s) => handleSelectShift(s)}
+                todayLoggedShiftCodes={todayLoggedCodes}
+              />
+              {selectedShiftCode && todayLoggedCodes.includes(selectedShiftCode) && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    padding: 8,
+                    marginTop: 8,
+                    gap: 6,
+                  }}
+                >
+                  <CheckCircle2 size={15} color="#059669" />
+                  <Text variant="caption" style={{ color: '#047857', flex: 1 }}>
+                    This shift has already been entered for today.
+                  </Text>
+                </View>
+              )}
+              {assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode) && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: targetOperatorId ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                    borderColor: targetOperatorId ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    padding: 8,
+                    marginTop: 8,
+                    gap: 6,
+                  }}
+                >
+                  <AlertTriangle size={15} color={targetOperatorId ? '#d97706' : '#ef4444'} />
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: targetOperatorId ? '#b45309' : '#ef4444',
+                      flex: 1,
+                    }}
+                  >
+                    {targetOperatorId
+                      ? `Shift Override: Logging Shift ${selectedShiftCode} for ${targetOperatorName || 'Operator'} (rostered: ${assignedShiftCodes.join(', ')}).`
+                      : `Assigned to Shift ${assignedShiftCodes.join(', ')} only.`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Machine Timeline Context Strip */}
+          {latestTimeline?.latestLog && (
+            <View style={{
+              padding: 10,
+              borderRadius: 10,
+              backgroundColor: 'rgba(14, 165, 233, 0.08)',
+              borderColor: 'rgba(14, 165, 233, 0.25)',
+              borderWidth: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <Clock size={14} color="#0284c7" />
+              <Text variant="caption" style={{ color: theme.colors.ink, flex: 1 }}>
+                Handover from{' '}
+                <Text variant="mono">
+                  {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
+                </Text>
               </Text>
             </View>
           )}
 
-          <ScrollView style={styles.formScroll} contentContainerStyle={{ gap: spacingNumeric.xs }} showsVerticalScrollIndicator={false}>
-            {/* Log Date Selector Strip (Today + Past 7 Days) */}
-            <View style={styles.inputGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text variant="label" style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Select Date *</Text>
-                <Text variant="caption" style={{ color: theme.colors.link }}>Allowed: 7 days window</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
-                {pastDates.map((item) => {
-                  const isSelected = item.str === logDate;
-                  return (
-                    <Touchable
-                      key={item.str}
-                      preset="card"
-                      haptic="select"
-                      onPress={() => setLogDate(item.str)}
-                      style={[
-                        styles.dateChip,
-                        {
-                          backgroundColor: isSelected ? theme.colors.link : theme.colors.canvas,
-                          borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <Text variant="label" style={{ color: isSelected ? '#ffffff' : theme.colors.ink }}>
-                        {item.label}
-                      </Text>
-                      <Text variant="caption" style={[styles.dateChipSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : theme.colors.mute }]}>
-                        {item.subLabel}
-                      </Text>
-                    </Touchable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Client Selector */}
-            <SearchableSelect
-              label="Client / Customer Site"
-              options={clientOptions}
-              value={selectedClientId || ''}
-              onChange={(val) => {
-                const found = clients.find((c) => c.id === val);
-                if (found) {
-                  handleSelectClient(found);
-                } else {
-                  setSelectedClientId(val || null);
-                }
-              }}
-              placeholder="Select assigned client..."
-              modalTitle="Select Customer / Client"
-              leftIcon={<Building2 size={15} color={theme.colors.mute} />}
-              containerStyle={{ marginBottom: 14 }}
-            />
-
-            <Input
-              label="Site Location / Address"
-              placeholder="e.g. Jhajjar, Haryana"
-              value={location}
-              onChangeText={setLocation}
-              name="site_location_input"
-              id="site_location_input"
-              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-              textContentType="none"
-              importantForAutofill="no"
-              autoCorrect={false}
-              spellCheck={false}
-              aria-autocomplete="none"
-            />
-
-            {/* Meter Inputs */}
+          {shiftCodes.length === 0 && (
             <View style={styles.rowInputs}>
               <View style={{ flex: 1 }}>
-                <Input
-                  label="Start Meter (hrs) *"
-                  value={startMeter}
-                  onChangeText={handleStartMeterChange}
-                  keyboardType="numeric"
-                  inputMode="decimal"
-                  name="start_meter_val"
-                  id="start_meter_val"
-                  autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-                  textContentType="none"
-                  importantForAutofill="no"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  aria-autocomplete="none"
+                <TimeInput
+                  label="Start Time *"
+                  required
+                  value={startTime}
+                  onChangeText={setStartTime}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Input
-                  label="End Meter (hrs) *"
-                  value={endMeter}
-                  onChangeText={handleEndMeterChange}
-                  keyboardType="numeric"
-                  inputMode="decimal"
-                  name="end_meter_val"
-                  id="end_meter_val"
-                  autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-                  textContentType="none"
-                  importantForAutofill="no"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  aria-autocomplete="none"
+                <TimeInput
+                  label="End Time *"
+                  required
+                  value={endTime}
+                  onChangeText={setEndTime}
+                  isInvalid={shiftStats.isFutureEnd}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Sequencing Error Alert */}
+          {sequencingError?.isInvalid && (
+            <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
+              <Text variant="caption" style={{ color: theme.colors.error }}>
+                {sequencingError.message}
+              </Text>
+              <Touchable
+                preset="button"
+                onPress={() => {
+                  if (sequencingError.recommendedTime) setStartTime(sequencingError.recommendedTime);
+                  if (sequencingError.recommendedDate) setLogDate(sequencingError.recommendedDate);
+                }}
+                style={{
+                  minHeight: 44,
+                  backgroundColor: theme.colors.error,
+                  borderRadius: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Text variant="label" style={{ color: '#ffffff' }}>
+                  Align to {sequencingError.recommendedTime}
+                </Text>
+              </Touchable>
+            </View>
+          )}
+
+          {!shiftStats.isValid && !sequencingError?.isInvalid && (
+            <View style={[styles.alertBox, {
+              backgroundColor: theme.colors.error + '14',
+              borderColor: theme.colors.error + '40',
+              borderWidth: 1,
+              marginVertical: 2,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }]}>
+              <AlertTriangle size={14} color={theme.colors.error} />
+              <Text variant="caption" style={{ color: theme.colors.error, flex: 1 }}>
+                {shiftStats.errorMessage || 'Shift is in progress. Logs can be submitted after shift ends.'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Input
+          label="Overtime Hours (Optional)"
+          placeholder="e.g. 0.0"
+          value={overtimeHours}
+          onChangeText={setOvertimeHours}
+          keyboardType="numeric"
+          inputMode="decimal"
+          name="overtime_hours_input"
+          id="overtime_hours_input"
+          autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+          textContentType="none"
+          importantForAutofill="no"
+          autoCorrect={false}
+          spellCheck={false}
+          aria-autocomplete="none"
+          containerStyle={{ maxWidth: 140 }}
+          style={[monoTypeStyle, { textAlign: 'center' }]}
+        />
+
+        {/* Breakdown Toggle */}
+        <View style={[styles.breakdownRow, { backgroundColor: theme.colors.canvas, borderColor: isBreakdown ? theme.colors.error : theme.colors.hairline }]}>
+          <View style={styles.breakdownLeft}>
+            <AlertTriangle size={16} color={isBreakdown ? theme.colors.error : theme.colors.mute} />
+            <View>
+              <Text variant="subheading" style={{ color: theme.colors.ink }}>Equipment Breakdown</Text>
+              <Text variant="caption" style={[styles.breakdownDesc, { color: theme.colors.mute }]}>Did any machine stoppage occur?</Text>
+            </View>
+          </View>
+          <Switch
+            value={isBreakdown}
+            onValueChange={(val) => {
+              setIsBreakdown(val);
+              if (!val) setRemarks('');
+            }}
+            trackColor={{ false: theme.colors.hairline, true: theme.colors.error }}
+          />
+        </View>
+
+        {isBreakdown && (
+          <View style={{
+            gap: 8,
+            marginVertical: 4,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.error + '30',
+          }}>
+            {/* Top Left Total Duration Badge */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+                backgroundColor: theme.colors.error + '18',
+                borderWidth: 1,
+                borderColor: theme.colors.error + '35',
+              }}>
+                <Clock size={12} color={theme.colors.error} />
+                <Text variant="mono" style={{ color: theme.colors.error }}>
+                  Duration: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : '0 min'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.rowInputs}>
+              <View style={{ flex: 1 }}>
+                <TimeInput
+                  label="Breakdown Start *"
+                  required
+                  value={breakdownStartTime}
+                  onChangeText={setBreakdownStartTime}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TimeInput
+                  label="Breakdown End *"
+                  required
+                  value={breakdownEndTime}
+                  onChangeText={setBreakdownEndTime}
                 />
               </View>
             </View>
 
-            {/* Calculated Running Hours Box */}
-            <View style={[styles.calcBox, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
-              <Text variant="label" style={{ color: theme.colors.mute }}>Calculated Running Hours:</Text>
-              <Text variant="heading" style={{ color: theme.colors.link }}>{runningHours.toFixed(1)} hrs</Text>
-            </View>
-
-            {/* Shift Timing Section */}
-            <View style={{ gap: 8, marginTop: 4 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift</Text>
-                {shiftStats.durationMinutes > 0 ? (
-                  <View style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    borderRadius: 12,
-                    backgroundColor: shiftStats.isOvernight ? 'rgba(99, 102, 241, 0.12)' : theme.colors.hairlineSoft,
-                  }}>
-                    <Text
-                      variant="mono"
-                      style={{
-                        color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
-                      }}
-                    >
-                      {shiftStats.isOvernight ? `🌙 Overnight · ${shiftStats.durationFormatted}` : shiftStats.durationFormatted}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Client Shift Codes Horizontal Touch Strip */}
-              {shiftCodes.length > 0 && (
-                <View style={{ marginVertical: 4 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text variant="caption" style={{ color: theme.colors.mute }}>
-                      Select Shift *
-                    </Text>
-                    <Touchable
-                      preset="row"
-                      haptic="select"
-                      onPress={() => setShowManualTimes(!showManualTimes)}
-                      style={{ paddingVertical: 2, paddingHorizontal: 6 }}
-                    >
-                      <Text variant="caption" style={{ color: theme.colors.link }}>
-                        {showManualTimes ? 'Hide Manual Times' : 'Manual Time Entry'}
-                      </Text>
-                    </Touchable>
-                  </View>
-                  <ShiftCardSelector
-                    shiftCodes={shiftCodes}
-                    selectedCode={selectedShiftCode || undefined}
-                    onSelect={(s) => handleSelectShift(s)}
-                    todayLoggedShiftCodes={todayLoggedCodes}
-                  />
-                  {selectedShiftCode && todayLoggedCodes.includes(selectedShiftCode) && (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderColor: 'rgba(16, 185, 129, 0.3)',
-                        borderWidth: 1,
-                        borderRadius: 8,
-                        padding: 8,
-                        marginTop: 8,
-                        gap: 6,
-                      }}
-                    >
-                      <CheckCircle2 size={15} color="#059669" />
-                      <Text variant="caption" style={{ color: '#047857', flex: 1 }}>
-                        This shift has already been entered for today.
-                      </Text>
-                    </View>
-                  )}
-                  {assignedShiftCodes.length > 0 && selectedShiftCode && !assignedShiftCodes.includes(selectedShiftCode) && (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: targetOperatorId ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                        borderColor: targetOperatorId ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)',
-                        borderWidth: 1,
-                        borderRadius: 8,
-                        padding: 8,
-                        marginTop: 8,
-                        gap: 6,
-                      }}
-                    >
-                      <AlertTriangle size={15} color={targetOperatorId ? '#d97706' : '#ef4444'} />
-                      <Text
-                        variant="caption"
-                        style={{
-                          color: targetOperatorId ? '#b45309' : '#ef4444',
-                          flex: 1,
-                        }}
-                      >
-                        {targetOperatorId
-                          ? `${targetOperatorName || 'Operator'} is rostered for Shift ${assignedShiftCodes.join(', ')}. Submitting will record an Assisted Override for Shift ${selectedShiftCode}.`
-                          : `Assigned to Shift ${assignedShiftCodes.join(', ')} only.`}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Machine Timeline Context Strip */}
-              {latestTimeline?.latestLog && (
-                <View style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  backgroundColor: 'rgba(14, 165, 233, 0.08)',
-                  borderColor: 'rgba(14, 165, 233, 0.25)',
-                  borderWidth: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <Clock size={14} color="#0284c7" />
-                  <Text variant="caption" style={{ color: theme.colors.ink, flex: 1 }}>
-                    Handover from{' '}
-                    <Text variant="mono">
-                      {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
-                    </Text>
-                  </Text>
-                </View>
-              )}
-
-              {(shiftCodes.length === 0 || showManualTimes) && (
-                <View style={styles.rowInputs}>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="Start Time *"
-                      required
-                      value={startTime}
-                      onChangeText={setStartTime}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="End Time *"
-                      required
-                      value={endTime}
-                      onChangeText={setEndTime}
-                      isInvalid={shiftStats.isFutureEnd}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* Sequencing Error Alert */}
-              {sequencingError?.isInvalid && (
-                <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
-                  <Text variant="caption" style={{ color: theme.colors.error }}>
-                    {sequencingError.message}
-                  </Text>
-                  <Touchable
-                    preset="button"
-                    onPress={() => {
-                      if (sequencingError.recommendedTime) setStartTime(sequencingError.recommendedTime);
-                      if (sequencingError.recommendedDate) setLogDate(sequencingError.recommendedDate);
-                    }}
-                    style={{
-                      minHeight: 44,
-                      backgroundColor: theme.colors.error,
-                      borderRadius: 8,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      paddingHorizontal: 12,
-                    }}
-                  >
-                    <Text variant="label" style={{ color: '#ffffff' }}>
-                      Align to {sequencingError.recommendedTime}
-                    </Text>
-                  </Touchable>
-                </View>
-              )}
-
-              {!shiftStats.isValid && !sequencingError?.isInvalid && (
-                <View style={[styles.alertBox, {
-                  backgroundColor: theme.colors.error + '14',
-                  borderColor: theme.colors.error + '40',
-                  borderWidth: 1,
-                  marginVertical: 2,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                }]}>
-                  <AlertTriangle size={14} color={theme.colors.error} />
-                  <Text variant="caption" style={{ color: theme.colors.error, flex: 1 }}>
-                    {shiftStats.errorMessage || 'Shift is in progress. Logs can be submitted after shift ends.'}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <Input
-              label="Overtime Hours (Optional)"
-              placeholder="e.g. 0.0"
-              value={overtimeHours}
-              onChangeText={setOvertimeHours}
-              keyboardType="numeric"
-              inputMode="decimal"
-              name="overtime_hours_input"
-              id="overtime_hours_input"
-              autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-              textContentType="none"
-              importantForAutofill="no"
-              autoCorrect={false}
-              spellCheck={false}
-              aria-autocomplete="none"
-              containerStyle={{ maxWidth: 140 }}
-              style={[monoTypeStyle, { textAlign: 'center' }]}
-            />
-
-            {/* Breakdown Toggle */}
-            <View style={[styles.breakdownRow, { backgroundColor: theme.colors.canvas, borderColor: isBreakdown ? theme.colors.error : theme.colors.hairline }]}>
-              <View style={styles.breakdownLeft}>
-                <AlertTriangle size={16} color={isBreakdown ? theme.colors.error : theme.colors.mute} />
-                <View>
-                  <Text variant="subheading" style={{ color: theme.colors.ink }}>Equipment Breakdown</Text>
-                  <Text variant="caption" style={[styles.breakdownDesc, { color: theme.colors.mute }]}>Did any machine stoppage occur?</Text>
-                </View>
-              </View>
-              <Switch
-                value={isBreakdown}
-                onValueChange={(val) => {
-                  setIsBreakdown(val);
-                  if (!val) setRemarks('');
-                }}
-                trackColor={{ false: theme.colors.hairline, true: theme.colors.error }}
-              />
-            </View>
-
-            {isBreakdown && (
-              <View style={{
-                gap: 8,
-                marginVertical: 4,
-                paddingTop: 8,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.error + '30',
-              }}>
-                {/* Top Left Total Duration Badge */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
-                    borderRadius: 6,
-                    backgroundColor: theme.colors.error + '18',
-                    borderWidth: 1,
-                    borderColor: theme.colors.error + '35',
-                  }}>
-                    <Clock size={12} color={theme.colors.error} />
-                    <Text variant="mono" style={{ color: theme.colors.error }}>
-                      Total: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : '0 min'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.rowInputs}>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="Breakdown Start *"
-                      required
-                      value={breakdownStartTime}
-                      onChangeText={setBreakdownStartTime}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <TimeInput
-                      label="Breakdown End *"
-                      required
-                      value={breakdownEndTime}
-                      onChangeText={setBreakdownEndTime}
-                    />
-                  </View>
-                </View>
-
-                {breakdownStats && !breakdownStats.isValid && (
-                  <View style={[styles.alertBox, {
-                    backgroundColor: theme.colors.warning + '14',
-                    borderColor: theme.colors.warning,
-                    padding: 8,
-                    borderRadius: 8,
-                  }]}>
-                    <Text variant="caption" style={{ color: theme.colors.warning }}>
-                      {breakdownStats.errorMessage || 'Invalid breakdown timing.'}
-                    </Text>
-                  </View>
-                )}
+            {breakdownStats && !breakdownStats.isValid && (
+              <View style={[styles.alertBox, {
+                backgroundColor: theme.colors.warning + '14',
+                borderColor: theme.colors.warning,
+                padding: 8,
+                borderRadius: 8,
+              }]}>
+                <Text variant="caption" style={{ color: theme.colors.warning }}>
+                  {breakdownStats.errorMessage || 'Invalid breakdown timing.'}
+                </Text>
               </View>
             )}
-
-            {isBreakdown && (
-              <Input
-                label="Remarks (Optional)"
-                placeholder="Add any important observation, defect, or breakdown reason..."
-                value={remarks}
-                onChangeText={setRemarks}
-                multiline
-                name="shift_remarks_input"
-                id="shift_remarks_input"
-                autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
-                textContentType="none"
-                importantForAutofill="no"
-                autoCorrect={false}
-                spellCheck={false}
-                aria-autocomplete="none"
-              />
-            )}
-          </ScrollView>
-
-          {/* Footer Actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
-            <Button
-              label="Cancel"
-              onPress={onClose}
-              variant="outline"
-              size="md"
-              style={{ flex: 1, minHeight: 44 }}
-            />
-            <Button
-              label={existingLog ? 'Save Changes' : 'Submit'}
-              onPress={handleSubmit}
-              isLoading={isSubmitting}
-              variant="primary"
-              size="md"
-              style={{ flex: 1, minHeight: 44 }}
-            />
           </View>
+        )}
+
+        {isBreakdown && (
+          <Input
+            label="Remarks (Optional)"
+            placeholder="e.g. Hydraulic pipe leakage replaced..."
+            value={remarks}
+            onChangeText={setRemarks}
+            multiline
+            name="shift_remarks_input"
+            id="shift_remarks_input"
+            autoComplete={Platform.OS === 'web' ? ('one-time-code' as any) : 'off'}
+            textContentType="none"
+            importantForAutofill="no"
+            autoCorrect={false}
+            spellCheck={false}
+            aria-autocomplete="none"
+          />
+        )}
+      </ScrollView>
+
+      {/* Footer Actions */}
+      <View style={[styles.footer, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
+        <Button
+          label="Cancel"
+          onPress={onClose}
+          variant="outline"
+          size="md"
+          style={{ flex: 1, minHeight: 44 }}
+        />
+        <Button
+          label={existingLog ? 'Save Changes' : 'Submit'}
+          onPress={handleSubmit}
+          isLoading={isSubmitting}
+          variant="primary"
+          size="md"
+          style={{ flex: 1, minHeight: 44 }}
+        />
+      </View>
     </AppModal>
   );
 };

@@ -20,8 +20,8 @@ import { Text } from '../ui/Text';
 import { Badge } from '../ui/Badge';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { getUserInitials, formatTo12Hour } from '@reachinternational/utils';
-import { Trash2, Clock, Truck, User, AlertCircle } from '../ui/icon';
+import { getUserInitials } from '@reachinternational/utils';
+import { Trash2, Truck, User, AlertCircle } from '../ui/icon';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -30,6 +30,7 @@ export interface SelectedAssignmentSummaryItem {
   id: string; // operatorId or machineId
   title: string;
   code?: string | null;
+  employeeId?: string | null;
   subtitle?: string | null;
   shiftCode?: string;
   shiftStartTime?: string | null;
@@ -123,8 +124,12 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
         <View style={styles.cardsList}>
           {items.map((item, index) => {
             const initials = getUserInitials(item.title);
-            const formattedStart = formatTo12Hour(item.shiftStartTime) || item.shiftStartTime;
-            const formattedEnd = formatTo12Hour(item.shiftEndTime) || item.shiftEndTime;
+            const shiftBadgeText = item.shiftCode
+              ? item.shiftCode.trim().toLowerCase().startsWith('shift')
+                ? item.shiftCode.trim()
+                : `Shift ${item.shiftCode.trim()}`
+              : null;
+            const empId = item.employeeId || item.code || item.subtitle;
 
             return (
               <View
@@ -196,25 +201,7 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
                       >
                         {item.title}
                       </Text>
-                      {item.code && (
-                        <View
-                          style={[
-                            styles.codeBadge,
-                            {
-                              backgroundColor: theme.colors.canvas,
-                              borderColor: theme.colors.hairline,
-                            },
-                          ]}
-                        >
-                          <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
-                            {item.code}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {item.shiftCode && (
-                      <View style={styles.shiftDetailsRow}>
+                      {shiftBadgeText && (
                         <View
                           style={[
                             styles.shiftCodePill,
@@ -225,20 +212,15 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
                           ]}
                         >
                           <Text variant="micro" weight="bold" style={{ color: '#0284c7' }}>
-                            {item.shiftCode}
+                            {shiftBadgeText}
                           </Text>
                         </View>
-                        {formattedStart && formattedEnd && (
-                          <Text variant="micro" style={{ color: theme.colors.mute }}>
-                            {formattedStart} – {formattedEnd}
-                          </Text>
-                        )}
-                      </View>
-                    )}
+                      )}
+                    </View>
 
-                    {item.subtitle && !item.shiftCode && (
+                    {empId && (
                       <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
-                        {item.subtitle}
+                        {empId}
                       </Text>
                     )}
                   </View>

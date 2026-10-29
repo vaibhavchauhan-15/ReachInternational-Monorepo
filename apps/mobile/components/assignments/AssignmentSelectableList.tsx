@@ -118,7 +118,9 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
                   : theme.colors.canvasElevated,
                 borderColor: isSelected
                   ? theme.colors.primary
-                  : theme.colors.hairline,
+                  : isDark
+                  ? '#333333'
+                  : '#d4d4d8',
                 opacity: isDisabled ? 0.6 : 1,
               },
             ]}
@@ -163,8 +165,8 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
             <View style={styles.detailsCol}>
               <View style={styles.titleRow}>
                 <Text
-                  variant="body"
-                  weight="semibold"
+                  variant="small"
+                  weight="medium"
                   style={{ color: theme.colors.ink }}
                   numberOfLines={1}
                 >
@@ -176,12 +178,31 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
                       styles.codeBadge,
                       {
                         backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
+                        borderColor: isDark ? '#333333' : '#e4e4e7',
                       },
                     ]}
                   >
                     <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
                       {item.code}
+                    </Text>
+                  </View>
+                )}
+                {item.statusBadge && (
+                  <View
+                    style={[
+                      styles.capacityBadge,
+                      {
+                        backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+                        borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#bae6fd',
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="micro"
+                      weight="medium"
+                      style={{ color: isDark ? '#38bdf8' : '#0284c7' }}
+                    >
+                      {item.statusBadge}
                     </Text>
                   </View>
                 )}
@@ -242,7 +263,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     minHeight: 52,
     gap: spacingNumeric.md,
   },
@@ -265,6 +286,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   codeBadge: {
+    paddingHorizontal: spacingNumeric.xs,
+    paddingVertical: 1,
+    borderRadius: radiusNumeric.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  capacityBadge: {
     paddingHorizontal: spacingNumeric.xs,
     paddingVertical: 1,
     borderRadius: radiusNumeric.xs,

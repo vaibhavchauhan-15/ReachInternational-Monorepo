@@ -39,6 +39,25 @@ export interface MachineAssignmentItem {
   clientShifts?: ClientShiftCode[];
 }
 
+export interface AssignPersonnelSuccessResult {
+  machineId?: string;
+  operators?: Array<{
+    id: string;
+    full_name: string;
+    employee_id?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    shift_time?: string;
+    shift_code?: string;
+    shift_name?: string;
+    shift_start_time?: string | null;
+    shift_end_time?: string | null;
+    role?: string;
+    [key: string]: any;
+  }>;
+  res?: any;
+}
+
 export interface AssignPersonnelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -55,7 +74,7 @@ export interface AssignPersonnelModalProps {
   initialMachineId?: string;
   initialOperatorId?: string;
   userRole?: UserRole | string;
-  onSuccess?: (result?: any) => void;
+  onSuccess?: (result?: AssignPersonnelSuccessResult) => void;
   onMachineUpdated?: (updated: Partial<MachineWithEngineer>) => void;
 }
 

@@ -17,9 +17,6 @@ import {
   Building2,
   CalendarCheck,
   Clock,
-  AlertTriangle,
-  Timer,
-  Layers,
   FileSpreadsheet,
 } from '../../ui/icon';
 
@@ -36,9 +33,6 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
   const totalClients = data?.totalClients ?? 0;
   const activeAssignments = data?.activeAssignments ?? 0;
   const todayLogs = data?.todayLogs ?? 0;
-  const breakdowns = data?.operationalKpis?.breakdowns ?? 0;
-  const overtime = data?.operationalKpis?.overtimeEntries ?? 0;
-  const overlappingLogs = data?.operationalKpis?.overlappingLogs ?? 0;
 
   const hasNoOrgData = totalMachines === 0 && activeUsers === 0 && totalClients === 0;
 
@@ -102,40 +96,6 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
             icon={Clock}
             variant={todayLogs > 0 ? 'success' : 'default'}
             href="/running-logs"
-          />
-        </KPIGrid>
-      </View>
-
-      {/* Operational Telemetry & Exceptions */}
-      <View style={styles.section}>
-        <Text
-          variant="caption"
-          weight="semibold"
-          style={[styles.eyebrowHeader, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
-        >
-          Today's Operational Exceptions
-        </Text>
-        <KPIGrid columns={3}>
-          <KPICard
-            label="Breakdowns Reported"
-            value={breakdowns}
-            icon={AlertTriangle}
-            variant={breakdowns > 0 ? 'error' : 'default'}
-            href="/operations"
-          />
-          <KPICard
-            label="Overtime Entries"
-            value={overtime}
-            icon={Timer}
-            variant={overtime > 0 ? 'warning' : 'default'}
-            href="/operations"
-          />
-          <KPICard
-            label="Schedule Conflicts"
-            value={overlappingLogs}
-            icon={Layers}
-            variant={overlappingLogs > 0 ? 'error' : 'default'}
-            href="/operations"
           />
         </KPIGrid>
       </View>

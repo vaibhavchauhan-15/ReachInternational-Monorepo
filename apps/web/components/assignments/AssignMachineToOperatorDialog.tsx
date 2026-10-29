@@ -167,10 +167,6 @@ export function AssignMachineToOperatorDialog({
   }, [selectedMachineId, assignableMachines]);
 
   // Candidates: available machines not already assigned with 3 shifts
-  const assignedMachineIds = useMemo(() => {
-    return new Set(operatorRoster.map((r) => r.machineId));
-  }, [operatorRoster]);
-
   const candidateMachines: AssignmentCandidateItem[] = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
@@ -183,19 +179,36 @@ export function AssignMachineToOperatorDialog({
         return code.includes(q) || model.includes(q) || client.includes(q);
       })
       .map((m) => {
-        const isAssignedToThisOp = assignedMachineIds.has(m.id);
+        const shiftsOnThisMach = operatorRoster.filter((r) => r.machineId === m.id).length;
+        const isMaxShiftsOnMach = shiftsOnThisMach >= 3;
+        const isAssignedToThisOp = shiftsOnThisMach > 0;
+        const isOperatorFull = operatorRoster.length >= 3;
+
+        let statusLabel = m.status === "rented" ? "Rented" : "Available";
+        let statusVariant: "default" | "success" | "warning" | "error" | "info" | "neutral" =
+          m.status === "rented" ? "info" : "success";
+
+        if (isMaxShiftsOnMach) {
+          statusLabel = "3/3 Shifts Assigned";
+          statusVariant = "neutral";
+        } else if (isAssignedToThisOp) {
+          statusLabel = `${shiftsOnThisMach}/3 Shifts Assigned`;
+          statusVariant = "info";
+        }
+
         return {
           id: m.id,
           title: m.machine_id || m.machine_code || "Machine",
           subtitle: m.model || "Asset",
           meta: m.client_name || m.client?.company_name || "Unallocated (Yard)",
           statusBadge: {
-            label: isAssignedToThisOp ? "Already Assigned" : m.status === "rented" ? "Rented" : "Available",
-            variant: isAssignedToThisOp ? "neutral" : m.status === "rented" ? "info" : "success",
+            label: statusLabel,
+            variant: statusVariant,
           } as const,
+          disabled: isMaxShiftsOnMach || isOperatorFull,
         };
       });
-  }, [assignableMachines, assignedMachineIds, searchQuery]);
+  }, [assignableMachines, operatorRoster, searchQuery]);
 
   // Check shift overlap between candidate machine shift and current roster
   const shiftConflictNotice = useMemo(() => {

@@ -20,7 +20,7 @@ export const getActiveSupervisors = unstable_cache(
 
     const { data: usersData, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time")
+      .select("id, full_name, employee_id, phone, email, role, status, shift_start_time, shift_end_time")
       .in("role", ["supervisor", "manager", "admin", "super_admin"])
       .neq("status", "inactive")
       .order("full_name", { ascending: true });
@@ -39,6 +39,7 @@ export const getActiveSupervisors = unstable_cache(
       return {
         id: u.id,
         full_name: u.full_name || u.email || "Supervisor",
+        employee_id: u.employee_id || null,
         phone: u.phone,
         email: u.email,
         role: u.role,
@@ -49,7 +50,7 @@ export const getActiveSupervisors = unstable_cache(
       } as User;
     });
   },
-  ["active-supervisors-v10"],
+  ["active-supervisors-v11"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta, TAGS.users] }
 );
 
@@ -59,7 +60,7 @@ export const getActiveOperators = unstable_cache(
 
     const { data: usersData, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time")
+      .select("id, full_name, employee_id, phone, email, role, status, shift_start_time, shift_end_time")
       .eq("role", "operator")
       .neq("status", "inactive")
       .order("full_name", { ascending: true });
@@ -78,6 +79,7 @@ export const getActiveOperators = unstable_cache(
       return {
         id: u.id,
         full_name: u.full_name || u.email || "Operator",
+        employee_id: u.employee_id || null,
         phone: u.phone,
         email: u.email,
         role: u.role,
@@ -88,7 +90,7 @@ export const getActiveOperators = unstable_cache(
       } as User;
     });
   },
-  ["active-operators-v10"],
+  ["active-operators-v11"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta, TAGS.users] }
 );
 

@@ -49,7 +49,7 @@ export function TodayShiftMonitorKPIStrip({
         ]}
       >
         <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-          Total Roster
+          Total Shift
         </Text>
         <View style={styles.valueRow}>
           {isLoading ? (

@@ -35,13 +35,15 @@ export const ClientsHeader = memo(function ClientsHeader({
       breadcrumbs={[{ label: "Clients" }]}
       actions={
         <div className="flex items-center gap-2">
-          <ExportDropdown
-            loading={isExporting}
-            onExportExcel={onExportExcel}
-            onExportCSV={onExportCSV}
-            onExportPDF={onExportPDF}
-            align="right"
-          />
+          {canManageClients && (
+            <ExportDropdown
+              loading={isExporting}
+              onExportExcel={onExportExcel}
+              onExportCSV={onExportCSV}
+              onExportPDF={onExportPDF}
+              align="right"
+            />
+          )}
 
           {canManageClients && (
             <>

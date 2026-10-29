@@ -218,7 +218,7 @@ export const Pressable = memo(
         outlineStyle: 'none',
         WebkitTapHighlightColor: 'transparent',
         userSelect: 'none',
-        cursor: isInteractive ? 'pointer' : 'default',
+        cursor: isInteractive ? 'pointer' : 'not-allowed',
       } as any,
       default: {},
     });

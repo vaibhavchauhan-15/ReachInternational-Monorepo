@@ -17,7 +17,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Mumbai – Ahmedabad Corridor',
     equipment: 'JLG 1350SJP Boom Lift',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'We switched to BYD lithium-ion forklifts and Toyota reach trucks for our 200,000 sq ft logistics hub. Zero downtime and high battery efficiency significantly reduced our turnaround cycles.',
@@ -27,7 +26,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Bhiwandi, Maharashtra',
     equipment: 'Toyota & BYD Lithium MHE',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'During our annual automotive plant turnaround, Reach provided certified Genie scissor lifts and heavy Toyota forklifts. Their on-site support engineers ensured our overhaul completed two days ahead of schedule.',
@@ -37,7 +35,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Sanand / Pune Industrial Cluster',
     equipment: 'Genie Z-62/40 & Toyota 5T',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'Glazing maintenance on high-rise commercial atriums requires specialized spider lifts with zero floor damage. Reach surveyed our slab load limits and supplied perfect non-marking rubber crawler lifts.',
@@ -47,7 +44,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Cyber City, Gurugram',
     equipment: 'Spider / Crawler Compact Lift',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'Cleanroom semiconductor and electronics assembly requires zero hydraulic residue or exhaust. Reach provided spotless electric scissor lifts with non-marking tyres and valid annual inspection certificates.',
@@ -57,7 +53,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Sri City, Andhra Pradesh',
     equipment: 'Genie Electric Scissor Lift',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'Continuous 24/7 container un-stuffing demands extreme machinery resilience. Reach’s heavy Hyundai forklifts run relentlessly with scheduled preventive visits keeping breakdown rates well under 2%.',
@@ -67,7 +62,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Dadri / Greater Noida',
     equipment: 'Hyundai 16-Tonne Heavy Forklift',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'High-bay narrow aisle racking at 11 meters demands rock-solid reach trucks. The mast stability and battery endurance on Reach’s Toyota units enabled our pick rates to jump by 28% during peak season.',
@@ -77,7 +71,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Chakan Industrial Area, Pune',
     equipment: 'Toyota 8-Series Reach Truck',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'Refinery safety audits are uncompromising on spark arrestors and annual load test certificates. Reach International provided third-party tested telescopic boom lifts with full compliance before mobilization.',
@@ -87,7 +80,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Mathura – Panipat Belt',
     equipment: 'Genie S-85 Telescopic Boom',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   },
   {
     text: 'Operating over sandy desert terrain would ground standard equipment. Reach’s rough-terrain 4x4 booms and telehandlers handled steep gradient access to wind turbine towers without a single traction hitch.',
@@ -97,7 +89,6 @@ export const industrialTestimonials: Testimonial[] = [
     location: 'Khavda Renewable Energy Park, Gujarat',
     equipment: 'JCB Rough Terrain 4x4 Boom',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
   },
 ]
 

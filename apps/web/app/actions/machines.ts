@@ -2074,6 +2074,7 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
     current_operator: any | null;
     active_assignments?: any[];
     client_shifts?: any[];
+    client_id?: string | null;
   };
 }> {
   if (!isValidUuid(machineId)) {
@@ -2100,22 +2101,12 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
       ? machine.operator_ids
       : machine.current_operator_id ? [machine.current_operator_id] : [];
 
-    const allUserIds = Array.from(new Set([...supIds, ...opIds]));
-
-    const [usersRes, assignmentsRes, clientShiftsRes] = await Promise.all([
-      allUserIds.length > 0
-        ? supabaseAdmin
-            .from("users")
-            .select("id, full_name, phone, email, shift_start_time, shift_end_time, role, employee_id")
-            .in("id", allUserIds)
-        : Promise.resolve({ data: [] }),
-      opIds.length > 0
-        ? supabaseAdmin
-            .from("operator_machine_assignments")
-            .select("operator_id, shift_start_time, shift_end_time, shift_code")
-            .eq("machine_id", machineId)
-            .eq("is_active", true)
-        : Promise.resolve({ data: [] }),
+    const [assignmentsRes, clientShiftsRes] = await Promise.all([
+      supabaseAdmin
+        .from("operator_machine_assignments")
+        .select("operator_id, shift_start_time, shift_end_time, shift_code")
+        .eq("machine_id", machineId)
+        .eq("is_active", true),
       machine.client_id
         ? supabaseAdmin
             .from("client_shift_codes")
@@ -2127,18 +2118,29 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
         : Promise.resolve({ data: [] }),
     ]);
 
-    const clientShifts = (clientShiftsRes.data || []) as any[];
-    const clientShiftMap = new Map(
-      clientShifts.map((cs: any) => [String(cs.code || "").trim().toUpperCase(), cs])
-    );
-
-    const usersMap = new Map((usersRes.data || []).map((u) => [u.id, u]));
     const activeAssignments = (assignmentsRes.data || []) as Array<{
       operator_id: string;
       shift_start_time: string | null;
       shift_end_time: string | null;
       shift_code: string | null;
     }>;
+
+    const assignmentOpIds = activeAssignments.map((a) => a.operator_id).filter(Boolean);
+    const allUserIds = Array.from(new Set([...supIds, ...opIds, ...assignmentOpIds]));
+
+    const usersRes = allUserIds.length > 0
+      ? await supabaseAdmin
+          .from("users")
+          .select("id, full_name, phone, email, shift_start_time, shift_end_time, role, employee_id")
+          .in("id", allUserIds)
+      : { data: [] };
+
+    const clientShifts = (clientShiftsRes.data || []) as any[];
+    const clientShiftMap = new Map(
+      clientShifts.map((cs: any) => [String(cs.code || "").trim().toUpperCase(), cs])
+    );
+
+    const usersMap = new Map((usersRes.data || []).map((u) => [u.id, u]));
 
     const supervisors = supIds
       .map((id) => usersMap.get(id))
@@ -2236,6 +2238,7 @@ export async function getMachinePersonnelFreshAction(machineId: string): Promise
         current_operator: (operators[0] as any) || null,
         active_assignments: activeAssignmentsWithShiftNames,
         client_shifts: clientShifts,
+        client_id: machine.client_id || null,
       },
     };
   } catch (err: unknown) {
@@ -2323,7 +2326,7 @@ export async function updateMachineClientAssignmentAction(
     revalidatePath(`/machines/${machineId}`, "page");
     revalidatePath("/machines");
 
-    return { success: true, client_id: validClientId, status };
+    return { success: true, client_id: validClientId, site_id: validSiteId, status };
   } catch (err: unknown) {
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;

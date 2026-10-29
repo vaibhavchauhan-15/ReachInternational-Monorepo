@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pick, readDraft } from "./useFormDraft";
+import { pick, readDraft, hasMeaningfulData } from "./useFormDraft.ts";
 
 // Minimal localStorage shim for Node.js testing
 const store = new Map<string, string>();
@@ -11,6 +11,9 @@ const store = new Map<string, string>();
   clear: () => store.clear(),
   get length() { return store.size; },
   key: () => null,
+};
+(globalThis as unknown as { window: unknown }).window = {
+  localStorage: (globalThis as unknown as { localStorage: Storage }).localStorage,
 };
 
 test("pick drops fields outside the allowlist", () => {
@@ -23,6 +26,26 @@ test("pick returns empty object for empty allowlist", () => {
 
 test("pick handles missing keys gracefully", () => {
   assert.deepEqual(pick({ email: "a@b.c" }, ["phone"]), {});
+});
+
+test("hasMeaningfulData returns false for empty or static default form fields", () => {
+  assert.equal(hasMeaningfulData({}), false);
+  assert.equal(hasMeaningfulData({ full_name: "", email: "" }), false);
+  assert.equal(
+    hasMeaningfulData({
+      role: "operator",
+      shift_start_time: "08:00 AM",
+      shift_end_time: "08:00 PM",
+      agreed_to_terms: false,
+    }),
+    false
+  );
+});
+
+test("hasMeaningfulData returns true when actual user data is entered", () => {
+  assert.equal(hasMeaningfulData({ full_name: "Rahul Sharma" }), true);
+  assert.equal(hasMeaningfulData({ role: "operator", email: "rahul@test.com" }), true);
+  assert.equal(hasMeaningfulData({ agreed_to_terms: true }), true);
 });
 
 test("readDraft returns data inside TTL, null after it", () => {
@@ -41,7 +64,7 @@ test("readDraft returns null for corrupt JSON", () => {
   assert.equal(readDraft("k", ["email"]), null);
 });
 
-test("readDraft returns null for empty data", () => {
+test("readDraft returns null for empty or default-only data", () => {
   store.set("k", JSON.stringify({ savedAt: Date.now(), data: { email: "", phone: "" } }));
   assert.equal(readDraft("k", ["email", "phone"]), null);
 });

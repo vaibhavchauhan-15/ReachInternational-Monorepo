@@ -100,13 +100,12 @@ check("AssignmentDialog: modal wrapper with target entity details and inherited 
 });
 
 // 8. AssignSupervisorToClientDialog
-check("AssignSupervisorToClientDialog: supervisor search, inherited access callout, and optimistic handling", () => {
+check("AssignSupervisorToClientDialog: supervisor dropdown, site selection, and optimistic handling", () => {
   const content = fs.readFileSync(path.join(webRoot, "components/assignments/AssignSupervisorToClientDialog.tsx"), "utf8");
   assert.match(content, /assignClientSupervisorAction/);
   assert.match(content, /getAvailableSupervisorsAction/);
   assert.match(content, /AssignmentDialog/);
-  assert.match(content, /AssignmentSearch/);
-  assert.match(content, /AssignmentSelectableList/);
+  assert.match(content, /UserSelect/);
   assert.match(content, /AssignmentActions/);
 });
 

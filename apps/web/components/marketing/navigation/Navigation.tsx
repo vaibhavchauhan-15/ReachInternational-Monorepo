@@ -3,15 +3,14 @@
 import * as React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ThemeToggle } from './ThemeToggle'
 import { ReachLogo } from '@/components/marketing/primitives/ReachLogo'
 import { Button } from '@/components/marketing/ui/button'
-import { NavigationMenu as NavigationMenuPrimitive } from '@base-ui-components/react/navigation-menu'
-import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import {
   ArrowRight,
@@ -28,188 +27,8 @@ import {
 } from 'lucide-react'
 
 // ============================================================================
-// Base UI Navigation Menu Primitives (Inlined)
+// Navigation Link Definitions
 // ============================================================================
-
-function NavigationMenu({ className, children, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Root>) {
-  return (
-    <NavigationMenuPrimitive.Root
-      data-slot="navigation-menu"
-      className={cn('group/navigation-menu relative flex max-w-max flex-1 items-center justify-center', className)}
-      {...props}
-    >
-      {children}
-    </NavigationMenuPrimitive.Root>
-  )
-}
-
-function NavigationMenuList({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.List>) {
-  return (
-    <NavigationMenuPrimitive.List
-      data-slot="navigation-menu-list"
-      className={cn('group flex flex-1 list-none items-center justify-center gap-1', className)}
-      {...props}
-    />
-  )
-}
-
-function NavigationMenuItem({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Item>) {
-  return (
-    <NavigationMenuPrimitive.Item data-slot="navigation-menu-item" className={cn('relative', className)} {...props} />
-  )
-}
-
-const navigationMenuTriggerStyle = cva(
-  'group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:hover:bg-accent data-[popup-open]:text-accent-foreground data-[popup-open]:focus:bg-accent data-[popup-open]:bg-accent/50 focus-visible:ring-ring/50 outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1',
-)
-
-function NavigationMenuTrigger({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Trigger>) {
-  return (
-    <NavigationMenuPrimitive.Trigger
-      data-slot="navigation-menu-trigger"
-      className={cn(navigationMenuTriggerStyle(), 'group', className)}
-      {...props}
-    >
-      {children}{' '}
-      <ChevronDown
-        className="relative top-[1px] ms-1 size-3 transition duration-300 group-data-[popup-open]:rotate-180"
-        aria-hidden="true"
-      />
-    </NavigationMenuPrimitive.Trigger>
-  )
-}
-
-function NavigationMenuContent({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Content>) {
-  return (
-    <NavigationMenuPrimitive.Content
-      data-slot="navigation-menu-content"
-      className={cn(
-        'w-[calc(100vw_-_40px)] h-full p-2 sm:w-max xs:min-w-[400px] ',
-        'transition-[opacity,transform,translate] duration-[var(--duration)] ease-[var(--easing)] ',
-        'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0 ',
-        'data-[starting-style]:data-[activation-direction=left]:translate-x-[-50%] ',
-        'data-[starting-style]:data-[activation-direction=right]:translate-x-[50%] ',
-        'data-[ending-style]:data-[activation-direction=left]:translate-x-[50%] ',
-        'data-[ending-style]:data-[activation-direction=right]:translate-x-[-50%]',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-function NavigationMenuPortal({ ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Portal>) {
-  return <NavigationMenuPrimitive.Portal data-slot="navigation-menu-portal" {...props} />
-}
-
-function NavigationMenuPositioner({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Positioner>) {
-  return (
-    <NavigationMenuPortal>
-      <NavigationMenuPrimitive.Positioner
-        data-slot="navigation-menu-positioner"
-        sideOffset={10}
-        collisionPadding={{ top: 5, bottom: 5, left: 20, right: 20 }}
-        collisionAvoidance={{ side: 'none' }}
-        className={cn(
-          "box-border h-[var(--positioner-height)] w-[var(--positioner-width)] max-w-[var(--available-width)] transition-[top,left,right,bottom] duration-[var(--duration)] ease-[var(--easing)] before:absolute before:content-[''] data-[instant]:transition-none data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0 data-[side=bottom]:before:h-2.5 data-[side=left]:before:top-0 data-[side=left]:before:right-[-10px] data-[side=left]:before:bottom-0 data-[side=left]:before:w-2.5 data-[side=right]:before:top-0 data-[side=right]:before:bottom-0 data-[side=right]:before:left-[-10px] data-[side=right]:before:w-2.5 data-[side=top]:before:right-0 data-[side=top]:before:bottom-[-10px] data-[side=top]:before:left-0 data-[side=top]:before:h-2.5",
-          className,
-        )}
-        style={
-          {
-            '--duration': '0.35s',
-            '--easing': 'cubic-bezier(0.22, 1, 0.36, 1)',
-          } as React.CSSProperties
-        }
-        {...props}
-      >
-        {children}
-      </NavigationMenuPrimitive.Positioner>
-    </NavigationMenuPortal>
-  )
-}
-
-function NavigationMenuPopup({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Popup>) {
-  return (
-    <NavigationMenuPrimitive.Popup
-      className={cn(
-        'data-[ending-style]:easing-[ease] relative h-[var(--popup-height)] origin-[var(--transform-origin)] rounded-lg bg-popover shadow-lg outline-1 outline-border transition-[opacity,transform,width,height,scale,translate] duration-[var(--duration)] ease-[var(--easing)] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[ending-style]:duration-150 data-[starting-style]:scale-90 data-[starting-style]:opacity-0 w-[var(--popup-width)] xs:w-[var(--popup-width)] dark:shadow-none dark:-outline-offset-1',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <NavigationMenuViewport />
-    </NavigationMenuPrimitive.Popup>
-  )
-}
-
-function NavigationMenuViewport({
-  className,
-  ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Viewport>) {
-  return (
-    <NavigationMenuPrimitive.Viewport className={cn('relative h-full w-full overflow-hidden', className)} {...props} />
-  )
-}
-
-function NavigationMenuLink({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Link>) {
-  return (
-    <NavigationMenuPrimitive.Link
-      data-slot="navigation-menu-link"
-      className={cn(
-        "data-[active]:focus:bg-accent data-[active]:hover:bg-accent data-[active]:bg-accent/50 data-[active]:text-accent-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:ring-ring/50 [&_svg:not([class*='text-'])]:text-muted-foreground flex flex-col gap-1 rounded-sm p-2 text-sm transition-all outline-none focus-visible:ring-[3px] focus-visible:outline-1 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-function NavigationMenuArrow({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Arrow>) {
-  return (
-    <NavigationMenuPrimitive.Arrow
-      data-slot="navigation-menu-arrow"
-      className={cn(
-        'flex transition-[left] duration-[var(--duration)] ease-[var(--easing)] data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180',
-        className,
-      )}
-      {...props}
-    >
-      <ArrowSvg />
-    </NavigationMenuPrimitive.Arrow>
-  )
-}
-
-function ArrowSvg(props: React.ComponentProps<'svg'>) {
-  return (
-    <svg width="20" height="10" viewBox="0 0 20 10" fill="none" {...props}>
-      <path
-        d="M9.66437 2.60207L4.80758 6.97318C4.07308 7.63423 3.11989 8 2.13172 8H0V10H20V8H18.5349C17.5468 8 16.5936 7.63423 15.8591 6.97318L11.0023 2.60207C10.622 2.2598 10.0447 2.25979 9.66437 2.60207Z"
-        className="fill-popover"
-      />
-      <path
-        d="M8.99542 1.85876C9.75604 1.17425 10.9106 1.17422 11.6713 1.85878L16.5281 6.22989C17.0789 6.72568 17.7938 7.00001 18.5349 7.00001L15.89 7L11.0023 2.60207C10.622 2.2598 10.0447 2.2598 9.66436 2.60207L4.77734 7L2.13171 7.00001C2.87284 7.00001 3.58774 6.72568 4.13861 6.22989L8.99542 1.85876Z"
-        className="fill-border dark:fill-none"
-      />
-      <path
-        d="M10.3333 3.34539L5.47654 7.71648C4.55842 8.54279 3.36693 9 2.13172 9H0V8H2.13172C3.11989 8 4.07308 7.63423 4.80758 6.97318L9.66437 2.60207C10.0447 2.25979 10.622 2.2598 11.0023 2.60207L15.8591 6.97318C16.5936 7.63423 17.5468 8 18.5349 8H20V9H18.5349C17.2998 9 16.1083 8.54278 15.1901 7.71648L10.3333 3.34539Z"
-        className="dark:fill-border"
-      />
-    </svg>
-  )
-}
 
 const equipmentLinks = {
   access: [
@@ -268,9 +87,108 @@ const industryLinks = [
   },
 ]
 
+type ActiveMenu = 'equipment' | 'services' | 'industries' | null
+
+// ============================================================================
+// Main Navigation Component
+// ============================================================================
+
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null)
+
+  // Mobile accordion states
+  const [mobileEquipmentOpen, setMobileEquipmentOpen] = useState(false)
+  const [mobileServicesOpen, setMobileServicesOpen] = useState(false)
+  const [mobileIndustriesOpen, setMobileIndustriesOpen] = useState(false)
+
+  const headerRef = useRef<HTMLElement>(null)
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastMouseEnterTimeRef = useRef<number>(0)
+  const isClickToggleRef = useRef<boolean>(false)
+
+  // Clear pending close timeout
+  const cancelClose = useCallback(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current)
+      closeTimeoutRef.current = null
+    }
+  }, [])
+
+  // Schedule menu close after short delay for seamless diagonal hover movement
+  const scheduleClose = useCallback(() => {
+    cancelClose()
+    closeTimeoutRef.current = setTimeout(() => {
+      setActiveMenu(null)
+      isClickToggleRef.current = false
+    }, 180)
+  }, [cancelClose])
+
+  // Open menu on hover
+  const handleMouseEnter = useCallback((menu: ActiveMenu) => {
+    cancelClose()
+    lastMouseEnterTimeRef.current = Date.now()
+    setActiveMenu(menu)
+  }, [cancelClose])
+
+  // Toggle menu on click/press (handles mouse click, touch tap, and deliberate toggling)
+  const handleTriggerClick = useCallback((menu: ActiveMenu) => {
+    cancelClose()
+    const now = Date.now()
+    const timeSinceHover = now - lastMouseEnterTimeRef.current
+
+    setActiveMenu((prev) => {
+      // If menu is closed, open it
+      if (prev !== menu) {
+        isClickToggleRef.current = true
+        return menu
+      }
+      // If it was just opened by mouseenter within 400ms, keep it open (user clicked to open it)
+      if (timeSinceHover < 400 && !isClickToggleRef.current) {
+        isClickToggleRef.current = true
+        return menu
+      }
+      // Otherwise toggle closed
+      isClickToggleRef.current = false
+      return null
+    })
+  }, [cancelClose])
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
+        setActiveMenu(null)
+        isClickToggleRef.current = false
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveMenu(null)
+        setMobileOpen(false)
+        isClickToggleRef.current = false
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  // Close menus on route change
+  useEffect(() => {
+    setActiveMenu(null)
+    setMobileOpen(false)
+    isClickToggleRef.current = false
+  }, [pathname])
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -284,8 +202,18 @@ export function Navigation() {
     }
   }, [mobileOpen])
 
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current)
+      }
+    }
+  }, [])
+
   return (
     <header
+      ref={headerRef}
       className="fixed top-0 left-0 right-0 z-50 transition-colors"
       style={{
         backgroundColor: 'var(--surface-base)',
@@ -294,41 +222,192 @@ export function Navigation() {
       }}
     >
       <div className="h-[72px] max-w-wide mx-auto px-4 md:px-6 lg:px-8 flex items-center justify-between gap-4">
-        {/* Brand Logo & Navigation */}
+        {/* Brand Logo & Desktop/Laptop Navigation */}
         <div className="flex items-center gap-6 xl:gap-8">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/"
+            className="flex items-center gap-2 shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onClick={() => setActiveMenu(null)}
+          >
             <ReachLogo height={48} priority />
           </Link>
 
-          {/* Desktop Navigation Menu via @/components/ui/navigation */}
-          <nav aria-label="Primary navigation" className="hidden lg:flex items-center">
-            <NavigationMenu>
-              <NavigationMenuList className="gap-1">
-                {/* Home Link */}
-                <NavigationMenuItem>
-                  <NavigationMenuLink
-                    render={
-                      <Link
-                        href="/"
-                        className={navigationMenuTriggerStyle({
-                          className: pathname === '/' ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                        })}
-                      />
-                    }
-                  >
-                    Home
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
+          {/* Desktop & Laptop Navigation Menu */}
+          <nav aria-label="Primary navigation" className="hidden lg:flex items-center relative">
+            <ul className="flex items-center gap-1 list-none m-0 p-0">
+              {/* Home Link */}
+              <li>
+                <Link
+                  href="/"
+                  className={cn(
+                    'inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    pathname === '/' ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  )}
+                  onClick={() => setActiveMenu(null)}
+                >
+                  Home
+                </Link>
+              </li>
 
-                {/* Equipment Mega Menu */}
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger className={pathname.startsWith('/equipment') ? 'text-foreground font-semibold' : ''}>
-                    Equipment
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <div className="grid grid-cols-12 gap-5 p-2 w-[780px] lg:w-[860px]">
+              {/* Equipment Trigger */}
+              <li
+                className="relative"
+                onMouseEnter={() => handleMouseEnter('equipment')}
+                onMouseLeave={scheduleClose}
+              >
+                <button
+                  type="button"
+                  aria-expanded={activeMenu === 'equipment'}
+                  aria-haspopup="true"
+                  onClick={() => handleTriggerClick('equipment')}
+                  className={cn(
+                    'group inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-all select-none',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    'active:scale-[0.98]',
+                    activeMenu === 'equipment'
+                      ? 'bg-accent text-accent-foreground font-semibold shadow-xs'
+                      : pathname.startsWith('/equipment')
+                        ? 'text-foreground font-semibold'
+                        : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Equipment</span>
+                  <ChevronDown
+                    className={cn(
+                      'ms-1 size-3.5 transition-transform duration-200 text-muted-foreground group-hover:text-foreground',
+                      activeMenu === 'equipment' && 'rotate-180 text-foreground'
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+
+              {/* Services Trigger */}
+              <li
+                className="relative"
+                onMouseEnter={() => handleMouseEnter('services')}
+                onMouseLeave={scheduleClose}
+              >
+                <button
+                  type="button"
+                  aria-expanded={activeMenu === 'services'}
+                  aria-haspopup="true"
+                  onClick={() => handleTriggerClick('services')}
+                  className={cn(
+                    'group inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-all select-none',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    'active:scale-[0.98]',
+                    activeMenu === 'services'
+                      ? 'bg-accent text-accent-foreground font-semibold shadow-xs'
+                      : pathname.startsWith('/services')
+                        ? 'text-foreground font-semibold'
+                        : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Services</span>
+                  <ChevronDown
+                    className={cn(
+                      'ms-1 size-3.5 transition-transform duration-200 text-muted-foreground group-hover:text-foreground',
+                      activeMenu === 'services' && 'rotate-180 text-foreground'
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+
+              {/* Industries Trigger */}
+              <li
+                className="relative"
+                onMouseEnter={() => handleMouseEnter('industries')}
+                onMouseLeave={scheduleClose}
+              >
+                <button
+                  type="button"
+                  aria-expanded={activeMenu === 'industries'}
+                  aria-haspopup="true"
+                  onClick={() => handleTriggerClick('industries')}
+                  className={cn(
+                    'group inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-all select-none',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    'active:scale-[0.98]',
+                    activeMenu === 'industries'
+                      ? 'bg-accent text-accent-foreground font-semibold shadow-xs'
+                      : pathname.startsWith('/industries')
+                        ? 'text-foreground font-semibold'
+                        : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Industries</span>
+                  <ChevronDown
+                    className={cn(
+                      'ms-1 size-3.5 transition-transform duration-200 text-muted-foreground group-hover:text-foreground',
+                      activeMenu === 'industries' && 'rotate-180 text-foreground'
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+
+              {/* About Link */}
+              <li>
+                <Link
+                  href="/about/"
+                  className={cn(
+                    'inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    pathname.startsWith('/about') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  )}
+                  onClick={() => setActiveMenu(null)}
+                >
+                  About
+                </Link>
+              </li>
+
+              {/* Contact Link */}
+              <li>
+                <Link
+                  href="/contact/"
+                  className={cn(
+                    'inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    pathname.startsWith('/contact') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  )}
+                  onClick={() => setActiveMenu(null)}
+                >
+                  Contact
+                </Link>
+              </li>
+            </ul>
+
+            {/* ============================================================== */}
+            {/* Desktop & Laptop Dropdown Panels (RENDERED ONLY WHEN ACTIVE)    */}
+            {/* ============================================================== */}
+            <AnimatePresence>
+              {activeMenu && (
+                <motion.div
+                  key="dropdown-panel"
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  onMouseEnter={cancelClose}
+                  onMouseLeave={scheduleClose}
+                  className="absolute top-[calc(100%+8px)] z-50 rounded-xl overflow-hidden pointer-events-auto bg-white dark:bg-[#171717] text-foreground border border-border shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
+                  style={{
+                    backgroundColor: 'var(--surface-elevated)',
+                    // Positioning: Equipment starts near nav start; Services/Industries align gracefully
+                    left: activeMenu === 'equipment' ? '0' : activeMenu === 'services' ? '80px' : '180px',
+                  }}
+                >
+                  {/* Invisible bridge to prevent pointer gap hover dropouts */}
+                  <div className="absolute -top-3 left-0 right-0 h-3" />
+
+                  {/* 1. EQUIPMENT MEGA-MENU */}
+                  {activeMenu === 'equipment' && (
+                    <div className="grid grid-cols-12 gap-5 p-4 w-[760px] xl:w-[840px] max-w-[calc(100vw-48px)]">
                       {/* Featured Visual Card */}
-                      <div className="col-span-4 rounded-lg overflow-hidden border border-border bg-muted/40 p-4 flex flex-col justify-between relative group">
+                      <div className="col-span-4 rounded-lg overflow-hidden border border-border bg-muted/30 p-3.5 flex flex-col justify-between relative group">
                         <div className="relative h-28 w-full rounded-md overflow-hidden mb-3">
                           <Image
                             src="/images/awp_boom_lift.jpg"
@@ -337,51 +416,45 @@ export function Navigation() {
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                             sizes="260px"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                          <span className="absolute bottom-2 left-2 text-[11px] font-semibold uppercase tracking-wider text-white bg-black/40 px-2 py-0.5 rounded backdrop-blur-xs">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                          <span className="absolute bottom-2 left-2 text-[10px] font-semibold uppercase tracking-wider text-white bg-black/50 px-2 py-0.5 rounded backdrop-blur-xs">
                             AWP & MHE Fleet
                           </span>
                         </div>
                         <div>
                           <h4 className="text-sm font-semibold text-foreground">Reaching All Heights</h4>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                             Certified boom lifts, scissor lifts, reach trucks & forklifts across India.
                           </p>
                         </div>
-                        <NavigationMenuLink
-                          render={
-                            <Link
-                              href="/equipment/"
-                              className="mt-4 flex items-center justify-between text-xs font-medium text-accent-foreground hover:underline pt-2 border-t border-border"
-                            />
-                          }
+                        <Link
+                          href="/equipment/"
+                          onClick={() => setActiveMenu(null)}
+                          className="mt-3.5 flex items-center justify-between text-xs font-semibold text-primary hover:underline pt-2.5 border-t border-border"
                         >
                           <span>Browse all equipment</span>
                           <ChevronRight className="size-3.5" />
-                        </NavigationMenuLink>
+                        </Link>
                       </div>
 
                       {/* Access Equipment Column */}
                       <div className="col-span-4">
-                        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2 py-1.5 mb-1 border-b border-border">
+                        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2.5 py-1.5 mb-1.5 border-b border-border">
                           Access Equipment
                         </div>
                         <ul className="space-y-1">
                           {equipmentLinks.access.map((item) => (
                             <li key={item.href}>
-                              <NavigationMenuLink
-                                render={
-                                  <Link
-                                    href={item.href}
-                                    className="p-2 rounded-md hover:bg-accent hover:text-accent-foreground block transition-colors group"
-                                  />
-                                }
+                              <Link
+                                href={item.href}
+                                onClick={() => setActiveMenu(null)}
+                                className="p-2 rounded-lg hover:bg-accent hover:text-accent-foreground block transition-colors group"
                               >
-                                <div className="text-sm font-medium text-foreground group-hover:text-accent-foreground">
+                                <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                                   {item.label}
                                 </div>
                                 <div className="text-xs text-muted-foreground line-clamp-1">{item.desc}</div>
-                              </NavigationMenuLink>
+                              </Link>
                             </li>
                           ))}
                         </ul>
@@ -389,162 +462,113 @@ export function Navigation() {
 
                       {/* Material Handling Column */}
                       <div className="col-span-4">
-                        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2 py-1.5 mb-1 border-b border-border">
+                        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2.5 py-1.5 mb-1.5 border-b border-border">
                           Material Handling
                         </div>
                         <ul className="space-y-1">
                           {equipmentLinks.mhe.map((item) => (
                             <li key={item.href}>
-                              <NavigationMenuLink
-                                render={
-                                  <Link
-                                    href={item.href}
-                                    className="p-2 rounded-md hover:bg-accent hover:text-accent-foreground block transition-colors group"
-                                  />
-                                }
+                              <Link
+                                href={item.href}
+                                onClick={() => setActiveMenu(null)}
+                                className="p-2 rounded-lg hover:bg-accent hover:text-accent-foreground block transition-colors group"
                               >
-                                <div className="text-sm font-medium text-foreground group-hover:text-accent-foreground">
+                                <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                                   {item.label}
                                 </div>
                                 <div className="text-xs text-muted-foreground line-clamp-1">{item.desc}</div>
-                              </NavigationMenuLink>
+                              </Link>
                             </li>
                           ))}
                         </ul>
                       </div>
                     </div>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
+                  )}
 
-                {/* Services Dropdown */}
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger className={pathname.startsWith('/services') ? 'text-foreground font-semibold' : ''}>
-                    Services
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-[340px] gap-2 p-3">
-                      {serviceLinks.map((service) => {
-                        const Icon = service.icon
-                        return (
-                          <li key={service.href}>
-                            <NavigationMenuLink
-                              render={
-                                <Link
-                                  href={service.href}
-                                  className="flex items-start gap-3 p-2.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group"
-                                />
-                              }
-                            >
-                              <div className="p-2 rounded-md bg-muted text-foreground group-hover:bg-accent-foreground/10 group-hover:text-accent-foreground transition-colors shrink-0">
-                                <Icon className="size-4" />
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-foreground group-hover:text-accent-foreground">
-                                  {service.label}
+                  {/* 2. SERVICES DROPDOWN */}
+                  {activeMenu === 'services' && (
+                    <div className="w-[360px] p-3">
+                      <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2.5 py-1.5 mb-1.5 border-b border-border">
+                        Our Services
+                      </div>
+                      <ul className="space-y-1.5">
+                        {serviceLinks.map((service) => {
+                          const Icon = service.icon
+                          return (
+                            <li key={service.href}>
+                              <Link
+                                href={service.href}
+                                onClick={() => setActiveMenu(null)}
+                                className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors group"
+                              >
+                                <div className="p-2 rounded-md bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0 mt-0.5">
+                                  <Icon className="size-4" />
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-0.5">{service.desc}</div>
-                              </div>
-                            </NavigationMenuLink>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
+                                <div>
+                                  <div className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                                    {service.label}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                    {service.desc}
+                                  </div>
+                                </div>
+                              </Link>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )}
 
-                {/* Industries Dropdown */}
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger className={pathname.startsWith('/industries') ? 'text-foreground font-semibold' : ''}>
-                    Industries
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <div className="w-[480px] p-3">
+                  {/* 3. INDUSTRIES DROPDOWN */}
+                  {activeMenu === 'industries' && (
+                    <div className="w-[460px] p-3.5">
                       <div className="flex items-center justify-between pb-2 mb-2 border-b border-border px-1">
                         <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
                           Industries We Serve
                         </span>
-                        <NavigationMenuLink
-                          render={
-                            <Link href="/industries/" className="text-xs font-medium text-accent-foreground hover:underline" />
-                          }
+                        <Link
+                          href="/#industries"
+                          onClick={() => setActiveMenu(null)}
+                          className="text-xs font-semibold text-primary hover:underline"
                         >
                           View all
-                        </NavigationMenuLink>
+                        </Link>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         {industryLinks.map((ind) => {
                           const Icon = ind.icon
                           return (
-                            <NavigationMenuLink
+                            <Link
                               key={ind.href}
-                              render={
-                                <Link
-                                  href={ind.href}
-                                  className="flex items-start gap-2.5 p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group"
-                                />
-                              }
+                              href={ind.href}
+                              onClick={() => setActiveMenu(null)}
+                              className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors group"
                             >
-                              <div className="p-1.5 rounded-md bg-muted text-foreground group-hover:bg-accent-foreground/10 group-hover:text-accent-foreground shrink-0 mt-0.5">
-                                <Icon className="size-3.5" />
+                              <div className="p-1.5 rounded-md bg-muted text-foreground group-hover:bg-primary/10 group-hover:text-primary shrink-0 mt-0.5 transition-colors">
+                                <Icon className="size-4" />
                               </div>
                               <div>
-                                <div className="text-xs font-medium text-foreground group-hover:text-accent-foreground">
+                                <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                                   {ind.label}
                                 </div>
-                                <div className="text-[11px] text-muted-foreground line-clamp-1">{ind.desc}</div>
+                                <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {ind.desc}
+                                </div>
                               </div>
-                            </NavigationMenuLink>
+                            </Link>
                           )
                         })}
                       </div>
                     </div>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-
-                {/* About Link */}
-                <NavigationMenuItem>
-                  <NavigationMenuLink
-                    render={
-                      <Link
-                        href="/about/"
-                        className={navigationMenuTriggerStyle({
-                          className: pathname.startsWith('/about') ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                        })}
-                      />
-                    }
-                  >
-                    About
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-
-                {/* Contact Link */}
-                <NavigationMenuItem>
-                  <NavigationMenuLink
-                    render={
-                      <Link
-                        href="/contact/"
-                        className={navigationMenuTriggerStyle({
-                          className: pathname.startsWith('/contact') ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                        })}
-                      />
-                    }
-                  >
-                    Contact
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-
-              {/* Popup Positioner and Viewport */}
-              <NavigationMenuPositioner className="z-50">
-                <NavigationMenuPopup>
-                  <NavigationMenuArrow />
-                </NavigationMenuPopup>
-              </NavigationMenuPositioner>
-            </NavigationMenu>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </nav>
         </div>
 
-        {/* Right actions: ThemeToggle + Sign In + CTA + Mobile Hamburger */}
+        {/* Right Actions: ThemeToggle + Sign In + CTA + Mobile Hamburger */}
         <div className="flex items-center gap-2.5">
           <ThemeToggle />
 
@@ -572,7 +596,7 @@ export function Navigation() {
             type="button"
             aria-label="Open navigation menu"
             aria-expanded={mobileOpen}
-            className="lg:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors"
+            className="lg:hidden flex items-center justify-center w-10 h-10 rounded-full transition-all active:scale-95"
             style={{
               color: 'var(--text-primary)',
               backgroundColor: 'var(--surface-sunken)',
@@ -584,15 +608,17 @@ export function Navigation() {
         </div>
       </div>
 
-      {/* Mobile full-screen navigation drawer */}
+      {/* ============================================================== */}
+      {/* Mobile Navigation Drawer (Optimized for Mobile & Touch)        */}
+      {/* ============================================================== */}
       <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
         <Dialog.Portal>
           <Dialog.Overlay
-            className="fixed inset-0 z-[60]"
+            className="fixed inset-0 z-[60] backdrop-blur-xs transition-opacity"
             style={{ backgroundColor: 'var(--surface-overlay)' }}
           />
           <Dialog.Content
-            className="fixed inset-y-0 right-0 z-[70] w-full max-w-sm flex flex-col overflow-y-auto"
+            className="fixed inset-y-0 right-0 z-[70] w-full max-w-sm flex flex-col overflow-y-auto shadow-2xl focus:outline-none"
             style={{ backgroundColor: 'var(--surface-base)' }}
             onEscapeKeyDown={() => setMobileOpen(false)}
           >
@@ -614,106 +640,247 @@ export function Navigation() {
                 <button
                   type="button"
                   aria-label="Close navigation menu"
-                  className="flex items-center justify-center w-10 h-10 rounded-md"
-                  style={{ color: 'var(--text-secondary)' }}
+                  className="flex items-center justify-center w-10 h-10 rounded-full transition-colors active:scale-95"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--surface-sunken)',
+                  }}
                 >
                   <X className="size-5" />
                 </button>
               </Dialog.Close>
             </div>
 
-            {/* Mobile nav links */}
-            <nav aria-label="Mobile navigation" className="flex-1 p-4 space-y-1">
-              <div className="space-y-1 mb-4">
-                <p className="text-overline uppercase tracking-widest px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  Access Equipment
-                </p>
-                {equipmentLinks.access.map((item) => (
-                  <Dialog.Close asChild key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="block px-3 py-2 rounded-md text-sm font-medium"
-                      style={{ color: 'var(--text-primary)' }}
+            {/* Mobile Nav Accordion Links */}
+            <nav aria-label="Mobile navigation" className="flex-1 p-4 space-y-2">
+              {/* Home */}
+              <Dialog.Close asChild>
+                <Link
+                  href="/"
+                  className={cn(
+                    'flex items-center min-h-[44px] px-3.5 rounded-xl text-sm font-semibold transition-colors',
+                    pathname === '/' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted active:bg-muted/70'
+                  )}
+                >
+                  Home
+                </Link>
+              </Dialog.Close>
+
+              {/* 1. Equipment Accordion */}
+              <div className="rounded-xl border border-border/80 overflow-hidden bg-white dark:bg-[#171717]">
+                <button
+                  type="button"
+                  onClick={() => setMobileEquipmentOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-3.5 min-h-[48px] py-2.5 text-sm font-semibold text-foreground select-none transition-colors hover:bg-muted active:bg-muted/70"
+                >
+                  <div className="flex items-center gap-2">
+                    <span>Equipment</span>
+                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                      8 Models
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      mobileEquipmentOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {mobileEquipmentOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-border bg-muted/20"
                     >
-                      {item.label}
-                    </Link>
-                  </Dialog.Close>
-                ))}
+                      <div className="p-3 space-y-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-2 py-1">
+                            Access Equipment
+                          </p>
+                          <div className="space-y-0.5">
+                            {equipmentLinks.access.map((item) => (
+                              <Dialog.Close asChild key={item.href}>
+                                <Link
+                                  href={item.href}
+                                  className="block px-2.5 py-2.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors min-h-[44px] flex items-center"
+                                >
+                                  {item.label}
+                                </Link>
+                              </Dialog.Close>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="border-t border-border/60 pt-2">
+                          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-2 py-1">
+                            Material Handling
+                          </p>
+                          <div className="space-y-0.5">
+                            {equipmentLinks.mhe.map((item) => (
+                              <Dialog.Close asChild key={item.href}>
+                                <Link
+                                  href={item.href}
+                                  className="block px-2.5 py-2.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors min-h-[44px] flex items-center"
+                                >
+                                  {item.label}
+                                </Link>
+                              </Dialog.Close>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Dialog.Close asChild>
+                          <Link
+                            href="/equipment/"
+                            className="flex items-center justify-between px-2.5 py-2.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border-t border-border min-h-[44px]"
+                          >
+                            <span>Browse all equipment</span>
+                            <ArrowRight className="size-3.5" />
+                          </Link>
+                        </Dialog.Close>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <div className="space-y-1 mb-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                <p className="text-overline uppercase tracking-widest px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  Material Handling
-                </p>
-                {equipmentLinks.mhe.map((item) => (
-                  <Dialog.Close asChild key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="block px-3 py-2 rounded-md text-sm font-medium"
-                      style={{ color: 'var(--text-primary)' }}
+              {/* 2. Services Accordion */}
+              <div className="rounded-xl border border-border/80 overflow-hidden bg-white dark:bg-[#171717]">
+                <button
+                  type="button"
+                  onClick={() => setMobileServicesOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-3.5 min-h-[48px] py-2.5 text-sm font-semibold text-foreground select-none transition-colors hover:bg-muted active:bg-muted/70"
+                >
+                  <span>Services</span>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      mobileServicesOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {mobileServicesOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-border bg-muted/20"
                     >
-                      {item.label}
-                    </Link>
-                  </Dialog.Close>
-                ))}
+                      <div className="p-2 space-y-1">
+                        {serviceLinks.map((service) => {
+                          const Icon = service.icon
+                          return (
+                            <Dialog.Close asChild key={service.href}>
+                              <Link
+                                href={service.href}
+                                className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px]"
+                              >
+                                <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
+                                  <Icon className="size-4" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-foreground">{service.label}</div>
+                                  <div className="text-[11px] text-muted-foreground">{service.desc}</div>
+                                </div>
+                              </Link>
+                            </Dialog.Close>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <div className="space-y-1 mb-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                <p className="text-overline uppercase tracking-widest px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  Services
-                </p>
-                {serviceLinks.map((service) => (
-                  <Dialog.Close asChild key={service.href}>
-                    <Link
-                      href={service.href}
-                      className="block px-3 py-2 rounded-md text-sm font-medium"
-                      style={{ color: 'var(--text-primary)' }}
+              {/* 3. Industries Accordion */}
+              <div className="rounded-xl border border-border/80 overflow-hidden bg-white dark:bg-[#171717]">
+                <button
+                  type="button"
+                  onClick={() => setMobileIndustriesOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-3.5 min-h-[48px] py-2.5 text-sm font-semibold text-foreground select-none transition-colors hover:bg-muted active:bg-muted/70"
+                >
+                  <span>Industries</span>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      mobileIndustriesOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {mobileIndustriesOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-border bg-muted/20"
                     >
-                      {service.label}
-                    </Link>
-                  </Dialog.Close>
-                ))}
+                      <div className="p-2 space-y-1">
+                        {industryLinks.map((ind) => {
+                          const Icon = ind.icon
+                          return (
+                            <Dialog.Close asChild key={ind.href}>
+                              <Link
+                                href={ind.href}
+                                className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px]"
+                              >
+                                <div className="p-1.5 rounded-md bg-muted text-foreground shrink-0">
+                                  <Icon className="size-3.5" />
+                                </div>
+                                <div className="text-xs font-semibold text-foreground">{ind.label}</div>
+                              </Link>
+                            </Dialog.Close>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <div className="space-y-1" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                <Dialog.Close asChild>
-                  <Link
-                    href="/industries/"
-                    className="block px-3 py-2 rounded-md text-sm font-medium"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    Industries
-                  </Link>
-                </Dialog.Close>
-                <Dialog.Close asChild>
-                  <Link
-                    href="/about/"
-                    className="block px-3 py-2 rounded-md text-sm font-medium"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    About Us
-                  </Link>
-                </Dialog.Close>
-                <Dialog.Close asChild>
-                  <Link
-                    href="/contact/"
-                    className="block px-3 py-2 rounded-md text-sm font-medium"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    Contact
-                  </Link>
-                </Dialog.Close>
-              </div>
+              {/* Direct Links: About Us & Contact */}
+              <Dialog.Close asChild>
+                <Link
+                  href="/about/"
+                  className={cn(
+                    'flex items-center min-h-[44px] px-3.5 rounded-xl text-sm font-semibold transition-colors',
+                    pathname.startsWith('/about') ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted active:bg-muted/70'
+                  )}
+                >
+                  About Us
+                </Link>
+              </Dialog.Close>
+
+              <Dialog.Close asChild>
+                <Link
+                  href="/contact/"
+                  className={cn(
+                    'flex items-center min-h-[44px] px-3.5 rounded-xl text-sm font-semibold transition-colors',
+                    pathname.startsWith('/contact') ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted active:bg-muted/70'
+                  )}
+                >
+                  Contact
+                </Link>
+              </Dialog.Close>
             </nav>
 
-            {/* Mobile CTA */}
-            <div className="p-4 space-y-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            {/* Mobile Drawer CTAs */}
+            <div className="p-4 space-y-2.5 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <Dialog.Close asChild>
                 <Button
                   href="/request-a-quote/"
                   color="primary"
                   size="lg"
-                  className="w-full rounded-xl"
+                  className="w-full rounded-xl shadow-xs min-h-[48px]"
                   iconTrailing={<ArrowRight className="size-4" />}
                 >
                   Request a quote
@@ -724,7 +891,7 @@ export function Navigation() {
                   href="/login"
                   variant="outline"
                   size="lg"
-                  className="w-full rounded-xl"
+                  className="w-full rounded-xl min-h-[48px]"
                 >
                   Sign In to Portal
                 </Button>

@@ -10,6 +10,8 @@ import {
   useToast,
   MultiUserSelect,
   ClientSelect,
+  MachineSelect,
+  SearchableSelect,
   type ClientSelectItem,
 } from "@/components/ui";
 import {
@@ -23,6 +25,9 @@ import {
   getClientSelectOptionsAction,
   getMachinePersonnelFreshAction,
 } from "@/app/actions/machines";
+import { getAssignableMachinesAction } from "@/app/actions/assignments";
+import { getClientSitesAction } from "@/app/actions/client-sites";
+import type { ClientSite } from "@/lib/data/clients";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole } from "@reachinternational/types";
 import { isManagerOrAbove } from "@reachinternational/permissions";
@@ -431,6 +436,7 @@ export interface MachineClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   machine: MachineWithEngineer;
+  machines?: MachineWithEngineer[] | any[];
   clients?: ClientSelectItem[];
   onMachineUpdated?: (updated: Partial<MachineWithEngineer>) => void;
 }
@@ -439,23 +445,60 @@ export function MachineClientModal({
   isOpen,
   onClose,
   machine,
+  machines = [],
   clients = [],
   onMachineUpdated,
 }: MachineClientModalProps) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [clientId, setClientId] = useState<string>(machine.client_id || "");
+  const [selectedMachineId, setSelectedMachineId] = useState<string>(machine?.id || "");
+  const [availableMachines, setAvailableMachines] = useState<any[]>(() => machines || []);
+  const [clientId, setClientId] = useState<string>(machine?.client_id || "");
+  const [siteId, setSiteId] = useState<string>(machine?.site_id || "");
+  const [sites, setSites] = useState<ClientSite[]>([]);
+  const [isLoadingSites, setIsLoadingSites] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => clients || []);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
 
+  // Sync available machines from props
+  useEffect(() => {
+    if (machines && machines.length > 0) {
+      setAvailableMachines(machines);
+    }
+  }, [machines]);
+
+  // Fallback lazy load machines if none passed
+  useEffect(() => {
+    if (!isOpen) return;
+    if (availableMachines.length > 0) return;
+
+    let isMounted = true;
+    getAssignableMachinesAction()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data && data.success && data.machines && data.machines.length > 0) {
+          setAvailableMachines(data.machines);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load machines for MachineClientModal", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, availableMachines.length]);
+
+  // Sync incoming clients prop
   useEffect(() => {
     if (clients && clients.length > 0) {
       setLazyClients(clients);
     }
   }, [clients]);
 
+  // Lazy load clients if empty
   useEffect(() => {
     if (!isOpen) return;
     if (lazyClients.length > 0) return;
@@ -481,59 +524,142 @@ export function MachineClientModal({
     };
   }, [isOpen, lazyClients.length]);
 
+  // Re-sync when modal opens or machine changes
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && machine) {
+      setSelectedMachineId(machine.id);
       setClientId(machine.client_id || "");
+      setSiteId(machine.site_id || "");
     }
   }, [isOpen, machine]);
 
-  const allClients: ClientSelectItem[] = [...lazyClients];
-  if (machine.client && machine.client_id) {
-    if (!allClients.some((c) => c.id === machine.client_id)) {
-      allClients.push(machine.client as ClientSelectItem);
+  // Resolve current active machine entity
+  const currentMachine: MachineWithEngineer = useMemo(() => {
+    if (!selectedMachineId) return machine;
+    const found = availableMachines.find((m) => m.id === selectedMachineId);
+    if (found) return found;
+    if (machine?.id === selectedMachineId) return machine;
+    return machine;
+  }, [selectedMachineId, availableMachines, machine]);
+
+  // Ensure current machine is part of the dropdown machines list
+  const allAvailableMachines = useMemo(() => {
+    const list = [...availableMachines];
+    if (machine && !list.some((m) => m.id === machine.id)) {
+      list.unshift(machine);
     }
-  }
+    return list;
+  }, [availableMachines, machine]);
+
+  // Handle machine selection from dropdown (placed above clients)
+  const handleSelectMachine = (newMachineId: string, targetMachine?: any) => {
+    if (!newMachineId) return;
+    setSelectedMachineId(newMachineId);
+    const target = targetMachine || allAvailableMachines.find((m) => m.id === newMachineId);
+    if (target) {
+      setClientId(target.client_id || "");
+      setSiteId(target.site_id || "");
+    }
+  };
+
+  // Load sites when clientId changes
+  useEffect(() => {
+    if (!clientId) {
+      setSites([]);
+      setSiteId("");
+      return;
+    }
+    let isMounted = true;
+    setIsLoadingSites(true);
+    getClientSitesAction(clientId)
+      .then((data) => {
+        if (!isMounted) return;
+        const activeSites = (data || []).filter((s: ClientSite) => s.status === "active" || !s.status);
+        setSites(activeSites);
+        if (activeSites.length === 1) {
+          setSiteId(activeSites[0].id);
+        } else {
+          setSiteId((prev) => (prev && activeSites.some((s: ClientSite) => s.id === prev) ? prev : ""));
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load client sites for MachineClientModal", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingSites(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [clientId]);
+
+  const allClients: ClientSelectItem[] = useMemo(() => {
+    const list = [...lazyClients];
+    if (currentMachine?.client && currentMachine.client_id) {
+      if (!list.some((c) => c.id === currentMachine.client_id)) {
+        list.push(currentMachine.client as ClientSelectItem);
+      }
+    }
+    return list;
+  }, [lazyClients, currentMachine]);
 
   const assignedClient = allClients.find((c) => c.id === clientId);
-  const assignedClientName = assignedClient?.company_name || assignedClient?.name || (clientId ? "Assigned Client" : "");
+  const assignedClientName =
+    assignedClient?.company_name || assignedClient?.name || (clientId ? "Assigned Client" : "");
 
-  const isDirty = (clientId || "") !== (machine.client_id || "");
+  const initialClientId = currentMachine?.client_id || "";
+  const initialSiteId = currentMachine?.site_id || "";
+  const isDirty = (clientId || "") !== initialClientId || (siteId || "") !== initialSiteId;
 
   const handleSaveClient = async () => {
+    if (!isDirty || isSaving || !currentMachine) return;
     setIsSaving(true);
     const selectedClientObj = allClients.find((c) => c.id === clientId);
+    const selectedSiteObj = sites.find((s) => s.id === siteId);
     // Instant optimistic update
     const optimisticFields: Partial<MachineWithEngineer> = {
+      id: currentMachine.id,
       client_id: clientId || null,
+      site_id: clientId ? (siteId || null) : null,
       status: clientId ? "rented" : "available",
       client: (selectedClientObj as any) || null,
     };
     onMachineUpdated?.(optimisticFields);
 
     try {
-      const res = await updateMachineClientAssignmentAction(machine.id, clientId || null);
+      const res = await updateMachineClientAssignmentAction(
+        currentMachine.id,
+        clientId || null,
+        siteId || null
+      );
       if (res.error) {
         toast("error", "Failed to update client assignment", res.error);
         // Rollback
         onMachineUpdated?.({
-          client_id: machine.client_id || null,
-          status: machine.status || "available",
-          client: machine.client || null,
+          id: currentMachine.id,
+          client_id: currentMachine.client_id || null,
+          site_id: currentMachine.site_id || null,
+          status: currentMachine.status || "available",
+          client: currentMachine.client || null,
         });
       } else {
         const updatedFields: Partial<MachineWithEngineer> = {
+          id: currentMachine.id,
           client_id: res.client_id || null,
+          site_id: res.site_id !== undefined ? res.site_id : (siteId || null),
           status: res.status || "available",
           client: (selectedClientObj as any) || null,
         };
         onMachineUpdated?.(updatedFields);
         onClose();
         router.refresh();
+        const siteLabel = selectedSiteObj ? ` (${selectedSiteObj.site_name})` : "";
         toast(
           "success",
           res.client_id ? "Client assigned" : "Machine set to available",
           res.client_id
-            ? `Machine deployed to ${assignedClientName} (Status: Rented).`
+            ? `Machine deployed to ${assignedClientName}${siteLabel} (Status: Rented).`
             : "Client assignment cleared. Machine is now Available in fleet."
         );
       }
@@ -541,9 +667,11 @@ export function MachineClientModal({
       const msg = err instanceof Error ? err.message : "Failed to update client assignment";
       toast("error", "Failed to update client assignment", msg);
       onMachineUpdated?.({
-        client_id: machine.client_id || null,
-        status: machine.status || "available",
-        client: machine.client || null,
+        id: currentMachine.id,
+        client_id: currentMachine.client_id || null,
+        site_id: currentMachine.site_id || null,
+        status: currentMachine.status || "available",
+        client: currentMachine.client || null,
       });
     } finally {
       setIsSaving(false);
@@ -554,30 +682,13 @@ export function MachineClientModal({
     <Modal
       open={isOpen}
       onClose={onClose}
-      title={
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="font-bold text-sm sm:text-base text-[var(--color-ink)]">
-            Client Assignment
-          </span>
-          <span className="font-mono text-xs px-2 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-normal">
-            {machine.machine_id}
-          </span>
-          {(machine.model || machine.serial_number) && (
-            <span className="text-xs text-[var(--color-mute)] font-normal flex items-center gap-1">
-              <span>•</span>
-              {machine.model && <span className="font-medium text-[var(--color-ink)]">{machine.model}</span>}
-              {machine.model && machine.serial_number && <span>-</span>}
-              {machine.serial_number && <span className="font-mono">{machine.serial_number}</span>}
-            </span>
-          )}
-        </div>
-      }
+      title="Client Assignment"
       size="md"
     >
       <div className="space-y-4">
         <div
           data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3.5 transition-colors"
         >
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-2 border-b border-[var(--color-hairline)]">
             <AnimatedBuilding size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
@@ -585,16 +696,80 @@ export function MachineClientModal({
           </div>
 
           <div className="space-y-3">
-            <ClientSelect
-              label=""
-              clients={allClients}
-              value={clientId}
-              onChange={(selectedId) => setClientId(selectedId || "")}
-              placeholder={isLoadingClients && allClients.length === 0 ? "Loading clients from database..." : "Search and select client renting this machine..."}
-              clearable
-              disabled={isSaving}
-            />
+            {/* 1. Target Machinery Selection — Placed above the clients */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-ink)] select-none">
+                Machinery Unit
+              </label>
+              <MachineSelect
+                machines={allAvailableMachines}
+                value={currentMachine?.id || ""}
+                onChange={handleSelectMachine}
+                placeholder="Search or select machinery unit..."
+                disabled={isSaving}
+              />
+            </div>
 
+            {/* 2. Client Selection */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-ink)] select-none">
+                Assigned Client
+              </label>
+              <ClientSelect
+                clients={allClients}
+                value={clientId}
+                onChange={(selectedId) => {
+                  setClientId(selectedId || "");
+                  if (!selectedId) {
+                    setSiteId("");
+                    setSites([]);
+                  }
+                }}
+                placeholder={
+                  isLoadingClients && allClients.length === 0
+                    ? "Loading clients from database..."
+                    : "Search and select client renting this machine..."
+                }
+                clearable
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* 3. Site Dropdown — Only shown if client has more than 1 site */}
+            {clientId && sites.length > 1 && (
+              <div className="space-y-1.5 pt-0.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="block text-xs font-semibold text-[var(--color-ink)] select-none">
+                  Client Deployment Site
+                </label>
+                <SearchableSelect
+                  options={[
+                    { value: "", label: "None (No specific site / Yard)" },
+                    ...sites.map((s) => ({
+                      value: s.id,
+                      label: `${s.site_name} (${s.site_code})`,
+                      description: [s.street, s.city, s.district, s.state_name].filter(Boolean).join(", "),
+                    })),
+                  ]}
+                  value={siteId}
+                  onChange={(val) => setSiteId(val || "")}
+                  placeholder={isLoadingSites ? "Loading deployment sites..." : "Select deployment site..."}
+                  disabled={isSaving || isLoadingSites}
+                  clearable
+                />
+              </div>
+            )}
+
+            {/* Single Site Notice — Shown when client has exactly 1 active site */}
+            {clientId && sites.length === 1 && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 text-xs text-[var(--color-ink)]">
+                <AnimatedInfo size={15} className="text-sky-500 shrink-0" />
+                <span className="truncate">
+                  Primary Site: <strong className="font-semibold">{sites[0].site_name}</strong> ({sites[0].site_code})
+                </span>
+              </div>
+            )}
+
+            {/* Rental Status Indicator */}
             <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
                 <span
@@ -606,46 +781,39 @@ export function MachineClientModal({
                   {clientId ? "Status upon update: RENTED" : "Status upon update: AVAILABLE"}
                 </span>
               </div>
-              <span className="text-[var(--color-mute)] hidden sm:inline">
-                {clientId ? `Deploying to ${assignedClientName}` : "Returning to unassigned fleet"}
+              <span className="text-[var(--color-mute)] hidden sm:inline truncate max-w-[200px]">
+                {clientId
+                  ? `Deploying to ${assignedClientName}${siteId && sites.find((s) => s.id === siteId) ? ` • ${sites.find((s) => s.id === siteId)?.site_name}` : ""}`
+                  : "Returning to unassigned fleet"}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="pt-3 border-t border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-xs text-[var(--color-mute)] empty:hidden">
-            {isDirty && (
-              <span
-                data-hover-parent
-                className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
-              >
-                <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
-                <span>Unsaved client assignment</span>
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2 sm:ml-auto">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onClose}
-              disabled={isSaving}
-              className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-sm font-medium justify-center"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              loading={isSaving}
-              disabled={!isDirty || isSaving}
-              onClick={handleSaveClient}
-              className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-sm font-semibold justify-center"
-            >
-              {clientId ? "Update Client Assignment" : "Confirm Available"}
-            </Button>
-          </div>
+        <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-end gap-2.5">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSaving}
+            className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-sm font-medium justify-center"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            loading={isSaving}
+            disabled={!isDirty || isSaving}
+            onClick={handleSaveClient}
+            className={`w-full sm:w-auto h-11 min-h-[44px] px-4 text-sm font-semibold justify-center ${
+              !isDirty || isSaving
+                ? "!cursor-not-allowed disabled:!cursor-not-allowed opacity-50 select-none"
+                : "cursor-pointer"
+            }`}
+          >
+            {clientId ? "Update Client Assignment" : "Confirm Available"}
+          </Button>
         </div>
       </div>
     </Modal>

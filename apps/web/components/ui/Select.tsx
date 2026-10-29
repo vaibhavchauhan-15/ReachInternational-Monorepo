@@ -265,6 +265,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                 exit={{ opacity: 0, y: -4, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xl overflow-hidden max-h-64 flex flex-col backdrop-blur-md"
+                data-portal-select="true"
               >
                 {/* Optional Search Filter Bar */}
                 {isSearchable && (

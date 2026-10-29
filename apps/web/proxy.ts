@@ -9,6 +9,8 @@ import {
   isAuthRoute as checkAuthRoute,
   isPublicLegalRoute as checkPublicLegalRoute,
   getRoleHomeRoute,
+  isRouteAllowedForRole,
+  AUTHORIZED_CLIENT_ROLES,
 } from "@reachinternational/permissions";
 
 export async function proxy(request: NextRequest) {
@@ -264,6 +266,22 @@ export async function proxy(request: NextRequest) {
   // Redirect authenticated user visiting deprecated routes or root '/' to role Home
   if ((isDeprecatedRoute || path === "/") && authenticatedUser) {
     return createRedirectResponse(roleHome);
+  }
+
+  // Restrict unauthorized roles from accessing /clients directly (only super_admin, admin, manager, supervisor allowed)
+  if ((path === "/clients" || path.startsWith("/clients/")) && authenticatedUser?.user_metadata?.role) {
+    const userRole = authenticatedUser.user_metadata.role;
+    if (!AUTHORIZED_CLIENT_ROLES.includes(userRole as any)) {
+      return createRedirectResponse(roleHome);
+    }
+  }
+
+  // Enforce role-based route access for authenticated users visiting protected routes
+  if (isProtectedRoute && authenticatedUser?.user_metadata?.role) {
+    const userRole = authenticatedUser.user_metadata.role as any;
+    if (!isRouteAllowedForRole(path, userRole)) {
+      return createRedirectResponse(roleHome);
+    }
   }
 
   return response;

@@ -18,7 +18,8 @@ import {
   UpdateHourLogSchema,
   DeleteHourLogSchema,
 } from "@reachinternational/validation";
-import { isManagerOrAbove } from "@reachinternational/permissions";
+import { isManagerOrAbove, isSupervisorOrAbove } from "@reachinternational/permissions";
+import { isOperatorUnderSupervisor } from "@/lib/data/operations/supervisor-operators";
 import {
   computeShiftTiming,
   computeBreakdownDuration,
@@ -331,17 +332,30 @@ export async function submitOperatorHourLogAction(payload: {
   // SECURITY (F04): Require authenticated user with appropriate role for hour log submission
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["operator", "manager", "admin", "super_admin"].includes(user.role)) {
-    return { success: false, error: "Insufficient permissions. Only operators (for their own shifts) and managers/admins can submit hour logs." };
+  const userRole = (user.role || "").toLowerCase().trim().replace(/[\s-]/g, "_");
+  if (!["operator", "manager", "admin", "super_admin", "supervisor", "site_supervisor"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions. Only operators, supervisors, and managers/admins can submit hour logs." };
   }
 
-  // Assisted Entry Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators
+  // Assisted Entry Guard:
+  // - Managers, admins, super_admins can enter logs for any operator.
+  // - Supervisors can ONLY enter shift logs for operators who come under their supervision.
   const isAssisted = Boolean(payload.operatorId && payload.operatorId !== user.id);
-  if (isAssisted && !["super_admin", "admin", "manager"].includes(user.role)) {
-    return { success: false, error: "Insufficient permissions. Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators." };
-  }
-  if (!isAssisted && user.role !== "operator" && !["super_admin", "admin", "manager"].includes(user.role)) {
-    return { success: false, error: "Insufficient permissions. Site supervisors cannot enter machine shift logs." };
+  if (isAssisted) {
+    if (!["super_admin", "admin", "manager", "supervisor", "site_supervisor"].includes(userRole)) {
+      return { success: false, error: "Insufficient permissions to enter logs on behalf of operators." };
+    }
+    if (userRole === "supervisor" || userRole === "site_supervisor") {
+      const isUnderSupervisor = await isOperatorUnderSupervisor(user.id, payload.operatorId!);
+      if (!isUnderSupervisor) {
+        return {
+          success: false,
+          error: "Unauthorized: Supervisors can only fill shift entries for operators assigned under their supervision.",
+        };
+      }
+    }
+  } else if (userRole !== "operator" && !["super_admin", "admin", "manager", "supervisor", "site_supervisor"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions to enter machine shift logs." };
   }
 
   // Schema Validation (Stage 2: validate)
@@ -399,7 +413,7 @@ export async function submitOperatorHourLogAction(payload: {
   const effectiveStartDate = payload.startDate || payload.logDate || todayDate;
 
   // Resolve target operator: managers & admins can log on behalf of an operator, otherwise defaults to current user
-  const targetOperatorId = (["super_admin", "admin", "manager"].includes(user.role) && payload.operatorId)
+  const targetOperatorId = (["super_admin", "admin", "manager", "supervisor", "site_supervisor"].includes(userRole) && payload.operatorId)
     ? payload.operatorId
     : user.id;
 
@@ -612,7 +626,7 @@ export async function submitOperatorHourLogAction(payload: {
     if (activeAssignedShiftCodes.length > 0) {
       const requestedCode = (payload.shiftCode || payload.shift || "").replace(/^shift\s*/i, "").trim();
       if (requestedCode && !activeAssignedShiftCodes.some((c: string) => c.toUpperCase() === requestedCode.toUpperCase())) {
-        if (isAssisted && ["super_admin", "admin", "manager"].includes(user.role)) {
+        if (isAssisted && ["super_admin", "admin", "manager", "supervisor", "site_supervisor"].includes(userRole)) {
           const overrideTag = `[Assisted Override: Shift ${requestedCode}]`;
           if (!finalRemarks.includes("[Assisted Override")) {
             finalRemarks = finalRemarks ? `${overrideTag} ${finalRemarks}` : overrideTag;
@@ -744,7 +758,7 @@ export async function submitOperatorHourLogAction(payload: {
       remarks: finalRemarks || null,
       idempotency_key: currentIdempotencyKey,
       entered_by: user.id,
-      entry_source: user.role === 'operator' ? 'operator' : (targetOperatorId === user.id ? 'operator' : user.role),
+      entry_source: userRole === 'operator' ? 'operator' : (targetOperatorId === user.id ? 'operator' : userRole),
     };
 
     if (effectiveBreakdownDuration) {

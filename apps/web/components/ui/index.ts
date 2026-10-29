@@ -213,8 +213,12 @@ export type {
 } from "./AnimatedIcon";
 
 // 11. Branding
-export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";
+export { Logo, ReachLogo, type ReachLogoProps, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";
 export { BRAND_ASSETS, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 
 // 12. Scroll Cloud Fade Effect
 export { ScrollCloud } from "./ScrollCloud";
+
+
+// 13. Infinite Sliders & Carousels
+export { InfiniteSlider, type InfiniteSliderProps } from "./infinite-slider";

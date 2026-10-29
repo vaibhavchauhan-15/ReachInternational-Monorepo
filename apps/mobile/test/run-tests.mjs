@@ -496,25 +496,25 @@ try {
   assert(searchInputCheck182.includes('isFlexLayout ? styles.flexContainer : styles.fullWidthContainer'), 'SearchInput conditionally applies flex vs full width');
   assert(searchInputCheck182.includes('leftIconWrapper: {') && searchInputCheck182.includes('clearBtn: {'), 'SearchInput protects left icon and clear button with flexShrink: 0');
 
-  const shiftMonitorCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftMonitorTab.tsx'), 'utf8');
+  const shiftMonitorCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftMonitorTab.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(shiftMonitorCheck182.includes('<View style={styles.searchContainer}>'), 'MobileTodayShiftMonitorTab wraps SearchInput in searchContainer');
   assert(shiftMonitorCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MobileTodayShiftMonitorTab searchContainer has flex: 1 and minWidth: 0');
   assert(shiftMonitorCheck182.includes('filterToggleBtn: {') && shiftMonitorCheck182.includes('quickResetBtn: {'), 'MobileTodayShiftMonitorTab styles filter and reset buttons');
 
-  const operatorHistCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileOperatorHistoryTab.tsx'), 'utf8');
+  const operatorHistCheck182 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileOperatorHistoryTab.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(operatorHistCheck182.includes('<View style={styles.searchContainer}>'), 'MobileOperatorHistoryTab wraps SearchInput in searchContainer');
   assert(operatorHistCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MobileOperatorHistoryTab searchContainer has flex: 1 and minWidth: 0');
 
-  const machinePanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/machines/MachineFilterPanel.tsx'), 'utf8');
+  const machinePanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/machines/MachineFilterPanel.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(machinePanelCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'MachineFilterPanel searchContainer defines minWidth: 0');
 
-  const userPanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/users/UserFiltersPanel.tsx'), 'utf8');
+  const userPanelCheck182 = fs.readFileSync(path.join(__dirname, 'components/users/UserFiltersPanel.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(userPanelCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'UserFiltersPanel searchContainer defines minWidth: 0');
 
-  const filterToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'components/ui/FilterToolbar.tsx'), 'utf8');
+  const filterToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'components/ui/FilterToolbar.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(filterToolbarCheck182.includes('searchFlexWrap: {\n    flex: 1,\n    minWidth: 0'), 'FilterToolbar searchFlexWrap defines minWidth: 0');
 
-  const attendanceToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'app/(app)/attendance.tsx'), 'utf8');
+  const attendanceToolbarCheck182 = fs.readFileSync(path.join(__dirname, 'app/(app)/attendance.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(attendanceToolbarCheck182.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'Attendance screen searchContainer defines minWidth: 0');
 
   // Test 183: Centralized Native Badges with Light & Dark Theme Tokens, Roles, and Universal Reuse
@@ -532,18 +532,18 @@ try {
   assert(machineCardCheck183.includes('<Badge status="active" dot') && machineCardCheck183.includes('customLabel="Active"'), 'MobileMachineCard binds dot to Active health status badge');
   assert(machineCardCheck183.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard renders Rented/Available badge');
 
-  const userTouchCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserTouchCard.tsx'), 'utf8');
+  const userTouchCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserTouchCard.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(userTouchCardCheck183.includes('<Badge\n                role={u.role}'), 'UserTouchCard reuses centralized Badge for user role');
   assert(userTouchCardCheck183.includes('<Badge\n                status={u.status}\n                dot'), 'UserTouchCard reuses centralized Badge with dot for user status');
 
-  const userDetailCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserDetailModal.tsx'), 'utf8');
+  const userDetailCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserDetailModal.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(userDetailCheck183.includes('<Badge\n                  role={user.role}'), 'UserDetailModal reuses centralized Badge for user role');
   assert(userDetailCheck183.includes('<Badge\n                  status={user.status}\n                  dot'), 'UserDetailModal reuses centralized Badge with dot for user status');
 
   const todayShiftCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftCard.tsx'), 'utf8');
   assert(todayShiftCardCheck183.includes('<Badge\n            status='), 'MobileTodayShiftCard reuses centralized Badge for shift log status');
 
-  const deleteDialogCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/DeleteUserConfirmDialog.tsx'), 'utf8');
+  const deleteDialogCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/DeleteUserConfirmDialog.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(deleteDialogCheck183.includes('<Badge\n              role={user.role}'), 'DeleteUserConfirmDialog reuses centralized Badge for user role');
   assert(deleteDialogCheck183.includes('<Badge\n              status={user.status'), 'DeleteUserConfirmDialog reuses centralized Badge for user status');
 

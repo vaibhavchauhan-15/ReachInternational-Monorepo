@@ -60,10 +60,26 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
  */
 export function isManagerOrAbove(role?: string | null): boolean {
   if (!role) return false;
+  const normalized = role.toLowerCase().trim().replace(/[\s-]/g, "_");
   return (
-    role === "super_admin" ||
-    role === "admin" ||
-    role === "manager"
+    normalized === "super_admin" ||
+    normalized === "admin" ||
+    normalized === "manager"
+  );
+}
+
+/**
+ * Checks whether a given role is Supervisor tier or above (super_admin, admin, manager, supervisor).
+ */
+export function isSupervisorOrAbove(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim().replace(/[\s-]/g, "_");
+  return (
+    normalized === "super_admin" ||
+    normalized === "admin" ||
+    normalized === "manager" ||
+    normalized === "supervisor" ||
+    normalized === "site_supervisor"
   );
 }
 
@@ -75,4 +91,3 @@ export function isSupervisedRole(role?: string | null): boolean {
   if (!role) return false;
   return role === "operator";
 }
-

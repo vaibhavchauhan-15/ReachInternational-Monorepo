@@ -300,6 +300,62 @@ check('signup.tsx enforces 0 raw typography properties in StyleSheet.create', ()
   assert(!styleBlock.match(/\blineHeight:\s*\d+/), 'Zero lineHeight in StyleSheet.create');
 });
 
+
+// ============================================================
+// 7. Web & Mobile 100% Parity: Draft Persistence & Restoration
+// ============================================================
+console.log('\n[7/7] Verifying Draft Persistence & Restoration Architecture...');
+
+const draftHookPath = path.join(__dirname, 'lib', 'hooks', 'useFormDraft.ts');
+const draftHookContent = fs.readFileSync(draftHookPath, 'utf8');
+
+check('useFormDraft.ts exports useMobileFormDraft, SIGNUP_DRAFT_KEY, and hasMeaningfulMobileDraft', () => {
+  assert(draftHookContent.includes('export function useMobileFormDraft'));
+  assert(draftHookContent.includes('export const SIGNUP_DRAFT_KEY ='));
+  assert(draftHookContent.includes('export function hasMeaningfulMobileDraft'));
+});
+
+check('useFormDraft.ts binds AsyncStorage and listens to AppState transitions', () => {
+  assert(draftHookContent.includes("from '@react-native-async-storage/async-storage'"));
+  assert(draftHookContent.includes('AppState.addEventListener'));
+  assert(draftHookContent.includes("nextAppState === 'inactive' || nextAppState === 'background'"));
+});
+
+check('useFormDraft.ts guards against race conditions (hasRestoredRef)', () => {
+  assert(draftHookContent.includes('hasRestoredRef.current'));
+  assert(draftHookContent.includes('if (!hasRestoredRef.current) return;'));
+});
+
+check('useFormDraft.ts supports restoring both text fields and picked documents', () => {
+  assert(draftHookContent.includes('bankDoc'));
+  assert(draftHookContent.includes('aadhaarDoc'));
+  assert(draftHookContent.includes('licenseDoc'));
+  assert(draftHookContent.includes('agreedToTerms'));
+});
+
+check('signup.tsx binds useMobileFormDraft with currentDraftValues and handleRestoreDraft', () => {
+  assert(signupContent.includes('useMobileFormDraft(currentDraftValues, handleRestoreDraft)'));
+  assert(signupContent.includes('currentDraftValues'));
+  assert(signupContent.includes('handleRestoreDraft'));
+});
+
+check('signup.tsx renders draft restored alert banner with Start fresh button', () => {
+  assert(signupContent.includes('Draft restored from'));
+  assert(signupContent.includes('handleStartFresh'));
+  assert(signupContent.includes('Start fresh'));
+  assert(signupContent.includes('Alert variant="info"'));
+});
+
+check('signup.tsx clears draft upon successful submission (clearDraft)', () => {
+  assert(signupContent.includes('await clearDraft()'));
+});
+
+check('signup.tsx implements handleStartFresh resetting all fields and documents', () => {
+  assert(signupContent.includes('await clearDraft()'));
+  assert(signupContent.includes('setBankDoc(null)'));
+  assert(signupContent.includes('setAadhaarDoc(null)'));
+  assert(signupContent.includes('setLicenseDoc(null)'));
+});
 console.log('\n------------------------------------------------------------');
 console.log(`Results: ${passed} / ${total} checks passed successfully.`);
 console.log('------------------------------------------------------------\n');

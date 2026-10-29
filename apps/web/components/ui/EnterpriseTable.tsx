@@ -48,6 +48,9 @@ interface EnterpriseTableProps<T extends { id: string | number }> {
   defaultHiddenColumns?: string[];
   defaultSortColumn?: string | null;
   defaultSortDirection?: "asc" | "desc";
+  showCount?: boolean;
+  toolbarLeft?: ReactNode;
+  density?: TableDensity;
 }
 
 export function CopyCell({
@@ -108,8 +111,10 @@ export function EnterpriseTable<T extends { id: string | number }>({
   defaultHiddenColumns = [],
   defaultSortColumn = null,
   defaultSortDirection = "asc",
+  showCount = false,
+  toolbarLeft,
+  density = "default",
 }: EnterpriseTableProps<T>) {
-  const [density, setDensity] = useState<TableDensity>("default");
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() =>
     columns
       .map((c) => c.id)
@@ -206,114 +211,79 @@ export function EnterpriseTable<T extends { id: string | number }>({
     <div className="w-full flex flex-col gap-3">
       {/* Table Toolbar Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-        {/* Bulk Actions Bar */}
-        <AnimatePresence>
-          {selectable && selectedIds.length > 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="flex items-center gap-2 bg-[var(--color-ink)] text-white px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium shadow-md"
-            >
-              <span className="font-semibold text-white/90 whitespace-nowrap">
-                {selectedIds.length} selected
-              </span>
-              <div className="h-4 w-px bg-neutral-700 mx-1 shrink-0" />
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {bulkActions.map((action, idx) => {
-                  const Icon = action.icon;
-                  const isDanger = action.variant === "danger";
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => action.onClick(selectedIds)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 whitespace-nowrap ${
-                        isDanger
-                          ? "bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40"
-                          : "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 hover:text-white border border-neutral-700/60 shadow-2xs"
-                      }`}
-                    >
-                      {Icon && (
-                        isValidElement(Icon) ? (
-                          Icon
-                        ) : (
-                          <AnimateIcon icon={Icon as any} animation="bounce" size={13} />
-                        )
-                      )}
-                      <span>{action.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ) : (
-            <div className="text-xs text-[var(--color-mute)] font-medium">
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3.5 w-16 bg-[var(--color-hairline)] animate-pulse rounded" />
-                  <span className="text-[11px] text-[var(--color-mute)]">Searching machines...</span>
+        {/* Bulk Actions Bar or Left Slot */}
+        <div className="flex items-center gap-2">
+          <AnimatePresence mode="wait">
+            {selectable && selectedIds.length > 0 ? (
+              <motion.div
+                key="bulk-actions"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="flex items-center gap-2 bg-[var(--color-ink)] text-[var(--color-canvas)] px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium shadow-md"
+              >
+                <span className="font-semibold text-[var(--color-canvas)]/90 whitespace-nowrap">
+                  {selectedIds.length} selected
+                </span>
+                <div className="h-4 w-px bg-[var(--color-hairline)] mx-1 shrink-0" />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {bulkActions.map((action, idx) => {
+                    const Icon = action.icon;
+                    const isDanger = action.variant === "danger";
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => action.onClick(selectedIds)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 whitespace-nowrap ${
+                          isDanger
+                            ? "bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40"
+                            : "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 hover:text-white border border-neutral-700/60 shadow-2xs"
+                        }`}
+                      >
+                        {Icon && (
+                          isValidElement(Icon) ? (
+                            Icon
+                          ) : (
+                            <AnimateIcon icon={Icon as any} animation="bounce" size={13} />
+                          )
+                        )}
+                        <span>{action.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <>
-                  Showing <span className="text-[var(--color-ink)] font-bold">{data.length}</span> entries
-                </>
-              )}
-            </div>
-          )}
-        </AnimatePresence>
+              </motion.div>
+            ) : toolbarLeft ? (
+              <div key="toolbar-left" className="flex items-center gap-2">
+                {toolbarLeft}
+              </div>
+            ) : showCount ? (
+              <div key="show-count" className="text-xs text-[var(--color-mute)] font-medium">
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-3.5 w-16 bg-[var(--color-hairline)] animate-pulse rounded" />
+                    <span className="text-[11px] text-[var(--color-mute)]">Searching machines...</span>
+                  </div>
+                ) : (
+                  <>
+                    Showing <span className="text-[var(--color-ink)] font-bold">{data.length}</span> entries
+                  </>
+                )}
+              </div>
+            ) : null}
+          </AnimatePresence>
+        </div>
 
-        {/* View Controls: Density & Column Toggles */}
+        {/* View Controls: Columns Toggle */}
         <div className="flex items-center gap-2 ml-auto">
-          {/* Density Selector */}
-          <div className="flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-[var(--radius-sm)] text-xs">
-            <TooltipWrapper content="Compact table row spacing" side="top">
-              <button
-                onClick={() => setDensity("compact")}
-                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                  density === "compact"
-                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                }`}
-                aria-label="Compact row density"
-              >
-                Compact
-              </button>
-            </TooltipWrapper>
-            <TooltipWrapper content="Default table row spacing" side="top">
-              <button
-                onClick={() => setDensity("default")}
-                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                  density === "default"
-                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                }`}
-                aria-label="Default row density"
-              >
-                Default
-              </button>
-            </TooltipWrapper>
-            <TooltipWrapper content="Comfortable table row spacing" side="top">
-              <button
-                onClick={() => setDensity("comfortable")}
-                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                  density === "comfortable"
-                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                }`}
-                aria-label="Comfortable row density"
-              >
-                Comfortable
-              </button>
-            </TooltipWrapper>
-          </div>
-
           {/* Column Visibility Dropdown */}
           <div className="relative">
             <TooltipWrapper content="Customize visible table columns" side="top">
               <button
+                type="button"
                 onClick={() => setShowColumnMenu(!showColumnMenu)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] text-xs text-[var(--color-body)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] text-xs text-[var(--color-body)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
                 aria-label="Customize visible table columns"
               >
                 <AnimatedSlidersHorizontal size={14} />
@@ -354,7 +324,13 @@ export function EnterpriseTable<T extends { id: string | number }>({
                           }}
                           className="rounded text-[var(--color-ink)] focus:ring-0 cursor-pointer"
                         />
-                        <span>{col.header}</span>
+                        <span className="truncate">
+                          {typeof col.header === "string" && col.header.trim()
+                            ? col.header
+                            : col.id === "actions"
+                            ? "Actions"
+                            : col.id}
+                        </span>
                       </label>
                     );
                   })}

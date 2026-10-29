@@ -1,3 +1,181 @@
+## [2026-10-29] - Task 290: Machines Fleet Directory (/machines) Header Dropdown Relocation, Multi-Site Conditional Dropdown & 100% Web/Native Parity
+- **Feedback 1 (Header Dropdown Relocation)**: Removed `<MachineSelect>` from the `<Modal title="...">` header in `MachineClientModal` (`apps/web/components/machines/MachineEditModals.tsx`). Positioned `<MachineSelect>` in the modal body directly above `<ClientSelect>` with label "Machinery Unit". In mobile `MachineModal.tsx`, displayed Machinery Unit summary card above client selection for 100% visual and structural parity.
+- **Feedback 2 (Multi-Site Conditional Dropdown & Auto-Assignment)**: In `MachineClientModal`, dynamically render Client Deployment Site `<SearchableSelect>` only when client has > 1 active site. When client has 1 site, automatically assign `siteId` to that site and display single-site info pill without showing the dropdown. In mobile `MachineModal.tsx`, synchronized identical multi-site dropdown conditional and single-site auto-assignment.
+- **Data Access Layer & Actions**: Updated `updateMachineClientAssignmentAction` in `apps/web/app/actions/machines.ts` to return `site_id: validSiteId`. Included `site_id` in `MACHINE_LIST_COLUMNS` (`machine-list.ts`), `MACHINE_DETAIL_COLUMNS` (`machine-detail.ts`), and `getAssignableMachinesAction` (`assignments.ts`).
+- **Mobile Touch Ergonomics & Quality**: Enforced >= 44px min touch targets, zero raw typography properties in mobile `StyleSheet.create`, forbidden cursor on save button when unchanged.
+- **Verification**: Monorepo typecheck (0 errors across 7 packages), `apps/web/scripts/test-machine-client-modal.mjs` (5/5 passed), `apps/web/scripts/test-assignment-standardization.mjs` (14/14 passed), `pnpm --filter @reachinternational/permissions test` (15/15 passed), `node apps/mobile/run-tests.mjs` (357/357 passed), `node scripts/check-typography.mjs` (0 violations).
+
+## Task 290: UserSelect Capacity Chip & Employee ID Badge Refinement (/operations) & Web/Native Parity (2026-10-29)
+- **Capacity Chip (Feedback #1)**: Shortened candidate operator capacity badge from "1/3 on this machine" to a very short "1/3" (and "1/3 other", "3/3 Max") in AssignOperatorToMachineDialog.tsx. Sized the chip to slightly smaller text-[9px] font-mono px-1 py-0.2 rounded leading-tight in UserSelect.tsx with accessible title tooltip.
+- **EMP ID Chip (Feedback #2)**: Sized employee ID chip to slightly smaller text-[9px] px-1 py-0.2 rounded font-mono font-medium in UserSelect.tsx across both listbox items and trigger button.
+- **Native Mobile Parity**: Synchronized AssignOperatorToMachineModal.tsx to pass statusBadge ("1/3", "3/3 Max") and updated AssignmentSelectableList.tsx to render both employee ID code badge and capacity badge with <Text variant="micro"> and compact padding, strictly passing 0 raw typography property checks.
+- **Verification**: Clean pass on monorepo typecheck (0 errors across 7 packages), mobile tests (357/357 passed), typography check (0 raw typography violations), and assignment standardization tests (14/14 passed).
+
+## [2026-10-29] Task 289: Machines Fleet Directory (/machines) Client Assignment Modal Feedback & Web/Native Parity
+- **Header Machine Info & Machine Dropdown (Feedback #1)**: Removed machine ID, model, and serial number text from modal header. Replaced with reusable `MachineSelect` dropdown component in compact mode with mobile optimization (`flex-col sm:flex-row`).
+- **Client Deletion & Immediate Dropdown Display (Feedback #2)**: In `ClientSelect`, added a red-hover `Trash2` delete icon on assigned client trigger. Clicking it clears selection, resets search query, recalculates position, and immediately opens the dropdown with search input auto-focused for quick client replacement.
+- **Removed Unsaved Banner (Feedback #3)**: Eradicated the amber "Unsaved client assignment" banner from the modal.
+- **Forbidden Cursor on Clean State (Feedback #4 - Web & Native Mobile Parity)**:
+  - **Web**: `Button.tsx` enforces `!cursor-not-allowed disabled:!cursor-not-allowed opacity-50` when disabled/loading. `MachineClientModal` Confirm button is disabled and displays the forbidden cursor 🚫 whenever `!isDirty || isSaving`.
+  - **Mobile**: In `Pressable.tsx`, updated web style `cursor: isInteractive ? 'pointer' : 'not-allowed'`. In mobile `Button.tsx`, replaced `pointer-events-none` with `opacity-50` when disabled to ensure hover renders the forbidden cursor. In `MachineModal.tsx`, computed `isDirty` and disabled save action with forbidden cursor when unchanged.
+- **Verification**: Clean pass on monorepo typecheck (0 errors across 7 packages), mobile tests (357/357 passed), and web assignment standardization tests (14/14 passed).
+
+## [2026-10-29] Task 288: Machines Fleet Directory (/machines) Table & Toolbar Feedback & Web/Native Parity
+- Aligned MachineListClient count items with the Columns dropdown button on the same toolbar row via EnterpriseTable toolbarLeft slot.
+- Removed redundant year_of_mfg (YUM) and manufacturer (MFR) columns from EnterpriseTable and rebalanced column widths.
+- Removed density selector toggle from EnterpriseTable and fixed density to default across all views.
+- Preserved mobile touch cards view and verified 100% web and native mobile consistency.
+- Verified monorepo: 0 typecheck errors, 357/357 mobile tests passed, 0 typography violations, all web standardization suites passed.
+
+## Task 287: Operations Shift Monitor Page Feedback & Web/Native Parity (2026-10-29)
+- **Machine Row (Feedback #1)**: Updated TodayShiftMonitorCard (Web) and MobileTodayShiftCard (Native Mobile) to display both machine model and serial number together in the Machine row (e.g., model with (SN: serial_number) and query highlighting), removing the redundant separate Serial No row.
+- **Button Label (Feedback #2)**: Changed primary action button text from "Enter Shift Log" to "Enter Shift" (and "Edit Shift" for entered shifts) in TodayShiftMonitorCard, MobileTodayShiftCard, and MobileTodayShiftMonitorTab bottom sheet.
+- **KPI Strip Label (Feedback #3)**: Renamed summary KPI strip card label from "Total Roster" to "Total Shift" across both web (TodayShiftMonitorKPIStrip.tsx) and native mobile (TodayShiftMonitorKPIStrip.tsx).
+- **Verification**: Clean pass on monorepo typecheck (0 errors across 7 packages), mobile tests (357/357 passed), typography check (0 raw typography violations), web assignment standardization tests (14/14 passed), and dashboard tests (12/12 passed).
+
+## Task 286: Operations Shift Assignment UI Refinement & Web/Native Parity (2026-10-29)
+- Removed 3 shift slots open badge from AssignOperatorToMachineDialog.
+- Changed Assign Operator to Shift label to clean small text (text-xs font-medium).
+- Ensured outer edges are crisp and properly visible on Assign Operator button, MachineSelect, and UserSelect.
+- In UserSelect, removed role chip (Operator), removed phone numbers, and formatted items with only name and EMP ID in small text.
+- Synchronized native mobile AssignOperatorToMachineModal and AssignmentSelectableList with 100% parity.
+- Monorepo typecheck passed (0 errors across 7 packages), mobile tests passed (357/357), and typography check clean (0 violations).
+
+## [Task 285] - 2026-10-29
+### Client Detail Page Mobile Optimization & 100% Cross-Platform Parity
+- **4-Card Metadata Grid (Item 1)**: Transformed vertical stack into a smooth horizontal snap-scrolling strip on mobile (`w-[84vw] max-w-[320px] shrink-0 snap-start`) that automatically scales to a 2-col/4-col grid on tablet and desktop.
+- **KPI Grid 2x2 Layout (Item 2)**: Updated `KPIGrid` 4-column layout to render as `grid-cols-2 sm:grid-cols-2 lg:grid-cols-4` with compact `gap-2.5 sm:gap-4` and refined padding, achieving 100% parity with mobile app's 2x2 cards.
+- **Touch-Optimized Tab Strip (Item 3)**: Optimized Tab Strip toolbar with momentum horizontal scrolling (`no-scrollbar touch-pan-x`), min 38px/40px touch targets, and tactile contrast.
+- **Removed "Filter machines..." Search Input (Item 4)**: Completely removed the search input box from the tab strip toolbar; tabs project lists directly without clutter.
+- **Single-Line Tab Headers & Standardized Table Text (Item 5)**: Standardized all tab panel section headers to render title and count in one line (`flex items-center justify-between pb-2 border-b`) with `text-xs font-medium` table text and compact padding.
+- **Mobile-Optimized Tab Container & Hero Card (Items 6 & 9)**: Upgraded tab container and hero card with responsive padding (`p-3 sm:p-5`), compact border radius, and tactile status indicators.
+- **Removed Duplicate Hero Action Row (Item 7)**: Unified duplicate `sm:hidden` and `hidden sm:flex` hero layouts into a single responsive Hero card.
+- **MobilePageHeader 3-Dot Contextual Actions (Item 8)**: Added Edit Profile, Assign Supervisor, Activate / Deactivate Client, and Delete Client to the header 3-dot More menu with dual-binding events and `useRegisterPageActions`. Excluded unwanted actions like Call and WhatsApp.
+- **Fixed Double Toast on Supervisor Assignment (Item 10)**: Removed redundant `toast("success", ...)` in `ClientDetailClient`'s `onSuccess` callback since `AssignSupervisorToClientDialog` already presents the success toast.
+- **Zero-Drift Web & Native Parity**: Verified native mobile `ClientDetailView.tsx` adheres to the same layout, tokens, zero duplicate toasts, and role-appropriate actions.
+- **Monorepo Verification**:
+  - `pnpm typecheck`: 7/7 packages clean (0 errors)
+  - `node apps/web/scripts/test-assignment-standardization.mjs`: 14/14 passed
+  - `node apps/web/scripts/test-dashboard-standardization.mjs`: 12/12 passed
+  - `pnpm --filter @reachinternational/permissions test`: 15/15 passed
+  - `node apps/mobile/run-tests.mjs`: 357/357 passed
+
+## [Task 283] - 2026-10-29
+### Operations Shift Assignment Dialog Mobile Optimization & Ergonomic Polish
+- **Removed Dialog Description**: Removed header paragraph description in AssignOperatorToMachineDialog.tsx.
+- **Shortened Equipment Label**: Shortened label from Select Machinery Equipment to Equipment.
+- **Removed Capacity Counter Badge**: Added showCapacityBadge (default false) in AssignmentSelectionSummary.tsx.
+- **Mobile Optimized Shift Trigger Button**: Added min 48px touch target and active feedback.
+- **Mobile Optimized AssignmentShiftPicker**: Responsive grid (1 col mobile, 3 col desktop) with untruncated names and clean timings.
+- **Fluid Animation & Touch Close Button**: Wrapped in AnimatePresence with min 44px close button.
+- **Mobile Optimized UserSelect**: Min 46px trigger height, disabled mobile autofocus, 16px iOS font, overscroll-contain.
+- **Dynamic Viewport Repositioning**: Enhanced useDynamicDropdownPosition.ts with window.visualViewport support.
+- **Monorepo Verification**: Typecheck (7/7 clean), assignment tests (14/14), mobile tests (357/357), typography (0 violations).
+
+# 2026-10-29 - Task 282: Client Supervisor Assignment Reusability, Dropdown Selection & EMP-001 Parity
+- **Reusable Client-to-Supervisor Assignment**: Refactored `AssignSupervisorToClientDialog` (Web) and `AssignSupervisorToClientModal` (Mobile) to be fully reusable across any client account, dynamically fetching clients and binding sites/supervisors on client selection.
+- **Removed "CLI-0050" from Dialog Header**: Added `showCodeInHeader?: boolean` (default `false`) to `AssignmentDialog` (web) and `AssignmentBottomSheet` (mobile), preventing entity codes from polluting modal header titles.
+- **Removed Duplicate Client ID Banner**: Replaced redundant static entity code banners with interactive client dropdown selectors, eliminating repeated "CLI-0050" badges.
+- **Client Dropdown Selection**: Integrated `<ClientSelect>` on Web and `<SearchableSelect>` on Mobile to display the client company name on top, with the client ID (e.g., `CLI-0050`) below the name in small monospace text.
+- **Standardized EMP-001 Employee ID Display in UserSelect**: Updated `getAvailableSupervisors` DAL to include `employee_id` in SQL projection. Enhanced `formatEmployeeId` to handle UUIDs safely and normalize numeric IDs. Updated `UserSelect.tsx` and candidate mappings so supervisor options consistently render `EMP-001`, `EMP-002`, etc.
+- **100% Cross-Platform Parity & Mobile Responsiveness**: Enforced 44px minimum touch targets, haptic feedback, safe area constraints, and zero raw typography properties.
+- **Verification**: Clean pass on `test-assignment-standardization.mjs` (14/14 checks passed, 100%), mobile test runner `run-tests.mjs` (357/357 checks passed, 100%), `check-typography.mjs` (0 raw typography violations), and monorepo-wide typecheck `pnpm typecheck` (7/7 packages clean, 0 errors).
+
+# 2026-10-29 - Task 280: Mobile Device Optimization for Dashboard Viewport
+- Implemented mobile device optimizations across Dashboard components on Web and Mobile.
+- Configured KPIGrid on Web and Mobile so odd 5th KPI card spans full width (col-span-2 on web, 100% on mobile) on mobile viewports (<640px), eliminating blank asymmetric grid holes.
+- Added touch-manipulation and active:scale-[0.98] to KPICard and PrimaryAction for zero-latency tap response and tactile mobile press feedback.
+- Optimized vertical and internal padding in AdminDashboardView, KPICard, and DashboardHeader for tight, comfortable 360px viewport ergonomics.
+
+# 2026-10-29 - Task 279: Fix TypeScript Parameter 'result' Implicitly Has 'any' Type
+- Resolved TypeScript error TS7006 in `TodayShiftMonitorTab.tsx` at line 1039 (`onSuccess={(result) => ...}`).
+- Root cause: Dynamic import of `AssignOperatorModal` without prop typing prevented TypeScript language service from inferring the callback parameter in strict mode (`noImplicitAny`).
+- Added and exported `AssignPersonnelSuccessResult` interface in `AssignPersonnelModal.tsx` and re-exported it in `AssignOperatorModal.tsx`.
+- Typed dynamic component as `dynamic<AssignOperatorModalProps>(...)` and explicitly typed `onSuccess={(result?: AssignPersonnelSuccessResult) => ...}`.
+- Removed unsafe `(o: any)` cast in operator shift code lookup.
+- Verified: `pnpm --filter web typecheck` and `test-assignment-standardization.mjs` passed with 0 errors.
+
+# 2026-10-29 - Task 278: Refine Dashboard Layout & Header Based on User Page Feedback
+- Eradicated default subtitle paragraph, role badge, and calendar date pill from DashboardHeader across web.
+- Completely removed Today's Operational Exceptions section and its 3 KPI cards (Breakdowns Reported, Overtime Entries, Shift Schedule Conflicts) from AdminDashboardView and synchronized to mobile AdminDashboardCard.
+- Updated test-dashboard-standardization.mjs suite to verify clean minimal header (12/12 passed).
+
+## [2026-10-28] Task 276: Show Client Page to Supervisor Role with View-Only Access Across Web & Native Apps
+
+- **Shared Permissions (`packages/permissions`)**:
+  - `packages/permissions/src/permissions.ts`: Added `CLIENT_VIEW: "client.view"`, `CLIENT_CREATE: "client.create"`, `CLIENT_EDIT: "client.edit"`, and `CLIENT_DELETE: "client.delete"`.
+  - `packages/permissions/src/matrix.ts`: Mapped `client.view`, `client.create`, `client.edit`, `client.delete` to `admin` and `manager`. Mapped `client.view` strictly as view-only permission to `supervisor` (zero mutation permissions).
+  - `packages/permissions/src/client-rbac.test.ts`: Added unit tests verifying client permission existence, supervisor view-only permissions, operator/hr denials, and route accessibility (15/15 passed).
+
+- **Database RLS Policies (`supabase/migrations`)**:
+  - Created migration `178_allow_supervisor_read_clients_directory.sql`: Updated `clients_select_policy` on `public.clients` to permit `supervisor` to read active (non-deleted) client records. Re-affirmed strict write boundaries for INSERT, UPDATE, and DELETE restricted to `super_admin`, `admin`, and `manager`.
+
+- **Web Application (`apps/web`)**:
+  - `apps/web/app/(app)/clients/page.tsx`: Updated `requireRole` to permit `"supervisor"` alongside `super_admin`, `admin`, and `manager`.
+  - `apps/web/components/layout/AppSidebar.tsx`: Added `"supervisor"` to `/clients` navigation item roles.
+  - `apps/web/components/layout/PublicNavbar.tsx`: Added `"supervisor"` to `/clients` navigation item roles.
+  - `apps/web/proxy.ts`: Imported `AUTHORIZED_CLIENT_ROLES` and `isRouteAllowedForRole`. Added edge proxy guard restricting `/clients` to `AUTHORIZED_CLIENT_ROLES` and enforced route checks across all protected routes.
+  - `apps/web/components/clients/ClientsHeader.tsx`: Gated `ExportDropdown` behind `canManageClients` so supervisors only see the directory list without non-permitted export actions.
+
+- **Native Mobile Application (`apps/mobile`)**:
+  - `apps/mobile/app/(app)/clients/index.tsx`: Updated `PermissionDeniedView` `requiredRoles` to include `"supervisor"`.
+  - Preserved `canManageClients = ['super_admin', 'admin', 'manager'].includes(normalizedRole)`, ensuring mobile client creation, editing, site adding, and supervisor assignments remain hidden for supervisors.
+
+### 2026-10-28 — Task 275: Fix Dark Theme Contrast and Visibility for ClientDetailClient Tabs & Action Buttons
+- Identified root cause for feedback at #main-content > .flex > .flex > .flex on /clients/[id]: active tab used text-[var(--color-on-primary)] with bg-[var(--color-ink)], causing white text on white background in dark mode.
+- Replaced with canonical Geist pair: bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-xs font-bold, giving 15.5:1 contrast in light mode and 18.5:1 contrast in dark mode.
+- Enhanced inactive tabs with border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] and distinct count badges.
+- Fixed all associated buttons and badges across ClientDetailClient, UserDetailClient, EnterpriseTable, and detail pages.
+- Monorepo verification passed: 0 typecheck errors across all 7 packages, all RBAC and standardization test suites passing.
+
+## [2026-10-28] - Task 270: Supervisor Assisted Shift Entry for Assigned Operators (Web & Mobile Parity)
+### Added & Updated
+- **Database Layer**:
+  - `supabase/migrations/177_allow_supervisor_assisted_shift_entry_for_assigned_operators.sql`: Added `is_operator_under_supervisor` helper supporting all 6 relationship pathways, updated `can_manage_operator_shift_log`, updated `submit_operator_hour_log_atomic` RPC to permit supervisors with operator scoping, and updated RLS policies on `public.machine_hour_logs`.
+  - `supabase/tests/test_supervisor_assisted_shift_entry.mjs`: Monorepo integration test suite for supervisor-operator validation.
+- **Shared Permissions (`packages/permissions`)**:
+  - Added and exported `isSupervisorOrAbove(role)` in `roles.ts`.
+  - Added `operator.log_create` and `operator.log_edit` to `supervisor` role in `matrix.ts`.
+  - Created `supervisor-shift-log.test.ts` (12/12 test assertions passing).
+- **Web App (`apps/web`)**:
+  - `apps/web/lib/data/operations/supervisor-operators.ts`: Added `isOperatorUnderSupervisor` data helper with DB RPC invocation and resilient 4-pathway direct query fallback.
+  - `apps/web/app/actions/operators.ts`: Enabled `supervisor` in `submitOperatorHourLogAction`, enforcing `isOperatorUnderSupervisor` authorization check and attribution.
+  - `apps/web/components/operations/TodayShiftMonitorTab.tsx`: Enabled `canEnterLog` for supervisors, rendering actionable 'Enter Log' / 'Edit Log' buttons instead of static 'Pending' text.
+  - `apps/web/components/operations/AssistedShiftEntryModal.tsx`: Permitted supervisor submissions.
+- **Mobile App (`apps/mobile`)**:
+  - `apps/mobile/app/(app)/operations.tsx`: Added `canFillShiftEntry` enabling supervisors to open `<MeterLogModal>` for assisted shift entry.
+  - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Enabled `canEnterLog` for supervisors.
+  - `apps/mobile/components/work/MeterLogModal.tsx`: Added caller role validation and client-side supervisor-operator assignment verification.
+- **Verification**:
+  - `pnpm typecheck`: 0 errors across all 7 packages.
+  - `pnpm --filter @reachinternational/permissions test`: 12/12 passed.
+  - `node --experimental-strip-types supabase/tests/test_supervisor_assisted_shift_entry.mjs`: 9/9 passed.
+  - `node scripts/check-typography.mjs`: Clean pass (0 raw typography property violations).
+  - `node apps/mobile/run-tests.mjs`: 344/357 passed (100% baseline match).
+
+### Task 268 (2026-10-28) � Operations Shift Roster Row Standardization (Avatar, Name, Shift Badge, Emp ID Only)
+- Eradicated redundant shift name text ('� Shift A (Morning)') and shift timings ('(06:00 AM � 02:00 PM)') from AssignmentSelectionSummary.
+- Eradicated phone numbers from roster rows in web and mobile assignment summaries.
+- Standardized roster row layout to strictly render: 1) Avatar, 2) Operator Name, 3) Shift Badge (e.g., 'Shift A'), 4) Employee ID Only (e.g. 'EMP-XXXX').
+- Built clean responsive flex layout supporting both desktop viewports and mobile screens without overflow.
+- Synchronized apps/mobile/components/assignments/AssignmentSelectionSummary.tsx in 100% parity with zero raw typography properties.
+- Monorepo-wide verification passed: 0 typecheck errors across all 7 workspace projects, 14/14 web assignment tests passed, 35/35 mobile assignment tests passed, 12/12 permissions tests passed.
+
+### Task 267 (2026-10-28) — Sidebar Brand Logo Modernization & Butter-Smooth Open/Close Geometry
+- Eradicated legacy ReachInternationalLogo and raw DOM/text scissor-lift lockup from SidebarHeader.
+- Built canonical ReachLogo primitive in apps/web/components/branding/ReachLogo.tsx using reach-logo-dark.png and reach-logo-light.png with 2:1 aspect ratio and zero-FOUC theme switching.
+- Unified SidebarHeader geometry with symmetric px-4 layout, eliminating button jumps during open/close.
+- Implemented 200ms smooth width/opacity transition on logo link with fluid icon morph in collapsed mode.
+- Synchronized MobileSidebarDrawer and ReachInternationalLogo delegation across Web and Mobile.
+
+# [Task 264] OEM Partner Logos Vertical InfiniteSlider Integration
+- Date: 2026-10-28
+- Refactored BrandsSection to display only big OEM Partner Logos (JCB, Toyota, Hyundai, JLG, Genie, BYD) with dual-column vertical infinite scrolling.
+- Integrated canonical InfiniteSlider into apps/web/components/ui/infinite-slider.tsx and demo.tsx.
+- Added dual-theme dark SVG assets: toyota_dark.svg, hyundai_dark.svg, genie_dark.svg, byd_dark.svg, jcb_dark.svg, jlg_dark.svg.
+- Both columns feature all 6 OEM partners in opposite positions and opposing vertical scroll directions.
+- Verified 0 typecheck errors monorepo-wide and passed verification suite.
+
 ## [2026-10-23] Task 258: Redesign and Standardize Assignment UI — Native Expo App
 - Modular Native Assignment Components (apps/mobile/components/assignments/):
   - AssignmentBottomSheet.tsx, AssignmentSearchInput.tsx, AssignmentSelectableList.tsx, AssignmentShiftPicker.tsx, AssignmentSelectionSummary.tsx, AssignmentActionBar.tsx, index.ts.
@@ -19602,3 +19780,39 @@ so i can tract each and everythings"
 - Elevated machine group header cards to `theme.colors.canvasElevated` with Title Case metric labels and `<Text variant="mono" weight="bold">` values.
 - Standardized shift card typography: eliminated metadata font size mismatch, bound shift codes and metric values to mono bold, and enforced 44px minimum touch targets on all interactive icon buttons and toggles.
 - Verification: 0 raw typography properties found, 7/7 packages clean in `pnpm typecheck`, 357/357 mobile test scenarios passed, 5/5 permissions tests passed, 25/25 utils tests passed.
+
+## [2026-10-28] - Task 265: Testimonials Profile Photo Eradication & Avatar Placeholder Integration
+- Removed real human face photos (Unsplash URLs) from all 9 industrial testimonials in apps/web/components/marketing/testimonials/TestimonialsSection.tsx.
+- Integrated clean enterprise-grade profile photo placeholder with Lucide User icon in apps/web/components/marketing/ui/testimonials-columns-1.tsx.
+- Cleaned up broken avatar image paths in apps/web/components/landing/TestimonialsSection.tsx in favor of the User placeholder avatar.
+- Monorepo verification clean: 0 typecheck errors monorepo-wide, 10/10 permissions tests passed, 0 mobile typography violations.
+
+
+## [Task 273] - Operations Page Feedback & Parity Refinements - 2026-10-28
+- **ShiftInputs**: Removed manual time entry mode toggle button, showManualTimes state, and manual CustomTimePicker inputs. Shift selector is now always authoritative.
+- **TodayShiftMonitorTab**: Renamed pending action button from 'Enter Log' to 'Enter Shift'.
+- **TodayShiftMonitorTab**: Removed secondary shift_name subtitle ('Evening') under the shift chip.
+- **TodayShiftMonitorTab**: Removed operator phone number from operator column, keeping only operator employee ID.
+- **TodayShiftMonitorTab**: Formatted Shift chip to be whitespace-nowrap and shrink-0, ensuring clean single-line appearance.
+- **Parity Synchronization**: Synchronized operator phone removal and shift formatting in TodayShiftMonitorCard (Web mobile card) and MobileTodayShiftCard (Expo Native), and removed manual time toggle in MeterLogModal when shift codes exist.
+- **Verification**: pnpm typecheck passed with 0 errors monorepo-wide. Shift workflows (28/28), timepicker (16/16), and permissions (12/12) test suites passed.
+
+## [Task 272] - 2026-10-28 - /operations Shift Picker & Operator Selection Polish & Parity
+- **UserSelect**: Replaced the secondary phone/email/city subtitle row with the operator's formatted Employee ID (`formatEmployeeId(u.employee_id)`), matching the exact text size and color (`text-[10px] text-[var(--color-mute)] font-mono`). Enabled search filtering by employee ID and displayed employee ID in trigger button when selected.
+- **Data Projection**: Updated `getActiveOperators` and `getActiveSupervisors` in `apps/web/lib/data/machines/machine-filters.ts` and `apps/web/lib/data/operations/operations-assignments.ts` to include `employee_id` in database queries.
+- **AssignmentShiftPicker Icon Removal**: Removed Sun and Moon icons from all shifts on Web and Mobile.
+- **Client Shift Name & DB Fetching**: Eliminated duplicate shift name rendering (`Shift A` and `Shift A (Morning)`). Display ONLY the client's configured shift name (`shift.name || shift.code`) and timings. Ensured fresh client shifts are synchronized from DB in `AssignOperatorToMachineDialog.tsx` via `fresh.client_shifts` and `fresh.client_id`.
+- **Shift and Grow Mechanism**: Implemented dynamic horizontal grow/shrink layout (`flex items-stretch gap-1.5 sm:gap-2 w-full`). The selected shift expands/grows (`flex-[1.5]`) and displays the client shift name and timings, while non-selected shifts shrink (`flex-1`) and show ONLY the shift name without timings.
+- **100% Mobile Parity**: Updated `apps/mobile/components/assignments/AssignmentShiftPicker.tsx` with identical grow/shrink mechanism (`flex: 1.4` / `flex: 1`), removed Sun/Moon/Clock icons, and hid timings on unselected shifts.
+- **Verification**: `pnpm typecheck` passed (7/7 packages, 0 errors). All permission and mobile test suites passed.
+
+### Task 284 — Operations Today Shift Monitor Card Redesign & Parity (Web & Mobile)
+- **Target**: `apps/web/components/operations/TodayShiftMonitorCard.tsx`, `apps/mobile/components/operations/MobileTodayShiftCard.tsx`
+- **Changes**:
+  1. Removed "Reassign Personnel" button from `<TodayShiftMonitorCard>`.
+  2. Relocated "Enter Shift Log" / "Edit Shift Log" from 3-dot menu to a prominent, full-width button at the bottom of the card, completely removing the redundant 3-dot dropdown.
+  3. Replaced machine ID (`machine_code` e.g. `MAC-001`) with Machine Model (`machine_model`) on `Machine:` and Serial Number (`machine_serial_number`) on `Serial No:`.
+  4. Shifted all card detail values to the left with a consistent, fixed-width label column (`w-24` on Web, `90px` on Mobile) and clean hairline dividers.
+  5. Standardized HMR hours display format to `start → end`.
+  6. Enforced 100% parity across Web and Native Mobile with zero raw typography properties and verified across monorepo test suites.
+- **Verification**: `pnpm typecheck` passed (0 errors), `node scripts/check-typography.mjs` passed (0 raw typography violations), `node apps/mobile/run-tests.mjs` passed (357/357), `apps/web/scripts/test-assignment-standardization.mjs` passed (14/14), `apps/web/scripts/test-dashboard-standardization.mjs` passed (12/12).

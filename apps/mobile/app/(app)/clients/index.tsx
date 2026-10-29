@@ -1182,7 +1182,7 @@ export default function ClientsScreen() {
         <PermissionDeniedView
           featureName="Client Management"
           currentRole={role}
-          requiredRoles={['super_admin', 'admin', 'manager']}
+          requiredRoles={['super_admin', 'admin', 'manager', 'supervisor']}
         />
       </View>
     );

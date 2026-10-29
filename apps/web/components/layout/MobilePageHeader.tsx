@@ -63,6 +63,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 const DETAIL_TITLES: Record<string, string> = {
   machines: "Machine Details",
+  clients: "Client Details",
   vendors: "Vendor Details",
   "purchase-orders": "Purchase Order",
   audit: "Audit Details",
@@ -117,6 +118,8 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const canEditMachine = isMachineDetail && userRole !== "operator" && userRole !== "client";
   const isUserDetail = pathname.startsWith("/users/") && pathname.split("/").filter(Boolean).length === 2;
   const canManageUserDetail = isUserDetail && userRole !== "operator" && userRole !== "client";
+  const isClientDetail = pathname.startsWith("/clients/") && pathname.split("/").filter(Boolean).length === 2;
+  const canManageClientDetail = isClientDetail && userRole !== "operator" && userRole !== "client";
 
   const { actions } = usePageActions();
 
@@ -473,6 +476,95 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                 >
                   <AnimatedTrash2 size={16} className="text-red-600 shrink-0" />
                   <span>Delete Account</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Client Detail Dedicated Contextual Actions */}
+          {isClientDetail && (
+            <div className="py-0.5">
+              {canManageClientDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (actions?.customActions) {
+                      const editAct = actions.customActions.find((a) => a.id === "edit-client");
+                      if (editAct) {
+                        editAct.run();
+                        return;
+                      }
+                    }
+                    window.dispatchEvent(new CustomEvent("reach:client-edit"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedEdit size={16} className="text-sky-500 shrink-0" />
+                  <span>Edit Profile</span>
+                </button>
+              )}
+
+              {canManageClientDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (actions?.customActions) {
+                      const assignAct = actions.customActions.find((a) => a.id === "assign-supervisor");
+                      if (assignAct) {
+                        assignAct.run();
+                        return;
+                      }
+                    }
+                    window.dispatchEvent(new CustomEvent("reach:client-assign-supervisor"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedUserPlus size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>Assign Supervisor</span>
+                </button>
+              )}
+
+              {canManageClientDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (actions?.customActions) {
+                      const toggleAct = actions.customActions.find((a) => a.id === "toggle-status");
+                      if (toggleAct) {
+                        toggleAct.run();
+                        return;
+                      }
+                    }
+                    window.dispatchEvent(new CustomEvent("reach:client-toggle-status"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedPower size={16} className="text-amber-600 shrink-0" />
+                  <span>Activate / Deactivate</span>
+                </button>
+              )}
+
+              {userRole === "super_admin" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (actions?.customActions) {
+                      const delAct = actions.customActions.find((a) => a.id === "delete-client");
+                      if (delAct) {
+                        delAct.run();
+                        return;
+                      }
+                    }
+                    window.dispatchEvent(new CustomEvent("reach:client-delete"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                >
+                  <AnimatedTrash2 size={16} className="text-red-600 shrink-0" />
+                  <span>Delete Client</span>
                 </button>
               )}
             </div>

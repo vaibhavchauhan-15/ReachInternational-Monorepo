@@ -13,8 +13,6 @@ import {
   AnimatedClipboardList,
   AnimatedWrench,
   AnimatedAlertTriangle,
-  AnimatedSlidersHorizontal,
-  AnimatedFileText,
   AnimatedChevronDown,
   AnimatedArrowUpDown,
   AnimatedMoreVertical,
@@ -839,24 +837,16 @@ export function MachineListClient({
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [activeHistoryMachine, setActiveHistoryMachine] = useState<Machine | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
-  const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
   const isDesktop = useMediaQuery("(min-width: 641px)");
 
-  // Strict mutually exclusive presentation mode:
-  // - "table": renders Table only (never cards)
-  // - "cards": renders Cards only (never table)
-  // - "auto": dynamically renders Table on desktop (>=641px) or Cards on mobile (<=640px)
-  const effectiveView: "table" | "cards" = useMemo(() => {
-    if (viewMode === "table") return "table";
-    if (viewMode === "cards") return "cards";
-    return isDesktop ? "table" : "cards";
-  }, [viewMode, isDesktop]);
+  // 3-Tier Dynamic View Resolver:
+  // Dynamically renders Table on desktop (>=641px) or Cards on mobile (<=640px)
+  const effectiveView: "table" | "cards" = isDesktop ? "table" : "cards";
 
   const displayedCardsMachines = useMemo(() => {
     if (isSearchActive) return searchResults ?? [];
-    if (isDesktop && viewMode === "cards") return machines;
     return mobileMachinesList;
-  }, [isSearchActive, searchResults, isDesktop, viewMode, machines, mobileMachinesList]);
+  }, [isSearchActive, searchResults, mobileMachinesList]);
 
   const handleOpenEdit = useCallback((m: Machine) => {
     setEditingMachine(m);
@@ -1592,7 +1582,7 @@ export function MachineListClient({
         header: "MACHINE ID",
         accessorKey: "machine_id" as const,
         sortable: true,
-        width: "11%",
+        width: "12%",
         cell: (row: Machine) => (
           <button
             type="button"
@@ -1612,9 +1602,9 @@ export function MachineListClient({
         header: "MODEL",
         accessorKey: "model" as const,
         sortable: true,
-        width: "11%",
+        width: "14%",
         cell: (row: Machine) => (
-          <span className="font-semibold text-[var(--color-ink)] text-xs truncate block max-w-[120px]" title={row.model || ""}>
+          <span className="font-semibold text-[var(--color-ink)] text-xs truncate block max-w-[130px]" title={row.model || ""}>
             <Highlight text={row.model || "—"} query={localSearchTerm} />
           </span>
         ),
@@ -1623,32 +1613,10 @@ export function MachineListClient({
         id: "serial_number",
         header: "SERIAL NO",
         accessorKey: "serial_number" as const,
-        width: "11%",
+        width: "13%",
         cell: (row: Machine) => (
-          <span className="font-mono text-[var(--color-mute)] text-xs truncate block max-w-[120px]" title={row.serial_number || ""}>
+          <span className="font-mono text-[var(--color-mute)] text-xs truncate block max-w-[130px]" title={row.serial_number || ""}>
             <Highlight text={row.serial_number || "—"} query={localSearchTerm} />
-          </span>
-        ),
-      },
-      {
-        id: "year_of_mfg",
-        header: "YUM",
-        accessorKey: "year_of_mfg" as const,
-        width: "6%",
-        cell: (row: Machine) => (
-          <span className="text-[var(--color-body)] text-xs font-mono">
-            {row.year_of_mfg || "—"}
-          </span>
-        ),
-      },
-      {
-        id: "manufacturer",
-        header: "MFR",
-        accessorKey: "manufacturer" as const,
-        width: "9%",
-        cell: (row: Machine) => (
-          <span className="text-[var(--color-body)] text-xs truncate block max-w-[90px]" title={row.manufacturer || ""}>
-            {row.manufacturer || "—"}
           </span>
         ),
       },
@@ -1657,7 +1625,7 @@ export function MachineListClient({
         header: "HMR",
         accessorKey: "hour_meter" as const,
         sortable: true,
-        width: "8%",
+        width: "9%",
         cell: (row: Machine) => (
           <button
             type="button"
@@ -1675,7 +1643,7 @@ export function MachineListClient({
       {
         id: "client",
         header: "ASSIGNED CLIENT",
-        width: "14%",
+        width: "15%",
         cell: (row: Machine) => {
           const clientName = row.client?.company_name || row.customer_name;
           const clientCode = row.client?.code;
@@ -1689,7 +1657,7 @@ export function MachineListClient({
           return (
             <div className="flex flex-col min-w-0 pr-1">
               <span
-                className="text-xs font-bold text-[var(--color-ink)] truncate max-w-[130px]"
+                className="text-xs font-bold text-[var(--color-ink)] truncate max-w-[140px]"
                 title={clientName}
               >
                 {clientName}
@@ -1706,7 +1674,7 @@ export function MachineListClient({
       {
         id: "supervisor",
         header: "SUPERVISOR",
-        width: "12%",
+        width: "13%",
         cell: (row: Machine) => (
           <PersonnelCell
             users={row.supervisors}
@@ -1719,7 +1687,7 @@ export function MachineListClient({
       {
         id: "operator",
         header: "OPERATOR (24H)",
-        width: "12%",
+        width: "13%",
         cell: (row: Machine) => (
           <PersonnelCell
             users={row.operators}
@@ -1851,51 +1819,6 @@ export function MachineListClient({
         onResetFilters={handleResetAllFilters}
         onSubmitSearch={handleSearchSubmit}
         isLoading={isPending || isSearchLoading}
-        actions={
-          <div className="flex items-center gap-2">
-            {/* View Switcher is strictly hidden on mobile viewports (≤640px) */}
-            <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-lg border border-[var(--color-hairline)] text-xs h-9 shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewMode("auto")}
-                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
-                  viewMode === "auto"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                }`}
-                title="Auto responsive view (Table on desktop, Cards on mobile)"
-              >
-                Auto View
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("cards")}
-                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
-                  viewMode === "cards"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                }`}
-                title="Cards view"
-              >
-                <AnimatedSlidersHorizontal size={13} />
-                <span>Cards</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
-                  viewMode === "table"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
-                }`}
-                title="Table view"
-              >
-                <AnimatedFileText size={13} />
-                <span>Table</span>
-              </button>
-            </div>
-          </div>
-        }
       >
         <div className="flex flex-col gap-3 w-full">
           {/* Responsive Custom Dropdown Filter Selectors for Status, Health, Client, Supervisor & Sort */}
@@ -2103,32 +2026,34 @@ export function MachineListClient({
         </div>
       </FilterToolbar>
 
-      {/* Search & Filter Results Count Bar */}
-      <div className="flex items-center justify-between px-1 text-xs text-[var(--color-mute)]">
-        <div className="flex items-center gap-2">
-          <span>
-            Showing{" "}
-            <span className="font-semibold text-[var(--color-ink)]">
-              {activeMachines.length}
-            </span>{" "}
-            of{" "}
-            <span className="font-semibold text-[var(--color-ink)]">
-              {activeTotal}
-            </span>{" "}
-            {activeTotal === 1 ? "machine" : "machines"}
-          </span>
-          {isSearchActive && (
-            <span className="text-[11px] bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-medium border border-sky-500/20">
-              Filtered by &quot;{localSearchTerm}&quot;
+      {/* Search & Filter Results Count Bar for Mobile Cards View */}
+      {effectiveView === "cards" && (
+        <div className="flex items-center justify-between px-1 text-xs text-[var(--color-mute)]">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing{" "}
+              <span className="font-semibold text-[var(--color-ink)]">
+                {activeMachines.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-[var(--color-ink)]">
+                {activeTotal}
+              </span>{" "}
+              {activeTotal === 1 ? "machine" : "machines"}
+            </span>
+            {isSearchActive && (
+              <span className="text-[11px] bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-medium border border-sky-500/20">
+                Filtered by &quot;{localSearchTerm}&quot;
+              </span>
+            )}
+          </div>
+          {selectedIds.length > 0 && (
+            <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+              {selectedIds.length} selected
             </span>
           )}
         </div>
-        {selectedIds.length > 0 && (
-          <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-            {selectedIds.length} selected
-          </span>
-        )}
-      </div>
+      )}
 
       {/* Main Table / Grid Display — Mutually Exclusive View Rendering (M6) */}
       {effectiveView === "table" ? (
@@ -2142,6 +2067,26 @@ export function MachineListClient({
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 bulkActions={tableBulkActions}
+                toolbarLeft={
+                  <div className="flex items-center gap-2 text-xs text-[var(--color-mute)]">
+                    <span>
+                      Showing{" "}
+                      <span className="font-semibold text-[var(--color-ink)]">
+                        {activeMachines.length}
+                      </span>{" "}
+                      of{" "}
+                      <span className="font-semibold text-[var(--color-ink)]">
+                        {activeTotal}
+                      </span>{" "}
+                      {activeTotal === 1 ? "machine" : "machines"}
+                    </span>
+                    {isSearchActive && (
+                      <span className="text-[11px] bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-medium border border-sky-500/20">
+                        Filtered by &quot;{localSearchTerm}&quot;
+                      </span>
+                    )}
+                  </div>
+                }
                 emptyMessage={
                   isSearchActive
                     ? `No machines found matching "${localSearchTerm}"`
@@ -2328,6 +2273,7 @@ export function MachineListClient({
             setEditClientMachine(null);
           }}
           machine={editClientMachine}
+          machines={machines}
           clients={lazyClients}
           onMachineUpdated={handleMachineUpdatedFromModal}
         />

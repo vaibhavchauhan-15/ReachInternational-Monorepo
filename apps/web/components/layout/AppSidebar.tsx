@@ -70,7 +70,7 @@ export const mainNavItems: NavItem[] = [
     href: "/clients",
     label: "Clients",
     icon: AnimatedBuilding2,
-    roles: ["super_admin", "admin", "manager"],
+    roles: ["super_admin", "admin", "manager", "supervisor"],
   },
   {
     href: "/users",

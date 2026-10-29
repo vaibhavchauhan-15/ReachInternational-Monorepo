@@ -46,7 +46,7 @@ export default async function ClientsPage(props: {
     redirect("/login");
   }
 
-  await requireRole("super_admin", "admin", "manager");
+  await requireRole("super_admin", "admin", "manager", "supervisor");
 
   // 3 & 4. Current Status & Current Search from URL
   const searchParams = await props.searchParams;

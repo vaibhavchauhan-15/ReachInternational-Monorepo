@@ -19,6 +19,7 @@ const MACHINE_DETAIL_COLUMNS = `
   current_operator_id,
   operator_ids,
   client_id,
+  site_id,
   health_status,
   status,
   created_at,

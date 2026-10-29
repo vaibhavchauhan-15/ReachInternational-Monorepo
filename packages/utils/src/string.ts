@@ -23,8 +23,18 @@ export function formatMachineCode(code: string | number): string {
 
 export function formatEmployeeId(id: string | number): string {
   if (!id) return '';
-  const str = String(id);
-  if (str.startsWith('EMP-')) return str;
+  const str = String(id).trim();
+  if (str.startsWith('EMP-')) {
+    const numPart = str.slice(4);
+    if (/^\d+$/.test(numPart) && numPart.length < 3) {
+      return `EMP-${numPart.padStart(3, '0')}`;
+    }
+    return str;
+  }
+  // If a UUID was accidentally passed as employee ID, shorten it cleanly to avoid ugly 36-char string
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) {
+    return `EMP-${str.replace(/-/g, '').substring(0, 3).toUpperCase()}`;
+  }
   return `EMP-${str.padStart(3, '0')}`;
 }
 

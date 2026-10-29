@@ -3,13 +3,13 @@
  *
  * Touch-optimized shift selector for machine-operator assignments.
  * Supports S1, S2, S3 or custom client shift codes, 12-hour start/end time display,
- * visual time-of-day iconography (Sun, Moon, Clock), occupied shift badges,
- * and real-time conflict warnings.
+ * occupied shift badges, grow/shrink responsive mechanism, and real-time conflict warnings.
  *
  * Invariants:
  * - Minimum 44px touch targets
  * - Zero raw typography properties in StyleSheet.create
  * - Vercel Geist design tokens and Light/Dark theme synchronization
+ * - 100% Web & Mobile Parity
  */
 
 import React from 'react';
@@ -21,7 +21,7 @@ import { Text } from '../ui/Text';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatTo12Hour } from '@reachinternational/utils';
-import { Sun, Moon, Clock, AlertCircle, Check } from '../ui/icon';
+import { AlertCircle, Check } from '../ui/icon';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 
@@ -52,16 +52,6 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
 
-  const getShiftIcon = (shift: ShiftPickerOption) => {
-    if (shift.crosses_midnight || shift.code === 'S3') {
-      return <Moon size={14} color="#818cf8" />;
-    }
-    if (shift.code === 'S1') {
-      return <Sun size={14} color="#f59e0b" />;
-    }
-    return <Clock size={14} color="#0284c7" />;
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -76,10 +66,20 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
       {/* Shift Option Buttons */}
       <View style={styles.shiftsGrid}>
         {shifts.map((shift) => {
-          const isSelected = selectedShiftCode === shift.code;
+          const isSelected = selectedShiftCode.trim().toUpperCase() === shift.code.trim().toUpperCase();
           const isOccupied = occupiedShiftCodes.includes(shift.code);
           const formattedStart = formatTo12Hour(shift.start_time) || shift.start_time;
           const formattedEnd = formatTo12Hour(shift.end_time) || shift.end_time;
+          const timeRange = formattedStart && formattedEnd ? `${formattedStart} – ${formattedEnd}` : '';
+
+          const shiftName =
+            shift.name && shift.name.trim()
+              ? shift.name.trim()
+              : shift.code?.trim()
+              ? shift.code.toLowerCase().startsWith('shift')
+                ? shift.code.trim()
+                : `Shift ${shift.code.trim()}`
+              : 'Shift';
 
           return (
             <Pressable
@@ -93,6 +93,7 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
               style={[
                 styles.shiftButton,
                 {
+                  flex: isSelected ? 1.4 : 1,
                   backgroundColor: isSelected
                     ? isDark
                       ? 'rgba(2, 132, 199, 0.16)'
@@ -107,22 +108,23 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected, disabled }}
-              accessibilityLabel={`Shift ${shift.code}, ${formattedStart} to ${formattedEnd}`}
+              accessibilityLabel={`${shiftName}${timeRange ? `, ${timeRange}` : ''}`}
             >
               <View style={styles.shiftTop}>
                 <View style={styles.shiftCodeRow}>
-                  {getShiftIcon(shift)}
                   <Text
                     variant="body"
                     weight="bold"
+                    numberOfLines={1}
                     style={{
                       color: isSelected ? theme.colors.primary : theme.colors.ink,
+                      flexShrink: 1,
                     }}
                   >
-                    {shift.code}
+                    {shiftName}
                   </Text>
                 </View>
-                {isOccupied && (
+                {isOccupied && !isSelected && (
                   <View
                     style={[
                       styles.occupiedBadge,
@@ -149,14 +151,18 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
                 )}
               </View>
 
-              <Text
-                variant="micro"
-                style={{
-                  color: isSelected ? theme.colors.primary : theme.colors.mute,
-                }}
-              >
-                {formattedStart} – {formattedEnd}
-              </Text>
+              {/* Shift timing: only displayed on the selected (grow) shift */}
+              {isSelected && timeRange ? (
+                <Text
+                  variant="micro"
+                  numberOfLines={1}
+                  style={{
+                    color: isSelected ? theme.colors.primary : theme.colors.mute,
+                  }}
+                >
+                  {timeRange}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -198,13 +204,12 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   shiftButton: {
-    flex: 1,
-    minHeight: 56,
+    minHeight: 52,
     borderRadius: radiusNumeric.md,
     borderWidth: 1.5,
     padding: spacingNumeric.sm,
     justifyContent: 'center',
-    gap: 4,
+    gap: 2,
   },
   shiftTop: {
     flexDirection: 'row',
@@ -215,6 +220,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacingNumeric.xs,
+    flexShrink: 1,
   },
   occupiedBadge: {
     paddingHorizontal: 4,

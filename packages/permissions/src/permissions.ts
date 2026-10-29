@@ -146,6 +146,10 @@ export const PERMISSIONS = {
   USER_ACTIVATE: "user.activate",
   USER_ASSIGN_SUPERVISOR: "user.assign_supervisor",
   USER_BULK_MANAGE: "user.bulk_manage",
+  CLIENT_VIEW: "client.view",
+  CLIENT_CREATE: "client.create",
+  CLIENT_EDIT: "client.edit",
+  CLIENT_DELETE: "client.delete",
   CLIENT_ASSIGN_SUPERVISOR: "client.assign_supervisor",
   CLIENT_REMOVE_SUPERVISOR: "client.remove_supervisor",
 

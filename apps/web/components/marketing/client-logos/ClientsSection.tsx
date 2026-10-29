@@ -98,8 +98,8 @@ export function ClientsSection() {
         </div>
       </div>
 
-      {/* Auto-scrolling Dual Logo Tracks */}
-      <div className="w-full flex flex-col gap-6 md:gap-8 my-2">
+      {/* Auto-scrolling Dual Logo Tracks - Optimized Compact Spacing */}
+      <div className="w-full flex flex-col gap-2.5 sm:gap-3 my-1">
         {/* Track 1: Left-to-Right Scrolling */}
         <div className="w-full">
           <LogoLoop
@@ -107,11 +107,11 @@ export function ClientsSection() {
             direction="right"
             speed={45}
             logoHeight={64}
-            gap={24}
+            gap={20}
             pauseOnHover={true}
             draggable={true}
             scaleOnHover={true}
-            labels="hover"
+            labels="none"
             fadeOut={true}
             fadeOutWidth={0.12}
             ariaLabel="Enterprise clients row 1"
@@ -125,11 +125,11 @@ export function ClientsSection() {
             direction="left"
             speed={45}
             logoHeight={64}
-            gap={24}
+            gap={20}
             pauseOnHover={true}
             draggable={true}
             scaleOnHover={true}
-            labels="hover"
+            labels="none"
             fadeOut={true}
             fadeOutWidth={0.12}
             ariaLabel="Enterprise clients row 2"

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/Button";
-import { AnimatedAlertCircle, AnimatedLoader } from "@/components/ui/animated-icons";
+import { AnimatedAlertCircle } from "@/components/ui/animated-icons";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ export interface AssignmentActionsProps {
   onSubmit: () => void;
   isSaving?: boolean;
   isDirty?: boolean;
+  showDirtyNotice?: boolean;
   disabled?: boolean;
   submitLabel?: string;
   cancelLabel?: string;
@@ -23,6 +24,7 @@ export function AssignmentActions({
   onSubmit,
   isSaving = false,
   isDirty = true,
+  showDirtyNotice = false,
   disabled = false,
   submitLabel = "Save Assignments",
   cancelLabel = "Cancel",
@@ -42,24 +44,29 @@ export function AssignmentActions({
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        {/* Unsaved Changes Indicator */}
-        <div className="text-xs text-[var(--color-mute)]">
-          {isDirty && (
+        {/* Unsaved Changes Indicator (hidden unless showDirtyNotice is explicitly true) */}
+        {showDirtyNotice && isDirty ? (
+          <div className="text-xs text-[var(--color-mute)]">
             <span className="text-amber-600 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs">
               <AnimatedAlertCircle size={14} className="shrink-0" />
               <span>Unsaved assignment modifications</span>
             </span>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         {/* Buttons (responsive grid on mobile, flex on desktop) */}
-        <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2 sm:ml-auto">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2",
+            showDirtyNotice && isDirty ? "sm:ml-auto" : "sm:w-full sm:justify-end"
+          )}
+        >
           <Button
             type="button"
             variant="secondary"
             onClick={onCancel}
             disabled={isSaving}
-            className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-xs sm:text-sm font-medium justify-center"
+            className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-xs sm:text-sm font-medium justify-center cursor-pointer"
           >
             {cancelLabel}
           </Button>
@@ -70,7 +77,12 @@ export function AssignmentActions({
             loading={isSaving}
             disabled={isButtonDisabled}
             onClick={onSubmit}
-            className="w-full sm:w-auto h-11 min-h-[44px] px-5 text-xs sm:text-sm font-semibold justify-center"
+            className={cn(
+              "w-full sm:w-auto h-11 min-h-[44px] px-5 text-xs sm:text-sm font-semibold justify-center transition-all",
+              isButtonDisabled
+                ? "cursor-not-allowed opacity-50 hover:cursor-not-allowed"
+                : "cursor-pointer"
+            )}
           >
             {submitLabel}
           </Button>

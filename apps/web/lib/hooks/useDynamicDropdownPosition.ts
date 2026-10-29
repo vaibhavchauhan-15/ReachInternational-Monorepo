@@ -95,8 +95,9 @@ export function useDynamicDropdownPosition({
   const updatePosition = useCallback(() => {
     if (!triggerRef.current || typeof window === "undefined") return null;
     const rect = triggerRef.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const viewportWidth = vv ? vv.width : window.innerWidth;
+    const viewportHeight = vv ? vv.height : window.innerHeight;
 
     // Safety: if trigger element is not in DOM or not visible
     if (rect.width === 0 && rect.height === 0) return null;
@@ -104,27 +105,31 @@ export function useDynamicDropdownPosition({
     const isMobile = viewportWidth < 640;
 
     // Determine target width
-    const targetWidth = matchTriggerWidth
+    const targetWidth = isMobile
+      ? Math.min(Math.max(rect.width, 280), viewportWidth - 16)
+      : matchTriggerWidth
       ? Math.min(Math.max(rect.width, minWidth), viewportWidth - 16)
-      : isMobile
-      ? Math.min(viewportWidth - 24, 340)
       : Math.min(Math.max(minWidth, 300), viewportWidth - 16);
 
     // Determine horizontal position (left)
     // On mobile viewports when matchTriggerWidth is false (e.g. date pickers), center popover in middle of screen
     let left = isMobile && !matchTriggerWidth
-      ? Math.max(12, Math.round((viewportWidth - targetWidth) / 2))
+      ? Math.max(8, Math.round((viewportWidth - targetWidth) / 2))
       : align === "right"
       ? rect.right - targetWidth
       : align === "center"
       ? Math.round(rect.left + (rect.width - targetWidth) / 2)
       : rect.left;
 
-    if (left + targetWidth > viewportWidth - 8) {
-      left = Math.max(8, viewportWidth - targetWidth - 8);
-    }
-    if (left < 8) {
-      left = 8;
+    if (isMobile) {
+      left = Math.max(8, Math.min(left, viewportWidth - targetWidth - 8));
+    } else {
+      if (left + targetWidth > viewportWidth - 8) {
+        left = Math.max(8, viewportWidth - targetWidth - 8);
+      }
+      if (left < 8) {
+        left = 8;
+      }
     }
 
     // Determine vertical available space
@@ -216,6 +221,12 @@ export function useDynamicDropdownPosition({
     window.addEventListener("resize", handleScrollOrResize);
     window.addEventListener("scroll", handleScrollOrResize, true);
 
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (vv) {
+      vv.addEventListener("resize", handleScrollOrResize);
+      vv.addEventListener("scroll", handleScrollOrResize);
+    }
+
     // Watch for size/layout shifts of trigger element (e.g. accordion transitions)
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined" && triggerRef.current) {
@@ -228,6 +239,10 @@ export function useDynamicDropdownPosition({
     return () => {
       window.removeEventListener("resize", handleScrollOrResize);
       window.removeEventListener("scroll", handleScrollOrResize, true);
+      if (vv) {
+        vv.removeEventListener("resize", handleScrollOrResize);
+        vv.removeEventListener("scroll", handleScrollOrResize);
+      }
       if (ro) {
         ro.disconnect();
       }

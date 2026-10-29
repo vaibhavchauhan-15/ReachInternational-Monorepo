@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Lock, Unlock, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 interface HMRInputsProps {
   startMeter: string;
@@ -9,8 +9,8 @@ interface HMRInputsProps {
   onStartMeterChange: (val: string) => void;
   onEndMeterChange: (val: string) => void;
   runningHours: number;
-  isStartMeterLocked: boolean;
-  onToggleLock: () => void;
+  isStartMeterLocked?: boolean;
+  onToggleLock?: () => void;
 }
 
 export function HMRInputs({
@@ -19,7 +19,7 @@ export function HMRInputs({
   onStartMeterChange,
   onEndMeterChange,
   runningHours,
-  isStartMeterLocked,
+  isStartMeterLocked = false,
   onToggleLock,
 }: HMRInputsProps) {
   const startNum = parseFloat(startMeter) || 0;
@@ -37,7 +37,7 @@ export function HMRInputs({
 
         {/* Dynamic Running Hours Chip */}
         <div
-          className={`inline-flex items-center shrink-0 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-semibold transition-colors ${
+          className={`inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors ${
             isMeterRegressed
               ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1"
               : isOver24Hours
@@ -71,24 +71,6 @@ export function HMRInputs({
               Start Meter (HMR)
               <span className="text-rose-500">*</span>
             </label>
-            <button
-              type="button"
-              onClick={onToggleLock}
-              className="text-[11px] sm:text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
-              title={isStartMeterLocked ? "Click to unlock and edit start meter" : "Click to lock start meter"}
-            >
-              {isStartMeterLocked ? (
-                <>
-                  <Lock size={12} className="h-3 w-3 text-emerald-500 shrink-0" />
-                  <span className="leading-none font-medium">Synced</span>
-                </>
-              ) : (
-                <>
-                  <Unlock size={12} className="h-3 w-3 text-amber-500 shrink-0" />
-                  <span className="leading-none font-medium">Manual</span>
-                </>
-              )}
-            </button>
           </div>
           <div className="relative">
             <input
@@ -102,18 +84,13 @@ export function HMRInputs({
               data-1p-ignore="true"
               value={startMeter}
               onChange={(e) => onStartMeterChange(e.target.value)}
-              disabled={isStartMeterLocked}
               required
-              className={`w-full min-h-[44px] h-[44px] sm:h-10 px-3 rounded-lg border font-mono text-base sm:text-sm font-semibold transition-colors ${
-                isStartMeterLocked
-                  ? "bg-[var(--color-canvas)] text-[var(--color-mute)] border-[var(--color-hairline)] cursor-not-allowed"
-                  : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] focus:outline-none focus:ring-2 focus:ring-[var(--color-link)]"
-              }`}
+              className="w-full min-h-[44px] h-[44px] sm:h-10 px-3 rounded-lg border font-mono text-base sm:text-sm font-semibold transition-colors bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] focus:outline-none focus:ring-2 focus:ring-[var(--color-link)]"
               placeholder="0.0"
             />
           </div>
           <p className="text-[10px] text-[var(--color-mute)] mt-1">
-            {isStartMeterLocked ? "Locked to last recorded meter reading." : "Manually adjusted starting meter."}
+            Auto-filled from last recorded data. Click to edit.
           </p>
         </div>
 

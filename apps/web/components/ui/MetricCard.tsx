@@ -136,10 +136,10 @@ export function MetricCard({
       whileTap={href ? { scale: 0.97 } : undefined}
     >
       <Card
-        padding="md"
+        padding="none"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`relative flex flex-col justify-between gap-2.5 group overflow-hidden h-full w-full ${
+        className={`p-3 sm:p-4 relative flex flex-col justify-between gap-1.5 sm:gap-2.5 group overflow-hidden h-full w-full ${
           href ? "cursor-pointer card-hover-system" : ""
         }`}
       >
@@ -157,16 +157,16 @@ export function MetricCard({
             {tooltipText && <InfoTooltip content={tooltipText} />}
           </div>
           <div
-            className={`flex h-7.5 w-7.5 sm:h-8 sm:w-8 items-center justify-center rounded-[var(--radius-sm)] transition-transform duration-200 group-hover:scale-105 flex-shrink-0 ${styles.iconBg}`}
+            className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-[var(--radius-sm)] transition-transform duration-200 group-hover:scale-105 flex-shrink-0 ${styles.iconBg}`}
           >
             <span className="flex items-center justify-center">
-              <IconComponent ref={iconRef as any} size={16} className="h-4 w-4 flex-shrink-0" />
+              <IconComponent ref={iconRef as any} size={15} className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             </span>
           </div>
         </div>
 
-        <div className="relative mt-1 flex items-baseline gap-2">
-          <AnimatedCounter value={value} className={`text-2xl sm:text-3xl font-bold tracking-tight tabular-nums ${styles.text}`} />
+        <div className="relative mt-0.5 sm:mt-1 flex items-baseline gap-2">
+          <AnimatedCounter value={value} className={`text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight tabular-nums ${styles.text}`} />
           {trend && (
             <span
               className={`inline-flex items-center gap-0.5 text-xs font-semibold ${

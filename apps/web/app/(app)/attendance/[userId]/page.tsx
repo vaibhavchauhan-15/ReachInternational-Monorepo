@@ -68,7 +68,7 @@ export default async function AttendanceDetailPage({
           action={
             <Link
               href="/attendance"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm bg-[var(--color-ink)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-semibold hover:opacity-90 transition-opacity"
             >
               Back to Attendance
             </Link>

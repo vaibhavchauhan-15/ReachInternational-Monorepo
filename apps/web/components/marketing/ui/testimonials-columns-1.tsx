@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'motion/react'
 import { cn } from '@/lib/utils'
+import { User } from 'lucide-react'
 
 export interface Testimonial {
   text: string
@@ -25,26 +26,27 @@ interface TestimonialsColumnProps {
 function AvatarWithFallback({
   src,
   alt,
-  initials,
+  initials: _initials,
 }: {
   src?: string
   alt: string
-  initials: string
+  initials?: string
 }) {
   const [hasError, setHasError] = useState(false)
 
   if (!src || hasError) {
     return (
       <div
-        className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none shadow-xs"
+        className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 select-none shadow-2xs border transition-transform duration-200 group-hover:scale-105"
         style={{
-          background: 'linear-gradient(135deg, var(--brand-blue, #008CFC) 0%, #005aa3 100%)',
-          color: '#ffffff',
-          border: '1.5px solid var(--border-subtle)',
+          backgroundColor: 'var(--surface-tint)',
+          borderColor: 'var(--border-subtle)',
+          color: 'var(--brand-blue, #0284c7)',
         }}
-        aria-label={alt}
+        aria-label={`Avatar placeholder for ${alt}`}
+        title={alt}
       >
-        {initials}
+        <User className="w-5 h-5 opacity-90" strokeWidth={1.75} />
       </div>
     )
   }

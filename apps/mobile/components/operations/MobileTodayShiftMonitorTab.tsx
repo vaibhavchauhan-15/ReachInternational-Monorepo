@@ -67,7 +67,7 @@ import {
 } from '../ui/icon';
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { MobileTodayShiftCard } from './MobileTodayShiftCard';
-import { isManagerOrAbove } from '@reachinternational/permissions';
+import { isManagerOrAbove, isSupervisorOrAbove } from '@reachinternational/permissions';
 import { getISTDateString, formatDate, addDaysToDateStr } from '@reachinternational/utils';
 import { useAuth } from '../../lib/auth/useAuth';
 import { haptics } from '../../lib/haptics';
@@ -115,7 +115,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const { theme, isDark } = useTheme();
   const { role: authRole, userProfile } = useAuth();
   const effectiveRole = (userRole || authRole || userProfile?.role || '').toLowerCase().replace(/[\s-]/g, '_');
-  const canEnterLog = isManagerOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager'].includes(effectiveRole);
+  const canEnterLog = isSupervisorOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager', 'supervisor'].includes(effectiveRole);
 
   const todayStr = useMemo(() => getISTDateString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
@@ -1096,7 +1096,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
                   </View>
                   <View style={styles.sheetActionTextCol}>
                     <Text variant="body" weight="semibold" style={{ color: isDark ? '#7dd3fc' : '#0284c7' }}>
-                      Enter Shift Log
+                      Enter Shift
                     </Text>
                     <Text variant="caption" style={{ color: theme.colors.mute }}>
                       Record start & end HMR meters for this shift

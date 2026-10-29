@@ -66,7 +66,7 @@ export const appNavItems: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: AnimatedHome, roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"] },
   { href: "/machines", label: "Machines", icon: AnimatedWrench, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
   { href: "/operations", label: "Operations", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
-  { href: "/clients", label: "Clients", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager"] },
+  { href: "/clients", label: "Clients", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor"] },
   { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "manager", "hr", "supervisor"] },
   { href: "/audit", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin", "manager"] },
 ];

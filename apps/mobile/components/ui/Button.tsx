@@ -386,7 +386,7 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
           className={cn(
             buttonVariants({ variant: effectiveVariant, size: effectiveSize, shape: effectiveShape }),
             fullWidth && 'w-full',
-            isDisabled && 'pointer-events-none',
+            isDisabled && 'opacity-50',
             className
           )}
           style={

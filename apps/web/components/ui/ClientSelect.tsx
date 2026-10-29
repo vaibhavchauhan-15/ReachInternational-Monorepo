@@ -7,7 +7,7 @@ import {
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Trash2 } from "lucide-react";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface ClientSelectItem {
@@ -156,10 +156,18 @@ export function ClientSelect({
     setSearchQuery("");
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClear = (e?: React.SyntheticEvent) => {
+    if (e && "stopPropagation" in e) {
+      e.stopPropagation();
+    }
     onChange(allowAll ? "all" : "", null);
     setSearchQuery("");
+    // After delete show clients dropdown as requested
+    updatePosition();
+    setIsOpen(true);
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -218,35 +226,39 @@ export function ClientSelect({
               </span>
             </span>
           ) : selectedClient ? (
-            <span className="truncate flex items-center gap-1.5 min-w-0">
-              <span className="truncate font-bold text-[var(--color-ink)] shrink-0 max-w-[55%] sm:max-w-[60%]">
+            <div className="min-w-0 pr-1 flex-1 text-left flex flex-col justify-center">
+              <span className="truncate font-bold text-[var(--color-ink)] text-xs sm:text-[13px]">
                 {clientDisplayName}
               </span>
               {(selectedClient.client_id || selectedClient.code) && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-sky-600 dark:text-sky-400 font-semibold border border-[var(--color-hairline)] shrink-0">
+                <span className="text-[10px] font-mono text-sky-600 dark:text-sky-400 font-semibold truncate leading-tight">
                   {selectedClient.client_id || selectedClient.code}
+                  {clientLocationStr ? ` • ${clientLocationStr}` : ""}
                 </span>
               )}
-              {clientLocationStr && (
-                <span className="text-[11px] sm:text-xs text-[var(--color-mute)] font-normal truncate">
-                  • {clientLocationStr}
-                </span>
-              )}
-            </span>
+            </div>
           ) : (
             <span className="text-[var(--color-mute)] font-normal">{placeholder}</span>
           )}
         </span>
 
         <span className="flex items-center gap-1.5 shrink-0">
-          {clearable && selectedClient && (
+          {clearable && (selectedClient || (Boolean(value) && value !== "all")) && (
             <span
               role="button"
               tabIndex={0}
+              title="Remove assigned client"
+              aria-label="Remove assigned client"
               onClick={handleClear}
-              className="p-1 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleClear(e);
+                }
+              }}
+              className="p-1.5 rounded-md hover:bg-rose-500/10 text-[var(--color-mute)] hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer touch-manipulation flex items-center justify-center min-w-[30px] min-h-[30px]"
             >
-              <AnimatedX size={12} />
+              <Trash2 size={14} className="stroke-[2.25]" />
             </span>
           )}
           <ChevronDown
@@ -386,21 +398,21 @@ export function ClientSelect({
                         }`}
                       >
                         <div className="min-w-0 pr-2 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-[var(--color-ink)] truncate text-xs sm:text-[13px]">
-                              {cName}
-                            </span>
+                          <div className="font-bold text-[var(--color-ink)] truncate text-xs sm:text-[13px]">
+                            {cName}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
                             {(c.client_id || c.code) && (
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-sky-600 dark:text-sky-400 font-semibold border border-[var(--color-hairline)] shrink-0">
+                              <span className="font-semibold text-sky-600 dark:text-sky-400">
                                 {c.client_id || c.code}
                               </span>
                             )}
+                            {cLoc && (
+                              <span className="text-[var(--color-mute)] truncate">
+                                {(c.client_id || c.code) ? "• " : ""}{cLoc}
+                              </span>
+                            )}
                           </div>
-                          {cLoc && (
-                            <div className="text-[11px] text-[var(--color-mute)] font-normal truncate mt-0.5">
-                              {cLoc}
-                            </div>
-                          )}
                         </div>
                         {isSelected && (
                           <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />

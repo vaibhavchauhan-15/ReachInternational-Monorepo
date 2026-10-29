@@ -1125,7 +1125,7 @@ export function UserDetailClient({
                 onClick={() => setActiveTab(tab.key as UserDetailTabKey)}
                 className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
                   isActive
-                    ? "bg-[var(--color-ink)] text-[var(--color-on-primary)] shadow-xs ring-1 ring-[var(--color-ink)]"
+                    ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-xs ring-1 ring-[var(--color-ink)]"
                     : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98"
                 }`}
               >
@@ -1532,7 +1532,7 @@ export function UserDetailClient({
 
             <Link
               href={`/attendance/${user.id}?month=2026-09`}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-md bg-[var(--color-ink)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 active:scale-98 transition-all shrink-0 cursor-pointer shadow-xs"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-md bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-semibold hover:opacity-90 active:scale-98 transition-all shrink-0 cursor-pointer shadow-xs"
             >
               <span>View Full Attendance Ledger</span>
               <ExternalLink className="h-3.5 w-3.5" />

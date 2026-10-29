@@ -19,15 +19,10 @@ import { HighlightText } from '../ui/HighlightText';
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  Clock,
   UserCheck,
   AlertCircle,
-  Truck,
-  Building2,
   Wrench,
-  Gauge,
-  MapPin,
-  MoreVertical,
+  Edit2,
   UserPlus,
 } from '../ui/icon';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
@@ -39,7 +34,7 @@ export interface MobileTodayShiftCardProps {
   canEnterLog: boolean;
   onInitiateAssign: (row: TodayShiftMonitorRow) => void;
   onEnterLog: (row: TodayShiftMonitorRow) => void;
-  onOpenMenu: (row: TodayShiftMonitorRow) => void;
+  onOpenMenu?: (row: TodayShiftMonitorRow) => void;
 }
 
 function formatTime(t: string | null | undefined): string {
@@ -84,6 +79,8 @@ function areShiftCardPropsEqual(
 
   return (
     pr.machine_id === nr.machine_id &&
+    pr.machine_model === nr.machine_model &&
+    pr.machine_serial_number === nr.machine_serial_number &&
     pr.operator_id === nr.operator_id &&
     pr.shift_code === nr.shift_code &&
     pr.status === nr.status &&
@@ -110,7 +107,6 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
   canEnterLog,
   onInitiateAssign,
   onEnterLog,
-  onOpenMenu,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -159,7 +155,7 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
       ]}
       accessibilityLabel={`${row.operator_name || 'Unassigned Machine'}, ${row.shift_name || row.shift_code}, Status: ${row.status}`}
     >
-      {/* 1. CARD HEADER: Operator Name / Alert Heading (Left) + Status Badge & 3-Dot Menu (Right) */}
+      {/* 1. CARD HEADER: Operator Name / Alert Heading (Left) + Status Badge (Right) */}
       <View style={styles.cardHeader}>
         <View style={styles.headerLeftCol}>
           {isUnassigned ? (
@@ -197,7 +193,7 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
           )}
         </View>
 
-        {/* Right Header: Shift Log Status Badge + 3-Dot Action Menu */}
+        {/* Right Header: Shift Log Status Badge */}
         <View style={styles.cardHeaderRight}>
           <Badge
             status={
@@ -225,90 +221,81 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
             }
             size="md"
           />
-
-          {/* 3-Dot Action Menu Button (Gated by RBAC: only authorized roles) */}
-          {canEnterLog && !isUnassigned && (
-            <Pressable
-              variant="outline"
-              haptic="tap"
-              hitSlopToMin48
-              onPress={() => onOpenMenu(row)}
-              style={[
-                styles.cardMoreBtn,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ]}
-              accessibilityLabel="Shift actions"
-            >
-              <MoreVertical size={14} color={theme.colors.mute} />
-            </Pressable>
-          )}
         </View>
       </View>
 
-      {/* 2. OPERATOR SUBTITLE ROW (EMP ID & Phone - 100% Web Parity) */}
-      {!isUnassigned && (row.operator_employee_id || row.operator_phone) ? (
+      {/* 2. OPERATOR SUBTITLE ROW (EMP ID - 100% Web Parity) */}
+      {!isUnassigned && row.operator_employee_id ? (
         <View style={styles.operatorSubtitleRow}>
-          {row.operator_employee_id ? (
-            <HighlightText
-              variant="caption"
-              weight="semibold"
-              text={row.operator_employee_id}
-              query={searchQuery}
-              style={{ color: isDark ? '#7dd3fc' : '#0369a1' }}
-            />
-          ) : null}
-          {row.operator_employee_id && row.operator_phone ? (
-            <Text variant="caption" style={{ color: theme.colors.mute }}>
-              {' '}•{' '}
-            </Text>
-          ) : null}
-          {row.operator_phone ? (
-            <HighlightText
-              variant="caption"
-              text={row.operator_phone}
-              query={searchQuery}
-              style={{ color: theme.colors.mute }}
-            />
-          ) : null}
+          <HighlightText
+            variant="caption"
+            weight="semibold"
+            text={row.operator_employee_id}
+            query={searchQuery}
+            style={{ color: isDark ? '#7dd3fc' : '#0369a1' }}
+          />
         </View>
       ) : null}
 
-      {/* 3. DETAILS GRID (Clean 1px Hairline Rows - 100% Web Parity) */}
+      {/* 3. DETAILS GRID: All values shifted to the left, well formatted (100% Web Parity) */}
       <View style={[styles.detailsGrid, { borderTopColor: theme.colors.hairline }]}>
-        {/* Row 1: Machine */}
+        {/* Row 1: Machine (Model + Serial No) */}
         <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
-          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-            Machine:
-          </Text>
-          <View style={styles.detailValueRight}>
+          <View style={styles.labelCol}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              Machine:
+            </Text>
+          </View>
+          <View style={styles.valueCol}>
             <HighlightText
-              variant="mono"
-              weight="bold"
-              text={row.machine_code}
+              variant="caption"
+              weight="semibold"
+              text={row.machine_model || row.machine_code || '—'}
               query={searchQuery}
               style={{ color: theme.colors.ink }}
+              numberOfLines={1}
             />
-            {row.machine_model ? (
-              <Text variant="micro" style={{ color: theme.colors.mute }}>
-                {' '}(<HighlightText variant="micro" text={row.machine_model} query={searchQuery} style={{ color: theme.colors.mute }} />)
-              </Text>
-            ) : null}
+            {(() => {
+              const serialText =
+                row.machine_serial_number ||
+                (row.machine_model && row.machine_code !== row.machine_model ? row.machine_code : null);
+              if (!serialText) return null;
+              const hasPrefix =
+                serialText.trim().toUpperCase().startsWith('SN') ||
+                serialText.trim().toUpperCase().startsWith('S/N');
+              return (
+                <Text variant="micro" style={{ color: theme.colors.mute }}>
+                  ({hasPrefix ? '' : 'SN: '}
+                  <HighlightText
+                    variant="mono"
+                    weight="medium"
+                    text={serialText}
+                    query={searchQuery}
+                    style={{ color: theme.colors.mute }}
+                  />
+                  )
+                </Text>
+              );
+            })()}
           </View>
         </View>
 
         {/* Row 2: Shift */}
         <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
-          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-            Shift:
-          </Text>
-          <View style={styles.detailValueRight}>
-            <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-              {row.shift_code || '—'}
+          <View style={styles.labelCol}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              Shift:
             </Text>
-            {(row.shift_start || row.shift_end) ? (
+          </View>
+          <View style={styles.valueCol}>
+            <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+              {row.shift_code
+                ? row.shift_code.trim().toUpperCase().startsWith('SHIFT')
+                  ? row.shift_code.trim()
+                  : `Shift ${row.shift_code.trim()}`
+                : '—'}
+            </Text>
+            {row.shift_start || row.shift_end ? (
               <Text variant="micro" style={{ color: theme.colors.mute }}>
                 {' '}({formatTime(row.shift_start)} – {formatTime(row.shift_end)})
               </Text>
@@ -316,44 +303,56 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
           </View>
         </View>
 
-        {/* Row 3: HMR (Hours) */}
+        {/* Row 4: HMR (Hours) */}
         <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
-          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-            HMR (Hours):
-          </Text>
-          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-            {formatMeterText(row)}
-          </Text>
+          <View style={styles.labelCol}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              HMR (Hours):
+            </Text>
+          </View>
+          <View style={styles.valueCol}>
+            <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+              {formatMeterText(row)}
+            </Text>
+          </View>
         </View>
 
-        {/* Row 4: Client */}
+        {/* Row 5: Client */}
         <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
-          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-            Client:
-          </Text>
-          <HighlightText
-            variant="caption"
-            weight="medium"
-            text={row.client_name || '—'}
-            query={searchQuery}
-            style={{ color: theme.colors.ink }}
-            numberOfLines={1}
-          />
+          <View style={styles.labelCol}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              Client:
+            </Text>
+          </View>
+          <View style={styles.valueCol}>
+            <HighlightText
+              variant="caption"
+              weight="medium"
+              text={row.client_name || '—'}
+              query={searchQuery}
+              style={{ color: theme.colors.ink }}
+              numberOfLines={1}
+            />
+          </View>
         </View>
 
-        {/* Row 5: Site */}
+        {/* Row 6: Site */}
         <View style={styles.detailRowLast}>
-          <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
-            Site:
-          </Text>
-          <HighlightText
-            variant="caption"
-            weight="medium"
-            text={row.client_city || row.site_name || '—'}
-            query={searchQuery}
-            style={{ color: theme.colors.ink }}
-            numberOfLines={1}
-          />
+          <View style={styles.labelCol}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
+              Site:
+            </Text>
+          </View>
+          <View style={styles.valueCol}>
+            <HighlightText
+              variant="caption"
+              weight="medium"
+              text={row.client_city || row.site_name || '—'}
+              query={searchQuery}
+              style={{ color: theme.colors.ink }}
+              numberOfLines={1}
+            />
+          </View>
         </View>
       </View>
 
@@ -378,15 +377,55 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
         </View>
       ) : null}
 
-      {/* 5. ACTION BUTTON: Assign Operator (Unassigned only, Min 44px touch target) */}
-      {isUnassigned ? (
+      {/* 5. ACTION BUTTON: Enter/Edit Shift Log below the card (Min 44px touch target) */}
+      {!isUnassigned && canEnterLog ? (
+        <Pressable
+          variant={isEntered ? 'outline' : 'primary'}
+          haptic="tap"
+          hitSlopToMin48
+          onPress={() => onEnterLog(row)}
+          style={[
+            styles.actionRowBtn,
+            {
+              backgroundColor: isEntered
+                ? isDark
+                  ? '#082f49'
+                  : '#f0f9ff'
+                : '#0284c7',
+              borderColor: isEntered
+                ? isDark
+                  ? '#0284c7'
+                  : '#7dd3fc'
+                : '#0284c7',
+            },
+          ]}
+        >
+          <Edit2
+            size={14}
+            color={isEntered ? (isDark ? '#38bdf8' : '#0284c7') : '#ffffff'}
+          />
+          <Text
+            variant="caption"
+            weight="semibold"
+            style={{
+              color: isEntered
+                ? isDark
+                  ? '#38bdf8'
+                  : '#0284c7'
+                : '#ffffff',
+            }}
+          >
+            {isEntered ? 'Edit Shift' : 'Enter Shift'}
+          </Text>
+        </Pressable>
+      ) : isUnassigned ? (
         <Pressable
           variant="primary"
           haptic="tap"
           hitSlopToMin48
           onPress={() => onInitiateAssign(row)}
           style={[
-            styles.assignRowBtn,
+            styles.actionRowBtn,
             {
               backgroundColor: isBreakdown
                 ? '#dc2626'
@@ -403,8 +442,8 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
           )}
           <Text variant="caption" weight="semibold" style={{ color: '#ffffff' }}>
             {isBreakdown || isMaintenance
-              ? `Activate & Assign ${row.machine_code}`
-              : `Assign Operator to ${row.machine_code}`}
+              ? `Activate & Assign ${row.machine_model || row.machine_code}`
+              : `Assign Operator to ${row.machine_model || row.machine_code}`}
           </Text>
         </Pressable>
       ) : null}
@@ -461,7 +500,6 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'space-between',
     paddingVertical: 3,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
@@ -469,16 +507,20 @@ const styles = StyleSheet.create({
   detailRowLast: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'space-between',
     paddingVertical: 3,
     gap: 8,
   },
-  detailValueRight: {
+  labelCol: {
+    width: 90,
+    flexShrink: 0,
+  },
+  valueCol: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'flex-end',
-    flexShrink: 1,
     flexWrap: 'wrap',
+    gap: 4,
   },
   attributionRow: {
     flexDirection: 'row',
@@ -487,25 +529,16 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingHorizontal: 2,
   },
-  assignRowBtn: {
+  actionRowBtn: {
     height: 44,
     minHeight: 44,
     borderRadius: radiusNumeric.md,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 14,
     marginTop: 4,
-  },
-  cardMoreBtn: {
-    width: 28,
-    height: 28,
-    minWidth: 28,
-    minHeight: 28,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

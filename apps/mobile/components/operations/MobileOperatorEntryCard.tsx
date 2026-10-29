@@ -1655,7 +1655,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
                     color: isDark ? '#fb7185' : '#e11d48',
                   }}
                 >
-                  Duration Window: {breakdownStartTime} - {breakdownEndTime} ({breakdownStats.durationDecimalHours} hrs)
+                  Duration: {breakdownStartTime} - {breakdownEndTime} ({breakdownStats.durationDecimalHours} hrs)
                 </Text>
               </View>
             )}
@@ -1669,7 +1669,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
                 numberOfLines={2}
                 value={breakdownReason}
                 onChangeText={setBreakdownReason}
-                placeholder="e.g. Pipe leak, repair note..."
+                placeholder="e.g. Hydraulic pipe leakage replaced..."
                 placeholderTextColor={theme.colors.mute}
                 style={[
                   styles.reasonInput,

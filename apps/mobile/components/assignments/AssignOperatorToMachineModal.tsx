@@ -246,9 +246,9 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
   }, [isAddingOperator, nextAvailableShift]);
 
   // Candidate operators list with conflict annotations
+  // Allows the same operator to be assigned to up to 3 shifts on each machine
   const candidateItems = useMemo((): AssignmentCandidateItem[] => {
     const q = operatorSearchQuery.trim().toLowerCase();
-    const assignedIds = new Set(roster.map((r) => r.operatorId));
 
     return modalData.operators
       .filter((op) => {
@@ -258,19 +258,27 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
         return Boolean(matchName || matchEmp);
       })
       .map((op) => {
-        const isAssignedOnThis = assignedIds.has(op.id);
+        const shiftsOnThis = roster.filter((r) => r.operatorId === op.id).length;
         const otherAssignments = (modalData.fleetAssignments || []).filter(
           (a) => a.operator_id === op.id && a.machine_id !== machineId && a.is_active !== false
         );
+        const totalShifts = shiftsOnThis + otherAssignments.length;
+        const isMaxThisMachine = shiftsOnThis >= 3;
+        const isMaxTotal = totalShifts >= 3;
+        const disabled = isMaxThisMachine || isMaxTotal;
 
         let conflictNotice: string | null = null;
-        let disabled = isAssignedOnThis;
+        let statusBadge: string | null = null;
 
-        if (otherAssignments.length >= 3) {
+        if (totalShifts >= 3 || otherAssignments.length >= 3) {
           conflictNotice = 'Max 3 shifts (24h) reached fleet-wide';
-          disabled = true;
+          statusBadge = '3/3 Max';
+        } else if (shiftsOnThis > 0) {
+          conflictNotice = `${shiftsOnThis}/3 shifts on this machine`;
+          statusBadge = `${shiftsOnThis}/3`;
         } else if (otherAssignments.length > 0) {
           conflictNotice = `Assigned on ${otherAssignments.length} other unit${otherAssignments.length > 1 ? 's' : ''}`;
+          statusBadge = `${otherAssignments.length}/3 other`;
         }
 
         return {
@@ -278,11 +286,16 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
           title: op.full_name,
           code: op.employee_id || null,
           subtitle: conflictNotice || 'Eligible Operator',
-          entityType: 'user',
-          isAlreadyAssigned: isAssignedOnThis,
+          statusBadge,
+          entityType: 'user' as const,
+          isAlreadyAssigned: isMaxThisMachine,
           disabled,
           conflictNotice,
         };
+      })
+      .sort((a, b) => {
+        if (a.disabled !== b.disabled) return a.disabled ? 1 : -1;
+        return (a.title || '').localeCompare(b.title || '');
       });
   }, [modalData.operators, modalData.fleetAssignments, operatorSearchQuery, roster, machineId]);
 
@@ -300,8 +313,18 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
       return `Shift ${selectedShiftCode} is already assigned on this equipment. Select a distinct shift.`;
     }
 
-    // Check fleet-wide interval overlap for this operator
     const candRanges = shiftToMinuteRanges(targetShift.start_time, targetShift.end_time);
+
+    // Check overlap with this operator's existing shifts on THIS machine
+    const existingOnThis = roster.filter((r) => r.operatorId === selectedCandidateId);
+    for (const ex of existingOnThis) {
+      const exRanges = shiftToMinuteRanges(ex.shiftStartTime, ex.shiftEndTime);
+      if (doRangesOverlap(candRanges, exRanges)) {
+        return `Shift interval overlaps with operator's existing Shift ${ex.shiftCode} on this machine.`;
+      }
+    }
+
+    // Check fleet-wide interval overlap for this operator on other machines
     const otherActive = (modalData.fleetAssignments || []).filter(
       (a) => a.operator_id === selectedCandidateId && a.machine_id !== machineId && a.is_active !== false
     );
@@ -315,7 +338,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
     }
 
     return null;
-  }, [selectedCandidateId, selectedShiftCode, clientShifts, occupiedShiftCodes, modalData.fleetAssignments, machineId]);
+  }, [selectedCandidateId, selectedShiftCode, clientShifts, occupiedShiftCodes, roster, modalData.fleetAssignments, machineId]);
 
   // Add operator to roster
   const handleAddOperatorToRoster = useCallback(() => {
@@ -324,6 +347,21 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
       toast('warning', 'Capacity Reached', 'Maximum 3 operators can be assigned to a single machine (24h coverage).');
       return;
     }
+
+    const shiftsOnThis = roster.filter((r) => r.operatorId === selectedCandidateId).length;
+    if (shiftsOnThis >= 3) {
+      toast('warning', 'Limit Reached', 'Operator is already assigned to all 3 shifts on this machine.');
+      return;
+    }
+
+    const otherActive = (modalData.fleetAssignments || []).filter(
+      (a) => a.operator_id === selectedCandidateId && a.machine_id !== machineId && a.is_active !== false
+    );
+    if (shiftsOnThis + otherActive.length >= 3) {
+      toast('warning', 'Limit Reached', 'Operator has reached maximum 3 shifts (24h) across the fleet.');
+      return;
+    }
+
     if (shiftConflictWarning) {
       haptics.reject();
       toast('error', 'Shift Conflict', shiftConflictWarning);
@@ -351,7 +389,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
     setSelectedCandidateId('');
     setIsAddingOperator(false);
     setSubmitError(null);
-  }, [selectedCandidateId, selectedShiftCode, roster.length, shiftConflictWarning, modalData.operators, clientShifts, toast]);
+  }, [selectedCandidateId, selectedShiftCode, roster, shiftConflictWarning, modalData.operators, modalData.fleetAssignments, clientShifts, machineId, toast]);
 
   // Remove operator from roster
   const handleRemoveOperatorFromRoster = useCallback((item: SelectedAssignmentSummaryItem) => {
@@ -540,7 +578,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
           shiftCode: r.shiftCode,
           shiftStartTime: r.shiftStartTime,
           shiftEndTime: r.shiftEndTime,
-          entityType: 'user',
+          entityType: 'user' as const,
           assignmentId: r.assignmentId,
         }))}
         onRemove={handleRemoveOperatorFromRoster}
@@ -562,15 +600,15 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
                 styles.addOperatorTrigger,
                 {
                   backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
+                  borderColor: isDark ? '#333333' : '#d4d4d8',
                 },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Add another operator to this machine"
             >
-              <Plus size={16} color={theme.colors.primary} />
-              <Text variant="body" weight="semibold" style={{ color: theme.colors.primary }}>
-                + Assign Operator to Shift
+              <Plus size={14} color={theme.colors.primary} />
+              <Text variant="small" weight="medium" style={{ color: theme.colors.primary }}>
+                Assign Operator to Shift
               </Text>
             </Pressable>
           ) : (
@@ -579,7 +617,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
                 styles.accordionCard,
                 {
                   backgroundColor: theme.colors.canvasElevated,
-                  borderColor: theme.colors.hairline,
+                  borderColor: isDark ? '#333333' : '#d4d4d8',
                 },
               ]}
             >
@@ -667,14 +705,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    minHeight: 48,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    minHeight: 44,
     gap: spacingNumeric.sm,
   },
   accordionCard: {
     borderRadius: radiusNumeric.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
   },

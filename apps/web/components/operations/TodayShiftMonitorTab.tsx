@@ -17,15 +17,21 @@ import dynamic from "next/dynamic";
 import { TodayShiftMonitorKPIStrip } from "./TodayShiftMonitorKPIStrip";
 import { TodayShiftMonitorCard } from "./TodayShiftMonitorCard";
 
+import type {
+  AssignOperatorModalProps,
+  AssignPersonnelSuccessResult,
+} from "./modals/AssignOperatorModal";
+
 const AssistedShiftEntryModal = dynamic(
   () => import("./AssistedShiftEntryModal").then((mod) => mod.AssistedShiftEntryModal),
   { ssr: false }
 );
 
-const AssignOperatorModal = dynamic(
+const AssignOperatorModal = dynamic<AssignOperatorModalProps>(
   () => import("./modals/AssignOperatorModal").then((mod) => mod.AssignOperatorModal),
   { ssr: false }
 );
+
 
 const MachineStatusWarningDialog = dynamic(
   () =>
@@ -117,7 +123,7 @@ export function TodayShiftMonitorTab({
 
   // Permission Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs
   const effectiveRole = userRole || user?.role || "";
-  const canEnterLog = ["super_admin", "admin", "manager"].includes(effectiveRole);
+  const canEnterLog = ["super_admin", "admin", "manager", "supervisor"].includes(effectiveRole);
 
   const fetchData = useCallback(
     async (dateToFetch?: string, search?: string, bypassCache: boolean = true) => {
@@ -261,10 +267,10 @@ export function TodayShiftMonitorTab({
             prev.map((r) =>
               r.machine_id === machineId
                 ? {
-                    ...r,
-                    machine_health_status: "active",
-                    machine_status: r.client_id ? "rented" : "active",
-                  }
+                  ...r,
+                  machine_health_status: "active",
+                  machine_status: r.client_id ? "rented" : "active",
+                }
                 : r
             )
           );
@@ -406,23 +412,23 @@ export function TodayShiftMonitorTab({
       { value: "unassigned", label: "Unassigned", dotColor: "bg-rose-500", count: summary.unassigned },
       ...(summary.breakdown > 0
         ? [
-            {
-              value: "breakdown",
-              label: "Breakdown",
-              dotColor: "bg-rose-600",
-              count: summary.breakdown,
-            },
-          ]
+          {
+            value: "breakdown",
+            label: "Breakdown",
+            dotColor: "bg-rose-600",
+            count: summary.breakdown,
+          },
+        ]
         : []),
       ...(summary.maintenance > 0
         ? [
-            {
-              value: "maintenance",
-              label: "Maintenance",
-              dotColor: "bg-amber-600",
-              count: summary.maintenance,
-            },
-          ]
+          {
+            value: "maintenance",
+            label: "Maintenance",
+            dotColor: "bg-amber-600",
+            count: summary.maintenance,
+          },
+        ]
         : []),
     ],
     [summary]
@@ -725,309 +731,296 @@ export function TodayShiftMonitorTab({
         <>
           {/* Desktop Table */}
           <div className="hidden sm:block rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Operator</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Machine</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Client</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Shift</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Timing</th>
-              <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Status</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Entered By</th>
-              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">HMR</th>
-              <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
-                  No matching shifts found
-                </td>
-              </tr>
-            ) : (
-              filtered.map((row, idx) => {
-                const isUnassigned = row.status === "unassigned" || !row.operator_id;
-                const isEntered = row.status === "entered";
-                const isBreakdown = row.machine_health_status === "breakdown";
-                const isMaintenance =
-                  row.machine_health_status === "under_maintenance" ||
-                  row.machine_status === "under_maintenance";
-
-                return (
-                  <tr
-                    key={row.operator_id ? `${row.operator_id}-${row.machine_id}-${row.shift_code}` : `unassigned-${row.machine_id}-${idx}`}
-                    onClick={() => {
-                      if (isUnassigned) handleInitiateAssign(row);
-                    }}
-                    className={`border-b border-[var(--color-hairline)] last:border-b-0 transition-colors ${
-                      isBreakdown
-                        ? "bg-rose-500/[0.04] hover:bg-rose-500/10 cursor-pointer"
-                        : isMaintenance
-                        ? "bg-amber-500/[0.04] hover:bg-amber-500/10 cursor-pointer"
-                        : isUnassigned
-                        ? "bg-amber-500/[0.03] hover:bg-amber-500/10 cursor-pointer"
-                        : "hover:bg-[var(--color-canvas)]/50"
-                    }`}
-                  >
-                    <td className="px-3 py-2 text-muted-foreground">{idx + 1}</td>
-                    {/* Operator: name + phone below */}
-                    <td className="px-3 py-2">
-                      {isUnassigned ? (
-                        <div>
-                          {isBreakdown ? (
-                            <div className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
-                              <AlertCircle size={12} />
-                              <span>Unassigned (Breakdown)</span>
-                            </div>
-                          ) : isMaintenance ? (
-                            <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
-                              <Wrench size={12} />
-                              <span>Unassigned (Maintenance)</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
-                              <AlertCircle size={12} />
-                              <span>Unassigned</span>
-                            </div>
-                          )}
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {isBreakdown
-                              ? "Machine in breakdown · Click to activate"
-                              : isMaintenance
-                              ? "Under maintenance · Click to activate"
-                              : "Click to assign operator"}
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="font-medium text-[var(--color-ink)]"><Highlight text={row.operator_name} query={searchQuery} /></div>
-                          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
-                            {row.operator_employee_id && (
-                              <span className="font-semibold text-sky-700 dark:text-sky-300"><Highlight text={row.operator_employee_id} query={searchQuery} /></span>
-                            )}
-                            {row.operator_employee_id && row.operator_phone && <span>·</span>}
-                            {row.operator_phone && (
-                              <span><Highlight text={row.operator_phone} query={searchQuery} /></span>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </td>
-                    {/* Machine: serial number + model & machine_id below — clickable to preselect */}
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleInitiateAssign(row);
-                        }}
-                        className="text-left group cursor-pointer"
-                        title={
-                          isBreakdown || isMaintenance
-                            ? `Reactivate & assign ${row.machine_code}`
-                            : `Assign personnel to ${row.machine_code}`
-                        }
-                      >
-                        <div className="font-mono text-[11px] font-medium text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
-                          <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
-                        </div>
-                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                          {row.machine_model && <span><Highlight text={row.machine_model} query={searchQuery} /> · </span>}
-                          <Highlight text={row.machine_code} query={searchQuery} />
-                        </div>
-                        {isBreakdown ? (
-                          <Badge variant="error" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
-                            Breakdown
-                          </Badge>
-                        ) : isMaintenance ? (
-                          <Badge variant="warning" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
-                            Maintenance
-                          </Badge>
-                        ) : null}
-                      </button>
-                    </td>
-                    {/* Client: name + client_id below */}
-                    <td className="px-3 py-2 max-w-[160px]">
-                      <div className="text-[var(--color-ink)] truncate"><Highlight text={row.client_name} query={searchQuery} /></div>
-                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate flex items-center gap-1">
-                        {(row.client_code || row.client_id) && (
-                          <span><Highlight text={row.client_code || row.client_id} query={searchQuery} /></span>
-                        )}
-                        {(row.client_code || row.client_id) && (row.client_city || row.site_name) && <span>·</span>}
-                        {(row.client_city || row.site_name) && (
-                          <span className="text-[var(--color-ink)] font-sans font-medium"><Highlight text={row.client_city || row.site_name} query={searchQuery} /></span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {isUnassigned ? (
-                        <span className="text-muted-foreground/60 text-[10px]">—</span>
-                      ) : (
-                        <div className="flex flex-col">
-                          <Badge variant="info" className="text-[10px] px-1.5 py-0.5 font-mono w-fit">
-                            Shift {row.shift_code}
-                          </Badge>
-                          {row.shift_name && (
-                            <span
-                              className="text-[10px] text-muted-foreground truncate max-w-[125px] mt-0.5"
-                              title={row.shift_name}
-                            >
-                              {row.shift_name.replace(new RegExp(`^shift\\s*${row.shift_code}\\s*[:\\-•]?\\s*\\(?`, "i"), "").replace(/\)$/, "").trim() || row.shift_name}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground text-[10px]">
-                      {isUnassigned ? "—" : `${formatTime(row.shift_start)} – ${formatTime(row.shift_end)}`}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <Badge
-                        variant={
-                          isEntered
-                            ? "success"
-                            : isBreakdown
-                            ? "error"
-                            : isMaintenance
-                            ? "warning"
-                            : isUnassigned
-                            ? "warning"
-                            : "warning"
-                        }
-                        dot
-                        className={`text-[10px] px-1.5 py-0.5 ${
-                          isBreakdown
-                            ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                            : isMaintenance
-                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                            : isUnassigned
-                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                            : ""
-                        }`}
-                      >
-                        {isEntered
-                          ? "Entered"
-                          : isBreakdown
-                          ? "Breakdown"
-                          : isMaintenance
-                          ? "Maintenance"
-                          : isUnassigned
-                          ? "Unassigned"
-                          : "Pending"}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      {isEntered && row.entered_by_name ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">{row.entered_by_name}</span>
-                          {row.entry_source && row.entry_source !== "operator" && (
-                            <Badge variant="info" className="text-[9px] px-1 py-0">
-                              {row.entry_source}
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground/50">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                      {row.start_meter != null && row.end_meter != null
-                        ? `${row.start_meter} → ${row.end_meter}`
-                        : row.start_meter != null
-                        ? `${row.start_meter} → —`
-                        : row.current_meter != null
-                        ? `${row.current_meter}`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {isUnassigned ? (
-                        <Button
-                          variant={isBreakdown ? "outline" : "primary"}
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleInitiateAssign(row);
-                          }}
-                          className={`h-7 px-2.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer mx-auto ${
-                            isBreakdown
-                              ? "border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
-                              : isMaintenance
-                              ? "bg-amber-600 hover:bg-amber-500 text-white"
-                              : "bg-sky-600 hover:bg-sky-500 text-white"
-                          }`}
-                        >
-                          {isBreakdown || isMaintenance ? <Wrench size={11} /> : <UserPlus size={11} />}
-                          <span>{isBreakdown || isMaintenance ? "Activate" : "Assign"}</span>
-                        </Button>
-                      ) : row.status === "pending" ? (
-                        canEnterLog ? (
-                          <Button
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEnterLog(row);
-                            }}
-                            className="h-7 px-2.5 text-[10px] font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer"
-                          >
-                            Enter Log
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground/60 text-[10px] font-medium">Pending</span>
-                        )
-                      ) : canEnterLog ? (
-                        <Button
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEnterLog(row);
-                          }}
-                          className="h-7 px-2.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 border border-sky-500/30 bg-sky-500/15 hover:bg-sky-500/25 cursor-pointer inline-flex items-center gap-1 mx-auto"
-                        >
-                          <Edit2 size={11} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                          <span>Edit Log</span>
-                        </Button>
-                      ) : (
-                        <span className="text-emerald-600 text-[10px] font-semibold">✓</span>
-                      )}
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Operator</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Machine</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Client</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Shift</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Timing</th>
+                  <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Status</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Entered By</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">HMR</th>
+                  <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
+                      No matching shifts found
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ) : (
+                  filtered.map((row, idx) => {
+                    const isUnassigned = row.status === "unassigned" || !row.operator_id;
+                    const isEntered = row.status === "entered";
+                    const isBreakdown = row.machine_health_status === "breakdown";
+                    const isMaintenance =
+                      row.machine_health_status === "under_maintenance" ||
+                      row.machine_status === "under_maintenance";
 
-      {/* Mobile Cards */}
-      <div className="block sm:hidden space-y-2">
-        {filtered.length === 0 ? (
-          <div className="text-center text-muted-foreground text-xs py-8">No matching shifts found</div>
-        ) : (
-          filtered.map((row, idx) => (
-            <TodayShiftMonitorCard
-              key={
-                row.operator_id
-                  ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}`
-                  : `m-unassigned-${row.machine_id}-${idx}`
-              }
-              row={row}
-              idx={idx}
-              searchQuery={searchQuery}
-              canEnterLog={canEnterLog}
-              onInitiateAssign={handleInitiateAssign}
-              onEnterLog={handleEnterLog}
-              activeMenuCardKey={activeMenuCardKey}
-              setActiveMenuCardKey={setActiveMenuCardKey}
-              menuRef={menuRef}
-            />
-          ))
-        )}
-      </div>
-    </>
-  )}
+                    return (
+                      <tr
+                        key={row.operator_id ? `${row.operator_id}-${row.machine_id}-${row.shift_code}` : `unassigned-${row.machine_id}-${idx}`}
+                        onClick={() => {
+                          if (isUnassigned) handleInitiateAssign(row);
+                        }}
+                        className={`border-b border-[var(--color-hairline)] last:border-b-0 transition-colors ${isBreakdown
+                          ? "bg-rose-500/[0.04] hover:bg-rose-500/10 cursor-pointer"
+                          : isMaintenance
+                            ? "bg-amber-500/[0.04] hover:bg-amber-500/10 cursor-pointer"
+                            : isUnassigned
+                              ? "bg-amber-500/[0.03] hover:bg-amber-500/10 cursor-pointer"
+                              : "hover:bg-[var(--color-canvas)]/50"
+                          }`}
+                      >
+                        <td className="px-3 py-2 text-muted-foreground">{idx + 1}</td>
+                        {/* Operator: name + phone below */}
+                        <td className="px-3 py-2">
+                          {isUnassigned ? (
+                            <div>
+                              {isBreakdown ? (
+                                <div className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
+                                  <AlertCircle size={12} />
+                                  <span>Unassigned (Breakdown)</span>
+                                </div>
+                              ) : isMaintenance ? (
+                                <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                                  <Wrench size={12} />
+                                  <span>Unassigned (Maintenance)</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                                  <AlertCircle size={12} />
+                                  <span>Unassigned</span>
+                                </div>
+                              )}
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {isBreakdown
+                                  ? "Machine in breakdown · Click to activate"
+                                  : isMaintenance
+                                    ? "Under maintenance · Click to activate"
+                                    : "Click to assign operator"}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="font-medium text-[var(--color-ink)]"><Highlight text={row.operator_name} query={searchQuery} /></div>
+                              {row.operator_employee_id && (
+                                <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                  <span className="font-semibold text-sky-700 dark:text-sky-300">
+                                    <Highlight text={row.operator_employee_id} query={searchQuery} />
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        {/* Machine: serial number + model & machine_id below — clickable to preselect */}
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleInitiateAssign(row);
+                            }}
+                            className="text-left group cursor-pointer"
+                            title={
+                              isBreakdown || isMaintenance
+                                ? `Reactivate & assign ${row.machine_code}`
+                                : `Assign personnel to ${row.machine_code}`
+                            }
+                          >
+                            <div className="font-mono text-[11px] font-medium text-[var(--color-ink)] group-hover:text-sky-600 transition-colors">
+                              <Highlight text={row.machine_serial_number || row.machine_code} query={searchQuery} />
+                            </div>
+                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                              {row.machine_model && <span><Highlight text={row.machine_model} query={searchQuery} /> · </span>}
+                              <Highlight text={row.machine_code} query={searchQuery} />
+                            </div>
+                            {isBreakdown ? (
+                              <Badge variant="error" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
+                                Breakdown
+                              </Badge>
+                            ) : isMaintenance ? (
+                              <Badge variant="warning" dot className="text-[9px] px-1 py-0 mt-0.5 w-fit">
+                                Maintenance
+                              </Badge>
+                            ) : null}
+                          </button>
+                        </td>
+                        {/* Client: name + client_id below */}
+                        <td className="px-3 py-2 max-w-[160px]">
+                          <div className="text-[var(--color-ink)] truncate"><Highlight text={row.client_name} query={searchQuery} /></div>
+                          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate flex items-center gap-1">
+                            {(row.client_code || row.client_id) && (
+                              <span><Highlight text={row.client_code || row.client_id} query={searchQuery} /></span>
+                            )}
+                            {(row.client_code || row.client_id) && (row.client_city || row.site_name) && <span>·</span>}
+                            {(row.client_city || row.site_name) && (
+                              <span className="text-[var(--color-ink)] font-sans font-medium"><Highlight text={row.client_city || row.site_name} query={searchQuery} /></span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {isUnassigned ? (
+                            <span className="text-muted-foreground/60 text-[10px]">—</span>
+                          ) : (
+                            <div className="flex items-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 whitespace-nowrap shrink-0">
+                                {row.shift_code ? (row.shift_code.trim().toUpperCase().startsWith("SHIFT") ? row.shift_code.trim() : `Shift ${row.shift_code.trim()}`) : "—"}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground text-[10px]">
+                          {isUnassigned ? "—" : `${formatTime(row.shift_start)} – ${formatTime(row.shift_end)}`}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Badge
+                            variant={
+                              isEntered
+                                ? "success"
+                                : isBreakdown
+                                  ? "error"
+                                  : isMaintenance
+                                    ? "warning"
+                                    : isUnassigned
+                                      ? "warning"
+                                      : "warning"
+                            }
+                            dot
+                            className={`text-[10px] px-1.5 py-0.5 ${isBreakdown
+                              ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                              : isMaintenance
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                : isUnassigned
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                  : ""
+                              }`}
+                          >
+                            {isEntered
+                              ? "Entered"
+                              : isBreakdown
+                                ? "Breakdown"
+                                : isMaintenance
+                                  ? "Maintenance"
+                                  : isUnassigned
+                                    ? "Unassigned"
+                                    : "Pending"}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEntered && row.entered_by_name ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">{row.entered_by_name}</span>
+                              {row.entry_source && row.entry_source !== "operator" && (
+                                <Badge variant="info" className="text-[9px] px-1 py-0">
+                                  {row.entry_source}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                          {row.start_meter != null && row.end_meter != null
+                            ? `${row.start_meter} → ${row.end_meter}`
+                            : row.start_meter != null
+                              ? `${row.start_meter} → —`
+                              : row.current_meter != null
+                                ? `${row.current_meter}`
+                                : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {isUnassigned ? (
+                            <Button
+                              variant={isBreakdown ? "outline" : "primary"}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleInitiateAssign(row);
+                              }}
+                              className={`h-7 px-2.5 text-[10px] font-semibold flex items-center gap-1 cursor-pointer mx-auto ${isBreakdown
+                                ? "border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
+                                : isMaintenance
+                                  ? "bg-amber-600 hover:bg-amber-500 text-white"
+                                  : "bg-sky-600 hover:bg-sky-500 text-white"
+                                }`}
+                            >
+                              {isBreakdown || isMaintenance ? <Wrench size={11} /> : <UserPlus size={11} />}
+                              <span>{isBreakdown || isMaintenance ? "Activate" : "Assign"}</span>
+                            </Button>
+                          ) : row.status === "pending" ? (
+                            canEnterLog ? (
+                              <Button
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEnterLog(row);
+                                }}
+                                className="h-7 px-2.5 text-[10px] font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer"
+                              >
+                                Enter Shift
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground/60 text-[10px] font-medium">Pending</span>
+                            )
+                          ) : canEnterLog ? (
+                            <Button
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnterLog(row);
+                              }}
+                              className="h-7 px-2.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 border border-sky-500/30 bg-sky-500/15 hover:bg-sky-500/25 cursor-pointer inline-flex items-center gap-1 mx-auto"
+                            >
+                              <Edit2 size={11} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                              <span>Edit Log</span>
+                            </Button>
+                          ) : (
+                            <span className="text-emerald-600 text-[10px] font-semibold">✓</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="block sm:hidden space-y-2">
+            {filtered.length === 0 ? (
+              <div className="text-center text-muted-foreground text-xs py-8">No matching shifts found</div>
+            ) : (
+              filtered.map((row, idx) => (
+                <TodayShiftMonitorCard
+                  key={
+                    row.operator_id
+                      ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}`
+                      : `m-unassigned-${row.machine_id}-${idx}`
+                  }
+                  row={row}
+                  idx={idx}
+                  searchQuery={searchQuery}
+                  canEnterLog={canEnterLog}
+                  onInitiateAssign={handleInitiateAssign}
+                  onEnterLog={handleEnterLog}
+                  activeMenuCardKey={activeMenuCardKey}
+                  setActiveMenuCardKey={setActiveMenuCardKey}
+                  menuRef={menuRef}
+                />
+              ))
+            )}
+          </div>
+        </>
+      )}
 
       {/* Assisted Shift Entry Modal */}
       <AssistedShiftEntryModal
@@ -1049,15 +1042,15 @@ export function TodayShiftMonitorTab({
         machines={combinedMachines}
         operators={operators}
         initialMachineId={assignModalMachineId}
-        onSuccess={(result) => {
+        onSuccess={(result?: AssignPersonnelSuccessResult) => {
           // Fine-grained optimistic update: update only affected machine row values immediately
           if (result?.machineId && Array.isArray(result?.operators)) {
             setRows((prevRows) =>
               prevRows.map((r) => {
                 if (r.machine_id !== result.machineId) return r;
                 const matchingOp =
-                  result.operators.find((o: any) => o.shift_code === r.shift_code) ||
-                  result.operators[0];
+                  result.operators?.find((o) => o.shift_code === r.shift_code) ||
+                  result.operators?.[0];
                 if (matchingOp) {
                   return {
                     ...r,

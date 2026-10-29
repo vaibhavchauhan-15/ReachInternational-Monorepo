@@ -43,7 +43,7 @@ import {
   Printer,
   UserPlus,
 } from '../../components/ui/icon';
-import { isManagerOrAbove } from '@reachinternational/permissions';
+import { isManagerOrAbove, isSupervisorOrAbove } from '@reachinternational/permissions';
 
 export type OpsTab = 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
@@ -61,6 +61,7 @@ export default function OperationsScreen() {
   const userRoleLower = (role || '').toLowerCase();
   const isSuperAdmin = userRoleLower === 'super_admin';
   const isManagerTier = isManagerOrAbove(userRoleLower);
+  const canFillShiftEntry = isSupervisorOrAbove(userRoleLower);
   const params = useLocalSearchParams<{ tab?: string; shift?: string }>();
 
   const [activeTab, setActiveTab] = useState<OpsTab>(() => {
@@ -317,7 +318,7 @@ export default function OperationsScreen() {
             actorId={user?.id}
             userRole={role || userProfile?.role}
             onEnterLog={(row) => {
-              if (isManagerTier) {
+              if (canFillShiftEntry) {
                 setAssistedRow(row);
               }
             }}
@@ -392,10 +393,10 @@ export default function OperationsScreen() {
         />
       )}
 
-      {/* Assisted Shift Entry Modal for Managers & Admins (Strictly above supervisor) */}
-      {assistedRow && isManagerTier && (
+      {/* Assisted Shift Entry Modal for Supervisors, Managers & Admins */}
+      {assistedRow && canFillShiftEntry && (
         <MeterLogModal
-          visible={Boolean(assistedRow && isManagerTier)}
+          visible={Boolean(assistedRow && canFillShiftEntry)}
           onClose={() => setAssistedRow(null)}
           machineId={assistedRow.machine_id}
           machineCode={assistedRow.machine_code}

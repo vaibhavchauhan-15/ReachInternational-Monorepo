@@ -678,17 +678,18 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   // Filtered Operators for "+ Assign Operator" list (Show only name & employee_id)
   const availableOperators = useMemo(() => {
     const q = debouncedOperatorSearch.trim().toLowerCase();
+    const activeMachId = selectedMachineId;
     return allOperators.filter((op) => {
-      const opFleetAssignments = fleetAssignments.filter((a) => a.operator_id === op.id);
+      const otherFleetAssignments = fleetAssignments.filter((a) => a.operator_id === op.id && a.machine_id !== activeMachId);
       const isAlreadyOnThisMach = machineOperators.filter((a) => a.operatorId === op.id).length;
-      if (opFleetAssignments.length >= 3 && isAlreadyOnThisMach === 0) return false;
+      if (isAlreadyOnThisMach >= 3 || isAlreadyOnThisMach + otherFleetAssignments.length >= 3) return false;
 
       if (!q) return true;
       const nameMatch = (op.full_name || '').toLowerCase().includes(q);
       const idMatch = (op.employee_id || '').toLowerCase().includes(q);
       return nameMatch || idMatch;
     });
-  }, [allOperators, fleetAssignments, machineOperators, debouncedOperatorSearch]);
+  }, [allOperators, fleetAssignments, machineOperators, debouncedOperatorSearch, selectedMachineId]);
 
   const displayedOperators = useMemo(() => {
     return availableOperators.slice(0, visibleOperatorLimit);
@@ -754,6 +755,18 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     animateLayout();
     setSubmitError(null);
     if (machineOperators.length >= 3) return;
+
+    const activeMachId = selectedMachineId;
+    const isAlreadyOnThisMach = machineOperators.filter((a) => a.operatorId === op.id).length;
+    const otherFleetAssignments = fleetAssignments.filter((a) => a.operator_id === op.id && a.machine_id !== activeMachId);
+    if (isAlreadyOnThisMach >= 3) {
+      showToast('warning', 'Shift Limit Reached', `${op.full_name} is already assigned to all 3 shifts on this machine.`);
+      return;
+    }
+    if (isAlreadyOnThisMach + otherFleetAssignments.length >= 3) {
+      showToast('warning', 'Shift Limit Reached', `${op.full_name} is already assigned to 3 active shifts (24h maximum).`);
+      return;
+    }
 
     const shift = nextAvailableShift;
     const newRow: OperatorAssignmentRow = {

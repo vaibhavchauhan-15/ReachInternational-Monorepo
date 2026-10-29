@@ -50,4 +50,9 @@ export function Logo({
   );
 }
 
-export { ReachInternationalLogo, ScissorLiftLogoIcon } from "@/components/branding";
+export {
+  ReachLogo,
+  type ReachLogoProps,
+  ReachInternationalLogo,
+  ScissorLiftLogoIcon,
+} from "@/components/branding";

@@ -96,9 +96,9 @@ export function BreakdownSection({
           </div>
 
           {breakdownDurationText && (
-            <div className="px-2.5 py-1.5 sm:py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[10px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400 flex items-center justify-between gap-1.5 leading-tight">
-              <span className="shrink-0">Duration Window:</span>
-              <span className="text-right truncate sm:overflow-visible">{breakdownDurationText}</span>
+            <div className="px-2.5 py-1 sm:py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-600 dark:text-rose-400 flex items-center justify-between gap-2 leading-tight">
+              <span className="shrink-0 font-medium">Duration:</span>
+              <span className="font-mono font-semibold truncate text-right">{breakdownDurationText}</span>
             </div>
           )}
 
@@ -110,8 +110,8 @@ export function BreakdownSection({
               rows={2}
               value={breakdownReason}
               onChange={(e) => onBreakdownReasonChange(e.target.value)}
-              placeholder="e.g. Hydraulic pipe leakage replaced by field engineer..."
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs text-[var(--color-ink)] placeholder:text-[11px] sm:placeholder:text-xs placeholder:text-[var(--color-mute)] focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+              placeholder="e.g. Hydraulic pipe leakage replaced..."
+              className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs sm:text-[13px] text-[var(--color-ink)] placeholder:text-xs sm:placeholder:text-[13px] placeholder:text-[var(--color-mute)] placeholder:truncate focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
             />
           </div>
         </div>

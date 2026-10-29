@@ -76,6 +76,7 @@ const DRAFT_FIELDS = [
   "street", "city", "district", "state", "state_id", "address",
   "bank_account_number", "bank_ifsc_code",
   "aadhaar_number", "license_number",
+  "agreed_to_terms",
 ] as const;
 
 const DRAFT_KEY = "signup_draft_v1";
@@ -112,13 +113,34 @@ export default function SignupPage() {
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  const draftValues = useMemo(
+    () => ({
+      ...formValues,
+      agreed_to_terms: agreedToTerms,
+    }),
+    [formValues, agreedToTerms]
+  );
+
   // Draft persistence: saves non-sensitive fields to localStorage (survives tab close/reload)
-  const { restoredAt, clear: clearDraft } = useFormDraft(
+  const { restoredAt: textRestoredAt, clear: clearDraft } = useFormDraft(
     DRAFT_KEY,
     DRAFT_FIELDS,
-    formValues,
-    (d) => setFormValues((v) => ({ ...v, ...d })),
+    draftValues,
+    (d) => {
+      setFormValues((v) => ({
+        ...v,
+        ...d,
+        password: v.password,
+        confirm_password: v.confirm_password,
+      }));
+      if (typeof d.agreed_to_terms === "boolean") {
+        setAgreedToTerms(d.agreed_to_terms);
+      }
+    },
   );
+
+  const [filesRestoredAt, setFilesRestoredAt] = useState<number | null>(null);
+  const restoredAt = textRestoredAt || filesRestoredAt;
 
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [bankPreviewUrl, setBankPreviewUrl] = useState<string | null>(null);
@@ -220,36 +242,49 @@ export default function SignupPage() {
     }
   };
 
-  // Restore files from IndexedDB when a text draft was found
+  // Restore files from IndexedDB on mount
   useEffect(() => {
-    if (restoredAt === null) return;
     let cancelled = false;
     (async () => {
-      const [bank, aadhaar, license] = await Promise.all([
-        readFileDraft(DRAFT_KEY, "bank_document"),
-        readFileDraft(DRAFT_KEY, "aadhaar"),
-        readFileDraft(DRAFT_KEY, "license"),
-      ]);
-      if (cancelled) return;
-      if (bank) {
-        setBankFile(bank);
-        setBankPreviewUrl(bank.type.startsWith("image/") ? URL.createObjectURL(bank) : null);
-      }
-      if (aadhaar) {
-        setAadhaarFile(aadhaar);
-        setAadhaarPreviewUrl(aadhaar.type.startsWith("image/") ? URL.createObjectURL(aadhaar) : null);
-      }
-      if (license) {
-        setLicenseFile(license);
-        setLicensePreviewUrl(license.type.startsWith("image/") ? URL.createObjectURL(license) : null);
+      try {
+        const [bank, aadhaar, license] = await Promise.all([
+          readFileDraft(DRAFT_KEY, "bank_document"),
+          readFileDraft(DRAFT_KEY, "aadhaar"),
+          readFileDraft(DRAFT_KEY, "license"),
+        ]);
+        if (cancelled) return;
+        let restoredCount = 0;
+        if (bank) {
+          setBankFile(bank);
+          setBankPreviewUrl(bank.type.startsWith("image/") ? URL.createObjectURL(bank) : null);
+          restoredCount++;
+        }
+        if (aadhaar) {
+          setAadhaarFile(aadhaar);
+          setAadhaarPreviewUrl(aadhaar.type.startsWith("image/") ? URL.createObjectURL(aadhaar) : null);
+          restoredCount++;
+        }
+        if (license) {
+          setLicenseFile(license);
+          setLicensePreviewUrl(license.type.startsWith("image/") ? URL.createObjectURL(license) : null);
+          restoredCount++;
+        }
+        if (restoredCount > 0) {
+          setFilesRestoredAt(Date.now());
+        }
+      } catch (err) {
+        console.warn("Draft file restore error:", err);
       }
     })();
-    return () => { cancelled = true; };
-  }, [restoredAt]); // only runs once when draft is detected
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleStartFresh = useCallback(() => {
     clearDraft();
     clearFileDrafts(DRAFT_KEY);
+    setFilesRestoredAt(null);
     setFormValues({
       full_name: "", email: "", phone: "", role: "operator", supervisor_id: "",
       shift_start_time: "08:00 AM", shift_end_time: "08:00 PM",
@@ -765,6 +800,7 @@ export default function SignupPage() {
       if (result.message && !result.error) {
         clearDraft();
         clearFileDrafts(DRAFT_KEY);
+        setFilesRestoredAt(null);
         toast(
           "success",
           "Registration Request Submitted",

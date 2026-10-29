@@ -13,10 +13,7 @@ import {
   Building2,
   CalendarCheck,
   Clock,
-  AlertTriangle,
-  Timer,
   FileSpreadsheet,
-  Layers,
 } from "lucide-react";
 
 interface AdminDashboardViewProps {
@@ -34,13 +31,10 @@ export async function AdminDashboardView({
   const totalClients = data?.totalClients ?? 0;
   const activeAssignments = data?.activeAssignments ?? 0;
   const todayLogs = data?.todayLogs ?? 0;
-  const breakdowns = data?.operationalKpis?.breakdowns ?? 0;
-  const overtime = data?.operationalKpis?.overtimeEntries ?? 0;
-  const overlappingLogs = data?.operationalKpis?.overlappingLogs ?? 0;
   const alerts = data?.alerts ?? [];
 
   return (
-    <div className="space-y-6 sm:space-y-7">
+    <div className="space-y-5 sm:space-y-6 lg:space-y-7">
       <DashboardHeader
         userName={userName}
         role="admin"
@@ -51,7 +45,7 @@ export async function AdminDashboardView({
 
       {/* Core Fleet & Organization KPIs */}
       <div>
-        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-2.5 sm:mb-3">
           Fleet & Personnel Summary
         </h2>
         <KPIGrid columns={5}>
@@ -93,39 +87,9 @@ export async function AdminDashboardView({
         </KPIGrid>
       </div>
 
-      {/* Operational Telemetry & Exceptions */}
-      <div>
-        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
-          Today&apos;s Operational Exceptions
-        </h2>
-        <KPIGrid columns={3}>
-          <KPICard
-            label="Breakdowns Reported"
-            value={breakdowns}
-            icon={AlertTriangle}
-            href="/operations"
-            variant={breakdowns > 0 ? "error" : "default"}
-          />
-          <KPICard
-            label="Overtime Entries"
-            value={overtime}
-            icon={Timer}
-            href="/operations"
-            variant={overtime > 0 ? "warning" : "default"}
-          />
-          <KPICard
-            label="Shift Schedule Conflicts"
-            value={overlappingLogs}
-            icon={Layers}
-            href="/operations"
-            variant={overlappingLogs > 0 ? "error" : "default"}
-          />
-        </KPIGrid>
-      </div>
-
       {/* Quick Action Navigation */}
       <div>
-        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold font-mono text-[var(--color-mute)] uppercase tracking-wider mb-2.5 sm:mb-3">
           Quick Management
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 lg:gap-4">

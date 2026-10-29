@@ -21,6 +21,7 @@ export interface CandidateSupervisorItem {
   full_name: string;
   phone: string | null;
   email: string | null;
+  employee_id?: string | null;
   status: string;
 }
 
@@ -93,7 +94,7 @@ export async function getAvailableSupervisors(clientId?: string): Promise<Candid
 
   const { data: supervisors, error } = await supabase
     .from("users")
-    .select("id, full_name, phone, email, status")
+    .select("id, full_name, phone, email, status, employee_id")
     .eq("role", "supervisor")
     .eq("status", "active")
     .order("full_name", { ascending: true });

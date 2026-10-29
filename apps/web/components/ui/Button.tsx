@@ -167,10 +167,16 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
         : "";
 
     const widthClass = fullWidth ? "w-full justify-center" : "";
+    const rawDisabled = ("disabled" in props && Boolean((props as any).disabled));
+    const isDisabled = Boolean(rawDisabled || effectiveLoading);
 
     const classes = `group group/btn interactive-parent inline-flex items-center justify-center gap-1.5 shrink-0 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30 dark:focus-visible:ring-sky-400/30 ${
       variantClasses[variant]
-    } ${variant === "link" ? "" : sizeClasses[effectiveSize]} ${widthClass} ${responsiveClasses} ${className}`;
+    } ${variant === "link" ? "" : sizeClasses[effectiveSize]} ${widthClass} ${responsiveClasses} ${
+      isDisabled
+        ? "!cursor-not-allowed disabled:!cursor-not-allowed opacity-50 disabled:opacity-50 hover:!opacity-50 active:scale-100"
+        : ""
+    } ${className}`;
 
     const renderLabel = () => {
       if (!children) return null;
@@ -273,12 +279,12 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
       <button
         ref={ref as any}
         type={type}
-        className={`${classes} ${disabled || effectiveLoading ? "disabled:opacity-50 disabled:cursor-not-allowed" : ""}`}
-        disabled={disabled || effectiveLoading}
+        className={classes}
+        disabled={isDisabled}
         onClick={handleButtonClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        aria-disabled={disabled || effectiveLoading}
+        aria-disabled={isDisabled}
         aria-busy={effectiveLoading}
         {...buttonRest}
       >

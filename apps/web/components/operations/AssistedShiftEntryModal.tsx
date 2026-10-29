@@ -160,15 +160,52 @@ export function AssistedShiftEntryModal({
     if (row && open) {
       setLogDate(row.log_date || selectedDate || getISTDateString());
       const isEntered = row.status === "entered";
+      const hasCurrentMeter = row.current_meter != null && Number(row.current_meter) > 0;
+      const hasEndMeter = row.end_meter != null && Number(row.end_meter) > 0;
       const startVal = isEntered && row.start_meter != null
         ? String(row.start_meter)
-        : (row.current_meter != null ? String(row.current_meter) : (row.end_meter != null ? String(row.end_meter) : "0"));
+        : (hasCurrentMeter
+            ? String(row.current_meter)
+            : (hasEndMeter ? String(row.end_meter) : "0"));
       const endVal = isEntered && row.end_meter != null
         ? String(row.end_meter)
         : startVal;
       setStartMeter(startVal);
       setEndMeter(endVal);
-      setIsStartMeterLocked(!isEntered);
+      setIsStartMeterLocked(false);
+
+      if (row.machine_id && !hasCurrentMeter && !hasEndMeter) {
+        const supabase = createSupabaseBrowserClient();
+        supabase
+          .from("equipment_hour_logs")
+          .select("end_meter")
+          .eq("machine_id", row.machine_id)
+          .order("log_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .then(({ data }: { data: any }) => {
+            if (data && data[0]?.end_meter != null && Number(data[0].end_meter) > 0) {
+              const prev = String(data[0].end_meter);
+              setStartMeter(prev);
+              setEndMeter((cur) => (cur === "0" || cur === startVal ? prev : cur));
+            } else {
+              supabase
+                .from("machines")
+                .select("hour_meter")
+                .eq("id", row.machine_id)
+                .single()
+                .then(({ data: mData }: { data: any }) => {
+                  if (mData?.hour_meter != null && Number(mData.hour_meter) > 0) {
+                    const prev = String(mData.hour_meter);
+                    setStartMeter(prev);
+                    setEndMeter((cur) => (cur === "0" || cur === startVal ? prev : cur));
+                  }
+                })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
 
       const initialShift = row.shift_code || "S1";
       setSelectedShiftCode(initialShift);
@@ -279,8 +316,9 @@ export function AssistedShiftEntryModal({
     e.preventDefault();
     if (!row || submitting || submittingRef.current) return;
 
-    if (userRole && !["super_admin", "admin", "manager"].includes(userRole)) {
-      toast("error", "Unauthorized Action", "Only roles above supervisor (manager, admin, super_admin) can enter shift logs.");
+    const normalizedUserRole = (userRole || "").toLowerCase().trim().replace(/[\s-]/g, "_");
+    if (normalizedUserRole && !["super_admin", "admin", "manager", "supervisor", "site_supervisor"].includes(normalizedUserRole)) {
+      toast("error", "Unauthorized Action", "Only supervisors, managers, and administrators can enter assisted shift logs.");
       return;
     }
 
@@ -472,12 +510,7 @@ export function AssistedShiftEntryModal({
                     return sub && sub.toLowerCase() !== row.shift_code.toLowerCase() ? ` • ${sub}` : "";
                   })() : "")}
                 </Badge>
-                {isShiftUnassigned && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 animate-in fade-in duration-200">
-                    <AlertTriangle size={11} className="shrink-0 text-amber-500" />
-                    Assisted Override
-                  </span>
-                )}
+
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                 <Clock size={12} className="h-3 w-3 shrink-0" />
@@ -529,18 +562,13 @@ export function AssistedShiftEntryModal({
 
           {/* Assisted Override Confirmation Banner when Manager logs for unassigned shift */}
           {isShiftUnassigned && (
-            <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 animate-in fade-in duration-200">
-              <AlertTriangle size={15} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <div className="flex-1 space-y-0.5">
-                <div className="font-semibold flex items-center gap-1.5 text-amber-900 dark:text-amber-100">
-                  <span>Assisted Override Active</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200 font-mono">
-                    Emergency Substitute
-                  </span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-amber-800/90 dark:text-amber-200/90">
-                  <strong>{row.operator_name}</strong> is rostered for Shift {assignedShiftCodes.join(", ")}, but you are recording for unassigned Shift {selectedShiftCode}. Submitting will record this emergency substitute shift with managerial supervisor override attribution.
-                </p>
+            <div className="p-2 sm:p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2 animate-in fade-in duration-200">
+              <AlertTriangle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1 min-w-0 text-[11px] leading-snug text-amber-900 dark:text-amber-100">
+                <span className="font-semibold">Shift Override: </span>
+                <span className="text-amber-800/90 dark:text-amber-200/90">
+                  Recording Shift {selectedShiftCode} for <strong>{row.operator_name}</strong> (rostered: {assignedShiftCodes.join(", ")}).
+                </span>
               </div>
             </div>
           )}
@@ -564,11 +592,11 @@ export function AssistedShiftEntryModal({
               Remarks (Optional)
             </label>
             <textarea
-              rows={2}
+              rows={1}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               placeholder="Operational notes, site observations..."
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-none focus:ring-1 focus:ring-[var(--color-link)] resize-none"
+              className="w-full min-h-[38px] sm:min-h-[42px] h-[38px] sm:h-11 px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs sm:text-[13px] text-[var(--color-ink)] placeholder:text-xs sm:placeholder:text-[13px] placeholder:text-[var(--color-mute)] placeholder:truncate focus:outline-none focus:ring-1 focus:ring-[var(--color-link)] resize-none"
             />
           </div>
 

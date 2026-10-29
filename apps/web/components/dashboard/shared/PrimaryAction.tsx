@@ -60,20 +60,20 @@ export function PrimaryAction({
       href={href}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`group relative flex items-center justify-between p-3.5 sm:p-4 md:p-5 rounded-[var(--radius-md)] border transition-all duration-200 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] motion-reduce:hover:translate-y-0 min-h-[56px] sm:min-h-[64px] ${variantStyles.card} ${className}`}
+      className={`group relative flex items-center justify-between p-3 sm:p-4 md:p-5 rounded-[var(--radius-md)] border transition-all duration-200 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] motion-reduce:hover:translate-y-0 min-h-[56px] sm:min-h-[64px] touch-manipulation select-none ${variantStyles.card} ${className}`}
     >
-      <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
-        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0 flex items-center justify-center transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100 ${variantStyles.iconBox}`}>
+      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+        <div className={`w-8.5 h-8.5 sm:w-10 sm:h-10 rounded-lg shrink-0 flex items-center justify-center transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100 ${variantStyles.iconBox}`}>
           {React.isValidElement(Icon) ? (
             React.cloneElement(Icon as React.ReactElement<any>, {
               ref: iconRef,
-              size: 20,
-              className: "w-5 h-5 shrink-0",
+              size: 18,
+              className: "w-4.5 h-4.5 sm:w-5 sm:h-5 shrink-0",
             })
           ) : typeof Icon === "function" || (typeof Icon === "object" && Icon !== null) ? (
             (() => {
               const IconComp = Icon as React.ComponentType<any>;
-              return <IconComp ref={iconRef} size={20} className="w-5 h-5 shrink-0" />;
+              return <IconComp ref={iconRef} size={18} className="w-4.5 h-4.5 sm:w-5 sm:h-5 shrink-0" />;
             })()
           ) : null}
         </div>

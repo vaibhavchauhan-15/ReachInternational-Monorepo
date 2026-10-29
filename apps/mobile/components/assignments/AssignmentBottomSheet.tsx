@@ -55,6 +55,7 @@ export interface AssignmentBottomSheetProps {
   title: string;
   description?: string;
   targetEntity?: TargetEntityDetails;
+  showCodeInHeader?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -65,6 +66,7 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
   title,
   description,
   targetEntity,
+  showCodeInHeader = false,
   children,
   footer,
 }) => {
@@ -103,7 +105,7 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
               <Text variant="subheading" style={[styles.modalTitle, { color: theme.colors.ink }]}>
                 {title}
               </Text>
-              {targetEntity?.code && (
+              {showCodeInHeader && targetEntity?.code && (
                 <View
                   style={[
                     styles.codePill,

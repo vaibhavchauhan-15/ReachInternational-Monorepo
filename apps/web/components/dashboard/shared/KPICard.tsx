@@ -86,33 +86,33 @@ export function KPICard({
       onClick={onClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative overflow-hidden p-3.5 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] ${
+      className={`relative overflow-hidden p-3 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] touch-manipulation select-none ${
         isInteractive
-          ? "hover:border-[var(--color-ink)]/30 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] cursor-pointer motion-reduce:hover:translate-y-0"
+          ? "hover:border-[var(--color-ink)]/30 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer motion-reduce:hover:translate-y-0"
           : ""
       } ${active ? "ring-2 ring-[var(--color-link)] border-[var(--color-link)]" : styles.border} ${styles.bg} ${className}`}
     >
       {/* Label and Icon Row — Optimized for Mobile, Tablet & Desktop */}
       <div className="flex items-start justify-between gap-2">
-        <span className="flex-1 min-w-0 text-xs sm:text-xs md:text-sm font-medium text-[var(--color-mute)] leading-tight sm:leading-snug break-words line-clamp-2 min-h-[28px] sm:min-h-0">
+        <span className="flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm font-medium text-[var(--color-mute)] leading-tight sm:leading-snug break-words line-clamp-2 min-h-[26px] sm:min-h-0">
           {label}
         </span>
-        <div className={`w-8 h-8 flex items-center justify-center rounded-full shrink-0 ${styles.iconBg}`}>
+        <div className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full shrink-0 ${styles.iconBg}`}>
           {React.isValidElement(Icon) ? (
             React.cloneElement(Icon as React.ReactElement<any>, {
               ref: iconRef,
-              size: 16,
-              className: "w-4 h-4 shrink-0",
+              size: 15,
+              className: "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0",
             })
           ) : typeof Icon === "function" || (typeof Icon === "object" && Icon !== null) ? (
             // @ts-expect-error Icon can be component type
-            <Icon ref={iconRef} size={16} className="w-4 h-4 shrink-0" />
+            <Icon ref={iconRef} size={15} className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           ) : null}
         </div>
       </div>
 
       {/* Value, Trend & Subtitle */}
-      <div className="mt-2.5 sm:mt-3">
+      <div className="mt-2 sm:mt-3">
         <div className="flex items-baseline justify-between gap-1.5 flex-wrap">
           <div className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight tabular-nums ${styles.valueText}`}>
             {typeof value === "number" ? <AnimatedCounter value={value} /> : value}
@@ -130,7 +130,7 @@ export function KPICard({
           )}
         </div>
         {subtitle && (
-          <p className="text-[11px] sm:text-xs text-[var(--color-mute)] mt-1 line-clamp-1 leading-normal">
+          <p className="text-[10px] sm:text-xs text-[var(--color-mute)] mt-1 line-clamp-1 leading-normal">
             {subtitle}
           </p>
         )}

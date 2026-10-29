@@ -5,12 +5,12 @@ import { buildFaqJsonLd } from '@/lib/seo/jsonld'
 import { Button } from '@/components/marketing/ui/button'
 import { Badge } from '@/components/marketing/ui/badge'
 import { Card } from '@/components/marketing/ui/card'
-import { TiltCard } from '@/components/marketing/spectrumui/tilt-card'
-import { StatusBadge } from '@/components/marketing/spectrumui/status-badge'
+import { BrandsSection } from '@/components/marketing/brands/BrandsSection'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/marketing/ui/accordion'
 import { ArrowRight } from '@untitledui/icons'
 import { HeroSection } from '@/components/marketing/hero/HeroSection'
 import { ClientsSection } from '@/components/marketing/client-logos/ClientsSection'
+import { IndustriesSection } from '@/components/marketing/industries/IndustriesSection'
 import { TestimonialsSection } from '@/components/marketing/testimonials/TestimonialsSection'
 
 export const metadata: Metadata = {
@@ -19,58 +19,6 @@ export const metadata: Metadata = {
     'Certified aerial work platforms, boom lifts, scissor lifts and material handling equipment for rental and sale across India. Authorized machinery from JCB, Toyota, Hyundai, JLG, Genie and BYD. Reaching All Heights.',
   alternates: { canonical: 'https://www.reachinternational.co.in/' },
 }
-
-// ── Verified Equipment Brands (per owner confirmation) ──────────────────────────
-const brandShowcase = [
-  {
-    name: 'JCB',
-    category: 'AWP (Aerial Work Platform)',
-    typeTag: 'Boom Lifts & Rough-Terrain Access',
-    desc: 'Heavy-duty rough-terrain aerial access machinery built for demanding Indian construction and infrastructure sites.',
-    models: 'Articulated Booms • Telescopic Booms • Access Scissor Lifts',
-    availability: 'Rental & Sales',
-  },
-  {
-    name: 'Toyota',
-    category: 'Both AWP & MHE',
-    typeTag: 'Counterbalanced Forklifts & Aerial Access',
-    desc: 'World benchmark in material handling durability, ergonomics, and precision electric and diesel forklift engineering.',
-    models: '1.5T–8T Forklifts • Electric Reach Trucks • Access Equipment',
-    availability: 'Rental & Sales',
-  },
-  {
-    name: 'Hyundai',
-    category: 'MHE (Material Handling)',
-    typeTag: 'Heavy Diesel & Electric Forklifts',
-    desc: 'Robust material handling machinery engineered for heavy-duty industrial yards, ports, and steel manufacturing plants.',
-    models: 'Heavy Forklifts • Warehouse Material Lifts • Pallet Equipment',
-    availability: 'Rental & Sales',
-  },
-  {
-    name: 'JLG',
-    category: 'AWP (Aerial Work Platform)',
-    typeTag: 'High-Reach Articulated & Telescopic Booms',
-    desc: 'Global leader in elevated work platform safety and engineering, reaching working heights from 15m to 48m.',
-    models: 'Articulating Booms • Ultra Booms • Electric Scissor Lifts',
-    availability: 'Rental & Sales',
-  },
-  {
-    name: 'Genie',
-    category: 'AWP (Aerial Work Platform)',
-    typeTag: 'Self-Propelled Scissor & Boom Lifts',
-    desc: 'Industry standard for electric slab scissor lifts and articulated aerial platforms with high operator safety.',
-    models: 'Electric Scissor Lifts • Telescopic Booms • Vertical Masts',
-    availability: 'Rental & Sales',
-  },
-  {
-    name: 'BYD',
-    category: 'MHE (Material Handling)',
-    typeTag: 'Lithium Iron Phosphate Electric Forklifts',
-    desc: 'Zero-emission lithium-ion battery forklifts designed for rapid charging, clean indoor air, and zero battery maintenance.',
-    models: 'Li-Ion Electric Forklifts • High-Bay Reach Trucks • Heavy Stackers',
-    availability: 'Rental & Sales',
-  },
-]
 
 // ── AWP Categories ─────────────────────────────────────────────────────────────
 const awpEquipment = [
@@ -141,71 +89,6 @@ const mheEquipment = [
     desc: 'Rapid-assembly certified aluminum and steel access towers for industrial plant overhauls.',
     image: '/images/awp_boom_lift.jpg',
     brands: ['Reach Access'],
-  },
-]
-
-// ── Industries ─────────────────────────────────────────────────────────────────
-const industries = [
-  {
-    href: '/industries/construction/',
-    label: 'Construction',
-    desc: 'High-elevation access for high-rise residential, commercial hubs & bridges.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/industries/manufacturing/',
-    label: 'Manufacturing',
-    desc: 'Heavy machinery handling, automotive assembly lines & plant retrofits.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/industries/aviation/',
-    label: 'Aviation & Aerospace',
-    desc: 'Hangar maintenance, aircraft fuselage inspection & engine servicing.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-      </svg>
-    ),
-  },
-  {
-    href: '/industries/warehousing-logistics/',
-    label: 'Warehousing & Logistics',
-    desc: 'High-bay reach trucks, pallet stacking & high-velocity fulfilment.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/industries/infrastructure/',
-    label: 'Infrastructure & Metro',
-    desc: 'Metro rail viaducts, bridge spans, airport terminals & elevated corridors.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/industries/oil-gas/',
-    label: 'Oil, Gas & Petrochemicals',
-    desc: 'Spark-arrested certified lifts for refinery overhauls and shutdowns.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-      </svg>
-    ),
   },
 ]
 
@@ -468,142 +351,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── 4. OUR CLIENTS & TRUSTED OEM BRANDS ───────────────────────────────── */}
-      <section
-        id="brands-section"
-        className="w-full py-12 md:py-16"
-        style={{
-          backgroundColor: 'var(--surface-sunken)',
-          borderBottom: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div className="max-w-wide mx-auto px-4 md:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-8 md:mb-10">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              World-Class Brands We Rent &amp; Sell
-            </h2>
-            <p className="text-base mt-2" style={{ color: 'var(--text-secondary)' }}>
-              Certified equipment sourced from global leaders in access platforms and material handling technology.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {brandShowcase.map((brand) => (
-              <TiltCard
-                key={brand.name}
-                className="p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between h-full"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center font-extrabold text-xl shadow-xs"
-                        style={{
-                          backgroundColor: 'var(--surface-sunken)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid var(--border-subtle)',
-                        }}
-                      >
-                        {brand.name.slice(0, 3)}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-foreground">{brand.name}</h3>
-                        <p className="text-xs font-semibold text-primary">{brand.category}</p>
-                      </div>
-                    </div>
-                    <StatusBadge
-                      status="success"
-                      label={brand.availability}
-                    />
-                  </div>
-
-                  <p className="text-xs font-semibold text-foreground/80 mb-2 uppercase tracking-wide">
-                    {brand.typeTag}
-                  </p>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                    {brand.desc}
-                  </p>
-                </div>
-
-                <div className="pt-4 border-t border-border flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground font-medium">{brand.models}</span>
-                  <Link
-                    href="/equipment/"
-                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                  >
-                    Explore Fleet
-                    <ArrowRight className="size-3" />
-                  </Link>
-                </div>
-              </TiltCard>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── 4. AUTHORIZED OEM EQUIPMENT PARTNERS ───────────────────────────────── */}
+      <BrandsSection />
 
       {/* ── 5. ENTERPRISE CLIENTS ────────────────────────────────────────────── */}
       <ClientsSection />
 
       {/* ── 6. INDUSTRIES WE SERVE ───────────────────────────────────────────── */}
-      <section
-        id="industries"
-        className="w-full py-12 md:py-16"
-        style={{
-          backgroundColor: 'var(--surface-base)',
-          borderBottom: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div className="max-w-wide mx-auto px-4 md:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-8 md:mb-10">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Industries We Serve Across India
-            </h2>
-            <p className="text-base mt-2" style={{ color: 'var(--text-secondary)' }}>
-              Engineered access and material movement solutions tailored to stringent sectoral safety norms.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {industries.map((ind) => (
-              <Link
-                key={ind.label}
-                href={ind.href}
-                className="group p-6 rounded-2xl shadow-xs hover:shadow-md transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between"
-                style={{
-                  backgroundColor: 'var(--surface-raised)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <div>
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
-                    style={{
-                      backgroundColor: 'var(--surface-tint)',
-                      color: 'var(--brand-blue, #008CFC)',
-                    }}
-                  >
-                    {ind.icon}
-                  </div>
-                  <h3
-                    className="text-lg font-bold mb-2 group-hover:text-[#008CFC] transition-colors"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {ind.label}
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                    {ind.desc}
-                  </p>
-                </div>
-
-                <div className="pt-6 mt-4 flex items-center justify-between text-xs font-semibold" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                  <span style={{ color: 'var(--brand-blue, #008CFC)' }}>Explore applications</span>
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" style={{ color: 'var(--brand-blue, #008CFC)' }} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+      <IndustriesSection />
 
       {/* ── 7. MOBILIZATION / QUOTE PROMO ────────────────────────────────────── */}
       <section

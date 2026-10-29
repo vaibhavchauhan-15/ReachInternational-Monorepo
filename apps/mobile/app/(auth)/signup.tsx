@@ -26,7 +26,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast, Badge } from '../../components/ui';
+import { Input, TimeInput, SearchableSelect, useTheme, Text, useToast, Badge, Alert } from '../../components/ui';
+import { useMobileFormDraft, type MobileSignupDraftValues } from '../../lib/hooks/useFormDraft';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
@@ -122,6 +123,110 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // Draft persistence: bundle non-credential fields and picked documents
+  const currentDraftValues = useMemo<MobileSignupDraftValues>(
+    () => ({
+      fullName,
+      email,
+      phone,
+      selectedRole,
+      selectedSupervisorId,
+      shiftStartTime,
+      shiftEndTime,
+      street,
+      city,
+      district,
+      stateVal,
+      stateId,
+      bankAccountNumber,
+      bankIfscCode,
+      aadhaarNumber,
+      licenseNumber,
+      agreedToTerms,
+      bankDoc,
+      aadhaarDoc,
+      licenseDoc,
+    }),
+    [
+      fullName,
+      email,
+      phone,
+      selectedRole,
+      selectedSupervisorId,
+      shiftStartTime,
+      shiftEndTime,
+      street,
+      city,
+      district,
+      stateVal,
+      stateId,
+      bankAccountNumber,
+      bankIfscCode,
+      aadhaarNumber,
+      licenseNumber,
+      agreedToTerms,
+      bankDoc,
+      aadhaarDoc,
+      licenseDoc,
+    ]
+  );
+
+  const handleRestoreDraft = useCallback((draft: Partial<MobileSignupDraftValues>) => {
+    if (draft.fullName !== undefined) setFullName(draft.fullName);
+    if (draft.email !== undefined) setEmail(draft.email);
+    if (draft.phone !== undefined) setPhone(draft.phone);
+    if (draft.selectedRole !== undefined) setSelectedRole(draft.selectedRole);
+    if (draft.selectedSupervisorId !== undefined) setSelectedSupervisorId(draft.selectedSupervisorId);
+    if (draft.shiftStartTime !== undefined) setShiftStartTime(draft.shiftStartTime);
+    if (draft.shiftEndTime !== undefined) setShiftEndTime(draft.shiftEndTime);
+    if (draft.street !== undefined) setStreet(draft.street);
+    if (draft.city !== undefined) setCity(draft.city);
+    if (draft.district !== undefined) setDistrict(draft.district);
+    if (draft.stateVal !== undefined) setStateVal(draft.stateVal);
+    if (draft.stateId !== undefined) setStateId(draft.stateId);
+    if (draft.bankAccountNumber !== undefined) setBankAccountNumber(draft.bankAccountNumber);
+    if (draft.bankIfscCode !== undefined) setBankIfscCode(draft.bankIfscCode);
+    if (draft.aadhaarNumber !== undefined) setAadhaarNumber(draft.aadhaarNumber);
+    if (draft.licenseNumber !== undefined) setLicenseNumber(draft.licenseNumber);
+    if (draft.agreedToTerms !== undefined) setAgreedToTerms(draft.agreedToTerms);
+    if (draft.bankDoc !== undefined) setBankDoc(draft.bankDoc || null);
+    if (draft.aadhaarDoc !== undefined) setAadhaarDoc(draft.aadhaarDoc || null);
+    if (draft.licenseDoc !== undefined) setLicenseDoc(draft.licenseDoc || null);
+  }, []);
+
+  const { restoredAt, clearDraft } = useMobileFormDraft(currentDraftValues, handleRestoreDraft);
+
+  const handleStartFresh = useCallback(async () => {
+    haptics.select();
+    await clearDraft();
+    setFullName('');
+    setEmail('');
+    setPhone('');
+    setSelectedRole('operator');
+    setSelectedSupervisorId('');
+    setShiftStartTime('08:00 AM');
+    setShiftEndTime('08:00 PM');
+    setStreet('');
+    setCity('');
+    setDistrict('');
+    setStateVal('');
+    setStateId(null);
+    setBankAccountNumber('');
+    setBankIfscCode('');
+    setBankDoc(null);
+    setBankDocError(null);
+    setAadhaarNumber('');
+    setAadhaarDoc(null);
+    setAadhaarDocError(null);
+    setLicenseNumber('');
+    setLicenseDoc(null);
+    setLicenseDocError(null);
+    setPassword('');
+    setConfirmPassword('');
+    setAgreedToTerms(false);
+    setFieldErrors({});
+  }, [clearDraft]);
 
   // Validation & Mutex State
   const [isLoading, setIsLoading] = useState(false);
@@ -595,6 +700,9 @@ export default function SignupScreen() {
         }
       }
 
+      // On successful signup: clear draft from storage
+      await clearDraft();
+
       toast(
         'success',
         'Registration Submitted',
@@ -677,6 +785,32 @@ export default function SignupScreen() {
                   Enter your details to request platform access
                 </Text>
               </View>
+
+              {/* Draft Restored Notice Banner — 100% Parity with Web */}
+              {Boolean(restoredAt) && (
+                <View style={styles.draftNoticeWrapper}>
+                  <Alert variant="info" style={styles.draftAlertBox}>
+                    <View style={styles.draftNoticeContent}>
+                      <Text variant="caption" style={styles.draftNoticeText}>
+                        Draft restored from {new Date(restoredAt!).toLocaleString()}. Re-enter your password to continue.
+                      </Text>
+                      <Pressable
+                        variant="plain"
+                        haptic="select"
+                        onPress={handleStartFresh}
+                        hitSlopToMin48={true}
+                        accessibilityRole="button"
+                        accessibilityLabel="Start fresh"
+                        style={styles.startFreshButton}
+                      >
+                        <Text variant="caption" weight="semiBold" style={styles.startFreshText}>
+                          Start fresh
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </Alert>
+                </View>
+              )}
 
               {/* Section 1: Account & Role */}
               <MobileFormSectionCard
@@ -1580,5 +1714,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  draftNoticeWrapper: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  draftAlertBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  draftNoticeContent: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 6,
+  },
+  draftNoticeText: {
+    color: '#0284c7',
+  },
+  startFreshButton: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  startFreshText: {
+    color: '#0284c7',
+    textDecorationLine: 'underline',
   },
 });

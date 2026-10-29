@@ -159,6 +159,10 @@
   --shadow-whisper: 0px 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-floating: 0px 4px 12px -2px rgba(0, 0, 0, 0.06),
                      0px 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
 
   /* ============================================
      Motion & Easing
@@ -193,6 +197,7 @@
 
   --surface-base: #ffffff;
   --surface-raised: #ffffff;
+  --surface-elevated: #ffffff;
   --surface-sunken: #f4f6f9;
   --surface-tint: #e8f3ff;
   --surface-inverse: #202329;
@@ -378,10 +383,15 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
   --shadow-whisper: 0px 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-floating: 0px 8px 24px -4px rgba(0, 0, 0, 0.5),
                      0px 2px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 30px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 
   /* Marketing Platform Tokens (Dark Theme) */
   --surface-base: #14171c;
   --surface-raised: #1a1e24;
+  --surface-elevated: #171717;
   --surface-sunken: #0f1215;
   --surface-tint: #0c2744;
   --surface-inverse: #202329;
@@ -418,6 +428,7 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
 [data-theme="dark"] {
   --surface-base: #14171c;
   --surface-raised: #1a1e24;
+  --surface-elevated: #171717;
   --surface-sunken: #0f1215;
   --surface-tint: #0c2744;
   --surface-inverse: #202329;
@@ -465,6 +476,7 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
   /* Semantic surface + text mappings */
   --color-background: var(--color-canvas);
   --color-foreground: var(--color-ink);
+  --color-surface-elevated: var(--color-canvas-elevated);
   --color-card: var(--color-canvas-elevated);
   --color-card-foreground: var(--color-ink);
   --color-popover: var(--color-canvas-elevated);

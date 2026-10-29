@@ -1084,6 +1084,7 @@ export async function getAssignableMachinesAction(): Promise<{
     status: string;
     health_status: string;
     client_id: string | null;
+    site_id: string | null;
     client_name: string | null;
     operator_ids: string[];
     supervisor_ids: string[];
@@ -1104,6 +1105,7 @@ export async function getAssignableMachinesAction(): Promise<{
         status,
         health_status,
         client_id,
+        site_id,
         operator_ids,
         supervisor_ids,
         client:clients(id, company_name)
@@ -1143,6 +1145,7 @@ export async function getAssignableMachinesAction(): Promise<{
       status: m.status || "available",
       health_status: m.health_status || "active",
       client_id: m.client_id || null,
+      site_id: m.site_id || null,
       client_name: m.client?.company_name || null,
       operator_ids: Array.isArray(m.operator_ids) ? m.operator_ids : [],
       supervisor_ids: Array.isArray(m.supervisor_ids) ? m.supervisor_ids : [],

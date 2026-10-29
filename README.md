@@ -430,7 +430,7 @@
     - Zero export libraries in initial bundle. Export modal is loaded strictly on demand via Next.js `dynamic()`.
     - Streams Excel UTF-8 BOM CSV (`\uFEFF`) without downloading all client records upfront to the browser.
   - **Security, RBAC & Cache Isolation (Milestone C20)**:
-    - Enforces `AUTHORIZED_CLIENT_ROLES` (`super_admin`, `admin`, `manager`, `supervisor`) across list, search, detail, mutations, and export. Unauthorized roles (`operator`, `hr`) are blocked from equipment operations.
+    - Enforces `AUTHORIZED_CLIENT_ROLES` (`super_admin`, `admin`, `manager`, `supervisor`) across list, search, and detail, with supervisors granted view-only access (mutations and exports strictly restricted to `super_admin`, `admin`, `manager`). Unauthorized roles (`operator`, `hr`) are blocked from client operations.
     - Deterministic canonical cache keys prevent cross-user/tenant data leakage.
   - **Dynamic Code-Split Lazy Modals (`next/dynamic`, `ssr: false`)**:
     - `ClientModal.tsx`: Add & Edit form with dual site/billing address management, loaded strictly on button click.

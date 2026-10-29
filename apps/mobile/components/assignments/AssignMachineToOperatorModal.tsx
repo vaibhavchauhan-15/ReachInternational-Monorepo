@@ -184,7 +184,6 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
   // Candidate machines list
   const candidateMachineItems = useMemo((): AssignmentCandidateItem[] => {
     const q = machineSearchQuery.trim().toLowerCase();
-    const assignedMachineIds = new Set(roster.map((r) => r.machineId));
 
     return machines
       .filter((m) => {
@@ -195,17 +194,27 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
         return Boolean(matchCode || matchModel || matchSN);
       })
       .map((m) => {
-        const isAlreadyAssigned = assignedMachineIds.has(m.id);
+        const shiftsOnThisMach = roster.filter((r) => r.machineId === m.id).length;
+        const isMaxShiftsOnMach = shiftsOnThisMach >= 3;
+        const isAlreadyAssigned = shiftsOnThisMach > 0;
+        const isOperatorFull = roster.length >= 3;
         const clientCompany = m.client?.company_name || null;
+
+        let subtitle = `S/N: ${m.serial_number || 'N/A'}${clientCompany ? ` • ${clientCompany}` : ''}`;
+        if (isMaxShiftsOnMach) {
+          subtitle = `3/3 shifts assigned to this operator • S/N: ${m.serial_number || 'N/A'}`;
+        } else if (shiftsOnThisMach > 0) {
+          subtitle = `${shiftsOnThisMach}/3 shifts assigned to this operator • S/N: ${m.serial_number || 'N/A'}`;
+        }
 
         return {
           id: m.id,
           title: m.model || 'Equipment',
           code: m.machine_id,
-          subtitle: `S/N: ${m.serial_number || 'N/A'}${clientCompany ? ` • ${clientCompany}` : ''}`,
+          subtitle,
           entityType: 'machine',
-          isAlreadyAssigned,
-          disabled: isAlreadyAssigned,
+          isAlreadyAssigned: isMaxShiftsOnMach,
+          disabled: isMaxShiftsOnMach || isOperatorFull,
         };
       });
   }, [machines, machineSearchQuery, roster]);

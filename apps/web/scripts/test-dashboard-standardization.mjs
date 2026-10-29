@@ -45,18 +45,14 @@ check("globals.css: defines --color-surface in :root and .dark", () => {
 });
 
 // 3. DashboardHeader
-check("DashboardHeader: supports role badge and role-specific default subtitles", () => {
+check("DashboardHeader: clean minimal header with greeting and title", () => {
   const content = fs.readFileSync(path.join(webRoot, "components/dashboard/shared/DashboardHeader.tsx"), "utf8");
-  assert.match(content, /super_admin:/);
-  assert.match(content, /admin:/);
-  assert.match(content, /manager:/);
-  assert.match(content, /supervisor:/);
-  assert.match(content, /hr:/);
-  assert.match(content, /operator:/);
-  assert.match(content, /roleMeta\.badge/);
-  assert.match(content, /roleMeta\.defaultSubtitle/);
-  assert.match(content, /tabular-nums/);
-  assert.match(content, /bg-\[var\(--color-canvas-elevated\)\]/);
+  assert.match(content, /getGreeting/);
+  assert.match(content, /text-xl sm:text-2xl font-bold/);
+  assert.match(content, /border-b border-\[var\(--color-hairline\)\]/);
+  assert.doesNotMatch(content, /roleMeta\.badge/);
+  assert.doesNotMatch(content, /roleMeta\.defaultSubtitle/);
+  assert.doesNotMatch(content, /tabular-nums/);
 });
 
 // 4. KPICard
@@ -75,7 +71,7 @@ check("KPICard: renders subtitle, trend, and active/hover/focus states", () => {
 check("KPIGrid: responsive column scaling for 2, 3, 4, 5, 6 columns", () => {
   const content = fs.readFileSync(path.join(webRoot, "components/dashboard/shared/KPIGrid.tsx"), "utf8");
   assert.match(content, /4:\s*"grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4"/);
-  assert.match(content, /5:\s*"grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5"/);
+  assert.match(content, /5:\s*"grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5/);
   assert.match(content, /6:\s*"grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6"/);
   assert.match(content, /gap-3 sm:gap-3\.5 lg:gap-4/);
 });
