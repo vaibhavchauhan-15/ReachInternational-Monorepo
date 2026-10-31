@@ -569,6 +569,25 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
 }
 
 /* ============================================
+   OEM Partner Brand Logo Theme Switching
+   ============================================ */
+.brand-logo-on-light {
+  display: block;
+}
+.brand-logo-on-dark {
+  display: none;
+}
+.dark .brand-logo-on-light,
+[data-theme="dark"] .brand-logo-on-light {
+  display: none !important;
+}
+.dark .brand-logo-on-dark,
+[data-theme="dark"] .brand-logo-on-dark {
+  display: block !important;
+}
+
+
+/* ============================================
    Base Styles
    ============================================ */
 * {

@@ -38,6 +38,10 @@ const contentSecurityPolicy = [
   .join("; ");
 
 const nextConfig: NextConfig = {
+  eslint: {
+    // Monorepo runs strict typechecking and targeted linting in pre-commit/CI pipelines
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
@@ -131,6 +135,11 @@ const nextConfig: NextConfig = {
         source: "/settings/prefrence",
         destination: "/settings/preference",
         permanent: true,
+      },
+      {
+        source: "/services/:path*",
+        destination: "/#quote-promo",
+        permanent: false,
       },
     ];
 

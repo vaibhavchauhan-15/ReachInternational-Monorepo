@@ -169,12 +169,12 @@ const todayShiftCardPath = path.join(__dirname, 'components', 'operations', 'Mob
 const deleteDialogPath = path.join(__dirname, 'components', 'users', 'DeleteUserConfirmDialog.tsx');
 const clientsScreenPath = fs.existsSync(path.join(__dirname, 'app', '(app)', 'clients', 'index.tsx')) ? path.join(__dirname, 'app', '(app)', 'clients', 'index.tsx') : path.join(__dirname, 'app', '(app)', 'clients.tsx');
 
-const machineCardContent = fs.readFileSync(machineCardPath, 'utf8');
-const userTouchCardContent = fs.readFileSync(userTouchCardPath, 'utf8');
-const userDetailModalContent = fs.readFileSync(userDetailModalPath, 'utf8');
-const todayShiftCardContent = fs.readFileSync(todayShiftCardPath, 'utf8');
-const deleteDialogContent = fs.readFileSync(deleteDialogPath, 'utf8');
-const clientsScreenContent = fs.readFileSync(clientsScreenPath, 'utf8');
+const machineCardContent = fs.readFileSync(machineCardPath, 'utf8').replace(/\r\n/g, '\n');
+const userTouchCardContent = fs.readFileSync(userTouchCardPath, 'utf8').replace(/\r\n/g, '\n');
+const userDetailModalContent = fs.readFileSync(userDetailModalPath, 'utf8').replace(/\r\n/g, '\n');
+const todayShiftCardContent = fs.readFileSync(todayShiftCardPath, 'utf8').replace(/\r\n/g, '\n');
+const deleteDialogContent = fs.readFileSync(deleteDialogPath, 'utf8').replace(/\r\n/g, '\n');
+const clientsScreenContent = fs.readFileSync(clientsScreenPath, 'utf8').replace(/\r\n/g, '\n');
 
 assert(machineCardContent.includes('<Badge status="active" dot') && machineCardContent.includes('customLabel="Active"'), 'MobileMachineCard uses Badge with dot for Active status');
 assert(machineCardContent.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard uses Badge for Rented / Available status');

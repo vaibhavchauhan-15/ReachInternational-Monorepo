@@ -23,6 +23,7 @@ export * from './payroll';
 export * from './shift-overlap';
 export * from './errors';
 export * from './domain-keys';
+export * from './brand';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";
 

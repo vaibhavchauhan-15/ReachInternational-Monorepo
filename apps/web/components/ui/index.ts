@@ -7,6 +7,7 @@
 // 1. Buttons
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";
 export { IconButton, type IconButtonProps } from "./IconButton";
+export { LiquidMetalButton, LiquidMetalButtonDemo, type LiquidMetalButtonProps } from "./liquid-metal-button";
 
 // 2. Form Controls & Inputs
 export { Input } from "./Input";
@@ -222,3 +223,13 @@ export { ScrollCloud } from "./ScrollCloud";
 
 // 13. Infinite Sliders & Carousels
 export { InfiniteSlider, type InfiniteSliderProps } from "./infinite-slider";
+
+// 14. Accordions
+export {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+  type AccordionVariant,
+  type AccordionIndicator,
+} from "./Accordion";

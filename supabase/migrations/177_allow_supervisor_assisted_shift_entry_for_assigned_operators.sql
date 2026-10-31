@@ -36,9 +36,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
       AND (
         -- Pathway A: Direct single supervisor_id column
         u.supervisor_id = p_supervisor_id
-        -- Pathway B: Multi-supervisor supervisor_ids array
-        OR (u.supervisor_ids IS NOT NULL AND u.supervisor_ids @> ARRAY[p_supervisor_id])
-        -- Pathway C: user_supervisors junction table
+        -- Pathway B: user_supervisors junction table
         OR EXISTS (
           SELECT 1 FROM public.user_supervisors us
           WHERE us.user_id = u.id AND us.supervisor_id = p_supervisor_id
@@ -199,9 +197,27 @@ BEGIN
     IF v_caller_role IN ('super_admin', 'admin', 'manager') THEN
       v_entry_source := v_caller_role;
     ELSIF v_caller_role = 'supervisor' THEN
-      -- Strict RBAC: Supervisor can ONLY enter shift logs for operators who come under them
-      IF NOT public.is_operator_under_supervisor(v_actor_id, p_operator_id) THEN
-        RAISE EXCEPTION 'Not authorized: Supervisors can only fill shift entries for operators assigned under their supervision.'
+      -- Strict RBAC: Supervisor can enter shift logs if:
+      -- 1. Operator comes under their supervision (is_operator_under_supervisor)
+      -- OR 2. Machine or client is supervised by this supervisor
+      IF NOT (
+        public.is_operator_under_supervisor(v_actor_id, p_operator_id)
+        OR EXISTS (
+          SELECT 1 FROM public.machines m
+          WHERE m.id = p_machine_id
+            AND (
+              m.current_supervisor_id = v_actor_id
+              OR (m.supervisor_ids IS NOT NULL AND m.supervisor_ids @> ARRAY[v_actor_id])
+              OR (
+                m.client_id IS NOT NULL AND EXISTS (
+                  SELECT 1 FROM public.client_supervisors cs
+                  WHERE cs.client_id = m.client_id AND cs.supervisor_id = v_actor_id
+                )
+              )
+            )
+        )
+      ) THEN
+        RAISE EXCEPTION 'Not authorized: Supervisors can only fill shift entries for operators or machinery assigned under their supervision.'
           USING ERRCODE = '42501';
       END IF;
       v_entry_source := 'supervisor';
@@ -377,7 +393,7 @@ BEGIN
   END IF;
 
   IF v_resolved_location IS NULL AND v_resolved_site_id IS NOT NULL THEN
-    SELECT name INTO v_resolved_location FROM public.client_sites WHERE id = v_resolved_site_id;
+    SELECT COALESCE(NULLIF(btrim(site_name), ''), NULLIF(btrim(city), '')) INTO v_resolved_location FROM public.client_sites WHERE id = v_resolved_site_id;
   END IF;
 
   IF v_resolved_location IS NULL AND v_resolved_client_id IS NOT NULL THEN
@@ -499,15 +515,26 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_machine_id;
 
-  -- 17. Sync active assignment shift_code if provided
-  IF v_shift_code IS NOT NULL AND p_operator_id IS NOT NULL THEN
+  -- 17. Sync assignment shift_code
+  IF v_shift_code IS NOT NULL AND p_operator_id IS NOT NULL AND NOT v_is_assisted_override THEN
     UPDATE public.operator_machine_assignments
-    SET shift_code = v_shift_code,
-        updated_at = NOW()
-    WHERE machine_id = p_machine_id
-      AND operator_id = p_operator_id
-      AND is_active = true
-      AND (shift_code IS NULL OR shift_code <> v_shift_code);
+    SET shift_code = v_shift_code, updated_at = NOW()
+    WHERE id = (
+      SELECT oma.id
+      FROM public.operator_machine_assignments oma
+      WHERE oma.machine_id = p_machine_id
+        AND oma.operator_id = p_operator_id
+        AND oma.is_active = true
+        AND oma.shift_code IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM public.operator_machine_assignments ex
+          WHERE ex.machine_id = p_machine_id
+            AND ex.is_active = true
+            AND ex.shift_code = v_shift_code
+            AND ex.id <> oma.id
+        )
+      LIMIT 1
+    );
   END IF;
 
   -- 18. Record Structured Audit Log Atomically
@@ -541,7 +568,7 @@ BEGIN
     v_actor_id,
     'machine.hour_logged',
     'machine',
-    p_machine_id,
+    p_machine_id::text,
     v_audit_meta,
     v_audit_meta,
     NOW()
@@ -594,10 +621,26 @@ CREATE POLICY "insert_machine_hour_logs" ON public.machine_hour_logs
     -- Management roles (super_admin, admin, manager)
     ((SELECT current_user_role()) = ANY (ARRAY['super_admin'::text, 'admin'::text, 'manager'::text]))
     OR
-    -- Supervisor: strictly for operators who come under their supervision
+    -- Supervisor: strictly for operators who come under their supervision or machines they supervise
     (
       ((SELECT current_user_role()) = 'supervisor'::text)
-      AND public.is_operator_under_supervisor(auth.uid(), operator_id)
+      AND (
+        public.is_operator_under_supervisor(auth.uid(), operator_id)
+        OR EXISTS (
+          SELECT 1 FROM public.machines m
+          WHERE m.id = machine_hour_logs.machine_id
+            AND (
+              m.current_supervisor_id = auth.uid()
+              OR (m.supervisor_ids IS NOT NULL AND m.supervisor_ids @> ARRAY[auth.uid()])
+              OR (
+                m.client_id IS NOT NULL AND EXISTS (
+                  SELECT 1 FROM public.client_supervisors cs
+                  WHERE cs.client_id = m.client_id AND cs.supervisor_id = auth.uid()
+                )
+              )
+            )
+        )
+      )
     )
   );
 
@@ -608,12 +651,28 @@ DROP POLICY IF EXISTS "view_machine_hour_logs" ON public.machine_hour_logs;
 CREATE POLICY "view_machine_hour_logs" ON public.machine_hour_logs
   FOR SELECT TO authenticated
   USING (
-    ((SELECT current_user_role()) = ANY (ARRAY['super_admin', 'admin', 'manager', 'hr']))
+    ((SELECT current_user_role()) = ANY (ARRAY['super_admin'::text, 'admin'::text, 'manager'::text, 'hr'::text]))
     OR operator_id = auth.uid()
     OR entered_by = auth.uid()
-    OR public.check_user_can_access_machine(machine_id)
+    OR public.check_user_can_access_machine(machine_hour_logs.machine_id, auth.uid())
     OR (
-      (SELECT current_user_role()) = 'supervisor'
-      AND public.is_operator_under_supervisor(auth.uid(), operator_id)
+      (SELECT current_user_role()) = 'supervisor'::text
+      AND (
+        public.is_operator_under_supervisor(auth.uid(), operator_id)
+        OR EXISTS (
+          SELECT 1 FROM public.machines m
+          WHERE m.id = machine_hour_logs.machine_id
+            AND (
+              m.current_supervisor_id = auth.uid()
+              OR (m.supervisor_ids IS NOT NULL AND m.supervisor_ids @> ARRAY[auth.uid()])
+              OR (
+                m.client_id IS NOT NULL AND EXISTS (
+                  SELECT 1 FROM public.client_supervisors cs
+                  WHERE cs.client_id = m.client_id AND cs.supervisor_id = auth.uid()
+                )
+              )
+            )
+        )
+      )
     )
   );

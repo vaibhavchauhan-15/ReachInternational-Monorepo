@@ -16,6 +16,7 @@ export const CACHE_TIERS = {
 
   /** Class B: Catalogs & Summaries (5 minutes) - Product Catalog, Heavy Report Summaries */
   CLASS_B_CATALOG: 300,
+  CLASS_B_SEMI_DYNAMIC: 300,
 
   /** Class B: Machine Fleet Directory (1 minute) - Machine Directory, Model Specs */
   CLASS_B_FLEET: 60,

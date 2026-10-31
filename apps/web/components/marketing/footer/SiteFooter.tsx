@@ -1,23 +1,23 @@
 import Link from 'next/link'
-import { ReachLogo } from '@/components/marketing/primitives/ReachLogo'
+import { ReachLogo } from '@/components/branding/ReachLogo'
 
 const footerSections = [
   {
     title: 'Equipment',
     links: [
-      { href: '/equipment/boom-lifts/', label: 'Boom Lifts' },
-      { href: '/equipment/scissor-lifts/', label: 'Scissor Lifts' },
-      { href: '/equipment/forklifts/', label: 'Forklifts' },
-      { href: '/equipment/reach-trucks/', label: 'Reach Trucks' },
-      { href: '/equipment/vertical-mast-lifts/', label: 'Vertical Mast Lifts' },
+      { href: '/equipment/awp/boom-lifts', label: 'Boom Lifts' },
+      { href: '/equipment/awp/scissor-lifts', label: 'Scissor Lifts' },
+      { href: '/equipment/mhe/forklifts', label: 'Forklifts' },
+      { href: '/equipment/mhe/reach-trucks', label: 'Reach Trucks' },
+      { href: '/equipment/awp/vertical-mast-lifts', label: 'Vertical Mast Lifts' },
     ],
   },
   {
     title: 'Services',
     links: [
-      { href: '/services/rental/', label: 'Rental' },
-      { href: '/services/equipment-sales/', label: 'Sales' },
-      { href: '/contact/', label: 'Support & Maintenance' },
+      { href: '/#quote-promo', label: 'Rental' },
+      { href: '/#quote-promo', label: 'Sales' },
+      { href: '/#quote-promo', label: 'Support & Maintenance' },
     ],
   },
   {

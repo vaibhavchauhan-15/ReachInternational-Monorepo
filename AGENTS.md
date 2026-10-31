@@ -19,6 +19,24 @@ This project uses a **two-level rule system**. Module-specific rules extend — 
 ```
 AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 │
+├── rules/testing/                 ← Centralized Monorepo Testing Standards (00-14)
+│   ├── README.md                  ← Testing index, navigation & rule hierarchy
+│   ├── 00-testing-policy.md       ← Mandatory global testing policy & quality gates
+│   ├── 01-test-selection.md       ← Change-impact analysis & test selection matrix
+│   ├── 02-code-quality-types.md   ← TypeScript, lint, formatting & dependency checks
+│   ├── 03-unit-component-testing.md ← Unit, component & business logic tests
+│   ├── 04-integration-api-database.md ← APIs, Server Actions, Supabase, Postgres, RPC, RLS
+│   ├── 05-web-e2e-testing.md      ← Web E2E, user journeys, auth & data tables
+│   ├── 06-ui-ux-responsive-visual.md ← 3-tier viewports, Geist tokens & data tables
+│   ├── 07-accessibility-testing.md ← WCAG 2.2 AA, keyboard, screen readers, ARIA
+│   ├── 08-security-testing.md     ← ASVS, negative authorization, RLS & secrets
+│   ├── 09-performance-testing.md  ← Web Vitals, bundles, query p95 & Hermes
+│   ├── 10-native-mobile-testing.md ← Expo SDK 57, iOS/Android, SecureStore & Touch
+│   ├── 11-marketing-seo-testing.md ← Public marketing SEO, Sitemap & Robots
+│   ├── 12-marketing-ai-crawler-llm.md ← AI crawler policies & LLM discoverability
+│   ├── 13-regression-release-testing.md ← Level 3 release acceptance battery
+│   └── 14-test-reporting.md       ← Standardized test evidence report format
+│
 ├── security/                      ← Monorepo-wide baseline security policies
 │   ├── README.md                  ← Security architecture & navigation
 │   ├── SECURITY-RULES.md          ← Mandatory non-negotiable security requirements
@@ -41,13 +59,12 @@ AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 ├── packages/permissions/AGENTS.md   ← Canonical RBAC & permission matrices
 ├── packages/types/AGENTS.md         ← Shared TypeScript data models & schemas
 ├── packages/validation/AGENTS.md    ← Zod schemas & shared validation
-├── packages/api-client/AGENTS.md    ← API transport & query clients
 ├── packages/utils/AGENTS.md         ← Common cross-platform utilities
-├── packages/config/AGENTS.md        ← Shared configuration constants
 └── supabase/AGENTS.md             ← Database / RLS / RPC / migration rules
 ```
 
 **When working in a module**, read BOTH this file AND the module's `AGENTS.md`.
+**When working on testing-affected code**, also read the relevant documents in `rules/testing/`.
 **When working on security-affected code**, also read the relevant documents in `security/` and `apps/*/security/`.
 **When a module rule conflicts with a global rule**, the STRICTER rule wins.
 
@@ -120,7 +137,24 @@ Before planning, editing, analyzing, or executing anything, every AI agent MUST 
    - `security/DEPENDENCY-SECURITY.md`
    - `security/INCIDENT-RESPONSE.md`
    - `security/SECURITY-TESTING.md`
-9. **Module-specific `AGENTS.md` & Scoped Security Policies**:
+9. **Authoritative Centralized Testing Standards (`rules/testing/`)**:
+   - `rules/testing/README.md` (Testing index, navigation, & rule hierarchy)
+   - `rules/testing/00-testing-policy.md` (Mandatory global testing policy & quality gates)
+   - `rules/testing/01-test-selection.md` (Change-impact analysis & test selection matrix)
+   - `rules/testing/02-code-quality-types.md` (TypeScript strictness, linting, imports, dead code)
+   - `rules/testing/03-unit-component-testing.md` (Unit tests, Zod schemas, calculations, components)
+   - `rules/testing/04-integration-api-database.md` (Server Actions, DAL, Supabase, Postgres, RLS)
+   - `rules/testing/05-web-e2e-testing.md` (Playwright web E2E, journeys, auth, data tables)
+   - `rules/testing/06-ui-ux-responsive-visual.md` (3-tier viewports, Geist tokens, responsive tables)
+   - `rules/testing/07-accessibility-testing.md` (WCAG 2.2 AA, axe-core, keyboard, contrast, ARIA)
+   - `rules/testing/08-security-testing.md` (ASVS, negative authorization, RLS & secrets)
+   - `rules/testing/09-performance-testing.md` (Web Vitals, bundles, query p95 & Hermes)
+   - `rules/testing/10-native-mobile-testing.md` (Expo SDK 57, iOS/Android, SecureStore & Touch)
+   - `rules/testing/11-marketing-seo-testing.md` (Public marketing SEO, Sitemap & Robots)
+   - `rules/testing/12-marketing-ai-crawler-llm.md` (AI crawler policies & LLM discoverability)
+   - `rules/testing/13-regression-release-testing.md` (Level 3 release acceptance battery)
+   - `rules/testing/14-test-reporting.md` (Standardized test evidence report format)
+10. **Module-specific `AGENTS.md` & Scoped Security Policies**:
    - Web: `apps/web/AGENTS.md` and `apps/web/security/SECURITY-RULES.md`
    - Mobile: `apps/mobile/AGENTS.md` and `apps/mobile/security/SECURITY-RULES.md`
    - Database: `supabase/AGENTS.md`
@@ -455,23 +489,43 @@ For each affected workflow check:
 
 ---
 
-## 14. TESTING GATE
+## 14. TESTING GATE & MANDATORY TESTING STANDARDS ENFORCEMENT
 
-### Minimum verification:
+> **AUTHORITATIVE TESTING DIRECTORY**: [`rules/testing/`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/README.md)
+> *Every AI coding agent and subagent MUST consult and enforce the centralized testing rules in `rules/testing/` for EVERY development task before declaring completion.*
 
-1. TypeScript / typecheck
-2. Lint
-3. Unit tests where applicable
-4. Integration tests where applicable
-5. Module-specific tests
-6. RBAC/security tests where applicable
-7. Database/migration verification where applicable
-8. Web build
-9. Mobile validation/build where applicable
+### Mandatory 8-Step Agent Testing Workflow:
+Every AI agent and subagent MUST:
+1. **Read `rules/testing/README.md`** before starting any coding task.
+2. **Read the applicable detailed testing rules** for the affected technical domain (`00` through `14`).
+3. **Inspect affected files and dependencies** to determine the direct and downstream blast radius.
+4. **Prepare a change-impact testing plan** selecting the right-sized execution level (`01-test-selection.md`).
+5. **Run relevant tests after implementation** using official project commands.
+6. **Fix newly introduced failures** before running further tests (`FAIL → DIAGNOSE → FIX → RE-VERIFY`).
+7. **Run regression checks according to risk** (Level 1, Level 2, or Level 3 acceptance).
+8. **Provide actual test results in the final report** adhering to the standardized schema in [`14-test-reporting.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/14-test-reporting.md).
+
+### Task Scope Enforcement:
+Apply this testing requirement to:
+- New features
+- Bug fixes
+- Refactoring
+- UI/UX and styling changes
+- API and Server Action changes
+- Database schemas, RLS, and migration changes
+- Security and permission modifications
+- Dependency updates and package configuration
+- Native mobile application changes
+
+*Documentation-only changes should use appropriate documentation validation (e.g. `verify-security-links.mjs`) rather than unnecessary application builds.*
+
+### Three Mandatory Test Execution Levels:
+- **Level 1 (Every Relevant Code Change)**: Affected package typecheck (`pnpm typecheck`), relevant lint (`pnpm lint`), targeted unit/component tests, import and diff hygiene checks.
+- **Level 2 (Feature Completion)**: Integration and E2E tests, 3-tier responsive viewport audit (Mobile/Tablet/Desktop), WCAG accessibility check, security negative tests, visual regression.
+- **Level 3 (Major Release / Refactor)**: Full monorepo verification, all package tests, production Web build (`pnpm build`), mobile validation, database seed/migration replay, security audit (`pnpm audit`).
 
 ### NEVER claim "Tested successfully" unless the relevant test/build actually completed successfully.
-
-If a test cannot be run, explicitly state: **NOT RUN — reason**
+If a test cannot be run, explicitly state: **NOT RUN — reason** (or **NOT APPLICABLE** with technical justification). Fabricating results or claiming an untested platform passed is strictly prohibited.
 
 ---
 

@@ -105,7 +105,7 @@
     "agentation": "^3.0.2",
     "babel-preset-expo": "~57.0.15",
     "react-dom": "19.2.3",
-    "typescript": "^6.0.3"
+    "typescript": "^5.7.0"
   },
   "expo": {
     "install": {

@@ -74,3 +74,86 @@ export function buildServiceJsonLd(name: string, description: string, url: strin
     },
   };
 }
+
+/**
+ * Build a Product JSON-LD schema for equipment models.
+ * Complies strictly with schema.org/Product without fake prices or fake reviews.
+ */
+export function buildProductJsonLd(product: {
+  name: string;
+  description: string;
+  image: string;
+  brandName: string;
+  modelNumber: string;
+  categoryName: string;
+  url: string;
+  rentalAvailable: boolean;
+  purchaseAvailable: boolean;
+}) {
+  const offers: any[] = [];
+
+  if (product.rentalAvailable) {
+    offers.push({
+      '@type': 'Offer',
+      businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
+      availability: 'https://schema.org/InStock',
+      url: BASE_URL + product.url,
+      seller: {
+        '@type': 'Organization',
+        name: 'Reach International',
+        url: BASE_URL,
+      },
+    });
+  }
+
+  if (product.purchaseAvailable) {
+    offers.push({
+      '@type': 'Offer',
+      businessFunction: 'http://purl.org/goodrelations/v1#Sell',
+      availability: 'https://schema.org/InStock',
+      url: BASE_URL + product.url,
+      seller: {
+        '@type': 'Organization',
+        name: 'Reach International',
+        url: BASE_URL,
+      },
+    });
+  }
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description,
+    image: product.image.startsWith('http') ? product.image : BASE_URL + product.image,
+    model: product.modelNumber,
+    category: product.categoryName,
+    brand: {
+      '@type': 'Brand',
+      name: product.brandName,
+    },
+    offers: offers.length === 1 ? offers[0] : offers,
+    url: BASE_URL + product.url,
+  };
+}
+
+/**
+ * Build an ItemList JSON-LD schema for category and segment listings.
+ */
+export function buildEquipmentItemListJsonLd(
+  title: string,
+  items: Array<{ name: string; url: string; image?: string; position: number }>
+) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: title,
+    itemListElement: items.map((it) => ({
+      '@type': 'ListItem',
+      position: it.position,
+      name: it.name,
+      url: BASE_URL + it.url,
+      ...(it.image ? { image: it.image.startsWith('http') ? it.image : BASE_URL + it.image } : {}),
+    })),
+  };
+}

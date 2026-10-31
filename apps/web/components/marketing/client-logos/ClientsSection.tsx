@@ -38,59 +38,59 @@ export function ClientsSection() {
             className="text-base md:text-lg mt-3 md:mt-4 leading-relaxed max-w-2xl mx-auto"
             style={{ color: 'var(--text-secondary)' }}
           >
-            From national infrastructure mega-projects and oil refineries to automotive factories and high-bay logistics hubs, India&apos;s top public and private enterprises depend on Reach International for reliable aerial access and material handling equipment.
+            India&apos;s top public and private enterprises depend on Reach International for reliable aerial access and material handling equipment.
           </p>
 
           {/* Quick Credibility Trust Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 md:mt-8 max-w-2xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5 mt-6 md:mt-8 max-w-3xl mx-auto">
             <div
-              className="px-3.5 py-2.5 rounded-xl border flex items-center gap-2.5 justify-center shadow-2xs"
+              className="px-4 py-2.5 rounded-full border flex items-center gap-2 justify-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xs"
               style={{
-                backgroundColor: 'var(--surface-sunken)',
+                backgroundColor: 'var(--surface-base)',
                 borderColor: 'var(--border-subtle)',
               }}
             >
-              <ShieldCheck className="w-4 h-4 text-[var(--icon-accent)] flex-none" />
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <ShieldCheck className="w-3.5 h-3.5 text-[#0284c7] flex-none" />
+              <span className="text-xs font-medium tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                 100% Certified Fleet
               </span>
             </div>
 
             <div
-              className="px-3.5 py-2.5 rounded-xl border flex items-center gap-2.5 justify-center shadow-2xs"
+              className="px-4 py-2.5 rounded-full border flex items-center gap-2 justify-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xs"
               style={{
-                backgroundColor: 'var(--surface-sunken)',
+                backgroundColor: 'var(--surface-base)',
                 borderColor: 'var(--border-subtle)',
               }}
             >
-              <Zap className="w-4 h-4 text-[var(--icon-accent)] flex-none" />
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                &lt;5% Target Breakdown
+              <Zap className="w-3.5 h-3.5 text-[#0284c7] flex-none" />
+              <span className="text-xs font-medium tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                &lt;5% Breakdown Rate
               </span>
             </div>
 
             <div
-              className="px-3.5 py-2.5 rounded-xl border flex items-center gap-2.5 justify-center shadow-2xs"
+              className="px-4 py-2.5 rounded-full border flex items-center gap-2 justify-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xs"
               style={{
-                backgroundColor: 'var(--surface-sunken)',
+                backgroundColor: 'var(--surface-base)',
                 borderColor: 'var(--border-subtle)',
               }}
             >
-              <Award className="w-4 h-4 text-[var(--icon-accent)] flex-none" />
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <Award className="w-3.5 h-3.5 text-[#0284c7] flex-none" />
+              <span className="text-xs font-medium tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                 10+ Years Excellence
               </span>
             </div>
 
             <div
-              className="px-3.5 py-2.5 rounded-xl border flex items-center gap-2.5 justify-center shadow-2xs"
+              className="px-4 py-2.5 rounded-full border flex items-center gap-2 justify-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xs"
               style={{
-                backgroundColor: 'var(--surface-sunken)',
+                backgroundColor: 'var(--surface-base)',
                 borderColor: 'var(--border-subtle)',
               }}
             >
-              <Building2 className="w-4 h-4 text-[var(--icon-accent)] flex-none" />
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <Building2 className="w-3.5 h-3.5 text-[#0284c7] flex-none" />
+              <span className="text-xs font-medium tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                 Pan-India Deployment
               </span>
             </div>

@@ -540,7 +540,7 @@ try {
   assert(userDetailCheck183.includes('<Badge\n                  role={user.role}'), 'UserDetailModal reuses centralized Badge for user role');
   assert(userDetailCheck183.includes('<Badge\n                  status={user.status}\n                  dot'), 'UserDetailModal reuses centralized Badge with dot for user status');
 
-  const todayShiftCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftCard.tsx'), 'utf8');
+  const todayShiftCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/operations/MobileTodayShiftCard.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(todayShiftCardCheck183.includes('<Badge\n            status='), 'MobileTodayShiftCard reuses centralized Badge for shift log status');
 
   const deleteDialogCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/DeleteUserConfirmDialog.tsx'), 'utf8').replace(/\r\n/g, '\n');

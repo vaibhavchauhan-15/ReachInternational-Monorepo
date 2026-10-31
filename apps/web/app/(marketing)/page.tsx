@@ -3,11 +3,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { buildFaqJsonLd } from '@/lib/seo/jsonld'
 import { Button } from '@/components/marketing/ui/button'
-import { Badge } from '@/components/marketing/ui/badge'
-import { Card } from '@/components/marketing/ui/card'
 import { BrandsSection } from '@/components/marketing/brands/BrandsSection'
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/marketing/ui/accordion'
-import { ArrowRight } from '@untitledui/icons'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/Accordion'
+import { ArrowRight, Check, CheckCircle2, Sparkles, ShieldCheck } from 'lucide-react'
+import { LiquidMetalButton } from '@/components/ui'
 import { HeroSection } from '@/components/marketing/hero/HeroSection'
 import { ClientsSection } from '@/components/marketing/client-logos/ClientsSection'
 import { IndustriesSection } from '@/components/marketing/industries/IndustriesSection'
@@ -154,7 +153,7 @@ export default function HomePage() {
                 Aerial Work Platforms (AWP)
               </h2>
               <p className="text-base mt-2 max-w-xl" style={{ color: 'var(--text-secondary)' }}>
-                High-reach access platforms engineered for worker safety, precision positioning, and elevated job site productivity.
+                High-reach access platforms engineered for worker safety and elevated job-site productivity.
               </p>
             </div>
             <Link
@@ -261,7 +260,7 @@ export default function HomePage() {
                 Material Handling Equipment (MHE)
               </h2>
               <p className="text-base mt-2 max-w-xl" style={{ color: 'var(--text-secondary)' }}>
-                Heavy-duty diesel, electric, and lithium-ion forklifts and reach trucks engineered for demanding warehouse and plant logistics.
+                Heavy-duty forklifts and reach trucks engineered for warehouse and plant logistics.
               </p>
             </div>
             <Link

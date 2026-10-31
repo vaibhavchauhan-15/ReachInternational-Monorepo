@@ -49,19 +49,19 @@ function pass(name) {
 
 // 1. Read files
 const operatorCardPath = path.join(__dirname, 'components', 'dashboard', 'operator', 'OperatorDashboardCard.tsx');
-const operatorCardSrc = fs.readFileSync(operatorCardPath, 'utf8');
+const operatorCardSrc = fs.readFileSync(operatorCardPath, 'utf8').replace(/\r\n/g, '\n');
 
 const dashboardPath = path.join(__dirname, 'app', '(app)', 'dashboard.tsx');
-const dashboardSrc = fs.readFileSync(dashboardPath, 'utf8');
+const dashboardSrc = fs.readFileSync(dashboardPath, 'utf8').replace(/\r\n/g, '\n');
 
 const entryCardPath = path.join(__dirname, 'components', 'operations', 'MobileOperatorEntryCard.tsx');
-const entryCardSrc = fs.readFileSync(entryCardPath, 'utf8');
+const entryCardSrc = fs.readFileSync(entryCardPath, 'utf8').replace(/\r\n/g, '\n');
 
 const syncCoordinatorPath = path.join(__dirname, 'lib', 'offline', 'SyncCoordinator.ts');
-const syncCoordinatorSrc = fs.readFileSync(syncCoordinatorPath, 'utf8');
+const syncCoordinatorSrc = fs.readFileSync(syncCoordinatorPath, 'utf8').replace(/\r\n/g, '\n');
 
 const shiftNotifierPath = path.join(__dirname, 'lib', 'notifications', 'shiftEndNotifier.ts');
-const shiftNotifierSrc = fs.readFileSync(shiftNotifierPath, 'utf8');
+const shiftNotifierSrc = fs.readFileSync(shiftNotifierPath, 'utf8').replace(/\r\n/g, '\n');
 
 // -----------------------------------------------------------------------------
 // Group 1: Instant UI Rendering & Per-Shift Log Actions

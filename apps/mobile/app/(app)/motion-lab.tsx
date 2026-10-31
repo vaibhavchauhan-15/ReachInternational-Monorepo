@@ -16,7 +16,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import {
   MobileHeader,
   Text,
@@ -47,6 +47,11 @@ import {
 import { postNotification } from '../../lib/notifications/postNotification';
 
 export default function MotionLabScreen() {
+  // Restrict development diagnostic lab from production release builds
+  if (!__DEV__) {
+    return <Redirect href="/dashboard" />;
+  }
+
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { isReduced, SPATIAL, EFFECTS, DUR } = useMotion();

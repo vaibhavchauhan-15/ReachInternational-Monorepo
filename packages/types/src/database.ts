@@ -1941,3 +1941,151 @@ export interface Village {
   updated_at?: string;
 }
 
+
+// ---------------------------------------------------------------------------
+// Equipment Catalogue Types (Public Marketing Website & Fleet Showcase)
+// ---------------------------------------------------------------------------
+export interface EquipmentSegment {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface EquipmentCategory {
+  id: string;
+  segment_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  image_url: string | null;
+  sort_order: number;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+  segment?: EquipmentSegment;
+  models_count?: number;
+}
+
+export interface EquipmentBrand {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  dark_logo_url: string | null;
+  website: string | null;
+  is_partner: boolean;
+  sort_order: number;
+  created_at: string;
+  models_count?: number;
+}
+
+export interface EquipmentModel {
+  id: string;
+  brand_id: string;
+  category_id: string;
+  model_name: string;
+  model_number: string;
+  slug: string;
+  subtype: string | null;
+  short_description: string;
+  full_description: string;
+  primary_image_url: string;
+  is_featured: boolean;
+  is_published: boolean;
+  rental_available: boolean;
+  purchase_available: boolean;
+  primary_working_height: string | null;
+  primary_capacity: string | null;
+  primary_power_source: string | null;
+  applications: string[];
+  features: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EquipmentSpecDefinition {
+  id: string;
+  category_id: string | null;
+  group_name: string;
+  name: string;
+  code: string;
+  unit: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface EquipmentSpecification {
+  id: string;
+  equipment_id: string;
+  spec_definition_id: string;
+  spec_value: string;
+  is_key_spec: boolean;
+  sort_order: number;
+  definition?: EquipmentSpecDefinition;
+}
+
+export interface EquipmentMedia {
+  id: string;
+  equipment_id: string;
+  media_url: string;
+  media_type: 'image' | 'video';
+  alt_text: string;
+  sort_order: number;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface EquipmentDocument {
+  id: string;
+  equipment_id: string;
+  title: string;
+  document_type: 'brochure' | 'spec_sheet' | 'manual' | 'certification';
+  file_url: string;
+  file_size_bytes: number;
+  mime_type: string;
+  is_published: boolean;
+  created_at: string;
+}
+
+export interface EquipmentEnquiry {
+  id: string;
+  equipment_id: string | null;
+  customer_name: string;
+  company_name: string | null;
+  phone: string;
+  email: string;
+  project_location: string;
+  requirement_type: 'rental' | 'purchase' | 'both';
+  rental_duration: string | null;
+  additional_requirements: string | null;
+  status: 'new' | 'contacted' | 'quoted' | 'closed' | 'rejected';
+  source_url: string | null;
+  ip_hash: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EquipmentModelWithRelations extends EquipmentModel {
+  brand: EquipmentBrand;
+  category: EquipmentCategory & { segment?: EquipmentSegment };
+  specifications: (EquipmentSpecification & { definition?: EquipmentSpecDefinition })[];
+  media: EquipmentMedia[];
+  documents: EquipmentDocument[];
+}
+
+export interface EquipmentFilterParams {
+  segment?: string;
+  category?: string;
+  brand?: string;
+  subtype?: string;
+  power?: string;
+  rental?: boolean;
+  purchase?: boolean;
+  query?: string;
+  sort?: 'featured' | 'name_asc' | 'name_desc' | 'height_asc' | 'height_desc';
+  page?: number;
+  limit?: number;
+}

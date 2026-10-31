@@ -189,6 +189,47 @@ async function runTests() {
   assert(isSupervisorOrAbove('operator') === false, 'isSupervisorOrAbove rejects operator');
   assert(isSupervisorOrAbove(null) === false, 'isSupervisorOrAbove handles null safely');
 
+  // Test 5: Verify submit_operator_hour_log_atomic allows supervisor for supervised operator
+  const { data: testMachine } = await client.from('machines').select('id, machine_id, hour_meter').limit(1).single();
+  if (testMachine && assignedOperatorId) {
+    const testMeter = Math.max(Number(testMachine.hour_meter) || 0, 500) + 1;
+    const testDate = '2026-05-15';
+    await client.from('machine_hour_logs').delete().eq('machine_id', testMachine.id).eq('log_date', testDate);
+    const { data: rpcRes, error: rpcErr } = await client.rpc('submit_operator_hour_log_atomic', {
+      p_machine_id: testMachine.id,
+      p_operator_id: assignedOperatorId,
+      p_entered_by: supervisor.id,
+      p_log_date: testDate,
+      p_start_datetime: `${testDate}T06:00:00+05:30`,
+      p_end_datetime: `${testDate}T14:00:00+05:30`,
+      p_start_meter: testMeter,
+      p_end_meter: testMeter + 4,
+      p_start_time: '06:00:00',
+      p_end_time: '14:00:00',
+      p_shift_code: 'S1',
+      p_idempotency_key: 'test_sup_verify_' + Date.now(),
+    });
+
+    assert(!rpcErr && rpcRes && rpcRes.success === true, `submit_operator_hour_log_atomic permits supervisor assisted entry: ${rpcErr?.message || 'Success'}`);
+    assert(rpcRes?.entry_source === 'supervisor', `submit_operator_hour_log_atomic sets entry_source: 'supervisor' (actual: ${rpcRes?.entry_source})`);
+
+    if (rpcRes?.log_id) {
+      await client.from('machine_hour_logs').delete().eq('id', rpcRes.log_id);
+    }
+  }
+
+  // Test 6: Verify submit_operator_hour_log_atomic rejects supervisor for completely unassociated operator/machine
+  const dummyOpId = '00000000-0000-0000-0000-000000000099';
+  const dummyMachineId = '00000000-0000-0000-0000-000000000088';
+  const { error: unauthErr } = await client.rpc('submit_operator_hour_log_atomic', {
+    p_machine_id: dummyMachineId,
+    p_operator_id: dummyOpId,
+    p_entered_by: supervisor.id,
+    p_start_meter: 10,
+    p_end_meter: 15,
+  });
+  assert(unauthErr && (unauthErr.code === '42501' || unauthErr.message?.includes('Supervisors can only fill shift entries')), `submit_operator_hour_log_atomic rejects unassociated operator with code 42501`);
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

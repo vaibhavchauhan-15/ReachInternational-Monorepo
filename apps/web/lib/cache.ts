@@ -40,6 +40,10 @@ export const CACHE_TAGS = {
   machineOperations: TAGS.machineOperations,
   operatorOperations: TAGS.operatorOperations,
   attendance: TAGS.attendance,
+  equipment: TAGS.equipment,
+  equipmentCategories: TAGS.equipmentCategories,
+  equipmentBrands: TAGS.equipmentBrands,
+  equipmentList: TAGS.equipmentList,
 } as const;
 
 export type CacheTag = string;

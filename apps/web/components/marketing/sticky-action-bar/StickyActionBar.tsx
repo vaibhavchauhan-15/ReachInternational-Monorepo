@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/marketing/ui/button'
-import { Phone, ArrowRight } from '@untitledui/icons'
+import { Phone, ArrowRight } from 'lucide-react'
 
 /**
  * StickyActionBar — mobile-only persistent bottom bar with Call and Quote CTA.

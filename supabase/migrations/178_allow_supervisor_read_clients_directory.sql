@@ -19,7 +19,7 @@ CREATE POLICY "clients_select_policy" ON public.clients
       deleted_at IS NULL
       AND (
         ((SELECT current_user_role()) = ANY (ARRAY['manager', 'hr', 'supervisor']))
-        OR public.check_user_can_access_client(id)
+        OR public.check_user_can_access_client(id, auth.uid())
       )
     )
   );

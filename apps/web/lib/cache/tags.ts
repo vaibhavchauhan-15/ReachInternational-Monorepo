@@ -14,6 +14,12 @@ export const TAGS = {
   settings: "system-settings",
 
   // Class B: Semi-Dynamic Directories & Catalogs
+  equipment: "equipment",
+  equipmentCategories: "equipment:categories",
+  equipmentBrands: "equipment:brands",
+  equipmentList: "equipment:list",
+  equipmentEnquiries: "equipment:enquiries",
+
   machines: "machines",
   machinesList: "machines:list",
   machinesKpis: "machines:kpis",

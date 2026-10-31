@@ -9,7 +9,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ThemeToggle } from './ThemeToggle'
-import { ReachLogo } from '@/components/marketing/primitives/ReachLogo'
+import { ReachLogo } from '@/components/branding/ReachLogo'
 import { Button } from '@/components/marketing/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -18,13 +18,11 @@ import {
   X,
   Truck,
   Wrench,
-  Building2,
-  Warehouse,
-  Factory,
-  HardHat,
+  Lock,
   ChevronRight,
   ChevronDown,
 } from 'lucide-react'
+import { LiquidMetalButton } from '@/components/ui/liquid-metal-button'
 
 // ============================================================================
 // Navigation Link Definitions
@@ -32,62 +30,35 @@ import {
 
 const equipmentLinks = {
   access: [
-    { href: '/equipment/boom-lifts/', label: 'Boom Lifts', desc: 'Articulated and telescopic heavy reach.' },
-    { href: '/equipment/scissor-lifts/', label: 'Scissor Lifts', desc: 'Electric and rough-terrain slab lifts.' },
-    { href: '/equipment/vertical-mast-lifts/', label: 'Vertical Mast Lifts', desc: 'Zero-tailswing indoor solutions.' },
-    { href: '/equipment/spider-lifts/', label: 'Spider Lifts', desc: 'Tracked crawlers for sensitive floors.' },
+    { href: '/equipment/awp/boom-lifts', label: 'Boom Lifts', desc: 'Articulated and telescopic heavy reach.' },
+    { href: '/equipment/awp/scissor-lifts', label: 'Scissor Lifts', desc: 'Electric and rough-terrain slab lifts.' },
+    { href: '/equipment/awp/vertical-mast-lifts', label: 'Vertical Mast Lifts', desc: 'Zero-tailswing indoor solutions.' },
+    { href: '/equipment/awp', label: 'All AWP Platforms', desc: 'Tracked crawlers for sensitive floors.' },
   ],
   mhe: [
-    { href: '/equipment/forklifts/', label: 'Forklifts', desc: 'Diesel, LPG and electric counterbalanced.' },
-    { href: '/equipment/reach-trucks/', label: 'Reach Trucks', desc: 'Narrow-aisle high-density stacking.' },
-    { href: '/equipment/material-lifts/', label: 'Material Lifts', desc: 'Compact portable crank lifts.' },
-    { href: '/equipment/scaffolding/', label: 'Scaffolding', desc: 'Modular mobile tower systems.' },
+    { href: '/equipment/mhe/forklifts', label: 'Forklifts', desc: 'Diesel, LPG and electric counterbalanced.' },
+    { href: '/equipment/mhe/reach-trucks', label: 'Reach Trucks', desc: 'Narrow-aisle high-density stacking.' },
+    { href: '/equipment/awp/material-lifts', label: 'Material Lifts', desc: 'Compact portable crank lifts.' },
+    { href: '/equipment/mhe', label: 'All MHE Fleet', desc: 'Modular mobile tower systems.' },
   ],
 }
 
 const serviceLinks = [
   {
-    href: '/services/rental/',
+    href: '/#quote-promo',
     label: 'Equipment Rental',
     desc: 'Flexible short & long term rental across India.',
     icon: Truck,
   },
   {
-    href: '/services/equipment-sales/',
+    href: '/#quote-promo',
     label: 'Equipment Sales',
     desc: 'New and certified pre-owned heavy machinery.',
     icon: Wrench,
   },
 ]
 
-const industryLinks = [
-  {
-    href: '/industries/construction/',
-    label: 'Construction',
-    desc: 'Rough-terrain lifts for job sites.',
-    icon: HardHat,
-  },
-  {
-    href: '/industries/warehousing-logistics/',
-    label: 'Warehousing & Logistics',
-    desc: 'Narrow-aisle reach trucks and stackers.',
-    icon: Warehouse,
-  },
-  {
-    href: '/industries/manufacturing/',
-    label: 'Manufacturing',
-    desc: 'Safe indoor vertical access.',
-    icon: Factory,
-  },
-  {
-    href: '/industries/infrastructure/',
-    label: 'Infrastructure',
-    desc: 'High-reach access for major developments.',
-    icon: Building2,
-  },
-]
-
-type ActiveMenu = 'equipment' | 'services' | 'industries' | null
+type ActiveMenu = 'equipment' | 'services' | null
 
 // ============================================================================
 // Main Navigation Component
@@ -101,7 +72,6 @@ export function Navigation() {
   // Mobile accordion states
   const [mobileEquipmentOpen, setMobileEquipmentOpen] = useState(false)
   const [mobileServicesOpen, setMobileServicesOpen] = useState(false)
-  const [mobileIndustriesOpen, setMobileIndustriesOpen] = useState(false)
 
   const headerRef = useRef<HTMLElement>(null)
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -214,12 +184,7 @@ export function Navigation() {
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 left-0 right-0 z-50 transition-colors"
-      style={{
-        backgroundColor: 'var(--surface-base)',
-        borderBottom: '1px solid var(--border-subtle)',
-        boxShadow: 'var(--shadow-sm)',
-      }}
+      className="fixed top-0 left-0 right-0 z-50 transition-colors backdrop-blur-xl bg-white/80 dark:bg-[#0a0a0a]/80 border-b border-black/[0.06] dark:border-white/[0.08] shadow-xs"
     >
       <div className="h-[72px] max-w-wide mx-auto px-4 md:px-6 lg:px-8 flex items-center justify-between gap-4">
         {/* Brand Logo & Desktop/Laptop Navigation */}
@@ -316,39 +281,6 @@ export function Navigation() {
                 </button>
               </li>
 
-              {/* Industries Trigger */}
-              <li
-                className="relative"
-                onMouseEnter={() => handleMouseEnter('industries')}
-                onMouseLeave={scheduleClose}
-              >
-                <button
-                  type="button"
-                  aria-expanded={activeMenu === 'industries'}
-                  aria-haspopup="true"
-                  onClick={() => handleTriggerClick('industries')}
-                  className={cn(
-                    'group inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-all select-none',
-                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
-                    'active:scale-[0.98]',
-                    activeMenu === 'industries'
-                      ? 'bg-accent text-accent-foreground font-semibold shadow-xs'
-                      : pathname.startsWith('/industries')
-                        ? 'text-foreground font-semibold'
-                        : 'text-muted-foreground'
-                  )}
-                >
-                  <span>Industries</span>
-                  <ChevronDown
-                    className={cn(
-                      'ms-1 size-3.5 transition-transform duration-200 text-muted-foreground group-hover:text-foreground',
-                      activeMenu === 'industries' && 'rotate-180 text-foreground'
-                    )}
-                    aria-hidden="true"
-                  />
-                </button>
-              </li>
-
               {/* About Link */}
               <li>
                 <Link
@@ -396,8 +328,8 @@ export function Navigation() {
                   className="absolute top-[calc(100%+8px)] z-50 rounded-xl overflow-hidden pointer-events-auto bg-white dark:bg-[#171717] text-foreground border border-border shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
                   style={{
                     backgroundColor: 'var(--surface-elevated)',
-                    // Positioning: Equipment starts near nav start; Services/Industries align gracefully
-                    left: activeMenu === 'equipment' ? '0' : activeMenu === 'services' ? '80px' : '180px',
+                    // Positioning: Equipment starts near nav start; Services aligns gracefully
+                    left: activeMenu === 'equipment' ? '0' : '84px',
                   }}
                 >
                   {/* Invisible bridge to prevent pointer gap hover dropouts */}
@@ -428,7 +360,7 @@ export function Navigation() {
                           </p>
                         </div>
                         <Link
-                          href="/equipment/"
+                          href="/#awp-section"
                           onClick={() => setActiveMenu(null)}
                           className="mt-3.5 flex items-center justify-between text-xs font-semibold text-primary hover:underline pt-2.5 border-t border-border"
                         >
@@ -519,77 +451,35 @@ export function Navigation() {
                       </ul>
                     </div>
                   )}
-
-                  {/* 3. INDUSTRIES DROPDOWN */}
-                  {activeMenu === 'industries' && (
-                    <div className="w-[460px] p-3.5">
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-border px-1">
-                        <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
-                          Industries We Serve
-                        </span>
-                        <Link
-                          href="/#industries"
-                          onClick={() => setActiveMenu(null)}
-                          className="text-xs font-semibold text-primary hover:underline"
-                        >
-                          View all
-                        </Link>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {industryLinks.map((ind) => {
-                          const Icon = ind.icon
-                          return (
-                            <Link
-                              key={ind.href}
-                              href={ind.href}
-                              onClick={() => setActiveMenu(null)}
-                              className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors group"
-                            >
-                              <div className="p-1.5 rounded-md bg-muted text-foreground group-hover:bg-primary/10 group-hover:text-primary shrink-0 mt-0.5 transition-colors">
-                                <Icon className="size-4" />
-                              </div>
-                              <div>
-                                <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
-                                  {ind.label}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                                  {ind.desc}
-                                </div>
-                              </div>
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </nav>
         </div>
 
-        {/* Right Actions: ThemeToggle + Sign In + CTA + Mobile Hamburger */}
+        {/* Right Actions: ThemeToggle + Staff Portal + Request a Quote (Liquid Metal CTA) + Mobile Hamburger */}
         <div className="flex items-center gap-2.5">
           <ThemeToggle />
 
-          <Button
+          {/* Discreet Staff Portal link: Clean, low-friction UX that clients naturally ignore */}
+          <Link
             href="/login"
-            variant="ghost"
-            size="md"
-            className="hidden md:inline-flex rounded-full px-4 text-xs font-semibold"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary select-none"
+            title="Staff & Employee Portal"
+            aria-label="Staff and Employee Portal Login"
           >
-            Sign In
-          </Button>
+            <Lock className="size-3 text-muted-foreground/70" />
+            <span>Staff Portal</span>
+          </Link>
 
-          <Button
-            href="/request-a-quote/"
-            color="primary"
-            size="md"
-            className="hidden sm:inline-flex rounded-full px-5 shadow-xs"
-            iconTrailing={<ArrowRight className="size-4" />}
-          >
-            Request a Quote
-          </Button>
+          {/* Premium Liquid Metal CTA for Clients */}
+          <div className="hidden sm:inline-flex items-center">
+            <LiquidMetalButton
+              href="/request-a-quote/"
+              label="Request a Quote"
+              icon={<ArrowRight className="size-3.5" />}
+            />
+          </div>
 
           {/* Mobile hamburger button */}
           <button
@@ -735,7 +625,7 @@ export function Navigation() {
 
                         <Dialog.Close asChild>
                           <Link
-                            href="/equipment/"
+                            href="/#awp-section"
                             className="flex items-center justify-between px-2.5 py-2.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border-t border-border min-h-[44px]"
                           >
                             <span>Browse all equipment</span>
@@ -799,54 +689,6 @@ export function Navigation() {
                 </AnimatePresence>
               </div>
 
-              {/* 3. Industries Accordion */}
-              <div className="rounded-xl border border-border/80 overflow-hidden bg-white dark:bg-[#171717]">
-                <button
-                  type="button"
-                  onClick={() => setMobileIndustriesOpen((prev) => !prev)}
-                  className="w-full flex items-center justify-between px-3.5 min-h-[48px] py-2.5 text-sm font-semibold text-foreground select-none transition-colors hover:bg-muted active:bg-muted/70"
-                >
-                  <span>Industries</span>
-                  <ChevronDown
-                    className={cn(
-                      'size-4 text-muted-foreground transition-transform duration-200',
-                      mobileIndustriesOpen && 'rotate-180'
-                    )}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {mobileIndustriesOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden border-t border-border bg-muted/20"
-                    >
-                      <div className="p-2 space-y-1">
-                        {industryLinks.map((ind) => {
-                          const Icon = ind.icon
-                          return (
-                            <Dialog.Close asChild key={ind.href}>
-                              <Link
-                                href={ind.href}
-                                className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px]"
-                              >
-                                <div className="p-1.5 rounded-md bg-muted text-foreground shrink-0">
-                                  <Icon className="size-3.5" />
-                                </div>
-                                <div className="text-xs font-semibold text-foreground">{ind.label}</div>
-                              </Link>
-                            </Dialog.Close>
-                          )
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
               {/* Direct Links: About Us & Contact */}
               <Dialog.Close asChild>
                 <Link
@@ -874,7 +716,7 @@ export function Navigation() {
             </nav>
 
             {/* Mobile Drawer CTAs */}
-            <div className="p-4 space-y-2.5 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <div className="p-4 space-y-3 shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <Dialog.Close asChild>
                 <Button
                   href="/request-a-quote/"
@@ -886,16 +728,19 @@ export function Navigation() {
                   Request a quote
                 </Button>
               </Dialog.Close>
-              <Dialog.Close asChild>
-                <Button
-                  href="/login"
-                  variant="outline"
-                  size="lg"
-                  className="w-full rounded-xl min-h-[48px]"
-                >
-                  Sign In to Portal
-                </Button>
-              </Dialog.Close>
+
+              <div className="pt-1 text-center">
+                <Dialog.Close asChild>
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Staff and Employee Portal Login"
+                  >
+                    <Lock className="size-3.5 text-muted-foreground/70" />
+                    <span>Staff & Employee Portal</span>
+                  </Link>
+                </Dialog.Close>
+              </div>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

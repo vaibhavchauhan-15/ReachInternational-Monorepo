@@ -1,12 +1,19 @@
 /**
- * Single source of truth for official REACH INTERNATIONAL branding metadata & assets in mobile.
+ * REACH INTERNATIONAL branding metadata & mobile assets.
+ * Re-exports canonical company metadata from @reachinternational/utils.
  * Aligned with apps/web/lib/brand.ts and public asset directory.
  */
-export const BRAND_NAME = "REACH INTERNATIONAL";
-export const BRAND_TAGLINE = "REACHING ALL HEIGHTS";
-export const BRAND_WEBSITE = "https://www.reachinternational.co.in";
-export const BRAND_WEBSITE_DISPLAY = "www.reachinternational.co.in";
-export const BRAND_EMAIL = "info@reachinternational.co.in";
+export {
+  BRAND_NAME,
+  BRAND_TAGLINE,
+  BRAND_WEBSITE,
+  BRAND_WEBSITE_DISPLAY,
+  BRAND_EMAIL,
+  BRAND_PHONE,
+  BRAND_PHONE_DISPLAY,
+  BRAND_METADATA,
+  type BrandMetadata,
+} from "@reachinternational/utils";
 
 export const BRAND_ASSETS = {
   // SVG Vector Brand Marks (crisp, scalable vectors)

@@ -297,7 +297,16 @@ function formatOperatorDatabaseError(error: any): string {
   }
 
   // 5. Permission errors (42501)
-  if (code === "42501" || msg.includes("permission denied") || msg.includes("Unauthorized")) {
+  if (code === "42501" || msg.includes("permission denied") || msg.includes("Unauthorized") || msg.includes("Not authorized")) {
+    if (msg.includes("Supervisors can only fill shift entries") || msg.includes("assigned under their supervision")) {
+      return "Unauthorized: Supervisors can only fill shift entries for operators or machinery assigned under their supervision.";
+    }
+    if (msg.includes("Only roles above supervisor") || msg.includes("on behalf of operators")) {
+      return "Insufficient permissions to enter shift logs on behalf of operators.";
+    }
+    if (msg.includes("Not authorized to submit shift log")) {
+      return "Not authorized to submit shift log.";
+    }
     return "You do not have permission to submit or update logs for this machine.";
   }
 
@@ -346,11 +355,11 @@ export async function submitOperatorHourLogAction(payload: {
       return { success: false, error: "Insufficient permissions to enter logs on behalf of operators." };
     }
     if (userRole === "supervisor" || userRole === "site_supervisor") {
-      const isUnderSupervisor = await isOperatorUnderSupervisor(user.id, payload.operatorId!);
+      const isUnderSupervisor = await isOperatorUnderSupervisor(user.id, payload.operatorId!, payload.machineId);
       if (!isUnderSupervisor) {
         return {
           success: false,
-          error: "Unauthorized: Supervisors can only fill shift entries for operators assigned under their supervision.",
+          error: "Unauthorized: Supervisors can only fill shift entries for operators or machinery assigned under their supervision.",
         };
       }
     }

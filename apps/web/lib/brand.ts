@@ -1,12 +1,19 @@
 /**
- * Single source of truth for official REACH INTERNATIONAL branding metadata & assets.
+ * REACH INTERNATIONAL branding metadata & web assets.
+ * Re-exports canonical company metadata from @reachinternational/utils.
  * Maintained as pure vector + text React identity system.
  */
-export const BRAND_NAME = "REACH INTERNATIONAL";
-export const BRAND_TAGLINE = "REACHING ALL HEIGHTS";
-export const BRAND_WEBSITE = "https://www.reachinternational.co.in";
-export const BRAND_WEBSITE_DISPLAY = "www.reachinternational.co.in";
-export const BRAND_EMAIL = "info@reachinternational.co.in";
+export {
+  BRAND_NAME,
+  BRAND_TAGLINE,
+  BRAND_WEBSITE,
+  BRAND_WEBSITE_DISPLAY,
+  BRAND_EMAIL,
+  BRAND_PHONE,
+  BRAND_PHONE_DISPLAY,
+  BRAND_METADATA,
+  type BrandMetadata,
+} from "@reachinternational/utils";
 
 export const BRAND_ASSETS = {
   // SVG Vector Brand Marks
@@ -34,4 +41,3 @@ export const BRAND_ASSETS = {
 } as const;
 
 export type BrandAssetKey = keyof typeof BRAND_ASSETS;
-

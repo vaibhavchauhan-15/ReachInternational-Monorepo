@@ -13,13 +13,43 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  */
 export async function isOperatorUnderSupervisor(
   supervisorId: string,
-  operatorId: string
+  operatorId: string,
+  machineId?: string
 ): Promise<boolean> {
   if (!supervisorId || !operatorId) return false;
 
   const supabase = createSupabaseAdminClient();
 
-  // 1. Try atomic PostgreSQL RPC first
+  // 1. If machineId is provided, check if supervisor supervises this equipment directly or via client
+  if (machineId) {
+    try {
+      const { data: machine } = await supabase
+        .from("machines")
+        .select("current_supervisor_id, supervisor_ids, client_id")
+        .eq("id", machineId)
+        .maybeSingle();
+
+      if (machine) {
+        if (machine.current_supervisor_id === supervisorId) return true;
+        if (Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.includes(supervisorId)) return true;
+
+        if (machine.client_id) {
+          const { data: clientSup } = await supabase
+            .from("client_supervisors")
+            .select("id")
+            .eq("client_id", machine.client_id)
+            .eq("supervisor_id", supervisorId)
+            .maybeSingle();
+
+          if (clientSup) return true;
+        }
+      }
+    } catch {
+      // Non-blocking, continue to operator pathways
+    }
+  }
+
+  // 2. Try atomic PostgreSQL RPC
   try {
     const { data, error } = await supabase.rpc("is_operator_under_supervisor", {
       p_supervisor_id: supervisorId,
@@ -33,23 +63,20 @@ export async function isOperatorUnderSupervisor(
     // Non-blocking fallback to direct resilient table queries
   }
 
-  // 2. Resilient Fallback: Direct table queries
+  // 3. Resilient Fallback: Direct table queries
   try {
-    // Pathway A & B: users table direct supervisor_id or supervisor_ids array
+    // Pathway A: users table direct supervisor_id column
     const { data: userRow } = await supabase
       .from("users")
-      .select("supervisor_id, supervisor_ids")
+      .select("supervisor_id")
       .eq("id", operatorId)
       .maybeSingle();
 
-    if (userRow) {
-      if (userRow.supervisor_id === supervisorId) return true;
-      if (Array.isArray(userRow.supervisor_ids) && userRow.supervisor_ids.includes(supervisorId)) {
-        return true;
-      }
+    if (userRow && userRow.supervisor_id === supervisorId) {
+      return true;
     }
 
-    // Pathway C: user_supervisors junction table
+    // Pathway B: user_supervisors junction table
     const { data: junctionRow } = await supabase
       .from("user_supervisors")
       .select("id")
@@ -59,7 +86,7 @@ export async function isOperatorUnderSupervisor(
 
     if (junctionRow) return true;
 
-    // Pathway D: Client supervisor inheritance via deployed active machinery
+    // Pathway C: Client supervisor inheritance via deployed active machinery
     const { data: clientSupervised } = await supabase
       .from("client_supervisors")
       .select("client_id")
@@ -80,7 +107,7 @@ export async function isOperatorUnderSupervisor(
       }
     }
 
-    // Pathway E: Direct machine supervision via active operator assignment
+    // Pathway D: Direct machine supervision via active operator assignment
     const { data: activeAssignments } = await supabase
       .from("operator_machine_assignments")
       .select("machine_id, machines!inner(current_supervisor_id, supervisor_ids)")
@@ -96,6 +123,21 @@ export async function isOperatorUnderSupervisor(
         return false;
       });
       if (isSupervisedMachine) return true;
+    }
+
+    // Pathway E: Direct machine current operator fallback
+    const { data: directMachines } = await supabase
+      .from("machines")
+      .select("id, current_supervisor_id, supervisor_ids, current_operator_id, operator_ids")
+      .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`);
+
+    if (directMachines && directMachines.length > 0) {
+      const isDirectSupervised = directMachines.some((m: any) => {
+        if (m.current_supervisor_id === supervisorId) return true;
+        if (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(supervisorId)) return true;
+        return false;
+      });
+      if (isDirectSupervised) return true;
     }
 
     return false;

@@ -53,6 +53,24 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
    - Web: `apps/web/security/` (`README.md`, `SECURITY-RULES.md`, `ATTACK-SURFACE.md`, `THREAT-MODEL.md`, `SECURITY-CHECKLIST.md`)
    - Mobile: `apps/mobile/security/` (`README.md`, `SECURITY-RULES.md`, `ATTACK-SURFACE.md`, `THREAT-MODEL.md`, `SECURITY-CHECKLIST.md`)
 
+6. **Centralized Testing Standards (`rules/testing/`)**:
+   `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\rules\testing`
+   - `README.md` (Testing index, navigation & rule hierarchy)
+   - `00-testing-policy.md` (Mandatory global testing policy & quality gates)
+   - `01-test-selection.md` (Change-impact analysis & test selection matrix)
+   - `02-code-quality-types.md` (TypeScript strictness, linting, imports & dead code)
+   - `03-unit-component-testing.md` (Unit tests, Zod schemas, business logic, components)
+   - `04-integration-api-database.md` (Server Actions, DAL, Supabase, Postgres, RPC, RLS)
+   - `05-web-e2e-testing.md` (Playwright web E2E, journeys, auth, data tables)
+   - `06-ui-ux-responsive-visual.md` (3-tier viewports, Geist tokens, responsive tables)
+   - `07-accessibility-testing.md` (WCAG 2.2 AA, axe-core, keyboard, contrast, ARIA)
+   - `08-security-testing.md` (ASVS, RBAC, RLS, BOLA/IDOR, secrets, pnpm audit)
+   - `09-performance-testing.md` (Web Vitals, bundles, query p95, Hermes, lists)
+   - `10-native-mobile-testing.md` (Expo SDK 57, React Native, iOS/Android, Touch/Haptics)
+   - `11-marketing-seo-testing.md` (Public marketing SEO, Open Graph, Sitemap, Robots)
+   - `12-marketing-ai-crawler-llm.md` (AI crawlers, LLM discoverability, llms.txt, privacy)
+   - `13-regression-release-testing.md` (Level 3 release acceptance, EAS, migration replay)
+   - `14-test-reporting.md` (Test evidence format, PASS/FAIL/BLOCKED statuses)
 
 ---
 
@@ -61,7 +79,7 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
 Every AI session, task, user prompt, and code edit MUST strictly adhere to the following 4-phase execution flow:
 
 ### Phase 1: Rule Ingestion & Alignment (Mandatory Step 0)
-- Read all active rule documents in `AI/RULES/` and `.agents/rules/`.
+- Read all active rule documents in `AI/RULES/`, `.agents/rules/`, and `rules/testing/`.
 - Cross-reference the user's prompt against domain rules to identify all applicable constraints (e.g., Security, UI/UX tokens, Database schemas, API structure, Accessibility, Testing).
 
 ### Phase 2: Strict Rule Compliance Planning
@@ -73,8 +91,9 @@ Every AI session, task, user prompt, and code edit MUST strictly adhere to the f
 - **Mandatory Web-to-Mobile Synchronization**: Whenever ANY feature, component, style, theme, color, modal, drawer, page, module, form field, status badge, or workflow is added or modified in the Web App (`apps/web`), the AI agent MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`) with mobile-compatible adaptations in the same session/task.
 - Never hardcode dynamic layout dimensions, never swallow errors silently, never introduce unverified state mutations, and never ignore responsive design specifications.
 
-### Phase 4: Compliance Verification & Memory Updates
-- Run automated verification (`tsc`, linters, tests) as required by `TESTING-QA.md`.
+### Phase 4: Compliance Verification & Test Evidence Reporting
+- Run automated verification (`pnpm typecheck`, linters, unit tests, mobile runners) as mandated by `rules/testing/`.
+- Conclude task response with a complete Test Execution Report conforming to `rules/testing/14-test-reporting.md`.
 - Automatically update persistent project memory (`AI/STATE.md`, `AI/CURRENT_TASK.md`, `AI/CHANGELOG_AI.md`, and `README.md` if features/schemas/roles changed).
 
 ---

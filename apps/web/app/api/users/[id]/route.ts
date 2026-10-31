@@ -18,30 +18,64 @@ import { maskAadhaar } from "@reachinternational/utils";
 
 export const dynamic = "force-dynamic";
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-};
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^https:\/\/([a-z0-9-]+\.)?reachinternational\.co\.in$/,
+  /^https:\/\/([a-z0-9-]+\.)?vercel\.app$/,
+];
+
+function getCorsHeaders(request?: NextRequest | Request | null): Record<string, string> {
+  const origin = request?.headers.get("origin");
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+    "Vary": "Origin",
+  };
+
+  if (origin) {
+    const isAllowed =
+      (Boolean(process.env.NEXT_PUBLIC_APP_URL) && origin === process.env.NEXT_PUBLIC_APP_URL) ||
+      ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+
+    if (isAllowed) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers["Access-Control-Allow-Credentials"] = "true";
+    }
+  }
+
+  return headers;
+}
 
 /**
  * Handle CORS preflight OPTIONS requests for mobile and web clients.
+ * Rejects unauthorized cross-origin requests with 403 Forbidden.
  */
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const corsHeaders = getCorsHeaders(request);
+
+  if (origin && !corsHeaders["Access-Control-Allow-Origin"]) {
+    return new NextResponse(null, { status: 403 });
+  }
+
   return new NextResponse(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: corsHeaders,
   });
 }
 
-function jsonResponse(data: unknown, init?: { status?: number; headers?: Record<string, string> }) {
-  return NextResponse.json(data, {
-    status: init?.status ?? 200,
-    headers: {
-      ...CORS_HEADERS,
-      ...init?.headers,
-    },
-  });
+function createJsonResponse(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
+  return (data: unknown, init?: { status?: number; headers?: Record<string, string> }) => {
+    return NextResponse.json(data, {
+      status: init?.status ?? 200,
+      headers: {
+        ...corsHeaders,
+        ...init?.headers,
+      },
+    });
+  };
 }
 
 /**
@@ -52,6 +86,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const jsonResponse = createJsonResponse(request);
   try {
     const { id: rawId } = await params;
     if (!rawId) {
@@ -289,6 +324,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const jsonResponse = createJsonResponse(request);
   try {
     const { id: rawId } = await params;
     if (!rawId) {

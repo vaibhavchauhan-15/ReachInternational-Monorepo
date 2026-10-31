@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { InfiniteSlider } from '@/components/ui/infinite-slider';
 import { cn } from '@/lib/utils';
 
@@ -19,43 +19,43 @@ export const partnerBrands: OemBrand[] = [
   {
     name: 'JCB',
     category: 'Aerial & Earthmoving Access',
-    logoSrc: '/images/brands/jcb.svg',
-    darkLogoSrc: '/images/brands/jcb_dark.svg',
-    badgeAccent: '#FFB800',
+    logoSrc: '/images/brands/jcb_v3.svg',
+    darkLogoSrc: '/images/brands/jcb_dark_v3.svg',
+    badgeAccent: '#FCAF26',
   },
   {
     name: 'Toyota',
     category: 'Material Handling Equipment',
-    logoSrc: '/images/brands/toyota.svg',
-    darkLogoSrc: '/images/brands/toyota_dark.svg',
+    logoSrc: '/images/brands/toyota_v3.svg',
+    darkLogoSrc: '/images/brands/toyota_dark_v3.svg',
     badgeAccent: '#EB0A1E',
   },
   {
     name: 'Hyundai',
     category: 'Heavy Material Handling',
-    logoSrc: '/images/brands/hyundai.svg',
-    darkLogoSrc: '/images/brands/hyundai_dark.svg',
-    badgeAccent: '#0072CE',
+    logoSrc: '/images/brands/hyundai_v3.svg',
+    darkLogoSrc: '/images/brands/hyundai_dark_v3.svg',
+    badgeAccent: '#003984',
   },
   {
     name: 'JLG',
     category: 'Aerial Work Platforms',
-    logoSrc: '/images/brands/jlg.svg',
-    darkLogoSrc: '/images/brands/jlg_dark.svg',
-    badgeAccent: '#F37021',
+    logoSrc: '/images/brands/jlg_v3.svg',
+    darkLogoSrc: '/images/brands/jlg_dark_v3.svg',
+    badgeAccent: '#F35C17',
   },
   {
     name: 'Genie',
     category: 'Self-Propelled Access',
-    logoSrc: '/images/brands/genie.svg',
-    darkLogoSrc: '/images/brands/genie_dark.svg',
+    logoSrc: '/images/brands/genie_v3.png',
+    darkLogoSrc: '/images/brands/genie_dark_v3.png',
     badgeAccent: '#0060A9',
   },
   {
     name: 'BYD',
     category: 'Lithium-Ion Electric MHE',
-    logoSrc: '/images/brands/byd.svg',
-    darkLogoSrc: '/images/brands/byd_dark.svg',
+    logoSrc: '/images/brands/byd_v3.svg',
+    darkLogoSrc: '/images/brands/byd_dark_v3.svg',
     badgeAccent: '#E60012',
   },
 ];
@@ -96,7 +96,7 @@ export function OemPartnerLogoCard({ brand }: { brand: OemBrand }) {
         width={190}
         height={65}
         className={cn(
-          'h-9 sm:h-11 md:h-13 lg:h-16 w-auto max-w-[85%] object-contain select-none pointer-events-none transition-transform duration-300 group-hover/brand:scale-105',
+          'brand-logo-on-light h-9 sm:h-11 md:h-13 lg:h-16 w-auto max-w-[85%] object-contain select-none pointer-events-none transition-transform duration-300 group-hover/brand:scale-105',
           brand.darkLogoSrc ? 'dark:hidden' : ''
         )}
         draggable={false}
@@ -109,7 +109,7 @@ export function OemPartnerLogoCard({ brand }: { brand: OemBrand }) {
           alt={`${brand.name} OEM Partner`}
           width={190}
           height={65}
-          className="h-9 sm:h-11 md:h-13 lg:h-16 w-auto max-w-[85%] object-contain select-none pointer-events-none transition-transform duration-300 group-hover/brand:scale-105 hidden dark:block"
+          className="brand-logo-on-dark h-9 sm:h-11 md:h-13 lg:h-16 w-auto max-w-[85%] object-contain select-none pointer-events-none transition-transform duration-300 group-hover/brand:scale-105 hidden dark:block"
           draggable={false}
         />
       )}
@@ -129,18 +129,6 @@ export function BrandsSection() {
     >
       {/* Section Header */}
       <div className="max-w-wide mx-auto px-4 md:px-6 lg:px-8 mb-8 md:mb-10 text-center">
-        <div
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-3 border shadow-2xs"
-          style={{
-            backgroundColor: 'var(--surface-base)',
-            borderColor: 'var(--border-subtle)',
-            color: 'var(--brand-blue, #008CFC)',
-          }}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Authorized OEM Fleet Partnerships</span>
-        </div>
-
         <h2
           className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight"
           style={{ color: 'var(--text-primary)' }}
@@ -229,7 +217,7 @@ export function BrandsSection() {
             •
           </span>
           <Link
-            href="/equipment/"
+            href="/#awp-section"
             className="inline-flex items-center gap-1 font-semibold text-[var(--brand-blue,#008CFC)] hover:underline group"
           >
             <span>Explore Certified Fleet</span>
