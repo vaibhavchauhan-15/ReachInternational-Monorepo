@@ -42,9 +42,11 @@ async function runVerification() {
   const jcbDarkContent = fs.readFileSync(path.join(brandsDir, 'jcb_dark_v3.svg'), 'utf8');
   assert(jcbDarkContent.includes('#FCAF26') && jcbDarkContent.includes('#231F20'), 'JCB Dark is authentic official logo from jcb.com with yellow badge & black container');
 
-  // 4. Check Hyundai Dark has pure `#FFFFFF` vector
+  // 4. Check Hyundai Light & Dark have official colors & zero invalid namespaces
+  const hyundaiLightContent = fs.readFileSync(path.join(brandsDir, 'hyundai_v3.svg'), 'utf8');
   const hyundaiDarkContent = fs.readFileSync(path.join(brandsDir, 'hyundai_dark_v3.svg'), 'utf8');
-  assert(hyundaiDarkContent.includes('#FFFFFF') && !hyundaiDarkContent.includes('sodipodi:namedview'), 'Hyundai Dark is clean vector with #FFFFFF mark without Inkscape bloat');
+  assert(hyundaiLightContent.includes('#003984') && !hyundaiLightContent.includes('inkscape:'), 'Hyundai Light is official vector with #003984 brand blue and zero invalid inkscape namespaces');
+  assert(hyundaiDarkContent.includes('#FFFFFF') && !hyundaiDarkContent.includes('inkscape:'), 'Hyundai Dark is clean vector with #FFFFFF mark and zero invalid inkscape namespaces');
 
   // 5. Check JLG Dark has pure `#FFFFFF` vector without coordinate clipping
   const jlgDarkContent = fs.readFileSync(path.join(brandsDir, 'jlg_dark_v3.svg'), 'utf8');

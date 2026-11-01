@@ -1,8 +1,8 @@
 "use client";
 
-import { AnimatedSearchX, AnimatedArrowLeft, AnimatedHome } from "@/components/ui/animated-icons";
+import { SearchX, ArrowLeft, Home } from "lucide-react";
 import { ReachInternationalLogo } from "@/components/branding";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 
 export default function NotFound() {
   return (
@@ -22,7 +22,7 @@ export default function NotFound() {
         <div className="w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl rounded-2xl border border-border bg-card p-6 sm:p-8 md:p-12 shadow-xl flex flex-col items-center text-card-foreground transition-all duration-200">
           {/* Badge */}
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3.5 py-1.5 text-xs font-semibold text-muted-foreground mb-4 sm:mb-6 shadow-2xs">
-            <AnimatedSearchX size={16} className="text-rose-500" />
+            <SearchX className="size-4 text-rose-500" />
             <span>404 — Page Not Found</span>
           </div>
 
@@ -87,7 +87,7 @@ export default function NotFound() {
               className="w-full sm:w-auto min-w-[140px] text-xs h-10"
               onClick={() => window.history.back()}
             >
-              <AnimatedArrowLeft size={16} className="mr-1.5" />
+              <ArrowLeft className="size-4 mr-1.5" />
               Go Back
             </Button>
 
@@ -96,7 +96,7 @@ export default function NotFound() {
               href="/dashboard"
               className="w-full sm:w-auto min-w-[140px] text-xs h-10"
             >
-              <AnimatedHome size={16} className="mr-1.5" />
+              <Home className="size-4 mr-1.5" />
               Dashboard
             </Button>
           </div>

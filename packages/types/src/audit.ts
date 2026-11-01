@@ -59,24 +59,25 @@ export const AUDIT_ACTIONS = {
   RENTAL_INSPECTED: "rental.inspected",
   RENTAL_DAMAGE_REPORTED: "rental.damage_reported",
 
-  // ── Operations / Running Logs ───────────────────────────────────────────
-  MACHINE_LOG_CREATED: "operations.log_created",
-  MACHINE_LOG_UPDATED: "operations.log_updated",
-  MACHINE_LOG_DELETED: "operations.log_deleted",
-  SHIFT_STARTED: "operations.shift_started",
-  SHIFT_ENDED: "operations.shift_ended",
-  SHIFT_CHANGED: "operations.shift_changed",
-  BREAKDOWN_CREATED: "operations.breakdown_created",
-  BREAKDOWN_UPDATED: "operations.breakdown_updated",
-  BREAKDOWN_RESOLVED: "operations.breakdown_resolved",
-
   // ── Clients ─────────────────────────────────────────────────────────────
   CLIENT_CREATED: "client.created",
   CLIENT_UPDATED: "client.updated",
   CLIENT_DELETED: "client.deleted",
+  CLIENT_STATUS_CHANGED: "client.status_changed",
 
-  // ── Services ────────────────────────────────────────────────────────────
-  SERVICE_CREATED: "service.created",
+  // ── Operations & Shifts ─────────────────────────────────────────────────
+  SHIFT_STARTED: "operations.shift_started",
+  SHIFT_ENDED: "operations.shift_ended",
+  LOG_SUBMITTED: "operations.log_submitted",
+  LOG_EDITED: "operations.log_edited",
+  LOG_APPROVED: "operations.log_approved",
+  LOG_REJECTED: "operations.log_rejected",
+  BREAKDOWN_LOGGED: "operations.breakdown_logged",
+  BREAKDOWN_RESOLVED: "operations.breakdown_resolved",
+
+  // ── Service & Maintenance ───────────────────────────────────────────────
+  SERVICE_SCHEDULED: "service.scheduled",
+  SERVICE_STARTED: "service.started",
   SERVICE_COMPLETED: "service.completed",
   SERVICE_REASSIGNED: "service.reassigned",
   SERVICE_CANCELLED: "service.cancelled",
@@ -91,6 +92,20 @@ export const AUDIT_ACTIONS = {
   SECURITY_EVENT: "security.event",
   RLS_VIOLATION: "security.rls_violation",
   BLOCKED_MUTATION: "security.blocked_mutation",
+
+  // ── Hiring & Careers ────────────────────────────────────────────────────
+  JOB_CREATED: "job.created",
+  JOB_UPDATED: "job.updated",
+  JOB_PUBLISHED: "job.published",
+  JOB_UNPUBLISHED: "job.unpublished",
+  JOB_CLOSED: "job.closed",
+  JOB_REOPENED: "job.reopened",
+  JOB_DUPLICATED: "job.duplicated",
+  JOB_DELETED: "job.deleted",
+  APPLICATION_STATUS_CHANGED: "application.status_changed",
+  APPLICATION_NOTE_SAVED: "application.note_saved",
+  APPLICATION_RESUME_VIEWED: "application.resume_viewed",
+  APPLICATION_EXPORTED: "application.exported",
 
   // ── System / Config ─────────────────────────────────────────────────────
   SETTINGS_UPDATED: "system.settings_updated",
@@ -123,6 +138,7 @@ export const AUDIT_CATEGORIES = [
   "operations",
   "service",
   "sales",
+  "hiring",
   "security",
   "system",
 ] as const;
@@ -137,6 +153,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   operations: "Operations",
   service: "Services",
   sales: "Sales & CRM",
+  hiring: "Hiring & Careers",
   security: "Security",
   system: "System",
 };
@@ -212,6 +229,7 @@ export function deriveAuditCategory(action: string): AuditCategory {
   if (action.startsWith("operations.") || action.startsWith("shift.")) return "operations";
   if (action.startsWith("service.")) return "service";
   if (action.startsWith("sales.")) return "sales";
+  if (action.startsWith("job.") || action.startsWith("application.")) return "hiring";
   if (action.startsWith("security.")) return "security";
   if (action.startsWith("permission.")) return "security";
   return "system";

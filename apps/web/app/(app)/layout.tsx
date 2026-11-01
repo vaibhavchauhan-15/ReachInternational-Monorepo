@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getCurrentUser, isProfileIncomplete } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
+import { PullToRefresh } from "@/components/ui/PullToRefresh";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,9 +40,13 @@ export default async function AppLayout({
   const defaultCollapsed = sidebarCookie === "true";
 
   return (
-    <AppShellClient user={user} defaultCollapsed={defaultCollapsed}>
-      {children}
-    </AppShellClient>
+    <TooltipProvider delayDuration={200}>
+      <AppShellClient user={user} defaultCollapsed={defaultCollapsed}>
+        <PullToRefresh>
+          {children}
+        </PullToRefresh>
+      </AppShellClient>
+    </TooltipProvider>
   );
 }
 

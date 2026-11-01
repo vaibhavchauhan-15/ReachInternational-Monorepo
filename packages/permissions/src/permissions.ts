@@ -84,6 +84,17 @@ export const PERMISSIONS = {
   ATTENDANCE_VIEW: "attendance.view",
   ATTENDANCE_VIEW_SELF: "attendance.view_self",
 
+  // Hiring & Careers
+  HIRING_VIEW: "hiring.view",
+  HIRING_MANAGE: "hiring.manage",
+  HIRING_APPLICATIONS: "hiring.applications",
+
+  // Equipment Marketing & Catalogue Management
+  EQUIPMENT_VIEW: "equipment.view",
+  EQUIPMENT_MANAGE: "equipment.manage",
+  EQUIPMENT_PUBLISH: "equipment.publish",
+  EQUIPMENT_ENQUIRIES: "equipment.enquiries",
+
   // Rental Management
   RENTAL_VIEW: "rental.view",
   RENTAL_CREATE: "rental.create",

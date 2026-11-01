@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useActionState, useState } from "react";
+import React, { useActionState, useState, useEffect } from "react";
 import { submitEquipmentEnquiry, type EnquiryActionResponse } from "@/app/actions/equipment-enquiry";
-import { CheckCircle2, AlertCircle, Loader2, Send, Phone, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface EquipmentEnquiryFormProps {
@@ -25,6 +25,12 @@ export function EquipmentEnquiryForm({
   const [requirementType, setRequirementType] = useState<"rental" | "purchase" | "both">("rental");
   const [state, formAction, isPending] = useActionState(submitEquipmentEnquiry, initialState);
 
+  useEffect(() => {
+    if (state.success && onSuccess) {
+      onSuccess();
+    }
+  }, [state.success, onSuccess]);
+
   return (
     <div
       id="quote-enquiry"
@@ -34,10 +40,6 @@ export function EquipmentEnquiryForm({
       )}
     >
       <div className="mb-6">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold uppercase tracking-wider bg-[#0284c7]/10 text-[#0284c7] mb-3 border border-[#0284c7]/20">
-          <ShieldCheck className="size-3.5" />
-          <span>Quick Quotation &amp; Logistics</span>
-        </div>
         <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
           {equipmentName ? `Request Quote for ${equipmentName}` : "Request Equipment Quotation"}
         </h3>
@@ -53,9 +55,10 @@ export function EquipmentEnquiryForm({
           <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 max-w-md leading-relaxed mb-4">
             {state.message}
           </p>
-          <div className="flex items-center gap-2 text-xs font-mono text-emerald-700 dark:text-emerald-400">
-            <span>Direct Hotline:</span>
-            <span className="font-bold">+91 98200 00000</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-emerald-700 dark:text-emerald-400">
+            <span>Rental: <strong>+91 88000 40308</strong></span>
+            <span>•</span>
+            <span>Sales: <strong>+91 98677 32204</strong></span>
           </div>
         </div>
       ) : (

@@ -12,6 +12,8 @@ import {
   AnimatedSettings,
   AnimatedCreditCard,
   AnimatedCalendarCheck,
+  AnimatedBriefcase,
+  AnimatedFileText,
 } from "@/components/ui/animated-icons";
 import dynamic from "next/dynamic";
 import {
@@ -91,6 +93,40 @@ export const mainNavItems: NavItem[] = [
     roles: ["super_admin", "admin", "hr"],
   },
   {
+    href: "/admin/sales/rfq",
+    label: "Quote Requests",
+    icon: AnimatedFileText,
+    roles: ["super_admin", "admin", "sales"],
+  },
+  {
+    href: "/marketing/equipment",
+    label: "Marketing",
+    icon: AnimatedBriefcase,
+    roles: ["super_admin", "admin", "hr", "manager"],
+    subItems: [
+      {
+        label: "Equipment Fleet",
+        tab: "equipment",
+        href: "/marketing/equipment",
+      },
+      {
+        label: "Enquiries",
+        tab: "enquiries",
+        href: "/marketing/equipment/enquiries",
+      },
+      {
+        label: "Careers",
+        tab: "careers",
+        href: "/hiring/jobs",
+      },
+      {
+        label: "Applications",
+        tab: "applications",
+        href: "/hiring/applications",
+      },
+    ],
+  },
+  {
     href: "/audit",
     label: "Audit Logs",
     icon: AnimatedScrollText,
@@ -154,7 +190,7 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
           collapsed={collapsed}
         />
 
-        {/* USER PROFILE ZONE */}
+        {/* FOOTER USER PROFILE */}
         <SidebarFooter>
           <UserProfileDropdown
             user={user}
@@ -163,24 +199,19 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         </SidebarFooter>
       </Sidebar>
 
-      {/* Mobile Drawer (Lazy loaded strictly when opened on mobile) */}
-      {mobileOpen && (
-        <MobileSidebarDrawer
-          user={user}
-          items={visibleMainItems}
-          isOpen={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-        />
-      )}
+      {/* Mobile Drawer (Visible on Viewport < 768px when toggled) */}
+      <MobileSidebarDrawer
+        user={user}
+        items={visibleMainItems}
+        isOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+      />
 
-      {/* Global Command Palette (Lazy loaded strictly on command trigger) */}
-      {cmdOpen && (
-        <CommandPalette
-          isOpen={cmdOpen}
-          onClose={() => setCmdOpen(false)}
-          userRole={user.role}
-        />
-      )}
+      {/* Global Command Palette */}
+      <CommandPalette
+        isOpen={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+      />
     </>
   );
 }

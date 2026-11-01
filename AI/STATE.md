@@ -1,19 +1,28 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Task 306 — Fix Pre-Deployment Blockers, Lint Gates, File Drift, and Production Readiness
+- **Current Task**: Request-a-Quote (RFQ) System & Route 404 Resolution
 - **Status**: 🟢 Clean / Verified & Production Ready
-- **Last Verified**: 2026-10-31
-- **TypeScript Typecheck**: 0 compilation errors across all 7 workspace packages (`pnpm turbo run typecheck --force`)
-- **Web Lint Gate**: 0 errors (`pnpm --filter @reachinternational/web lint` passed with exit code 0)
-- **Next.js Production Build Config**: `eslint: { ignoreDuringBuilds: true }` enabled in `apps/web/next.config.ts`
-- **Migration 036 Integrity**: Restored cleanly to `supabase/migrations/` and loose copy eradicated from monorepo root
-- **Canonical Testing Rules**: 16 authoritative documents established in `rules/testing/` matching `AGENTS.md`
-- **Link Integrity**: 110/110 relative links valid across 26 security/rules files (`node scripts/verify-security-links.mjs`)
-- **Supervisor Shift Entry Integration Test**: 12/12 passed (`node supabase/tests/test_supervisor_assisted_shift_entry.mjs`)
-- **Permissions Test Suite**: 15/15 passed (`pnpm --filter @reachinternational/permissions test`)
-- **Utils Test Suite**: 25/25 passed (`pnpm --filter @reachinternational/utils test`)
-- **Mobile Test Suite**: 357/357 passed (`node apps/mobile/test/run-tests.mjs`)
-- **Web Security, RBAC & Standardization Suites**: 100% passed (CORS, client-rbac 26/26, assignments 14/14, dashboard 12/12, brand logos 100%, landing feedback 9/9)
-- **Typography & Haptics Guards**: 0 raw typography property violations, 100% touch/haptics guards verified
-- **Database Isolation**: Development DB (`vlmxciuogczumumrwyot`) verified with all 9 equipment catalogue tables present; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly protected pending user release approval
+- **Last Verified**: 2026-11-01
+- **Turborepo Typecheck**: 7/7 packages & apps passed with 0 errors (`pnpm turbo run typecheck`)
+- **Monorepo Test Suite**: 10/10 suites passed cleanly (`node scripts/run-all-tests.mjs`)
+- **RFQ System Implementation**:
+  - **Marketing Side**:
+    - `/request-a-quote`: Multi-machine form with Geist tokens, Indian states selector, signed uploads, 4-section layout. (Resolves 404!)
+    - `/request-a-quote/thank-you`: Confirmation page with SLA timeline, WhatsApp/Phone actions, zero PII displayed.
+    - `/api/rfq/session`: Direct Storage signed upload URL generator for private bucket `rfq-attachments`.
+    - `submitRfqAction`: Rate-limited, honeypot-protected atomic submission calling `submit_rfq` RPC with service role.
+  - **Admin Side**:
+    - `/admin/sales/rfq`: Realtime pipeline dashboard (KPI cards, table, and Kanban board).
+    - `/admin/sales/rfq/[id]`: Two-column inspection page, status transitions, staff assignment, follow-up scheduler, quotation draft line-items editor, and immutable event timeline.
+    - `/admin/sales/rfq/new`: Manual intake form for phone, WhatsApp, email, and walk-in enquiries.
+    - `/admin/sales/rfq/clients`: Client companies directory with past RFQ counts and atomic company merge.
+    - `/admin/sales/rfq/settings`: Business profile, GSTIN, bank details, default terms, and notification targets.
+    - `/rfq`: Redirect alias to `/admin/sales/rfq`.
+    - `/api/rfq/download`: Authorized attachment download endpoint via signed URLs.
+  - **RBAC**:
+    - Gated at Edge (`proxy.ts`), Server (`requireRole`), and Database (`can_manage_rfq()`).
+    - Allowed: `super_admin`, `admin`, `sales`.
+    - Forbidden: `marketing`, `operator`, `hr`, `manager`, `supervisor` (redirected to role home; prevents PII/pricing leakage).
+  - **Navigation**:
+    - `AppSidebar.tsx` updated with "Quote Requests" (`AnimatedFileText`).

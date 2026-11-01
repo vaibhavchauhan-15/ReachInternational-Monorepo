@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
-import { Wifi, RefreshCw, CheckCircle2 } from "@/components/icons";
-import { AnimatePresence, motion } from "framer-motion";
+import { Wifi, RefreshCw, CheckCircle2 } from "lucide-react";
 
 export function WebOfflineBanner() {
   const { isOffline } = useOnlineStatus();
@@ -40,16 +39,12 @@ export function WebOfflineBanner() {
   };
 
   return (
-    <AnimatePresence>
+    <>
       {isOffline && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.2 }}
+        <div
           role="status"
           aria-live="polite"
-          className="sticky top-0 z-[100] w-full bg-amber-500/10 dark:bg-amber-950/40 border-b border-amber-500/25 px-4 py-2 backdrop-blur-md"
+          className="sticky top-0 z-[100] w-full bg-amber-500/10 dark:bg-amber-950/40 border-b border-amber-500/25 px-4 py-2 backdrop-blur-md animate-in fade-in-0 slide-in-from-top-2 duration-200"
         >
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm text-amber-700 dark:text-amber-300 font-medium">
             <div className="flex items-center gap-2 min-w-0">
@@ -68,25 +63,21 @@ export function WebOfflineBanner() {
               <span>{isChecking ? "Checking..." : "Retry"}</span>
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {showRestored && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.2 }}
+        <div
           role="status"
           aria-live="polite"
-          className="sticky top-0 z-[100] w-full bg-emerald-500/10 dark:bg-emerald-950/40 border-b border-emerald-500/25 px-4 py-1.5 backdrop-blur-md"
+          className="sticky top-0 z-[100] w-full bg-emerald-500/10 dark:bg-emerald-950/40 border-b border-emerald-500/25 px-4 py-1.5 backdrop-blur-md animate-in fade-in-0 slide-in-from-top-2 duration-200"
         >
           <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 font-medium">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <span>Connection restored. Online synchronization active.</span>
           </div>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

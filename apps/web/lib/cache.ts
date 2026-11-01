@@ -1,9 +1,8 @@
 import "server-only";
 import { TAGS } from "./cache/tags";
-import { CACHE_TIERS, OPERATIONS_CACHE_TIERS, OPERATIONS_CACHE_TTLS } from "./cache/policies";
+import { CACHE_TIERS, OPERATIONS_CACHE_TIERS, OPERATIONS_CACHE_TTLS, HIRING_CACHE_TTLS } from "./cache/policies";
 
-export { TAGS, CACHE_TIERS, OPERATIONS_CACHE_TIERS, OPERATIONS_CACHE_TTLS };
-
+export { TAGS, CACHE_TIERS, OPERATIONS_CACHE_TIERS, OPERATIONS_CACHE_TTLS, HIRING_CACHE_TTLS };
 
 /**
  * Legacy CACHE_TAGS map maintained for full backwards compatibility across existing code.
@@ -44,6 +43,10 @@ export const CACHE_TAGS = {
   equipmentCategories: TAGS.equipmentCategories,
   equipmentBrands: TAGS.equipmentBrands,
   equipmentList: TAGS.equipmentList,
+  careersList: TAGS.careersList,
+  hiringList: TAGS.hiringList,
+  hiringKpis: TAGS.hiringKpis,
+  hiringApplications: TAGS.hiringApplications,
 } as const;
 
 export type CacheTag = string;

@@ -2,13 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import {
-  AnimatedCheckCircle,
-  AnimatedXCircle,
-  AnimatedAlertCircle,
-  AnimatedInfo,
-  AnimatedX,
-} from "./animated-icons";
-import { motion, AnimatePresence } from "framer-motion";
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Info,
+  X,
+} from "lucide-react";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -32,10 +31,10 @@ export function useToast() {
 }
 
 const toastConfig: Record<ToastType, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
-  success: { icon: AnimatedCheckCircle, color: "text-[var(--color-link)]", bg: "bg-[var(--color-link-soft)]" },
-  error: { icon: AnimatedXCircle, color: "text-[var(--color-error)]", bg: "bg-[rgba(238,0,0,0.1)]" },
-  warning: { icon: AnimatedAlertCircle, color: "text-[var(--color-warning-deep)]", bg: "bg-[var(--color-warning-soft)]" },
-  info: { icon: AnimatedInfo, color: "text-[var(--color-link-deep)]", bg: "bg-[var(--color-link-soft)]" },
+  success: { icon: CheckCircle2, color: "text-[var(--color-link)]", bg: "bg-[var(--color-link-soft)]" },
+  error: { icon: XCircle, color: "text-[var(--color-error)]", bg: "bg-[rgba(238,0,0,0.1)]" },
+  warning: { icon: AlertCircle, color: "text-[var(--color-warning-deep)]", bg: "bg-[var(--color-warning-soft)]" },
+  info: { icon: Info, color: "text-[var(--color-link-deep)]", bg: "bg-[var(--color-link-soft)]" },
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -87,43 +86,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={contextValue}>
       {children}
       <div className="fixed top-3 sm:top-4 left-3 right-3 sm:left-auto sm:right-4 z-[100] flex flex-col items-center sm:items-end gap-1.5 sm:gap-2 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((t) => {
-            const config = toastConfig[t.type];
-            const Icon = config.icon;
-            return (
-              <motion.div
-                key={t.id}
-                initial={
-                  isDesktop
-                    ? { opacity: 0, y: -30, x: 30, scale: 0.95 }
-                    : { opacity: 0, y: -30, scale: 0.95 }
-                }
-                animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -30, x: 0, scale: 0.95 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                className="pointer-events-auto card-elevated flex items-start gap-2 sm:gap-3 p-2.5 sm:p-4 min-w-0 w-full sm:min-w-[320px] sm:max-w-[400px] shadow-lg sm:shadow-xl border border-[var(--color-hairline)] rounded-xl"
+        {toasts.map((t) => {
+          const config = toastConfig[t.type];
+          const Icon = config.icon;
+          return (
+            <div
+              key={t.id}
+              className="pointer-events-auto card-elevated flex items-start gap-2 sm:gap-3 p-2.5 sm:p-4 min-w-0 w-full sm:min-w-[320px] sm:max-w-[400px] shadow-lg sm:shadow-xl border border-[var(--color-hairline)] rounded-xl animate-in fade-in-0 slide-in-from-top-2 duration-200"
+            >
+              <div className={`flex h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-full ${config.bg}`}>
+                <Icon size={15} className={config.color} />
+              </div>
+              <div className="flex-1 pt-0.5 min-w-0">
+                <p className="text-xs sm:text-sm text-[var(--color-ink)] font-bold truncate">{t.message}</p>
+                {t.description && (
+                  <p className="text-[11px] sm:text-xs text-[var(--color-body)] mt-0.5 leading-snug">{t.description}</p>
+                )}
+              </div>
+              <button
+                onClick={() => removeToast(t.id)}
+                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors p-0.5 rounded shrink-0 cursor-pointer"
+                aria-label="Dismiss toast"
               >
-                <div className={`flex h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-full ${config.bg}`}>
-                  <Icon size={15} className={config.color} />
-                </div>
-                <div className="flex-1 pt-0.5 min-w-0">
-                  <p className="text-xs sm:text-sm text-[var(--color-ink)] font-bold truncate">{t.message}</p>
-                  {t.description && (
-                    <p className="text-[11px] sm:text-xs text-[var(--color-body)] mt-0.5 leading-snug">{t.description}</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => removeToast(t.id)}
-                  className="text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors p-0.5 rounded shrink-0"
-                  aria-label="Dismiss toast"
-                >
-                  <AnimatedX size={15} />
-                </button>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+                <X size={15} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

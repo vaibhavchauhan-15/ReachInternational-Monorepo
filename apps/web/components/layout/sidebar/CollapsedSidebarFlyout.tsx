@@ -4,6 +4,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { NavItem } from "./types";
 import { SIDEBAR_WIDTH_COLLAPSED } from "@/components/ui/Sidebar";
 
@@ -84,6 +85,7 @@ export function CollapsedSidebarFlyout({
   onMouseEnter,
   onMouseLeave,
 }: CollapsedSidebarFlyoutProps) {
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<Position | null>(null);
   const flyoutRef = useRef<HTMLDivElement | null>(null);
@@ -242,11 +244,12 @@ export function CollapsedSidebarFlyout({
           {/* Submenu Links */}
           <div className="relative z-20 p-2 space-y-1">
             {item.subItems?.map((sub) => {
-              const isSubActive = isActiveParent && currentTab === sub.tab;
+              const subUrl = sub.href || `${item.href}?tab=${sub.tab}`;
+              const isSubActive = sub.href ? (pathname === sub.href || pathname.startsWith(sub.href + "/")) : (isActiveParent && currentTab === sub.tab);
               return (
                 <Link
                   key={sub.tab}
-                  href={`${item.href}?tab=${sub.tab}`}
+                  href={subUrl}
                   onClick={onClose}
                   className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-xs transition-colors duration-150 cursor-pointer ${
                     isSubActive

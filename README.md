@@ -526,6 +526,47 @@
 - **Unified Shift Editing**: `EditProfileModal` features `<CustomTimePicker>` / `<TimeInput>` integration with 12-hour AM/PM inputs, live duration computation, and automated 24-hour SQL persistence (`shift_start_time` and `shift_end_time`).
 - **Cross-Platform Mobile App Parity (`apps/mobile/app/(app)/profile.tsx`)**: Synchronized mobile screen featuring touch cards for shift times, assigned machines, compensation, leave balances, and banking details with clipboard copy buttons and mobile `EditProfileModal`.
 
+### 14. 🌐 Public Marketing & Contact Desks (`/contact`)
+- **Dedicated Equipment Desks & Direct Telemetry**:
+  - **Rental Desk**: Mobile **+91 88000 40308** (`8800040308`), Email **rental@reachinternational.co.in**, direct WhatsApp, click-to-call, and one-tap clipboard copy actions. Handles short/long term hire for boom lifts (12m–58m), scissor lifts (6m–22m), forklifts, 24/7 emergency dispatch, and certified operators.
+  - **Sales Desk**: Mobile **+91 98677 32204** (`9867732204`), Email **sale@reachinternational.co.in**, direct WhatsApp, click-to-call, and one-tap clipboard copy actions. Handles brand-new and certified pre-owned equipment acquisitions from authorized OEM partners (JLG, Genie, JCB, Toyota, Hyundai, BYD), warranty, financing, and genuine parts.
+- **Vercel Geist Design System Aesthetic**: Full alignment with `DESIGN.md` tokens (1px hairline borders, `#171717` ink, `#fafafa` canvas, `#ffffff` elevated cards, Reach sky blue `#0284c7` accents, Geist Sans / Geist Mono typography, and 3-tier viewport responsiveness).
+- **Interactive Quotation Form**: Integrated `EquipmentEnquiryForm` with direct toggle for "Rental", "Purchase", or "Both", connected to canonical server action `submitEquipmentEnquiry` with Zod validation.
+- **Search Engine & Social Optimization (SEO)**:
+  - Canonical page title: `Contact Us — Equipment Rental & Sales | REACH INTERNATIONAL — Reaching All Heights`.
+  - Canonical URL: `https://www.reachinternational.co.in/contact`.
+  - Dynamic `sitemap.ts` entry (priority 0.9) and `robots.ts` allow directives for web and AI bots.
+  - Rich OpenGraph & Twitter preview metadata.
+  - Schema.org JSON-LD structured data: `ContactPage`, `LocalBusiness`, `contactPoint` (Rental & Sales), `BreadcrumbList`, and `FAQPage`.
+- **AI & LLM Discoverability**:
+  - Semantic machine-readable HTML `<table>` and `<dl>` in `ContactDirectoryTable.tsx` for immediate headless scraping by AI bots (ChatGPT Search, PerplexityBot, Claude, Bingbot, Googlebot).
+  - Synchronized `apps/web/app/llms.txt/route.ts` with direct department contacts, numbers, emails, SLAs, and contact URL.
+- **Web-to-Mobile Parity**: Synchronized mobile Support & Contact screen (`apps/mobile/app/(app)/settings/about/support.tsx`) with direct Rental Desk (+91 88000 40308) and Sales Desk (+91 98677 32204) cards.
+
+### 15. 🚜 Dynamic Equipment Management & Marketing Fleet Admin (`/marketing/equipment`)
+- **Dynamic Supabase Backend & Schema Architecture (Migration 181)**:
+  - Transitioned equipment from static placeholders to a fully dynamic, Supabase-backed catalogue (`equipment_models`, `equipment_media`, `equipment_docs`, `equipment_enquiries`).
+  - **Hybrid Schema**: Combines indexed numerical columns (`max_platform_height_m`, `max_working_height_m`, `capacity_kg`, `weight_kg`, `indoor_use`, `outdoor_use`) for fast faceted querying with a flexible JSONB `specs` column supporting unlimited technical specifications and printed datasheet overrides (`display_override` / `d`).
+  - **Lifecycle State Machine**: Strict status transitions (`draft` ⇄ `published`, `published` → `archived` → `draft`, soft delete `deleted_at`).
+  - **Automated Public Sync**: PostgreSQL trigger `trg_equipment_models_before_write` automatically keeps `is_published := (status = 'published' AND deleted_at IS NULL)` in sync, guaranteeing zero draft or archived machine leakage to public routes.
+  - **Optimistic Concurrency**: Model versioning (`version INT`) prevents concurrent overwrite collisions with merge warnings.
+- **Reference Machine Ingestion — JCB S2632E Electric Scissor Lift**:
+  - Ingested all 41 technical specification rows (A–AO) from official OEM datasheet `JCB-S2632E.pdf` (Issue 1, July 2018).
+  - Explicit handling of technical ambiguities: indoor-only machine (`outdoor_use = false`, `occupants_outdoor`, `wind_speed_outdoor_ms`, and `side_force_outdoor_n` stored as `null` with "Not rated (indoor use only)" presentation), platform guardrail height mapped to `platform_guardrail_height_m` (1.10 m), and 4×6V battery series mapped to 24V system.
+- **Marketing Admin CRUD Panel (`/marketing/equipment`)**:
+  - **Fleet Table**: Server-side paginated TanStack table with search, category filter, brand filter, power source chips, and tabs (**All**, **Published**, **Drafts**, **Archived**, **Trash**) with real-time counts.
+  - **Tabbed Editor (`/marketing/equipment/[id]`)**: 5 comprehensive tabs:
+    1. *Basics*: Name, model number, slug generator, brand, category, power, tagline, summary, full description, rental/purchase/indoor/outdoor toggles.
+    2. *Technical Specs*: Spec groups with numeric inputs, units, live Metric/Imperial conversion toggle, "N/A" toggles, and exact printed display text overrides.
+    3. *Media*: Direct upload to `equipment_media` storage bucket, primary cover selector, and alt text enforcement.
+    4. *Documents*: Technical datasheets, brochures, and operating manual PDF management via `equipment_docs` storage bucket.
+    5. *Publish & SEO*: Pre-publication completeness audit checklist, SEO snippet preview, and publication trigger.
+  - **Quotation Enquiries Management (`/marketing/equipment/enquiries`)**: Tracks customer quote requests with review drawer and lifecycle progression (`new` → `contacted` → `quoted` → `closed` / `rejected`).
+- **Tag-Based Cache Invalidation (ISR)**:
+  - Server actions call `revalidateEquipmentCache(slug)` to purge Next.js 16 Data Cache and edge tags (`equipment`, `equipmentList`, `equipment:${slug}`) within seconds of saving.
+- **Access Control & Permissions**:
+  - Managed by `@reachinternational/permissions`: `EQUIPMENT_VIEW`, `EQUIPMENT_MANAGE`, `EQUIPMENT_PUBLISH`, `EQUIPMENT_ENQUIRIES` granted to `super_admin`, `admin`, and `manager`.
+  - Accessible via AppSidebar Marketing menu group, with 301 redirects from `/admin/marketing/equipment` to `/marketing/equipment`.
 
 ---
 

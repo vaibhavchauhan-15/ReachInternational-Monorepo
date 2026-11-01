@@ -1,10 +1,14 @@
-export type UserRole = 
+export type CanonicalUserRole = 
   | "super_admin"
   | "admin"
   | "manager"
   | "supervisor"
   | "hr"
   | "operator";
+
+export type ExtendedUserRole = "sales" | "marketing";
+
+export type UserRole = CanonicalUserRole | ExtendedUserRole;
 
 export type PermissionScope = 
   | "ORGANIZATION"
@@ -1982,6 +1986,14 @@ export interface EquipmentBrand {
   models_count?: number;
 }
 
+export type EquipmentStatus = 'draft' | 'published' | 'archived';
+export type PowerType = 'electric' | 'diesel' | 'hybrid' | 'bi_energy' | 'manual';
+
+export interface EquipmentSpecValue {
+  v: number | string | boolean | null;
+  d?: string;
+}
+
 export interface EquipmentModel {
   id: string;
   brand_id: string;
@@ -2002,8 +2014,83 @@ export interface EquipmentModel {
   primary_power_source: string | null;
   applications: string[];
   features: string[];
+  status: EquipmentStatus;
+  power: PowerType;
+  tagline?: string | null;
+  summary?: string | null;
+  description_md?: string | null;
+  tags?: string[];
+  max_platform_height_m?: number | null;
+  max_working_height_m?: number | null;
+  capacity_kg?: number | null;
+  weight_kg?: number | null;
+  indoor_use?: boolean;
+  outdoor_use?: boolean;
+  specs?: Record<string, EquipmentSpecValue>;
+  cover_path?: string | null;
+  cover_blur?: string | null;
+  sort_weight?: number;
+  published_at?: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  version: number;
+  deleted_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface EquipmentAdminSummary {
+  total_models: number;
+  published_models: number;
+  draft_models: number;
+  archived_models: number;
+  total_enquiries: number;
+  new_enquiries: number;
+  total_brands: number;
+  total_categories: number;
+}
+
+export interface EquipmentAdminFilterParams {
+  status?: string;
+  category_id?: string;
+  brand_id?: string;
+  power?: PowerType;
+  search?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface EquipmentAdminListItem {
+  id: string;
+  slug: string;
+  model_name: string;
+  model_number: string;
+  brand_id: string;
+  brand_name: string;
+  brand_logo: string | null;
+  category_id: string;
+  category_name: string;
+  power: PowerType;
+  status: EquipmentStatus;
+  is_featured: boolean;
+  max_platform_height_m: number | null;
+  max_working_height_m: number | null;
+  capacity_kg: number | null;
+  weight_kg: number | null;
+  primary_image_url: string;
+  cover_path: string | null;
+  rental_available: boolean;
+  purchase_available: boolean;
+  sort_weight: number;
+  version: number;
+  published_at: string | null;
+  updated_at: string;
+  media_count: number;
+  docs_count: number;
+  specs_count: number;
 }
 
 export interface EquipmentSpecDefinition {
@@ -2088,4 +2175,255 @@ export interface EquipmentFilterParams {
   sort?: 'featured' | 'name_asc' | 'name_desc' | 'height_asc' | 'height_desc';
   page?: number;
   limit?: number;
+}
+
+
+// ============================================================================
+// REQUEST-A-QUOTE (RFQ) & QUOTATIONS SYSTEM TYPES
+// ============================================================================
+
+export type RfqStatus = 
+  | "new"
+  | "under_review"
+  | "contacted"
+  | "quotation_prepared"
+  | "quotation_sent"
+  | "on_hold"
+  | "converted"
+  | "lost"
+  | "spam";
+
+export type RfqRequirement = "rental" | "purchase";
+export type DurationUnit = "day" | "week" | "month";
+export type RfqSource = 
+  | "website"
+  | "equipment_page"
+  | "phone"
+  | "whatsapp"
+  | "email"
+  | "walk_in"
+  | "referral";
+
+export type RfqEventType = 
+  | "created"
+  | "status_changed"
+  | "assigned"
+  | "note"
+  | "contacted"
+  | "follow_up_set"
+  | "attachment_added"
+  | "quotation_created"
+  | "quotation_revised"
+  | "quotation_sent"
+  | "email_sent"
+  | "merged"
+  | "reopened";
+
+export type LostReason = 
+  | "price"
+  | "availability"
+  | "competitor"
+  | "no_response"
+  | "project_cancelled"
+  | "client_cancelled"
+  | "not_serviceable"
+  | "other";
+
+export type RfqQuotationStatus = 
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "superseded";
+
+export type QuoteLineKind = "rental" | "sale" | "transport" | "operator" | "other";
+export type OutboxStatus = "pending" | "sending" | "sent" | "failed";
+
+export interface StateLookup {
+  id: number;
+  code: string;
+  name: string;
+  gst_state_code: string;
+}
+
+export interface BusinessProfile {
+  id: boolean;
+  legal_name: string;
+  gstin: string | null;
+  address: string | null;
+  state_code: string | null;
+  phone: string | null;
+  email: string | null;
+  bank_details: string | null;
+  default_terms_md: string | null;
+  default_validity_days: number;
+  default_gst_rate: number;
+  rfq_notify_emails: string[];
+  logo_path: string | null;
+  updated_at: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  name_key?: string;
+  gstin: string | null;
+  city: string | null;
+  state_code: string | null;
+  merged_into_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Contact {
+  id: string;
+  company_id: string | null;
+  full_name: string;
+  email: string;
+  phone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteRequest {
+  id: string;
+  rfq_number: string;
+  company_id: string | null;
+  contact_id: string;
+  status: RfqStatus;
+  assigned_to: string | null;
+  priority: number;
+  source: RfqSource;
+  project_city: string;
+  project_state_code: string;
+  project_site_address: string | null;
+  required_from: string | null;
+  client_notes: string | null;
+  follow_up_at: string | null;
+  lost_reason: LostReason | null;
+  closed_at: string | null;
+  consent_at: string | null;
+  attribution: Record<string, unknown> | null;
+  ip_hash: string | null;
+  idempotency_key: string | null;
+  last_activity_at: string;
+  version: number;
+  deleted_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteRequestItem {
+  id: string;
+  request_id: string;
+  requirement_type: RfqRequirement;
+  equipment_id: string | null;
+  category_id: string | null;
+  brand_id: string | null;
+  custom_description: string | null;
+  quantity: number;
+  min_height_m: number | null;
+  min_capacity_kg: number | null;
+  duration_value: number | null;
+  duration_unit: DurationUnit | null;
+  notes: string | null;
+  sort_order: number;
+}
+
+export interface RfqAttachment {
+  id: string;
+  request_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+export interface RfqEvent {
+  id: number;
+  request_id: string;
+  type: RfqEventType;
+  actor_id: string | null;
+  data: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface Quotation {
+  id: string;
+  request_id: string;
+  version: number;
+  status: RfqQuotationStatus;
+  valid_until: string;
+  place_of_supply_state: string;
+  notes_to_client: string | null;
+  terms_md: string;
+  pdf_path: string | null;
+  sent_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuotationItem {
+  id: string;
+  quotation_id: string;
+  request_item_id: string | null;
+  equipment_id: string | null;
+  kind: QuoteLineKind;
+  description: string;
+  hsn_sac: string | null;
+  quantity: number;
+  unit_price_paise: number;
+  rate_unit: DurationUnit | null;
+  duration_value: number | null;
+  discount_pct: number;
+  gst_rate: number;
+  sort_order: number;
+  line_net_paise: number | null;
+  tax_paise: number | null;
+}
+
+export interface QuotationTotals {
+  quotation_id: string;
+  subtotal_paise: number;
+  tax_paise: number;
+  total_paise: number;
+  is_inter_state: boolean;
+}
+
+export interface RfqListItem {
+  id: string;
+  rfq_number: string;
+  status: RfqStatus;
+  priority: number;
+  source: RfqSource;
+  assigned_to: string | null;
+  follow_up_at: string | null;
+  last_activity_at: string;
+  created_at: string;
+  project_city: string;
+  project_state_code: string;
+  version: number;
+  contact_name: string;
+  phone: string;
+  email: string;
+  company_name: string | null;
+  item_count: number;
+  types: RfqRequirement[] | null;
+  headline: string | null;
+}
+
+export interface RfqDashboardCounts {
+  total: number;
+  new: number;
+  in_progress: number;
+  converted: number;
+  lost: number;
+  conversion_rate: number | null;
+  awaiting_first_response_24h: number;
+  follow_ups_overdue: number;
 }

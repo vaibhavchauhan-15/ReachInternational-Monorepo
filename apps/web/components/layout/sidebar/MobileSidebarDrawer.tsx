@@ -97,7 +97,7 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
                   (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
                 const firstHref = item.subItems?.[0]
-                  ? `${item.href}?tab=${item.subItems[0].tab}`
+                  ? (item.subItems[0].href || `${item.href}?tab=${item.subItems[0].tab}`)
                   : item.href;
 
                 return (
@@ -122,7 +122,7 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
                           return (
                             <Link
                               key={sub.tab}
-                              href={`${item.href}?tab=${sub.tab}`}
+                              href={sub.href || `${item.href}?tab=${sub.tab}`}
                               onClick={onClose}
                               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                             >

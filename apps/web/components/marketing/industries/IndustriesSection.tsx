@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { primaryIndustries, type PrimaryIndustry } from '@/lib/data/industries';
 export { primaryIndustries, type PrimaryIndustry };
@@ -151,34 +150,6 @@ export function IndustriesSection() {
                   priority={idx < 3}
                   className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-106 dark:brightness-[0.90] dark:contrast-[1.04] dark:group-hover:brightness-100"
                 />
-
-                {/* Gradient Scrim for Top & Bottom Contrast */}
-                <div
-                  className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent pointer-events-none"
-                  aria-hidden="true"
-                />
-                <div
-                  className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent pointer-events-none"
-                  aria-hidden="true"
-                />
-
-                {/* Top Eyebrow Tag & Spec Pill */}
-                <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none z-10">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider backdrop-blur-md bg-white/95 text-neutral-900 dark:bg-black/85 dark:text-neutral-100 shadow-2xs border border-black/5 dark:border-white/10">
-                    {ind.eyebrow}
-                  </span>
-                  <span className="hidden xs:inline-flex items-center px-2 py-0.8 rounded-full text-[10px] font-medium backdrop-blur-md bg-black/65 text-white/90 border border-white/15">
-                    {ind.stats}
-                  </span>
-                </div>
-
-                {/* Bottom Sector Tag on Image */}
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
-                  <span className="text-xs font-semibold text-white drop-shadow-sm flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]" />
-                    {ind.tag}
-                  </span>
-                </div>
               </div>
 
               {/* Content Stage */}
@@ -205,19 +176,12 @@ export function IndustriesSection() {
                 </div>
 
                 {/* Bottom Action Row */}
-                <div className="pt-4 mt-5 border-t border-neutral-100 dark:border-neutral-800/90 flex items-center justify-between">
+                <div className="pt-4 mt-5 border-t border-neutral-100 dark:border-neutral-800/90 flex items-center">
                   <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                     <span className="font-medium text-neutral-400 dark:text-neutral-500">Fleet:</span>
                     <span className="font-semibold text-neutral-700 dark:text-neutral-300">
                       {ind.brands.join(' • ')}
                     </span>
-                  </div>
-
-                  <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#0284c7] dark:text-[#38bdf8]">
-                    <span className="hidden sm:inline">Explore solutions</span>
-                    <div className="w-7 h-7 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-700 dark:text-neutral-200 group-hover:bg-[#0284c7] group-hover:text-white transition-all duration-300 group-hover:translate-x-0.5">
-                      <ArrowRight className="size-3.5" />
-                    </div>
                   </div>
                 </div>
               </div>

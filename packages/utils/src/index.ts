@@ -6,6 +6,7 @@
 export * from './date';
 export * from './currency';
 export * from './string';
+export * from './slugify';
 export * from './clipboard';
 export * from './ssti';
 export * from './sanitize';
@@ -26,4 +27,3 @@ export * from './domain-keys';
 export * from './brand';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";
-

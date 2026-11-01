@@ -1,19 +1,21 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
+import React, { useState, useEffect, useCallback, useTransition } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import {
-  EquipmentSearch,
+  FilterToolbar,
+  FilterDropdown,
+  FilterChips,
+  type FilterChipItem,
+  type FilterDropdownOption,
+} from "@/components/ui";
+import {
   EquipmentCardGrid,
-  EquipmentFilterPanel,
-  EquipmentFilterDrawer,
-  EquipmentSort,
   EquipmentEnquiryForm,
 } from "@/components/equipment";
 import type {
   EquipmentSegment,
-  EquipmentCategory,
 } from "@reachinternational/types";
 import type {
   FeaturedEquipmentCard,
@@ -21,12 +23,11 @@ import type {
   CategoryWithMeta,
 } from "@/lib/queries/equipment";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/Accordion";
-import { ShieldCheck, HelpCircle } from "lucide-react";
 
 export interface CategoryListingViewProps {
   segment: EquipmentSegment;
   category?: CategoryWithMeta;
-  allCategoriesInSegment: CategoryWithMeta[];
+  allCategoriesInSegment?: CategoryWithMeta[];
   equipmentItems: FeaturedEquipmentCard[];
   totalCount: number;
   filterOptions: FilterOptions;
@@ -36,12 +37,16 @@ export interface CategoryListingViewProps {
 export function CategoryListingView({
   segment,
   category,
-  allCategoriesInSegment,
   equipmentItems,
   totalCount,
   filterOptions,
   faqs,
 }: CategoryListingViewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
   const isCategoryPage = !!category;
   const pageTitle = isCategoryPage ? category.name : segment.name;
   const pageDescription = isCategoryPage
@@ -60,6 +65,206 @@ export function CategoryListingView({
       : []),
   ];
 
+  // Active query parameters
+  const currentQuery = searchParams.get("q") || "";
+  const currentBrand = searchParams.get("brand") || "";
+  const currentSubtype = searchParams.get("subtype") || "";
+  const currentPower = searchParams.get("power") || "";
+  const isRental = searchParams.get("rental") === "true";
+  const isPurchase = searchParams.get("purchase") === "true";
+  const currentSort = searchParams.get("sort") || "featured";
+
+  const currentOffering = isRental ? "rental" : isPurchase ? "purchase" : "all";
+
+  // Local state for instant search input
+  const [localSearch, setLocalSearch] = useState(currentQuery);
+  const [prevQuery, setPrevQuery] = useState(currentQuery);
+
+  // Sync state if queryParam changed from external navigation or chip removal
+  if (currentQuery !== prevQuery) {
+    setPrevQuery(currentQuery);
+    setLocalSearch(currentQuery);
+  }
+
+  // Helper to update query params safely
+  const updateFilter = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      });
+      params.delete("page"); // Reset page on filter change
+      startTransition(() => {
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      });
+    },
+    [pathname, router, searchParams]
+  );
+
+  // Debounced search input sync
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = localSearch.trim();
+      if (trimmed !== currentQuery) {
+        updateFilter({ q: trimmed || null });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, currentQuery, updateFilter]);
+
+  const handleSearchChange = (val: string) => {
+    setLocalSearch(val);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = localSearch.trim();
+    if (trimmed !== currentQuery) {
+      updateFilter({ q: trimmed || null });
+    }
+  };
+
+  const handleResetAllFilters = useCallback(() => {
+    setLocalSearch("");
+    startTransition(() => {
+      router.push(pathname, { scroll: false });
+    });
+  }, [pathname, router]);
+
+  // Dropdown options
+  const offeringOptions: FilterDropdownOption[] = [
+    { value: "all", label: "All Offerings" },
+    { value: "rental", label: "Rental Available", count: filterOptions.rentalCount },
+    { value: "purchase", label: "Direct Purchase", count: filterOptions.purchaseCount },
+  ];
+
+  const brandOptions: FilterDropdownOption[] = [
+    { value: "all", label: "All Brands" },
+    ...filterOptions.brands.map((b) => ({
+      value: b.value,
+      label: b.label,
+      count: b.count,
+    })),
+  ];
+
+  const subtypeOptions: FilterDropdownOption[] = [
+    { value: "all", label: "All Subtypes" },
+    ...filterOptions.subtypes.map((s) => ({
+      value: s.value,
+      label: s.label,
+      count: s.count,
+    })),
+  ];
+
+  const powerOptions: FilterDropdownOption[] = [
+    { value: "all", label: "All Power Sources" },
+    ...filterOptions.powerSources.map((p) => ({
+      value: p.value,
+      label: p.label,
+      count: p.count,
+    })),
+  ];
+
+  const sortOptions: FilterDropdownOption[] = [
+    { value: "featured", label: "Featured" },
+    { value: "name_asc", label: "Model Name (A-Z)" },
+    { value: "name_desc", label: "Model Name (Z-A)" },
+    { value: "height_asc", label: "Working Height (Low to High)" },
+    { value: "height_desc", label: "Working Height (High to Low)" },
+  ];
+
+  // Active filter count for FilterToolbar button badge
+  const activeFilterCount =
+    (isRental ? 1 : 0) +
+    (isPurchase ? 1 : 0) +
+    (currentBrand ? 1 : 0) +
+    (currentSubtype ? 1 : 0) +
+    (currentPower ? 1 : 0) +
+    (currentSort && currentSort !== "featured" ? 1 : 0);
+
+  // Build active filter chips
+  const filterChips: FilterChipItem[] = [];
+
+  if (currentQuery) {
+    filterChips.push({
+      id: "query",
+      label: "Search",
+      valueLabel: `"${currentQuery}"`,
+      onRemove: () => {
+        setLocalSearch("");
+        updateFilter({ q: null });
+      },
+    });
+  }
+
+  if (isRental) {
+    filterChips.push({
+      id: "rental",
+      label: "Offering",
+      valueLabel: "Rental Available",
+      onRemove: () => updateFilter({ rental: null }),
+    });
+  }
+
+  if (isPurchase) {
+    filterChips.push({
+      id: "purchase",
+      label: "Offering",
+      valueLabel: "Direct Purchase",
+      onRemove: () => updateFilter({ purchase: null }),
+    });
+  }
+
+  if (currentBrand) {
+    const brandObj = filterOptions.brands.find((b) => b.value === currentBrand);
+    filterChips.push({
+      id: "brand",
+      label: "Brand",
+      valueLabel: brandObj ? brandObj.label : currentBrand.toUpperCase(),
+      onRemove: () => updateFilter({ brand: null }),
+    });
+  }
+
+  if (currentSubtype) {
+    const subtypeObj = filterOptions.subtypes.find((s) => s.value === currentSubtype);
+    filterChips.push({
+      id: "subtype",
+      label: "Subtype",
+      valueLabel: subtypeObj ? subtypeObj.label : currentSubtype,
+      onRemove: () => updateFilter({ subtype: null }),
+    });
+  }
+
+  if (currentPower) {
+    const powerObj = filterOptions.powerSources.find((p) => p.value === currentPower);
+    filterChips.push({
+      id: "power",
+      label: "Power",
+      valueLabel: powerObj ? powerObj.label : currentPower,
+      onRemove: () => updateFilter({ power: null }),
+    });
+  }
+
+  if (currentSort && currentSort !== "featured") {
+    const sortLabels: Record<string, string> = {
+      name_asc: "Model A-Z",
+      name_desc: "Model Z-A",
+      height_asc: "Height (Low to High)",
+      height_desc: "Height (High to Low)",
+    };
+    filterChips.push({
+      id: "sort",
+      label: "Sort",
+      valueLabel: sortLabels[currentSort] || currentSort,
+      onRemove: () => updateFilter({ sort: null }),
+    });
+  }
+
   return (
     <div className="bg-[#fafafa] dark:bg-[#0a0a0a] min-h-screen pb-20">
       {/* Top Banner / Breadcrumbs Bar */}
@@ -73,11 +278,6 @@ export function CategoryListingView({
       <header className="py-10 sm:py-14 border-b border-neutral-200/80 dark:border-neutral-800/80 bg-white dark:bg-[#0f0f0f]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold uppercase tracking-wider bg-[#0284c7]/10 text-[#0284c7] mb-3 border border-[#0284c7]/20">
-              <ShieldCheck className="size-3.5" />
-              <span>{segment.name} Division</span>
-            </div>
-
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-neutral-950 dark:text-white mb-3">
               {pageTitle}
             </h1>
@@ -86,83 +286,91 @@ export function CategoryListingView({
               {pageDescription}
             </p>
           </div>
-
-          {/* Sibling Category Pill Navigation Strip */}
-          {allCategoriesInSegment.length > 1 && (
-            <div className="mt-8 pt-6 border-t border-neutral-100 dark:border-neutral-800/80">
-              <span className="text-xs font-mono uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-3 font-medium">
-                Categories in this Division:
-              </span>
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                <Link
-                  href={`/equipment/${segment.slug}`}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                    !isCategoryPage
-                      ? "bg-[#0284c7] text-white shadow-2xs"
-                      : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                  }`}
-                >
-                  All {segment.slug.toUpperCase()}
-                </Link>
-
-                {allCategoriesInSegment.map((cat) => {
-                  const isSelected = category?.slug === cat.slug;
-                  return (
-                    <Link
-                      key={cat.id}
-                      href={`/equipment/${segment.slug}/${cat.slug}`}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                        isSelected
-                          ? "bg-[#0284c7] text-white shadow-2xs"
-                          : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                      }`}
-                    >
-                      {cat.name} ({cat.models_count})
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </header>
 
-      {/* Main Content Layout: Sidebar + Grid */}
+      {/* Main Content Layout */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
-        {/* Controls Toolbar: Search, Result Count, Mobile Filter Trigger, Sort */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-8 border-b border-neutral-200/80 dark:border-neutral-800">
-          <div className="flex-1 max-w-md">
-            <EquipmentSearch
-              placeholder={`Search in ${pageTitle}...`}
-              targetUrl={isCategoryPage && category ? `/equipment/${segment.slug}/${category.slug}` : `/equipment/${segment.slug}`}
-            />
-          </div>
-
-          <div className="flex items-center justify-between sm:justify-end gap-3">
-            <span className="text-xs sm:text-sm font-semibold text-neutral-600 dark:text-neutral-300">
+        {/* Existing Canonical FilterToolbar with Search, Filters & Sorting */}
+        <FilterToolbar
+          searchQuery={localSearch}
+          onSearchChange={handleSearchChange}
+          onSubmitSearch={handleSearchSubmit}
+          placeholder={`Search in ${pageTitle}...`}
+          activeFilterCount={activeFilterCount}
+          onResetFilters={handleResetAllFilters}
+          isLoading={isPending}
+          actions={
+            <span className="text-xs sm:text-sm font-semibold text-neutral-600 dark:text-neutral-300 whitespace-nowrap px-2 hidden sm:inline-block">
               <span className="font-bold text-neutral-900 dark:text-white">{totalCount}</span>{" "}
               {totalCount === 1 ? "Machine" : "Machines"} Available
             </span>
+          }
+        >
+          {/* Expandable Filter Controls Drawer */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3 w-full">
+            <FilterDropdown
+              label="Offering"
+              value={currentOffering}
+              onChange={(val) => {
+                if (val === "rental") updateFilter({ rental: "true", purchase: null });
+                else if (val === "purchase") updateFilter({ purchase: "true", rental: null });
+                else updateFilter({ rental: null, purchase: null });
+              }}
+              options={offeringOptions}
+            />
 
-            {/* Mobile Filter Drawer Trigger */}
-            <EquipmentFilterDrawer filterOptions={filterOptions} totalResults={totalCount} />
+            {filterOptions.brands.length > 0 && (
+              <FilterDropdown
+                label="Brand"
+                value={currentBrand || "all"}
+                onChange={(val) => updateFilter({ brand: val === "all" ? null : val })}
+                options={brandOptions}
+              />
+            )}
 
-            {/* Sort Control */}
-            <EquipmentSort />
+            {filterOptions.subtypes.length > 0 && (
+              <FilterDropdown
+                label="Subtype"
+                value={currentSubtype || "all"}
+                onChange={(val) => updateFilter({ subtype: val === "all" ? null : val })}
+                options={subtypeOptions}
+              />
+            )}
+
+            {filterOptions.powerSources.length > 0 && (
+              <FilterDropdown
+                label="Power"
+                value={currentPower || "all"}
+                onChange={(val) => updateFilter({ power: val === "all" ? null : val })}
+                options={powerOptions}
+              />
+            )}
+
+            <FilterDropdown
+              label="Sort"
+              value={currentSort}
+              onChange={(val) => updateFilter({ sort: val === "featured" ? null : val })}
+              options={sortOptions}
+            />
           </div>
-        </div>
+        </FilterToolbar>
 
-        {/* 2-Column Responsive Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          {/* Desktop Left Sidebar: Dynamic Filters */}
-          <aside className="hidden lg:block lg:col-span-1 sticky top-24">
-            <EquipmentFilterPanel filterOptions={filterOptions} totalResults={totalCount} />
-          </aside>
+        {/* Active Filter Chips */}
+        {filterChips.length > 0 && (
+          <FilterChips
+            chips={filterChips}
+            onClearAll={handleResetAllFilters}
+            className="mt-3"
+          />
+        )}
 
-          {/* Main Equipment Cards Grid */}
-          <div className="lg:col-span-3">
-            <EquipmentCardGrid items={equipmentItems} />
-          </div>
+        {/* Full-Width Main Equipment Cards Grid */}
+        <div className="mt-8">
+          <EquipmentCardGrid
+            items={equipmentItems}
+            onClearFilters={handleResetAllFilters}
+          />
         </div>
 
         {/* Relevant FAQs Section (if provided) */}

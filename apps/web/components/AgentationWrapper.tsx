@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { Agentation } from "agentation";
 import { isAgentationEnabled } from "@/lib/env/client";
+
+const Agentation = dynamic(
+  () => import("agentation").then((m) => m.Agentation),
+  { ssr: false }
+);
 
 const emptySubscribe = () => () => {};
 

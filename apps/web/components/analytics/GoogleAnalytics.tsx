@@ -149,14 +149,14 @@ export function GoogleAnalytics() {
     <>
       {/* 1. Official Google Tag Script */}
       <Script
-        strategy="afterInteractive"
+        strategy="lazyOnload"
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
       />
 
       {/* 2. Google Tag Initialization & Consent Mode v2 Configuration */}
       <Script
         id="google-analytics-init"
-        strategy="afterInteractive"
+        strategy="lazyOnload"
         dangerouslySetInnerHTML={{
           __html: `
             window.dataLayer = window.dataLayer || [];

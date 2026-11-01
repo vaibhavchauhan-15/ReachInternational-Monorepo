@@ -53,6 +53,18 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     description: "Daily hour meter logging and breakdown complaint reporting.",
     category: "field",
   },
+  sales: {
+    code: "sales",
+    name: "Sales Executive",
+    description: "Request-a-quote (RFQ) handling, client quotations, and sales enquiries.",
+    category: "sales",
+  },
+  marketing: {
+    code: "marketing",
+    name: "Marketing Specialist",
+    description: "Marketing site content, equipment catalogue, and campaigns.",
+    category: "admin",
+  },
 };
 
 /**

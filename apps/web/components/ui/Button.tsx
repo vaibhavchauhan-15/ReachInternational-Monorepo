@@ -3,7 +3,7 @@
 import React, { ReactNode, forwardRef, useState, useRef } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
-import { AnimatedLoader } from "./animated-icons";
+import { Loader2 } from "lucide-react";
 
 export type ButtonVariant =
   | "primary"
@@ -54,9 +54,9 @@ export type Props = ButtonProps | LinkProps;
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
   "primary-sm":
-    "bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white shadow-xs text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
   secondary:
     "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs font-medium active:scale-[0.98] transition-all cursor-pointer",
   "ghost-sm":
@@ -193,7 +193,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
       <>
         {effectiveLoading ? (
           <span className="inline-flex items-center justify-center shrink-0">
-            <AnimatedLoader isSpinning size={16} />
+            <Loader2 className="size-4 animate-spin" />
           </span>
         ) : iconPosition === "left" && icon ? (
           <span className="inline-flex items-center justify-center shrink-0 leading-none">

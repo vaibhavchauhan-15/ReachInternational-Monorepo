@@ -78,3 +78,12 @@ export const OPERATIONS_CACHE_TIERS = {
 
 export type OperationsCacheTierKey = keyof typeof OPERATIONS_CACHE_TIERS;
 
+/**
+ * Hiring Domain Cache Policies
+ */
+export const HIRING_CACHE_TTLS = {
+  list: 60,
+  kpis: 15,
+  detail: 60,
+  filters: 120,
+} as const;

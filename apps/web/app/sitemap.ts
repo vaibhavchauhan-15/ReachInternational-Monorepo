@@ -25,6 +25,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.95,
     },
     {
+      url: `${baseUrl}/careers`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/about`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
       url: `${baseUrl}/equipment/awp`,
       lastModified: new Date(),
       changeFrequency: "weekly",
@@ -32,6 +44,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${baseUrl}/equipment/mhe`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/contact`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.9,
@@ -102,9 +120,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }));
 
-    return [...staticRoutes, ...categoryRoutes, ...modelRoutes];
+    // 3. Fetch all published job postings
+    const { data: jobs } = await supabase
+      .from("job_postings")
+      .select("slug, updated_at")
+      .eq("status", "published")
+      .is("deleted_at", null);
+
+    const jobRoutes: MetadataRoute.Sitemap = (jobs || []).map((job: any) => ({
+      url: `${baseUrl}/careers/${job.slug}`,
+      lastModified: new Date(job.updated_at || Date.now()),
+      changeFrequency: "weekly",
+      priority: 0.85,
+    }));
+
+    return [...staticRoutes, ...categoryRoutes, ...modelRoutes, ...jobRoutes];
   } catch (error) {
-    console.error("[Sitemap] Error fetching dynamic equipment routes:", error);
+    console.error("[Sitemap] Error fetching dynamic routes:", error);
     return staticRoutes;
   }
 }

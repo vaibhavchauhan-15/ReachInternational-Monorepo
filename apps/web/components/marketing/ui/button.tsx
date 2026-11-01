@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { motion } from 'framer-motion'
+
 import {
   Button as CanonicalButton,
   type ButtonVariant,
@@ -113,12 +113,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const isWFull = className?.includes('w-full')
 
     return (
-      <motion.div
-        whileHover={{ scale: disabled || isBusy ? 1 : 1.02 }}
-        whileTap={{ scale: disabled || isBusy ? 1 : 0.96 }}
-        transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+      <div
         className={cn(
-          'inline-flex',
+          'inline-flex transition-transform duration-150 ease-out motion-reduce:transform-none',
+          !disabled && !isBusy && 'hover:scale-[1.02] active:scale-[0.96]',
           isHiddenSm && 'hidden sm:inline-flex',
           isWFull && 'w-full flex'
         )}
@@ -152,7 +150,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             {children}
           </CanonicalButton>
         )}
-      </motion.div>
+      </div>
     )
   }
 )

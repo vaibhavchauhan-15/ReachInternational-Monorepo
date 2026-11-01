@@ -100,6 +100,15 @@ export const TAGS = {
   attendanceSummary: (yearMonth: string) => `attendance:summary:${yearMonth}`,
   attendanceDetail: (userId: string, yearMonth: string) => `attendance:detail:${userId}:${yearMonth}`,
 
+  // Careers & Hiring Domain
+  careersList: "careers:list",
+  careerDetail: (slug: string) => `careers:job:${slug}`,
+  hiringList: "hiring:list",
+  hiringKpis: "hiring:kpis",
+  hiringJob: (id: string) => `hiring:job:${id}`,
+  hiringApplications: "hiring:applications",
+  hiringApplicationDetail: (id: string) => `hiring:application:${id}`,
+
   // Class D / User Scoped
   users: "users",
 } as const;

@@ -25,6 +25,7 @@ export interface FilterDropdownProps {
   disabled?: boolean;
   className?: string;
   dropdownClassName?: string;
+  buttonClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
   icon?: React.ReactNode;
@@ -41,6 +42,7 @@ export function FilterDropdown({
   disabled = false,
   className = "",
   dropdownClassName = "",
+  buttonClassName = "",
   searchable,
   searchPlaceholder,
   icon,
@@ -120,7 +122,7 @@ export function FilterDropdown({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={`w-full flex items-center justify-between gap-1.5 rounded-lg border text-xs font-semibold select-none transition-all cursor-pointer shadow-2xs ${
-          compact ? "h-8 px-2.5" : "h-11 sm:h-9 px-3"
+          buttonClassName ? buttonClassName : compact ? "h-8 px-2.5" : "h-11 sm:h-9 px-3"
         } ${
           isFiltered
             ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"

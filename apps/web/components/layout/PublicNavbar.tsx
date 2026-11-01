@@ -78,6 +78,8 @@ const roleLabels: Record<UserRole, string> = {
   supervisor: "Supervisor",
   hr: "HR",
   operator: "Operator",
+  sales: "Sales",
+  marketing: "Marketing",
 };
 
 const UserMenu = memo(function UserMenu({ user }: { user: User }) {

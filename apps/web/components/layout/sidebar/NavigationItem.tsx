@@ -60,7 +60,10 @@ export function NavigationItem({
   } else if (item.href === "/dashboard") {
     isActive = pathname === "/dashboard" && (!currentTab || currentTab !== "history");
   } else {
-    isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+    isActive =
+      pathname === item.href ||
+      (item.href !== "/" && pathname.startsWith(item.href)) ||
+      Boolean(item.subItems?.some((sub) => (sub.href ? pathname.startsWith(sub.href) : false)));
   }
 
   const hasSubItems = Boolean(item.subItems && item.subItems.length > 0);
@@ -131,10 +134,11 @@ export function NavigationItem({
                 <CollapsibleContent>
                   <SidebarMenuSub>
                     {item.subItems?.map((sub) => {
-                      const isSubActive = isActive && currentTab === sub.tab;
+                      const subUrl = sub.href || `${item.href}?tab=${sub.tab}`;
+                      const isSubActive = sub.href ? (pathname === sub.href || pathname.startsWith(sub.href + "/")) : (isActive && currentTab === sub.tab);
                       return (
                         <SidebarMenuSubItem key={sub.tab}>
-                          <Link href={`${item.href}?tab=${sub.tab}`} className="focus:outline-none">
+                          <Link href={subUrl} className="focus:outline-none">
                             <SidebarMenuSubButton as="div" active={isSubActive}>
                               <span className="truncate">{sub.label}</span>
                             </SidebarMenuSubButton>

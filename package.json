@@ -10,6 +10,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "check:type": "node scripts/check-typography.mjs",
+    "test": "node scripts/run-all-tests.mjs",
+    "test:all": "node scripts/run-all-tests.mjs && turbo run typecheck",
     "seed": "node supabase/seed.mjs",
     "verify:seed": "node supabase/verify_seed.mjs"
   },

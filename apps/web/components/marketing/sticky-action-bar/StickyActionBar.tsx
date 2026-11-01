@@ -11,7 +11,7 @@ import { Phone, ArrowRight } from 'lucide-react'
  */
 export function StickyActionBar() {
   const pathname = usePathname()
-  const hidden = pathname === '/contact/' || pathname === '/request-a-quote/'
+  const hidden = pathname?.startsWith('/contact') || pathname?.startsWith('/request-a-quote')
 
   if (hidden) return null
 

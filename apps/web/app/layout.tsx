@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
-import { AgentationWrapper } from "@/components/AgentationWrapper";
-import { CookieConsent } from "@/components/ui/CookieConsent";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { GoogleAnalytics } from "@/components/analytics";
@@ -13,19 +11,19 @@ const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
   display: "swap",
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 });
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
@@ -86,8 +84,17 @@ export const metadata: Metadata = {
   },
 };
 
-import { TooltipProvider, ToastProvider, PullToRefresh } from "@/components/ui";
+import dynamic from "next/dynamic";
+import { ToastProvider } from "@/components/ui/Toast";
 import { WebOfflineBanner } from "@/components/ui/WebOfflineBanner";
+
+const AgentationWrapper = dynamic(
+  () => import("@/components/AgentationWrapper").then((m) => m.AgentationWrapper)
+);
+
+const CookieConsent = dynamic(
+  () => import("@/components/ui/CookieConsent").then((m) => m.CookieConsent)
+);
 
 export default function RootLayout({
   children,
@@ -122,16 +129,12 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
           <ToastProvider>
-            <TooltipProvider delayDuration={200}>
-              <WebOfflineBanner />
-              <PullToRefresh>
-                {children}
-              </PullToRefresh>
-              <AgentationWrapper />
-              <CookieConsent />
-              <GoogleAnalytics />
-              <Analytics />
-            </TooltipProvider>
+            <WebOfflineBanner />
+            {children}
+            <AgentationWrapper />
+            <CookieConsent />
+            <GoogleAnalytics />
+            {process.env.VERCEL ? <Analytics /> : null}
           </ToastProvider>
         </ThemeProvider>
       </body>

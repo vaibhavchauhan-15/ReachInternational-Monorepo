@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { AnimatedInfo } from "./animated-icons";
+import { Info } from "lucide-react";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
@@ -101,7 +101,7 @@ export function InfoTooltip({
             aria-label="More information"
             className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
           >
-            <AnimatedInfo size={14} />
+            <Info className="size-3.5" />
           </button>
         )}
       </span>

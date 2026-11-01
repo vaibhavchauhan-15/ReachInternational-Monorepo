@@ -10,6 +10,8 @@ export const ROLE_DEFAULT_SCOPES: Record<UserRole, PermissionScope> = {
   supervisor: "ORGANIZATION",
   hr: "ORGANIZATION",
   operator: "ASSIGNED",
+  sales: "ORGANIZATION",
+  marketing: "ORGANIZATION",
 };
 
 /**

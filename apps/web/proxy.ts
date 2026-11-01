@@ -218,6 +218,13 @@ export async function proxy(request: NextRequest) {
     return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
   }
 
+  // Redirect /rfq to /admin/sales/rfq
+  if (path === "/rfq" || path.startsWith("/rfq/")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.pathname = targetUrl.pathname.replace(/^\/rfq(\/|$)/, "/admin/sales/rfq$1");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
   // Redirect unauthenticated user accessing protected or deprecated route to /login
   if (isProtectedRoute && !authenticatedUser) {
     return createRedirectResponse("/login");

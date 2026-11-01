@@ -10,9 +10,11 @@ export type NavKey =
   | "audit"
   | "payroll"
   | "attendance"
+  | "hiring"
   | "hr"
   | "settings"
-  | "profile";
+  | "profile"
+  | "rfq";
 
 // ─── Nav item definition ───────────────────────────────────────
 export interface NavItem {
@@ -37,6 +39,8 @@ export const CANONICAL_NAV_ROLES: readonly UserRole[] = [
   "supervisor",
   "hr",
   "operator",
+  "sales",
+  "marketing",
 ];
 
 // Matches the constant in apps/web/app/actions/clients.ts
@@ -45,6 +49,7 @@ export const AUTHORIZED_CLIENT_ROLES: readonly UserRole[] = [
   "admin",
   "manager",
   "supervisor",
+  "sales",
 ];
 
 // Matches roles authorized to access Daily Running Logs (/running-logs)
@@ -168,6 +173,31 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    key: "hiring",
+    label: "Hiring",
+    href: "/hiring",
+    icon: "briefcase",
+    match: ["/hiring"],
+    roles: [
+      "super_admin",
+      "admin",
+      "hr",
+      "manager",
+    ],
+  },
+  {
+    key: "rfq",
+    label: "Quote Requests",
+    href: "/admin/sales/rfq",
+    icon: "file-text",
+    match: ["/admin/sales/rfq", "/rfq"],
+    roles: [
+      "super_admin",
+      "admin",
+      "sales",
+    ],
+  },
+  {
     key: "settings",
     label: "Settings",
     href: "/settings",
@@ -193,6 +223,8 @@ export const ROLE_HOME_ROUTES: Record<UserRole, string> = {
   supervisor: "/dashboard",
   hr: "/dashboard",
   operator: "/dashboard",
+  sales: "/dashboard",
+  marketing: "/dashboard",
 };
 
 export const MOBILE_ROLE_HOME_ROUTES: Record<UserRole, string> = {
@@ -202,6 +234,8 @@ export const MOBILE_ROLE_HOME_ROUTES: Record<UserRole, string> = {
   supervisor: "/(app)/dashboard",
   hr: "/(app)/dashboard",
   operator: "/(app)/dashboard",
+  sales: "/(app)/dashboard",
+  marketing: "/(app)/dashboard",
 };
 
 export function getRoleHomeRoute(role?: UserRole | string | null): string {
@@ -228,11 +262,13 @@ export const ACTIVE_PROTECTED_ROUTES: readonly string[] = [
   "/users",
   "/payroll",
   "/attendance",
+  "/hiring",
   "/audit",
   "/settings",
-
   "/profile",
   "/onboarding",
+  "/admin/sales/rfq",
+  "/rfq",
 ];
 
 export const AUTH_ROUTES: readonly string[] = [
@@ -322,14 +358,15 @@ export function isRouteAllowedForRole(pathname: string, role: UserRole): boolean
 }
 
 // ─── Bar slot order per role (max 4 primary + More/Account) ─────
-// ponytail: hand-picked per role; derive from usage data only if it ever matters.
 export const PRIMARY: Record<UserRole, NavKey[]> = {
   operator: ["home", "operations", "machines", "attendance"],
   supervisor: ["home", "operations", "machines", "users"],
-  hr: ["home", "operations", "attendance", "payroll"],
+  hr: ["home", "users", "hiring"],
   manager: ["home", "operations", "machines", "clients"],
   admin: ["home", "operations", "machines", "users"],
   super_admin: ["home", "operations", "machines", "users"],
+  sales: ["home", "rfq", "clients"],
+  marketing: ["home", "machines"],
 };
 
 // ─── Runtime helpers ────────────────────────────────────────────
@@ -360,4 +397,3 @@ export function labelFor(item: NavItem, role: UserRole): string {
 export function getDrawerItems(role: UserRole): NavItem[] {
   return getNavForRole(role).more;
 }
-

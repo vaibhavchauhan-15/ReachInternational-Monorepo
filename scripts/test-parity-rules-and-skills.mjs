@@ -70,9 +70,9 @@ const REQUIRED_CORE_SPECS = [
   'packages/permissions/AGENTS.md',
   'packages/types/AGENTS.md',
   'packages/validation/AGENTS.md',
-  'packages/api-client/AGENTS.md',
   'packages/utils/AGENTS.md',
-  'packages/config/AGENTS.md',
+  'rules/testing/README.md',
+  '.agents/rules/testing_standards_and_enforcement.md',
   'AI/PROJECT_MEMORY.md',
   'AI/FILE_INDEX.md',
 ];

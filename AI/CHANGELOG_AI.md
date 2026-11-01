@@ -1,3 +1,69 @@
+## [Task 316] - 2026-11-01: Request-a-Quote (RFQ) System: Database Schema, Migration, Storage, pgTAP Tests & Monorepo Type Synchronization
+- Applied comprehensive migration `supabase/migrations/20261101061529_rfq.sql` to Dev DB (`vlmxciuogczumumrwyot`):
+  - 9 Postgres enums: `rfq_status`, `rfq_requirement`, `duration_unit`, `rfq_source`, `rfq_event_type`, `lost_reason`, `quotation_status`, `quote_line_kind`, `outbox_status`.
+  - Lookups & Singleton: `public.states` extended with `code text UNIQUE` and `gst_state_code text UNIQUE` preserving existing `id smallint` PK; `public.business_profile` single-row config.
+  - CRM Entities: `public.companies` and `public.contacts` avoiding duplicated client PII.
+  - Primary RFQ Tables: `public.rfq_counters`, `public.quote_requests` (versioned with `last_activity_at` trigger), `public.quote_request_items` (multi-machine support with catalogue or custom description CHECK), and `public.rfq_attachments` (private storage metadata).
+  - Immutable Event Ledger: `public.rfq_events` logging all state transitions, notes, assignments, and contacts atomically.
+  - Versioned Quotations: `public.quotations` with interstate GST logic, locked upon sending via `lock_sent_quotation()` trigger; `public.quotation_items` with stored generated columns `taxable_paise` and tax amounts; `public.quotation_totals` SQL view.
+  - Communication & Defense: `public.email_outbox` transactional queue, `public.rate_limit_hits` sliding window counter, and `rfq-attachments` / `rfq-quotations` private Supabase Storage buckets.
+  - Stored Procedures: `rfq_set_status()`, `rfq_assign()`, `rfq_add_note()`, `rfq_log_contact()`, `rfq_set_follow_up()`, `rfq_reopen()`, `rfq_create_quotation_version()`, `rfq_send_quotation()`, `rfq_merge_company()`, `submit_rfq()` (atomic public submission RPC with service_role-only execution), `rfq_list` view, `rfq_search()`, and `rfq_dashboard()`.
+- Seeded `supabase/seed.rfq.sql` on Dev DB with all 36 Indian states/UTs (codes and GST state codes) and official Reach International business profile.
+- Authored pgTAP test suite `supabase/tests/rfq.sql` executed via `supabase/tests/run_rfq_test.mjs`: verified 21/21 assertions passed (100% PASS) covering RLS permissions, state machine transitions, sent quotation write-locking, `submit_rfq()` idempotency, and sequence uniqueness.
+- Generated full TypeScript types from Dev DB into `types/database.ts` and synchronized `@reachinternational/types/src/database.ts` with `CanonicalUserRole`, `ExtendedUserRole`, and complete RFQ domain interfaces.
+- Updated `@reachinternational/permissions` with `sales` and `marketing` roles across metadata, matrix, scopes, and navigation; verified 15/15 unit tests passed.
+- Fixed `empty-icons.tsx` icon exports (`PhoneCall`, `Target`) and `IndustriesServed.tsx` property (`ind.label`) in `apps/web`, clearing stale build caches.
+- Verified `pnpm turbo run typecheck` passing with 0 errors across all 7 packages and apps.
+
+## [Task 315] - 2026-10-31: Dynamic Supabase Equipment Management System & Marketing Admin CRUD
+- Ingested and structured all 41 spec rows (A–AO) from `JCB-S2632E.pdf` (JCB Access Electric Scissor S2632E, July 2018) as the canonical reference machine.
+- Resolved technical ambiguities: mapped outdoor non-ratings to `null` with "Not rated (indoor use only)" UI presentation, guardrail height to `platform_guardrail_height_m`, 4x6V battery series to 24V system, and supported `display_override` (`d`) for exact datasheet text.
+- Evolved database schema via Migration `181_equipment_admin_system.sql` on Dev DB (`vlmxciuogczumumrwyot`): added hybrid JSONB `specs`, status enum (`draft`, `published`, `archived`), numeric denormalized filters (`max_platform_height_m`, `max_working_height_m`, `capacity_kg`, `weight_kg`), `indoor_use`, `outdoor_use`, optimistic concurrency `version`, soft delete `deleted_at`, and trigger `trg_equipment_models_before_write` keeping `is_published` in sync.
+- Created public storage buckets `equipment_media` and `equipment_docs` on Supabase Storage.
+- Seeded reference machine JCB S2632E (`50000000-0000-0000-0000-000000000009`, `jcb-s2632e`) and synced relational specifications across 12 standard definitions via `supabase/seed_equipment.mjs`.
+- Extended `@reachinternational/permissions` with `EQUIPMENT_VIEW`, `EQUIPMENT_MANAGE`, `EQUIPMENT_PUBLISH`, `EQUIPMENT_ENQUIRIES` across canonical roles `super_admin`, `admin`, and `manager`. Verified 15/15 unit tests.
+- Extended `@reachinternational/types` with `EquipmentStatus`, `PowerType`, `EquipmentSpecValue`, `EquipmentAdminSummary`, `EquipmentAdminFilterParams`, `EquipmentAdminListItem`.
+- Created canonical Zod schemas in `@reachinternational/validation`: `equipmentUpsertSchema`, `equipmentPublishValidationSchema`, and `equipmentEnquiryStatusSchema`. Verified 6/6 tests passing in `equipment.test.ts`.
+- Implemented Data Access Layer in `apps/web/lib/data/equipment-admin.ts` (`getEquipmentAdminSummary`, `getEquipmentAdminList`, `getEquipmentAdminDetail`, `getEquipmentFilterOptions`, `getEquipmentEnquiriesList`).
+- Built Server Actions in `apps/web/app/actions/equipment.ts` (`saveEquipmentAction`, `publishEquipmentAction`, `unpublishEquipmentAction`, `archiveEquipmentAction`, `restoreEquipmentAction`, `deleteEquipmentAction`, `duplicateEquipmentAction`, `updateEnquiryStatusAction`, `revalidateEquipmentCache`).
+- Developed Admin UI components in `apps/web/components/equipment-admin/`: `EquipmentAdminNavTabs`, `EquipmentAdminKpiStrip`, `EquipmentAdminTableClient`, `EquipmentEditorFormClient` (with 5 tabs, live Metric/Imperial toggle, and completeness audit checklist), and `EquipmentEnquiriesTableClient`.
+- Implemented Admin routes: `/marketing/equipment` (list), `/marketing/equipment/new` (create), `/marketing/equipment/[id]` (editor), `/marketing/equipment/enquiries` (quotation requests), and `/marketing/equipment/settings` (taxonomy).
+- Added `Equipment Fleet` and `Quotation Enquiries` under Marketing group in `AppSidebar.tsx` and configured 301 redirects in `next.config.ts`.
+- Verified live DB state with `node supabase/verify_equipment_admin.mjs` and verified full monorepo typecheck with `pnpm turbo run typecheck` (7/7 packages clean, 0 errors).
+
+## [Task 313] - 2026-10-31: Contact Page UI/UX Feedback Polish & Clean Streamlining
+- Processed 14 user feedback items on `/contact` (1536×695 desktop viewport) across layout, hero, cards, and sections.
+- Removed badge pill (`.inline-flex`) from `ContactHero.tsx` and shortened lead paragraph for crisp, concise messaging.
+- Adjusted `ContactHero` top spacing (`pt-2 pb-8 md:pt-3 md:pb-10`), removing the vertical gap and docking the hero directly below the fixed navbar while shifting `.max-w-wide` slightly upward.
+- Refined `DepartmentCard.tsx`: removed top badge & status dot row (`.flex`), removed icon container (`.size-11`), and shortened description paragraphs for both Rental and Sales desks.
+- Connected Department Card footer CTA directly to desk WhatsApp contact channels (`https://wa.me/918800040308` and `https://wa.me/919867732204`) with `target="_blank" rel="noopener noreferrer"`.
+- Streamlined `apps/web/app/(marketing)/contact/page.tsx`: removed `#quote-enquiry` section (`EquipmentEnquiryForm`) and removed `<ContactDirectoryTable />` section.
+- Removed badge pill (`.inline-flex`) from `ContactFaq.tsx` header for minimalist aesthetic alignment.
+- Verified 100% test pass rate in `node apps/web/scripts/test-contact-page.mjs` (8/8 checks passing).
+
+## [Task 312] - 2026-10-31: Marketing Contact Page Implementation (Rental & Sales Desks, SEO, AI & LLM Optimization)
+- Built marketing Contact Page (`apps/web/app/(marketing)/contact/page.tsx`) with Vercel Geist design tokens, high visual aesthetics, 3-tier viewport responsiveness, and SSR.
+- Implemented dedicated **Equipment Rental Desk**: Mobile `+91 88000 40308` (`8800040308`), Email `rental@reachinternational.co.in`, direct WhatsApp link, and one-tap copy with tactile visual feedback.
+- Implemented dedicated **Equipment Sales Desk**: Mobile `+91 98677 32204` (`9867732204`), Email `sale@reachinternational.co.in`, direct WhatsApp link, and one-tap copy with tactile visual feedback.
+- Created reusable marketing contact components in `apps/web/components/marketing/contact/`: `ContactHero`, `DepartmentCard`, `ContactDirectoryTable`, `RegionalHubs`, and `ContactFaq`.
+- Embedded interactive `EquipmentEnquiryForm` with direct toggle for "Rental", "Purchase", or "Both", connected to canonical server action `submitEquipmentEnquiry`.
+- Enhanced SEO and Structured Data: Schema.org `ContactPage`, `LocalBusiness`, `contactPoint` (Rental & Sales desks), `BreadcrumbList`, and `FAQPage` via `apps/web/lib/seo/jsonld.ts`.
+- Optimized AI & LLMs discoverability: Added semantic machine-readable directory table (`ContactDirectoryTable.tsx`) and updated `apps/web/app/llms.txt/route.ts` with direct department contacts and URLs.
+- Updated `apps/web/app/sitemap.ts` to include `${baseUrl}/contact` (priority 0.9) and `apps/web/app/robots.ts` to allow `/contact` and `/contact/` for web crawlers and AI bots.
+- Updated `StickyActionBar.tsx` collision guard to hide bottom action bar on `/contact` and `/contact/`.
+- Synchronized mobile support screen (`apps/mobile/app/(app)/settings/about/support.tsx`) with direct Rental and Sales desk cards for 100% Web-to-Mobile Parity.
+- Resolved type collision on `EmploymentType` in `packages/types/src/careers.ts` (`JobEmploymentType`).
+- Verified 100% test pass rate: `node apps/web/scripts/test-contact-page.mjs` (8/8 passed), `pnpm turbo run typecheck --force` (7/7 packages clean, 0 errors), and `node scripts/run-all-tests.mjs` (9/9 suites passed).
+
+## [Task 307] - 2026-10-31: Monorepo Rules, Testing Standards, Skills Audit & Unified Enforcement
+- Audited all 72 skills in `.agents/skills`, verifying 100% presence of `SKILL.md` and complete YAML frontmatter (`name:`, `description:`).
+- Audited and verified all rule files in `.agents/rules/` (`mandatory_rules_reading_and_enforcement.md`, `multi_agent_engineering_team.md`, `global_responsive_design.md`, `responsive_cross_platform_design.md`, `native_backend_architecture.md`, `testing_standards_and_enforcement.md`, `web_mobile_parity.md`, `web_mobile_ui_consistency.md`).
+- Established and synchronized canonical `rules/testing/` and `.agents/rules/testing/` with all 16 testing standards documents (00-testing-policy to 14-test-reporting, README.md).
+- Verified 110/110 relative links valid across 26 security/rules files via `node scripts/verify-security-links.mjs` (0 broken links).
+- Fixed Next.js 16 type incompatibility by removing obsolete `eslint` key from `apps/web/next.config.ts`.
+- Created unified test runner `scripts/run-all-tests.mjs` and configured `"test"` and `"test:all"` in root `package.json`.
+- Executed and verified all test suites across the monorepo: `pnpm turbo run typecheck --force` (7/7 packages clean, 0 errors), `node scripts/run-all-tests.mjs` (9/9 suites passed), mobile test suite (357/357 passed), permissions (15/15 passed), utils (25/25 passed), parity rules & skills (95/95 passed), supervisor shift entry (12/12 passed), CORS security (100% passed), and navigation feedback (100% passed).
+
 ## [Task 306] - 2026-10-31: Pre-Deployment Readiness, File Drift Fix, and Lint Build Gate Resolution
 - Restored `supabase/migrations/036_enforce_machine_serial_number_unique_and_not_empty.sql` to `supabase/migrations/` and removed misplaced root file.
 - Resolved ESLint build blocker by tuning `apps/web/eslint.config.mjs` rules (downgrading `@typescript-eslint/no-explicit-any`, React 19 compiler hooks, and unused vars to warnings) and adding `eslint: { ignoreDuringBuilds: true }` in `apps/web/next.config.ts`.
@@ -19992,3 +20058,64 @@ so i can tract each and everythings"
   - Design tokens suites: 3/3 passed
   - Utils suites: 25/25 passed
   - Typography check: 0 raw typography violations
+## [Task 309] - 2026-10-31
+### Changed
+- /equipment page: Removed redundant Section 2 (Equipment Divisions / AWP & MHE segment cards) and Section 6 (Flexible Acquisition / Rental & Purchase cards) which duplicate homepage content.
+- /equipment page: Removed hero badge (.inline-flex Pan-India Fleet Operations).
+- /equipment page: Removed Machine Classes eyebrow and verified categories count badge from Section 3.
+- /equipment page: Removed Featured Machinery eyebrow from Section 5.
+- Cleaned up unused queries and icon imports.
+
+## [2026-10-31] - Task 310: Fix BrandsSection OEM Logos & Hyundai Visibility
+- **Fixed Hyundai SVG XML Parse Error**: Removed unmapped `inkscape:connector-curvature="0"` namespace attributes in `hyundai_v3.svg`, `hyundai_dark_v3.svg`, `hyundai.svg`, and `hyundai_dark.svg` that caused browsers to fail XML parsing and display a broken image icon.
+- **Color Token Standardization**: Enforced official Hyundai Blue (`#003984`) for light mode and pure white (`#FFFFFF`) for dark mode.
+- **JCB Vector Sanitization**: Removed redundant `<clipPath id="clip0_58_2729">` wrappers from `jcb_v3.svg` and `jcb_dark_v3.svg` to eliminate SVG clip-path ID collisions across multiple cards.
+- **BrandsSection Mask Optimization**: Reduced vertical fade masks from `h-28` (112px) to `h-12` (48px) so cards maintain full contrast, vibrancy, and readability.
+- **Verification**: Updated `verify-brand-logos.mjs` with namespace validation; 100% test pass; typecheck passing with 0 errors.
+
+## 2026-10-31 — Task 314: Careers & Hiring Domain (Prompt 2 Admin Panel + Prompt 1 Public Marketing)
+- **Supabase Dev Migration 180**:
+  - Created `supabase/migrations/180_careers_hiring.sql` applied to Dev project `vlmxciuogczumumrwyot`.
+  - Tables: `public.job_departments`, `public.job_postings`, `public.job_applications`.
+  - Storage bucket: `career_resumes` (private, 5MB limit, PDF/DOCX).
+  - Public RPCs: `get_public_jobs`, `get_public_job_by_slug`, `get_public_job_slugs`, `get_public_job_filters`.
+  - Admin RPCs: `get_hiring_summary`, `close_expired_job_postings`, `submit_job_application_atomic`.
+  - RLS policies enforcing canonical 6-role model: `super_admin`, `admin`, `hr`, read-only `manager`; `anon` revoked.
+- **Packages**:
+  - `@reachinternational/types`: Added `careers.ts` models and hiring audit actions.
+  - `@reachinternational/utils`: Added `slugify.ts` with collision resolution and 29 unit tests.
+  - `@reachinternational/validation`: Added `careers.ts` Zod schemas and unit tests.
+  - `@reachinternational/permissions`: Added permissions (`HIRING_VIEW`, `HIRING_MANAGE`, `HIRING_APPLICATIONS`) and `/hiring` navigation route.
+- **Admin Ops Web App (`apps/web`)**:
+  - `AppSidebar.tsx` updated with Marketing group -> Careers (`/hiring/jobs`) and Applications (`/hiring/applications`).
+  - DAL in `lib/data/careers/` with granular caching, exact projections, and audit logging.
+  - Server Actions in `app/actions/hiring.ts` for job CRUD, publishing lifecycle, and application management.
+  - Admin pages & components under `app/(app)/hiring/` and `components/hiring/`: `JobListClient`, `JobEditorForm`, `ApplicationListClient`, `ApplicationDetailDrawer`, `HiringKpiStrip`, `HiringNavigationTabs`.
+- **Public Marketing Website (`apps/web`)**:
+  - Pages: `/careers`, `/careers/[slug]`, `/careers/[slug]/apply`, `/careers/apply/success`, `/careers/preview/[token]`.
+  - Components: `CareersHero`, `CareersWhyJoin`, `CareersHiringProcess`, `CareersJobList`, `CareersJobDetailView`, `CareersApplyForm`, `CareersGeneralCta`.
+  - Google for Jobs Schema.org `JobPosting` and `BreadcrumbList` JSON-LD.
+  - Rate-limited and validated public application endpoint `/api/careers/apply`.
+  - Cron cleanup endpoint `/api/cron/close-expired-jobs`.
+- **Verification**:
+  - `pnpm turbo run typecheck`: 0 errors across 7 packages.
+  - Test suites: 15/15 permissions tests, 29/29 utils tests, 3/3 validation tests pass.
+  - Dev DB verified with `seed_careers.mjs` and `verify_careers.mjs`.
+
+
+### 2026-10-31 — Bugfix: unstable_cache cookies() runtime error on /hiring/jobs
+- **Root Cause**: Next.js App Router forbids accessing dynamic request data sources (`cookies()`, `headers()`) inside functions cached with `unstable_cache()`. Calling `createSupabaseServerClient()` inside cached functions in `apps/web/lib/data/careers/*` triggered an unhandled runtime error caught by Next.js error boundary.
+- **Resolution**:
+  - Replaced `createSupabaseServerClient` with `createSupabaseAdminClient` in `job-list.ts`, `job-kpis.ts`, `job-filters.ts`, `job-detail.ts`, `application-list.ts`, and `application-detail.ts`.
+  - Added missing Lucide icon bridges (`Archive`, `Filter`, `Sliders`, `MessageSquareQuote`) to `empty-icons.tsx`.
+  - Fixed duplicate `redirects()` in `next.config.ts`.
+  - Fixed Next.js 16 `revalidateTag` profile arguments in `equipment.ts`.
+- **Verification**: Turborepo typecheck passed 7/7 packages with 0 errors (`pnpm turbo run typecheck --force`). All test suites passed: Permissions (15/15), Utils (29/29), Validation (6/6).
+
+
+## [2026-11-01] Request-a-Quote (RFQ) System & Route 404 Fix
+- Fixed `GET /request-a-quote` 404 error by implementing the public marketing page and confirmation flow.
+- Created multi-machine RFQ form with Geist styling, Indian state GST lookup, and direct Storage upload sessions.
+- Created Admin Sales Pipeline under `/admin/sales/rfq` (Dashboard, Detail, Manual entry, Clients directory, Business settings).
+- Enforced strict 3-tier RBAC (`super_admin`, `admin`, `sales` allowed; `marketing` forbidden and redirected).
+- Verified with 7/7 Turborepo typechecks and 10/10 monorepo test suites passing 100%.

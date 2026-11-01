@@ -148,7 +148,7 @@ export function BrandsSection() {
         <div className="relative flex justify-center items-center gap-3 sm:gap-5 md:gap-7 lg:gap-8 h-[380px] sm:h-[440px] md:h-[500px] lg:h-[520px] overflow-hidden rounded-3xl p-2 sm:p-4">
           {/* Top Subtle Fade Gradient Mask */}
           <div
-            className="pointer-events-none absolute top-0 left-0 right-0 h-16 sm:h-20 md:h-28 z-20"
+            className="pointer-events-none absolute top-0 left-0 right-0 h-8 sm:h-10 md:h-12 z-20"
             style={{
               background:
                 'linear-gradient(to bottom, var(--surface-sunken) 0%, transparent 100%)',
@@ -158,7 +158,7 @@ export function BrandsSection() {
 
           {/* Bottom Subtle Fade Gradient Mask */}
           <div
-            className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 sm:h-20 md:h-28 z-20"
+            className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 sm:h-10 md:h-12 z-20"
             style={{
               background:
                 'linear-gradient(to top, var(--surface-sunken) 0%, transparent 100%)',

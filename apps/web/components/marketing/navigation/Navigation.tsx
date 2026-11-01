@@ -7,7 +7,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
-import { AnimatePresence, motion } from 'framer-motion'
+
+
 import { ThemeToggle } from './ThemeToggle'
 import { ReachLogo } from '@/components/branding/ReachLogo'
 import { Button } from '@/components/marketing/ui/button'
@@ -22,7 +23,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from 'lucide-react'
-import { LiquidMetalButton } from '@/components/ui/liquid-metal-button'
+
 
 // ============================================================================
 // Navigation Link Definitions
@@ -296,7 +297,22 @@ export function Navigation() {
                 </Link>
               </li>
 
-              {/* Contact Link */}
+                            {/* Careers Link */}
+              <li>
+                <Link
+                  href="/careers"
+                  className={cn(
+                    'inline-flex h-9 items-center justify-center rounded-md px-3.5 py-2 text-sm font-medium transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary outline-none',
+                    pathname.startsWith('/careers') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  )}
+                  onClick={() => setActiveMenu(null)}
+                >
+                  Careers
+                </Link>
+              </li>
+
+{/* Contact Link */}
               <li>
                 <Link
                   href="/contact/"
@@ -315,17 +331,12 @@ export function Navigation() {
             {/* ============================================================== */}
             {/* Desktop & Laptop Dropdown Panels (RENDERED ONLY WHEN ACTIVE)    */}
             {/* ============================================================== */}
-            <AnimatePresence>
-              {activeMenu && (
-                <motion.div
-                  key="dropdown-panel"
-                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  onMouseEnter={cancelClose}
-                  onMouseLeave={scheduleClose}
-                  className="absolute top-[calc(100%+8px)] z-50 rounded-xl overflow-hidden pointer-events-auto bg-white dark:bg-[#171717] text-foreground border border-border shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
+            {activeMenu && (
+              <div
+                key="dropdown-panel"
+                onMouseEnter={cancelClose}
+                onMouseLeave={scheduleClose}
+                className="absolute top-[calc(100%+8px)] z-50 rounded-xl overflow-hidden pointer-events-auto bg-white dark:bg-[#171717] text-foreground border border-border shadow-2xl ring-1 ring-black/5 dark:ring-white/10 animate-in fade-in-0 zoom-in-95 duration-150"
                   style={{
                     backgroundColor: 'var(--surface-elevated)',
                     // Positioning: Equipment starts near nav start; Services aligns gracefully
@@ -451,9 +462,8 @@ export function Navigation() {
                       </ul>
                     </div>
                   )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+            )}
           </nav>
         </div>
 
@@ -472,13 +482,15 @@ export function Navigation() {
             <span>Staff Portal</span>
           </Link>
 
-          {/* Premium Liquid Metal CTA for Clients */}
+          {/* CTA Button for Clients */}
           <div className="hidden sm:inline-flex items-center">
-            <LiquidMetalButton
+            <Link
               href="/request-a-quote/"
-              label="Request a Quote"
-              icon={<ArrowRight className="size-3.5" />}
-            />
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white bg-sky-700 hover:bg-sky-800 active:bg-sky-900 transition-colors shadow-xs"
+            >
+              <span>Request a Quote</span>
+              <ArrowRight className="size-3.5" />
+            </Link>
           </div>
 
           {/* Mobile hamburger button */}
@@ -577,15 +589,8 @@ export function Navigation() {
                   />
                 </button>
 
-                <AnimatePresence>
-                  {mobileEquipmentOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden border-t border-border bg-muted/20"
-                    >
+                {mobileEquipmentOpen && (
+                    <div className="overflow-hidden border-t border-border bg-muted/20 animate-in fade-in-0 duration-200">
                       <div className="p-3 space-y-3">
                         <div>
                           <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-2 py-1">
@@ -633,9 +638,8 @@ export function Navigation() {
                           </Link>
                         </Dialog.Close>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
               </div>
 
               {/* 2. Services Accordion */}
@@ -654,15 +658,8 @@ export function Navigation() {
                   />
                 </button>
 
-                <AnimatePresence>
-                  {mobileServicesOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden border-t border-border bg-muted/20"
-                    >
+                {mobileServicesOpen && (
+                    <div className="overflow-hidden border-t border-border bg-muted/20 animate-in fade-in-0 duration-200">
                       <div className="p-2 space-y-1">
                         {serviceLinks.map((service) => {
                           const Icon = service.icon
@@ -684,9 +681,8 @@ export function Navigation() {
                           )
                         })}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+                )}
               </div>
 
               {/* Direct Links: About Us & Contact */}
@@ -702,7 +698,19 @@ export function Navigation() {
                 </Link>
               </Dialog.Close>
 
-              <Dialog.Close asChild>
+                            <Dialog.Close asChild>
+                <Link
+                  href="/careers"
+                  className={cn(
+                    'flex items-center min-h-[44px] px-3.5 rounded-xl text-sm font-semibold transition-colors',
+                    pathname.startsWith('/careers') ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted active:bg-muted/70'
+                  )}
+                >
+                  Careers
+                </Link>
+              </Dialog.Close>
+
+<Dialog.Close asChild>
                 <Link
                   href="/contact/"
                   className={cn(

@@ -73,11 +73,26 @@ Equipment for lifting, transporting, pallet handling, and high-density warehouse
 `;
     }
 
-    content += `---
-## Customer Assistance & Custom Quotation
-For specialized working height requirements, customized site leases, or purchase inquiries:
-- Form: ${baseUrl}/equipment#quote-assistance
-- Response Time: Under 2 hours across India
+content += `---
+## Direct Department Contacts (Rental & Sales)
+Official contact points for heavy machinery deployment, rental hire, and new/pre-owned equipment acquisitions across India:
+
+### Equipment Rental Desk
+- Purpose: Short & long-term hire of boom lifts, scissor lifts, rough-terrain platforms, and forklifts with certified operators and 24/7 breakdown support.
+- Mobile / WhatsApp: +91 88000 40308 (8800040308)
+- Email: rental@reachinternational.co.in
+- Coverage: Pan-India dispatch
+
+### Equipment Sales Desk
+- Purpose: Outright purchase of brand-new and certified pre-owned access platforms, material handling machinery, OEM warranties, and genuine parts.
+- Mobile / WhatsApp: +91 98677 32204 (9867732204)
+- Email: sale@reachinternational.co.in
+- Authorized OEM Brands: JLG, Genie, JCB, Toyota, Hyundai, BYD
+
+### Contact & Assistance
+- Contact Page: ${baseUrl}/contact
+- Quotation Request: ${baseUrl}/equipment#quote-assistance
+- Response SLA: Under 2 hours across India
 `;
 
     return new NextResponse(content, {

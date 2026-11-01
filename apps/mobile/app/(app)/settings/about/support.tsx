@@ -23,8 +23,11 @@ import {
 } from '../../../../lib/brand';
 import {
   Mail,
+  Phone,
   ExternalLink,
   ChevronRight,
+  Truck,
+  ShieldCheck,
 } from '../../../../components/ui/icon';
 import { haptics } from '../../../../lib/haptics';
 
@@ -34,6 +37,26 @@ export default function SupportContactScreen() {
 
   const handleBack = () => {
     router.replace('/settings/about');
+  };
+
+  const handleRentalCall = () => {
+    haptics.select();
+    Linking.openURL('tel:+918800040308');
+  };
+
+  const handleRentalEmail = () => {
+    haptics.select();
+    Linking.openURL('mailto:rental@reachinternational.co.in?subject=Equipment%20Rental%20Inquiry');
+  };
+
+  const handleSalesCall = () => {
+    haptics.select();
+    Linking.openURL('tel:+919867732204');
+  };
+
+  const handleSalesEmail = () => {
+    haptics.select();
+    Linking.openURL('mailto:sale@reachinternational.co.in?subject=Equipment%20Sales%20Inquiry');
   };
 
   const handleEmailPress = () => {
@@ -54,7 +77,105 @@ export default function SupportContactScreen() {
       onPressBack={handleBack}
       contentContainerStyle={styles.containerContent}
     >
-      {/* 1. Official Email Support Card */}
+      {/* 1. Equipment Rental Desk Card */}
+      <Pressable
+        variant="card"
+        haptic="select"
+        onPress={handleRentalCall}
+        accessibilityRole="button"
+        accessibilityLabel="Call Equipment Rental Desk"
+        style={[
+          styles.contactCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: isDark
+                ? 'rgba(2, 132, 199, 0.15)'
+                : '#e0f2fe',
+            },
+          ]}
+        >
+          <Truck size={20} color={isDark ? '#38bdf8' : '#0284c7'} />
+        </View>
+
+        <View style={styles.textCol}>
+          <Text
+            variant="caption"
+            style={{ color: theme.colors.mute }}
+          >
+            Equipment Rental Desk (Mo: 8800040308)
+          </Text>
+          <Text
+            variant="subheading"
+            style={{ color: theme.colors.ink }}
+            numberOfLines={1}
+          >
+            +91 88000 40308
+          </Text>
+        </View>
+
+        <View style={styles.chevronBox}>
+          <ChevronRight size={18} color={theme.colors.mute} />
+        </View>
+      </Pressable>
+
+      {/* 2. Equipment Sales Desk Card */}
+      <Pressable
+        variant="card"
+        haptic="select"
+        onPress={handleSalesCall}
+        accessibilityRole="button"
+        accessibilityLabel="Call Equipment Sales Desk"
+        style={[
+          styles.contactCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: isDark
+                ? 'rgba(16, 185, 129, 0.15)'
+                : '#d1fae5',
+            },
+          ]}
+        >
+          <ShieldCheck size={20} color={isDark ? '#34d399' : '#059669'} />
+        </View>
+
+        <View style={styles.textCol}>
+          <Text
+            variant="caption"
+            style={{ color: theme.colors.mute }}
+          >
+            Equipment Sales Desk (Mo: 9867732204)
+          </Text>
+          <Text
+            variant="subheading"
+            style={{ color: theme.colors.ink }}
+            numberOfLines={1}
+          >
+            +91 98677 32204
+          </Text>
+        </View>
+
+        <View style={styles.chevronBox}>
+          <ChevronRight size={18} color={theme.colors.mute} />
+        </View>
+      </Pressable>
+
+      {/* 3. Official Email Support Card */}
       <Pressable
         variant="card"
         haptic="select"

@@ -12,7 +12,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "echo \"@reachinternational/validation built\""
+    "build": "echo \"@reachinternational/validation built\"",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
   },
   "dependencies": {
     "@reachinternational/types": "workspace:*",

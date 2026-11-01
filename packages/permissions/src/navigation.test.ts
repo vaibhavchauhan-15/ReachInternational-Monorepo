@@ -62,6 +62,11 @@ test("route classification helpers classify accurately", () => {
   assert.equal(isProtectedRoute("/running-logs"), true);
   assert.equal(isProtectedRoute("/dashboard"), true);
   assert.equal(isProtectedRoute("/users/123"), true);
+  assert.equal(isProtectedRoute("/hiring"), true);
+  assert.equal(isProtectedRoute("/admin/sales/rfq"), true);
+  assert.equal(isProtectedRoute("/rfq"), true);
+  assert.equal(isProtectedRoute("/request-a-quote"), false);
+  assert.equal(isProtectedRoute("/request-a-quote/thank-you"), false);
   assert.equal(isProtectedRoute("/login"), false);
 
   assert.equal(isAuthRoute("/login"), true);
@@ -99,6 +104,22 @@ test("route classification helpers classify accurately", () => {
   assert.equal(isRouteAllowedForRole("/attendance", "super_admin"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "supervisor"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "operator"), true);
+  assert.equal(isRouteAllowedForRole("/hiring", "super_admin"), true);
+  assert.equal(isRouteAllowedForRole("/hiring", "admin"), true);
+  assert.equal(isRouteAllowedForRole("/hiring", "hr"), true);
+  assert.equal(isRouteAllowedForRole("/hiring", "manager"), true);
+  assert.equal(isRouteAllowedForRole("/hiring", "supervisor"), false);
+  assert.equal(isRouteAllowedForRole("/hiring", "operator"), false);
+
+  // RFQ Sales / Admin routing permissions
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "super_admin"), true);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "admin"), true);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "sales"), true);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "marketing"), false);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "operator"), false);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "hr"), false);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "manager"), false);
+  assert.equal(isRouteAllowedForRole("/admin/sales/rfq", "supervisor"), false);
 });
 
 test("getDrawerItems returns correct overflow items and no /more exists in any role", () => {
@@ -142,9 +163,9 @@ test("labelFor resolves correctly including operator Shift override", () => {
   const operationsItem = NAV_ITEMS.find((i) => i.key === "operations")!;
   assert.equal(labelFor(operationsItem, "operator"), "Shift");
   assert.equal(labelFor(operationsItem, "admin"), "Operations");
-  assert.equal(labelFor(operationsItem, "manager"), "Operations");
   assert.equal(labelFor(operationsItem, "supervisor"), "Operations");
-  assert.equal(labelFor(operationsItem, "hr"), "Operations");
-  assert.equal(labelFor(operationsItem, "super_admin"), "Operations");
-});
 
+  const homeItem = NAV_ITEMS.find((i) => i.key === "home")!;
+  assert.equal(labelFor(homeItem, "operator"), "Home");
+  assert.equal(labelFor(homeItem, "admin"), "Home");
+});

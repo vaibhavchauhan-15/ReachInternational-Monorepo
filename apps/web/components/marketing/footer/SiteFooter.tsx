@@ -23,10 +23,10 @@ const footerSections = [
   {
     title: 'Industries',
     links: [
-      { href: '/industries/construction/', label: 'Construction' },
-      { href: '/industries/manufacturing/', label: 'Manufacturing' },
-      { href: '/industries/warehousing-logistics/', label: 'Warehousing & Logistics' },
-      { href: '/industries/infrastructure/', label: 'Infrastructure' },
+      { href: '/equipment#construction', label: 'Construction' },
+      { href: '/equipment#manufacturing', label: 'Manufacturing' },
+      { href: '/equipment#warehousing', label: 'Warehousing & Logistics' },
+      { href: '/equipment#infrastructure', label: 'Infrastructure' },
     ],
   },
   {
@@ -34,7 +34,7 @@ const footerSections = [
     links: [
       { href: '/about/', label: 'Our Story' },
       { href: '/about/', label: 'Why Reach' },
-      { href: '/contact/', label: 'Careers' },
+      { href: '/careers', label: 'Careers' },
       { href: '/contact/', label: 'Contact' },
     ],
   },

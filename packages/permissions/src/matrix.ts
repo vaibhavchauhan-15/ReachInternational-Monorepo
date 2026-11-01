@@ -14,6 +14,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "inventory.view", "inventory.create", "inventory.stock_in", "inventory.stock_out", "inventory.adjust", "inventory.transfer", "inventory.approve_transfer", "inventory.request", "part_request.approve",
     "employee.view", "employee.create", "employee.edit", "employee.salary.view", "hr.payroll.view", "hr.payroll.manage",
     "attendance.view",
+    "hiring.view", "hiring.manage", "hiring.applications",
+    "equipment.view", "equipment.manage", "equipment.publish", "equipment.enquiries",
     "rental.view", "rental.create", "rental.edit", "rental.approve", "rental.dispatch", "rental.return",
     "sales.view", "sales.create", "sales.edit",
     "finance.view",
@@ -36,6 +38,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "challan.view", "challan.create", "challan.edit", "challan.approve", "challan.cancel",
     "supplier.view", "supplier.create", "supplier.edit",
     "employee.view", "employee.create", "employee.edit", "employee.salary.view", "attendance.view",
+    "hiring.view",
+    "equipment.view", "equipment.manage", "equipment.publish", "equipment.enquiries",
     "rental.view", "rental.create", "rental.edit", "rental.approve", "rental.dispatch", "rental.return", "rental.inspect", "rental.damage_report", "rental.extend", "rental.cancel",
     "sales.view", "sales.create", "sales.edit", "sales.quotation", "sales.lead_manage", "sales.customer_manage", "sales.opportunity_manage", "sales.order_manage",
     "finance.view", "finance.invoice", "finance.invoice.create", "finance.invoice.edit", "finance.payment", "finance.expense.manage", "finance.report",
@@ -68,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "employee.view", "employee.create", "employee.edit", "employee.delete", "employee.onboard", "employee.status_change",
     "employee.salary.view", "employee.salary.create", "employee.salary.edit", "hr.payroll.view", "hr.payroll.manage",
     "attendance.view",
+    "hiring.view", "hiring.manage", "hiring.applications",
     "department.manage", "designation.manage",
     "employee.document.manage",
     "user_request.create", "user_request.view", "user.view", "user.create", "user.edit", "user.activate",
@@ -88,6 +93,16 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "profile.edit_self",
     "notification.view",
     "notification.send",
+  ],
+
+  sales: [
+    "rfq.view", "rfq.manage", "quotation.view", "quotation.manage", "client.view",
+    "machine.view", "profile.view", "profile.edit",
+  ],
+
+  marketing: [
+    "equipment.view", "equipment.edit",
+    "profile.view", "profile.edit",
   ],
 };
 

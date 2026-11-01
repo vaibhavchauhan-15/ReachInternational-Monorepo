@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { withSentryConfig } from "@sentry/nextjs/config";
+import withBundleAnalyzer from "@next/bundle-analyzer";
+
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -38,11 +43,8 @@ const contentSecurityPolicy = [
   .join("; ");
 
 const nextConfig: NextConfig = {
-  eslint: {
-    // Monorepo runs strict typechecking and targeted linting in pre-commit/CI pipelines
-    ignoreDuringBuilds: true,
-  },
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -67,18 +69,7 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
   },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "lucide-react": path.resolve(__dirname, "components/ui/empty-icons.tsx"),
-    };
-    return config;
-  },
-  turbopack: {
-    resolveAlias: {
-      "lucide-react": "./components/ui/empty-icons.tsx",
-    },
-  },
+
   async redirects() {
     return [
       {
@@ -140,6 +131,16 @@ const nextConfig: NextConfig = {
         source: "/services/:path*",
         destination: "/#quote-promo",
         permanent: false,
+      },
+      {
+        source: "/admin/marketing/equipment/:path*",
+        destination: "/marketing/equipment/:path*",
+        permanent: true,
+      },
+      {
+        source: "/admin/marketing/equipment",
+        destination: "/marketing/equipment",
+        permanent: true,
       },
     ];
 
@@ -217,7 +218,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(bundleAnalyzer(nextConfig), {
   // Sentry project org and project (set via SENTRY_ORG / SENTRY_PROJECT env vars in CI)
   silent: !process.env.CI, // Only print upload logs in CI
   // Upload source maps automatically so Sentry shows readable stack traces
