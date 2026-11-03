@@ -136,7 +136,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
   const [open, setOpen] = useState(false);
-  const buttonRef = useRef<View>(null);
+  const buttonRef = useRef<any>(null);
 
   // Responsive width tracking
   const [windowWidth, setWindowWidth] = useState(() =>

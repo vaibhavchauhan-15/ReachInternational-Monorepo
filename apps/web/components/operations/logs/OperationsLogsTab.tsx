@@ -33,6 +33,7 @@ import {
   normalizeOperationsFilter,
   serializeNormalizedOperationsFilter,
   OPERATIONS_CACHE_TTLS,
+  formatSiteDropdownLabel,
 } from "@reachinternational/utils";
 import { formatClientFullAddress, getCurrentMonthValue } from "../operations-helpers";
 import { OperationsLogsTable, calculateShiftWorkingHours } from "./OperationsLogsTable";
@@ -1868,7 +1869,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
                     <div>
                       <SearchableSelect
                         label="Select Location"
-                        count={dbSites.length > 0 ? dbSites.length : clientSites.length}
+                        count={dbSites.length}
                         value={effectiveSelectedSite}
                         onChange={(val) => {
                           const nextSite = val === "all" ? "" : val;
@@ -1877,12 +1878,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
                         }}
                         options={[
                           { value: "all", label: "All Sites & Locations" },
-                          ...(dbSites.length > 0
-                            ? dbSites.map((s) => ({
-                                value: s.id,
-                                label: `${s.site_name} (${s.site_code})`,
-                              }))
-                            : clientSites.map((s) => ({ value: s, label: s }))),
+                          ...dbSites.map((s) => ({
+                            value: s.id,
+                            label: formatSiteDropdownLabel(s),
+                            description: (s as any).address_full || s.city,
+                          })),
                         ]}
                       />
                     </div>

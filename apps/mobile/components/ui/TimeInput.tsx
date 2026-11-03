@@ -330,8 +330,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     setIsClockModalOpen(false);
   };
 
-  const hourInputRef = useRef<TextInput>(null);
-  const minuteInputRef = useRef<TextInput>(null);
+  const hourInputRef = useRef<any>(null);
+  const minuteInputRef = useRef<any>(null);
 
   const containerBorderColor = validation.hasError
     ? '#ef4444'

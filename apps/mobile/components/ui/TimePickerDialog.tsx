@@ -174,11 +174,11 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
   const [minuteInputText, setMinuteInputText] = useState<string>('00');
 
   // Text input refs for keyboard mode auto-advance
-  const hourInputRef = useRef<TextInput>(null);
-  const minuteInputRef = useRef<TextInput>(null);
+  const hourInputRef = useRef<any>(null);
+  const minuteInputRef = useRef<any>(null);
 
   // Dial layout reference for rock-solid window coordinate tracking
-  const dialRef = useRef<View>(null);
+  const dialRef = useRef<any>(null);
   const dialScreenCoord = useRef<{ x: number; y: number } | null>(null);
 
   // Sync internal state when dialog opens or initialTime changes
@@ -242,7 +242,7 @@ export const TimePickerDialog: React.FC<TimePickerDialogProps> = ({
 
   // Update measured dial position on screen
   const measureDialPosition = useCallback(() => {
-    dialRef.current?.measureInWindow((x, y) => {
+    dialRef.current?.measureInWindow((x: any, y: any) => {
       dialScreenCoord.current = { x, y };
     });
   }, []);

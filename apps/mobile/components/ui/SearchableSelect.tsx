@@ -103,8 +103,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     maxHeight: number;
   }>({ top: 0, left: 0, width: 300, maxHeight: 260 });
 
-  const containerRef = useRef<View>(null);
-  const triggerRef = useRef<View>(null);
+  const containerRef = useRef<any>(null);
+  const triggerRef = useRef<any>(null);
   const bodyTypeStyle = useTypeStyle('body');
 
   const selectedOption = useMemo(() => {
@@ -191,7 +191,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       const rect = (anchor as any).getBoundingClientRect();
       calculate(rect.left, rect.top, rect.width, rect.height);
     } else if (typeof anchor.measureInWindow === 'function') {
-      anchor.measureInWindow((x, y, width, height) => {
+      anchor.measureInWindow((x: any, y: any, width: any, height: any) => {
         calculate(x, y, width, height);
       });
     }

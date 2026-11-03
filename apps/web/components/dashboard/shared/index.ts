@@ -7,6 +7,7 @@ export { StatusCard } from "./StatusCard";
 export type { StatusCardProps } from "./StatusCard";
 export { PrimaryAction } from "./PrimaryAction";
 export type { PrimaryActionProps } from "./PrimaryAction";
+export { ICONS, getIcon, type IconName } from "@/components/ui/icon-map";
 export { AlertWidget } from "./AlertWidget";
 export { ActivityWidget } from "./ActivityWidget";
 export type { ActivityItem } from "./ActivityWidget";

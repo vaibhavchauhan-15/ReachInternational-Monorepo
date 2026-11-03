@@ -140,7 +140,7 @@ function BaseUserTouchCard({
 }: UserTouchCardProps) {
   const { isDark } = useTheme();
   const accentColor = getRoleAccentColor(u.role);
-  const moreBtnRef = useRef<View>(null);
+  const moreBtnRef = useRef<any>(null);
 
   const handleMorePress = (e?: any) => {
     e?.stopPropagation?.();
@@ -158,7 +158,7 @@ function BaseUserTouchCard({
       }
     }
     if (moreBtnRef.current?.measureInWindow) {
-      moreBtnRef.current.measureInWindow((x, y, width, height) => {
+      moreBtnRef.current.measureInWindow((x: any, y: any, width: any, height: any) => {
         onOpenMoreActions?.(u, { x, y, width, height });
       });
     } else {

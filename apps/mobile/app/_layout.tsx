@@ -540,8 +540,9 @@ function TypographyGate({ children }: { children: React.ReactNode }) {
     'Geist-Bold': require('../assets/fonts/Geist-Bold.ttf'),
     'GeistMono-Medium': require('../assets/fonts/GeistMono-Medium.ttf'),
   });
-  const { ready } = useTypeScale();
-  const done = (fontsLoaded || !!fontError) && ready;
+  const { ready: typeReady } = useTypeScale();
+  const { ready: themeReady } = useTheme();
+  const done = (fontsLoaded || !!fontError) && typeReady && themeReady;
 
   React.useEffect(() => {
     if (done) {
@@ -566,29 +567,29 @@ function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider style={styles.safeArea}>
-        <TypeScaleProvider>
-          <TypographyGate>
-            <PersistQueryClientProvider
-              client={queryClient}
-              persistOptions={{
-                persister: asyncStoragePersister,
-                maxAge: CACHE_MAX_AGE_MS,
-                buster: appBuster,
-                dehydrateOptions: dehydrateOptions as any,
-              }}
-            >
-              <AuthProvider>
-                <ThemeProvider>
+        <ThemeProvider>
+          <TypeScaleProvider>
+            <TypographyGate>
+              <PersistQueryClientProvider
+                client={queryClient}
+                persistOptions={{
+                  persister: asyncStoragePersister,
+                  maxAge: CACHE_MAX_AGE_MS,
+                  buster: appBuster,
+                  dehydrateOptions: dehydrateOptions as any,
+                }}
+              >
+                <AuthProvider>
                   <OverlayHostProvider>
                     <ToastProvider>
                       <ThemedAppContainer />
                     </ToastProvider>
                   </OverlayHostProvider>
-                </ThemeProvider>
-              </AuthProvider>
-            </PersistQueryClientProvider>
-          </TypographyGate>
-        </TypeScaleProvider>
+                </AuthProvider>
+              </PersistQueryClientProvider>
+            </TypographyGate>
+          </TypeScaleProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

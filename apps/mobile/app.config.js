@@ -1,5 +1,46 @@
 const fs = require('fs');
 const path = require('path');
+
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, '../..');
+
+// --- Monorepo Environment Auto-Discovery ---
+const loadEnvFile = (envPath) => {
+  if (!fs.existsSync(envPath)) return;
+  try {
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        const key = trimmed.slice(0, idx).trim();
+        let val = trimmed.slice(idx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  } catch {}
+};
+
+loadEnvFile(path.resolve(projectRoot, '.env.local'));
+loadEnvFile(path.resolve(projectRoot, '.env'));
+loadEnvFile(path.resolve(monorepoRoot, '.env.local'));
+loadEnvFile(path.resolve(monorepoRoot, '.env'));
+loadEnvFile(path.resolve(monorepoRoot, 'apps/web/.env.local'));
+loadEnvFile(path.resolve(monorepoRoot, 'apps/web/.env'));
+
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+}
+
 const {
   withAndroidStyles,
   withAndroidManifest,
@@ -125,6 +166,11 @@ const withOptimizationGradleProperties = (config) => {
     cfg.modResults = AndroidConfig.BuildProperties.updateAndroidBuildProperty(
       cfg.modResults,
       'edgeToEdgeEnabled',
+      'true'
+    );
+    cfg.modResults = AndroidConfig.BuildProperties.updateAndroidBuildProperty(
+      cfg.modResults,
+      'android.enableLegacyVariantApi',
       'true'
     );
     return cfg;

@@ -242,6 +242,30 @@ export function extractBreakdownTiming(log: MachineHourLog): {
   return { startTime: start, endTime: end, timeRange, duration };
 }
 
+/**
+ * Extracts clean user-entered breakdown remarks from a log by stripping out
+ * synthetic tags like `[Breakdown Duration: ...]`, `[Breakdown: ...]`, etc.
+ * Returns an empty string if only synthetic/dummy text or "—" was present.
+ */
+export function extractBreakdownRemark(log: MachineHourLog): string {
+  if (!log.remarks) return "";
+  const rem = log.remarks
+    .replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "")
+    .replace(/\[Breakdown:\s*[^\]]+\]\s*/gi, "")
+    .replace(/\[Assisted Override:\s*[^\]]+\]\s*/gi, "")
+    .trim();
+  if (
+    !rem ||
+    rem === "—" ||
+    rem.toLowerCase() === "null" ||
+    rem.toLowerCase() === "none" ||
+    rem.toLowerCase() === "n/a"
+  ) {
+    return "";
+  }
+  return rem;
+}
+
 export interface DailyLogGroup {
   date: string;
   formattedDate: string;
@@ -383,11 +407,22 @@ export function groupLogsByDate(logs: MachineHourLog[], logsViewMode: string = "
     }
     const operatorsDisplay = operatorNamesList.length > 0 ? operatorNamesList.join(", ") : "Unassigned";
 
-    // Format consolidated remarks
-    const remarksList = sortedShifts
-      .map((s) => (s.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim())
-      .filter((r) => r.length > 0 && r !== "—");
-    const remarksDisplay = Array.from(new Set(remarksList)).join("; ");
+    // Format consolidated remarks: only collect remarks from breakdown shifts where actual remarks were entered in the database.
+    // Unwanted placeholder/dummy text and non-breakdown remarks are completely excluded.
+    const breakdownRemarksList: string[] = [];
+    for (const s of sortedShifts) {
+      const isBkd =
+        Boolean(s.is_breakdown) ||
+        Number(s.breakdown_minutes || 0) > 0 ||
+        Number(s.breakdown_hours || 0) > 0;
+      if (isBkd) {
+        const cleanRem = extractBreakdownRemark(s);
+        if (cleanRem && !breakdownRemarksList.includes(cleanRem)) {
+          breakdownRemarksList.push(cleanRem);
+        }
+      }
+    }
+    const remarksDisplay = breakdownRemarksList.join("; ");
 
     const totalWorkingHours =
       Math.abs(sumWorkHours - Math.round(sumWorkHours)) < 0.05
@@ -458,30 +493,52 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
     (l) => Boolean(l.conflict_flag) && (!l.conflict_status || l.conflict_status === "pending")
   );
 
+  // Identify individual stoppage shift logs
+  const stoppageLogs = useMemo(() => {
+    return group.logs.filter(
+      (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
+    );
+  }, [group.logs]);
+
+  const hasBreakdown = group.totalBreakdownHours > 0 || stoppageLogs.length > 0;
+  const canExpand = hasBreakdown;
+
   return (
     <>
       <tr
-        onClick={() => setIsRowExpanded((prev) => !prev)}
-        className={`group transition-colors border-b border-[var(--color-hairline)] cursor-pointer select-none ${
-          isRowExpanded
+        onClick={() => {
+          if (canExpand) {
+            setIsRowExpanded((prev) => !prev);
+          }
+        }}
+        className={`group transition-colors border-b border-[var(--color-hairline)] select-none ${
+          canExpand ? "cursor-pointer" : "cursor-default"
+        } ${
+          isRowExpanded && canExpand
             ? "bg-[var(--color-canvas)]"
             : conflictLog
             ? "bg-amber-500/5 dark:bg-amber-500/10 hover:bg-amber-500/10"
-            : "hover:bg-[var(--color-canvas)]/70"
+            : canExpand
+            ? "hover:bg-[var(--color-canvas)]/70"
+            : ""
         }`}
       >
         {/* Date (e.g. 28-Sep-26) */}
         <td className="px-3 py-2 font-mono font-bold text-xs text-[var(--color-ink)] whitespace-nowrap">
           <div className="flex items-center gap-1.5">
-            <ChevronRight
-              size={12}
-              className={`text-[var(--color-mute)] transition-transform duration-200 shrink-0 ${
-                isRowExpanded ? "rotate-90 text-sky-600 dark:text-sky-400" : ""
-              }`}
-            />
+            {canExpand ? (
+              <ChevronRight
+                size={12}
+                className={`text-[var(--color-mute)] transition-transform duration-200 shrink-0 ${
+                  isRowExpanded ? "rotate-90 text-sky-600 dark:text-sky-400" : ""
+                }`}
+              />
+            ) : (
+              <span className="w-3 shrink-0" />
+            )}
             <span>{group.formattedDate}</span>
-            {group.remarksDisplay && (
-              <TooltipWrapper content="Click to view remarks">
+            {hasBreakdown && group.remarksDisplay && (
+              <TooltipWrapper content={`Breakdown remark: ${group.remarksDisplay}`}>
                 <span className="inline-flex text-sky-600 dark:text-sky-400 p-0.5">
                   <MessageSquare size={11} className="shrink-0" />
                 </span>
@@ -620,42 +677,21 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
         </td>
       </tr>
 
-      {/* Expandable Remark Row */}
-      {isRowExpanded && (
+      {/* Expandable Breakdown Details: ONLY rendered if there is a breakdown on this day */}
+      {isRowExpanded && canExpand && (
         <tr className="bg-[var(--color-canvas)]/90 border-b border-[var(--color-hairline)]">
           <td
             colSpan={showMachineColumn ? 7 : 6}
             className="px-4 py-3 text-xs text-[var(--color-ink)] space-y-2.5"
           >
-            <div className="flex items-start gap-2.5">
-              <MessageSquare size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-[10.5px] uppercase tracking-wider text-[var(--color-mute)]">
-                    Shift Remarks ({group.formattedDate}):
-                  </span>
-                  <span className="text-[10.5px] text-[var(--color-mute)] font-mono">
-                    Shifts: {group.shiftsDisplay} • Operators: {group.operatorsDisplay}
-                  </span>
-                </div>
-                <p className="font-sans text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed">
-                  <Highlight text={group.remarksDisplay || "No special remarks logged for this day."} query={searchTerm} />
-                </p>
-              </div>
-            </div>
-            {group.totalBreakdownHours > 0 && (() => {
+            {(() => {
               const totalBdMin = Math.round(group.totalBreakdownHours * 60);
               const maintMin = group.totalMaintenanceMinutes;
               const netBdMin = Math.max(0, totalBdMin - maintMin);
               const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
 
-              // Identify individual stoppage shift logs
-              const stoppageLogs = group.logs.filter(
-                (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
-              );
-
               return (
-                <div className="flex flex-col gap-2 pl-6 pt-1 border-t border-[var(--color-hairline)]/60">
+                <div className="flex flex-col gap-2.5 pl-5 pt-0.5">
                   {/* Summary row */}
                   <div className="flex items-center gap-3 flex-wrap text-xs">
                     <div className="flex items-center gap-1.5 font-medium text-[var(--color-mute)]">
@@ -700,10 +736,7 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                             (bLog as any).operator_name ||
                             "Operator";
 
-                          const note = (bLog.remarks || "")
-                            .replace(/\[Breakdown Duration:[^\]]+\]/gi, "")
-                            .replace(/\[Breakdown:[^\]]+\]/gi, "")
-                            .trim();
+                          const note = extractBreakdownRemark(bLog);
 
                           return (
                             <div
@@ -727,8 +760,8 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                                 <span className="font-mono text-[var(--color-mute)] text-[11px]">
                                   Duration: {fmtMin(logBdMin)}
                                 </span>
-                                {note && note !== "—" && (
-                                  <span className="text-[var(--color-mute)] italic truncate max-w-[280px]">
+                                {note && (
+                                  <span className="text-[var(--color-ink)] font-medium truncate max-w-[320px]">
                                     • {note}
                                   </span>
                                 )}
@@ -757,6 +790,21 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Breakdown remarks from database: only shown if user entered remarks for the breakdown */}
+                  {group.remarksDisplay && (
+                    <div className="flex items-start gap-2 pt-2 border-t border-[var(--color-hairline)]/70 text-xs">
+                      <MessageSquare size={13} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="font-bold text-[10.5px] uppercase tracking-wider text-[var(--color-mute)] mr-2">
+                          Breakdown Remarks:
+                        </span>
+                        <span className="font-sans text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed">
+                          <Highlight text={group.remarksDisplay} query={searchTerm} />
+                        </span>
                       </div>
                     </div>
                   )}

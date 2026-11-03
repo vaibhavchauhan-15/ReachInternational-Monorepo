@@ -84,8 +84,8 @@ interface SupervisorReportContentProps {
 /**
  * Calculates optimal row height (in mm) for A4 portrait document so the table
  * content dynamically fills the page, eliminates large empty voids, and guarantees
- * that when isFirstPage and isLastPage are both true (1-page report), header,
- * table, and signature footer all fit comfortably on the single page without spilling.
+ * that all 31 days fit comfortably on a single page when rowCount is up to 31,
+ * and gracefully expands without over-expanding when rowCount is fewer.
  */
 function calculateA4RowHeight({
   rowCount,
@@ -93,30 +93,34 @@ function calculateA4RowHeight({
   isLastPage,
   hasKpiStrip = false,
   hasMachineBanner = false,
+  hasTfoot = false,
 }: {
   rowCount: number;
   isFirstPage: boolean;
   isLastPage: boolean;
   hasKpiStrip?: boolean;
   hasMachineBanner?: boolean;
+  hasTfoot?: boolean;
 }): { rowHeightMm: number; footerRowHeightMm: number } {
   // Printable A4 height is 287mm. We target 278mm to guarantee safe margin against browser print engine overflow
   const TARGET_PAGE_H_MM = 278;
 
   let fixedH = 0;
   if (isFirstPage) {
-    fixedH += 34; // PDFReportHeader (logo, title, subtitle, metadata strip)
-    if (hasKpiStrip) fixedH += 15; // PDFKPIStrip
+    fixedH += 33; // PDFReportHeader (logo, title, subtitle, metadata strip)
+    if (hasKpiStrip) fixedH += 10; // PDFKPIStrip (thin)
   }
   if (hasMachineBanner) {
-    fixedH += 9; // Machine banner
+    fixedH += 8.5; // Attached machine banner
   }
-  fixedH += 8; // thead
-  fixedH += 9; // tfoot
+  fixedH += 7.5; // thead
+  if (hasTfoot) {
+    fixedH += 8.5; // tfoot
+  }
   if (isLastPage) {
-    fixedH += 28; // PDFSignatureBlock (3-col signatures)
+    fixedH += 27; // PDFSignatureBlock (3-col signatures)
   }
-  fixedH += 6; // container padding, borders, gaps
+  fixedH += 4; // container padding, borders, gaps
 
   const availableHeightMm = Math.max(50, TARGET_PAGE_H_MM - fixedH);
   const count = Math.max(1, rowCount);
@@ -125,13 +129,13 @@ function calculateA4RowHeight({
   const rawRowH = availableHeightMm / count;
 
   // Clamping bounds:
-  // MIN: 5.6mm - ensures 31 rows fit cleanly with header, KPI strip, and footer on 1 page!
-  // MAX: 10.5mm - prevents rows from looking unnaturally tall when there are only a few rows (e.g. 5-10 rows)
-  const MIN_ROW_MM = 5.6;
-  const MAX_ROW_MM = 10.5;
+  // MIN: 5.8mm - ensures 31 rows fit cleanly with header, KPI strip, and footer on 1 page without squeezing!
+  // MAX: 9.0mm - prevents rows from looking unnaturally tall when there are only a few rows ("do not expand too much")
+  const MIN_ROW_MM = 5.8;
+  const MAX_ROW_MM = 9.0;
 
   const rowHeightMm = Math.min(MAX_ROW_MM, Math.max(MIN_ROW_MM, rawRowH));
-  const footerRowHeightMm = Math.min(9, Math.max(5.5, rowHeightMm * 0.9));
+  const footerRowHeightMm = Math.min(8.5, Math.max(5.5, rowHeightMm * 0.9));
 
   return {
     rowHeightMm: Math.round(rowHeightMm * 10) / 10,
@@ -394,8 +398,8 @@ function SupervisorLogsReportContent({
       );
     }
 
-    // Split machines and paginate their rows (max 30 rows per page)
-    const MAX_ROWS_PER_CLIENT_PAGE = 30;
+    // Split machines and paginate their rows (max 31 rows per page — fits all days of any month on 1 page!)
+    const MAX_ROWS_PER_CLIENT_PAGE = 31;
     const clientPages: {
       machineId: string;
       machineObj: any;
@@ -444,12 +448,13 @@ function SupervisorLogsReportContent({
         {clientPages.map((page, pageIdx) => {
           const isFirstPage = pageIdx === 0;
           const isLastPage = pageIdx === totalClientPages - 1;
-          const { rowHeightMm, footerRowHeightMm } = calculateA4RowHeight({
+          const { rowHeightMm } = calculateA4RowHeight({
             rowCount: page.dailyGroups.length,
             isFirstPage,
             isLastPage,
             hasKpiStrip: isFirstPage,
             hasMachineBanner: true,
+            hasTfoot: false,
           });
 
           return (
@@ -458,7 +463,7 @@ function SupervisorLogsReportContent({
               data-machine-idx={pageIdx}
               className="print-page bg-white text-black p-4 sm:p-5 rounded-lg border border-neutral-300 shadow-md flex flex-col justify-between text-xs font-sans max-w-[210mm] w-full min-h-[297mm] sm:min-h-[287mm] mx-auto print:p-0 print:border-none print:shadow-none print:rounded-none"
             >
-              {/* Top section: Header (Page 1 only), KPI (Page 1 only), Machine Banner, Table */}
+              {/* Top section: Header (Page 1 only), KPI (Page 1 only), Attached Machine Card */}
               <div className="flex flex-col gap-y-2">
                 {/* Official Title & Client Details Header ONLY on first page */}
                 {isFirstPage && (
@@ -474,6 +479,7 @@ function SupervisorLogsReportContent({
                 {isFirstPage && (
                   <PDFKPIStrip
                     variant="light"
+                    density="thin"
                     items={[
                       { label: "Total Shifts", value: `${logs.length} ${logs.length === 1 ? "Shift" : "Shifts"}` },
                       { label: "Operating Hours", value: `${Math.round(totalRunningHours * 10) / 10} hrs`, valueColor: "text-sky-700" },
@@ -483,153 +489,124 @@ function SupervisorLogsReportContent({
                   />
                 )}
 
-                {/* Machine Details Header Banner */}
-                <div data-machine-banner="true" className="p-1.5 sm:p-2 bg-neutral-100 border border-neutral-900 rounded flex items-center justify-between text-[9px] font-bold">
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-black">
-                      EQUIPMENT: {(page.machineObj.model || "Machine").toUpperCase()}
-                    </span>
-                    {(page.machineObj.serial_number || page.machineObj.machine_code) && (
-                      <span className="font-mono text-neutral-700">
-                        (SN: {page.machineObj.serial_number || page.machineObj.machine_code})
+                {/* Unified Attached Machine Card (Machine Title Tab + Daily Shift Logs Table) */}
+                <div className="w-full border border-neutral-900 rounded overflow-hidden">
+                  {/* Machine Details Header Banner — Attached directly on top of table */}
+                  <div
+                    data-machine-banner="true"
+                    className="p-1.5 sm:p-2 bg-neutral-100 border-b border-neutral-900 flex items-center justify-between text-[10px] sm:text-[10.5px] font-bold select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-black text-[10.5px] sm:text-[11px] tracking-wide">
+                        EQUIPMENT: {(page.machineObj.model || "Machine").toUpperCase()}
                       </span>
-                    )}
-                    {(page.machineObj.machine_id || page.machineObj.machine_code) && (
-                      <span className="font-mono px-1 py-0.5 bg-white border border-neutral-400 rounded text-[8px]">
-                        {page.machineObj.machine_id || page.machineObj.machine_code}
+                      {(page.machineObj.serial_number || page.machineObj.machine_code) && (
+                        <span className="font-mono font-bold text-neutral-800 text-[10px]">
+                          (SN: {page.machineObj.serial_number || page.machineObj.machine_code})
+                        </span>
+                      )}
+                      {(page.machineObj.machine_id || page.machineObj.machine_code) && (
+                        <span className="font-mono font-black px-1.5 py-0.5 bg-white border border-neutral-800 rounded text-[8.5px] text-neutral-900 shadow-2xs">
+                          {page.machineObj.machine_id || page.machineObj.machine_code}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3.5 font-mono text-[9.5px] sm:text-[10px]">
+                      <span>
+                        Days: <strong className="font-black text-neutral-900">{page.dailyGroups.length}</strong>
                       </span>
-                    )}
+                      <span>
+                        M/C RT: <strong className="font-black text-sky-800">{formatHoursWithUnit(page.sumDayRT)}</strong>
+                      </span>
+                      <span>
+                        WH: <strong className="font-black text-neutral-900">{formatHoursWithUnit(page.sumWorkingHours)}</strong>
+                      </span>
+                      {page.sumBreakdownHours > 0 && (
+                        <span className="text-rose-700">
+                          B/D: <strong className="font-black text-rose-700">{formatHoursWithUnit(page.sumBreakdownHours)}</strong>
+                        </span>
+                      )}
+                      {totalClientPages > 1 && (
+                        <span className="text-neutral-600 font-bold bg-neutral-200/60 px-1.5 py-0.5 rounded text-[8.5px]">
+                          Page {pageIdx + 1}/{totalClientPages}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 font-mono">
-                    <span>Days: {page.dailyGroups.length}</span>
-                    <span>M/C RT: {formatHoursWithUnit(page.sumDayRT)}</span>
-                    <span>WH: {formatHoursWithUnit(page.sumWorkingHours)}</span>
-                    {page.sumBreakdownHours > 0 && (
-                      <span className="text-rose-700">B/D: {formatHoursWithUnit(page.sumBreakdownHours)}</span>
-                    )}
-                    {totalClientPages > 1 && (
-                      <span className="text-neutral-500 font-normal">Page {pageIdx + 1}/{totalClientPages}</span>
-                    )}
-                  </div>
-                </div>
 
-                {/* Daily Shift Logs Table with A4-optimized dynamic row sizing */}
-                <PDFTableWrapper>
-                  <table className="w-full text-center border border-neutral-900 border-collapse print-table table-fixed min-w-[700px] sm:min-w-0 mx-auto">
-                    <thead>
-                      <tr className="bg-neutral-100 text-black font-black text-[8.5px] uppercase tracking-wider border-b-2 border-neutral-900">
-                        <th className="py-1 px-1 border border-neutral-900 w-[12%] font-mono text-center align-middle">Date</th>
-                        <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">Shift</th>
-                        <th className="py-1 px-1 border border-neutral-900 w-[53%] text-center align-middle">OPERATOR NAME</th>
-                        <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">M/C RT</th>
-                        <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">WH</th>
-                        <th className="py-1 px-0.5 border border-neutral-900 w-[8%] font-mono text-center align-middle">B/D</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {page.dailyGroups.map((group) => (
-                        <tr
-                          key={group.date}
-                          className="bg-white border-b border-neutral-300 text-[8.5px]"
-                          style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm` }}
-                        >
-                          <td
-                            className="px-1 border border-neutral-300 font-mono font-bold text-center align-middle whitespace-nowrap"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {group.formattedDate}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-300 font-mono font-bold text-sky-800 text-center align-middle whitespace-nowrap"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {group.shiftsDisplay}
-                          </td>
-                          <td
-                            className="px-1 border border-neutral-300 text-center align-middle font-medium leading-tight whitespace-normal break-words"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {group.operatorsDisplay || "Unassigned"}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-300 font-mono font-bold text-sky-800 text-center align-middle whitespace-nowrap"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {formatHoursWithUnit(group.totalRunningHours)}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-300 font-mono font-bold text-neutral-900 text-center align-middle whitespace-nowrap"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {formatHoursWithUnit(group.totalWorkingHours)}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-300 font-mono font-bold text-center align-middle whitespace-nowrap"
-                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {(() => {
-                              const totalBdMin = Math.round(group.totalBreakdownHours * 60);
-                              const maintMin = group.totalMaintenanceMinutes;
-                              const netBdMin = Math.max(0, totalBdMin - maintMin);
-                              const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
-                              if (totalBdMin === 0) return <span style={{ color: '#9ca3af' }}>0h</span>;
-                              if (maintMin >= totalBdMin && maintMin > 0)
-                                return <span style={{ color: '#b45309', fontWeight: 'bold' }}>MT {fmtMin(maintMin)}</span>;
-                              if (maintMin > 0 && netBdMin > 0)
-                                return <span><span style={{ color: '#b45309' }}>MT {fmtMin(maintMin)}</span> / <span style={{ color: '#be123c' }}>{fmtMin(netBdMin)}</span></span>;
-                              return <span style={{ color: '#be123c' }}>{fmtMin(totalBdMin)}</span>;
-                            })()}
-                          </td>
+                  {/* Daily Shift Logs Table with A4-optimized dynamic row sizing */}
+                  <PDFTableWrapper className="border-0">
+                    <table className="w-full text-center border-collapse print-table table-fixed min-w-[700px] sm:min-w-0 mx-auto">
+                      <thead>
+                        <tr className="bg-neutral-100 text-black font-black text-[8.5px] uppercase tracking-wider border-b-2 border-neutral-900">
+                          <th className="py-1 px-1 border border-neutral-900 w-[12%] font-mono text-center align-middle">Date</th>
+                          <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">Shift</th>
+                          <th className="py-1 px-1 border border-neutral-900 w-[53%] text-center align-middle">OPERATOR NAME</th>
+                          <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">M/C RT</th>
+                          <th className="py-1 px-0.5 border border-neutral-900 w-[9%] font-mono text-center align-middle">WH</th>
+                          <th className="py-1 px-0.5 border border-neutral-900 w-[8%] font-mono text-center align-middle">B/D</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    {/* Machine-specific total footer rendered on the last page of this machine */}
-                    {page.isLastChunkOfMachine && (
-                      <tfoot className="border-t-2 border-neutral-900 bg-neutral-100 font-bold text-[8.5px] select-none">
-                        <tr style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm` }}>
-                          <td
-                            colSpan={6}
-                            className="px-1 border border-neutral-900 font-black text-center align-middle"
-                            style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm`, verticalAlign: "middle" }}
+                      </thead>
+                      <tbody>
+                        {page.dailyGroups.map((group) => (
+                          <tr
+                            key={group.date}
+                            className="bg-white border-b border-neutral-300 text-[8.5px]"
+                            style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm` }}
                           >
-                            Total for {page.machineObj.model || "Machine"}
-                          </td>
-                        </tr>
-                        <tr
-                          className="border-b-2 border-neutral-900 font-mono font-bold"
-                          style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm` }}
-                        >
-                          <td
-                            className="px-1 border border-neutral-900 text-center align-middle"
-                            style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {page.dailyGroups.length} {page.dailyGroups.length === 1 ? "day" : "days"}
-                          </td>
-                          <td className="px-0.5 border border-neutral-900 text-center align-middle" style={{ height: `${footerRowHeightMm}mm` }}></td>
-                          <td className="px-1 border border-neutral-900 text-center align-middle" style={{ height: `${footerRowHeightMm}mm` }}></td>
-                          <td
-                            className="px-0.5 border border-neutral-900 text-center align-middle font-bold text-sky-800"
-                            style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {formatHoursWithUnit(page.sumDayRT)}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-900 text-center align-middle font-bold text-neutral-900"
-                            style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {formatHoursWithUnit(page.sumWorkingHours)}
-                          </td>
-                          <td
-                            className="px-0.5 border border-neutral-900 text-center align-middle font-bold"
-                            style={{ height: `${footerRowHeightMm}mm`, minHeight: `${footerRowHeightMm}mm`, verticalAlign: "middle" }}
-                          >
-                            {formatHoursWithUnit(page.sumBreakdownHours)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </PDFTableWrapper>
+                            <td
+                              className="px-1 border border-neutral-300 font-mono font-bold text-center align-middle whitespace-nowrap"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {group.formattedDate}
+                            </td>
+                            <td
+                              className="px-0.5 border border-neutral-300 font-mono font-bold text-sky-800 text-center align-middle whitespace-nowrap"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {group.shiftsDisplay}
+                            </td>
+                            <td
+                              className="px-1 border border-neutral-300 text-center align-middle font-medium leading-tight whitespace-normal break-words"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {group.operatorsDisplay || "Unassigned"}
+                            </td>
+                            <td
+                              className="px-0.5 border border-neutral-300 font-mono font-bold text-sky-800 text-center align-middle whitespace-nowrap"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {formatHoursWithUnit(group.totalRunningHours)}
+                            </td>
+                            <td
+                              className="px-0.5 border border-neutral-300 font-mono font-bold text-neutral-900 text-center align-middle whitespace-nowrap"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {formatHoursWithUnit(group.totalWorkingHours)}
+                            </td>
+                            <td
+                              className="px-0.5 border border-neutral-300 font-mono font-bold text-center align-middle whitespace-nowrap"
+                              style={{ height: `${rowHeightMm}mm`, minHeight: `${rowHeightMm}mm`, verticalAlign: "middle" }}
+                            >
+                              {(() => {
+                                const totalBdMin = Math.round(group.totalBreakdownHours * 60);
+                                const maintMin = group.totalMaintenanceMinutes;
+                                const netBdMin = Math.max(0, totalBdMin - maintMin);
+                                const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+                                if (totalBdMin === 0) return <span style={{ color: '#9ca3af' }}>0h</span>;
+                                if (maintMin >= totalBdMin && maintMin > 0)
+                                  return <span style={{ color: '#b45309', fontWeight: 'bold' }}>MT {fmtMin(maintMin)}</span>;
+                                if (maintMin > 0 && netBdMin > 0)
+                                  return <span><span style={{ color: '#b45309' }}>MT {fmtMin(maintMin)}</span> / <span style={{ color: '#be123c' }}>{fmtMin(netBdMin)}</span></span>;
+                                return <span style={{ color: '#be123c' }}>{fmtMin(totalBdMin)}</span>;
+                              })()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </PDFTableWrapper>
+                </div>
               </div>
 
               {/* Bottom section: Signature block ONLY on the last page of the document */}
@@ -651,7 +628,7 @@ function SupervisorLogsReportContent({
   const sumWorkingHours = groupedLogs.reduce((acc, g) => acc + g.totalWorkingHours, 0);
   const sumBreakdownHours = groupedLogs.reduce((acc, g) => acc + g.totalBreakdownHours, 0);
 
-  const MAX_ROWS_PER_NON_CLIENT_PAGE = 30;
+  const MAX_ROWS_PER_NON_CLIENT_PAGE = 31;
   const nonClientPages: (typeof groupedLogs)[] = [];
   if (groupedLogs.length === 0) {
     nonClientPages.push([]);
@@ -674,6 +651,7 @@ function SupervisorLogsReportContent({
           isLastPage,
           hasKpiStrip: isFirstPage,
           hasMachineBanner: false,
+          hasTfoot: isLastPage && groupedLogs.length > 0,
         });
 
         return (

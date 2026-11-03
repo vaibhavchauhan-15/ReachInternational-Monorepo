@@ -5,8 +5,9 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useColorScheme, Platform } from 'react-native';
+import { useColorScheme, Platform, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 import { getRNTheme } from '@reachinternational/design-tokens';
 import { colorScheme } from 'nativewind';
 
@@ -18,6 +19,7 @@ export interface ThemeContextType {
   isDark: boolean;
   setMode: (mode: 'light' | 'dark' | 'system') => void;
   mode: 'light' | 'dark' | 'system';
+  ready: boolean;
 }
 
 const STORAGE_KEY = '@reachinternational_theme';
@@ -57,11 +59,13 @@ const ThemeContext = createContext<ThemeContextType>({
   isDark: false,
   setMode: () => {},
   mode: 'system',
+  ready: false,
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<'light' | 'dark' | 'system'>(getInitialMode);
+  const [ready, setReady] = useState<boolean>(() => Platform.OS === 'web');
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
@@ -84,6 +88,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {}
   }, []);
 
+  // Track system preference reactively on Native via Appearance listener
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = Appearance.addChangeListener(({ colorScheme: nextScheme }) => {
+      if (nextScheme) {
+        setSystemIsDark(nextScheme === 'dark');
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   // Update systemIsDark if RN systemScheme updates
   useEffect(() => {
     if (systemScheme) {
@@ -94,13 +109,21 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isDark = mode === 'system' ? systemIsDark : mode === 'dark';
   const theme = useMemo(() => getRNTheme(isDark), [isDark]);
 
-  // Initial synchronization
+  // Sync SystemUI on Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      SystemUI.setBackgroundColorAsync(theme.colors.canvas).catch(() => {});
+    }
+  }, [theme.colors.canvas]);
+
+  // Initial synchronization & hydration from storage before splash screen hides
   useEffect(() => {
     if (Platform.OS === 'web') {
       applyDomTheme(isDark);
       try {
         colorScheme.set(mode);
       } catch {}
+      setReady(true);
     } else {
       AsyncStorage.getItem(STORAGE_KEY)
         .then((savedMode) => {
@@ -111,7 +134,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             } catch {}
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          setReady(true);
+        });
     }
   }, []);
 
@@ -147,8 +173,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isDark,
       setMode,
       mode,
+      ready,
     }),
-    [theme, isDark, setMode, mode]
+    [theme, isDark, setMode, mode, ready]
   );
 
   return (

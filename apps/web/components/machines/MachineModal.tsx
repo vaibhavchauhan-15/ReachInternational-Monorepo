@@ -7,6 +7,7 @@ import { getClientSitesAction } from "@/app/actions/client-sites";
 import type { Machine, User } from "@/lib/types/database";
 import type { ClientSite } from "@/lib/data/clients";
 import { isManagerOrAbove } from "@reachinternational/permissions";
+import { formatSiteDropdownLabel } from "@reachinternational/utils";
 import {
   AnimatedInfo,
   AnimatedUsers,
@@ -537,7 +538,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                     { value: "", label: isLoadingSites ? "Loading sites..." : "Select deployment site..." },
                     ...sites.map((s) => ({
                       value: s.id,
-                      label: `${s.site_name} (${s.site_code}) — ${s.city}`,
+                      label: formatSiteDropdownLabel(s),
                     })),
                   ]}
                   disabled={isSaving || isLoadingSites}

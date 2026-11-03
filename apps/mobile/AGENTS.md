@@ -8,7 +8,7 @@
 
 ## Technology Stack
 
-- **Framework**: Expo SDK 57, React Native
+- **Framework**: Expo SDK 58, React Native 0.88
 - **Routing**: Expo Router (file-based, mirrors Next.js App Router patterns)
 - **Language**: TypeScript 5 (Strict Mode)
 - **UI**: React Native core components, custom design system components
@@ -163,11 +163,11 @@ pnpm typecheck
 
 Before modifying any mobile code, every AI agent MUST:
 1. **Read Scoped Security Policy**:
-   - Mobile rules: [`apps/mobile/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-RULES.md)
-   - Mobile attack surface: [`apps/mobile/security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/ATTACK-SURFACE.md)
-   - Mobile threat model: [`apps/mobile/security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/THREAT-MODEL.md)
-   - Root baseline rules: [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)
-2. **Execute Compliance Checklist**: Check all implementation steps against [`apps/mobile/security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-CHECKLIST.md).
+   - Mobile rules: [`security/SECURITY-RULES.md`](security/SECURITY-RULES.md)
+   - Mobile attack surface: [`security/ATTACK-SURFACE.md`](security/ATTACK-SURFACE.md)
+   - Mobile threat model: [`security/THREAT-MODEL.md`](security/THREAT-MODEL.md)
+   - Root baseline rules: [`security/SECURITY-RULES.md`](security/SECURITY-RULES.md)
+2. **Execute Compliance Checklist**: Check all implementation steps against [`security/SECURITY-CHECKLIST.md`](security/SECURITY-CHECKLIST.md).
 3. **Mandatory Invariants**:
    - Hardware-backed keystore exclusively for auth tokens via `mobileSecureStorage` (`expo-secure-store`). Zero plaintext `AsyncStorage` fallback.
    - Zero server secrets in mobile bundles or environment (`verifyClientSecurityEnvironment`).

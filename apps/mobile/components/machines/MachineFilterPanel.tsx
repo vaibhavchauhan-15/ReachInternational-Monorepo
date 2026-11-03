@@ -90,7 +90,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
 }: MachineFilterPanelProps) {
   const { theme, isDark } = useTheme();
   const searchInputRef = useRef<TextInput>(null);
-  const filterBtnRef = useRef<View>(null);
+  const filterBtnRef = useRef<any>(null);
 
   const currentRentalLabel =
     rentalFilterOptions.find((o) => o.id === rentalFilter)?.label || 'All Rental';
@@ -119,7 +119,7 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
     }
     haptics.select();
     if (filterBtnRef.current && filterBtnRef.current.measureInWindow) {
-      filterBtnRef.current.measureInWindow((x, y, width, height) => {
+      filterBtnRef.current.measureInWindow((x: any, y: any, width: any, height: any) => {
         const windowWidth =
           Platform.OS === 'web' && typeof window !== 'undefined'
             ? window.innerWidth

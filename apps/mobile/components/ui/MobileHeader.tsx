@@ -122,7 +122,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => {
       setScreenWidth(window.width);
     });
     return () => sub.remove();
@@ -141,7 +141,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   // Search State & Focus Tracking
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<any>(null);
 
   // Quick Access Command Palette State
   const [isCmdOpen, setIsCmdOpen] = useState(false);
@@ -161,7 +161,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   // 3-Dot Actions Menu State & Positioning
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuTriggerRef = useRef<View>(null);
+  const menuTriggerRef = useRef<any>(null);
   const [menuCoords, setMenuCoords] = useState<{ top: number; right: number }>({
     top: 50,
     right: 16,
@@ -241,7 +241,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
     }
 
     if (menuTriggerRef.current && typeof menuTriggerRef.current.measureInWindow === 'function') {
-      menuTriggerRef.current.measureInWindow((x, y, width, height) => {
+      menuTriggerRef.current.measureInWindow((x: any, y: any, width: any, height: any) => {
         setMenuCoords({
           top: Math.max(44, Math.round(y + height + 6)),
           right: Math.max(12, Math.round(windowWidth - (x + width))),

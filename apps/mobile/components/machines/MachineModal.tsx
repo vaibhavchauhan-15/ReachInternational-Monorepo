@@ -1811,12 +1811,15 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         label="Client Deployment Site"
                         options={[
                           { value: '', label: 'None (No specific site / Yard)' },
-                          ...clientSites.map((s) => ({
-                            value: s.id,
-                            label: `${s.site_name} (${s.site_code})`,
-                            code: s.site_code,
-                            description: [s.street, s.city, s.district].filter(Boolean).join(' • ') || undefined,
-                          })),
+                          ...clientSites.map((s) => {
+                            const code = s.site_code ? s.site_code.replace(/^.*-S/, 'S') : 'S00';
+                            return {
+                              value: s.id,
+                              label: `${code} · ${s.site_name}`,
+                              code,
+                              description: [s.street, s.city, s.district].filter(Boolean).join(' • ') || undefined,
+                            };
+                          }),
                         ]}
                         value={siteId}
                         onChange={(val) => setSiteId(val)}
@@ -1842,7 +1845,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                         <View style={styles.selectLeft}>
                           <View style={[styles.statusDot, { backgroundColor: '#0ea5e9' }]} />
                           <Text variant="caption" weight="medium" style={[styles.selectValueText, { color: theme.colors.ink }]}>
-                            Primary Site: {clientSites[0].site_name} ({clientSites[0].site_code})
+                            Primary Site: {clientSites[0].site_code ? clientSites[0].site_code.replace(/^.*-S/, 'S') : 'S00'} · {clientSites[0].site_name}
                           </Text>
                         </View>
                       </View>

@@ -27,6 +27,7 @@ import {
 } from "@/app/actions/machines";
 import { getAssignableMachinesAction } from "@/app/actions/assignments";
 import { getClientSitesAction } from "@/app/actions/client-sites";
+import { formatSiteDropdownLabel } from "@reachinternational/utils";
 import type { ClientSite } from "@/lib/data/clients";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole } from "@reachinternational/types";
@@ -746,7 +747,7 @@ export function MachineClientModal({
                     { value: "", label: "None (No specific site / Yard)" },
                     ...sites.map((s) => ({
                       value: s.id,
-                      label: `${s.site_name} (${s.site_code})`,
+                      label: formatSiteDropdownLabel(s),
                       description: [s.street, s.city, s.district, s.state_name].filter(Boolean).join(", "),
                     })),
                   ]}

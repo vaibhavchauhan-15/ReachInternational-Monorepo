@@ -157,7 +157,7 @@ export const DropdownFilterSelector: React.FC<DropdownFilterSelectorProps> = Rea
     maxHeight: 280,
   });
 
-  const buttonRef = useRef<View>(null);
+  const buttonRef = useRef<any>(null);
 
   // Keyboard awareness so popover stays visible above keyboard
   useEffect(() => {

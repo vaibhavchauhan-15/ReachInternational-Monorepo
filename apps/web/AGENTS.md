@@ -155,11 +155,11 @@ pnpm typecheck
 
 Before modifying any web code, every AI agent MUST:
 1. **Read Scoped Security Policy**:
-   - Web rules: [`apps/web/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-RULES.md)
-   - Web attack surface: [`apps/web/security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/ATTACK-SURFACE.md)
-   - Web threat model: [`apps/web/security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/THREAT-MODEL.md)
-   - Root baseline rules: [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)
-2. **Execute Compliance Checklist**: Check all implementation steps against [`apps/web/security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-CHECKLIST.md).
+   - Web rules: [`security/SECURITY-RULES.md`](security/SECURITY-RULES.md)
+   - Web attack surface: [`security/ATTACK-SURFACE.md`](security/ATTACK-SURFACE.md)
+   - Web threat model: [`security/THREAT-MODEL.md`](security/THREAT-MODEL.md)
+   - Root baseline rules: [`security/SECURITY-RULES.md`](security/SECURITY-RULES.md)
+2. **Execute Compliance Checklist**: Check all implementation steps against [`security/SECURITY-CHECKLIST.md`](security/SECURITY-CHECKLIST.md).
 3. **Mandatory Invariants**:
    - Server Components by default; client components strictly leaf nodes.
    - All mutations in Server Actions (`app/actions/*`) with `requireRole()` / `requirePermission()`.

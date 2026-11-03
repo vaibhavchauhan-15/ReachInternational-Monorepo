@@ -7,13 +7,6 @@ import {
   AlertWidget,
   PrimaryAction,
 } from "../shared";
-import {
-  Users,
-  UserCheck,
-  FileEdit,
-  Clock,
-  UserPlus,
-} from "lucide-react";
 
 interface HRDashboardViewProps {
   userId: string;
@@ -50,28 +43,28 @@ export async function HRDashboardView({
           <KPICard
             label="Total Active Staff"
             value={totalEmployees}
-            icon={Users}
+            icon="users"
             href="/users"
             variant="default"
           />
           <KPICard
             label="Active Field Operators"
             value={activeOperators}
-            icon={UserCheck}
+            icon="user-check"
             href="/users"
             variant="info"
           />
           <KPICard
             label="Pending Profile Changes"
             value={pendingProfileChanges}
-            icon={FileEdit}
+            icon="file-edit"
             href="/users"
             variant={pendingProfileChanges > 0 ? "warning" : "default"}
           />
           <KPICard
             label="Logs Recorded Today"
             value={todayLogsCount}
-            icon={Clock}
+            icon="clock"
             href="/operations"
             variant={todayLogsCount > 0 ? "success" : "default"}
           />
@@ -88,7 +81,7 @@ export async function HRDashboardView({
             title="Profile Change Requests"
             description="Review and approve operator contact details, banking info, and document updates"
             href="/users"
-            icon={FileEdit}
+            icon="file-edit"
             variant={pendingProfileChanges > 0 ? "warning" : "primary"}
             badgeText={pendingProfileChanges > 0 ? `${pendingProfileChanges} Pending` : undefined}
           />
@@ -96,7 +89,7 @@ export async function HRDashboardView({
             title="Employee Directory"
             description="Manage employee profiles, shift schedules, and supervisor assignments"
             href="/users"
-            icon={UserPlus}
+            icon="user-plus"
             variant="secondary"
           />
         </div>

@@ -63,6 +63,7 @@ const CLIENT_LOG_EXACT_PROJECTION = `
   machine_id,
   operator_id,
   client_id,
+  site_id,
   log_date,
   start_meter,
   end_meter,
@@ -233,11 +234,16 @@ export const getOperationsClientLogsData = cache(
           }
 
           if (effectiveSite && effectiveSite !== "all") {
-            const siteCandidates = resolveSiteMatchCandidates(effectiveSite, activeClient?.street);
-            if (siteCandidates.length === 1) {
-              query = query.eq("location", siteCandidates[0]);
-            } else if (siteCandidates.length > 1) {
-              query = query.in("location", siteCandidates);
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveSite);
+            if (isUuid) {
+              query = query.eq("site_id", effectiveSite);
+            } else {
+              const siteCandidates = resolveSiteMatchCandidates(effectiveSite, activeClient?.street);
+              if (siteCandidates.length === 1) {
+                query = query.eq("location", siteCandidates[0]);
+              } else if (siteCandidates.length > 1) {
+                query = query.in("location", siteCandidates);
+              }
             }
           }
 

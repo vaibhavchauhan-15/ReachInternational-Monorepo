@@ -7,16 +7,6 @@ import {
   AlertWidget,
   PrimaryAction,
 } from "../shared";
-import {
-  Users,
-  Wrench,
-  Building2,
-  CalendarCheck,
-  Clock,
-  ShieldCheck,
-  Shield,
-  SlidersHorizontal,
-} from "lucide-react";
 
 interface SuperAdminDashboardViewProps {
   userId: string;
@@ -55,42 +45,42 @@ export async function SuperAdminDashboardView({
           <KPICard
             label="Total Staff"
             value={totalUsers}
-            icon={Users}
+            icon="users"
             href="/users"
             variant="default"
           />
           <KPICard
             label="Active Fleet"
             value={activeMachines}
-            icon={Wrench}
+            icon="wrench"
             href="/machines"
             variant="info"
           />
           <KPICard
             label="Active Clients"
             value={totalClients}
-            icon={Building2}
+            icon="building"
             href="/clients"
             variant="default"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
-            icon={CalendarCheck}
+            icon="calendar-check"
             href="/operations"
             variant="warning"
           />
           <KPICard
             label="Logs Today"
             value={todayLogs}
-            icon={Clock}
+            icon="clock"
             href="/operations"
             variant={todayLogs > 0 ? "success" : "default"}
           />
           <KPICard
             label="Audit Events"
             value={recentAuditActions}
-            icon={ShieldCheck}
+            icon="shield-check"
             href="/audit"
             variant="default"
           />
@@ -107,21 +97,21 @@ export async function SuperAdminDashboardView({
             title="System Audit Trail"
             description="Inspect recent administrative mutations and security events"
             href="/audit"
-            icon={Shield}
+            icon="shield"
             variant="primary"
           />
           <PrimaryAction
             title="User & Access Directory"
             description="Manage administrative roles, supervisor scopes, and operators"
             href="/users"
-            icon={Users}
+            icon="users"
             variant="secondary"
           />
           <PrimaryAction
             title="Machinery Fleet Registry"
             description="Global view of all equipment, client sites, and telemetry"
             href="/machines"
-            icon={SlidersHorizontal}
+            icon="sliders-horizontal"
             variant="secondary"
           />
         </div>

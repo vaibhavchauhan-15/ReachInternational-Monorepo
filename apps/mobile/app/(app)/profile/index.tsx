@@ -241,7 +241,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
-    const sub = Dimensions.addEventListener('change', ({ window: w }) => {
+    const sub = Dimensions.addEventListener('change', ({ window: w }: any) => {
       setScreenWidth(w.width);
     });
     return () => sub.remove();

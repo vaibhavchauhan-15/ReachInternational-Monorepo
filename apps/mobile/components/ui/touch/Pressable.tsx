@@ -145,7 +145,7 @@ export const Pressable = memo(
     const resolvePressStyle = (isPressed: boolean): ViewStyle | undefined => {
       if (!isPressed || !isInteractive) return undefined;
 
-      const pressStyles: ViewStyle = {};
+      const pressStyles: any = {};
 
       // Apply activeOpacity on iOS and Web
       if (Platform.OS !== 'android') {

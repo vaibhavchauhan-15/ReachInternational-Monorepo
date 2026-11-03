@@ -47,6 +47,7 @@ export * from './AppLinearGradient';
 export * from '../dashboard/shared';
 export * from './FilterToolbar';
 export * from './ConfirmDialog';
+export * from './ToggleSwitch';
 export * from './SegmentedToggle';
 export * from './ShiftCardSelector';
 export * from './SearchInput';

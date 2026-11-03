@@ -1,3 +1,113 @@
+## 2026-11-02 — Running Logs Page Feedback: Breakdown-Only Remarks & Client Location Removal
+- **Objective**: Address page feedback on `/running-logs?view=client`:
+  1. Remove generic remarks ("No special remarks logged for this day.") from every row. Only allow row expansion and display remarks if a breakdown occurred AND actual user-entered remarks exist in the database. Strip synthetic prefixes and unwanted placeholders.
+  2. Remove client location string underneath the client name in `<ClientSelect>`.
+- **Root Cause**:
+  1. `OperationsDailyLogRow` had a generic fallback block that unconditionally rendered "Shift Remarks: No special remarks logged for this day." whenever a row was expanded, and rows without breakdowns were expandable. Furthermore, synthetic tags (`[Breakdown Duration: 2h]`) stored in `machine_hour_logs.remarks` were treated as operator remarks.
+  2. `ClientSelect` concatenated `{clientLocationStr ? " • " + clientLocationStr : ""}` under the client name in the trigger button, which caused duplicate clutter next to the dedicated location selector dropdown.
+- **Implemented Changes**:
+  1. `apps/web/components/ui/ClientSelect.tsx`: Added `showLocation?: boolean` (defaults to `false`). Only rendered `clientLocationStr` under the client name if `showLocation` is true.
+  2. `apps/web/components/operations/logs/OperationsLogsTable.tsx`:
+     - Added `extractBreakdownRemark(log)` to clean out synthetic tags (`[Breakdown Duration: ...]`, `[Breakdown: ...]`, `[Assisted Override: ...]`) and dummy placeholders (`"—"`, `"null"`, `"none"`, `"n/a"`).
+     - Filtered `remarksDisplay` in `groupLogsByDate` to only collect remarks from shifts with breakdowns (`is_breakdown || breakdown_minutes > 0 || breakdown_hours > 0`).
+     - Restricted row expandability in `OperationsDailyLogRow` to `canExpand = hasBreakdown`. Non-breakdown rows render a blank spacer instead of chevron and use `cursor-default`.
+     - Removed the old generic shift remarks block. Rendered stoppage details and dedicated `Breakdown Remarks:` section only when actual database remarks exist.
+  3. `apps/web/components/operations/logs/OperationsLogsMobileList.tsx`: Applied identical breakdown-only gating and `extractBreakdownRemark` cleaning to mobile responsive cards for 100% Web-to-Mobile Parity.
+  4. `apps/web/components/clients/SitesList.tsx`: Fixed pre-existing `Badge` size prop error.
+- **Verification**:
+  - `node apps/web/scripts/test-running-logs-remarks-and-client-select.mjs`: PASS (7/7 checks)
+  - `pnpm --filter @reachinternational/web typecheck`: PASS (0 errors)
+  - `node scripts/run-all-tests.mjs`: PASS (10/10 monorepo suites clean)
+
+## 2026-11-02 — Site Machine Running Hours PDF Report Layout & Pagination Optimizations
+- **Objective**: Address 5 user feedback items on `/running-logs?view=client` PDF report: bold & highlight machine header details, attach machine title tab directly to the log sheet table, fit all 31 days of a month on 1 page per machine with dynamic compression/expansion, make the KPI strip slightly thin, and remove the redundant bottom total rows.
+- **Root Cause**:
+  1. `MAX_ROWS_PER_CLIENT_PAGE = 30` caused 31-day months (e.g. October) to split October 31st onto an isolated 2nd page with 1 day.
+  2. Machine Details Header banner was separated by `gap-y-2` (8px) with independent rounded borders instead of being attached to the table.
+  3. Header details were styled with plain font weights and `text-[9px]`.
+  4. Redundant 2-row `<tfoot>` was rendered at the bottom of the table despite totals already existing in the machine header banner.
+  5. `PDFKPIStrip` occupied excessive vertical height on A4 print pages.
+- **Implemented Changes**:
+  1. `apps/web/components/operations/PrintableSupervisorLogsModal.tsx`:
+     - Wrapped Machine Header Banner and Log Sheet Table into an attached container (`<div className="w-full border border-neutral-900 rounded overflow-hidden">`) with `border-b border-neutral-900` separating the header tab from the table underneath and zero gap.
+     - Enhanced Machine Details Header typography: `text-[10px] sm:text-[10.5px] font-bold`, prominent equipment title (`text-[10.5px] sm:text-[11px] font-black`), bold metrics (`font-black`), and high-contrast badges.
+     - Increased `MAX_ROWS_PER_CLIENT_PAGE` and `MAX_ROWS_PER_NON_CLIENT_PAGE` from 30 to 31 so all 31 days of any month stay on 1 page.
+     - Removed redundant `<tfoot>` from client view table.
+     - Updated `calculateA4RowHeight` with `hasTfoot = false`, thinner KPI height (10mm), and clamped row heights (`MIN_ROW_MM = 5.8`, `MAX_ROW_MM = 9.0`) so rows compress gracefully for 31 days and expand cleanly without over-expanding for fewer rows.
+  2. `apps/web/components/pdf/PDFKPIStrip.tsx`:
+     - Added `density?: "default" | "thin"` (defaulting to thin in reports) with `py-1 px-1.5` padding and compact typography.
+  3. `apps/web/components/pdf/PDFReportHeader.tsx`:
+     - Emphasized metadata items with `text-[9px] sm:text-[9.5px]` bold labels and values.
+  4. `apps/web/app/actions/client-sites.ts`:
+     - Typed `getClientSitesAction` to return active `ClientSite[]`.
+- **Verification**:
+  - `pnpm --filter @reachinternational/web typecheck`: PASS (0 errors)
+  - `pnpm turbo run typecheck`: PASS (7/7 packages & apps clean)
+  - `node scripts/run-all-tests.mjs`: PASS (10/10 monorepo suites)
+
+## 2026-11-02 — Eradicate Legacy Segmented Toggle & Implement Mobile-Optimized ToggleSwitch
+- **Objective**: Eliminate legacy sliding pill segmented toggle and replace with a robust, mobile-optimized ToggleSwitch matching Screenshot 3, resolving text/button overlapping bugs and restoring clean theme mode and shift tab switching.
+- **Root Cause**: Absolute positioned Reanimated sliding pill combined with Yoga flex layout measurement and fallback pill rendered multiple overlapping views and miscalculated widths on Android devices.
+- **Implemented Changes**:
+  1. `apps/mobile/components/ui/ToggleSwitch.tsx`: Built clean, reusable, mobile-first toggle switch with 0ms instant response, equal width distribution (`flex: 1`), min 44dp hit area, solid Reach Sky Blue (`#0284c7` / `#0ea5e9`) active state with pure white text, muted inactive text, and haptic feedback (`haptics.select()`).
+  2. `apps/mobile/components/ui/SegmentedToggle.tsx`: Replaced legacy implementation with full aliases to `ToggleSwitch`, style invariants, and types for monorepo backward compatibility.
+  3. `apps/mobile/app/(app)/operations.tsx`: Migrated "Shift" and "Log History" tab toggle to `ToggleSwitch`, suppressed 0 and loading count badges.
+  4. `apps/mobile/app/(app)/settings/preferences/index.tsx`: Migrated "Dark", "Light", and "System" theme mode toggle to `ToggleSwitch`.
+  5. `apps/mobile/app/(app)/running-logs.tsx`: Migrated Clients/Machine/Operator view switcher to `ToggleSwitch`.
+  6. `apps/mobile/components/machines/MachineDetailView.tsx` & `RunningLogFilterPanel.tsx`: Migrated to `ToggleSwitch`.
+  7. `apps/mobile/test/test-segmented-toggle.mjs`: Updated test assertions for `ToggleSwitch` architecture, tokens, touch ergonomics, and backward compatibility.
+- **Verification**:
+  - `node apps/mobile/test/test-segmented-toggle.mjs`: PASS
+  - `node apps/mobile/test/test-users-detail-infinite-pagination.mjs`: PASS (16/16)
+  - `node apps/mobile/run-tests.mjs`: PASS (357/357)
+  - `node scripts/check-typography.mjs`: PASS (0 raw typography violations)
+  - `pnpm --filter @reachinternational/mobile typecheck`: PASS (0 errors)
+  - `node scripts/run-all-tests.mjs`: PASS (10/10 monorepo suites)
+
+## [Task 318] - 2026-11-02: Fix Native Segmented Toggle Dynamic Geometry, Label Alignment & Button Area Overlap
+- Root Cause Identified from Android Live Screenshots:
+  - In React Native Android Yoga layout, `itemFullWidth` defined with `flexBasis: 0, minWidth: 0` without an explicit width inside the row container caused segment items ("Shift" and "Log History") to collapse to their intrinsic content widths (~64px and ~139px).
+  - Both items were clustered on the left half of the container (~0 to 203px) while the entire right half remained vacant. When toggled to "Log History", the blue sliding indicator moved to the right half (`x = 179px`), leaving the indicator empty and the text stranded on the left.
+  - The same bug affected the Theme Toggle (`Dark | Light | System`) in Preferences (`/settings/preferences`).
+- Implemented Fix in `apps/mobile/components/ui/SegmentedToggle.tsx`:
+  - Dynamically calculated `itemWidth = (containerWidth - config.padding * 2) / items.length` and passed `itemWidth` and `itemsCount` to `BaseSegmentItem`.
+  - Applied deterministic width geometry: `width: itemWidth, maxWidth: itemWidth, flex: 1` when container is measured, falling back to `${100 / items.length}%` on frame 0.
+  - Added `flexWrap: 'nowrap'` to `styles.item` and enforced `numberOfLines={1}` with `ellipsizeMode="tail"` and `flexShrink: 1` on text to ensure labels never wrap onto multiple rows or collide with badges.
+  - Set `pointerEvents="none"` on frame-0 fallback indicator.
+  - Updated `styles.container` to `width: '100%'` and `styles.itemFullWidth` to `flex: 1, height: '100%'`.
+- Synchronized `apps/mobile/app/(app)/operations.tsx`:
+  - Enforced `fullWidth` prop on `<SegmentedToggle<'entry' | 'history'>>`.
+  - Added `width: '100%'` to `styles.segmentedToggleWrapper`.
+- Verification Results:
+  - `node apps/mobile/test/test-segmented-toggle.mjs` (18/18 PASS)
+  - `pnpm --filter @reachinternational/mobile typecheck` (0 errors)
+  - `node scripts/check-typography.mjs` (0 raw typography violations)
+  - `node apps/mobile/run-tests.mjs` (357/357 PASS)
+  - `node scripts/run-all-tests.mjs` (10/10 monorepo suites PASS)
+
+## [Task 317] - 2026-11-02: Fix Shift / Log History Segmented Toggle & Theme System Parity in Native App (apps/mobile)
+- Refactored `apps/mobile/components/ui/SegmentedToggle.tsx`:
+  - Removed dual-property (`translateX` + `width`) spring animation which induced visual indicator oscillation and cross-segment spill; anchored `animWidth.value = tabW` directly and transitioned purely via UI-thread spring `translateX`.
+  - Resolved label and badge collision: assigned `flexShrink: 1` to `itemText` and `flexShrink: 0` to `countBadge` with a fixed 20x20dp circular pill.
+  - Implemented `99+` count ceiling formatting and suppressed badge display when `count === 0`, `count === undefined`, or `loading === true`.
+  - Added WCAG AA high-contrast tokens for inactive segment labels (`#3f3f46` light / `#d4d4d8` dark).
+  - Enforced minimum 44dp hit area (`minHeight: 44`) on interactive segment containers across all size variants.
+  - Exported canonical alias interfaces `SegmentedControl`, `SegmentedControlProps`, and `SegmentedControlItem`.
+- Synchronized `apps/mobile/app/(app)/operations.tsx`:
+  - Bound `isLoading: isHistoryCountLoading` from `useOperatorHistoryCount` query to prevent rendering unhydrated badge placeholders.
+  - Replaced legacy React Native `StatusBar` with `expo-status-bar` `<StatusBar style={isDark ? 'light' : 'dark'} />`.
+- Hardened Theme Lifecycle & Synchronization in `apps/mobile/components/ui/ThemeProvider.tsx` and `apps/mobile/app/_layout.tsx`:
+  - Lifted `ThemeProvider` outside `TypographyGate` in `RootLayout`.
+  - Extended `TypographyGate` to hold `SplashScreen.hideAsync()` until `typeReady && themeReady && (fontsLoaded || fontError)`, eliminating dark/light flashes on cold start.
+  - Added native `Appearance.addChangeListener` to reactively track OS theme switches when `mode === 'system'`.
+  - Synchronized Android native system navigation bar and canvas background via `expo-system-ui` `SystemUI.setBackgroundColorAsync`.
+- Audited codebase for floating grey gear button: confirmed it is an external Android OS Accessibility Menu shortcut running on the host device, requiring no code removal inside the app bundle.
+- Executed full test verification:
+  - `node apps/mobile/test/test-segmented-toggle.mjs` (18/18 PASS)
+  - `pnpm --filter @reachinternational/mobile typecheck` (0 errors)
+  - `node scripts/check-typography.mjs` (0 violations)
+  - `node scripts/run-all-tests.mjs` (10/10 monorepo suites PASS)
+
 ## [Task 316] - 2026-11-01: Request-a-Quote (RFQ) System: Database Schema, Migration, Storage, pgTAP Tests & Monorepo Type Synchronization
 - Applied comprehensive migration `supabase/migrations/20261101061529_rfq.sql` to Dev DB (`vlmxciuogczumumrwyot`):
   - 9 Postgres enums: `rfq_status`, `rfq_requirement`, `duration_unit`, `rfq_source`, `rfq_event_type`, `lost_reason`, `quotation_status`, `quote_line_kind`, `outbox_status`.
@@ -20119,3 +20229,16 @@ so i can tract each and everythings"
 - Created Admin Sales Pipeline under `/admin/sales/rfq` (Dashboard, Detail, Manual entry, Clients directory, Business settings).
 - Enforced strict 3-tier RBAC (`super_admin`, `admin`, `sales` allowed; `marketing` forbidden and redirected).
 - Verified with 7/7 Turborepo typechecks and 10/10 monorepo test suites passing 100%.
+
+## [2026-11-02] - Mobile Native App Upgrade to Expo SDK 58 & Expo Go Compatibility
+- Upgraded apps/mobile to Expo SDK 58 (~58.0.22), React Native 0.88.1, React 19.3.0.
+- Resolved all React Native 0.88 ViewInstance/TextInputInstance ref types and immutable ViewStyle rules.
+- Successfully bundled 4,840 modules for Android via Metro.
+- Passed 19/19 expo-doctor checks, 357/357 mobile tests, and 7/7 Turbo typechecks.
+
+
+## [2026-11-02] - Fix Expo Router v58 "router-store" Package Resolution Warning
+- **Module**: `apps/mobile` (`@sentry/react-native`)
+- **Root Cause**: `@sentry/react-native` versions `<= 8.32.0` attempted deep require `expo-router/build/global-state/router-store`, which was removed in Expo Router v58, triggering Metro's package.json exports warning.
+- **Resolution**: Upgraded `@sentry/react-native` to `~8.33.0`, introducing native Expo Router 58 integration support and eliminating the warning entirely.
+- **Verification**: `expo export --platform android` (0 warnings), `expo-doctor` (19/19 checks clean), `pnpm turbo run typecheck` (7/7 clean), `run-all-tests.mjs` (10/10 suites passed).

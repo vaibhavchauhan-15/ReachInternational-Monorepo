@@ -1215,13 +1215,7 @@ export interface CRMClient {
   deleted_at?: string | null;
   created_at: string;
   /** Operational sites associated with this client */
-  client_sites?: {
-    id: string;
-    site_code: string;
-    site_name: string;
-    city: string;
-    status: string;
-  }[];
+  client_sites?: ClientSite[];
   /** Count of operational sites for this client */
   site_count?: number;
   /** Primary supervisor assigned at the client account level */
@@ -1236,6 +1230,52 @@ export interface CRMClient {
   email?: string | null;
   /** @deprecated Backward compatibility optional alias */
   notes?: string | null;
+}
+
+
+export interface ClientSite {
+  id: string;
+  client_id: string;
+  site_no: number;
+  code: string;
+  site_code: string;
+  legacy_code?: string | null;
+  site_name: string;
+  street: string;
+  city: string;
+  district: string;
+  state_id: number;
+  state_name?: string;
+  pincode: string;
+  address_full?: string;
+  address_key?: string;
+  is_default: boolean;
+  status: 'active' | 'inactive';
+  deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientSiteDropdownItem {
+  id: string;
+  code: string;
+  site_code: string;
+  site_name: string;
+  city: string;
+  address_full?: string;
+  is_default: boolean;
+  site_no: number;
+}
+
+export interface ClientWithSitesResponse {
+  client: CRMClient;
+  sites: ClientSite[];
+  counts: {
+    total_sites: number;
+    active_sites: number;
+    assigned_machines: number;
+    total_logs: number;
+  };
 }
 
 export interface ClientSupervisor {

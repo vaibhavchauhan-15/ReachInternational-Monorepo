@@ -16,6 +16,7 @@ import {
   ErrorState,
   PermissionDeniedView,
   SearchInput,
+  ToggleSwitch,
   SegmentedToggle,
   Text,
 } from '../../components/ui';
@@ -474,8 +475,8 @@ export default function RunningLogsScreen() {
       {/* 2. Top Navbar: Segmented Mode Toggle (Clients | Machine | Operator) */}
       <View style={styles.segmentedToggleWrapper}>
         <View style={[styles.segmentedToggleInner, isWide && styles.segmentedToggleInnerWide]}>
-          <SegmentedToggle<LogsViewMode>
-            items={[
+          <ToggleSwitch<LogsViewMode>
+            options={[
               { id: 'client', label: 'Clients' },
               { id: 'machine', label: 'Machine' },
               { id: 'operator', label: 'Operator' },

@@ -867,9 +867,14 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({
                       ]}
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                        <Text variant="mono" weight="bold" style={{ color: theme.colors.primary }}>
-                          {s.site_code}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text variant="mono" weight="bold" style={{ color: theme.colors.primary }}>
+                            {((s as any).code || (s.site_code ? s.site_code.replace(/^.*-S/, 'S') : 'S00'))} · {s.site_code}
+                          </Text>
+                          {(s.site_code?.endsWith('-S00') || (s as any).is_default) && (
+                            <Badge status="info" customLabel="DEFAULT" />
+                          )}
+                        </View>
                         <Badge
                           status={s.status === 'active' ? 'active' : 'inactive'}
                           customLabel={s.status.toUpperCase()}

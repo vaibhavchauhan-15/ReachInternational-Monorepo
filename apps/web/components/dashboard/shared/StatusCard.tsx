@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useRef } from "react";
+import React from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { CheckCircle2, Clock, AlertTriangle, Info } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { getIcon, type IconName } from "@/components/ui/icon-map";
 
 export interface StatusCardProps {
   title: string;
   status?: "success" | "pending" | "warning" | "info" | "default";
   label?: string;
   description?: string;
-  icon?: LucideIcon | React.ComponentType<{ className?: string; size?: number | string; ref?: any }> | React.ReactNode;
+  icon?: IconName | LucideIcon | React.ComponentType<{ className?: string; size?: number | string; ref?: React.Ref<unknown> }> | React.ReactNode;
   extra?: React.ReactNode;
   href?: string;
   onClick?: () => void;
@@ -76,30 +77,23 @@ export function StatusCard({
   monoValue = false,
   children,
 }: StatusCardProps) {
-  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const config = statusConfig[status] || statusConfig.default;
-  const Icon = customIcon || config.icon;
+  const customResolved = typeof customIcon === "string" ? getIcon(customIcon) : customIcon;
+  const Icon = customResolved || config.icon;
   const isInteractive = Boolean(href || onClick);
-
-  const handleMouseEnter = () => {
-    iconRef.current?.startAnimation?.();
-  };
-
-  const handleMouseLeave = () => {
-    iconRef.current?.stopAnimation?.();
-  };
 
   const renderIcon = () => {
     if (React.isValidElement(Icon)) {
-      return React.cloneElement(Icon as React.ReactElement<any>, {
-        ref: iconRef,
+      return React.cloneElement(Icon as React.ReactElement<{ size?: number; className?: string }>, {
         size: 16,
         className: `w-4 h-4 shrink-0 ${config.iconColor}`,
       });
     }
     if (typeof Icon === "function" || (typeof Icon === "object" && Icon !== null)) {
-      const IconComp = Icon as React.ComponentType<any>;
-      return <IconComp ref={iconRef} size={16} className={`w-4 h-4 shrink-0 ${config.iconColor}`} />;
+      return React.createElement(Icon as React.ComponentType<{ size?: number; className?: string }>, {
+        size: 16,
+        className: `w-4 h-4 shrink-0 ${config.iconColor}`,
+      });
     }
     return null;
   };
@@ -108,8 +102,6 @@ export function StatusCard({
     <Card
       padding="none"
       onClick={onClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       className={`relative overflow-hidden p-3.5 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] ${
         isInteractive
           ? "hover:border-[var(--color-ink)]/30 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] cursor-pointer motion-reduce:hover:translate-y-0"
@@ -169,8 +161,6 @@ export function StatusCard({
       <Link
         href={href}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] rounded-[var(--radius-md)]"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         {cardContent}
       </Link>

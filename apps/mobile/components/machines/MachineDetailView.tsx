@@ -21,6 +21,7 @@ import {
   useTheme,
   SharedLinkPreviewCard,
   AppRefreshControl,
+  ToggleSwitch,
   SegmentedToggle,
   MobileHeader,
   Text,
@@ -380,7 +381,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
   const [assignPersonnelModalVisible, setAssignPersonnelModalVisible] = useState(false);
   const [heroMenuVisible, setHeroMenuVisible] = useState(false);
-  const heroEditBtnRef = useRef<View>(null);
+  const heroEditBtnRef = useRef<any>(null);
   const [heroMenuCoords, setHeroMenuCoords] = useState<{ top: number; right: number } | null>(null);
 
   const handleOpenHeroMenu = useCallback(() => {
@@ -1504,8 +1505,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           </View>
 
           {/* TAB NAVIGATION TOGGLE / NAVBAR */}
-          <SegmentedToggle
-            items={segmentedTabItems}
+          <ToggleSwitch
+            options={segmentedTabItems}
             value={activeTab}
             onChange={handleTabChange}
             size="sm"

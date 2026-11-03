@@ -51,8 +51,7 @@ export default function AppLayout() {
     <View style={styles.container}>
       <OfflineBanner />
       <Tabs
-        initialRouteName="dashboard"
-        backBehavior="history"
+                backBehavior="history"
         tabBar={() => <MobileBottomNav />}
         screenOptions={{
           headerShown: false,

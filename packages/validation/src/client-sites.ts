@@ -40,5 +40,17 @@ export const UpdateSiteSchema = SiteSchema.partial().extend({
   id: z.string().uuid(),
 });
 
+export const ClientSiteDropdownItemSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string().min(1).max(20),
+  site_code: z.string().min(1).max(50),
+  site_name: z.string().min(1).max(200),
+  city: z.string().min(1).max(200),
+  address_full: z.string().optional(),
+  is_default: z.boolean(),
+  site_no: z.number().int().nonnegative(),
+});
+
 export type SiteInput = z.infer<typeof SiteSchema>;
 export type UpdateSiteInput = z.infer<typeof UpdateSiteSchema>;
+export type ClientSiteDropdownItemInput = z.infer<typeof ClientSiteDropdownItemSchema>;

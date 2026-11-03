@@ -22,7 +22,7 @@ export type CardProps = ViewProps & {
 
 const CardPressContext = React.createContext<{ isPressed: boolean }>({ isPressed: false });
 
-const Card: React.ForwardRefExoticComponent<CardProps & React.RefAttributes<View>> = React.forwardRef(
+const Card = React.forwardRef<any, CardProps>(
   ({ className, variant = 'default', onPress, interactive, style, children, ...props }: CardProps, ref) => {
     const { theme, isDark } = useTheme();
 

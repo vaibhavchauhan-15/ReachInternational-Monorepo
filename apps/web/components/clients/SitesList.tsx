@@ -98,7 +98,18 @@ export function SitesList({ sites, clientId, states, currentUserRole }: SitesLis
               <tbody className="divide-y divide-[var(--color-hairline)]">
                 {sites.map((site) => (
                   <tr key={site.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs font-semibold">{site.site_code}</td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sky-600 dark:text-sky-400">{site.code || 'S00'}</span>
+                        <span className="text-[var(--color-mute)]">·</span>
+                        <span>{site.site_code}</span>
+                        {site.is_default && (
+                          <Badge variant="info" className="ml-1 text-[10px] py-0 px-1.5">
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 font-semibold text-[var(--color-ink)]">{site.site_name}</td>
                     <td className="px-4 py-3 text-[var(--color-mute)] truncate max-w-[250px]">
                       {site.city}, {site.state_name} - {site.pincode}
@@ -144,8 +155,13 @@ export function SitesList({ sites, clientId, states, currentUserRole }: SitesLis
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-xs font-semibold bg-[var(--color-hairline-soft-surface)] px-1.5 py-0.5 rounded border border-[var(--color-hairline)]">
-                        {site.site_code}
+                        <span className="text-sky-600 dark:text-sky-400 font-bold">{site.code || 'S00'}</span> · {site.site_code}
                       </span>
+                      {site.is_default && (
+                        <Badge variant="info" className="text-[10px] py-0 px-1.5">
+                          Default
+                        </Badge>
+                      )}
                       <Badge variant={site.status === "active" ? "success" : "default"}>
                         {site.status === "active" ? "Active" : "Inactive"}
                       </Badge>

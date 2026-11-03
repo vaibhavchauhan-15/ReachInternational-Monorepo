@@ -19,31 +19,47 @@ export interface PDFKPIStripProps {
   items: PDFKPIItem[];
   /** Visual variant: "light" uses neutral-100 bg, "dark" uses neutral-900 bg with white text */
   variant?: "light" | "dark";
+  /** Density setting: "thin" renders a sleeker, thinner strip */
+  density?: "default" | "thin";
+  /** Optional additional CSS classes */
+  className?: string;
 }
 
-export function PDFKPIStrip({ items, variant = "light" }: PDFKPIStripProps) {
+export function PDFKPIStrip({
+  items,
+  variant = "light",
+  density = "thin",
+  className = "",
+}: PDFKPIStripProps) {
   const isLight = variant === "light";
+  const isThin = density === "thin";
 
   return (
     <div
-      className={`grid gap-1 p-1.5 rounded-lg text-center font-mono kpi-strip ${
+      className={`grid gap-1 ${
+        isThin ? "py-1 px-1.5" : "p-1.5"
+      } rounded-lg text-center font-mono kpi-strip ${
         isLight
           ? "bg-neutral-100 border border-neutral-300"
           : "bg-neutral-900 text-white"
-      }`}
+      } ${className}`}
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       {items.map((item, idx) => (
         <div key={idx} className="flex flex-col items-center justify-center">
           <span
-            className={`text-[8px] sm:text-[9px] block font-sans font-extrabold uppercase tracking-wide truncate ${
+            className={`${
+              isThin ? "text-[7.5px] sm:text-[8px]" : "text-[8px] sm:text-[9px]"
+            } block font-sans font-extrabold uppercase tracking-tight truncate leading-tight ${
               isLight ? "text-neutral-600" : "text-neutral-400"
             }`}
           >
             {item.label}
           </span>
           <span
-            className={`text-[11px] sm:text-[12px] font-black ${
+            className={`${
+              isThin ? "text-[10px] sm:text-[11px]" : "text-[11px] sm:text-[12px]"
+            } font-black leading-tight ${
               item.valueColor || (isLight ? "text-neutral-900" : "text-white")
             }`}
           >

@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from 'lucide-react'
+import { LiquidMetalButton } from '@/components/ui/liquid-metal-button'
 
 
 // ============================================================================
@@ -482,15 +483,13 @@ export function Navigation() {
             <span>Staff Portal</span>
           </Link>
 
-          {/* CTA Button for Clients */}
+          {/* Premium Liquid Metal CTA for Clients */}
           <div className="hidden sm:inline-flex items-center">
-            <Link
+            <LiquidMetalButton
               href="/request-a-quote/"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white bg-sky-700 hover:bg-sky-800 active:bg-sky-900 transition-colors shadow-xs"
-            >
-              <span>Request a Quote</span>
-              <ArrowRight className="size-3.5" />
-            </Link>
+              label="Request a Quote"
+              icon={<ArrowRight className="size-3.5" />}
+            />
           </div>
 
           {/* Mobile hamburger button */}

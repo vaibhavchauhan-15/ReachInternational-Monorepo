@@ -192,6 +192,7 @@ export async function deactivateClientSite(siteId: string, clientId: string) {
 
 export async function getClientSitesAction(clientId: string) {
   if (!clientId) return [];
-  const { getActiveClientSites } = await import("@/lib/data/clients/client-sites");
-  return getActiveClientSites(clientId);
+  const { getClientSites } = await import("@/lib/data/clients/client-sites");
+  const sites = await getClientSites(clientId);
+  return sites.filter((s) => s.status === 'active');
 }

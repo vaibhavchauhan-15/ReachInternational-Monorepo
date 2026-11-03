@@ -7,14 +7,6 @@ import {
   AlertWidget,
   PrimaryAction,
 } from "../shared";
-import {
-  Wrench,
-  Users,
-  Building2,
-  CalendarCheck,
-  Clock,
-  FileSpreadsheet,
-} from "lucide-react";
 
 interface AdminDashboardViewProps {
   userId: string;
@@ -52,35 +44,35 @@ export async function AdminDashboardView({
           <KPICard
             label="Total Machines"
             value={totalMachines}
-            icon={Wrench}
+            icon="wrench"
             href="/machines"
             variant="info"
           />
           <KPICard
             label="Active Users"
             value={activeUsers}
-            icon={Users}
+            icon="users"
             href="/users"
             variant="default"
           />
           <KPICard
             label="Clients"
             value={totalClients}
-            icon={Building2}
+            icon="building"
             href="/clients"
             variant="default"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
-            icon={CalendarCheck}
+            icon="calendar-check"
             href="/operations"
             variant="warning"
           />
           <KPICard
             label="Logs Today"
             value={todayLogs}
-            icon={Clock}
+            icon="clock"
             href="/operations"
             variant={todayLogs > 0 ? "success" : "default"}
           />
@@ -97,14 +89,14 @@ export async function AdminDashboardView({
             title="Operations Hub & Running Logs"
             description="Review daily operator submissions, meter readings, and client worksites"
             href="/operations"
-            icon={FileSpreadsheet}
+            icon="file-spreadsheet"
             variant="primary"
           />
           <PrimaryAction
             title="Machinery Fleet & Maintenance"
             description="Configure machine assignments, track hours, and update equipment status"
             href="/machines"
-            icon={Wrench}
+            icon="wrench"
             variant="secondary"
           />
         </div>

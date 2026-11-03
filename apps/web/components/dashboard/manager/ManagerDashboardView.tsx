@@ -7,15 +7,6 @@ import {
   AlertWidget,
   PrimaryAction,
 } from "../shared";
-import {
-  Wrench,
-  Gauge,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  Layers,
-  FileSpreadsheet,
-} from "lucide-react";
 
 interface ManagerDashboardViewProps {
   userId: string;
@@ -55,35 +46,35 @@ export async function ManagerDashboardView({
           <KPICard
             label="Total Fleet"
             value={totalFleet}
-            icon={Wrench}
+            icon="wrench"
             href="/machines"
             variant="default"
           />
           <KPICard
             label="On Commercial Rent"
             value={rentedFleet}
-            icon={CheckCircle2}
+            icon="check-circle"
             href="/machines"
             variant="success"
           />
           <KPICard
             label="Active Shifts"
             value={activeAssignments}
-            icon={Layers}
+            icon="layers"
             href="/operations"
             variant="info"
           />
           <KPICard
             label="Spare / Idle"
             value={spareFleet}
-            icon={Clock}
+            icon="clock"
             href="/machines"
             variant="warning"
           />
           <KPICard
             label="Breakdowns"
             value={breakdownFleet}
-            icon={AlertTriangle}
+            icon="alert-triangle"
             href="/machines"
             variant={breakdownFleet > 0 ? "error" : "default"}
           />
@@ -99,14 +90,14 @@ export async function ManagerDashboardView({
           <KPICard
             label="Total Logs Submitted Today"
             value={todayLogs}
-            icon={FileSpreadsheet}
+            icon="file-spreadsheet"
             href="/operations"
             variant="default"
           />
           <KPICard
             label="Total Running Hours Today"
             value={`${todayHours.toFixed(1)} hrs`}
-            icon={Gauge}
+            icon="gauge"
             href="/operations"
             variant="info"
           />
@@ -123,14 +114,14 @@ export async function ManagerDashboardView({
             title="Daily Operations Review"
             description="Examine shift logs, running hours, and site location records"
             href="/operations"
-            icon={FileSpreadsheet}
+            icon="file-spreadsheet"
             variant="primary"
           />
           <PrimaryAction
             title="Machinery Fleet Roster"
             description="Reassign equipment, update rental status, and track maintenance"
             href="/machines"
-            icon={Wrench}
+            icon="wrench"
             variant="secondary"
           />
         </div>

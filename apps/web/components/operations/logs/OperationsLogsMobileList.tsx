@@ -11,6 +11,7 @@ import {
   resolveShiftCode,
   formatHoursWithUnit,
   extractBreakdownTiming,
+  extractBreakdownRemark,
   type DailyLogGroup,
 } from "./OperationsLogsTable";
 
@@ -64,6 +65,12 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
     (l) => Boolean(l.conflict_flag) && (!l.conflict_status || l.conflict_status === "pending")
   );
 
+  const hasBreakdown =
+    group.totalBreakdownHours > 0 ||
+    group.logs.some(
+      (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
+    );
+
   return (
     <div
       className={`rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-2xs transition-colors p-3 space-y-2 relative ${
@@ -75,12 +82,12 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
         <div className="flex items-center gap-1.5 font-mono font-bold text-sm text-[var(--color-ink)]">
           <Calendar size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
           <span>{group.formattedDate}</span>
-          {group.remarksDisplay && (
+          {hasBreakdown && group.remarksDisplay && (
             <button
               type="button"
               onClick={() => setIsRemarksOpen((prev) => !prev)}
               className="p-0.5 text-sky-600 dark:text-sky-400 hover:text-sky-700 cursor-pointer"
-              title="Toggle remarks"
+              title="Toggle breakdown remarks"
             >
               <MessageSquare size={13} className="shrink-0" />
             </button>
@@ -177,8 +184,8 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
           </div>
         </div>
 
-        {/* Row 3: Remarks & Stoppage Timestamps (click to toggle / expanded) */}
-        {(group.remarksDisplay || group.totalBreakdownHours > 0) && (
+        {/* Row 3: Stoppage Details & Breakdown Remarks (only if breakdown occurred) */}
+        {hasBreakdown && (
           <div className="pt-1 border-t border-[var(--color-hairline)]">
             <button
               type="button"
@@ -187,21 +194,12 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
             >
               <MessageSquare size={12} className="shrink-0" />
               <span>
-                {isRemarksOpen
-                  ? "Hide Details"
-                  : group.totalBreakdownHours > 0
-                  ? "View Remarks & Stoppage"
-                  : "View Remark"}
+                {isRemarksOpen ? "Hide Breakdown Details" : "View Breakdown Details"}
               </span>
             </button>
             {isRemarksOpen && (
               <div className="mt-1.5 space-y-2">
-                {group.remarksDisplay && (
-                  <p className="p-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed italic">
-                    <Highlight text={group.remarksDisplay} query={searchTerm} />
-                  </p>
-                )}
-                {group.totalBreakdownHours > 0 && (() => {
+                {(() => {
                   const totalBdMin = Math.round(group.totalBreakdownHours * 60);
                   const maintMin = group.totalMaintenanceMinutes;
                   const netBdMin = Math.max(0, totalBdMin - maintMin);
@@ -249,6 +247,8 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
                               (bLog as any).operator_name ||
                               "Operator";
 
+                            const note = extractBreakdownRemark(bLog);
+
                             return (
                               <div
                                 key={bLog.id || bIdx}
@@ -278,9 +278,29 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
                                   <span>•</span>
                                   <span>Duration: {fmtMin(logBdMin)}</span>
                                 </div>
+                                {note && (
+                                  <div className="text-[11px] text-[var(--color-ink)] font-medium pt-0.5 truncate">
+                                    • {note}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {/* If user entered breakdown remarks in the database, display them */}
+                      {group.remarksDisplay && (
+                        <div className="pt-2 border-t border-[var(--color-hairline)] text-xs flex items-start gap-1.5">
+                          <MessageSquare size={12} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <span className="font-bold text-[10px] uppercase tracking-wider text-[var(--color-mute)] mr-1">
+                              Breakdown Remarks:
+                            </span>
+                            <span className="text-[var(--color-ink)]">
+                              <Highlight text={group.remarksDisplay} query={searchTerm} />
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -43,6 +43,7 @@ export interface ClientSelectProps {
   allLabel?: string;
   compact?: boolean;
   isLoading?: boolean;
+  showLocation?: boolean;
   error?: string;
   className?: string;
 }
@@ -71,6 +72,7 @@ export function ClientSelect({
   allLabel = "All Clients",
   compact = false,
   isLoading = false,
+  showLocation = false,
   error,
   className = "",
 }: ClientSelectProps) {
@@ -233,7 +235,7 @@ export function ClientSelect({
               {(selectedClient.client_id || selectedClient.code) && (
                 <span className="text-[10px] font-mono text-sky-600 dark:text-sky-400 font-semibold truncate leading-tight">
                   {selectedClient.client_id || selectedClient.code}
-                  {clientLocationStr ? ` • ${clientLocationStr}` : ""}
+                  {showLocation && clientLocationStr ? ` • ${clientLocationStr}` : ""}
                 </span>
               )}
             </div>
@@ -407,9 +409,9 @@ export function ClientSelect({
                                 {c.client_id || c.code}
                               </span>
                             )}
-                            {cLoc && (
+                            {(showLocation ? cLoc : c.city) && (
                               <span className="text-[var(--color-mute)] truncate">
-                                {(c.client_id || c.code) ? "• " : ""}{cLoc}
+                                {(c.client_id || c.code) ? "• " : ""}{showLocation ? cLoc : c.city}
                               </span>
                             )}
                           </div>

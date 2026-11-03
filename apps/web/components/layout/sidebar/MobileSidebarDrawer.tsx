@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,10 +19,16 @@ interface MobileSidebarDrawerProps {
 
 export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSidebarDrawerProps) {
   const pathname = usePathname();
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
-    onClose();
-  }, [pathname, onClose]);
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Close drawer when route changes
+  useEffect(() => {
+    onCloseRef.current();
+  }, [pathname]);
 
   // Lock body scroll when drawer is open
   useEffect(() => {
@@ -40,11 +46,11 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
@@ -147,3 +153,5 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
     </AnimatePresence>
   );
 }
+
+export default MobileSidebarDrawer;

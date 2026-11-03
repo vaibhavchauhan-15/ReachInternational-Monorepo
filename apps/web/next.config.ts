@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 import { withSentryConfig } from "@sentry/nextjs/config";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 

@@ -47,7 +47,7 @@ export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
   id?: string;
 }
 
-export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
+export const SearchInput = React.forwardRef<any, SearchInputProps>(({
   value,
   onChangeText,
   onClear,
@@ -68,7 +68,7 @@ export const SearchInput = React.forwardRef<TextInput, SearchInputProps>(({
 }, ref) => {
   const { theme, isDark } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<any>(null);
 
   const textVariantResolved: TypeVariant = textVariant || (size === 'lg' ? 'body' : 'caption');
   const typeStyleObj = useTypeStyle(textVariantResolved);

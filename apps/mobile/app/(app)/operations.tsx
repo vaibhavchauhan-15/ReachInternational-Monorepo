@@ -4,14 +4,15 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  StatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useTheme,
   MobileHeader,
   HeaderActionItem,
+  ToggleSwitch,
   SegmentedToggle,
   useToast,
   ConfirmDialog,
@@ -80,7 +81,7 @@ export default function OperationsScreen() {
   } = useOperatorEntryContext(isOperator ? user?.id : undefined);
 
   // Ultra-lightweight HEAD count query for tab badge (transfers ZERO row payload, ~10ms)
-  const { data: operatorHistoryCount } = useOperatorHistoryCount(isOperator ? user?.id : undefined);
+  const { data: operatorHistoryCount, isLoading: isHistoryCountLoading } = useOperatorHistoryCount(isOperator ? user?.id : undefined);
 
   const lastParamTabRef = useRef(params.tab);
   const lastParamShiftRef = useRef(params.shift);
@@ -233,17 +234,18 @@ export default function OperationsScreen() {
   // Lazy loading state: History tab is only mounted on first user visit, then preserved in memory
   const [hasLoadedHistory, setHasLoadedHistory] = useState(() => activeTab === 'history');
 
-  const segmentedItems = useMemo(
+  const toggleOptions = useMemo(
     () => [
       { id: 'entry' as const, label: 'Shift' },
       {
         id: 'history' as const,
         label: 'Log History',
-        count: isOperator && operatorHistoryCount && operatorHistoryCount > 0 ? operatorHistoryCount : undefined,
+        count: isOperator && !isHistoryCountLoading && operatorHistoryCount && operatorHistoryCount > 0 ? operatorHistoryCount : undefined,
       },
     ],
-    [isOperator, operatorHistoryCount]
+    [isOperator, isHistoryCountLoading, operatorHistoryCount]
   );
+  const segmentedItems = toggleOptions;
 
   const handleTabChange = useCallback(
     (tab: 'entry' | 'history') => {
@@ -259,7 +261,7 @@ export default function OperationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
@@ -269,14 +271,15 @@ export default function OperationsScreen() {
         actions={headerActions}
       />
 
-      {/* 2. TOP NAVBAR (SEGMENTED CONTROL: LOG ENTRY VS LOG HISTORY - 100% Webapp Parity) */}
+      {/* 2. TOP NAVBAR (TOGGLE SWITCH: SHIFT VS LOG HISTORY) */}
       {(isOperator || activeTab === 'entry' || activeTab === 'history') && (
-        <View style={styles.segmentedToggleWrapper}>
-          <SegmentedToggle<'entry' | 'history'>
-            items={segmentedItems}
+        <View style={styles.toggleSwitchWrapper}>
+          <ToggleSwitch<'entry' | 'history'>
+            options={toggleOptions}
             value={activeTab === 'history' ? 'history' : 'entry'}
             onChange={handleTabChange}
             size="md"
+            fullWidth
           />
         </View>
       )}
@@ -508,11 +511,19 @@ const styles = StyleSheet.create({
     maxWidth: 1200,
     alignSelf: 'center',
   },
+  toggleSwitchWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
+    width: '100%',
+  },
   segmentedToggleWrapper: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 6,
     backgroundColor: 'transparent',
+    width: '100%',
   },
   contentScroll: {
     flex: 1,

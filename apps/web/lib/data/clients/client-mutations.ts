@@ -129,6 +129,35 @@ export async function createClient(
       };
     }
 
+    // Automatically provision S00 default site for this newly created client
+    try {
+      let stateId = 27;
+      if (data.state) {
+        const { data: stRow } = await supabase
+          .from("states")
+          .select("id")
+          .ilike("name", data.state.trim())
+          .maybeSingle();
+        if (stRow?.id) stateId = stRow.id;
+      }
+
+      await supabase.from("client_sites").insert([
+        {
+          client_id: createdClient.id,
+          site_code: `${createdClient.client_id || createdClient.code || "CLI"}-S00`,
+          site_name: `${createdClient.company_name} - Main Site`,
+          street: resolvedStreet || "Head Office",
+          city: data.city.trim() || "City",
+          district: data.district.trim() || data.city.trim() || "District",
+          state_id: stateId,
+          pincode: data.pincode.trim() || "110001",
+          status: "active",
+        },
+      ]);
+    } catch (sErr) {
+      console.warn("Auto-creation of S00 site warning:", sErr);
+    }
+
     if (currentUserId) {
       await logAudit({
         user_id: currentUserId,

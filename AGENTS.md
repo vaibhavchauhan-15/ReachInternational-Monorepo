@@ -31,7 +31,7 @@ AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 │   ├── 07-accessibility-testing.md ← WCAG 2.2 AA, keyboard, screen readers, ARIA
 │   ├── 08-security-testing.md     ← ASVS, negative authorization, RLS & secrets
 │   ├── 09-performance-testing.md  ← Web Vitals, bundles, query p95 & Hermes
-│   ├── 10-native-mobile-testing.md ← Expo SDK 57, iOS/Android, SecureStore & Touch
+│   ├── 10-native-mobile-testing.md ← Expo SDK 58, iOS/Android, SecureStore & Touch
 │   ├── 11-marketing-seo-testing.md ← Public marketing SEO, Sitemap & Robots
 │   ├── 12-marketing-ai-crawler-llm.md ← AI crawler policies & LLM discoverability
 │   ├── 13-regression-release-testing.md ← Level 3 release acceptance battery
@@ -54,7 +54,7 @@ AGENTS.md                          ← YOU ARE HERE (global engineering rules)
 │   └── security/                  ← Web-scoped security policies (Next.js 16 App Router)
 ├── apps/mobile/
 │   ├── AGENTS.md                  ← React Native / Expo-specific rules
-│   └── security/                  ← Mobile-scoped security policies (Expo SDK 57)
+│   └── security/                  ← Mobile-scoped security policies (Expo SDK 58)
 ├── packages/design-tokens/AGENTS.md ← Shared design tokens & Geist theme rules
 ├── packages/permissions/AGENTS.md   ← Canonical RBAC & permission matrices
 ├── packages/types/AGENTS.md         ← Shared TypeScript data models & schemas
@@ -149,7 +149,7 @@ Before planning, editing, analyzing, or executing anything, every AI agent MUST 
    - `rules/testing/07-accessibility-testing.md` (WCAG 2.2 AA, axe-core, keyboard, contrast, ARIA)
    - `rules/testing/08-security-testing.md` (ASVS, negative authorization, RLS & secrets)
    - `rules/testing/09-performance-testing.md` (Web Vitals, bundles, query p95 & Hermes)
-   - `rules/testing/10-native-mobile-testing.md` (Expo SDK 57, iOS/Android, SecureStore & Touch)
+   - `rules/testing/10-native-mobile-testing.md` (Expo SDK 58, iOS/Android, SecureStore & Touch)
    - `rules/testing/11-marketing-seo-testing.md` (Public marketing SEO, Sitemap & Robots)
    - `rules/testing/12-marketing-ai-crawler-llm.md` (AI crawler policies & LLM discoverability)
    - `rules/testing/13-regression-release-testing.md` (Level 3 release acceptance battery)
@@ -406,23 +406,23 @@ Web and Native Mobile are two views of **ONE SINGLE SYSTEM**. They must achieve 
 1. Inspect Web implementation (`apps/web`).
 2. Inspect Mobile implementation (`apps/mobile`).
 3. Standardize tokens from `@reachinternational/design-tokens`.
-4. Apply platform-appropriate architecture: Next.js 16.2 App Router (RSC, DAL, Server Actions) on Web; Expo SDK 57 (TanStack Query, hardware-backed SecureStore, offline queue, touch cards, min 44px touch targets, haptics) on Mobile.
+4. Apply platform-appropriate architecture: Next.js 16.2 App Router (RSC, DAL, Server Actions) on Web; Expo SDK 58 (TanStack Query, hardware-backed SecureStore, offline queue, touch cards, min 44px touch targets, haptics) on Mobile.
 5. Mobile touch adaptations (touch cards, bottom sheets, scrollable horizontal filter strips) are responsive ergonomics, NEVER visual, color, or behavioral drift.
 
 ---
 
 ## 10. SECURITY ENFORCEMENT & MANDATORY AI WORKFLOW RULE
 
-> **CRITICAL REQUIREMENT**: AI agents MUST consult and enforce the repository security baseline ([`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md)) and application-scoped security rules for EVERY task they perform.
+> **CRITICAL REQUIREMENT**: AI agents MUST consult and enforce the repository security baseline ([`security/SECURITY-RULES.md`](security/SECURITY-RULES.md)) and application-scoped security rules for EVERY task they perform.
 
 Every task involving code modification MUST follow this mandatory security workflow:
 
 ### Phase A: Before Changes (Discovery & Threat Assessment)
-1. **Read Security Baseline**: Consult [`security/README.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/README.md), [`security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-RULES.md), and the target application's security policy:
-   - Web: [`apps/web/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/security/SECURITY-RULES.md)
-   - Mobile: [`apps/mobile/security/SECURITY-RULES.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/security/SECURITY-RULES.md)
-2. **Inspect Trust Boundaries & Attack Surface**: Review [`security/ATTACK-SURFACE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/ATTACK-SURFACE.md) and [`security/THREAT-MODEL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/THREAT-MODEL.md) for affected entry points.
-3. **Verify Applicable Checklist Items**: Identify specific controls required from [`security/SECURITY-CHECKLIST.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-CHECKLIST.md).
+1. **Read Security Baseline**: Consult [`security/README.md`](security/README.md), [`security/SECURITY-RULES.md`](security/SECURITY-RULES.md), and the target application's security policy:
+   - Web: [`apps/web/security/SECURITY-RULES.md`](apps/web/security/SECURITY-RULES.md)
+   - Mobile: [`apps/mobile/security/SECURITY-RULES.md`](apps/mobile/security/SECURITY-RULES.md)
+2. **Inspect Trust Boundaries & Attack Surface**: Review [`security/ATTACK-SURFACE.md`](security/ATTACK-SURFACE.md) and [`security/THREAT-MODEL.md`](security/THREAT-MODEL.md) for affected entry points.
+3. **Verify Applicable Checklist Items**: Identify specific controls required from [`security/SECURITY-CHECKLIST.md`](security/SECURITY-CHECKLIST.md).
 4. **Determine Scope & Roles**: Map required permissions against canonical 6 roles (`super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`) in `@reachinternational/permissions`.
 
 ### Phase B: During Changes (Security Invariants)
@@ -491,7 +491,7 @@ For each affected workflow check:
 
 ## 14. TESTING GATE & MANDATORY TESTING STANDARDS ENFORCEMENT
 
-> **AUTHORITATIVE TESTING DIRECTORY**: [`rules/testing/`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/README.md)
+> **AUTHORITATIVE TESTING DIRECTORY**: [`rules/testing/`](rules/testing/README.md)
 > *Every AI coding agent and subagent MUST consult and enforce the centralized testing rules in `rules/testing/` for EVERY development task before declaring completion.*
 
 ### Mandatory 8-Step Agent Testing Workflow:
@@ -503,7 +503,7 @@ Every AI agent and subagent MUST:
 5. **Run relevant tests after implementation** using official project commands.
 6. **Fix newly introduced failures** before running further tests (`FAIL → DIAGNOSE → FIX → RE-VERIFY`).
 7. **Run regression checks according to risk** (Level 1, Level 2, or Level 3 acceptance).
-8. **Provide actual test results in the final report** adhering to the standardized schema in [`14-test-reporting.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/14-test-reporting.md).
+8. **Provide actual test results in the final report** adhering to the standardized schema in [`14-test-reporting.md`](rules/testing/14-test-reporting.md).
 
 ### Task Scope Enforcement:
 Apply this testing requirement to:

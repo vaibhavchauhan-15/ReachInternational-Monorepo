@@ -614,7 +614,7 @@ function renderBadgeChildren(
   return children;
 }
 
-const Badge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<View>> = React.forwardRef<
+const Badge = React.forwardRef<
   React.ElementRef<typeof View>,
   BadgeProps
 >(

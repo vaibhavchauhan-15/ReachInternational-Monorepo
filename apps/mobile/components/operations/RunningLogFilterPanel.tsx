@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import {
   SearchableSelect,
+  ToggleSwitch,
   SegmentedToggle,
   Badge,
   useTheme,
@@ -102,17 +103,12 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
 
     // Client select options (code: CLI-xxx)
     const clientOptions = useMemo(() => {
-      return clients.map((c) => {
-        const address = [c.street, c.city, c.district, c.state, c.pincode]
-          .filter(Boolean)
-          .join(', ');
-        return {
-          value: c.id,
-          label: c.company_name,
-          code: c.code || 'CLI',
-          description: address || undefined,
-        };
-      });
+      return clients.map((c) => ({
+        value: c.id,
+        label: c.company_name,
+        code: c.code || 'CLI',
+        description: c.city || undefined,
+      }));
     }, [clients]);
 
     // Filter sites for selected client (code: site_code)
@@ -123,12 +119,15 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
 
     const siteOptions = useMemo(() => {
       const base = [{ value: 'all', label: 'All Sites & Locations', code: 'ALL' }];
-      const dynamicSites = currentClientSites.map((s) => ({
-        value: s.id || s.site_name,
-        label: s.site_name,
-        code: s.site_code || 'SITE',
-        description: s.city || undefined,
-      }));
+      const dynamicSites = currentClientSites.map((s) => {
+        const code = (s as any).code || (s.site_code ? s.site_code.replace(/^.*-S/, 'S') : 'S00');
+        return {
+          value: s.id,
+          label: `${code} · ${s.site_name}`,
+          code,
+          description: (s as any).address_full || s.city || undefined,
+        };
+      });
       return [...base, ...dynamicSites];
     }, [currentClientSites]);
 
@@ -183,8 +182,8 @@ export const RunningLogFilterPanel = React.memo<RunningLogFilterPanelProps>(
         {/* Optional Top View Mode Switcher */}
         {showToggle && (
           <View style={styles.topRow}>
-            <SegmentedToggle<LogsViewMode>
-              items={[
+            <ToggleSwitch<LogsViewMode>
+              options={[
                 { id: 'machine', label: 'Machine' },
                 { id: 'client', label: 'Clients' },
                 { id: 'operator', label: 'Operator' },

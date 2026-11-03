@@ -71,12 +71,12 @@ export default function MotionLabScreen() {
   const [pulseCount, setPulseCount] = useState(0);
   const [checkKey, setCheckKey] = useState(0);
 
-  const popoverAnchorRef = useRef<View>(null);
+  const popoverAnchorRef = useRef<any>(null);
   const [popoverAnchor, setPopoverAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const openPopover = () => {
     if (popoverAnchorRef.current) {
-      popoverAnchorRef.current.measureInWindow((x, y, width, height) => {
+      popoverAnchorRef.current.measureInWindow((x: any, y: any, width: any, height: any) => {
         setPopoverAnchor({ x, y, width, height });
         setShowPopover(true);
       });

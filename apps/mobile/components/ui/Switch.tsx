@@ -45,7 +45,7 @@ const SPRING_CONFIG = {
   mass: 0.6,
 };
 
-export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
+export const Switch = React.forwardRef<any, SwitchProps>(function Switch(
   {
     value,
     checked,
@@ -142,7 +142,7 @@ export const Switch = React.forwardRef<View, SwitchProps>(function Switch(
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: localChecked, disabled }}
       aria-checked={localChecked}
-      android_ripple={null}
+      android_ripple={undefined}
       disabled={disabled}
       onPress={handlePress}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

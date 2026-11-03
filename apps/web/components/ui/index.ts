@@ -151,6 +151,7 @@ export { Badge } from "./Badge";
 export { MetricCard } from "./MetricCard";
 export { KPICard, type KPICardProps, type KPIVariant } from "./KPICard";
 export { KPIGrid, type KPIGridProps } from "./KPIGrid";
+export { ICONS, getIcon, type IconName } from "./icon-map";
 export { Sparkline } from "./Sparkline";
 export { CommandPalette } from "./CommandPalette";
 export { RefreshButton } from "./RefreshButton";

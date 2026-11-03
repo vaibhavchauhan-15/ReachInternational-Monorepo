@@ -16,6 +16,7 @@ import {
   useTheme,
   Text,
   Switch,
+  ToggleSwitch,
   SegmentedToggle,
 } from '../../../../components/ui';
 import { Pressable } from '../../../../components/ui/touch/Pressable';
@@ -132,8 +133,8 @@ export default function PreferencesSettingsScreen() {
           </View>
         </View>
 
-        <SegmentedToggle
-          items={THEME_OPTIONS}
+        <ToggleSwitch
+          options={THEME_OPTIONS}
           value={mode}
           onChange={handleThemeChange}
           size="md"

@@ -72,10 +72,11 @@ export function PDFReportHeader({
         </div>
 
         {/* Metadata Strip */}
-        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-0.5 text-[8.5px] sm:text-[9px] text-neutral-800 font-medium leading-tight pt-0.5 border-t border-neutral-200">
+        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-0.5 text-[9px] sm:text-[9.5px] text-neutral-900 font-semibold leading-tight pt-1 border-t border-neutral-300">
           {metadataItems.map((item, idx) => (
             <div key={idx}>
-              <strong>{item.label}:</strong> {item.value}
+              <strong className="font-black text-black">{item.label}:</strong>{" "}
+              <span className="font-bold text-neutral-800">{item.value}</span>
             </div>
           ))}
         </div>
@@ -113,10 +114,11 @@ export function PDFReportHeader({
       </div>
 
       {/* Metadata Strip */}
-      <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-0.5 text-[8.5px] sm:text-[9px] text-neutral-800 font-medium leading-tight pt-0.5 border-t border-neutral-200">
+      <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-0.5 text-[9px] sm:text-[9.5px] text-neutral-900 font-semibold leading-tight pt-1 border-t border-neutral-300">
         {metadataItems.map((item, idx) => (
           <div key={idx}>
-            <strong>{item.label}:</strong> {item.value}
+            <strong className="font-black text-black">{item.label}:</strong>{" "}
+            <span className="font-bold text-neutral-800">{item.value}</span>
           </div>
         ))}
       </div>

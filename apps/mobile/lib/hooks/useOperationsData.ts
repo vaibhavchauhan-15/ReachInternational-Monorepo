@@ -67,8 +67,13 @@ export interface ClientSiteRecord {
   client_id: string;
   site_name: string;
   site_code?: string;
+  code?: string;
   street?: string;
   city?: string;
+  district?: string;
+  pincode?: string;
+  address_full?: string;
+  status?: string;
 }
 
 export interface OperationsMasterData {
@@ -198,7 +203,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
           .order('company_name'),
         supabase
           .from('client_sites')
-          .select('id, client_id, site_name, site_code, street, city')
+          .select('id, client_id, site_name, site_code, street, city, district, pincode, status')
           .order('site_name'),
       ]);
 
@@ -220,7 +225,15 @@ export function useOperationsMasterData(enabled: boolean = true) {
           : null,
       })) as OperatorRecord[];
       const clientsList: ClientRecord[] = (clientsRes.data || []) as ClientRecord[];
-      const clientSites: ClientSiteRecord[] = (sitesRes.data || []) as ClientSiteRecord[];
+      const clientSites: ClientSiteRecord[] = (sitesRes.data || []).map((s: any) => {
+        const code = s.site_code ? s.site_code.replace(/^.*-S/, 'S') : 'S00';
+        const addressFull = [s.street, s.city, s.district, s.pincode].filter(Boolean).join(', ');
+        return {
+          ...s,
+          code,
+          address_full: addressFull,
+        };
+      });
 
       return {
         machinesList,

@@ -66,7 +66,7 @@ function Skeleton({
   // Light: #ebebeb (subtle hairline gray against #ffffff card / #fafafa canvas)
   const defaultBg = isDark ? '#262626' : '#ebebeb';
 
-  const dynamicStyle: ViewStyle = {};
+  const dynamicStyle: any = {};
   if (width !== undefined) dynamicStyle.width = width as any;
   if (height !== undefined) dynamicStyle.height = height;
   if (borderRadius !== undefined) dynamicStyle.borderRadius = borderRadius;

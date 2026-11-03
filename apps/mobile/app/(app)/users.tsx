@@ -211,7 +211,7 @@ export default function UsersScreen() {
   const setDateRangeFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('dateRangeFilter', val), [setFilter]);
   const setSortBy = useCallback((val: string | ((prev: string) => string)) => setFilter('sortBy', val), [setFilter]);
 
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<any>(null);
 
   // Synchronize route search param if supplied (e.g. from HR link)
   useEffect(() => {

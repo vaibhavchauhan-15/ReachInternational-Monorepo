@@ -220,8 +220,7 @@ export function MobileDocumentViewerModal({
       <View style={[styles.modalOverlay, { backgroundColor: theme.colors.canvas }]}>
         <StatusBar
           barStyle={isDark ? 'light-content' : 'dark-content'}
-          translucent
-        />
+          />
         <SafeAreaView
           style={styles.safeArea}
           edges={['top', 'bottom', 'left', 'right']}

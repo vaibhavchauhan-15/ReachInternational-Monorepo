@@ -368,9 +368,9 @@ export function useClientDetailData(rawId: string, activeTab: ClientDetailTabKey
     isLoading: isSitesLoading,
     refetch: refetchSites,
   } = useQuery<ClientSiteItem[]>({
-    queryKey: ['clientDetail', clientId, 'sites'],
+    queryKey: ['client-sites', clientId],
     enabled: Boolean(clientId) && activeTab === 'sites',
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!clientId) return [];
       const { data, error } = await supabase
@@ -754,14 +754,10 @@ export function useClientDetailData(rawId: string, activeTab: ClientDetailTabKey
     }) => {
       if (!clientId) throw new Error('No client selected');
 
-      // Auto-generate site_code if needed
-      const siteCode = `SITE-${Math.floor(1000 + Math.random() * 9000)}`;
-
       const { data, error } = await supabase
         .from('client_sites')
         .insert({
           client_id: clientId,
-          site_code: siteCode,
           site_name: payload.site_name,
           street: payload.street || '',
           city: payload.city,
@@ -791,6 +787,7 @@ export function useClientDetailData(rawId: string, activeTab: ClientDetailTabKey
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-sites', clientId] });
       queryClient.invalidateQueries({ queryKey: ['clientDetail', clientId, 'sites'] });
       queryClient.invalidateQueries({ queryKey: ['clientDetail', clientId, 'summary'] });
       queryClient.invalidateQueries({ queryKey: ['clients'] });

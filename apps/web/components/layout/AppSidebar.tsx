@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   AnimatedHome,
   AnimatedUsers,
@@ -15,7 +15,6 @@ import {
   AnimatedBriefcase,
   AnimatedFileText,
 } from "@/components/ui/animated-icons";
-import dynamic from "next/dynamic";
 import {
   Sidebar,
   SidebarFooter,
@@ -29,16 +28,8 @@ import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { QuickAccessTrigger } from "./sidebar/QuickAccessTrigger";
 import { SidebarNavigation } from "./sidebar/SidebarNavigation";
 import { UserProfileDropdown } from "./sidebar/UserProfileDropdown";
-
-const CommandPalette = dynamic(
-  () => import("@/components/ui/CommandPalette").then((mod) => mod.CommandPalette),
-  { ssr: false }
-);
-
-const MobileSidebarDrawer = dynamic(
-  () => import("./sidebar/MobileSidebarDrawer").then((mod) => mod.MobileSidebarDrawer),
-  { ssr: false }
-);
+import { MobileSidebarDrawer } from "./sidebar/MobileSidebarDrawer";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 
 export { SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED };
 export type { NavItem, AppSidebarProps };
@@ -144,6 +135,10 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
   const [cmdOpen, setCmdOpen] = useState(false);
   const { mobileOpen, setMobileOpen } = useSidebar();
 
+  const handleOpenCmd = useCallback(() => setCmdOpen(true), []);
+  const handleCloseCmd = useCallback(() => setCmdOpen(false), []);
+  const handleCloseMobileDrawer = useCallback(() => setMobileOpen(false), [setMobileOpen]);
+
   const visibleMainItems = useMemo(() => {
     const filtered = mainNavItems.filter(
       (item) => !item.roles || item.roles.includes(user.role)
@@ -181,7 +176,7 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         {/* QUICK ACCESS ZONE */}
         <QuickAccessTrigger
           collapsed={collapsed}
-          onOpenCommandPalette={() => setCmdOpen(true)}
+          onOpenCommandPalette={handleOpenCmd}
         />
 
         {/* NAVIGATION ZONE */}
@@ -204,13 +199,13 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         user={user}
         items={visibleMainItems}
         isOpen={mobileOpen}
-        onClose={() => setMobileOpen(false)}
+        onClose={handleCloseMobileDrawer}
       />
 
       {/* Global Command Palette */}
       <CommandPalette
         isOpen={cmdOpen}
-        onClose={() => setCmdOpen(false)}
+        onClose={handleCloseCmd}
       />
     </>
   );

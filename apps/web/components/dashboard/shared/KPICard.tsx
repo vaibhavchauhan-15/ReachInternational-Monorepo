@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useRef } from "react";
+import React from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { AnimatedCounter } from "@/components/ui/Motion";
 import type { LucideIcon } from "lucide-react";
+import { getIcon, type IconName } from "@/components/ui/icon-map";
 
 export interface KPICardProps {
   label: string;
   value: number | string;
-  icon: LucideIcon | React.ComponentType<{ className?: string; size?: number | string; ref?: any }> | React.ReactNode;
+  icon: IconName | LucideIcon | React.ComponentType<{ className?: string; size?: number | string; ref?: React.Ref<unknown> }> | React.ReactNode;
   variant?: "default" | "warning" | "error" | "success" | "info";
   href?: string;
   onClick?: () => void;
@@ -58,7 +59,7 @@ const variantStyles = {
 export function KPICard({
   label,
   value,
-  icon: Icon,
+  icon,
   variant = "default",
   href,
   onClick,
@@ -67,25 +68,30 @@ export function KPICard({
   trend,
   className = "",
 }: KPICardProps) {
-  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const styles = variantStyles[variant] || variantStyles.default;
-
-  const handleMouseEnter = () => {
-    iconRef.current?.startAnimation?.();
-  };
-
-  const handleMouseLeave = () => {
-    iconRef.current?.stopAnimation?.();
-  };
-
   const isInteractive = Boolean(href || onClick);
+  const resolvedIcon = typeof icon === "string" ? getIcon(icon) : icon;
+
+  const renderIcon = () => {
+    if (React.isValidElement(resolvedIcon)) {
+      return React.cloneElement(resolvedIcon as React.ReactElement<{ size?: number; className?: string }>, {
+        size: 15,
+        className: "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0",
+      });
+    }
+    if (typeof resolvedIcon === "function" || (typeof resolvedIcon === "object" && resolvedIcon !== null)) {
+      return React.createElement(resolvedIcon as React.ComponentType<{ size?: number; className?: string }>, {
+        size: 15,
+        className: "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0",
+      });
+    }
+    return null;
+  };
 
   const content = (
     <Card
       padding="none"
       onClick={onClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       className={`relative overflow-hidden p-3 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] touch-manipulation select-none ${
         isInteractive
           ? "hover:border-[var(--color-ink)]/30 hover:shadow-whisper hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer motion-reduce:hover:translate-y-0"
@@ -98,16 +104,7 @@ export function KPICard({
           {label}
         </span>
         <div className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full shrink-0 ${styles.iconBg}`}>
-          {React.isValidElement(Icon) ? (
-            React.cloneElement(Icon as React.ReactElement<any>, {
-              ref: iconRef,
-              size: 15,
-              className: "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0",
-            })
-          ) : typeof Icon === "function" || (typeof Icon === "object" && Icon !== null) ? (
-            // @ts-expect-error Icon can be component type
-            <Icon ref={iconRef} size={15} className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          ) : null}
+          {renderIcon()}
         </div>
       </div>
 
@@ -143,8 +140,6 @@ export function KPICard({
       <Link
         href={href}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)] rounded-[var(--radius-md)]"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         {content}
       </Link>

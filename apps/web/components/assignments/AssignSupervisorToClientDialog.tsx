@@ -16,7 +16,7 @@ import { getClientSitesAction } from "@/app/actions/client-sites";
 import { getClientOptionsAction } from "@/app/actions/clients";
 import type { CandidateSupervisorItem, ClientSupervisorItem } from "@/lib/data/clients";
 import type { ClientSite } from "@/lib/data/clients/client-sites";
-import { formatEmployeeId } from "@reachinternational/utils";
+import { formatEmployeeId, formatSiteDropdownLabel } from "@reachinternational/utils";
 
 export interface AssignSupervisorToClientDialogProps {
   isOpen: boolean;
@@ -236,7 +236,7 @@ export function AssignSupervisorToClientDialog({
       { value: "", label: "All Sites (Full Client Access)" },
       ...sites.map((s) => ({
         value: s.id,
-        label: `${s.site_name} (${s.site_code})${s.city ? ` — ${s.city}` : ""}`,
+        label: formatSiteDropdownLabel(s),
       })),
     ];
   }, [sites]);

@@ -8,14 +8,6 @@ import {
   AlertWidget,
   PrimaryAction,
 } from "../shared";
-import {
-  Wrench,
-  Users,
-  CheckCircle2,
-  Clock,
-  Timer,
-  FileSpreadsheet,
-} from "lucide-react";
 
 interface SupervisorDashboardViewProps {
   userId: string;
@@ -54,28 +46,28 @@ export async function SupervisorDashboardView({
           <KPICard
             label="Supervised Machines"
             value={assignedMachines}
-            icon={Wrench}
+            icon="wrench"
             href="/machines"
             variant="default"
           />
           <KPICard
             label="Field Operators"
             value={assignedOperators}
-            icon={Users}
+            icon="users"
             href="/operations"
             variant="info"
           />
           <KPICard
             label="Logs Submitted Today"
             value={submitted}
-            icon={CheckCircle2}
+            icon="check-circle"
             href="/operations"
             variant="success"
           />
           <KPICard
             label="Submissions Pending"
             value={pending}
-            icon={Clock}
+            icon="clock"
             href="/operations"
             variant={pending > 0 ? "warning" : "default"}
           />
@@ -101,7 +93,7 @@ export async function SupervisorDashboardView({
           <KPICard
             label="Overtime Shifts"
             value={overtimeEntries}
-            icon={Timer}
+            icon="timer"
             href="/operations"
             variant={overtimeEntries > 0 ? "info" : "default"}
           />
@@ -118,14 +110,14 @@ export async function SupervisorDashboardView({
             title="Review Daily Shift Logs"
             description="Examine operator entries, verify start/end meter readings, and approve logs"
             href="/operations"
-            icon={FileSpreadsheet}
+            icon="file-spreadsheet"
             variant="primary"
           />
           <PrimaryAction
             title="Supervised Machine Status"
             description="Check current machine health, worksite locations, and meter records"
             href="/machines"
-            icon={Wrench}
+            icon="wrench"
             variant="secondary"
           />
         </div>

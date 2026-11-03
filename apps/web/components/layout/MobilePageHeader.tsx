@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
+
 import {
   AnimatedArrowLeft,
   AnimatedSearch,
@@ -24,11 +24,7 @@ import {
   AnimatedTrash2,
 } from "@/components/ui/animated-icons";
 
-const CommandPalette = dynamic(
-  () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
-  { ssr: false }
-);
-
+import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ScrollCloud } from "@/components/ui/ScrollCloud";
 import { recordAppNavigation, popPreviousAppRoute } from "@/lib/navigation";
 import { usePageActions } from "@/components/layout/PageActionContext";

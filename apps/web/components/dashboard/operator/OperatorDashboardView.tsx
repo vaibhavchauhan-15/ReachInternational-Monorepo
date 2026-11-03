@@ -7,8 +7,6 @@ import {
   AlertWidget,
 } from "../shared";
 import {
-  Wrench,
-  Building2,
   Gauge,
   Clock,
   MapPin,
@@ -102,7 +100,7 @@ export async function OperatorDashboardView({
           <StatusCard
             title="Last Recorded Meter (HMR)"
             status="default"
-            icon={Gauge}
+            icon="gauge"
             label={data?.today?.lastHmr != null ? `${data.today.lastHmr.toFixed(1)} hrs` : "No prior logs"}
             description="Use as starting meter for your next log"
             monoValue
@@ -215,7 +213,7 @@ export async function OperatorDashboardView({
           {/* Machine Card */}
           <StatusCard
             title="Assigned Machine"
-            icon={Wrench}
+            icon="wrench"
             status="default"
           >
             {data.machine ? (
@@ -243,7 +241,7 @@ export async function OperatorDashboardView({
           {/* Client & Worksite Card */}
           <StatusCard
             title="Client & Location"
-            icon={Building2}
+            icon="building"
             status="default"
           >
             {data.client ? (
