@@ -1,22 +1,20 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Normalize Client Sites (S00 Default Site Architecture, Deduplication, Single DAL & Fast Backend)
-- **Status**: 🟢 Clean / Verified & Production Ready
-- **Last Verified**: 2026-11-02
+- **Current Task**: Production Build Verification & Web Deployment Readiness Audit
+- **Status**: 🟢 Clean / Verified & Production Ready for Deployment
+- **Last Verified**: 2026-11-03
 - **Turborepo Typecheck**: 7/7 packages passed with 0 errors (`pnpm turbo run typecheck`)
-- **Monorepo Test Suite**: 10/10 suites passed cleanly (`node scripts/run-all-tests.mjs`)
+- **Monorepo Test Suite**: 15/15 suites passed cleanly (`node scripts/run-all-tests.mjs`)
 - **Mobile Verification Suite**: 357/357 assertions passed cleanly (`node apps/mobile/run-tests.mjs`)
 - **Typography Linter**: 0 raw typography violations (`node scripts/check-typography.mjs`)
+- **Web Production Build**: Next.js 16.2.12 App Router built with 0 errors across all 28 static and dynamic routes (`pnpm --filter @reachinternational/web build`)
+- **Monorepo Production Build**: 7/7 workspace packages compiled successfully with Turborepo (`pnpm build`)
+- **Linter**: ESLint passed with 0 errors (`pnpm lint`)
+- **Database Schema & Seed Verification**: Dev DB verified (`node supabase/verify_seed.mjs`)
 - **Deliverables Completed**:
-  - `supabase/migrations/182_normalize_client_sites_s00.sql`: Added `site_no`, `code`, `legacy_code`, `address_full`, `deleted_at`, `is_default`; temporarily drops `trg_enforce_site_code_immutable` and `trg_assign_site_code` during renumbering and updates `site_code` through a safe two-pass temporary assignment (`TMP-` prefix) to prevent `23514: site_code is immutable once assigned` and unique index collisions; temporarily drops `trg_enforce_machine_hour_logs_immutable` during `machine_hour_logs.site_id` backfill; updates `assign_site_code()` trigger for S00, S01, S02 sequences; deploys `create_default_client_site()` trigger on `public.clients` for automatic S00 site provisioning; deploys `get_client_with_sites` and `get_client_sites_dropdown` RPCs.
-  - `packages/types`: Added `ClientSite`, `ClientSiteDropdownItem`, `ClientWithSitesResponse`.
-  - `packages/validation`: Added `ClientSiteDropdownItemSchema`, updated `SiteSchema`.
-  - `packages/utils`: Added `formatSiteDropdownLabel` (`S00 · Fort Songadh`), `formatSiteDropdownDescription`, `formatClientDropdownLabel` (`CLI-0002 · JK Paper Ltd.`); 7/7 unit tests passing.
-  - `apps/web/lib/data/clients/client-sites.ts`: Single authoritative DAL module for `client_sites` with React `cache()` and tag-based invalidation (`TAGS.clientSites(clientId)`).
-  - `apps/web/lib/data/clients/client-mutations.ts`: Auto-provisions `S00` default site upon client creation.
-  - `apps/web/lib/data/operations/operations-client-logs.ts`: Filters strictly by `site_id` (UUID), eradicating raw location string fallback and duplicate dropdown options.
-  - `apps/web/components/ui/ClientSelect.tsx`: Cleans client dropdown labels to show only client code and company name.
-  - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: Standardized location select to `S00 · Site Name` with `address_full` secondary text.
-  - `apps/web/components/clients/SitesList.tsx`: Displays `S00 · CLI-XXXX-S00` with `Default` badge.
-  - `apps/mobile`: Synchronized `useOperationsData.ts`, `RunningLogFilterPanel.tsx`, `MachineModal.tsx`, `useClientDetailData.ts`, and `ClientDetailView.tsx` with unified `['client-sites', clientId]` query key (staleTime: 5 mins).
+  - `pnpm build`: Next.js Turbopack production compilation succeeded; 28 static and dynamic routes prerendered / compiled without error.
+  - `apps/web/next.config.ts`: Cleaned unused imports; confirmed security headers (CSP, HSTS, X-Frame-Options, Permissions-Policy, strict cache-control for dynamic authenticated routes).
+  - `scripts/run-all-tests.mjs`: Expanded to 15 comprehensive suites covering security, parity, typography, touch ergonomics, RBAC permissions, shared utils, mobile flows, CORS, navigation feedback, RFQ system, running logs remarks/client-select, assignment standardization, dashboard standardization, machine client modal, and contact/SEO discoverability.
+  - Deployment Pre-Build Guards: Verified `guard-build.js` bypasses safely in production CI/Vercel environments (`CI=true` / `VERCEL=1`).
+  - Monorepo Hygiene: Removed accidental root `app.json` stub; confirmed single canonical `pnpm-lock.yaml`.

@@ -68,6 +68,36 @@ const SUITES = [
     args: ['supabase/tests/run_rfq_test.mjs'],
     domain: 'RFQ Schema, RLS, Buckets, RPC & Idempotency',
   },
+  {
+    name: 'Web Running Logs & Client Select Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-running-logs-remarks-and-client-select.mjs'],
+    domain: 'Remarks Filtering, S00 Client Site Integration & UI Parity',
+  },
+  {
+    name: 'Web Assignment Standardization Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-assignment-standardization.mjs'],
+    domain: 'Assignment Dialogs, Roles, Overlap Guards & Error Handling',
+  },
+  {
+    name: 'Web Dashboard Standardization Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-dashboard-standardization.mjs'],
+    domain: 'Dashboard Layout, High-Contrast CTAs & 6 Role Views',
+  },
+  {
+    name: 'Web Machine Client Modal Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-machine-client-modal.mjs'],
+    domain: 'Machine/Client Hierarchy & Multi-Site Auto Assignment',
+  },
+  {
+    name: 'Web Contact & SEO Discoverability Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-contact-page.mjs'],
+    domain: 'Contact Information, Schema.org JSON-LD & SEO Meta',
+  },
 ];
 
 console.log('\n================================================================');
