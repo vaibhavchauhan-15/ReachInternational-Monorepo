@@ -1,20 +1,29 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Production Build Verification & Web Deployment Readiness Audit
-- **Status**: 🟢 Clean / Verified & Production Ready for Deployment
-- **Last Verified**: 2026-11-03
-- **Turborepo Typecheck**: 7/7 packages passed with 0 errors (`pnpm turbo run typecheck`)
-- **Monorepo Test Suite**: 15/15 suites passed cleanly (`node scripts/run-all-tests.mjs`)
-- **Mobile Verification Suite**: 357/357 assertions passed cleanly (`node apps/mobile/run-tests.mjs`)
-- **Typography Linter**: 0 raw typography violations (`node scripts/check-typography.mjs`)
-- **Web Production Build**: Next.js 16.2.12 App Router built with 0 errors across all 28 static and dynamic routes (`pnpm --filter @reachinternational/web build`)
-- **Monorepo Production Build**: 7/7 workspace packages compiled successfully with Turborepo (`pnpm build`)
-- **Linter**: ESLint passed with 0 errors (`pnpm lint`)
-- **Database Schema & Seed Verification**: Dev DB verified (`node supabase/verify_seed.mjs`)
+- **Current Task**: Native App Theme Provider Performance Optimization & Instant Theme Switching
+- **Status**: 🟢 Clean / Verified & Production Ready
+- **Last Verified**: 2026-11-04
+- **Turborepo Typecheck**: All 7 packages passed with 0 errors (`pnpm typecheck`)
+- **Mobile Automated Verification Suite**: Passed 100% (357/357 scenarios) (`node apps/mobile/run-tests.mjs`)
+- **Settings & Navigation Workflows Suite**: Passed 100% (`node apps/mobile/test/test-settings-workflows.mjs`)
+- **Button & Badge Primitives Suite**: Passed 100% (36/36 and 61/61 scenarios)
+- **Splash Screen Suite**: Passed 100% (34/34 scenarios)
 - **Deliverables Completed**:
-  - `pnpm build`: Next.js Turbopack production compilation succeeded; 28 static and dynamic routes prerendered / compiled without error.
-  - `apps/web/next.config.ts`: Cleaned unused imports; confirmed security headers (CSP, HSTS, X-Frame-Options, Permissions-Policy, strict cache-control for dynamic authenticated routes).
-  - `scripts/run-all-tests.mjs`: Expanded to 15 comprehensive suites covering security, parity, typography, touch ergonomics, RBAC permissions, shared utils, mobile flows, CORS, navigation feedback, RFQ system, running logs remarks/client-select, assignment standardization, dashboard standardization, machine client modal, and contact/SEO discoverability.
-  - Deployment Pre-Build Guards: Verified `guard-build.js` bypasses safely in production CI/Vercel environments (`CI=true` / `VERCEL=1`).
-  - Monorepo Hygiene: Removed accidental root `app.json` stub; confirmed single canonical `pnpm-lock.yaml`.
+  - `apps/mobile/lib/theming/palettes.ts`:
+    - Precomputes and deeply freezes `LIGHT_THEME`, `DARK_THEME`, and `NAV_THEME` from `@reachinternational/design-tokens`.
+    - Zero runtime color calculation; pointer swap (O(1)) on theme toggle.
+  - `apps/mobile/lib/theming/store.ts`:
+    - Microscopic external store powered by `useSyncExternalStore`.
+    - Fine-grained selector hooks: `useIsDark()`, `useThemeMode()`, `useThemeColors()`, `useThemeColor()`, `useSetThemeMode()`.
+    - Single deduplicated `Appearance.addChangeListener` with Android backgrounding suppression (`AppState.currentState === 'active'`).
+    - Synchronous atomic native chrome updates (`expo-system-ui` / StatusBar).
+    - Deferred persistence via non-blocking asynchronous dispatch.
+  - `apps/mobile/lib/theming/makeStyles.ts`:
+    - Memoized 2-slot StyleSheet cache (`light`/`dark`) created lazily once per component.
+  - `apps/mobile/app/_layout.tsx` & `(app)/_layout.tsx`:
+    - Wired `NAV_THEME` into Expo Router `<NavThemeProvider value={navTheme}>`.
+    - Centralized StatusBar and decoupled stack/tab container re-renders.
+    - Removed redundant screen-level `<StatusBar>` elements across `machines.tsx`, `operations.tsx`, `running-logs.tsx`, `users.tsx`.
+  - `apps/mobile/components/ui/Card.tsx`, `Button.tsx`, `Badge.tsx`, `Text.tsx`:
+    - Replaced render-time style and color object allocations with memoized lookups and StyleSheets.
