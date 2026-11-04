@@ -8,7 +8,7 @@ import {
   Animated,
   Easing,
   Platform,
-  StatusBar,
+
   FlatList,
   ListRenderItem,
   useWindowDimensions,
@@ -30,6 +30,7 @@ import {
   EmptyState,
   ErrorState,
   Skeleton,
+  PermissionDeniedView,
 } from '../../components/ui';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { UserDetailView, type UserRecord } from '../../components/users';
@@ -164,14 +165,21 @@ export default function UsersScreen() {
   const normalizedRole = (currentUserRole || '').toLowerCase();
   const canAccessUsers = ['super_admin', 'admin', 'manager', 'hr', 'supervisor'].includes(normalizedRole);
 
-  useEffect(() => {
-    if (currentUserRole && !canAccessUsers) {
-      router.replace('/dashboard');
-    }
-  }, [currentUserRole, canAccessUsers, router]);
-
   if (currentUserRole && !canAccessUsers) {
-    return null;
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader
+          title="User Management"
+          showBack={true}
+          backRoute="/dashboard"
+        />
+        <PermissionDeniedView
+          featureName="User Management"
+          currentRole={currentUserRole}
+          requiredRoles={['super_admin', 'admin', 'manager', 'hr', 'supervisor']}
+        />
+      </View>
+    );
   }
 
   // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination)
@@ -1312,7 +1320,7 @@ export default function UsersScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
 
       {selectedUser ? (
         <UserDetailView

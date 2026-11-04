@@ -4,7 +4,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  StatusBar,
+
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -438,7 +438,7 @@ export default function RunningLogsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
 
       {/* Main Header with Back Arrow, Title, Search Icon, 3-Dot More Menu */}
       <MobileHeader

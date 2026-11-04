@@ -5,15 +5,14 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useTheme,
   MobileHeader,
   HeaderActionItem,
-  ToggleSwitch,
-  SegmentedToggle,
+  Button,
+  Text,
   useToast,
   ConfirmDialog,
 } from '../../components/ui';
@@ -261,7 +260,6 @@ export default function OperationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
@@ -271,16 +269,65 @@ export default function OperationsScreen() {
         actions={headerActions}
       />
 
-      {/* 2. TOP NAVBAR (TOGGLE SWITCH: SHIFT VS LOG HISTORY) */}
+      {/* 2. TOP NAVBAR (TAB BUTTONS: SHIFT VS LOG HISTORY) */}
       {(isOperator || activeTab === 'entry' || activeTab === 'history') && (
-        <View style={styles.toggleSwitchWrapper}>
-          <ToggleSwitch<'entry' | 'history'>
-            options={toggleOptions}
-            value={activeTab === 'history' ? 'history' : 'entry'}
-            onChange={handleTabChange}
+        <View style={styles.tabButtonGroup}>
+          <Button
+            variant={activeTab === 'entry' ? 'primary' : 'outline'}
             size="md"
-            fullWidth
-          />
+            shape="rounded"
+            style={styles.tabOptionBtn}
+            onPress={() => handleTabChange('entry')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'entry' }}
+            haptic="select"
+          >
+            Shift
+          </Button>
+          <Button
+            variant={activeTab === 'history' ? 'primary' : 'outline'}
+            size="md"
+            shape="rounded"
+            style={styles.tabOptionBtn}
+            onPress={() => handleTabChange('history')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'history' }}
+            haptic="select"
+            rightIcon={
+              isOperator && !isHistoryCountLoading && operatorHistoryCount && operatorHistoryCount > 0 ? (
+                <View
+                  style={[
+                    styles.tabBadge,
+                    {
+                      backgroundColor:
+                        activeTab === 'history'
+                          ? 'rgba(255, 255, 255, 0.25)'
+                          : isDark
+                          ? 'rgba(255, 255, 255, 0.12)'
+                          : '#e4e4e7',
+                    },
+                  ]}
+                >
+                  <Text
+                    variant="caption"
+                    weight="semibold"
+                    style={{
+                      color:
+                        activeTab === 'history'
+                          ? '#ffffff'
+                          : isDark
+                          ? '#f4f4f5'
+                          : '#3f3f46',
+                    }}
+                  >
+                    {operatorHistoryCount > 99 ? '99+' : operatorHistoryCount}
+                  </Text>
+                </View>
+              ) : undefined
+            }
+          >
+            Log History
+          </Button>
         </View>
       )}
 
@@ -510,6 +557,28 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1200,
     alignSelf: 'center',
+  },
+  tabButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
+    width: '100%',
+  },
+  tabOptionBtn: {
+    flex: 1,
+    minHeight: 44,
+  },
+  tabBadge: {
+    borderRadius: 9999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toggleSwitchWrapper: {
     paddingHorizontal: 16,

@@ -18,7 +18,7 @@ configureReanimatedLogger({
 
 import React from 'react';
 import { View, StyleSheet, Platform, AppState, type AppStateStatus, useWindowDimensions } from 'react-native';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, ThemeProvider as NavThemeProvider } from 'expo-router';
 import { useNavigationMotion } from '../lib/motion';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
@@ -32,6 +32,7 @@ import {
 import { AuthProvider, useAuth } from '../lib/auth/useAuth';
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
+import { NAV_THEME, useIsDark, useThemeColor } from '../lib/theming';
 import { PostNotificationBanner } from '../components/notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
@@ -44,7 +45,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OverlayHostProvider, ToastProvider } from '../components/ui/overlay';
 import { Pressable } from '../components/ui/touch/Pressable';
-import { isAgentationEnabled, getSentryDsn } from '../lib/env';
+import { isAgentationEnabled, getAgentationEndpoint, getSentryDsn } from '../lib/env';
 
 // Prevent native splash screen from autohiding until fonts, type scale, and core resources load
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -93,7 +94,13 @@ function MobileAgentation() {
 
   try {
     const { Agentation } = require('agentation');
-    return <Agentation key={pathname || 'mobile-web'} className="reach-agentation-toolbar" />;
+    return (
+      <Agentation
+        key={pathname || 'mobile-web'}
+        className="reach-agentation-toolbar"
+        endpoint={getAgentationEndpoint()}
+      />
+    );
   } catch (err) {
     if (__DEV__) {
       console.warn('[MobileAgentation] Failed to mount agentation toolbar:', err);
@@ -226,15 +233,23 @@ function MobileWebScrollbarStyles() {
         transition: background-color 5000s ease-in-out 0s;
       }
       /* Agentation Toolbar Floating Layer on Web */
+      agentation-toolbar,
       .reach-agentation-toolbar,
       [data-agentation-toolbar] {
-        z-index: 100000 !important;
+        position: fixed !important;
+        bottom: 24px !important;
+        right: 24px !important;
+        z-index: 999999 !important;
+        display: block !important;
+        pointer-events: auto !important;
       }
       @media (max-width: 767px) {
+        agentation-toolbar,
         .reach-agentation-toolbar,
         [data-agentation-toolbar] {
           max-width: calc(100vw - 24px) !important;
         }
+        agentation-toolbar:not([style*="top"]),
         .reach-agentation-toolbar:not([style*="top"]),
         [data-agentation-toolbar]:not([style*="top"]) {
           bottom: 80px !important;
@@ -420,7 +435,9 @@ function MobileScreenSyncWatcher() {
 }
 
 function ThemedAppContainer() {
-  const { theme, isDark } = useTheme();
+  const isDark = useIsDark();
+  const canvasColor = useThemeColor('canvas');
+  const navTheme = isDark ? NAV_THEME.dark : NAV_THEME.light;
   const motion = useNavigationMotion();
 
   React.useEffect(() => {
@@ -451,47 +468,49 @@ function ThemedAppContainer() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: theme.colors.canvas },
-          ...motion.stackDefault,
-        }}
-      >
-        <Stack.Screen name="index" options={{ animation: motion.stackModalTransparent.animation }} />
-        <Stack.Screen name="(auth)" options={{ animation: motion.stackModalTransparent.animation }} />
-        <Stack.Screen name="(app)" options={{ animation: motion.stackModalTransparent.animation }} />
-        <Stack.Screen
-          name="privacy"
-          options={{
-            ...motion.stackModalSheet,
+    <NavThemeProvider value={navTheme}>
+      <View style={[styles.container, { backgroundColor: canvasColor }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: canvasColor },
+            ...motion.stackDefault,
           }}
-        />
-        <Stack.Screen
-          name="terms"
-          options={{
-            ...motion.stackModalSheet,
-          }}
-        />
-        <Stack.Screen
-          name="+not-found"
-          options={{
-            title: 'Oops!',
-            animation: motion.stackModalTransparent.animation,
-          }}
-        />
-      </Stack>
-      <PortalHost />
-      <PostNotificationBanner />
-      <MobileOperatorAlertsListener />
-      <MobileOfflineSyncListener />
-      <MobileScreenSyncWatcher />
-      <MobileAgentation />
-      <MobileGoogleAnalytics />
-      <MobileWebScrollbarStyles />
-    </View>
+        >
+          <Stack.Screen name="index" options={{ animation: motion.stackModalTransparent.animation }} />
+          <Stack.Screen name="(auth)" options={{ animation: motion.stackModalTransparent.animation }} />
+          <Stack.Screen name="(app)" options={{ animation: motion.stackModalTransparent.animation }} />
+          <Stack.Screen
+            name="privacy"
+            options={{
+              ...motion.stackModalSheet,
+            }}
+          />
+          <Stack.Screen
+            name="terms"
+            options={{
+              ...motion.stackModalSheet,
+            }}
+          />
+          <Stack.Screen
+            name="+not-found"
+            options={{
+              title: 'Oops!',
+              animation: motion.stackModalTransparent.animation,
+            }}
+          />
+        </Stack>
+        <PortalHost />
+        <PostNotificationBanner />
+        <MobileOperatorAlertsListener />
+        <MobileOfflineSyncListener />
+        <MobileScreenSyncWatcher />
+        <MobileAgentation />
+        <MobileGoogleAnalytics />
+        <MobileWebScrollbarStyles />
+      </View>
+    </NavThemeProvider>
   );
 }
 

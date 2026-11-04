@@ -6,7 +6,6 @@ import {
   RefreshControl,
   BackHandler,
   Platform,
-  StatusBar,
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,7 +20,6 @@ import {
   ErrorState,
   PermissionDeniedView,
   SlowNetworkBanner,
-  type PopoverCoords,
 } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
@@ -170,7 +168,6 @@ export default function MachinesScreen() {
   );
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const [filterAnchorCoords, setFilterAnchorCoords] = useState<PopoverCoords | null>(null);
 
   const handleSearchSubmit = () => {
     setSearch(search, true);
@@ -586,7 +583,6 @@ export default function MachinesScreen() {
           isSearching={isSearching}
           filterPanelOpen={filterPanelOpen}
           setFilterPanelOpen={setFilterPanelOpen}
-          setFilterAnchorCoords={setFilterAnchorCoords}
           activeFilterCount={activeFilterCount}
           handleResetAllFilters={handleResetAllFilters}
           rentalFilter={rentalFilter}
@@ -831,7 +827,6 @@ export default function MachinesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {selectedMachine ? (
         <MachineDetailView
@@ -1096,11 +1091,9 @@ export default function MachinesScreen() {
         />
       )}
 
-      {/* Category-Wise Filter Sidebar Drawer / Popover */}
+      {/* Category-Wise Filter Sidebar Drawer */}
       <MachineFilterSidebar
         visible={filterPanelOpen}
-        presentation="popover"
-        anchorCoords={filterAnchorCoords}
         onClose={() => setFilterPanelOpen(false)}
         activeFilterCount={activeFilterCount}
         totalFilteredCount={totalCount}
