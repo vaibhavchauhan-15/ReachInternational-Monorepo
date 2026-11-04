@@ -288,6 +288,24 @@ function resolveButtonColors(
   }
 }
 
+const buttonColorsCache = new Map<string, ResolvedButtonColors>();
+
+function getCachedButtonColors(
+  variant: string,
+  theme: RNThemeType,
+  isDark: boolean,
+  isDisabled: boolean,
+  isLoading: boolean
+): ResolvedButtonColors {
+  const key = `${variant}:${isDark}:${isDisabled}:${isLoading}`;
+  let cached = buttonColorsCache.get(key);
+  if (!cached) {
+    cached = Object.freeze(resolveButtonColors(variant, theme, isDark, isDisabled, isLoading));
+    buttonColorsCache.set(key, cached);
+  }
+  return cached;
+}
+
 export type ButtonProps = Omit<PressableProps, 'variant'> &
   VariantProps<typeof buttonVariants> & {
     className?: string;
@@ -351,7 +369,7 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
       : RADIUS_ROUNDED;
 
     const sizeStyle = BUTTON_SIZE_STYLES[effectiveSize as string] ?? BUTTON_SIZE_STYLES.default;
-    const colors = resolveButtonColors(effectiveVariant, theme, isDark, isDisabled, isLoading);
+    const colors = getCachedButtonColors(effectiveVariant, theme, isDark, isDisabled, isLoading);
 
     const dynamicStyle: ViewStyle = {
       backgroundColor: colors.background,

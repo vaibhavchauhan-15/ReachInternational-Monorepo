@@ -2,6 +2,11 @@
  * ReachInternational Mobile — React Native Reusables Card Component
  * Official RNR Card primitive with CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
  * powered by canonical Pressable with Material Design 3 and iOS press feedback.
+ *
+ * Performance-optimized:
+ * - Memoized 2-slot StyleSheet cache per color scheme via makeStyles
+ * - Zero inline style object allocations in render loop
+ * - Static frozen press contexts
  */
 
 import { Text, TextClassContext } from '@/components/ui/Text';
@@ -9,7 +14,7 @@ import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { View, type ViewProps, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { useTheme } from './ThemeProvider';
+import { useIsDark, makeStyles } from '../../lib/theming';
 import { Pressable } from './touch/Pressable';
 
 export type CardProps = ViewProps & {
@@ -20,11 +25,42 @@ export type CardProps = ViewProps & {
   style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
 };
 
-const CardPressContext = React.createContext<{ isPressed: boolean }>({ isPressed: false });
+const PRESSED_CONTEXT_TRUE = Object.freeze({ isPressed: true });
+const PRESSED_CONTEXT_FALSE = Object.freeze({ isPressed: false });
+
+const CardPressContext = React.createContext<{ isPressed: boolean }>(PRESSED_CONTEXT_FALSE);
+
+const useCardStyles = makeStyles((theme, isDark) => ({
+  default: {
+    backgroundColor: theme.colors.canvasElevated,
+    borderColor: theme.colors.hairline,
+    borderWidth: 1,
+    borderRadius: radiusNumeric.lg,
+    padding: spacingNumeric.md,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'border-color 150ms ease, opacity 150ms ease, background-color 150ms ease',
+      } as any,
+      default: {},
+    }),
+  },
+  flat: {
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+    borderColor: 'transparent',
+    borderWidth: 0,
+    borderRadius: radiusNumeric.lg,
+    padding: spacingNumeric.md,
+  },
+  pressed: {
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(23, 23, 23, 0.22)',
+  },
+}));
 
 const Card = React.forwardRef<any, CardProps>(
   ({ className, variant = 'default', onPress, interactive, style, children, ...props }: CardProps, ref) => {
-    const { theme, isDark } = useTheme();
+    const cardStyles = useCardStyles();
 
     const variantClass =
       variant === 'elevated'
@@ -35,27 +71,7 @@ const Card = React.forwardRef<any, CardProps>(
         ? 'border-0'
         : '';
 
-    const defaultStyle: ViewStyle = {
-      backgroundColor:
-        variant === 'flat'
-          ? isDark
-            ? 'rgba(255, 255, 255, 0.04)'
-            : 'rgba(0, 0, 0, 0.04)'
-          : theme.colors.canvasElevated,
-      borderColor: theme.colors.hairline,
-      borderWidth: variant === 'flat' ? 0 : 1,
-      borderRadius: radiusNumeric.lg,
-      padding: spacingNumeric.md,
-      ...Platform.select({
-        web: {
-          outlineStyle: 'none',
-          WebkitTapHighlightColor: 'transparent',
-          transition: 'border-color 150ms ease, opacity 150ms ease, background-color 150ms ease',
-        } as any,
-        default: {},
-      }),
-    };
-
+    const defaultStyle = variant === 'flat' ? cardStyles.flat : cardStyles.default;
     const isInteractive = Boolean(onPress || interactive);
 
     if (isInteractive) {
@@ -70,16 +86,14 @@ const Card = React.forwardRef<any, CardProps>(
             const resolvedList = Array.isArray(resolved) ? resolved : [resolved];
             return [
               defaultStyle,
-              state.pressed && {
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(23, 23, 23, 0.22)',
-              },
+              state.pressed && cardStyles.pressed,
               ...resolvedList,
             ];
           }}
           {...(props as any)}
         >
           {(state) => (
-            <CardPressContext.Provider value={{ isPressed: state.pressed }}>
+            <CardPressContext.Provider value={state.pressed ? PRESSED_CONTEXT_TRUE : PRESSED_CONTEXT_FALSE}>
               {typeof children === 'function' ? (children as any)(state) : children}
             </CardPressContext.Provider>
           )}

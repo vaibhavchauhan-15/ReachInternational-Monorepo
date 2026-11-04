@@ -448,6 +448,25 @@ export function resolveBadgeColors(
   }
 }
 
+const badgeColorsCache = new Map<string, ResolvedBadgeColors>();
+
+export function getCachedBadgeColors(
+  variant: BadgeVariantType,
+  theme: RNThemeType,
+  isDark: boolean,
+  role?: string,
+  accentColor?: string,
+  solid: boolean = false
+): ResolvedBadgeColors {
+  const key = `${variant}:${isDark}:${role || ''}:${accentColor || ''}:${solid}`;
+  let cached = badgeColorsCache.get(key);
+  if (!cached) {
+    cached = Object.freeze(resolveBadgeColors(variant, theme, isDark, role, accentColor, solid));
+    badgeColorsCache.set(key, cached);
+  }
+  return cached;
+}
+
 export function formatBadgeStatusLabel(status: string): string {
   const s = String(status).trim().toLowerCase();
   switch (s) {
@@ -658,7 +677,7 @@ const Badge = React.forwardRef<
     // Role auto-mapping
     const effectiveRole = userRole || role || (status && ['operator', 'supervisor', 'admin', 'super_admin', 'manager', 'hr'].includes(String(status).trim().toLowerCase()) ? String(status).trim().toLowerCase() : undefined);
 
-    const colors = resolveBadgeColors(effectiveVariant, theme, isDark, effectiveRole, accentColor, solid);
+    const colors = getCachedBadgeColors(effectiveVariant, theme, isDark, effectiveRole, accentColor, solid);
 
     const displayText = customLabel || label;
     const effectiveDisplayText =

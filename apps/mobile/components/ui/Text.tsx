@@ -47,13 +47,23 @@ const textVariants = cva('text-foreground web:select-text', {
 
 const cache = new Map<string, TextStyle>();
 
-export function typeStyle(variant: TypeVariant, scale: number): TextStyle {
-  const key = `${variant}@${scale}`;
+export function typeStyle(variant: TypeVariant, scale: number, weight?: string): TextStyle {
+  const key = weight ? `${variant}@${scale}@${weight}` : `${variant}@${scale}`;
   let s = cache.get(key);
   if (!s) {
     const t = TYPE_VARIANTS[variant];
     if (t) {
-      s = { fontFamily: t.font, fontSize: scaled(t.size, scale), lineHeight: scaled(t.line, scale) };
+      const weightFont =
+        weight === 'bold'
+          ? 'Geist-Bold'
+          : weight === 'semibold'
+          ? 'Geist-SemiBold'
+          : weight === 'medium'
+          ? 'Geist-Medium'
+          : weight === 'normal'
+          ? 'Geist-Regular'
+          : t.font;
+      s = Object.freeze({ fontFamily: weightFont, fontSize: scaled(t.size, scale), lineHeight: scaled(t.line, scale) });
       cache.set(key, s);
     } else {
       s = {};
@@ -100,13 +110,13 @@ const Text = React.forwardRef<TextRef, TextProps>(
     if (variant && variant in TYPE_VARIANTS) {
       try {
         const { scale } = useTypeScale();
-        dynamicTypeStyle = { ...typeStyle(variant as TypeVariant, scale) };
+        dynamicTypeStyle = typeStyle(variant as TypeVariant, scale, weight);
       } catch {
-        dynamicTypeStyle = { ...typeStyle(variant as TypeVariant, 1) };
+        dynamicTypeStyle = typeStyle(variant as TypeVariant, 1, weight);
       }
     }
 
-    if (weight) {
+    else if (weight) {
       const weightFont =
         weight === 'bold'
           ? 'Geist-Bold'
@@ -115,7 +125,7 @@ const Text = React.forwardRef<TextRef, TextProps>(
           : weight === 'medium'
           ? 'Geist-Medium'
           : 'Geist-Regular';
-      dynamicTypeStyle = { ...dynamicTypeStyle, fontFamily: weightFont };
+      dynamicTypeStyle = { fontFamily: weightFont };
     }
 
     const matchedVariant =
