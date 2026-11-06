@@ -82,9 +82,9 @@ export function isReleaseApplicable(
   }
 ): boolean {
   const currentEnv = options?.currentEnv ?? getAppEnv();
-  const currentVersion = options?.currentVersion ?? Constants.expoConfig?.version ?? '1.3.0';
+  const currentVersion = options?.currentVersion ?? Constants.expoConfig?.version ?? '1.4.0';
   const currentVersionCode =
-    options?.currentVersionCode ?? Constants.expoConfig?.android?.versionCode ?? 4;
+    options?.currentVersionCode ?? Constants.expoConfig?.android?.versionCode ?? 5;
   const currentOtaUpdateId =
     options?.currentOtaUpdateId ?? (Updates.isEnabled ? Updates.updateId : null);
   const currentOtaChannel =

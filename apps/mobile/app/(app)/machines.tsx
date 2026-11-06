@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useTheme,
@@ -829,70 +830,76 @@ export default function MachinesScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
 
       {selectedMachine ? (
-        <MachineDetailView
-          machine={selectedMachine}
-          initialTab={detailInitialTab}
-          onBack={() => {
-            setSelectedMachine(null);
-            setDetailInitialTab('overview');
-          }}
-          onMachineUpdated={(updatedMachine?: any) => {
-            if (updatedMachine) {
-              setSelectedMachine((prev: any) => ({ ...prev, ...updatedMachine }));
-              setMachines((prev) =>
-                prev.map((m) => (m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m))
-              );
-              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                if (old && Array.isArray(old.pages)) {
-                  return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                      ...page,
-                      machines: page.machines.map((m: any) =>
-                        m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
-                      ),
-                    })),
-                  };
-                }
-                if (Array.isArray(old)) {
-                  return old.map((m: any) =>
-                    m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
-                  );
-                }
-                return old;
-              });
-            } else {
-              fetchMachines();
-            }
-          }}
-          onMachineDeleted={(deletedId?: string) => {
-            const idToRemove = deletedId || selectedMachine?.id;
-            setSelectedMachine(null);
-            setDetailInitialTab('overview');
-            if (idToRemove) {
-              setMachines((prev) => prev.filter((m) => m.id !== idToRemove));
-              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                if (old && Array.isArray(old.pages)) {
-                  return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                      ...page,
-                      machines: page.machines.filter((m: any) => m.id !== idToRemove),
-                      totalCount: Math.max(0, (page.totalCount || 0) - 1),
-                    })),
-                  };
-                }
-                if (Array.isArray(old)) {
-                  return old.filter((m: any) => m.id !== idToRemove);
-                }
-                return old;
-              });
-            } else {
-              fetchMachines();
-            }
-          }}
-          userRole={role}
-        />
+        <Animated.View
+          style={styles.detailViewWrapper}
+          entering={FadeIn.duration(220)}
+          exiting={FadeOut.duration(160)}
+        >
+          <MachineDetailView
+            machine={selectedMachine}
+            initialTab={detailInitialTab}
+            onBack={() => {
+              setSelectedMachine(null);
+              setDetailInitialTab('overview');
+            }}
+            onMachineUpdated={(updatedMachine?: any) => {
+              if (updatedMachine) {
+                setSelectedMachine((prev: any) => ({ ...prev, ...updatedMachine }));
+                setMachines((prev) =>
+                  prev.map((m) => (m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m))
+                );
+                queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
+                  if (old && Array.isArray(old.pages)) {
+                    return {
+                      ...old,
+                      pages: old.pages.map((page: any) => ({
+                        ...page,
+                        machines: page.machines.map((m: any) =>
+                          m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
+                        ),
+                      })),
+                    };
+                  }
+                  if (Array.isArray(old)) {
+                    return old.map((m: any) =>
+                      m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
+                    );
+                  }
+                  return old;
+                });
+              } else {
+                fetchMachines();
+              }
+            }}
+            onMachineDeleted={(deletedId?: string) => {
+              const idToRemove = deletedId || selectedMachine?.id;
+              setSelectedMachine(null);
+              setDetailInitialTab('overview');
+              if (idToRemove) {
+                setMachines((prev) => prev.filter((m) => m.id !== idToRemove));
+                queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
+                  if (old && Array.isArray(old.pages)) {
+                    return {
+                      ...old,
+                      pages: old.pages.map((page: any) => ({
+                        ...page,
+                        machines: page.machines.filter((m: any) => m.id !== idToRemove),
+                        totalCount: Math.max(0, (page.totalCount || 0) - 1),
+                      })),
+                    };
+                  }
+                  if (Array.isArray(old)) {
+                    return old.filter((m: any) => m.id !== idToRemove);
+                  }
+                  return old;
+                });
+              } else {
+                fetchMachines();
+              }
+            }}
+            userRole={role}
+          />
+        </Animated.View>
       ) : (
         <>
           {/* Top Standardized Mobile Header */}
@@ -1194,5 +1201,8 @@ const styles = StyleSheet.create({
     height: 1,
   },
   endOfListText: {
+  },
+  detailViewWrapper: {
+    flex: 1,
   },
 });

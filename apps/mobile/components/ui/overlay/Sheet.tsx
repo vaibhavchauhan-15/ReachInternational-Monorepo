@@ -29,6 +29,7 @@ import Animated, {
   withTiming,
   runOnJS,
   ReduceMotion,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -98,20 +99,26 @@ export const Sheet: React.FC<SheetProps> = ({
     setMounted(false);
   }, []);
 
-  // Animate open / close transitions
+  // Animate open / close transitions with ultra-premium physics
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      translateY.value = screenHeight;
+      sheetScale.value = 0.98;
       if (isReduced) {
         translateY.value = 0;
         sheetScale.value = 1;
       } else {
         translateY.value = withSpring(0, {
-          ...SPATIAL.default,
+          stiffness: 340,
+          damping: 32,
+          mass: 0.9,
           reduceMotion: ReduceMotion.System,
         });
         sheetScale.value = withSpring(1, {
-          ...SPATIAL.default,
+          stiffness: 340,
+          damping: 32,
+          mass: 0.9,
           reduceMotion: ReduceMotion.System,
         });
       }
@@ -120,11 +127,11 @@ export const Sheet: React.FC<SheetProps> = ({
         translateY.value = screenHeight;
         setMounted(false);
       } else {
-        translateY.value = withSpring(
+        translateY.value = withTiming(
           screenHeight,
           {
-            ...SPATIAL.fast,
-            overshootClamping: true,
+            duration: 220,
+            easing: Easing.bezier(0.3, 0, 0.8, 0.15),
             reduceMotion: ReduceMotion.System,
           },
           (finished) => {
@@ -133,6 +140,11 @@ export const Sheet: React.FC<SheetProps> = ({
             }
           },
         );
+        sheetScale.value = withTiming(0.98, {
+          duration: 200,
+          easing: Easing.bezier(0.3, 0, 0.8, 0.15),
+          reduceMotion: ReduceMotion.System,
+        });
       }
     }
   }, [visible, isReduced, screenHeight, translateY, sheetScale, handleDismissComplete]);
@@ -291,6 +303,7 @@ const styles = StyleSheet.create({
   sheetPanel: {
     width: '100%',
     maxWidth: 640,
+    minHeight: 220,
     alignSelf: 'center',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -313,11 +326,13 @@ const styles = StyleSheet.create({
   handleWrapper: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    minHeight: 32,
   },
   dragHandle: {
-    width: 38,
-    height: 4.5,
+    width: 42,
+    height: 5,
     borderRadius: 9999,
   },
 });

@@ -38,6 +38,7 @@ import {
   OperatorHistoryCardSkeletonList,
   OperationsLogTableSkeletonRows,
 } from "../skeletons/OperationsSkeletons";
+import { OperatorHistoryCard } from "./OperatorHistoryCard";
 
 const PrintableSupervisorLogsModal = dynamic(
   () => import("@/components/operations/PrintableSupervisorLogsModal").then((mod) => mod.PrintableSupervisorLogsModal),
@@ -786,150 +787,13 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
 
           {/* Mobile Touch Cards View (<=640px) */}
           <div className="block sm:hidden space-y-2.5">
-            {mobileDisplayedLogs.map((log) => {
-              const startM = Number(log.start_meter) || 0;
-              const endM = Number(log.end_meter) || startM;
-              const rt = log.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
-
-              const rawShift = (log.shift_code || log.shift || "").trim();
-              const shiftName = !rawShift
-                ? "Shift A"
-                : /^shift/i.test(rawShift)
-                ? rawShift.replace(/^shift\s*/i, "Shift ")
-                : `Shift ${rawShift}`;
-
-              // Machine Model + Serial Number
-              const model = log.machine?.model || "";
-              const serial = log.machine?.serial_number || "";
-              const machineTitle = model && serial
-                ? `${model} (${serial})`
-                : model || (serial ? `S/N: ${serial}` : log.machine?.machine_id || "Equipment");
-
-              // Client Name & City
-              const clientName =
-                log.client?.company_name ||
-                log.client?.client_name ||
-                (log.location ? log.location.split(",")[0]?.trim() : "") ||
-                "Base Yard";
-              const rawCity =
-                log.client?.city?.trim() ||
-                (log.location && log.location.includes(",")
-                  ? log.location.split(",")[1]?.trim()
-                  : "");
-              const clientCity = rawCity && rawCity.toLowerCase() !== clientName.toLowerCase() ? rawCity : "";
-
-              // Breakdown details parsing
-              const breakdownInfo = parseBreakdownDetails(log);
-
-              // Exact log timestamp date and time
-              const timestampStr = log.created_at
-                ? formatExactTimestamp(log.created_at, false)
-                : formatDate(log.log_date);
-
-              return (
-                <div
-                  key={log.id}
-                  className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5 shadow-2xs"
-                >
-                  {/* Row 1: Top Header — Exact timestamp date & time with small text + Operating Hours badge & Edit/Lock Action */}
-                  <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-1.5 text-[10px] font-mono">
-                    <span className="text-[var(--color-mute)] font-medium">
-                      {timestampStr}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
-                        +{rt.toFixed(1)} hrs
-                      </span>
-                      {isLogWithin7Days(log.log_date) ? (
-                        <button
-                          type="button"
-                          onClick={() => setEditingLog(log)}
-                          className="p-1 rounded-full text-[var(--color-mute)] hover:text-[var(--color-link)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 transition-colors cursor-pointer"
-                          title="Edit log within 7 days"
-                          aria-label="Edit machine log"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      ) : (
-                        <span
-                          className="p-1 text-[var(--color-mute)] opacity-50 inline-flex items-center"
-                          title="Locked after 7 days"
-                        >
-                          <Lock size={12} />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 2: Machine + Serial Number */}
-                  <div className="text-xs font-bold text-[var(--color-ink)] truncate" title={machineTitle}>
-                    {model || "Equipment"}
-                    {serial ? (
-                      <span className="font-mono text-[11px] font-normal text-[var(--color-mute)] ml-1">
-                        ({serial})
-                      </span>
-                    ) : log.machine?.machine_id ? (
-                      <span className="font-mono text-[11px] font-normal text-[var(--color-mute)] ml-1">
-                        ({log.machine.machine_id})
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {/* Row 3: Client : Client name only + city name with small text */}
-                  <div className="text-xs flex items-baseline gap-1 min-w-0">
-                    <span className="text-[11px] text-[var(--color-mute)] shrink-0">Client :</span>
-                    <span className="font-semibold text-[var(--color-ink)] truncate">{clientName}</span>
-                    {clientCity ? (
-                      <span className="text-[10px] text-[var(--color-mute)] shrink-0 font-normal">
-                        ({clientCity})
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {/* Row 4: HMR: 77255->772260 */}
-                  <div className="text-[11px] font-mono text-[var(--color-mute)]">
-                    <span>HMR: </span>
-                    <span className="text-[var(--color-ink)]">{startM.toFixed(1)}</span>
-                    <span className="mx-1 text-[var(--color-mute)]">&rarr;</span>
-                    <strong className="text-[var(--color-ink)] font-bold">{endM.toFixed(1)}</strong>
-                  </div>
-
-                  {/* Row 5: Shift Date & Shift Badge */}
-                  <div className="text-[11px] font-mono text-[var(--color-mute)] flex items-center gap-2 flex-wrap">
-                    <span>Shift Date : </span>
-                    <strong className="text-[var(--color-ink)] font-bold">{formatDate(log.log_date)}</strong>
-                    <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
-                      {shiftName}
-                    </span>
-                    {log.overtime_hours ? (
-                      <span className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                        +{log.overtime_hours}h OT
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {/* Row 6: Breakdown */}
-                  <div className="pt-1 border-t border-[var(--color-hairline)]/70">
-                    {log.is_breakdown ? (
-                      <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 flex items-center gap-1 truncate">
-                        <span className="font-semibold shrink-0">Breakdown: </span>
-                        <span
-                          className="truncate"
-                          title={breakdownInfo.displayText || log.breakdown_duration || "Yes"}
-                        >
-                          {breakdownInfo.displayText || log.breakdown_duration || "Yes"}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] font-mono text-[var(--color-mute)] flex items-center gap-1">
-                        <span className="font-semibold shrink-0">Breakdown: </span>
-                        <span>0 (Normal)</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {mobileDisplayedLogs.map((log) => (
+              <OperatorHistoryCard
+                key={log.id}
+                log={log}
+                onEditLog={setEditingLog}
+              />
+            ))}
 
             {hasMoreMobile && (
               <div ref={mobileSentinelRef} className="pt-1">

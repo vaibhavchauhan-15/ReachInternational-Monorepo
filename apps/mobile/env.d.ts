@@ -12,6 +12,7 @@ declare var process: {
     EXPO_PUBLIC_WEB_APP_URL?: string;
     EXPO_PUBLIC_SENTRY_DSN?: string;
     EXPO_PUBLIC_ENABLE_AGENTATION?: string;
+    EXPO_PUBLIC_AGENTATION_ENDPOINT?: string;
     [key: string]: string | undefined;
   };
 };

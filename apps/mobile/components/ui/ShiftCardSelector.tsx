@@ -54,7 +54,11 @@ export interface ShiftCardSelectorProps {
 export function formatCompactTime(timeStr?: string | null): string {
   if (!timeStr) return '';
   const formatted = formatTo12Hour(timeStr) || timeStr;
-  return formatted.trim().replace(/^0(\d:)/, '$1').replace(/\s+(AM|PM)$/i, '$1');
+  return formatted
+    .trim()
+    .replace(/^0(\d:)/, '$1')
+    .replace(/:00\s*(AM|PM)$/i, '$1')
+    .replace(/\s+(AM|PM)$/i, '$1');
 }
 
 export function formatCompactShiftRange(start?: string | null, end?: string | null): string {
@@ -70,23 +74,28 @@ export function resolveShiftTimeRange(sc?: ShiftCardItem | null): string {
   const range = formatCompactShiftRange(sc.start_time || sc.raw_start_time, sc.end_time || sc.raw_end_time);
   if (range) return range;
   const c = (sc.code || '').replace(/^shift\s+/i, '').trim().toUpperCase();
-  if (c === 'S1' || c === 'A') return '6:00AM-2:00PM';
-  if (c === 'S2' || c === 'B') return '2:00PM-10:00PM';
-  if (c === 'S3' || c === 'C') return '10:00PM-6:00AM';
+  if (c === 'S1' || c === 'A') return '6AM-2PM';
+  if (c === 'S2' || c === 'B') return '2PM-10PM';
+  if (c === 'S3' || c === 'C') return '10PM-6AM';
   return '';
 }
 
 export { getShiftDisplayTitle } from '@reachinternational/utils';
 
 export function formatShiftBadgeTitle(sc: { code: string; name?: string | null }): string {
-  if (sc.name && /^shift\s+[a-z0-9]/i.test(sc.name)) {
-    return sc.name;
-  }
   const code = (sc.code || '').trim().toUpperCase();
   if (code === 'S1' || code === 'A' || code === 'SHIFT A' || code === 'SHIFT-A') return 'Shift A';
   if (code === 'S2' || code === 'B' || code === 'SHIFT B' || code === 'SHIFT-B') return 'Shift B';
   if (code === 'S3' || code === 'C' || code === 'SHIFT C' || code === 'SHIFT-C') return 'Shift C';
-  if (/^shift\s+/i.test(sc.code)) return sc.code;
+  if (sc.name) {
+    const cleaned = sc.name.replace(/\s*\([^)]*\)/g, '').trim();
+    if (/^shift\s+[a-z0-9]/i.test(cleaned)) {
+      return cleaned;
+    }
+  }
+  if (/^shift\s+/i.test(sc.code)) {
+    return sc.code.replace(/\s*\([^)]*\)/g, '').trim();
+  }
   return `Shift ${sc.code}`;
 }
 
@@ -251,7 +260,8 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
             <View style={styles.cardContent}>
               <View style={styles.titleRow}>
                 <Text
-                  variant="label"
+                  variant="caption"
+                  weight={isSelected ? 'semibold' : 'medium'}
                   numberOfLines={1}
                   style={[
                     styles.optionText,
@@ -268,9 +278,9 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
                 </Text>
                 {sc.crosses_midnight && (
                   <Moon
-                    size={10}
+                    size={9}
                     color={isSelected ? '#ffffff' : theme.colors.mute}
-                    style={{ marginLeft: 3 }}
+                    style={{ marginLeft: 2 }}
                   />
                 )}
               </View>
@@ -281,7 +291,7 @@ export const ShiftCardSelector: React.FC<ShiftCardSelectorProps> = ({
                   style={[
                     styles.timeText,
                     {
-                      color: 'rgba(255, 255, 255, 0.72)',
+                      color: 'rgba(255, 255, 255, 0.82)',
                     },
                   ]}
                 >
@@ -301,10 +311,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
-    borderRadius: 26,
+    borderRadius: 22,
     borderWidth: 1,
     padding: 3,
-    minHeight: 52,
+    minHeight: 46,
+    height: 46,
     width: '100%',
     overflow: 'hidden',
   },
@@ -312,33 +323,34 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 3,
     bottom: 3,
-    borderRadius: 23,
+    borderRadius: 19,
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 8px -2px rgba(2, 132, 199, 0.4)',
+        boxShadow: '0 2px 6px -1px rgba(2, 132, 199, 0.35)',
         willChange: 'transform',
       } as any,
       ios: {
         shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1.5 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   optionBtn: {
     flex: 1,
-    minHeight: 46,
-    height: 46,
+    minWidth: 0,
+    minHeight: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    borderRadius: 23,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    borderRadius: 19,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -350,6 +362,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    paddingHorizontal: 2,
   },
   titleRow: {
     flexDirection: 'row',

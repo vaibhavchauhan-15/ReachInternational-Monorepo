@@ -7,7 +7,7 @@
  * - Minimum 44px touch targets on action buttons (hitSlopToMin48, minHeight: 44)
  * - Category-wise grouping without icons in header or category titles
  * - 100% unified DropdownFilterSelector across all filter dimensions (Rental, Health, Client, Supervisor, Sort)
- * - Uses canonical reusable FilterSidebar & FilterCategoryCard
+ * - Uses canonical reusable FilterSidebar & FilterCategoryCard (matches Operations page slide-out drawer)
  * - Tactile haptic feedback on filter changes and dismissals
  */
 
@@ -34,13 +34,15 @@ export type SortOptionType =
   | 'lowest_hmr';
 
 export interface MachineFilterSidebarProps {
-  visible: boolean;
+  visible?: boolean;
+  isOpen?: boolean;
   presentation?: 'drawer' | 'popover';
   anchorCoords?: PopoverCoords | null;
   onClose: () => void;
-  activeFilterCount: number;
+  activeFilterCount?: number;
+  badgeCount?: number;
   totalFilteredCount: number;
-  totalFleetCount: number;
+  totalFleetCount?: number;
   rentalFilter: RentalFilterType;
   setRentalFilter: (val: RentalFilterType) => void;
   healthFilter: HealthFilterType;
@@ -57,15 +59,18 @@ export interface MachineFilterSidebarProps {
   clientFilterOptions: FilterOption[];
   sortOptions: FilterOption[];
   isLoadingOptions?: boolean;
-  onResetAllFilters: () => void;
+  onResetAllFilters?: () => void;
+  onReset?: () => void;
 }
 
 export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.memo(({
   visible,
-  presentation = 'popover',
+  isOpen,
+  presentation = 'drawer',
   anchorCoords,
   onClose,
   activeFilterCount,
+  badgeCount,
   totalFilteredCount,
   totalFleetCount: _totalFleetCount,
   rentalFilter,
@@ -85,16 +90,21 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
   sortOptions,
   isLoadingOptions = false,
   onResetAllFilters,
+  onReset,
 }) => {
+  const isDrawerOpen = visible !== undefined ? visible : Boolean(isOpen);
+  const count = activeFilterCount !== undefined ? activeFilterCount : (badgeCount ?? 0);
+  const resetHandler = onResetAllFilters || onReset;
+
   return (
     <FilterSidebar
-      visible={visible}
+      visible={isDrawerOpen}
       presentation={presentation}
       anchorCoords={anchorCoords}
       onClose={onClose}
       title="Filters & Sorting"
-      activeFilterCount={activeFilterCount}
-      onResetAll={onResetAllFilters}
+      activeFilterCount={count}
+      onResetAll={resetHandler}
       applyText={`Show ${totalFilteredCount} ${totalFilteredCount === 1 ? 'Machine' : 'Machines'}`}
       onApply={onClose}
       testID="machine-filter-sidebar"
@@ -108,8 +118,11 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         <DropdownFilterSelector
           label="Rental Status"
           value={rentalFilter}
+          selectedId={rentalFilter}
           options={rentalFilterOptions}
           onChange={(val) => setRentalFilter(val as RentalFilterType)}
+          onSelect={(val) => setRentalFilter(val as RentalFilterType)}
+          placeholder="Select Rental Status"
           minMenuWidth={280}
         />
       </FilterCategoryCard>
@@ -123,8 +136,11 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         <DropdownFilterSelector
           label="Health Status"
           value={healthFilter}
+          selectedId={healthFilter}
           options={healthFilterOptions}
           onChange={(val) => setHealthFilter(val as HealthFilterType)}
+          onSelect={(val) => setHealthFilter(val as HealthFilterType)}
+          placeholder="Select Health Status"
           minMenuWidth={280}
         />
       </FilterCategoryCard>
@@ -141,9 +157,14 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
           <DropdownFilterSelector
             label="Client Allocation"
             value={clientFilter}
+            selectedId={clientFilter}
             options={clientFilterOptions}
             onChange={setClientFilter}
-            showSearch={true}
+            onSelect={setClientFilter}
+            searchable={clientFilterOptions.length > 5}
+            showSearch={clientFilterOptions.length > 5}
+            searchPlaceholder="Search clients..."
+            placeholder="Select Client"
             minMenuWidth={280}
           />
         )}
@@ -161,9 +182,14 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
           <DropdownFilterSelector
             label="Site Supervisor"
             value={supervisorFilter}
+            selectedId={supervisorFilter}
             options={supervisorFilterOptions}
             onChange={setSupervisorFilter}
-            showSearch={true}
+            onSelect={setSupervisorFilter}
+            searchable={supervisorFilterOptions.length > 5}
+            showSearch={supervisorFilterOptions.length > 5}
+            searchPlaceholder="Search supervisors..."
+            placeholder="Select Supervisor"
             minMenuWidth={280}
           />
         )}
@@ -179,8 +205,11 @@ export const MachineFilterSidebar: React.FC<MachineFilterSidebarProps> = React.m
         <DropdownFilterSelector
           label="Sort By"
           value={sortBy}
+          selectedId={sortBy}
           options={sortOptions}
           onChange={(val) => setSortBy(val as SortOptionType)}
+          onSelect={(val) => setSortBy(val as SortOptionType)}
+          placeholder="Select Sort"
           minMenuWidth={280}
         />
       </FilterCategoryCard>

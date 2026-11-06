@@ -169,7 +169,7 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
       </View>
 
       {/* Conflict Warning Notice */}
-      {conflictWarning && (
+      {Boolean(conflictWarning) ? (
         <View
           style={[
             styles.conflictNotice,
@@ -184,7 +184,7 @@ export const AssignmentShiftPicker: React.FC<AssignmentShiftPickerProps> = ({
             {conflictWarning}
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 };

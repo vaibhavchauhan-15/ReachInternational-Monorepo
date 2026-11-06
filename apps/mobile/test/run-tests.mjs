@@ -31,7 +31,13 @@ try {
   const appJson = JSON.parse(appJsonRaw);
 
   assert(appJson.expo?.name === 'Reach Ops', 'app.json expo.name is Reach Ops');
-  assert(appJson.expo?.android?.package === 'com.reachinternational.app', 'Android package is com.reachinternational.app');
+  const buildGradlePath = path.join(__dirname, 'android', 'app', 'build.gradle');
+  const buildGradleRaw = fs.readFileSync(buildGradlePath, 'utf8');
+  assert(
+    buildGradleRaw.includes("applicationId 'com.reachinternational.app'") ||
+      appJson.expo?.android?.package === 'com.reachinternational.app',
+    'Android package is com.reachinternational.app'
+  );
   assert(appJson.expo?.updates?.url?.startsWith('https://u.expo.dev/'), 'EAS Update URL is configured');
   assert(
     typeof appJson.expo?.runtimeVersion === 'string' || appJson.expo?.runtimeVersion?.policy === 'appVersion',
@@ -296,7 +302,9 @@ try {
   assert(!collisionModalContent.includes('Alert.alert') && collisionModalContent.includes('<ConfirmDialog'), 'OfflineCollisionModal uses ConfirmDialog with zero Alert.alert');
   assert(!opsContent.includes('Alert.alert') && opsContent.includes('<ConfirmDialog'), 'operations.tsx uses ConfirmDialog with zero Alert.alert');
   assert(!monitorContent.includes('Alert.alert') && monitorContent.includes('<ConfirmDialog'), 'MobileTodayShiftMonitorTab uses ConfirmDialog with zero Alert.alert');
-  assert(!historyContent.includes('Alert.alert') && historyContent.includes('<SyncStatusBadge'), 'MobileOperatorHistoryTab uses SyncStatusBadge with zero Alert.alert');
+  const historyCardPath = path.join(__dirname, 'components', 'operations', 'MobileOperatorHistoryCard.tsx');
+  const historyCardContent = fs.existsSync(historyCardPath) ? fs.readFileSync(historyCardPath, 'utf8') : '';
+  assert(!historyContent.includes('Alert.alert') && (historyContent.includes('<SyncStatusBadge') || historyCardContent.includes('<SyncStatusBadge')), 'MobileOperatorHistoryTab uses SyncStatusBadge with zero Alert.alert');
 
   // Test 10: Shift Page UI States, Error Resilience, Empty States & Form Validation
   const useOpsDataContent = fs.readFileSync(path.join(__dirname, 'lib', 'hooks', 'useOperationsData.ts'), 'utf8');

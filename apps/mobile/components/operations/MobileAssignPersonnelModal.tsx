@@ -77,12 +77,135 @@ import {
   DEFAULT_MODAL_SHIFTS,
   ClientShiftOption,
 } from '../../lib/hooks/useAssignPersonnelModalData';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+  runOnJS,
+  Easing,
+  useReducedMotion,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const EMPTY_ARRAY: any[] = Object.freeze([]) as any;
+
+/**
+ * 60fps Reanimated Collapsible Dropdown for Butter-Smooth Mobile Expansion & Contraction
+ */
+interface DropdownCollapsibleProps {
+  isOpen: boolean;
+  maxHeight?: number;
+  duration?: number;
+  children: React.ReactNode;
+}
+
+const DropdownCollapsible: React.FC<DropdownCollapsibleProps> = ({
+  isOpen,
+  maxHeight = 360,
+  duration = 220,
+  children,
+}) => {
+  const reduceMotion = useReducedMotion();
+  const [mounted, setMounted] = useState(isOpen);
+  const progress = useSharedValue(isOpen ? 1 : 0);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      if (reduceMotion) {
+        progress.value = 1;
+      } else {
+        progress.value = withTiming(1, {
+          duration,
+          easing: Easing.bezier(0.2, 0, 0, 1),
+        });
+      }
+    } else {
+      if (reduceMotion) {
+        progress.value = 0;
+        setMounted(false);
+      } else {
+        progress.value = withTiming(
+          0,
+          {
+            duration: Math.max(150, duration - 50),
+            easing: Easing.bezier(0.3, 0, 0.8, 0.15),
+          },
+          (finished) => {
+            if (finished) {
+              runOnJS(setMounted)(false);
+            }
+          }
+        );
+      }
+    }
+  }, [isOpen, duration, reduceMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      maxHeight: interpolate(progress.value, [0, 1], [0, maxHeight]),
+      opacity: interpolate(progress.value, [0, 0.3, 1], [0, 0.6, 1]),
+      transform: [
+        {
+          translateY: interpolate(progress.value, [0, 1], [-6, 0]),
+        },
+      ],
+      overflow: 'hidden',
+    };
+  });
+
+  if (!mounted) return null;
+
+  return (
+    <Animated.View style={animatedStyle}>
+      {children}
+    </Animated.View>
+  );
+};
+
+interface AnimatedChevronProps {
+  isOpen: boolean;
+  color?: string;
+  size?: number;
+}
+
+const AnimatedChevron: React.FC<AnimatedChevronProps> = ({
+  isOpen,
+  color,
+  size = 16,
+}) => {
+  const reduceMotion = useReducedMotion();
+  const rotation = useSharedValue(isOpen ? 1 : 0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      rotation.value = isOpen ? 1 : 0;
+    } else {
+      rotation.value = withTiming(isOpen ? 1 : 0, {
+        duration: 200,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+      });
+    }
+  }, [isOpen, reduceMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const deg = interpolate(rotation.value, [0, 1], [0, 180]);
+    return {
+      transform: [{ rotate: `${deg}deg` }],
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <ChevronDown size={size} color={color} />
+    </Animated.View>
+  );
+};
 
 export interface MobileAssignPersonnelModalProps {
   visible: boolean;
@@ -267,6 +390,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const { theme, isDark } = useTheme();
   const queryClient = useQueryClient();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isDesktop = windowWidth >= 640;
   const { user: authUser, role: authRole } = useAuth();
   const effectiveRole = (userRole || authRole || '').toLowerCase();
@@ -403,38 +527,6 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   // 2. Fetch client shift codes cached per client_id with 60s TTL
   const { data: clientShiftsData } = useClientShiftCodes(activeMachine?.client_id, visible);
   const clientShifts = useMemo(() => clientShiftsData || DEFAULT_MODAL_SHIFTS, [clientShiftsData]);
-
-  // Fetch client supervisor for the active machine's client (inherited client-level RBAC)
-  const { data: activeMachineClientSupervisors = [] } = useQuery({
-    queryKey: ['activeMachineClientSupervisors', activeMachine?.client_id],
-    enabled: Boolean(visible && activeMachine?.client_id),
-    staleTime: 60 * 1000,
-    queryFn: async () => {
-      if (!activeMachine?.client_id) return [];
-      const { data, error } = await supabase
-        .from('client_supervisors')
-        .select(`
-          id,
-          supervisor_id,
-          supervisor:users!client_supervisors_supervisor_id_fkey(id, full_name, employee_id)
-        `)
-        .eq('client_id', activeMachine.client_id);
-      if (error) return [];
-      return (data || []).map((row: any) => {
-        const sup = Array.isArray(row.supervisor) ? row.supervisor[0] : row.supervisor;
-        return {
-          id: row.id,
-          supervisor_id: row.supervisor_id,
-          name: sup?.full_name || 'Supervisor',
-          employee_id: sup?.employee_id || null,
-        };
-      });
-    },
-  });
-
-  const inheritedClientSupervisorNames = useMemo(() => {
-    return activeMachineClientSupervisors.map((s) => s.name).join(', ');
-  }, [activeMachineClientSupervisors]);
 
   // Resolve initial target machine
   useEffect(() => {
@@ -1008,6 +1100,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
               overflow: 'hidden',
             }
           : {
+              height: '88%',
               maxHeight: '92%',
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
@@ -1017,7 +1110,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ width: '100%', flexShrink: 1 }}
+        style={{ width: '100%', flex: 1 }}
       >
         <View
           style={[
@@ -1257,7 +1350,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                       variant="body"
                                       style={{
                                         color: isSelected ? '#0284c7' : theme.colors.ink,
-                                        flexShrink: 1,
+                                        flex: 1,
                                       }}
                                       numberOfLines={1}
                                     >
@@ -1386,30 +1479,6 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     </Text>
                   </View>
                 )}
-
-                {/* Inherited Client Supervisor Informational Banner */}
-                {Boolean(inheritedClientSupervisorNames) && (
-                  <View
-                    style={[
-                      styles.inheritedSupervisorBanner,
-                      {
-                        backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
-                        borderColor: isDark ? 'rgba(2, 132, 199, 0.35)' : '#bae6fd',
-                      },
-                    ]}
-                  >
-                    <ShieldCheck size={14} color={theme.colors.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text variant="caption" weight="semibold" style={{ color: theme.colors.primary }}>
-                        Supervised by {inheritedClientSupervisorNames} (Inherited from {activeMachine?.client?.company_name || 'Client'})
-                      </Text>
-                      <Text variant="micro" style={{ color: isDark ? '#bae6fd' : '#0369a1', marginTop: 1 }}>
-                        Inherited through client assignment. Machine-level assignment below is an optional override.
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
                 {/* Supervisor Multi-Select Trigger */}
                 <Pressable
                   variant="card"
@@ -1430,9 +1499,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                   <View style={styles.supervisorChipsContainer}>
                     {selectedSupervisorIds.length === 0 ? (
                       <Text variant="caption" style={{ color: theme.colors.mute }}>
-                        {inheritedClientSupervisorNames
-                          ? `Optional Override (Supervised by ${inheritedClientSupervisorNames})`
-                          : canEditSupervisor
+                        {canEditSupervisor
+
+
                           ? 'Search & assign supervisors...'
                           : 'No supervisors assigned'}
                       </Text>
@@ -2001,7 +2070,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           {/* ═══════════════════════════════════════════════════════ */}
           {/* FOOTER ACTIONS                                          */}
           {/* ═══════════════════════════════════════════════════════ */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.hairline, paddingBottom: Math.max(14, insets.bottom) }]}>
             <Pressable
               variant="outline"
               haptic="tap"
@@ -2045,7 +2114,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
 const styles = StyleSheet.create({
   drawerContainer: {
     width: '100%',
-    flexShrink: 1,
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -2076,7 +2145,7 @@ const styles = StyleSheet.create({
 
   /* Scroll Area */
   scrollArea: {
-    maxHeight: 620,
+    flex: 1,
   },
   scrollContent: {
     padding: spacingNumeric.md,
@@ -2178,16 +2247,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    marginBottom: 8,
-  },
-  inheritedSupervisorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
     marginBottom: 8,
   },
 

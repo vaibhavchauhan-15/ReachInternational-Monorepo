@@ -50,6 +50,14 @@ export function getSentryDsn(): string | undefined {
 /**
  * Returns whether Agentation visual feedback toolbar is enabled.
  */
+/**
+ * Returns the Agentation MCP / sync server endpoint URL.
+ * Defaults to http://localhost:4747.
+ */
+export function getAgentationEndpoint(): string {
+  return process.env.EXPO_PUBLIC_AGENTATION_ENDPOINT?.trim() || "http://localhost:4747";
+}
+
 export function isAgentationEnabled(): boolean {
   if (Platform.OS !== "web") return false;
   if (process.env.EXPO_PUBLIC_ENABLE_AGENTATION === "false") return false;
@@ -165,6 +173,9 @@ export const mobileEnv = {
   },
   get sentryDsn(): string | undefined {
     return getSentryDsn();
+  },
+  get agentationEndpoint(): string {
+    return getAgentationEndpoint();
   },
   get isAgentationEnabled(): boolean {
     return isAgentationEnabled();

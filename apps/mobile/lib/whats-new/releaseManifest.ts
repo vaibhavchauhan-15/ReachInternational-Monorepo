@@ -10,6 +10,55 @@ import type { ReleaseItem } from './types';
 
 export const RELEASE_MANIFEST: ReleaseItem[] = [
   {
+    releaseId: 'v1.4.0-native-release',
+    version: '1.4.0',
+    versionCode: 5,
+    runtimeVersion: '1.4.0',
+    releaseDate: '2026-11-05',
+    type: 'native',
+    title: "What's New in Reach Ops v1.4.0",
+    subtitle: 'Silky shift assignments, optimized machine management, precomputed high-performance themes, and refined operator workflows.',
+    isMajor: true,
+    targetEnv: 'all',
+    highlights: [
+      {
+        id: 'assign-personnel-140',
+        title: 'Refined Shift Personnel Assignment',
+        description: 'Single-row shift buttons (Shift A, B, C) with compact hours (6AM-2PM, 2PM-10PM, 10PM-6AM), 60fps Reanimated dropdown collapsibles, and silky spring physics.',
+        iconName: 'users',
+        category: 'feature',
+      },
+      {
+        id: 'machine-detail-140',
+        title: 'Optimized Machine Details',
+        description: 'Cleaned-up machine card layouts with eliminated flex height collapse, compact client code badge with 1-tap copy, and streamlined header menus.',
+        iconName: 'truck',
+        category: 'improvement',
+      },
+      {
+        id: 'theme-perf-140',
+        title: 'High-Performance Theme Engine',
+        description: 'Zero-lag dark/light theme switching with precomputed frozen palettes, synchronized status bar, and cached component styling allocations.',
+        iconName: 'sparkles',
+        category: 'performance',
+      },
+      {
+        id: 'shift-guard-140',
+        title: 'Operational Shift Validation',
+        description: 'Enhanced shift submission safeguards, 1-tap switch to assigned shifts, and robust cross-machine overlap prevention.',
+        iconName: 'shield-check',
+        category: 'feature',
+      },
+      {
+        id: 'touch-ergonomics-140',
+        title: 'Ergonomic Touch Targets',
+        description: 'Strict 44px+ touch targets across all filters, modal action bars, and navigation controls with tactile haptic feedback.',
+        iconName: 'zap',
+        category: 'improvement',
+      },
+    ],
+  },
+  {
     releaseId: 'v1.3.0-native-launch',
     version: '1.3.0',
     versionCode: 4,

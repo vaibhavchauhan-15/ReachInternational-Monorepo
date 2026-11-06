@@ -115,6 +115,13 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
   // Active target machine ID
   const machineId = propMachine?.id || initialMachineId;
 
+  const [roster, setRoster] = useState<OperatorAssignmentItem[]>([]);
+  const [isAddingOperator, setIsAddingOperator] = useState(false);
+
+
+
+  const relevantOpIds = useMemo(() => roster.map((r) => r.operatorId), [roster]);
+
   // Fetch modal master data (fleet assignments, operators, supervisors, machines)
   const {
     data: modalData,
@@ -125,6 +132,8 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
     supervisorId: user?.id,
     initialMachineId: machineId,
     relevantSupervisorIds: propMachine?.supervisor_ids || [],
+    isAddOperatorOpen: isAddingOperator,
+    relevantOperatorIds: relevantOpIds,
   });
 
   // Resolve target machine from props or fetched machines
@@ -166,14 +175,14 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
   }, [clientSupervisors]);
 
   // Current machine roster and initial snapshot
-  const [roster, setRoster] = useState<OperatorAssignmentItem[]>([]);
+
   const [initialSnapshot, setInitialSnapshot] = useState<{
     roster: OperatorAssignmentItem[];
     supervisorIds: string[];
   }>({ roster: [], supervisorIds: [] });
 
   const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
-  const [isAddingOperator, setIsAddingOperator] = useState(false);
+
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>('');
   const [selectedShiftCode, setSelectedShiftCode] = useState<string>('S1');
   const [operatorSearchQuery, setOperatorSearchQuery] = useState('');
@@ -669,7 +678,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
               />
 
               {/* Confirm Add Button */}
-              {selectedCandidateId && (
+              {Boolean(selectedCandidateId) ? (
                 <Pressable
                   onPress={handleAddOperatorToRoster}
                   disabled={Boolean(shiftConflictWarning)}
@@ -686,7 +695,7 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
                     Add to Roster (Shift {selectedShiftCode})
                   </Text>
                 </Pressable>
-              )}
+              ) : null}
             </View>
           )}
         </View>

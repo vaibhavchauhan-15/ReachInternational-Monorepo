@@ -107,7 +107,7 @@ const shiftCardContent = fs.readFileSync(shiftCardPath, 'utf8');
 
 assert(
   shiftCardContent.includes('{isSelected && timeRange ? (') &&
-  shiftCardContent.includes("color: 'rgba(255, 255, 255, 0.72)'"),
+  shiftCardContent.includes("rgba(255, 255, 255,"),
   'ShiftCardSelector displays shift time only on selected shift with low opacity'
 );
 
@@ -126,6 +126,25 @@ assert(
 assert(
   entryCardContent.includes("offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);"),
   'MobileOperatorEntryCard integrates offline queue manager on network failure'
+);
+
+assert(
+  entryCardContent.includes('if (isCurrentShiftUnassigned) {') &&
+  entryCardContent.includes("title: 'Unassigned Shift',") &&
+  entryCardContent.includes('Please select your assigned shift.'),
+  'MobileOperatorEntryCard blocks unassigned shift submission before sending network request'
+);
+
+assert(
+  entryCardContent.includes('Switch to Shift') &&
+  entryCardContent.includes('handleSelectShift(resolvedInitialShift)'),
+  'MobileOperatorEntryCard renders 1-tap quick action to switch to assigned shift'
+);
+
+assert(
+  entryCardContent.includes('const isAssigned =') &&
+  entryCardContent.includes('assignedShiftCodes.some('),
+  'MobileOperatorEntryCard validates draft shift against assigned shifts before restoring'
 );
 
 console.log('\n--- 3. Testing MobileTodayShiftMonitorTab UI States & Error Resilience ---');

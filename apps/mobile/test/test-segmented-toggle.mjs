@@ -200,50 +200,68 @@ console.log('  ✓ Distribution math, duplicate-tap prevention, and rapid-switch
 // ─── 5. Consumer Integration Verification ───
 console.log('\n--- 5. Consumer Integration Verification ---');
 
-// Check operations.tsx
+// Check operations.tsx (Shift & Log History buttons verified)
 const opsSource = fs.readFileSync(
   path.join(MOBILE_ROOT, 'app/(app)/operations.tsx'),
   'utf8'
 );
 assert.ok(
-  opsSource.includes('ToggleSwitch'),
-  'operations.tsx must import ToggleSwitch'
+  opsSource.includes('tabOptionBtn'),
+  'operations.tsx must use dedicated tabOptionBtn for Shift and Log History selection'
 );
 assert.ok(
-  opsSource.includes('options={toggleOptions}'),
-  'operations.tsx must bind memoized toggleOptions'
+  opsSource.includes('handleTabChange'),
+  'operations.tsx must bind memoized handleTabChange'
 );
 
-// Check preferences/index.tsx
+// Check running-logs.tsx
+const runningLogsSource = fs.readFileSync(
+  path.join(MOBILE_ROOT, 'app/(app)/running-logs.tsx'),
+  'utf8'
+);
+assert.ok(
+  runningLogsSource.includes('ToggleSwitch'),
+  'running-logs.tsx must import ToggleSwitch'
+);
+assert.ok(
+  runningLogsSource.includes('<ToggleSwitch<LogsViewMode>'),
+  'running-logs.tsx must render ToggleSwitch with LogsViewMode'
+);
+
+// Check preferences/index.tsx (Theme buttons verified)
 const prefsSource = fs.readFileSync(
   path.join(MOBILE_ROOT, 'app/(app)/settings/preferences/index.tsx'),
   'utf8'
 );
 assert.ok(
-  prefsSource.includes('ToggleSwitch'),
-  'preferences/index.tsx must import ToggleSwitch'
-);
-assert.ok(
-  prefsSource.includes('options={THEME_OPTIONS}'),
+  prefsSource.includes('THEME_OPTIONS'),
   'preferences/index.tsx must bind THEME_OPTIONS'
 );
 assert.ok(
   prefsSource.includes('useCallback'),
   'preferences/index.tsx must memoize handleThemeChange'
 );
+assert.ok(
+  prefsSource.includes('themeOptionBtn'),
+  'preferences/index.tsx must use dedicated themeOptionBtn for theme selection'
+);
 
-// Check MachineDetailView.tsx
+// Check MachineDetailView.tsx (Tab buttons verified)
 const machineViewSource = fs.readFileSync(
   path.join(MOBILE_ROOT, 'components/machines/MachineDetailView.tsx'),
   'utf8'
 );
 assert.ok(
-  machineViewSource.includes('ToggleSwitch'),
-  'MachineDetailView.tsx must import ToggleSwitch'
+  machineViewSource.includes('segmentedTabItems'),
+  'MachineDetailView.tsx must bind memoized segmentedTabItems'
 );
 assert.ok(
-  machineViewSource.includes('options={segmentedTabItems}'),
-  'MachineDetailView.tsx must bind memoized segmentedTabItems'
+  machineViewSource.includes('handleTabChange'),
+  'MachineDetailView.tsx must bind memoized handleTabChange'
+);
+assert.ok(
+  machineViewSource.includes('tabOptionBtn'),
+  'MachineDetailView.tsx must use dedicated tabOptionBtn for tab selection'
 );
 
 console.log('  ✓ operations.tsx, preferences/index.tsx, and MachineDetailView.tsx integrated cleanly');

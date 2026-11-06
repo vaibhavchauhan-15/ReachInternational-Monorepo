@@ -11,6 +11,9 @@ export const CreateHourLogSchema = z.object({
   location: z.string().max(255, "Location cannot exceed 255 characters").optional().nullable(),
   remarks: z.string().max(500, "Remarks cannot exceed 500 characters").optional().nullable(),
   shift: z.string().max(50, "Shift cannot exceed 50 characters").optional().nullable(),
+  shift_code: z.string().max(20, "Shift code cannot exceed 20 characters").optional().nullable(),
+  operator_id: z.string().uuid("Invalid operator ID format").optional().nullable(),
+  client_id: z.string().uuid("Invalid client ID format").optional().nullable(),
   machine_condition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
   start_time: z.string().max(20, "Start time string cannot exceed 20 characters").optional().nullable(),
   end_time: z.string().max(20, "End time string cannot exceed 20 characters").optional().nullable(),
@@ -91,6 +94,14 @@ export const SubmitHourLogSchema = z.object({
 }).refine((data) => (data.endMeter - data.startMeter) <= 24, {
   message: "Machine running hours cannot exceed 24 hours in a single log.",
   path: ["endMeter"],
+}).refine((data) => {
+  if (data.isBreakdown && typeof data.breakdownHours === "number" && data.breakdownHours > 0) {
+    if (data.breakdownHours > 24) return false;
+  }
+  return true;
+}, {
+  message: "Breakdown duration cannot exceed total shift duration.",
+  path: ["breakdownHours"],
 });
 
 export type SubmitHourLogInput = z.infer<typeof SubmitHourLogSchema>;

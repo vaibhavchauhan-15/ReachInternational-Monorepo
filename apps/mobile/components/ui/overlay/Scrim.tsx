@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
   withSpring,
   ReduceMotion,
+  Easing,
   type SharedValue,
 } from 'react-native-reanimated';
 import { EFFECTS, DUR } from '../../../lib/motion/tokens';
@@ -44,8 +45,9 @@ export const Scrim: React.FC<ScrimProps> = ({
       if (isReduced) {
         progress.value = 1;
       } else {
-        progress.value = withSpring(1, {
-          ...EFFECTS.default,
+        progress.value = withTiming(1, {
+          duration: 260,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
           reduceMotion: ReduceMotion.System,
         });
       }
@@ -54,7 +56,8 @@ export const Scrim: React.FC<ScrimProps> = ({
         progress.value = 0;
       } else {
         progress.value = withTiming(0, {
-          duration: DUR.sm,
+          duration: 220,
+          easing: Easing.bezier(0.3, 0, 0.8, 0.15),
           reduceMotion: ReduceMotion.System,
         });
       }

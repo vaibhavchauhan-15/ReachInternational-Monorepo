@@ -34,6 +34,8 @@ const IGNORED_WARNING_PATTERNS: (string | RegExp)[] = [
   '"shadow*" style props are deprecated',
   'Use "boxShadow"',
   'SafeAreaView has been deprecated',
+  'ImageBackground is deprecated',
+  'VirtualizedList: You have a large list that is slow to update',
 ];
 
 // Configure Reanimated Logger to disable strict mode warnings triggered by NativeWind v4 (react-native-css-interop)

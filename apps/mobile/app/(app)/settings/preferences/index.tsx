@@ -15,9 +15,8 @@ import {
   Card,
   useTheme,
   Text,
+  Button,
   Switch,
-  ToggleSwitch,
-  SegmentedToggle,
 } from '../../../../components/ui';
 import { Pressable } from '../../../../components/ui/touch/Pressable';
 import { SettingsScreenContainer } from '../../../../components/settings';
@@ -27,6 +26,9 @@ import {
   Type,
   Vibrate,
   ChevronRight,
+  Sun,
+  Moon,
+  Monitor,
 } from '../../../../components/ui/icon';
 import { haptics } from '../../../../lib/haptics';
 import { usePreferences } from '../../../../lib/preferences/store';
@@ -133,14 +135,45 @@ export default function PreferencesSettingsScreen() {
           </View>
         </View>
 
-        <ToggleSwitch
-          options={THEME_OPTIONS}
-          value={mode}
-          onChange={handleThemeChange}
-          size="md"
-          fullWidth
-          accessibilityLabel="Select theme mode: Dark, Light, or System"
-        />
+        <View style={styles.themeSelectorGroup}>
+          {THEME_OPTIONS.map((option) => {
+            const isSelected = mode === option.id;
+            const IconComponent =
+              option.id === 'dark'
+                ? Moon
+                : option.id === 'light'
+                ? Sun
+                : Monitor;
+
+            return (
+              <Button
+                key={option.id}
+                variant={isSelected ? 'primary' : 'outline'}
+                size="md"
+                shape="rounded"
+                style={styles.themeOptionBtn}
+                onPress={() => handleThemeChange(option.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                haptic="select"
+                leftIcon={
+                  <IconComponent
+                    size={16}
+                    color={
+                      isSelected
+                        ? '#ffffff'
+                        : isDark
+                        ? theme.colors.mute
+                        : '#52525b'
+                    }
+                  />
+                }
+              >
+                {option.label}
+              </Button>
+            );
+          })}
+        </View>
       </Card>
 
       {/* 2. Font Size Card */}
@@ -287,6 +320,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+  },
+  themeSelectorGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  themeOptionBtn: {
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: 6,
   },
   navCard: {
     minHeight: 64,

@@ -1,0 +1,83 @@
+diff --git a/scripts/get-app-config-android.gradle b/scripts/get-app-config-android.gradle
+index 7911284daf803ee15cff2e0743248ac82e91bc36..366a1dfba018a99dc5ea3ae18ea0982493e483ba 100644
+--- a/scripts/get-app-config-android.gradle	
++++ b/scripts/get-app-config-android.gradle	
+@@ -16,11 +16,11 @@ afterEvaluate {
+   def customProjectRoot = expoGradleExtension?.projectRoot
+   def projectRoot = file("${customProjectRoot ?: rootProject.projectDir}")
+ 
+-  project.android.libraryVariants.all { variant ->
+-    def assetsDir = file("$buildDir/generated/assets/expo-constants/${variant.name}")
+-    def configMode = variant.buildType.name == "debug" || variant.buildType.name == "debugOptimized" ? "development" : "production"
++  def configureVariant = { String variantName, String buildTypeName, boolean isDebug, Object preBuildProvider ->
++    def assetsDir = file("$buildDir/generated/assets/expo-constants/${variantName}")
++    def configMode = (buildTypeName == "debug" || buildTypeName == "debugOptimized") ? "development" : "production"
+ 
+-    def createConfigTask = tasks.register("create${variant.name.capitalize()}ExpoConfig", Exec) {
++    def createConfigTask = tasks.register("create${variantName.capitalize()}ExpoConfig", Exec) {
+       description = 'expo-constants: Create app.config.'
+ 
+       doFirst {
+@@ -46,10 +46,16 @@ afterEvaluate {
+     }
+ 
+     // Generate app.config at preBuild
+-    variant.preBuildProvider.configure { it.dependsOn(createConfigTask) }
++    if (preBuildProvider != null) {
++      preBuildProvider.configure { it.dependsOn(createConfigTask) }
++    } else {
++      tasks.matching { it.name == "pre${variantName.capitalize()}Build" || it.name == "preBuild" }.configureEach {
++        it.dependsOn(createConfigTask)
++      }
++    }
+ 
+     // Add generated assetsDir into assets.srcDirs
+-    project.android.sourceSets.maybeCreate(variant.name).assets.srcDirs += assetsDir
++    project.android.sourceSets.maybeCreate(variantName).assets.srcDirs += assetsDir
+   }
+ 
+   def fingerprintAssetsDir = file("$buildDir/generated/assets/expo-constants-fingerprint")
+@@ -75,11 +81,39 @@ afterEvaluate {
+     }
+   }
+ 
+-  project.android.libraryVariants.all { variant ->
+-    if (!variant.buildType.debuggable) {
++  def configureFingerprint = { String variantName, String buildTypeName, boolean isDebug, Object preBuildProvider ->
++    if (!isDebug) {
+       return
+     }
+-    variant.preBuildProvider.configure { it.dependsOn(createFingerprintTask) }
+-    project.android.sourceSets.maybeCreate(variant.buildType.name).assets.srcDirs += fingerprintAssetsDir
++    if (preBuildProvider != null) {
++      preBuildProvider.configure { it.dependsOn(createFingerprintTask) }
++    } else {
++      tasks.matching { it.name == "pre${variantName.capitalize()}Build" || it.name == "preBuild" }.configureEach {
++        it.dependsOn(createFingerprintTask)
++      }
++    }
++    project.android.sourceSets.maybeCreate(buildTypeName).assets.srcDirs += fingerprintAssetsDir
++  }
++
++  boolean hasLibraryVariants = false
++  try {
++    hasLibraryVariants = project.android.hasProperty("libraryVariants") && project.android.libraryVariants != null
++  } catch (Throwable ignored) {
++    hasLibraryVariants = false
++  }
++
++  if (hasLibraryVariants) {
++    project.android.libraryVariants.all { variant ->
++      configureVariant(variant.name, variant.buildType.name, variant.buildType.debuggable, variant.preBuildProvider)
++      configureFingerprint(variant.name, variant.buildType.name, variant.buildType.debuggable, variant.preBuildProvider)
++    }
++  } else {
++    // AGP 9.0+ compatibility: libraryVariants removed from LibraryExtension in AGP 9.0+.
++    // Fall back to configuring directly from buildTypes.
++    project.android.buildTypes.all { buildType ->
++      boolean isDebug = buildType.name == "debug" || buildType.name == "debugOptimized" || (buildType.hasProperty("debuggable") && buildType.debuggable)
++      configureVariant(buildType.name, buildType.name, isDebug, null)
++      configureFingerprint(buildType.name, buildType.name, isDebug, null)
++    }
+   }
+ }

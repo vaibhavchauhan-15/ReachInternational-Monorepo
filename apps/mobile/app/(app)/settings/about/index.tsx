@@ -99,7 +99,7 @@ export default function AboutAppHomeScreen() {
     router.replace('/settings');
   };
 
-  const appVersion = Constants.expoConfig?.version || '1.3.0';
+  const appVersion = Constants.expoConfig?.version || '1.4.0';
 
   return (
     <SettingsScreenContainer

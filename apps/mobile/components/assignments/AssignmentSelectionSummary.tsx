@@ -201,7 +201,7 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
                       >
                         {item.title}
                       </Text>
-                      {shiftBadgeText && (
+                      {Boolean(shiftBadgeText) ? (
                         <View
                           style={[
                             styles.shiftCodePill,
@@ -215,14 +215,14 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
                             {shiftBadgeText}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
 
-                    {empId && (
+                    {Boolean(empId) ? (
                       <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
                         {empId}
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 </View>
 

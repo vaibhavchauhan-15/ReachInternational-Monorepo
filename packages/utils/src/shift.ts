@@ -18,6 +18,7 @@ export interface ShiftMatchTarget {
 
 export interface OperatorShiftContextMeta {
   assigned_shift_code?: string | null;
+  assigned_shift_codes?: string[] | null;
   operator?: {
     shift_code?: string | null;
     shift_start?: string | null;
@@ -45,7 +46,12 @@ export function resolveDefaultOperatorShift<T extends ShiftMatchTarget = ShiftMa
   const shifts: T[] = availableShifts as T[];
   if (!context) return shifts[0];
 
-  const assignedCode = (context.assigned_shift_code || context.operator?.shift_code || '').trim();
+  const assignedCode = (
+    context.assigned_shift_code ||
+    (Array.isArray(context.assigned_shift_codes) && context.assigned_shift_codes.length > 0 ? context.assigned_shift_codes[0] : '') ||
+    context.operator?.shift_code ||
+    ''
+  ).trim();
 
   // 1. Direct code equality match
   if (assignedCode) {
@@ -507,7 +513,28 @@ export function parseOperationalErrorMessage(
     };
   }
 
-  // 8. Unauthorized operator
+  // 8. Unauthorized operator / equipment / supervisory scope
+  if (
+    lower.includes('not authorized to submit shift logs for this equipment') ||
+    lower.includes('must be assigned to the machine')
+  ) {
+    return {
+      title: 'Unauthorized Action',
+      message: 'You are not authorized to submit logs for this equipment. You must be assigned to the machine to submit logs.',
+    };
+  }
+
+  if (
+    lower.includes('supervisors can only fill shift entries') ||
+    lower.includes('assigned under their supervision')
+  ) {
+    return {
+      title: 'Supervisory Scope Error',
+      message: 'Supervisors can only fill shift entries for operators or machinery assigned under their supervision.',
+    };
+  }
+
+  // 8b. Unauthorized generic action
   if (lower.includes('unauthorized operator') || err?.code === '42501') {
     return {
       title: 'Unauthorized Action',

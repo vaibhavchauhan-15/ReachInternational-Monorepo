@@ -1,5 +1,7 @@
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
+if (project.extensions.findByName('kotlin') == null) {
+  apply plugin: 'kotlin-android'
+}
 
 group = 'com.reachinternational.modules.haptics'
 version = '0.1.0'
@@ -11,11 +13,11 @@ if (expoModulesCorePlugin.exists()) {
 
 android {
   namespace "com.reachinternational.modules.haptics"
-  compileSdkVersion 36
+  compileSdkVersion rootProject.ext.has('compileSdkVersion') ? rootProject.ext.get('compileSdkVersion') : 37
 
   defaultConfig {
-    minSdkVersion 24
-    targetSdkVersion 36
+    minSdkVersion rootProject.ext.has('minSdkVersion') ? rootProject.ext.get('minSdkVersion') : 24
+    targetSdkVersion rootProject.ext.has('targetSdkVersion') ? rootProject.ext.get('targetSdkVersion') : 36
     versionCode 1
     versionName "0.1.0"
   }
@@ -27,5 +29,4 @@ android {
 
 dependencies {
   implementation project(':expo-modules-core')
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"
 }

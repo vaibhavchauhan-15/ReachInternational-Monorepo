@@ -331,16 +331,24 @@ html[data-nav-hidden] nav[aria-label="Primary"] {
    Positions the toolbar cleanly above the mobile bottom navigation bar (56px)
    guaranteeing unobstructed visibility across /profile, /settings, etc.
    ============================================ */
+agentation-toolbar,
 .reach-agentation-toolbar,
 [data-agentation-toolbar] {
-  z-index: 100000 !important;
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  z-index: 999999 !important;
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 @media (max-width: 767px) {
+  agentation-toolbar,
   .reach-agentation-toolbar,
   [data-agentation-toolbar] {
     max-width: calc(100vw - 24px) !important;
   }
+  agentation-toolbar:not([style*="top"]),
   .reach-agentation-toolbar:not([style*="top"]),
   [data-agentation-toolbar]:not([style*="top"]) {
     bottom: calc(var(--bottom-nav-h, 56px) + 12px) !important;

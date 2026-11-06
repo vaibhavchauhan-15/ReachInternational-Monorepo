@@ -1,6 +1,6 @@
 {
   "name": "@reachinternational/mobile",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -112,7 +112,15 @@
       "exclude": [
         "@sentry/react-native",
         "typescript",
-        "@types/jest"
+        "@types/jest",
+        "react-native-safe-area-context",
+        "expo",
+        "expo-constants",
+        "expo-linking",
+        "expo-router",
+        "expo-sharing",
+        "expo-splash-screen",
+        "expo-updates"
       ]
     },
     "doctor": {

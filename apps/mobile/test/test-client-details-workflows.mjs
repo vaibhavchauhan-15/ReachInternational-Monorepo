@@ -64,8 +64,8 @@ runAssertion('_layout.tsx registers clients/index tab and clients/[id] screen', 
     '_layout.tsx should register clients/index'
   );
   assert.ok(
-    content.includes('<Tabs.Screen name="clients/[id]" options={{ ...motion.tabsShift, title: \'Client Details\', href: null }} />'),
-    '_layout.tsx should register clients/[id] with href: null'
+    content.includes('<Tabs.Screen name="clients/[id]" options={{ ...motion.tabsShift, title: \'Client Details\' }} />'),
+    '_layout.tsx should register clients/[id]'
   );
 });
 

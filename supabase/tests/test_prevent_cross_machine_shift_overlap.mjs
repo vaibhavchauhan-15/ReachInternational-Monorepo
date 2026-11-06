@@ -56,36 +56,47 @@ async function runTests() {
   const testOperator = operators[0];
   console.log(`✅ Using test operator: ${testOperator.full_name} (${testOperator.id})`);
 
-  // 2. Fetch machines specifically for NCC Limited and Tata Projects Limited (the exact user issue)
-  const { data: nccMachines } = await supabase
+  const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin').limit(1);
+  const testAdminId = admins?.[0]?.id || 'cc2b0d0c-e06d-4500-98fe-69354b2bdc16';
+
+  // 2. Fetch real test machines from Dev DB
+  const { data: m1 } = await supabase
     .from('machines')
     .select('id, machine_id, client_id, client:clients(id, company_name)')
-    .eq('client_id', 'ea0dbad0-6ce8-4965-9fdd-2d6287b3063c') // NCC Limited (Shift A: 06:00-18:00, Shift B: 18:00-06:00)
-    .limit(1);
+    .eq('machine_id', 'M/C-0001')
+    .single();
 
-  const { data: tataMachines } = await supabase
+  const { data: m2 } = await supabase
     .from('machines')
     .select('id, machine_id, client_id, client:clients(id, company_name)')
-    .eq('client_id', '479f9a08-7242-4417-959c-4611c7c0361b') // Tata Projects (Shift A: 06:00-14:00, Shift B: 14:00-22:00, Shift C: 22:00-06:00)
-    .limit(1);
+    .eq('machine_id', 'M/C-0002')
+    .single();
 
-  const { data: ltMachines } = await supabase
+  const { data: m3 } = await supabase
     .from('machines')
     .select('id, machine_id, client_id, client:clients(id, company_name)')
-    .eq('client_id', '7a2f76de-3b7f-465a-95f2-cff5dd29db06') // L&T
-    .limit(2);
+    .eq('machine_id', 'M/C-0003')
+    .single();
 
-  const nccMachine = nccMachines?.[0];
-  const tataMachine = tataMachines?.[0];
-  const ltMachine1 = ltMachines?.[0];
-  const ltMachine2 = ltMachines?.[1] || ltMachine1;
+  const { data: m6 } = await supabase
+    .from('machines')
+    .select('id, machine_id, client_id, client:clients(id, company_name)')
+    .eq('machine_id', 'M/C-0006')
+    .single();
 
-  if (!nccMachine || !tataMachine) {
-    throw new Error('Could not find NCC and Tata Projects machines to reproduce real scenario.');
+  const nccMachine = m1; // Machine 1
+  const tataMachine = m2; // Machine 2
+  const ltMachine1 = m3; // Machine 3
+  const ltMachine2 = m6; // Machine 4
+
+  if (!nccMachine || !tataMachine || !ltMachine1 || !ltMachine2) {
+    throw new Error('Could not find all required test machines (M/C-0001, M/C-0002, M/C-0003, M/C-0006) in dev database.');
   }
 
-  console.log(`✅ Machine 1 (NCC Limited - 12h shifts): ${nccMachine.machine_id}`);
-  console.log(`✅ Machine 2 (Tata Projects - 8h shifts): ${tataMachine.machine_id}`);
+  console.log(`✅ Machine 1: ${nccMachine.machine_id} (${nccMachine.client?.company_name})`);
+  console.log(`✅ Machine 2: ${tataMachine.machine_id} (${tataMachine.client?.company_name})`);
+  console.log(`✅ Machine 3: ${ltMachine1.machine_id} (${ltMachine1.client?.company_name})`);
+  console.log(`✅ Machine 4: ${ltMachine2.machine_id} (${ltMachine2.client?.company_name})`);
 
   // Backup existing active assignments for this operator to restore later
   const { data: originalAssignments, error: origErr } = await supabase
@@ -116,42 +127,40 @@ async function runTests() {
 
   try {
     // =========================================================================
-    // SCENARIO 1: Exact User Bug Reproduction & Fix Verification
-    // Operator is assigned to NCC Limited (Shift A: 06:00 - 18:00)
-    // Then user tries to assign operator to Tata Projects (Shift B: 14:00 - 22:00)
-    // There is a 4-hour overlap (14:00 - 18:00) -> MUST BE REJECTED with SHIFT_OVERLAP_CONFLICT!
+    // SCENARIO 1: Overlapping Shift Rejection Across Machines
+    // Operator is assigned to Machine 1 (Shift A: 06:00 - 14:00)
+    // Then user tries to assign operator to Machine 2 (Shift A: 06:00 - 14:00)
+    // Both machines have Shift A at the exact same hours -> MUST BE REJECTED with SHIFT_OVERLAP_CONFLICT!
     // =========================================================================
-    console.log('\n--- SCENARIO 1: Overlapping Shifts Across NCC (06:00-18:00) and Tata Projects (14:00-22:00) ---');
+    console.log('\n--- SCENARIO 1: Overlapping Shifts Across Machine 1 (Shift A 06:00-14:00) and Machine 2 (Shift A 06:00-14:00) ---');
     const { data: assign1, error: err1 } = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: nccMachine.id,
       p_operator_id: testOperator.id,
-      p_shift_start_time: '06:00:00',
-      p_shift_end_time: '18:00:00',
+      p_assigned_by: testAdminId,
       p_shift_code: 'A',
-      p_notes: 'NCC Shift A assignment',
+      p_notes: 'Machine 1 Shift A assignment',
     });
 
     if (err1 || (assign1 && !assign1.success)) {
-      throw new Error(`Failed to assign NCC Shift A: ${err1?.message || assign1?.error}`);
+      throw new Error(`Failed to assign Machine 1 Shift A: ${err1?.message || assign1?.error}`);
     }
-    console.log(`✅ Machine ${nccMachine.machine_id} Shift A (06:00-18:00) assigned successfully.`);
+    console.log(`✅ Machine ${nccMachine.machine_id} Shift A (06:00-14:00) assigned successfully.`);
 
-    // Now attempt to assign overlapping Shift B (14:00-22:00) on Tata Projects Machine
+    // Now attempt to assign overlapping Shift A (06:00-14:00) on Machine 2
     const { data: assign2, error: err2 } = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: tataMachine.id,
       p_operator_id: testOperator.id,
-      p_shift_start_time: '14:00:00',
-      p_shift_end_time: '22:00:00',
-      p_shift_code: 'B',
-      p_notes: 'Tata Projects Shift B overlapping attempt',
+      p_assigned_by: testAdminId,
+      p_shift_code: 'A',
+      p_notes: 'Machine 2 Shift A overlapping attempt',
     });
 
     const isConflict =
       (err2 && (err2.message.includes('SHIFT_OVERLAP_CONFLICT') || err2.code === 'P0003')) ||
-      (assign2 && !assign2.success && (assign2.error?.includes('SHIFT_OVERLAP_CONFLICT') || assign2.error?.includes('overlaps with')));
+      (assign2 && !assign2.success && (assign2.error?.includes('SHIFT_OVERLAP_CONFLICT') || assign2.error?.includes('overlaps with') || assign2.code === 'SHIFT_OVERLAP_CONFLICT'));
 
     if (isConflict) {
-      console.log('✅ PASSED: RPC correctly rejected cross-machine overlapping shift (06:00-18:00 vs 14:00-22:00).');
+      console.log('✅ PASSED: RPC correctly rejected cross-machine overlapping shift (Shift A vs Shift A).');
       console.log(`   Conflict message: ${err2?.message || assign2?.error}`);
     } else {
       console.error('❌ FAILED: RPC allowed cross-machine overlapping shift! Response:', assign2);
@@ -160,22 +169,21 @@ async function runTests() {
 
     // =========================================================================
     // SCENARIO 2: Valid Non-Overlapping Shift Across Machines
-    // Operator has NCC Limited Shift A (06:00 - 18:00).
-    // Now assign to Tata Projects Shift C (22:00 - 06:00) [crosses midnight].
-    // [22:00, 06:00) does NOT overlap [06:00, 18:00). -> MUST SUCCEED!
+    // Operator has Machine 1 (Shift A: 06:00 - 14:00).
+    // Now assign to Machine 2 Shift C (22:00 - 06:00) [crosses midnight].
+    // [22:00, 06:00) does NOT overlap [06:00, 14:00). -> MUST SUCCEED!
     // =========================================================================
     console.log('\n--- SCENARIO 2: Non-Overlapping Midnight-Crossing Shift Across Machines ---');
     const { data: assign2Valid, error: err2Valid } = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: tataMachine.id,
       p_operator_id: testOperator.id,
-      p_shift_start_time: '22:00:00',
-      p_shift_end_time: '06:00:00',
+      p_assigned_by: testAdminId,
       p_shift_code: 'C',
-      p_notes: 'Tata Projects Shift C night shift',
+      p_notes: 'Machine 2 Shift C night shift',
     });
 
     if (!err2Valid && assign2Valid && assign2Valid.success) {
-      console.log(`✅ PASSED: RPC allowed non-overlapping midnight shift (22:00-06:00) alongside (06:00-18:00) across ${nccMachine.machine_id} and ${tataMachine.machine_id}.`);
+      console.log(`✅ PASSED: RPC allowed non-overlapping midnight shift (22:00-06:00) alongside (06:00-14:00) across ${nccMachine.machine_id} and ${tataMachine.machine_id}.`);
     } else {
       console.error(`❌ FAILED: Non-overlapping night shift rejected: ${err2Valid?.message || assign2Valid?.error}`);
       passedAll = false;
@@ -199,6 +207,7 @@ async function runTests() {
     const resS1 = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: tataMachine.id,
       p_operator_id: testOperator.id,
+      p_assigned_by: testAdminId,
       p_shift_start_time: '06:00:00',
       p_shift_end_time: '14:00:00',
       p_shift_code: 'A',
@@ -206,6 +215,7 @@ async function runTests() {
     const resS2 = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: ltMachine1.id,
       p_operator_id: testOperator.id,
+      p_assigned_by: testAdminId,
       p_shift_start_time: '14:00:00',
       p_shift_end_time: '22:00:00',
       p_shift_code: 'B',
@@ -213,6 +223,7 @@ async function runTests() {
     const resS3 = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: ltMachine2.id,
       p_operator_id: testOperator.id,
+      p_assigned_by: testAdminId,
       p_shift_start_time: '22:00:00',
       p_shift_end_time: '06:00:00',
       p_shift_code: 'C',
@@ -242,6 +253,7 @@ async function runTests() {
     const resS4 = await supabase.rpc('assign_operator_machine_atomic', {
       p_machine_id: nccMachine.id,
       p_operator_id: testOperator.id,
+      p_assigned_by: testAdminId,
       p_shift_start_time: '10:00:00',
       p_shift_end_time: '12:00:00',
       p_shift_code: 'A',
@@ -294,6 +306,7 @@ async function runTests() {
       const assignRes = await supabase.rpc('assign_operator_machine_atomic', {
         p_machine_id: tataMachine.id,
         p_operator_id: testOperator.id,
+        p_assigned_by: testAdminId,
         p_shift_start_time: originalStart,
         p_shift_end_time: originalEnd,
         p_shift_code: targetShift.code,

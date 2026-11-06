@@ -509,7 +509,7 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
               />
 
               {/* Shift Picker for Selected Machine */}
-              {selectedCandidateMachine && (
+              {Boolean(selectedCandidateMachine) ? (
                 <AssignmentShiftPicker
                   shifts={candidateMachineShifts}
                   selectedShiftCode={selectedShiftCode}
@@ -517,10 +517,10 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
                   conflictWarning={shiftConflictWarning}
                   disabled={isSaving}
                 />
-              )}
+              ) : null}
 
               {/* Confirm Add Button */}
-              {selectedMachineId && (
+              {Boolean(selectedMachineId) ? (
                 <Pressable
                   onPress={handleAddMachineToRoster}
                   disabled={Boolean(shiftConflictWarning)}
@@ -536,7 +536,7 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
                     Assign {selectedCandidateMachine?.machine_id} (Shift {selectedShiftCode})
                   </Text>
                 </Pressable>
-              )}
+              ) : null}
             </View>
           )}
         </View>

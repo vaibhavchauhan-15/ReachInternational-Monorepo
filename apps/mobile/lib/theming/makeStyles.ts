@@ -37,3 +37,4 @@ export function makeStyles<T extends NamedStyles<T> | NamedStyles<any>>(
     return lightSheet;
   };
 }
+

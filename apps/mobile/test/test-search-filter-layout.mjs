@@ -142,7 +142,7 @@ const machineFilterPath = path.join(rootDir, 'apps/mobile/components/machines/Ma
 const machineFilterContent = fs.readFileSync(machineFilterPath, 'utf8');
 
 test('MachineFilterPanel searchContainer defines minWidth: 0', () => {
-  assert(machineFilterContent.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
+  assert(machineFilterContent.replace(/\r\n/g, '\n').includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
 });
 
 test('MachineFilterPanel filterToggleBtn enforces flexShrink: 0', () => {
@@ -163,7 +163,7 @@ const userFiltersPath = path.join(rootDir, 'apps/mobile/components/users/UserFil
 const userFiltersContent = fs.readFileSync(userFiltersPath, 'utf8');
 
 test('UserFiltersPanel searchContainer defines minWidth: 0', () => {
-  assert(userFiltersContent.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
+  assert(userFiltersContent.replace(/\r\n/g, '\n').includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
 });
 
 test('UserFiltersPanel filterToggleBtn enforces flexShrink: 0', () => {
@@ -184,7 +184,7 @@ const filterToolbarPath = path.join(rootDir, 'apps/mobile/components/ui/FilterTo
 const filterToolbarContent = fs.readFileSync(filterToolbarPath, 'utf8');
 
 test('FilterToolbar searchFlexWrap defines minWidth: 0', () => {
-  assert(filterToolbarContent.includes('searchFlexWrap: {\n    flex: 1,\n    minWidth: 0'), 'searchFlexWrap includes minWidth: 0');
+  assert(filterToolbarContent.replace(/\r\n/g, '\n').includes('searchFlexWrap: {\n    flex: 1,\n    minWidth: 0'), 'searchFlexWrap includes minWidth: 0');
 });
 
 test('FilterToolbar filterToggleBtn enforces flexShrink: 0', () => {
@@ -205,7 +205,7 @@ const attendancePath = path.join(rootDir, 'apps/mobile/app/(app)/attendance.tsx'
 const attendanceContent = fs.readFileSync(attendancePath, 'utf8');
 
 test('Attendance screen searchContainer defines minWidth: 0', () => {
-  assert(attendanceContent.includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
+  assert(attendanceContent.replace(/\r\n/g, '\n').includes('searchContainer: {\n    flex: 1,\n    minWidth: 0'), 'searchContainer includes minWidth: 0');
 });
 
 test('Attendance screen managementFilterBtn enforces flexShrink: 0', () => {

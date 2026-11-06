@@ -172,7 +172,7 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
                 >
                   {item.title}
                 </Text>
-                {item.code && (
+                {Boolean(item.code) ? (
                   <View
                     style={[
                       styles.codeBadge,
@@ -186,8 +186,8 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
                       {item.code}
                     </Text>
                   </View>
-                )}
-                {item.statusBadge && (
+                ) : null}
+                {Boolean(item.statusBadge) ? (
                   <View
                     style={[
                       styles.capacityBadge,
@@ -205,27 +205,27 @@ export const AssignmentSelectableList: React.FC<AssignmentSelectableListProps> =
                       {item.statusBadge}
                     </Text>
                   </View>
-                )}
+                ) : null}
                 {item.isAlreadyAssigned && (
                   <Badge status="active" size="sm" customLabel="ASSIGNED" />
                 )}
               </View>
 
-              {item.subtitle && (
+              {Boolean(item.subtitle) ? (
                 <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
                   {item.subtitle}
                 </Text>
-              )}
+              ) : null}
 
               {/* Conflict / Overlap Alert */}
-              {item.conflictNotice && (
+              {Boolean(item.conflictNotice) ? (
                 <View style={styles.conflictRow}>
                   <AlertCircle size={12} color="#f59e0b" />
                   <Text variant="micro" style={{ color: '#f59e0b' }} numberOfLines={1}>
                     {item.conflictNotice}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             {/* Right: Selection Checkbox / Radio */}

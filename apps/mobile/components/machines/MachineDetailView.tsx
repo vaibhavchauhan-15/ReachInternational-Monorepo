@@ -12,6 +12,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import { AppModal } from '../ui/AppModal';
 import { Pressable } from '../ui/touch/Pressable';
@@ -21,8 +22,6 @@ import {
   useTheme,
   SharedLinkPreviewCard,
   AppRefreshControl,
-  ToggleSwitch,
-  SegmentedToggle,
   MobileHeader,
   Text,
   showToast,
@@ -78,7 +77,7 @@ import {
 } from '../ui/icon';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
-import { AssignOperatorToMachineModal } from '../assignments/AssignOperatorToMachineModal';
+import { MobileAssignPersonnelModal } from '../operations/MobileAssignPersonnelModal';
 import { MachineHMRSkeleton } from './MachineHMRSkeleton';
 import { MachineAuditSkeleton } from './MachineAuditSkeleton';
 
@@ -375,29 +374,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [copiedPan, setCopiedPan] = useState(false);
   const [copiedSiteAddress, setCopiedSiteAddress] = useState(false);
   const [copiedBillingAddress, setCopiedBillingAddress] = useState(false);
+  const [copiedClientCode, setCopiedClientCode] = useState(false);
 
   // Modals
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
   const [assignPersonnelModalVisible, setAssignPersonnelModalVisible] = useState(false);
-  const [heroMenuVisible, setHeroMenuVisible] = useState(false);
-  const heroEditBtnRef = useRef<any>(null);
-  const [heroMenuCoords, setHeroMenuCoords] = useState<{ top: number; right: number } | null>(null);
-
-  const handleOpenHeroMenu = useCallback(() => {
-    if (heroEditBtnRef.current && (heroEditBtnRef.current as any).measureInWindow) {
-      (heroEditBtnRef.current as any).measureInWindow((x: number, y: number, width: number, height: number) => {
-        const screenWidth = Dimensions.get('window').width;
-        const right = Math.max(16, screenWidth - (x + width));
-        const top = y + height + 6;
-        setHeroMenuCoords({ top, right });
-        setHeroMenuVisible(true);
-      });
-    } else {
-      setHeroMenuCoords({ top: 120, right: 16 });
-      setHeroMenuVisible(true);
-    }
-  }, []);
 
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -424,16 +406,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [selectedMobileAuditLog, setSelectedMobileAuditLog] = useState<any | null>(null);
   const [copiedLogIdMobile, setCopiedLogIdMobile] = useState(false);
 
+  const getAccentBorderColor = useCallback(() => {
+    if (machine.health_status === 'breakdown') return '#ef4444';
+    if (machine.health_status === 'under_maintenance') return '#f59e0b';
+    if (machine.health_status === 'spare') return '#06b6d4';
+    if (machine.status === 'rented') return '#0ea5e9';
+    return '#10b981';
+  }, [machine.health_status, machine.status]);
+
   const handleTabChange = useCallback((val: string) => {
     setActiveTab(val as 'overview' | 'running_hours' | 'audit_trail');
   }, []);
 
   const segmentedTabItems = useMemo(
     () => [
-      { id: 'overview' as const, label: 'Basic Info' },
+      { id: 'overview' as const, label: 'Basic Info', icon: Info },
       {
         id: 'running_hours' as const,
         label: 'HMR',
+        icon: Clock,
         count: hasLoadedLogs && hourLogs && hourLogs.length > 0 ? hourLogs.length : undefined,
       },
       ...(normalizedRole !== 'operator'
@@ -441,6 +432,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             {
               id: 'audit_trail' as const,
               label: 'Audit',
+              icon: Shield,
               count: hasLoadedAudit && auditLogs && auditLogs.length > 0 ? auditLogs.length : undefined,
             },
           ]
@@ -448,6 +440,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     ],
     [hasLoadedLogs, hourLogs, normalizedRole, hasLoadedAudit, auditLogs]
   );
+  const tabItems = segmentedTabItems;
 
   // Logs Filter / Sort State
   const [logSearch, setLogSearch] = useState('');
@@ -1379,143 +1372,204 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor: theme.colors.hairline,
+                borderLeftWidth: 4,
+                borderLeftColor: getAccentBorderColor(),
               },
             ]}
           >
-            {/* Row 1: Left squircle + Title & Subtitle + Right Actions */}
+            {/* Row 1: Left squircle + Title & Subtitle + Monospace Codes */}
             <View style={styles.heroMainRow}>
-              {/* Scissor Lift Logo Icon in Pitch Dark Squircle Container matching Screenshot 3 */}
+              {/* Scissor Lift Logo Icon in Pitch Dark Squircle Container */}
               <View
                 style={[
                   styles.scissorSquircle,
                   {
-                    backgroundColor: '#18181b',
-                    borderColor: '#27272a',
+                    backgroundColor: isDark ? '#141414' : '#18181b',
+                    borderColor: isDark ? '#262626' : '#27272a',
                   },
                 ]}
               >
-                <ScissorLiftLogoIcon size={22} variant="light" color="#38bdf8" />
+                <ScissorLiftLogoIcon size={24} variant="light" color="#38bdf8" />
               </View>
 
               {/* Title & Subtitle */}
               <View style={styles.heroTitleWrap}>
-                <Text variant="title" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                <Text
+                  variant="title"
+                  weight="bold"
+                  style={{ color: theme.colors.ink, letterSpacing: -0.3 }}
+                  numberOfLines={1}
+                >
                   {machine.model || 'Machine Model'}
                 </Text>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <View style={styles.heroMetaRow}>
                   {Boolean(machine.serial_number) && (
                     <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
                       {machine.serial_number}
                     </Text>
                   )}
                   {Boolean(machine.serial_number && machine.machine_id) && (
-                    <Text variant="caption" style={{ color: theme.colors.mute }}>•</Text>
+                    <Text variant="caption" style={{ color: theme.colors.hairline }}>•</Text>
                   )}
                   {Boolean(machine.machine_id) && (
-                    <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
-                      {machine.machine_id}
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {/* Right Action Buttons: Edit & Delete */}
-              <View style={styles.heroActionBtns}>
-                {canManage ? (
-                  <View ref={heroEditBtnRef} collapsable={false}>
-                    <Pressable variant="outline" haptic="tap"
-                      onPress={handleOpenHeroMenu}
+                    <Pressable
+                      variant="plain"
+                      hitSlopToMin48
+                      onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)}
                       style={[
-                        styles.heroEditBtn,
+                        styles.heroIdChip,
                         {
-                          backgroundColor: theme.colors.canvas,
+                          backgroundColor: isDark ? '#262626' : '#f0f0f2',
                           borderColor: theme.colors.hairline,
                         },
                       ]}
-                      accessibilityLabel="Edit Machine Options"
+                      accessibilityLabel={`Copy machine ID ${machine.machine_id}`}
                     >
-                      <Edit2 size={13} color={theme.colors.ink} />
-                      <Text variant="label" style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Edit</Text>
-                      <ChevronDown size={11} color={theme.colors.mute} />
+                      <Text variant="caption" weight="semibold" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
+                        {machine.machine_id}
+                      </Text>
+                      {copiedId ? (
+                        <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                      ) : (
+                        <Copy size={11} color={theme.colors.mute} />
+                      )}
                     </Pressable>
-                  </View>
-                ) : isSupervisor ? (
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={() => {
-                      setAssignPersonnelModalVisible(true);
-                    }}
-                    style={[
-                      styles.heroEditBtn,
-                      {
-                        backgroundColor: theme.colors.canvas,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                    accessibilityLabel="Assign Operator"
-                  >
-                    <UserCheck size={13} color="#0d9488" />
-                    <Text variant="label" style={[styles.heroEditBtnText, { color: theme.colors.ink }]}>Assign</Text>
-                  </Pressable>
-                ) : null}
-
-                {canDelete && (
-                  <Pressable variant="outline" haptic="tap"
-                    onPress={() => setDeleteDialogVisible(true)}
-                    style={styles.circleDeleteBtn}
-                    accessibilityLabel="Delete Machine"
-                  >
-                    <Trash2 size={14} color="#ffffff" />
-                  </Pressable>
-                )}
+                  )}
+                </View>
               </View>
             </View>
 
-            {/* Row 2: Status Badges Row (full width, side-by-side, clean padding, formatted) */}
-            <View
-              style={[
-                styles.heroBadgeRow,
-                {
-                  borderTopWidth: 1,
-                  borderTopColor: theme.colors.hairline,
-                  paddingTop: 10,
-                  marginTop: 10,
-                },
-              ]}
-            >
+            {/* Row 2: Status Badges Row (Clean, premium, well-spaced placement) */}
+            <View style={styles.heroBadgeRow}>
               {machine.health_status === 'breakdown' && (
-                <Badge status="breakdown" dot solid customLabel="Breakdown" />
+                <Badge status="breakdown" dot solid customLabel="Breakdown" size="md" />
               )}
               {machine.health_status === 'under_maintenance' && (
-                <Badge status="under_maintenance" dot solid customLabel="Under Maintenance" />
+                <Badge status="under_maintenance" dot solid customLabel="Under Maintenance" size="md" />
               )}
               {machine.health_status === 'spare' && (
-                <Badge status="spare" dot solid customLabel="Spare" />
+                <Badge status="spare" dot solid customLabel="Spare" size="md" />
               )}
               {(!machine.health_status || machine.health_status === 'active') && (
-                <Badge status="active" dot solid customLabel="Active" />
+                <Badge status="active" dot solid customLabel="Active" size="md" />
               )}
 
               <Badge
                 status={machine.status === 'rented' ? 'in_transit' : machine.status === 'under_maintenance' ? 'under_maintenance' : 'available'}
                 solid
                 customLabel={machine.status === 'rented' ? 'On Rent' : machine.status === 'under_maintenance' ? 'Under Maintenance' : 'Available'}
+                size="md"
               />
+
+              {machine.hour_meter !== undefined && machine.hour_meter !== null && (
+                <View
+                  style={[
+                    styles.heroHmrPill,
+                    {
+                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.08)',
+                      borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.2)',
+                    },
+                  ]}
+                >
+                  <Clock size={11} color="#0284c7" />
+                  <Text variant="caption" weight="bold" style={{ color: '#0284c7' }}>
+                    {machine.hour_meter} hrs
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
-          {/* TAB NAVIGATION TOGGLE / NAVBAR */}
-          <ToggleSwitch
-            options={segmentedTabItems}
-            value={activeTab}
-            onChange={handleTabChange}
-            size="sm"
-          />
+          {/* REUSABLE TAB BUTTON BAR (Replaces broken ToggleSwitch) */}
+          <View
+            style={[
+              styles.tabButtonBar,
+              {
+                backgroundColor: isDark ? '#141414' : '#f0f0f2',
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {tabItems.map((tab) => {
+              const isActive = activeTab === tab.id;
+              const IconComp = tab.icon;
+              return (
+                <Pressable
+                  key={tab.id}
+                  variant="segmentedOption"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    haptics.select();
+                    handleTabChange(tab.id);
+                  }}
+                  style={[
+                    styles.tabButton,
+                    isActive
+                      ? [
+                          styles.tabButtonActive,
+                          {
+                            backgroundColor: isDark ? '#262626' : '#ffffff',
+                            borderColor: isDark ? '#383838' : '#e2e2e4',
+                          },
+                        ]
+                      : styles.tabButtonInactive,
+                  ]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${tab.label} tab`}
+                >
+                  <IconComp
+                    size={14}
+                    color={isActive ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute}
+                  />
+                  <Text
+                    variant="caption"
+                    weight={isActive ? 'bold' : 'medium'}
+                    style={{
+                      color: isActive ? theme.colors.ink : theme.colors.mute,
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <View
+                      style={[
+                        styles.tabCountPill,
+                        {
+                          backgroundColor: isActive
+                            ? (isDark ? '#38bdf825' : '#0284c718')
+                            : (isDark ? '#1f1f1f' : '#e4e4e7'),
+                        },
+                      ]}
+                    >
+                      <Text
+                        variant="micro"
+                        weight="bold"
+                        style={{
+                          color: isActive
+                            ? (isDark ? '#38bdf8' : '#0284c7')
+                            : theme.colors.mute,
+                        }}
+                      >
+                        {tab.count}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         {/* TAB 1: BASIC INFO, PERSONNEL & CLIENT DETAILS */}
         {activeTab === 'overview' && (
-          <View style={styles.tabContentArea}>
+          <Animated.View
+            key="tab_overview"
+            entering={FadeIn.duration(200)}
+            style={styles.tabContentArea}
+          >
             {/* 1. Basic Info Specs Grid Card */}
             <View
               style={[
@@ -1535,155 +1589,159 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
               </View>
 
-              <View
-                style={[
-                  styles.specsGrid,
-                  Platform.OS === 'web' && ({
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${numCols}, minmax(0, 1fr))`,
-                    gap: 10,
-                  } as any),
-                ]}
-              >
-                {/* 1. Machine ID */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <View style={styles.specBoxHeader}>
-                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
-                      MACHINE ID
+              <View style={styles.specsGridContainer}>
+                {/* Row 1: Machine ID & Model */}
+                <View style={styles.specsRow}>
+                  {/* 1. Machine ID */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        MACHINE ID
+                      </Text>
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)} accessibilityLabel="Copy Machine Code">
+                        {copiedId ? (
+                          <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                        ) : (
+                          <Copy size={11} color={theme.colors.mute} />
+                        )}
+                      </Pressable>
+                    </View>
+                    <Text variant="mono" weight="bold" style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {machine.machine_id || '—'}
                     </Text>
-                    <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)} accessibilityLabel="Copy Machine Code">
-                      {copiedId ? (
-                        <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
-                      ) : (
-                        <Copy size={11} color={theme.colors.mute} />
+                  </View>
+
+                  {/* 2. Model */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        MODEL
+                      </Text>
+                      {Boolean(machine.model) && (
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.model, `Model "${machine.model}"`, setCopiedModel)} accessibilityLabel="Copy Model Name">
+                          {copiedModel ? (
+                            <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                          ) : (
+                            <Copy size={11} color={theme.colors.mute} />
+                          )}
+                        </Pressable>
                       )}
-                    </Pressable>
+                    </View>
+                    <Text variant="body" weight="bold" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {machine.model || '—'}
+                    </Text>
                   </View>
-                  <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
-                    {machine.machine_id}
-                  </Text>
                 </View>
 
-                {/* 2. Model */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <View style={styles.specBoxHeader}>
-                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
-                    {Boolean(machine.model) && (
-                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.model, `Model "${machine.model}"`, setCopiedModel)} accessibilityLabel="Copy Model Name">
-                        {copiedModel ? (
-                          <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
-                        ) : (
-                          <Copy size={11} color={theme.colors.mute} />
-                        )}
-                      </Pressable>
-                    )}
+                {/* Row 2: Serial No & Year of Mfg */}
+                <View style={styles.specsRow}>
+                  {/* 3. Serial No */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        SERIAL NO
+                      </Text>
+                      {Boolean(machine.serial_number) && (
+                        <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.serial_number, `Serial Number "${machine.serial_number}"`, setCopiedSerial)} accessibilityLabel="Copy Serial Number">
+                          {copiedSerial ? (
+                            <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                          ) : (
+                            <Copy size={11} color={theme.colors.mute} />
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                    <Text variant="mono" weight="bold" style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {machine.serial_number || '—'}
+                    </Text>
                   </View>
-                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {machine.model || '—'}
-                  </Text>
-                </View>
 
-                {/* 3. Serial No */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <View style={styles.specBoxHeader}>
-                    <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
-                    {Boolean(machine.serial_number) && (
-                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(machine.serial_number, `Serial Number "${machine.serial_number}"`, setCopiedSerial)} accessibilityLabel="Copy Serial Number">
-                        {copiedSerial ? (
-                          <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
-                        ) : (
-                          <Copy size={11} color={theme.colors.mute} />
-                        )}
-                      </Pressable>
-                    )}
+                  {/* 4. Year of Mfg */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        YEAR OF MFG (YUM)
+                      </Text>
+                    </View>
+                    <Text variant="body" weight="bold" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
+                      {machine.year_of_mfg || '—'}
+                    </Text>
                   </View>
-                  <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
-                    {machine.serial_number || '—'}
-                  </Text>
                 </View>
 
-                {/* 4. Year of Mfg */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
-                    YEAR OF MFG (YUM)
-                  </Text>
-                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
-                    {machine.year_of_mfg || '—'}
-                  </Text>
-                </View>
+                {/* Row 3: Manufacturer & Hour Meter (HMR) */}
+                <View style={styles.specsRow}>
+                  {/* 5. Manufacturer */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        MANUFACTURER
+                      </Text>
+                    </View>
+                    <Text variant="body" weight="bold" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {machine.manufacturer || '—'}
+                    </Text>
+                  </View>
 
-                {/* 5. Manufacturer */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
-                    MANUFACTURER
-                  </Text>
-                  <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {machine.manufacturer || '—'}
-                  </Text>
-                </View>
-
-                {/* 6. Hour Meter (HMR) */}
-                <View
-                  style={[
-                    styles.specBox,
-                    {
-                      backgroundColor: theme.colors.canvas,
-                      borderColor: theme.colors.hairline,
-                      width: Platform.OS === 'web' ? '100%' : `${(100 - (numCols - 1) * 2.5) / numCols}%`,
-                    },
-                  ]}
-                >
-                  <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
-                    HOUR METER (HMR)
-                  </Text>
-                  <Text variant="mono" style={[styles.specBoxValueHmr, { color: theme.colors.link }]}>
-                    {machine.hour_meter ?? 0} hrs
-                  </Text>
+                  {/* 6. Hour Meter (HMR) */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        HOUR METER (HMR)
+                      </Text>
+                    </View>
+                    <Text variant="mono" weight="bold" style={[styles.specBoxValueHmr, { color: theme.colors.link }]}>
+                      {machine.hour_meter ?? 0} hrs
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1730,9 +1788,20 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 )}
               </View>
 
-              <View style={[styles.personnelSectionBody, { flexDirection: isMobile ? 'column' : 'row', gap: 12 }]}>
+              <View style={[styles.personnelSectionBody, { flexDirection: isMobile ? 'column' : 'row', gap: 12, width: '100%' }]}>
                 {/* Supervisors Panel */}
-                <View style={[styles.personnelSubBox, { flex: 1, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View
+                  style={[
+                    styles.personnelSubBox,
+                    {
+                      flex: isMobile ? undefined : 1,
+                      width: isMobile ? '100%' : undefined,
+                      flexShrink: 0,
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
                       <Shield size={14} color="#0d9488" />
@@ -1841,7 +1910,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
 
                 {/* Operators Panel */}
-                <View style={[styles.personnelSubBox, { flex: 1, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View
+                  style={[
+                    styles.personnelSubBox,
+                    {
+                      flex: isMobile ? undefined : 1,
+                      width: isMobile ? '100%' : undefined,
+                      flexShrink: 0,
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
                   <View style={[styles.personnelSubHeader, { borderBottomColor: theme.colors.hairline }]}>
                     <View style={styles.personnelSubHeaderLeft}>
                       <Wrench size={14} color="#d97706" />
@@ -1939,24 +2019,33 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     Client Details
                   </Text>
                   {clientCode ? (
-                    <View
+                    <Pressable
+                      variant="ghost"
+                      haptic="tap"
+                      hitSlopToMin48
+                      onPress={() => handleCopy(clientCode, `Client Code "${clientCode}"`, setCopiedClientCode)}
                       style={[
                         styles.clientCodePill,
                         {
-                          backgroundColor: '#0284c7',
-                          borderColor: '#0284c7',
-                          borderWidth: 1,
-                          opacity: 1,
+                          backgroundColor: isDark ? '#27272a' : '#f4f4f5',
+                          borderColor: theme.colors.hairline,
                         },
                       ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Client Code ${clientCode}, tap to copy`}
                     >
                       <Text
                         variant="mono"
-                        style={[styles.clientCodePillText, { color: '#ffffff' }]}
+                        style={[styles.clientCodePillText, { color: theme.colors.mute }]}
                       >
                         {clientCode}
                       </Text>
-                    </View>
+                      {copiedClientCode ? (
+                        <Check size={10} color={theme.colors.success} strokeWidth={2.5} />
+                      ) : (
+                        <Copy size={10} color={theme.colors.mute} />
+                      )}
+                    </Pressable>
                   ) : null}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -2011,83 +2100,83 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
               {hasLinkedClient ? (
                 <View style={styles.clientDetailsBody}>
-                  <View
-                    style={[
-                      styles.clientGrid,
-                      Platform.OS === 'web'
-                        ? ({
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                            gap: 10,
-                          } as any)
-                        : {
-                            flexDirection: 'row',
-                            flexWrap: 'wrap',
-                            gap: 10,
-                          },
-                    ]}
-                  >
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CLIENT NAME</Text>
-                      <Text variant="body" weight="medium" style={[styles.clientNameValue, { color: theme.colors.ink }]}>
-                        {clientCompanyName}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
-                      <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
-                        {clientContactPerson || '—'}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
-                      {clientPhone ? (
-                        <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={() => handleCall(clientPhone)}>
-                          <Text variant="body" style={[styles.clickableLinkText, { color: theme.colors.link }]}>
-                            {clientPhone}
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.mute }]}>—</Text>
-                      )}
-                    </View>
-
-                    <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                      <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CITY & STATE</Text>
-                      <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]}>
-                        {clientLocation || '—'}
-                      </Text>
-                    </View>
-
-                    {clientGstin ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                        <View style={styles.specBoxHeader}>
-                          <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
-                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientGstin, `GSTIN "${clientGstin}"`, setCopiedGstin)} accessibilityLabel="Copy GSTIN">
-                            {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                          </Pressable>
-                        </View>
-                        <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
-                          {clientGstin}
+                  <View style={styles.clientGridContainer}>
+                    {/* Row 1: Client Name & Contact Person */}
+                    <View style={styles.specsRow}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                        <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CLIENT NAME</Text>
+                        <Text variant="body" weight="medium" style={[styles.clientNameValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                          {clientCompanyName}
                         </Text>
                       </View>
-                    ) : null}
 
-                    {clientPan ? (
-                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, width: Platform.OS === 'web' ? '100%' : '48%' }]}>
-                        <View style={styles.specBoxHeader}>
-                          <Text variant="micro" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
-                          <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientPan, `PAN "${clientPan}"`, setCopiedPan)} accessibilityLabel="Copy PAN">
-                            {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
-                          </Pressable>
-                        </View>
-                        <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
-                          {clientPan}
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                        <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT PERSON</Text>
+                        <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                          {clientContactPerson || '—'}
                         </Text>
                       </View>
-                    ) : null}
+                    </View>
+
+                    {/* Row 2: Contact Mobile & City/State */}
+                    <View style={styles.specsRow}>
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                        <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CONTACT MOBILE</Text>
+                        {clientPhone ? (
+                          <Pressable variant="ghost" haptic="tap" hitSlopToMin48 onPress={() => handleCall(clientPhone)}>
+                            <Text variant="body" style={[styles.clickableLinkText, { color: theme.colors.link }]} numberOfLines={1}>
+                              {clientPhone}
+                            </Text>
+                          </Pressable>
+                        ) : (
+                          <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.mute }]}>—</Text>
+                        )}
+                      </View>
+
+                      <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                        <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>CITY & STATE</Text>
+                        <Text variant="body" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                          {clientLocation || '—'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Row 3: GSTIN & PAN (if available) */}
+                    {(Boolean(clientGstin) || Boolean(clientPan)) && (
+                      <View style={styles.specsRow}>
+                        {clientGstin ? (
+                          <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                            <View style={styles.specBoxHeader}>
+                              <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>GSTIN</Text>
+                              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientGstin, `GSTIN "${clientGstin}"`, setCopiedGstin)} accessibilityLabel="Copy GSTIN">
+                                {copiedGstin ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
+                              </Pressable>
+                            </View>
+                            <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
+                              {clientGstin}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ flex: 1 }} />
+                        )}
+
+                        {clientPan ? (
+                          <View style={[styles.clientFieldBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                            <View style={styles.specBoxHeader}>
+                              <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>PAN NUMBER</Text>
+                              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(clientPan, `PAN "${clientPan}"`, setCopiedPan)} accessibilityLabel="Copy PAN">
+                                {copiedPan ? <Check size={11} color={theme.colors.success} strokeWidth={2.5} /> : <Copy size={11} color={theme.colors.mute} />}
+                              </Pressable>
+                            </View>
+                            <Text variant="mono" style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
+                              {clientPan}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ flex: 1 }} />
+                        )}
+                      </View>
+                    )}
                   </View>
 
                   {/* Site Location Box */}
@@ -2134,12 +2223,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 />
               )}
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* TAB 2: RUNNING LOGS (Hours Meter Logs) */}
         {activeTab === 'running_hours' && (
-          <View style={styles.tabContentArea}>
+          <Animated.View
+            key="tab_running_hours"
+            entering={FadeIn.duration(200)}
+            style={styles.tabContentArea}
+          >
             <View
               style={[
                 styles.contentCard,
@@ -2355,12 +2448,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
               )}
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* TAB 3: AUDIT TRAIL */}
         {activeTab === 'audit_trail' && normalizedRole !== 'operator' && (
-          <View style={styles.tabContentArea}>
+          <Animated.View
+            key="tab_audit_trail"
+            entering={FadeIn.duration(200)}
+            style={styles.tabContentArea}
+          >
             <View
               style={[
                 styles.contentCard,
@@ -2981,7 +3078,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 </View>
               )}
             </View>
-          </View>
+          </Animated.View>
         )}
       </ScrollView>
 
@@ -3351,104 +3448,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         </FilterCategoryCard>
       </FilterSidebar>
 
-      {/* Hero Edit Options Anchored Popover */}
-      <Modal
-        visible={heroMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setHeroMenuVisible(false)}
-      >
-        <Pressable
-          style={styles.heroMenuOverlay}
-          onPress={() => setHeroMenuVisible(false)}
-        >
-          <View
-            style={[
-              styles.heroMenuPopover,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                top: heroMenuCoords?.top ?? 120,
-                right: heroMenuCoords?.right ?? 16,
-              },
-            ]}
-            onStartShouldSetResponder={() => true}
-            onTouchEnd={(e) => e.stopPropagation()}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }}>
-              <Text variant="micro" style={[styles.heroMenuHeaderTitle, { color: theme.colors.mute }]}>
-                EDIT MACHINE OPTIONS
-              </Text>
-              <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => setHeroMenuVisible(false)} accessibilityLabel="Close menu">
-                <X size={15} color={theme.colors.mute} />
-              </Pressable>
-            </View>
-
-            <Pressable variant="outline" haptic="tap"
-              style={styles.heroMenuItem}
-              onPress={() => {
-                setHeroMenuVisible(false);
-                setEditSection('info');
-                setEditModalVisible(true);
-              }}
-            >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#78350f' : '#fef3c7', opacity: 1 }]}>
-                <Wrench size={16} color="#d97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
-                  Edit Machine Info
-                </Text>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Specs, HMR & Health Status
-                </Text>
-              </View>
-            </Pressable>
-
-            <Pressable variant="outline" haptic="tap"
-              style={styles.heroMenuItem}
-              onPress={() => {
-                setHeroMenuVisible(false);
-                setAssignPersonnelModalVisible(true);
-              }}
-            >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#042f2e' : '#ccfbf1', opacity: 1 }]}>
-                <Shield size={16} color="#0d9488" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
-                  Edit Personnel
-                </Text>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Supervisors & Operators
-                </Text>
-              </View>
-            </Pressable>
-
-            <Pressable variant="outline" haptic="tap"
-              style={styles.heroMenuItem}
-              onPress={() => {
-                setHeroMenuVisible(false);
-                setEditSection('client');
-                setEditModalVisible(true);
-              }}
-            >
-              <View style={[styles.heroMenuIconBox, { backgroundColor: isDark ? '#1e3a8a' : '#e0f2fe', opacity: 1 }]}>
-                <Building2 size={16} color="#0284c7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="body" weight="medium" style={[styles.heroMenuItemTitle, { color: theme.colors.ink }]}>
-                  Edit Client Assignment
-                </Text>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>
-                  Client & Rental Fleet Status
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-
       {/* Shared Link Preview Modal */}
       <SharedLinkPreviewCard
         asModal={true}
@@ -3460,10 +3459,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
       />
 
       {/* Assign Personnel Modal */}
-      <AssignOperatorToMachineModal
+      <MobileAssignPersonnelModal
         visible={assignPersonnelModalVisible}
         onClose={() => setAssignPersonnelModalVisible(false)}
-        machine={machine}
+        initialMachineId={machine.id}
         userRole={userRole || undefined}
         onSuccess={async () => {
           try {
@@ -3520,12 +3519,10 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   scissorSquircle: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    backgroundColor: '#171717',
     borderWidth: 1,
-    borderColor: '#262626',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3535,11 +3532,37 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
   },
+  heroMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  heroIdChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radiusNumeric.xs,
+    borderWidth: 1,
+  },
   heroBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  heroHmrPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1,
   },
   heroActionBtns: {
     flexDirection: 'row',
@@ -3629,44 +3652,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabBarWrap: {
+  tabButtonBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: 3,
+    gap: 4,
+    width: '100%',
   },
-  tabPill: {
+  tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: radiusNumeric.lg,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  tabPillActive: {
+  tabOptionBtn: {
+    flex: 1,
+  },
+  tabButtonActive: {
     borderWidth: 1,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
       },
       default: {
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.08,
         shadowRadius: 2,
         elevation: 2,
       },
     }),
   },
-  tabPillText: {
-  },
+  tabButtonInactive: {},
   tabCountPill: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
-  },
-  tabCountText: {
+    paddingVertical: 1.5,
+    borderRadius: radiusNumeric.pill,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabContentArea: {
     gap: spacingNumeric.md,
@@ -3694,16 +3727,15 @@ const styles = StyleSheet.create({
   cardHeaderTitle: {
   },
   clientCodePill: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radiusNumeric.pill,
-    opacity: 1,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.xs,
   },
   clientCodePillText: {
-    color: '#0284c7',
   },
   manageStaffBtn: {
     flexDirection: 'row',
@@ -3712,24 +3744,31 @@ const styles = StyleSheet.create({
   },
   manageStaffText: {
   },
-  specsGrid: {
+  specsGridContainer: {
     padding: spacingNumeric.md,
+    gap: 10,
+    width: '100%',
+  },
+  specsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
+    gap: 10,
+    width: '100%',
   },
   specBox: {
+    flex: 1,
+    minWidth: 0,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    padding: 10,
-    minHeight: 64,
+    padding: 12,
+    minHeight: 68,
     justifyContent: 'space-between',
   },
   specBoxHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    minHeight: 18,
+    marginBottom: 4,
   },
   specBoxLabel: {
     textTransform: 'uppercase',
@@ -3748,6 +3787,7 @@ const styles = StyleSheet.create({
   personnelSectionBody: {
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
+    width: '100%',
   },
   personnelSubBox: {
     borderRadius: radiusNumeric.lg,
@@ -3851,12 +3891,13 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     gap: spacingNumeric.sm,
   },
-  clientGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
+  clientGridContainer: {
+    gap: 10,
+    width: '100%',
   },
   clientFieldBox: {
+    flex: 1,
+    minWidth: 0,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     padding: spacingNumeric.sm,

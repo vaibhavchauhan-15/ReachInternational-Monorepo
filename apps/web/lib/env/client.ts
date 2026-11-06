@@ -50,6 +50,14 @@ export function getSentryDsn(): string | undefined {
   return process.env.NEXT_PUBLIC_SENTRY_DSN?.trim() || undefined;
 }
 
+/**
+ * Returns the Agentation MCP / sync server endpoint URL.
+ * Defaults to http://localhost:4747.
+ */
+export function getAgentationEndpoint(): string {
+  return process.env.NEXT_PUBLIC_AGENTATION_ENDPOINT?.trim() || "http://localhost:4747";
+}
+
 export function isAgentationEnabled(): boolean {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ENABLE_AGENTATION !== "true") {
     return false;
@@ -103,6 +111,9 @@ export const clientEnv = {
   },
   get sentryDsn(): string | undefined {
     return getSentryDsn();
+  },
+  get agentationEndpoint(): string {
+    return getAgentationEndpoint();
   },
   get isAgentationEnabled(): boolean {
     return isAgentationEnabled();

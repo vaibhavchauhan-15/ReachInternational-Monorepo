@@ -50,7 +50,7 @@ export const AssignmentActionBar: React.FC<AssignmentActionBarProps> = ({
   return (
     <View style={styles.container}>
       {/* Error Callout Banner */}
-      {error && (
+      {Boolean(error) ? (
         <View
           style={[
             styles.errorBanner,
@@ -65,17 +65,17 @@ export const AssignmentActionBar: React.FC<AssignmentActionBarProps> = ({
             {error}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Unsaved Changes Indicator */}
-      {hasUnsavedChanges && !error && (
+      {Boolean(hasUnsavedChanges && !error) ? (
         <View style={styles.unsavedRow}>
           <View style={[styles.unsavedDot, { backgroundColor: '#f59e0b' }]} />
           <Text variant="micro" weight="medium" style={{ color: '#f59e0b' }}>
             Unsaved assignment changes
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Action Buttons Row */}
       <View style={styles.buttonsRow}>

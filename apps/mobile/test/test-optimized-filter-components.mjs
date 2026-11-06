@@ -188,8 +188,8 @@ assert(filterSidebarContent.includes('label={`${activeFilterCount} active`}'), '
 
 const alertPath = path.join(rootDir, 'apps/mobile/components/ui/Alert.tsx');
 const alertContent = fs.readFileSync(alertPath, 'utf8');
-assert(alertContent.includes('const AlertTitle = React.forwardRef<\n  React.ElementRef<typeof Text>'), 'AlertTitle renders Text component instead of View');
-assert(alertContent.includes('const AlertDescription = React.forwardRef<\n  React.ElementRef<typeof Text>'), 'AlertDescription renders Text component instead of View');
+assert(alertContent.replace(/\r\n/g, '\n').includes('const AlertTitle = React.forwardRef<\n  React.ElementRef<typeof Text>'), 'AlertTitle renders Text component instead of View');
+assert(alertContent.replace(/\r\n/g, '\n').includes('const AlertDescription = React.forwardRef<\n  React.ElementRef<typeof Text>'), 'AlertDescription renders Text component instead of View');
 
 const cardPath = path.join(rootDir, 'apps/mobile/components/ui/Card.tsx');
 const cardContent = fs.readFileSync(cardPath, 'utf8');

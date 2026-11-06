@@ -122,7 +122,7 @@ export default function SettingsHomeScreen() {
   };
 
   const roleText = (role || userProfile?.role || 'Operator').toUpperCase();
-  const appVersion = Constants.expoConfig?.version || '1.3.0';
+  const appVersion = Constants.expoConfig?.version || '1.4.0';
 
   return (
     <SettingsScreenContainer

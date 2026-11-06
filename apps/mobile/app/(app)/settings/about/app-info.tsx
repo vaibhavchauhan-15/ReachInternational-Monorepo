@@ -95,14 +95,14 @@ export default function AppInfoScreen() {
           icon={<Tag size={18} color={isDark ? '#38bdf8' : '#0284c7'} />}
           iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
           label="Version"
-          value={`v${Constants.expoConfig?.version || '1.3.0'} (Build ${Constants.expoConfig?.android?.versionCode || 4})`}
+          value={`v${Constants.expoConfig?.version || '1.4.0'} (Build ${Constants.expoConfig?.android?.versionCode || 5})`}
         />
 
         <SpecRow
           icon={<Smartphone size={18} color={isDark ? '#34d399' : '#059669'} />}
           iconBg={isDark ? 'rgba(5, 150, 105, 0.15)' : '#d1fae5'}
           label="Platform Runtime"
-          value="Expo SDK 57 • React Native"
+          value="Expo SDK 58 • React Native"
         />
 
         <SpecRow

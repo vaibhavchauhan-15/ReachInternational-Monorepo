@@ -110,7 +110,7 @@ assert(appLayoutContent.includes('backBehavior="history"'), 'App layout Tabs mus
 assert(appLayoutContent.includes('useNavigationMotion()'), 'App layout must consume useNavigationMotion()');
 assert(appLayoutContent.includes('motion.tabsFade'), 'App layout screenOptions must configure motion.tabsFade for primary tabs');
 
-// Sub-pages must have motion.tabsShift for horizontal shift transition and href: null
+// Sub-pages must have motion.tabsShift for horizontal shift transition
 const subRoutesToCheck = [
   'settings/account/index',
   'settings/account/profile',
@@ -139,8 +139,8 @@ for (const route of subRoutesToCheck) {
   const match = appLayoutContent.match(routeRegex);
   assert(match, `Route ${route} must be registered in (app)/_layout.tsx`);
   assert(match[0].includes('motion.tabsShift'), `Route ${route} must use motion.tabsShift`);
-  assert(match[0].includes('href: null'), `Route ${route} must have href: null`);
-  console.log(`  ✓ Sub-route ${route} configured with motion.tabsShift and href: null`);
+
+  console.log(`  ✓ Sub-route ${route} configured with motion.tabsShift`);
 }
 
 // -------------------------------------------------------------

@@ -65,11 +65,25 @@ export const SUITES = [
     description: 'Fleet inventory, category filters, machine detail modals, deletion dialogs',
   },
   {
+    id: 'machine-detail-mobile-opt',
+    file: 'test-machine-detail-mobile-opt.mjs',
+    name: 'Machine Detail Mobile Optimization',
+    category: 'operations',
+    description: 'Machine header card, button tabs, 2-column flexbox specs grid, Reanimated transitions',
+  },
+  {
     id: 'running-logs',
     file: 'test-running-logs-workflows.mjs',
     name: 'Running Logs & HMR Meter',
     category: 'operations',
     description: 'Operational meter logs, breakdown reporting, date range pickers',
+  },
+  {
+    id: 'operator-history-card',
+    file: 'test-operator-history-card.mjs',
+    name: 'Operator History Card & Parity',
+    category: 'operations',
+    description: 'Reusable history log card, 7-day edit calculation, 0 raw typography, layout parity',
   },
   {
     id: 'assign-modal',

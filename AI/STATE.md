@@ -1,29 +1,54 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Native App Theme Provider Performance Optimization & Instant Theme Switching
+- **Current Task**: EAS Build Gradle 9.4.1 / AGP 9.2.1 Deep Analysis and Build Failure Resolution
 - **Status**: 🟢 Clean / Verified & Production Ready
-- **Last Verified**: 2026-11-04
-- **Turborepo Typecheck**: All 7 packages passed with 0 errors (`pnpm typecheck`)
-- **Mobile Automated Verification Suite**: Passed 100% (357/357 scenarios) (`node apps/mobile/run-tests.mjs`)
-- **Settings & Navigation Workflows Suite**: Passed 100% (`node apps/mobile/test/test-settings-workflows.mjs`)
-- **Button & Badge Primitives Suite**: Passed 100% (36/36 and 61/61 scenarios)
-- **Splash Screen Suite**: Passed 100% (34/34 scenarios)
-- **Deliverables Completed**:
-  - `apps/mobile/lib/theming/palettes.ts`:
-    - Precomputes and deeply freezes `LIGHT_THEME`, `DARK_THEME`, and `NAV_THEME` from `@reachinternational/design-tokens`.
-    - Zero runtime color calculation; pointer swap (O(1)) on theme toggle.
-  - `apps/mobile/lib/theming/store.ts`:
-    - Microscopic external store powered by `useSyncExternalStore`.
-    - Fine-grained selector hooks: `useIsDark()`, `useThemeMode()`, `useThemeColors()`, `useThemeColor()`, `useSetThemeMode()`.
-    - Single deduplicated `Appearance.addChangeListener` with Android backgrounding suppression (`AppState.currentState === 'active'`).
-    - Synchronous atomic native chrome updates (`expo-system-ui` / StatusBar).
-    - Deferred persistence via non-blocking asynchronous dispatch.
-  - `apps/mobile/lib/theming/makeStyles.ts`:
-    - Memoized 2-slot StyleSheet cache (`light`/`dark`) created lazily once per component.
-  - `apps/mobile/app/_layout.tsx` & `(app)/_layout.tsx`:
-    - Wired `NAV_THEME` into Expo Router `<NavThemeProvider value={navTheme}>`.
-    - Centralized StatusBar and decoupled stack/tab container re-renders.
-    - Removed redundant screen-level `<StatusBar>` elements across `machines.tsx`, `operations.tsx`, `running-logs.tsx`, `users.tsx`.
-  - `apps/mobile/components/ui/Card.tsx`, `Button.tsx`, `Badge.tsx`, `Text.tsx`:
-    - Replaced render-time style and color object allocations with memoized lookups and StyleSheets.
+- **App Version**: `1.4.0` (Native `versionCode`: managed via EAS remote / `build.gradle`, `runtimeVersion`: `1.4.0`)
+- **Last Verified**: 2026-11-06
+- **Expo Doctor**: 🟢 19/19 checks passed (0 issues detected)
+- **Monorepo Typecheck**: All 7 packages passed with 0 errors (`pnpm typecheck`)
+- **Native Verification Suites**: **36/36 TEST SUITES PASSED (100%)** (`node apps/mobile/test/index.mjs`)
+- **What's New System Verification**: 57/57 passed (`node apps/mobile/test/test-whats-new-system.mjs`)
+- **Authoritative Release Documentation**: `apps/mobile/RELEASE_NOTES_v1.4.0.md`
+- **Gradle & AGP Compatibility**:
+  - `FIX-EAS-BUILD-06`: Deep Gradle 9.4.1 / AGP 9.2.1 build failure remediation for EAS Build `@vaibhavchauhan_15/reachinternational-monorepo` (`a25ae1cb-ddf5-4618-beb1-aaa2a6f9b7f2`).
+    - Stripped `android.enableLegacyVariantApi=true` from `gradle.properties` (fatal error in AGP 9.0+).
+    - Stripped obsolete `android.enableR8.fullMode=true`.
+    - Maintained `android.newDsl=false` for legacy AGP DSL access required by `expo-modules-core` (`ndkDirectory`).
+    - Added `android.disallowKotlinSourceSets=false` to permit source set declarations in `expo-updates` with KSP.
+    - Added `android.builtInKotlin=false` to avoid extension collisions in `react-native-webview` and `reach-haptics`.
+    - Migrated `packagingOptions` to modern `packaging` DSL in `app/build.gradle`.
+    - Guarded `apply plugin: 'kotlin-android'` and modernized `compileSdkVersion` in `reach-haptics/android/build.gradle`.
+    - Verified locally via `./gradlew help` and `./gradlew :app:bundleRelease --dry-run` with 100% success.
+  - `FIX-EAS-BUILD-05`: In AGP 9.0+, `libraryVariants` was completely removed from `LibraryExtensionImpl` (`com.android.library`). Patched `expo-constants`'s `get-app-config-android.gradle` via `pnpm patch expo-constants` (`patches/expo-constants.patch` in `pnpm-workspace.yaml`). The patch safely falls back to configuring variant config tasks directly on `project.android.buildTypes.all` when `hasLibraryVariants` is false, hooking into lifecycle tasks (`preBuild` / `pre<Variant>Build`) and setting asset directories. Retained `android.enableLegacyVariantApi=true` and `android.newDsl=false` in `apps/mobile/android/gradle.properties` for broader AGP 9 backwards compatibility.
+- **Core Bug Fixes Applied**:
+  - `FIX-EAS-BUILD-05`: Resolved Gradle build exception `Could not get unknown property 'libraryVariants' for object of type com.android.build.gradle.internal.dsl.LibraryExtensionImpl$AgpDecorated` in `expo-constants/scripts/get-app-config-android.gradle`. Created monorepo pnpm patch `patches/expo-constants.patch` applied automatically during CI/EAS `pnpm install`.
+  - `FIX-EAS-BUILD-01`: Upgraded `eas-cli` globally from `27.2.0` to `27.4.1`, resolving outdated CLI banner.
+  - `FIX-EAS-BUILD-02`: Removed redundant `"NODE_ENV": "production"` and `"NODE_ENV": "development"` from `apps/mobile/eas.json` `env` blocks. Expo CLI automatically sets production bundling mode, eliminating the EAS builder package pruning warning.
+  - `FIX-EAS-BUILD-03`: Removed `android.package` from `apps/mobile/app.json`. In bare workflow with an existing committed `android/` directory, the native package identity is owned authoritatively by `android/app/build.gradle` (`applicationId 'com.reachinternational.app'`). Updated test suite assertion to verify native Gradle applicationId.
+  - `FIX-EAS-BUILD-04`: Removed static `android.versionCode` from `apps/mobile/app.json`. Since `eas.json` utilizes `appVersionSource: "remote"` with `autoIncrement: true`, EAS automatically tracks and increments the authoritative build number remotely on Expo servers without manifest divergence warnings.
+  - `BUG-SHIFT-01`: Standardized premature shift end error string across layers to `"Cannot log before shift end."` (`packages/utils/src/date.ts:677`).
+  - `BUG-SHIFT-02`: Unified validation parity between Web and Mobile by extending `CreateHourLogSchema` with `shift_code`, `operator_id`, `client_id`, and breakdown bounds refinement (`packages/validation/src/hourMeter.ts`). Wired schema safeParse into `MobileOperatorEntryCard.tsx` and `MeterLogModal.tsx`. Authored `hourMeter.test.ts`.
+  - `BUG-SHIFT-03`: Modernized operations security RLS assertions for strict log immutability (`test_operations_security_rls_regression.mjs`).
+  - `BUG-SHIFT-04`: Dynamic test machine resolution and overlap conflict detection verification (`test_prevent_cross_machine_shift_overlap.mjs`).
+  - `BUG-SHIFT-05`: Exclusion constraint `osr_machine_shift_no_overlap` (`23P01`) collision resolution in test matrix fixtures (`test_exhaustive_shift_entry_matrix.mjs`).
+  - `BUG-SHIFT-06`: Resolved operator unassigned shift submission error (`23514`) in `MobileOperatorEntryCard.tsx`. Fixed shift resolution to prioritize assigned shifts (`resolvedInitialShift` / `assignedShiftCodes`), prevented unassigned draft overwrites, added client-side pre-submission validation guard, added 1-tap "Switch to Assigned Shift" button in the warning banner, and suppressed harmless React Native runtime notices (`ImageBackground is deprecated` and `VirtualizedList`).
+  - `BUG-MACHINES-01`: Removed redundant Edit and Delete buttons from the hero card in `MachineDetailView.tsx` (fully covered by the header 3-dots more menu: Edit Info, Manage Personnel, Edit Client, Delete Machine).
+  - `BUG-MACHINES-02`: Fixed flex layout collapse and component overlap in `Assigned Shift Personnel` card (`MachineDetailView.tsx`). Removed unconditional `{ flex: 1 }` on column children in mobile view, added `width: '100%'` and `flexShrink: 0`, ensuring `Operators` panel with `EmptyState` ("No Operators Assigned") expands to full height and is cleanly contained inside the card without overlapping `Client Details`.
+  - `BUG-MACHINES-03`: Replaced large solid blue client code pill with a compact, light-grey pill badge with copy icon (`Copy size={10}`) and 1-tap copy functionality (`handleCopy`).
+  - `BUG-MACHINES-04`: Mobile layout optimization across all machine cards (Basic Info specs grid, Shift Personnel, Client Details) adhering to Geist design tokens and 44px min touch targets.
+  - `BUG-MACHINES-05`: Fixed "Edit Assigned Shift Personnel" modal opening and layout collapse on machine details page (`MachineDetailView.tsx`, `MobileAssignPersonnelModal.tsx`, `Sheet.tsx`, `AssignmentBottomSheet.tsx`):
+    - Replaced outdated `AssignOperatorToMachineModal` with canonical `MobileAssignPersonnelModal` in `MachineDetailView.tsx`, bound to `initialMachineId={machine.id}`.
+    - Resolved root-cause height collapse: set explicit `height: '88%', maxHeight: '92%'` in modal panel styles, enabling flex: 1 scroll containers to expand and scroll smoothly.
+    - Added `minHeight: 220` anti-collapse safety guard in `Sheet.tsx` `styles.sheetPanel`.
+    - Tuned silky-smooth native spring entrance curve (`stiffness: 340, damping: 32, mass: 0.9`), timing exit with cubic-bezier easing (`duration: 220, Easing.bezier(0.3, 0, 0.8, 0.15)`), and synchronized Scrim backdrop fade (260ms in / 220ms out).
+    - Fixed operator query lazy loading in `AssignOperatorToMachineModal.tsx` by passing active `isAddOperatorOpen` and `relevantOperatorIds`.
+  - `FEAT-ASSIGN-MODAL-MOBILE-OPT`: Fully optimized "Assign Machine Operator" modal for native mobile screens (`MobileAssignPersonnelModal.tsx` & `ShiftCardSelector.tsx`):
+    - Completely removed inherited client-level supervisor banner and inherited override placeholder.
+    - Simplified shift buttons to clean, short titles (`Shift A`, `Shift B`, `Shift C`) with parenthesized qualifiers completely stripped.
+    - Optimized shift times to compact mobile format (`6AM-2PM`, `2PM-10PM`, `10PM-6AM`).
+    - Enforced single-row flex layout (`flex: 1`, `minWidth: 0`) for shift buttons, preventing wrapping across all device viewports.
+    - Implemented 60fps Reanimated animated collapsibles (`DropdownCollapsible`) with height, opacity, and glide interpolation for smooth dropdown opening and closing.
+    - Implemented smooth 180-degree rotating chevrons (`AnimatedChevron`) for all dropdown triggers.
+    - Enhanced bottom sheet opening and closing spring curve (`Sheet.tsx`) for fluid, native dismissal.
+    - Elevated touch ergonomics to 46px min target height across all trigger and action buttons with safe area bottom inset padding.

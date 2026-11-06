@@ -1,6 +1,6 @@
-What's New in v1.3.0:
-• Native PDF & Document Viewer: In-app continuous vertical scrolling, zoom, and instant download/share.
-• User Profile: Instant document uploads, optimistic deletion, and one-tap copy actions.
-• Dark Theme Polish: Fixed autofill backgrounds, high-contrast labels, and theme-aware loading skeletons.
-• Auth & Security: Live password strength meter, password match verification, and concise feedback.
-• Fleet & Users: Responsive segmented tabs, direct WhatsApp contact, and faster shift logging.
+What's New in v1.4.0:
+• Shift Personnel Assignment: Seamless single-row shift buttons (Shift A, B, C) and silky Reanimated dropdowns.
+• Machine Details: Enhanced card layouts, eliminated height collapse, and 1-tap client code copy.
+• Performance & Theme: Zero-lag theme switching with precomputed palettes and optimized render allocations.
+• Operations Validation: Real-time shift overlap protection and 1-tap switch to assigned shifts.
+• Ergonomics: 44px+ touch targets and refined haptic feedback.

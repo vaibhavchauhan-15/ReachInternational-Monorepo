@@ -169,6 +169,21 @@ config.resolver = {
       };
     }
 
+    // Explicitly resolve agentation for Expo Web across pnpm monorepo symlinks
+    if (platform === 'web' && moduleName === 'agentation') {
+      try {
+        const resolved = require.resolve('agentation', {
+          paths: [projectRoot, monorepoRoot],
+        });
+        return {
+          filePath: resolved,
+          type: 'sourceFile',
+        };
+      } catch {
+        // Fall through to default resolver
+      }
+    }
+
     // Explicitly resolve critical packages across pnpm symlinks in monorepo
     if (
       moduleName === 'expo-linear-gradient' ||

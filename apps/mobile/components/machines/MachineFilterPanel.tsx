@@ -1,10 +1,9 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   Platform,
-  Dimensions,
   type TextInput,
 } from 'react-native';
 import {
@@ -13,10 +12,9 @@ import {
   Badge,
   SearchInput,
   type FilterOption,
-  type PopoverCoords,
 } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
-import { SlidersHorizontal, RotateCcw, X } from '../ui/icon';
+import { SlidersHorizontal, RotateCcw } from '../ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { haptics } from '../../lib/haptics';
 
@@ -57,7 +55,7 @@ export interface MachineFilterPanelProps {
   supervisorFilterOptions: FilterOption[];
   clientFilterOptions: FilterOption[];
   sortOptions: FilterOption[];
-  setFilterAnchorCoords?: (coords: PopoverCoords | null) => void;
+  setFilterAnchorCoords?: (coords: any) => void;
 }
 
 export const MachineFilterPanel = React.memo(function MachineFilterPanel({
@@ -86,11 +84,9 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
   supervisorFilterOptions,
   clientFilterOptions,
   sortOptions,
-  setFilterAnchorCoords,
 }: MachineFilterPanelProps) {
   const { theme, isDark } = useTheme();
   const searchInputRef = useRef<TextInput>(null);
-  const filterBtnRef = useRef<any>(null);
 
   const currentRentalLabel =
     rentalFilterOptions.find((o) => o.id === rentalFilter)?.label || 'All Rental';
@@ -112,40 +108,10 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
       ? 'warning'
       : 'success';
 
-  const handleOpenFilterPopover = useCallback(() => {
-    if (filterPanelOpen) {
-      setFilterPanelOpen(false);
-      return;
-    }
+  const handleToggleFilterSidebar = useCallback(() => {
     haptics.select();
-    if (filterBtnRef.current && filterBtnRef.current.measureInWindow) {
-      filterBtnRef.current.measureInWindow((x: any, y: any, width: any, height: any) => {
-        const windowWidth =
-          Platform.OS === 'web' && typeof window !== 'undefined'
-            ? window.innerWidth
-            : Dimensions.get('window').width;
-        const windowHeight =
-          Platform.OS === 'web' && typeof window !== 'undefined'
-            ? window.innerHeight
-            : Dimensions.get('window').height;
-
-        const popoverWidth = Math.min(380, windowWidth - 24);
-        const rightEdge = x + width;
-        let left = rightEdge - popoverWidth;
-        if (left < 12) left = 12;
-        if (left + popoverWidth > windowWidth - 12) {
-          left = Math.max(12, windowWidth - popoverWidth - 12);
-        }
-        const top = y + height + 6;
-        const maxHeight = Math.max(280, Math.min(540, windowHeight - top - 20));
-
-        setFilterAnchorCoords?.({ top, left, width: popoverWidth, maxHeight });
-        setFilterPanelOpen(true);
-      });
-    } else {
-      setFilterPanelOpen(true);
-    }
-  }, [filterPanelOpen, setFilterPanelOpen, setFilterAnchorCoords]);
+    setFilterPanelOpen((prev) => !prev);
+  }, [setFilterPanelOpen]);
 
   return (
     <View style={styles.filterToolbar}>
@@ -167,14 +133,13 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
           />
         </View>
 
-        {/* Filter Trigger Button (Opens Popover Anchored Below Button) */}
+        {/* Filter Trigger Button (Opens Canonical Filter Sidebar Drawer) */}
         <Pressable
-          ref={filterBtnRef}
           variant="buttonSecondary"
           haptic="select"
           hitSlopToMin48
           activeOpacity={1.0}
-          onPress={handleOpenFilterPopover}
+          onPress={handleToggleFilterSidebar}
           style={[
             styles.filterToggleBtn,
             {
@@ -192,6 +157,9 @@ export const MachineFilterPanel = React.memo(function MachineFilterPanel({
                   : theme.colors.hairline,
               opacity: 1,
             },
+            Platform.OS === 'web' && ({
+              transition: 'background-color 180ms ease, border-color 180ms ease',
+            } as any),
           ]}
           accessibilityRole="button"
           accessibilityLabel="Open filter sidebar"

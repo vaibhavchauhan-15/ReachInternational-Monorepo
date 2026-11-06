@@ -12,7 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Check, ChevronDown, Clock, AlertTriangle, User, CheckCircle2, Building2 } from '../ui/icon';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
-import { HmrSchema } from '@reachinternational/validation';
+import { HmrSchema, CreateHourLogSchema } from '@reachinternational/validation';
 import {
   computeShiftTiming,
   computeBreakdownDuration,
@@ -777,6 +777,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         end_datetime: shiftStats.endDateTime?.toISOString(),
         idempotency_key: idempotencyKey,
       };
+
+      // Canonical shared Zod validation guard (@reachinternational/validation)
+      const valResult = CreateHourLogSchema.safeParse(logPayload);
+      if (!valResult.success) {
+        const firstError = valResult.error.issues[0]?.message || 'Invalid shift log payload.';
+        reportError(firstError);
+        submittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
 
       // Pre-queue duplicate validation against local offline queue and cached logs
       const dupCheck = offlineQueueManager.checkDuplicateShiftLog({

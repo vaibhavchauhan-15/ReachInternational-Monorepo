@@ -11,8 +11,6 @@ import {
   Users,
   Building2,
   Settings,
-  Sun,
-  Moon,
 } from '../ui/icon';
 
 export interface DashboardHeaderActionsOptions {
@@ -210,16 +208,6 @@ export function getDashboardHeaderActions({
       label: 'Settings & Preferences',
       icon: <Settings size={15} color={inkColor} />,
       onPress: () => router.push('/settings' as any),
-    },
-    {
-      id: 'theme-toggle',
-      label: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-      icon: isDark ? (
-        <Sun size={15} color={inkColor} />
-      ) : (
-        <Moon size={15} color={inkColor} />
-      ),
-      onPress: () => setMode(isDark ? 'light' : 'dark'),
     }
   );
 

@@ -105,9 +105,9 @@ async function runSuite1() {
     assert(tableObj && tableObj.rowsecurity === true, `RLS enabled on table '${t}' (rowsecurity = true)`);
   }
 
-  assert(policies.includes('Allow authenticated read machine_hour_logs'), 'Policy: "Allow authenticated read machine_hour_logs" is active');
-  assert(policies.includes('admins_delete_logs'), 'Policy: "admins_delete_logs" is active (blocks non-admin deletion)');
-  assert(policies.includes('operators_and_admins_insert_logs'), 'Policy: "operators_and_admins_insert_logs" is active (blocks operator spoofing)');
+  assert(policies.includes('view_machine_hour_logs'), 'Policy: "view_machine_hour_logs" is active');
+  assert(!policies.includes('admins_delete_logs'), 'Policy: "admins_delete_logs" is dropped (shift logs are strictly immutable)');
+  assert(policies.includes('insert_machine_hour_logs'), 'Policy: "insert_machine_hour_logs" is active (blocks operator spoofing & unassigned machines)');
   assert(policies.includes('oma_select_policy'), 'Policy: "oma_select_policy" is active (protects operator assignments)');
   assert(policies.includes('oma_manage_policy'), 'Policy: "oma_manage_policy" is active (restricts assignment management)');
   assert(policies.includes('machines_delete_authorized'), 'Policy: "machines_delete_authorized" is active (blocks non-admin machine deletion)');

@@ -6,6 +6,7 @@ export * from './MobileTodayShiftMonitorTab';
 export * from './MobileAssignPersonnelModal';
 export * from './MobileOperatorEntryCard';
 export * from './MobileOperatorHistoryTab';
+export * from './MobileOperatorHistoryCard';
 export * from './RunningLogShiftCard';
 export * from './RunningLogDayGroup';
 export * from './RunningLogSummaryCard';

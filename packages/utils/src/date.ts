@@ -674,7 +674,7 @@ export function computeShiftTiming(params: {
       normalWorkingHours,
       breakHours,
       isValid: false,
-      errorMessage: 'Shift is in progress. Logs can be submitted after shift ends.',
+      errorMessage: 'Cannot log before shift end.',
       isFutureEnd: true,
     };
   }

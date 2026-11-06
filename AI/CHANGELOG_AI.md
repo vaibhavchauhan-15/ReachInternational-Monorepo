@@ -1,3 +1,38 @@
+## [2026-11-06] - EAS Build Gradle 9.4.1 / AGP 9.2.1 Deep Analysis and Resolution
+- **Remediation**:
+  - Removed fatal android.enableLegacyVariantApi=true and obsolete android.enableR8.fullMode=true from apps/mobile/android/gradle.properties.
+  - Retained android.newDsl=false for compatibility with expo-modules-core (ndkDirectory access).
+  - Added android.disallowKotlinSourceSets=false to permit source set declarations in expo-updates with KSP under AGP 9.
+  - Added android.builtInKotlin=false so standard Kotlin Gradle Plugin handles all compilation without duplicate extension collisions.
+  - Migrated deprecated packagingOptions block and properties in apps/mobile/android/app/build.gradle to modern packaging DSL.
+  - Guarded apply plugin: kotlin-android and modernized SDK version variables in apps/mobile/modules/reach-haptics/android/build.gradle.
+- **Verification**:
+  - Verified evaluation of all 33 Gradle subprojects via ./gradlew help.
+  - Verified full :app:bundleRelease task graph via ./gradlew :app:bundleRelease --dry-run (100% SUCCESS).
+  - All 357/357 automated mobile test scenarios passed.
+
+## [2026-11-05] EAS Build Gradle 9 & AGP 9.x Compatibility Fix for expo-constants
+- Resolved Gradle build failure: Could not get unknown property 'libraryVariants' for object of type com.android.build.gradle.internal.dsl.LibraryExtensionImpl in expo-constants/scripts/get-app-config-android.gradle.
+- Root cause: Android Gradle Plugin (AGP) 9.0+ removed the legacy libraryVariants property from LibraryExtensionImpl.
+- Implemented pnpm patch patches/expo-constants.patch via pnpm patch expo-constants and registered in pnpm-workspace.yaml patchedDependencies.
+- The patch dynamically checks project.android.hasProperty('libraryVariants'): if present, uses legacy variant wiring; if absent (AGP 9+), falls back to project.android.buildTypes.all, registering create<Variant>ExpoConfig and createExpoFingerprint tasks and wiring them into preBuild / pre<Variant>Build.
+- Verified patch applies cleanly during pnpm install, 0 monorepo typecheck errors, and 36/36 mobile verification test suites pass.
+
+## [2026-11-05] Machine Detail Screen Mobile Optimization & Ergonomics
+- Cleaned and elevated Machine Header Hero card with 4px left accent border, dark squircle scissor icon, copyable machine ID chip, and well-proportioned status badges.
+- Completely removed broken ToggleSwitch and replaced with reusable Pressable button tab bar.
+- Fixed Basic Info 6-card grid to 3 rows of 2 columns with flex: 1, properly filling 100% of mobile screen width.
+- Implemented 60fps Reanimated smooth page transition animation and tab cross-fade animations.
+
+## [2026-11-05] - Assign Machine Operator Modal Mobile Optimization & Ergonomics
+- **Inherited Info Removal**: Completely removed inherited client-level supervisor banner and optional override text from MobileAssignPersonnelModal.tsx.
+- **Compact Shift Badges**: ShiftCardSelector now strips parenthesized qualifiers, rendering clean Shift A / Shift B / Shift C titles.
+- **Ultra-Compact Shift Times**: Time format condensed to 6AM-2PM / 2PM-10PM / 10PM-6AM, fitting comfortably on narrow mobile screens.
+- **Single-Row Shift Buttons**: Enforced single-row flex layout with flex: 1 and minWidth: 0, preventing wrapping across all device viewports.
+- **Smooth 60fps Dropdown Collapsibles**: Reanimated DropdownCollapsible with height, opacity, and glide interpolation + 180° AnimatedChevron.
+- **Fluid Modal Spring Animation**: Tuned Sheet.tsx physics curve for smooth entry and exit transitions matching Scrim fade.
+- **Mobile Touch Ergonomics**: Standardized 46px min touch target on all triggers and footer buttons with safe area bottom inset padding.
+
 ## 2026-11-04 — Native App Theme Provider Performance Optimization & Instant Theme Switching
 
 - Architected microscopic external theme store in apps/mobile/lib/theming/store.ts powered by useSyncExternalStore, eliminating Context-induced O(N) re-render cascades across 410 consumers.
@@ -20285,3 +20320,25 @@ so i can tract each and everythings"
   - `apps/mobile/run-tests.mjs`: 357/357 PASSED (100%).
   - `apps/mobile/test/test-shift-workflows.mjs`: 28/28 PASSED (100%).
   - `pnpm typecheck`: 7/7 packages clean (100%).
+
+## [2026-11-04] - Shift Entry Production-Readiness & Monorepo QA Audit
+- **Report**: Authored authoritative report in `SHIFT_ENTRY_QA_REPORT.md`.
+- **Parity**: Achieved 100% validation and behavioral parity between Web (Next.js Server Actions) and Native Mobile (Expo SDK 58).
+- **Validation**: Extended `CreateHourLogSchema` in `@reachinternational/validation` with `operator_id`, `client_id`, `shift_code`, and breakdown bounds refinement. Wired `safeParse` in `MobileOperatorEntryCard.tsx` and `MeterLogModal.tsx`. Added `hourMeter.test.ts`.
+- **Bug Fixes**:
+  - `BUG-SHIFT-01`: Standardized premature shift end error string across layers to `'Cannot log before shift end.'` (`packages/utils/src/date.ts:677`).
+  - `BUG-SHIFT-02`: Unified mobile validation with `CreateHourLogSchema`.
+  - `BUG-SHIFT-03`: Modernized operations security RLS regression assertions matching immutable log policies (`test_operations_security_rls_regression.mjs`).
+  - `BUG-SHIFT-04`: Hardened cross-machine overlap test suite with dynamic machines from Dev DB (`test_prevent_cross_machine_shift_overlap.mjs`).
+  - `BUG-SHIFT-05`: Resolved exclusion constraint `osr_machine_shift_no_overlap` fixture collisions in `test_exhaustive_shift_entry_matrix.mjs`.
+- **Verification**: Over 540 automated tests passed across monorepo test suites; 7/7 packages clean typecheck.
+
+
+### [2026-11-05] — EAS Build Production Warnings Remediation
+
+#### Root Cause Analysis & Resolutions:
+1. **Outdated EAS CLI**: Upgraded global `eas-cli` package to `v27.4.1` via `npm install -g eas-cli`.
+2. **`NODE_ENV=production` in build profile**: Removed redundant `"NODE_ENV"` entries from `apps/mobile/eas.json` profiles. EAS/Metro automatically sets production mode during bundling. Removing it prevents package managers from pruning devDependencies in CI.
+3. **`android.package` ignored warning**: Removed `package` field from `app.json`'s `expo.android`. In bare workflow, `android/app/build.gradle` is the authoritative source for `applicationId 'com.reachinternational.app'`.
+4. **`android.versionCode` ignored warning**: Removed static `versionCode` from `app.json`'s `expo.android`. Because EAS uses `appVersionSource: "remote"` with `autoIncrement: true`, EAS server tracks and owns the incremented `versionCode` (Build 21), eliminating manifest divergence.
+5. **Test Assertion Alignment**: Updated `apps/mobile/test/run-tests.mjs` to assert native `applicationId` in `build.gradle`. All 36 test suites passed.

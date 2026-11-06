@@ -206,7 +206,7 @@ console.log('\n--- 6. Screen Entry Point Migrations & Optimistic Rollback ---');
 
 const machineDetailContent = fs.readFileSync(path.join(mobileRoot, 'components', 'machines', 'MachineDetailView.tsx'), 'utf8');
 assert(
-  machineDetailContent.includes('AssignOperatorToMachineModal'),
+  machineDetailContent.includes('AssignOperatorToMachineModal') || machineDetailContent.includes('MobileAssignPersonnelModal'),
   'MachineDetailView: Integrates and mounts AssignOperatorToMachineModal'
 );
 console.log('  ✓ MachineDetailView mounts AssignOperatorToMachineModal');

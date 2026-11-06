@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { isAgentationEnabled } from "@/lib/env/client";
+import { isAgentationEnabled, getAgentationEndpoint } from "@/lib/env/client";
 
 const Agentation = dynamic(
   () => import("agentation").then((m) => m.Agentation),
@@ -51,6 +51,12 @@ export function AgentationWrapper() {
     return null;
   }
 
-  return <Agentation key={pathname} className="reach-agentation-toolbar" />;
+  return (
+    <Agentation
+      key={pathname}
+      className="reach-agentation-toolbar"
+      endpoint={getAgentationEndpoint()}
+    />
+  );
 }
 

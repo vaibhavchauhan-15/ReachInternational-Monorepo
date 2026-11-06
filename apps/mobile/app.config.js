@@ -168,11 +168,6 @@ const withOptimizationGradleProperties = (config) => {
       'edgeToEdgeEnabled',
       'true'
     );
-    cfg.modResults = AndroidConfig.BuildProperties.updateAndroidBuildProperty(
-      cfg.modResults,
-      'android.enableLegacyVariantApi',
-      'true'
-    );
     return cfg;
   });
 };

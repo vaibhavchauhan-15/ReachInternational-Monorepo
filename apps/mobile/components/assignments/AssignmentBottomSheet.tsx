@@ -92,10 +92,10 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
       visible={visible}
       onClose={onClose}
       variant="bottom"
-      panelStyle={{ maxHeight: '92%' }}
+      panelStyle={[styles.modalPanel, { height: '88%', maxHeight: '92%' }]}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <View
+
         style={styles.keyboardContainer}
       >
         {/* Header Bar */}
@@ -105,7 +105,7 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
               <Text variant="subheading" style={[styles.modalTitle, { color: theme.colors.ink }]}>
                 {title}
               </Text>
-              {showCodeInHeader && targetEntity?.code && (
+              {Boolean(showCodeInHeader && targetEntity?.code) ? (
                 <View
                   style={[
                     styles.codePill,
@@ -116,16 +116,16 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
                   ]}
                 >
                   <Text variant="mono" style={[styles.codeText, { color: theme.colors.primary }]}>
-                    {targetEntity.code}
+                    {targetEntity?.code}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
-            {description && (
+            {Boolean(description) ? (
               <Text variant="caption" style={[styles.modalDescription, { color: theme.colors.mute }]}>
                 {description}
               </Text>
-            )}
+            ) : null}
           </View>
           <Pressable
             onPress={() => {
@@ -176,21 +176,21 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
                     <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
                       {targetEntity.title}
                     </Text>
-                    {targetEntity.statusBadge && (
+                    {Boolean(targetEntity.statusBadge) ? (
                       <Badge
                         status="active"
                         size="sm"
-                        customLabel={targetEntity.statusBadge}
+                        customLabel={targetEntity.statusBadge ?? undefined}
                       />
-                    )}
+                    ) : null}
                   </View>
-                  {targetEntity.subtitle && (
+                  {Boolean(targetEntity.subtitle) ? (
                     <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
                       {targetEntity.subtitle}
                     </Text>
-                  )}
+                  ) : null}
                 </View>
-                {targetEntity.capacityLabel && (
+                {Boolean(targetEntity.capacityLabel) ? (
                   <View
                     style={[
                       styles.capacityPill,
@@ -204,7 +204,7 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
                       {targetEntity.capacityLabel}
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </View>
           )}
@@ -243,14 +243,19 @@ export const AssignmentBottomSheet: React.FC<AssignmentBottomSheetProps> = ({
             {footer}
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
     </AppModal>
   );
 };
 
 const styles = StyleSheet.create({
+  modalPanel: {
+    height: '88%',
+    maxHeight: '92%',
+  },
   keyboardContainer: {
     flex: 1,
+    width: '100%',
   },
   headerBar: {
     flexDirection: 'row',
@@ -263,6 +268,7 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     flex: 1,
+    width: '100%',
     marginRight: spacingNumeric.md,
   },
   titleRow: {
@@ -296,6 +302,7 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     padding: spacingNumeric.lg,
@@ -321,6 +328,7 @@ const styles = StyleSheet.create({
   },
   entityDetails: {
     flex: 1,
+    width: '100%',
     gap: 2,
   },
   entityTitleRow: {

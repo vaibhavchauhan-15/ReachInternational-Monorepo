@@ -108,14 +108,14 @@ console.log('  ✓ Tabs backBehavior="history" configured for native navigation 
 assert(!layoutContent.includes('name="settings/account/edit-profile"'), 'settings/account/edit-profile must not be registered in (app)/_layout.tsx');
 console.log('  ✓ Verified non-existent route settings/account/edit-profile is excluded from Tabs.Screen');
 
-// Ensure sub-pages have href: null so they don't appear in bottom tab bar
+// Ensure sub-pages are registered with motion.tabsShift and without href: null (prevents Expo v58 hidden redirection bug)
 const subpageRoutes = registeredRoutes.filter((r) => r !== 'settings/index');
 for (const subRoute of subpageRoutes) {
   const routeBlockMatch = layoutContent.match(new RegExp(`<Tabs\\.Screen\\s+name=["']${subRoute}["'][^>]+>`));
   assert(routeBlockMatch, `Expected route definition for ${subRoute}`);
-  assert(routeBlockMatch[0].includes('href: null'), `Sub-page ${subRoute} must have href: null`);
+  assert(!routeBlockMatch[0].includes('href: null'), `Sub-page ${subRoute} must not have href: null (causes redirect to dashboard in Expo SDK 58)`);
 }
-console.log(`  ✓ All ${subpageRoutes.length} settings sub-pages have href: null (hidden from bottom bar)`);
+console.log(`  ✓ All ${subpageRoutes.length} settings sub-pages registered cleanly without href: null (safe for Expo SDK 58)`);
 
 // Group 4: Legacy Route Redirection in +not-found.tsx
 console.log('\n--- 4. Legacy Route Redirections (+not-found.tsx) ---');

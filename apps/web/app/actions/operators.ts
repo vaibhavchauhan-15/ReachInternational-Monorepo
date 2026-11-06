@@ -250,6 +250,24 @@ function formatOperatorDatabaseError(error: any): string {
     if (msg.includes("chk_machine_hour_logs_meter_range") || msg.includes("cannot be less than start meter")) {
       return "Ending hour meter reading cannot be less than starting hour meter reading.";
     }
+    if (msg.includes("assigned to Shift") || msg.includes("select your assigned shift")) {
+      return msg.replace(/^Error:\s*/i, "").trim();
+    }
+    if (msg.includes("cannot exceed 24 hours")) {
+      return "Machine running hours cannot exceed 24 hours in a single log.";
+    }
+    if (msg.includes("previous 7 days")) {
+      return "Shift logs can only be submitted for dates within the previous 7 days.";
+    }
+    if (msg.includes("maintenance or inactive") || msg.includes("currently in maintenance")) {
+      return "Cannot record machine log for equipment currently in maintenance or inactive status.";
+    }
+    if (msg.includes("cannot operate two machines")) {
+      return msg.replace(/^Error:\s*/i, "").trim();
+    }
+    if (msg.includes("Duplicate entries are not permitted") || msg.includes("already been recorded for this equipment")) {
+      return msg.replace(/^Error:\s*/i, "").trim();
+    }
     if (
       msg.includes("Cannot log before shift end") ||
       details.includes("Cannot log before shift end") ||
@@ -298,6 +316,9 @@ function formatOperatorDatabaseError(error: any): string {
 
   // 5. Permission errors (42501)
   if (code === "42501" || msg.includes("permission denied") || msg.includes("Unauthorized") || msg.includes("Not authorized")) {
+    if (msg.includes("not authorized to submit shift logs for this equipment") || msg.includes("must be assigned to the machine")) {
+      return "Unauthorized: You are not authorized to submit logs for this equipment. You must be assigned to the machine to submit logs.";
+    }
     if (msg.includes("Supervisors can only fill shift entries") || msg.includes("assigned under their supervision")) {
       return "Unauthorized: Supervisors can only fill shift entries for operators or machinery assigned under their supervision.";
     }

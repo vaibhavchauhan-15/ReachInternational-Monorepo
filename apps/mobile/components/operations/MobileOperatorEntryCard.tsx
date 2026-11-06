@@ -61,6 +61,7 @@ import {
 } from '@reachinternational/utils';
 import { useToast, EmptyState, ErrorState, FormError, Skeleton, SearchableSelect, Badge, type SelectOption } from '../ui';
 import type { OperatorEntryContext, ClientShiftCode } from '@reachinternational/types';
+import { CreateHourLogSchema } from '@reachinternational/validation';
 import { supabase } from '../../lib/supabase';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
@@ -317,12 +318,27 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
   // Auto-sync start and end times whenever available shifts change (e.g. rented client shifts loaded)
   useEffect(() => {
     if (availableShifts && availableShifts.length > 0) {
-      const match =
-        availableShifts.find((s) => {
-          const sNorm = s.code.replace(/^shift\s*/i, '').trim().toUpperCase();
-          const selNorm = selectedShiftCode.replace(/^shift\s*/i, '').trim().toUpperCase();
-          return s.code.toUpperCase() === selectedShiftCode.toUpperCase() || (selNorm !== '' && sNorm === selNorm);
-        }) || availableShifts[0];
+      let match = availableShifts.find((s) => {
+        const sNorm = s.code.replace(/^shift\s*/i, '').trim().toUpperCase();
+        const selNorm = selectedShiftCode.replace(/^shift\s*/i, '').trim().toUpperCase();
+        return s.code.toUpperCase() === selectedShiftCode.toUpperCase() || (selNorm !== '' && sNorm === selNorm);
+      });
+
+      // If no match or currently unassigned while operator has assignments, prioritize assigned shift
+      if (!match || (assignedShiftCodes.length > 0 && !assignedShiftCodes.some((ac) => ac.replace(/^shift\s*/i, '').trim().toUpperCase() === (match?.code || '').replace(/^shift\s*/i, '').trim().toUpperCase()))) {
+        if (resolvedInitialShift) {
+          match = resolvedInitialShift;
+        } else if (assignedShiftCodes.length > 0) {
+          match = availableShifts.find((s) => {
+            const sNorm = s.code.replace(/^shift\s*/i, '').trim().toUpperCase();
+            return assignedShiftCodes.some((ac) => ac.replace(/^shift\s*/i, '').trim().toUpperCase() === sNorm);
+          }) || match || availableShifts[0];
+        }
+      }
+
+      if (!match) {
+        match = availableShifts[0];
+      }
 
       if (match) {
         if (match.code !== selectedShiftCode) {
@@ -337,7 +353,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         }
       }
     }
-  }, [availableShifts]);
+  }, [availableShifts, resolvedInitialShift, assignedShiftCodes]);
 
   const handleSelectMachine = useCallback((machineId: string) => {
     setSelectedMachineId(machineId);
@@ -438,7 +454,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
           const parsed = JSON.parse(saved);
           if (parsed.logDate === getISTDateString()) {
             if (parsed.endMeter) setEndMeter(parsed.endMeter);
-            if (parsed.selectedShiftCode) setSelectedShiftCode(parsed.selectedShiftCode);
+            if (parsed.selectedShiftCode) {
+              const draftNorm = parsed.selectedShiftCode.replace(/^shift\s*/i, '').trim().toUpperCase();
+              const isAssigned =
+                assignedShiftCodes.length === 0 ||
+                assignedShiftCodes.some((ac) => ac.replace(/^shift\s*/i, '').trim().toUpperCase() === draftNorm);
+              if (isAssigned) {
+                setSelectedShiftCode(parsed.selectedShiftCode);
+              }
+            }
             if (parsed.startTime) setStartTime(parsed.startTime);
             if (parsed.endTime) setEndTime(parsed.endTime);
             if (parsed.overtimeHours) setOvertimeHours(parsed.overtimeHours);
@@ -661,6 +685,18 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       return;
     }
 
+    if (isCurrentShiftUnassigned) {
+      haptics.reject();
+      const shiftsStr = assignedShiftCodes.join(', ');
+      const err = {
+        title: 'Unassigned Shift',
+        message: `Operator is assigned to Shift ${shiftsStr} on this equipment, but attempted to log for Shift ${selectedShiftCode}. Please select your assigned shift.`,
+      };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
+      return;
+    }
+
     if (!endMeter.trim() || isNaN(endNum) || endNum < startNum) {
       haptics.reject();
       const err = {
@@ -830,6 +866,18 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         end_datetime: shiftTiming.endDateTime?.toISOString(),
         idempotency_key: idempotencyKey,
       };
+
+      // Canonical shared Zod validation guard (@reachinternational/validation)
+      const valResult = CreateHourLogSchema.safeParse(logPayload);
+      if (!valResult.success) {
+        haptics.reject();
+        const firstError = valResult.error.issues[0]?.message || 'Invalid shift log payload.';
+        postNotification({ category: 'log_entry', title: 'Validation Error', body: firstError, severity: 'error' });
+        toast('error', 'Validation Error', firstError);
+        submittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
 
       const optimisticHistoryRow = {
         id: idempotencyKey,
@@ -1526,19 +1574,40 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
                 {
                   backgroundColor: isDark ? '#451a03' : '#fffbeb',
                   borderColor: isDark ? '#92400e' : '#fde68a',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                 },
               ]}
             >
-              <AlertTriangle size={11} color={isDark ? '#fbbf24' : '#d97706'} />
-              <Text
-                variant="micro"
-                style={{
-                  color: isDark ? '#fbbf24' : '#92400e',
-                  flex: 1,
-                }}
-              >
-                Assigned to Shift {assignedShiftCodes.join(', ')} only.
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <AlertTriangle size={13} color={isDark ? '#fbbf24' : '#d97706'} />
+                <Text
+                  variant="micro"
+                  style={{
+                    color: isDark ? '#fbbf24' : '#92400e',
+                    flex: 1,
+                  }}
+                >
+                  Assigned to Shift {assignedShiftCodes.join(', ')} only.
+                </Text>
+              </View>
+              {resolvedInitialShift && (
+                <Pressable
+                  haptic="select"
+                  onPress={() => handleSelectShift(resolvedInitialShift)}
+                  style={{
+                    backgroundColor: isDark ? '#78350f' : '#fef3c7',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text variant="caption" weight="medium" style={{ color: isDark ? '#fef08a' : '#b45309' }}>
+                    Switch to Shift {assignedShiftCodes.join(', ')}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           )}
 

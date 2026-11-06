@@ -42,6 +42,7 @@ import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { OperationLogListSkeleton } from './OperationsSkeleton';
 import { SyncStatusBadge } from '../offline/SyncStatusBadge';
+import { MobileOperatorHistoryCard } from './MobileOperatorHistoryCard';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import {
   FileSpreadsheet,
@@ -49,16 +50,11 @@ import {
   X,
   SlidersHorizontal,
   Calendar,
-  Pencil,
-  Lock,
   AlertTriangle,
   AlertCircle,
   RotateCcw,
   Check,
   ChevronDown,
-  Truck,
-  Building2,
-  ArrowRight,
 } from '../ui/icon';
 import {
   formatDate,
@@ -170,242 +166,7 @@ function matchesDateSearch(log: HourLogRecord, query: string): boolean {
   return rawDateStr.toLowerCase().includes(q);
 }
 
-/**
- * Checks if log was submitted within the last 7 calendar days
- */
-function isLogWithin7Days(logDate?: string | null): boolean {
-  if (!logDate) return false;
-  const logDateStr = logDate.split('T')[0];
-  const parts = logDateStr.split('-').map(Number);
-  const now = new Date();
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-    const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
-    const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
-    return diffDays <= 7 && diffDays >= 0;
-  }
-  return false;
-}
 
-/**
- * Memoized Individual History Log Card Component
- * Isolates rendering per log item for maximum scroll performance & zero unnecessary re-renders.
- */
-interface HistoryLogCardProps {
-  log: HourLogRecord;
-  theme: any;
-  isDark: boolean;
-  onEditLog?: (log: HourLogRecord) => void;
-}
-
-const HistoryLogCard = React.memo<HistoryLogCardProps>(
-  function HistoryLogCard({ log, theme, isDark, onEditLog }) {
-    const startM = Number(log.start_meter) || 0;
-    const endM = Number(log.end_meter) || startM;
-    const rt = log.running_hours ?? Math.max(0, Math.round((endM - startM) * 10) / 10);
-
-    // Shift display name (e.g. "Shift A", "Shift B")
-    const shiftName = useMemo(() => {
-      const raw = (log.shift_code || log.shift || '').trim();
-      if (!raw) return 'Shift A';
-      if (/^shift/i.test(raw)) {
-        return raw.replace(/^shift\s*/i, 'Shift ');
-      }
-      return `Shift ${raw}`;
-    }, [log.shift_code, log.shift]);
-
-    const model = log.machine?.model || 'Equipment';
-    const serial = log.machine?.serial_number || '';
-    const machineIdCode = log.machine?.machine_id || log.machine_code || '';
-    const clientName = log.client?.company_name || 'Base Yard';
-    const clientCode = (log.client as any)?.code || '';
-    const clientCity = log.client?.city || (log.location && log.location.includes(',') ? log.location.split(',')[1]?.trim() : '');
-
-    const timestampStr = log.created_at
-      ? formatExactTimestamp(log.created_at, false)
-      : formatDate(log.log_date);
-
-    const breakdownInfo = log.is_breakdown ? parseBreakdownDetails(log) : null;
-    const canEdit = isLogWithin7Days(log.log_date);
-    const breakdownNote = (log.remarks || '').trim();
-
-    return (
-      <View
-        style={[
-          styles.historyCard,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        {/* Row 1: Top Header — Exact timestamp date & time (left) + Sync Status Pill + Operating Hours badge & Edit/Lock Action (right) */}
-        <View style={[styles.cardHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8, flexWrap: 'wrap' }}>
-            <Text variant="mono" style={[styles.timestampText, { color: theme.colors.mute }]}>
-              {timestampStr}
-            </Text>
-            {log.sync_status && log.sync_status !== 'synced' && (
-              <SyncStatusBadge status={log.sync_status} />
-            )}
-          </View>
-          <View style={styles.headerRightActions}>
-            <Badge
-              variant="success"
-              size="sm"
-              label={`+${rt.toFixed(1)} hrs`}
-            />
-
-            {canEdit && (!log.sync_status || log.sync_status === 'synced') ? (
-              <Pressable
-                variant="iconButton"
-                haptic="tap"
-                hitSlopToMin48
-                onPress={() => onEditLog?.(log)}
-                style={styles.headerEditBtn}
-                accessibilityLabel="Edit machine log within 7 days"
-              >
-                <Pencil size={13} color={theme.colors.link} />
-              </Pressable>
-            ) : (
-              <View style={styles.headerLockBtn} accessibilityLabel="Locked (archived)">
-                <Lock size={12} color={theme.colors.mute} />
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Row 2: Equipment Model + Machine ID Pill + Serial Number Pill */}
-        <View style={styles.cardMachineRow}>
-          <Truck size={14} color="#0284c7" style={{ marginRight: 4 }} />
-          <Text variant="subheading" style={[styles.machineTitle, { color: theme.colors.ink }]}>
-            {model}
-          </Text>
-          {machineIdCode ? (
-            <Badge variant="neutral" size="sm" label={machineIdCode} />
-          ) : null}
-          {serial ? (
-            <Badge variant="outline" size="sm" label={`S/N: ${serial}`} />
-          ) : null}
-        </View>
-
-        {/* Row 3: Client & Location */}
-        <View style={styles.cardClientRow}>
-          <Building2 size={13} color="#10b981" style={{ marginRight: 4 }} />
-          <Text variant="body" style={[styles.clientName, { color: theme.colors.ink }]} numberOfLines={1}>
-            {clientName}
-          </Text>
-          {clientCode ? (
-            <Badge variant="neutral" size="sm" label={clientCode} />
-          ) : null}
-          {clientCity ? (
-            <Text variant="caption" style={[styles.clientCity, { color: theme.colors.mute }]}>
-              {' '}({clientCity})
-            </Text>
-          ) : null}
-        </View>
-
-        {/* Row 4: Metrics Box (Clean Formatted Grid) */}
-        <View
-          style={[
-            styles.metricsBox,
-            {
-              backgroundColor: theme.colors.canvas,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          {/* Shift Date & Shift Badge */}
-          <View style={styles.metricItemRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
-              <Calendar size={13} color="#0284c7" />
-              <Text variant="mono" style={[styles.dateValueBold, { color: theme.colors.ink }]}>
-                {formatDate(log.log_date)}
-              </Text>
-
-              {/* Shift Badge with ONLY shift name (e.g. Shift A, Shift B) */}
-              <Badge variant="info" size="sm" label={shiftName} />
-            </View>
-
-            {log.overtime_hours ? (
-              <Badge variant="warning" size="sm" label={`+${log.overtime_hours}h OT`} />
-            ) : null}
-          </View>
-
-          {/* HMR Progression (Tight inline row with ArrowRight icon) */}
-          <View style={styles.hmrInlineRow}>
-            <Text variant="mono" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-              HMR:
-            </Text>
-            <Text variant="mono" style={[styles.hmrValue, { color: theme.colors.ink }]}>
-              {Number.isInteger(startM) ? startM.toFixed(0) : startM.toFixed(1)}
-            </Text>
-            <ArrowRight size={12} color={theme.colors.mute} style={{ marginHorizontal: 4 }} />
-            <Text variant="mono" style={[styles.hmrValueBold, { color: theme.colors.ink }]}>
-              {Number.isInteger(endM) ? endM.toFixed(0) : endM.toFixed(1)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Row 5: Breakdown Details & Notes */}
-        {log.is_breakdown ? (
-          <View style={styles.breakdownSection}>
-            <View style={styles.breakdownBadgeRow}>
-              <AlertTriangle size={13} color="#e11d48" style={{ marginRight: 4 }} />
-              <Text variant="mono" style={{ color: '#e11d48' }}>
-                Breakdown:
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: '#e11d48', flex: 1, marginLeft: 4 }}
-                numberOfLines={1}
-              >
-                {breakdownInfo?.displayText || (log as any).breakdown_duration || 'Reported'}
-              </Text>
-            </View>
-
-            {/* Breakdown Notes (Only rendered if breakdown note is non-empty/non-null) */}
-            {breakdownNote ? (
-              <View
-                style={[
-                  styles.breakdownNoteBox,
-                  {
-                    backgroundColor: isDark ? '#450a0a' : '#fff1f2',
-                    borderColor: isDark ? '#991b1b' : '#fecdd3',
-                  },
-                ]}
-              >
-                <AlertCircle size={13} color="#e11d48" style={{ marginTop: 2, marginRight: 6 }} />
-                <View style={{ flex: 1 }}>
-                  <Text variant="caption" style={{ color: isDark ? '#fb7185' : '#be123c' }}>
-                    Breakdown Notes:
-                  </Text>
-                  <Text variant="caption" style={{ color: theme.colors.ink, marginTop: 1 }}>
-                    {breakdownNote}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.normalBadgeRow}>
-            <Text variant="micro" style={[styles.metaLabel, { color: theme.colors.mute }]}>
-              Breakdown: 0 (Normal)
-            </Text>
-          </View>
-        )}
-      </View>
-    );
-  },
-  (prev, next) =>
-    prev.log.id === next.log.id &&
-    prev.log.sync_status === next.log.sync_status &&
-    prev.log.end_meter === next.log.end_meter &&
-    prev.log.running_hours === next.log.running_hours &&
-    prev.log.shift === next.log.shift &&
-    prev.log.shift_code === next.log.shift_code &&
-    prev.isDark === next.isDark
-);
 
 export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> = React.memo(
   function MobileOperatorHistoryTab({
@@ -691,14 +452,18 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
 
     const renderLogItem = useCallback(
       ({ item }: { item: HourLogRecord }) => (
-        <HistoryLogCard
-          log={item}
-          theme={theme}
-          isDark={isDark}
-          onEditLog={onEditLog}
-        />
+        <>
+          <MobileOperatorHistoryCard
+            log={item}
+            onEditLog={onEditLog}
+            style={styles.historyCardItem}
+          />
+          {item.sync_status && item.sync_status !== 'synced' ? (
+            <SyncStatusBadge status={item.sync_status} />
+          ) : null}
+        </>
       ),
-      [theme, isDark, onEditLog]
+      [onEditLog]
     );
 
     const listHeaderElement = useMemo(() => {
@@ -1406,142 +1171,9 @@ const styles = StyleSheet.create({
   logsList: {
     gap: 10,
   },
-  historyCard: {
+  historyCardItem: {
     marginHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  timestampText: {},
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  headerEditBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerLockBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.5,
-  },
-  hoursBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  hoursBadgeText: {},
-  cardMachineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  machineTitle: {},
-  machineSerial: {},
-  codePillSmall: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  codePillSmallText: {},
-  cardClientRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  metaLabel: {},
-  clientName: {},
-  clientCity: {},
-  cardHmrRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 4,
-  },
-  hmrValue: {},
-  hmrValueBold: {},
-  dateValueBold: {},
-  shiftBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  shiftBadgeText: {},
-  otPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  otPillText: {},
-  serialPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 9999,
-    borderWidth: 1,
-  },
-  metricsBox: {
-    padding: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    marginVertical: 4,
-  },
-  metricItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  hmrInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  breakdownSection: {
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  normalBadgeRow: {
-    paddingVertical: 4,
-  },
-  breakdownNoteBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 6,
-  },
-  breakdownBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginBottom: 12,
   },
 
   cachedErrorBanner: {

@@ -54,7 +54,8 @@ try {
 
   const manifestContent = fs.readFileSync(manifestPath, 'utf8');
   const serviceContent = fs.readFileSync(servicePath, 'utf8');
-  assert(manifestContent.includes('v1.3.0-native-launch'), 'Manifest indexes current release v1.3.0-native-launch');
+  assert(manifestContent.includes('v1.4.0-native-release'), 'Manifest indexes current release v1.4.0-native-release');
+  assert(manifestContent.includes('v1.3.0-native-launch'), 'Manifest indexes release v1.3.0-native-launch');
   assert(manifestContent.includes('splash-perf-130'), 'Manifest includes real splash screen performance highlight');
   assert(manifestContent.includes('operations-anr-130'), 'Manifest includes real operations ANR resolution highlight');
   assert(manifestContent.includes('user-management-130'), 'Manifest includes real user management pagination highlight');

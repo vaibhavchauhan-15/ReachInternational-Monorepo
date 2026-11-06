@@ -1,7 +1,7 @@
 # Operations Hub Security & RLS Regression Audit — Phase 24 Report
 
 > **AUTHORITATIVE SECURITY & RLS REGRESSION AUDIT**  
-> Generated: 2026-09-14T11:46:56.009Z  
+> Generated: 2026-11-04T09:07:11.383Z  
 > Standard: OWASP ASVS 5.0 & `AI/RULES/SECURITY.md`  
 > Target System: `/operations` Subsystem, `public.get_operation_logs`, and RLS Tables  
 > Overall Status: **ALL SECURITY & RLS INVARIANTS PASSED (100%)**
@@ -40,9 +40,9 @@ Phase 24 validates the security architecture, authorization boundaries, and Row 
 3. **✅ PASS**: RLS enabled on table 'operator_machine_assignments' (rowsecurity = true) 
 4. **✅ PASS**: RLS enabled on table 'machines' (rowsecurity = true) 
 5. **✅ PASS**: RLS enabled on table 'clients' (rowsecurity = true) 
-6. **✅ PASS**: Policy: "Allow authenticated read machine_hour_logs" is active 
-7. **✅ PASS**: Policy: "admins_delete_logs" is active (blocks non-admin deletion) 
-8. **✅ PASS**: Policy: "operators_and_admins_insert_logs" is active (blocks operator spoofing) 
+6. **✅ PASS**: Policy: "view_machine_hour_logs" is active 
+7. **✅ PASS**: Policy: "admins_delete_logs" is dropped (shift logs are strictly immutable) 
+8. **✅ PASS**: Policy: "insert_machine_hour_logs" is active (blocks operator spoofing & unassigned machines) 
 9. **✅ PASS**: Policy: "oma_select_policy" is active (protects operator assignments) 
 10. **✅ PASS**: Policy: "oma_manage_policy" is active (restricts assignment management) 
 11. **✅ PASS**: Policy: "machines_delete_authorized" is active (blocks non-admin machine deletion) 
@@ -50,9 +50,9 @@ Phase 24 validates the security architecture, authorization boundaries, and Row 
 13. **✅ PASS**: Unauthenticated insert into operator_machine_assignments rejected by RLS _(new row violates row-level security policy for table "operator_machine_assignments")_
 14. **✅ PASS**: Unauthenticated delete on machine_hour_logs rejected by RLS (0 rows affected) 
 15. **✅ PASS**: Active operational users found in database 
-16. **✅ PASS**: Discovered active operator: Surya Pratap Singh (ccfed0a4-684f-4ead-9c80-e9af480c1ef4) 
-17. **✅ PASS**: Discovered active supervisor: Shiv om pandey (6e0ba19f-43e3-43a4-ad94-f179556d1550) 
-18. **✅ PASS**: Discovered active admin: Dhruv Sharma (0c3efdaa-6091-471e-86cd-5236c89d2d3a) 
+16. **✅ PASS**: Discovered active operator: Rohit Singh (b3400740-3e79-44c7-9aec-a0ec3ccd22ce) 
+17. **✅ PASS**: Discovered active supervisor: Vikram Singh (13841eaa-c894-448f-b60f-093b341605e7) 
+18. **✅ PASS**: Discovered active admin: Admin User Dev (cc2b0d0c-e06d-4500-98fe-69354b2bdc16) 
 19. **✅ PASS**: Role "operator" strictly excluded from createAssignmentAction authorization gate 
 20. **✅ PASS**: Role "mechanic" strictly excluded from createAssignmentAction authorization gate 
 21. **✅ PASS**: Role "driver" strictly excluded from createAssignmentAction authorization gate 
