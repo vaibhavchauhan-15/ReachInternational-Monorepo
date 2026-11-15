@@ -4,8 +4,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 /**
- * Hourly Cron: Remove doc_staging sessions older than 24 hours.
+ * Daily Cron: Remove doc_staging sessions older than 24 hours.
  * Uses the Supabase Storage API exclusively (never direct SQL on storage.objects).
+ * Scheduled daily (e.g. 02:00 UTC) to comply with Vercel Hobby plan tier.
  * Protected by CRON_SECRET authorization header.
  */
 export async function POST(req: NextRequest) {

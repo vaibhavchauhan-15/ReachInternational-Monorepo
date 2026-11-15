@@ -158,6 +158,12 @@ const SUITES = [
     args: ['scripts/test-cross-platform-shift-assignment-push.mjs'],
     domain: 'Web/Mobile Supervisor to Web/Mobile Operator Shift Assignment & Dual Delivery',
   },
+  {
+    name: 'Vercel Cron Hobby Plan Compliance Suite',
+    cmd: 'node',
+    args: ['scripts/test-vercel-cron-hobby-compliance.mjs'],
+    domain: 'Vercel Free Tier Cron Schedules (<=1/day) & Route Integrity',
+  },
 ];
 
 console.log('\n================================================================');

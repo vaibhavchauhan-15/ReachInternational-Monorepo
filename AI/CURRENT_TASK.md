@@ -1,6 +1,34 @@
 # Current Task
 
-## Task: Native App Expo Doctor, Production Build / APK Verification & Release Notes v1.5.0
+## Task: Vercel Hobby Plan Cron Schedule Remediation (`cleanup-staging` Hourly to Daily)
+**Status**: 🟢 COMPLETED & VERIFIED (26/26 MONOREPO SUITES PASSED, 0 TYPECHECK ERRORS, VERCEL HOBBY COMPLIANCE AUDIT PASSED)
+**Date**: 2026-11-16
+**Affected Files**:
+- `vercel.json`: Changed `/api/cron/cleanup-staging` schedule from `"0 * * * *"` (hourly) to `"0 2 * * *"` (daily at 02:00 UTC) to strictly comply with Vercel Hobby plan tier.
+- `apps/web/vercel.json`: Synchronized `/api/cron/cleanup-staging` schedule to `"0 2 * * *"` (daily at 02:00 UTC).
+- `apps/web/app/api/cron/cleanup-staging/route.ts`: Updated route documentation to reflect daily schedule cadence.
+- `scripts/test-vercel-cron-hobby-compliance.mjs`: Added automated audit suite asserting that all crons across root and web `vercel.json` are $\le 1$/day (strictly daily), fully synchronized, and reference valid existing route handlers.
+- `scripts/run-all-tests.mjs`: Integrated Vercel Cron Hobby Plan Compliance Suite (now 26/26 suites passed).
+- `supabase/tests/test_phase1_database_and_storage_foundation.mjs`: Updated test assertion labels to reflect daily cron registration.
+
+### Resolution Summary:
+1. **Root Cause Analysis**:
+   - Vercel's free Hobby plan strictly limits cron jobs to daily execution (at most once per day).
+   - In commit `8c6b2cc`, `vercel.json` introduced `"schedule": "0 * * * *"` for `/api/cron/cleanup-staging`, which evaluates to every hour (24 times/day).
+   - When deploying on a free Hobby tier account (`VAIBHAV CHAU... Hobby`), Vercel deploy-time validation rejected the build with:
+     `Hobby accounts are limited to daily cron jobs. This cron expression (0 * * * *) would run more than once per day. Upgrade to the Pro plan to unlock all Cron Jobs features on Vercel.`
+2. **Implementation**:
+   - Replaced `"0 * * * *"` with `"0 2 * * *"` in both `vercel.json` and `apps/web/vercel.json`.
+   - All 3 Vercel crons now run once daily without overlapping (`0 0 * * *`, `0 2 * * *`, `0 3 * * *`), remaining 100% free with zero Vercel Pro subscription requirement.
+3. **Quality Gates Verification**:
+   - `node scripts/test-vercel-cron-hobby-compliance.mjs`: **Passed cleanly (100%)**.
+   - `node supabase/tests/test_phase1_database_and_storage_foundation.mjs`: **25/25 checks passed (100%)**.
+   - `node scripts/run-all-tests.mjs`: **26/26 monorepo test suites passed cleanly (100%)**.
+   - `pnpm typecheck`: **0 errors across all 7 packages**.
+
+---
+
+## Previous Task: Native App Expo Doctor, Production Build / APK Verification & Release Notes v1.5.0
 **Status**: 🟢 COMPLETED & VERIFIED (19/19 EXPO DOCTOR CHECKS, 43/43 MOBILE SUITES, 25/25 MONOREPO SUITES, 0 TYPECHECK ERRORS, 0 TYPOGRAPHY VIOLATIONS)
 **Date**: 2026-11-16
 **Affected Files**:

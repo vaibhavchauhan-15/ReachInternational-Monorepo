@@ -1,10 +1,18 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Native App Expo Doctor, Production Build / APK Verification & Release Notes v1.5.0
-- **Status**: 🟢 Clean / Verified & Production Ready (19/19 expo-doctor checks, 0 typecheck errors, 43/43 mobile suites, 25/25 monorepo test suites passed)
+- **Current Task**: Vercel Hobby Plan Cron Schedule Remediation (`cleanup-staging` Hourly to Daily)
+- **Status**: 🟢 Clean / Verified & Production Ready (26/26 monorepo test suites passed, 0 typecheck errors, Vercel Hobby plan compliance verified)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-16
+- **Vercel Hobby Plan Cron Remediation (`vercel.json` & `apps/web/vercel.json`)**:
+  - `Root Cause`: Vercel's free Hobby plan strictly limits cron schedules to at most once per day. Commit `8c6b2cc` introduced `"schedule": "0 * * * *"` on `/api/cron/cleanup-staging`, triggering deploy error: `Hobby accounts are limited to daily cron jobs. This cron expression (0 * * * *) would run more than once per day. Upgrade to the Pro plan to unlock all Cron Jobs features on Vercel.`
+  - `Fix Applied`:
+    1. Adjusted `/api/cron/cleanup-staging` schedule from `"0 * * * *"` to `"0 2 * * *"` (daily at 02:00 UTC) across both `vercel.json` and `apps/web/vercel.json`.
+    2. Spaced out daily cron execution across separate hours: `close-expired-jobs` (00:00 UTC), `cleanup-staging` (02:00 UTC), and `cleanup-superseded` (03:00 UTC).
+    3. Created automated verification suite `scripts/test-vercel-cron-hobby-compliance.mjs` verifying schedule syntax, $\le 1$/day Hobby compliance, and handler existence.
+    4. Verified `node scripts/run-all-tests.mjs`: 26/26 test suites passed cleanly.
+    5. Verified `pnpm typecheck`: 0 errors across all 7 workspace packages.
 - **Native Mobile Production Release & Play Store Audit (`apps/mobile`)**:
   - `Expo Doctor`: 19/19 checks passed cleanly (0 issues detected).
   - `Production APK & AAB Profiles`: Configured `eas.json` with `production` (`buildType: "app-bundle"` for Google Play Store) and `production-apk` (`buildType: "apk"` for standalone sideloading).

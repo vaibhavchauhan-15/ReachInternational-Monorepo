@@ -248,14 +248,14 @@ async function runTests() {
   const webVercelJsonPath = path.join(ROOT_DIR, 'apps/web/vercel.json');
   const rootVercelJsonPath = path.join(ROOT_DIR, 'vercel.json');
 
-  assert(fs.existsSync(cleanupStagingRoutePath), 'Hourly cron route /api/cron/cleanup-staging exists');
+  assert(fs.existsSync(cleanupStagingRoutePath), 'Daily cron route /api/cron/cleanup-staging exists');
   assert(fs.existsSync(cleanupSupersededRoutePath), 'Daily cron route /api/cron/cleanup-superseded exists');
   assert(fs.existsSync(webVercelJsonPath), 'apps/web/vercel.json exists');
   assert(fs.existsSync(rootVercelJsonPath), 'root vercel.json exists');
 
   const vercelConfig = JSON.parse(fs.readFileSync(webVercelJsonPath, 'utf-8'));
   const cronPaths = vercelConfig.crons?.map((c) => c.path) || [];
-  assert(cronPaths.includes('/api/cron/cleanup-staging'), 'vercel.json registers /api/cron/cleanup-staging (hourly)');
+  assert(cronPaths.includes('/api/cron/cleanup-staging'), 'vercel.json registers /api/cron/cleanup-staging (daily)');
   assert(cronPaths.includes('/api/cron/cleanup-superseded'), 'vercel.json registers /api/cron/cleanup-superseded (daily)');
 
   console.log('\n------------------------------------------------------------');
