@@ -80,6 +80,7 @@ export const UpdateAssignmentSchema = z.object({
 export const EndAssignmentSchema = z.object({
   assignmentId: z.string().uuid("Invalid assignment ID"),
   endReason: z.enum(["reassigned", "removed", "shift_changed", "migrated"]).default("removed"),
+  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Effective date must be YYYY-MM-DD").optional().nullable(),
   notes: z.string().max(500, "Notes cannot exceed 500 characters").optional().nullable(),
 });
 

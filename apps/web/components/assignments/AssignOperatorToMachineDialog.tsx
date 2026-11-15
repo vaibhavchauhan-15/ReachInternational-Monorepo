@@ -214,7 +214,7 @@ export function AssignOperatorToMachineDialog({
     setIsAddingToShift(false);
     setSelectedCandidateId("");
 
-    const targetClientId = currentMachine?.client_id || currentMachine?.client?.id;
+    const targetClientId = clientId;
 
     // Load client shifts
     if (targetClientId) {
@@ -340,7 +340,7 @@ export function AssignOperatorToMachineDialog({
     return () => {
       mounted = false;
     };
-  }, [isOpen, selectedMachineId, currentMachine?.client_id]);
+  }, [isOpen, selectedMachineId, clientId]);
 
   // Map of taken shift codes on this machine
   const takenShiftCodes = useMemo(() => {

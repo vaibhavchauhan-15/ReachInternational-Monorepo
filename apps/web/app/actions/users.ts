@@ -7,7 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
-import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
+import { validateAadhaarNumber, validateLicenseNumber, normalizeMachineCategory } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import type { User, UserRole } from "@/lib/types/database";
 import {
@@ -180,6 +180,27 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       }).catch((auditErr) => {
         console.error("Error logging user approval audit:", auditErr);
       }),
+
+      // Synchronize with unified approval engine if an open request exists
+      (async () => {
+        try {
+          const { data: engineReq } = await adminSupabase
+            .from("approval_requests")
+            .select("id, version")
+            .eq("type_key", "registration")
+            .eq("subject_id", userId)
+            .eq("status", "pending")
+            .maybeSingle();
+
+          if (engineReq) {
+            await adminSupabase.rpc("approval_decide", {
+              p_request_id: engineReq.id,
+              p_decision: "approve",
+              p_expected_version: engineReq.version,
+            });
+          }
+        } catch {}
+      })(),
     ]);
 
 
@@ -250,6 +271,28 @@ export async function rejectUser(userId: string): Promise<UserFormState> {
       }).catch((auditErr) => {
         console.error("Error logging user rejection audit:", auditErr);
       }),
+
+      // Synchronize with unified approval engine if an open request exists
+      (async () => {
+        try {
+          const { data: engineReq } = await adminSupabase
+            .from("approval_requests")
+            .select("id, version")
+            .eq("type_key", "registration")
+            .eq("subject_id", userId)
+            .eq("status", "pending")
+            .maybeSingle();
+
+          if (engineReq) {
+            await adminSupabase.rpc("approval_decide", {
+              p_request_id: engineReq.id,
+              p_decision: "reject",
+              p_note: "Registration rejected by administrator",
+              p_expected_version: engineReq.version,
+            });
+          }
+        } catch {}
+      })(),
     ]);
 
 
@@ -295,6 +338,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
+    const rawMachineCategory = (formData.get("machine_category") as string)?.trim() || "";
+    const machineCategory = role === "operator" ? (normalizeMachineCategory(rawMachineCategory) || rawMachineCategory || null) : null;
 
     if (!fullName || !email || !password || !role || !phone) {
       return { error: "Full name, email, mobile number, password, and role fields are required." };
@@ -308,6 +353,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     if (role === "operator") {
       if (monthlySalary === null || isNaN(monthlySalary) || monthlySalary <= 0) {
         return { error: "Monthly salary is mandatory for operator accounts and must be greater than 0." };
+      }
+      if (!rawMachineCategory) {
+        return { error: "Machine category is required for operator accounts." };
       }
     }
 
@@ -413,6 +461,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         full_name: fullName,
         role: role,
         supervisor_id: supervisorId || null,
+        machine_category: role === "operator" ? machineCategory : null,
         phone: phone || null,
         street: street || null,
         address: street || null,
@@ -451,6 +500,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         status: "active",
         role: role,
         supervisor_id: supervisorId || null,
+        machine_category: role === "operator" ? machineCategory : null,
         phone: phone || null,
         street: street || null,
         shift_start_time: shiftStartTime,
@@ -944,10 +994,18 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     }
 
     const effectiveRole = role || targetUser.role;
+    const rawMachineCategory = (formData.get("machine_category") as string)?.trim() || "";
+    const machineCategory = effectiveRole === "operator"
+      ? (normalizeMachineCategory(rawMachineCategory) || rawMachineCategory || targetUser.machine_category || null)
+      : null;
+
     if (effectiveRole === "operator") {
       const currentSalary = monthlySalary !== null ? monthlySalary : targetUser.monthly_salary;
       if (currentSalary === null || isNaN(currentSalary) || currentSalary <= 0) {
         return { error: "Monthly salary is mandatory for operator accounts and must be greater than 0." };
+      }
+      if (!machineCategory) {
+        return { error: "Machine category is required for operator accounts." };
       }
     }
 
@@ -1046,6 +1104,7 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         supervisor_id: supervisorId,
+        machine_category: machineCategory,
         ...(role && (currentUser.role === "super_admin" || role !== "super_admin") ? { role } : {}),
       }
     });
@@ -1068,6 +1127,7 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
       supervisor_id: supervisorId,
+      machine_category: machineCategory,
     };
     if (monthlySalary !== null && !isNaN(monthlySalary)) {
       updatePayload.monthly_salary = monthlySalary;

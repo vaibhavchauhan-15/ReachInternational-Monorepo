@@ -34,6 +34,7 @@ export interface InputProps extends TextInputProps {
   name?: string;
   id?: string;
   focusBorderColor?: string;
+  isSuccess?: boolean;
 }
 
 const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
@@ -60,6 +61,7 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       keyboardType,
       inputMode,
       focusBorderColor,
+      isSuccess = false,
       placeholderTextColor,
       onFocus,
       onBlur,
@@ -135,24 +137,34 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
       : {};
 
     const hasError = Boolean(error);
+    const isSuccessValid = Boolean(isSuccess) && !hasError;
     const errorMessage = typeof error === 'string' && error.trim().length > 0 ? error : undefined;
 
     const activeBorderColor = hasError
       ? '#ef4444'
+      : isSuccessValid
+      ? (isDark ? '#34d399' : '#10b981')
       : (focusBorderColor || (isDark ? '#0ea5e9' : '#0284c7'));
 
     const inactiveBorderColor = hasError
       ? (isDark ? '#f87171' : '#ee0000')
+      : isSuccessValid
+      ? (isDark ? '#34d399' : '#10b981')
       : (isDark ? '#262626' : '#ebebeb');
 
     const effectiveBorderColor = isFocused ? activeBorderColor : inactiveBorderColor;
     const inputBackgroundColor = isDark ? '#141414' : '#fafafa';
+    const effectiveInputBg = isSuccessValid
+      ? (isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.05)')
+      : hasError
+      ? (isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.03)')
+      : inputBackgroundColor;
     const inputTextColor = theme.colors.ink;
     const effectivePlaceholderColor = placeholderTextColor || (isDark ? '#737373' : '#8f8f8f');
 
     const resolvedInputStyle = React.useMemo(() => {
       const baseStyle: any = {
-        backgroundColor: inputBackgroundColor,
+        backgroundColor: effectiveInputBg,
         color: inputTextColor,
         borderColor: effectiveBorderColor,
         borderWidth: 1,

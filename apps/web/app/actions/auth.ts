@@ -7,8 +7,22 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env/client";
-import { validateAadhaarNumber, validateLicenseNumber, validateBankAccountNumber, validateIfscCode, getStateById, getStateByName } from "@reachinternational/utils";
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  validateBankAccountNumber,
+  validateIfscCode,
+  getStateById,
+  getStateByName,
+  DOC_UPLOAD,
+  normalizeMachineCategory,
+} from "@reachinternational/utils";
 import { isSupervisedRole, getRoleHomeRoute } from "@reachinternational/permissions";
+import { verifyUploadSessionToken } from "@/lib/security/upload-session";
+import { finalizeStagedSignupDocuments } from "@/lib/server/finalize-signup-documents";
+import { submitToApprovalEngineSafely } from "@/lib/server/approval-engine-bridge";
+import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
+import crypto from "node:crypto";
 
 
 export interface AuthFormState {
@@ -301,12 +315,86 @@ function sanitizeDocumentFileName(fileName: string): string {
     .slice(0, 100);
 }
 
+/**
+ * Extracts client IP from incoming request headers for Server Actions.
+ */
+async function getServerActionClientIp(): Promise<string> {
+  try {
+    const headerList = await headers();
+    const cfIp = headerList.get("cf-connecting-ip");
+    if (cfIp && cfIp.trim().length > 0) return cfIp.trim();
+    const realIp = headerList.get("x-real-ip");
+    if (realIp && realIp.trim().length > 0) return realIp.trim();
+    const trueClientIp = headerList.get("true-client-ip");
+    if (trueClientIp && trueClientIp.trim().length > 0) return trueClientIp.trim();
+    const forwarded = headerList.get("x-forwarded-for");
+    if (forwarded) {
+      const parts = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) return parts[parts.length - 1] || parts[0];
+    }
+  } catch {}
+  return "127.0.0.1";
+}
+
+/**
+ * Verifies that the first 3 bytes of a staged file match JPEG magic bytes FF D8 FF.
+ * Uses HTTP Range 0-2 request so exactly 3 bytes travel across the network.
+ */
+async function verifyStagedJpegMagicBytes(
+  adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
+  stagingPath: string
+): Promise<boolean> {
+  try {
+    const { data: signedData, error: signErr } = await adminSupabase.storage
+      .from("doc_staging")
+      .createSignedUrl(stagingPath, 60);
+
+    if (signErr || !signedData?.signedUrl) {
+      console.error(`[MagicBytes] Failed to create signed URL for ${stagingPath}:`, signErr);
+      return false;
+    }
+
+    const resp = await fetch(signedData.signedUrl, {
+      headers: { Range: "bytes=0-2" },
+    });
+
+    if (!resp.ok && resp.status !== 206) {
+      console.error(`[MagicBytes] HTTP error ${resp.status} reading ${stagingPath}`);
+      return false;
+    }
+
+    const buf = await resp.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (bytes.length < 3) return false;
+
+    // Standard JPEG magic bytes: FF D8 FF
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  } catch (err) {
+    console.error(`[MagicBytes] Exception reading magic bytes for ${stagingPath}:`, err);
+    return false;
+  }
+}
+
 export async function signup(
   state: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
   const sanitize = (val: string) => val.replace(/[\x00-\x1F\x7F]/g, "").trim();
 
+  // 1. Rate limit inside the action (Upstash / In-Memory fallback)
+  const clientIp = await getServerActionClientIp();
+  const rateLimitResult = await checkRateLimitAsync(`${clientIp}:action:signup`, RATE_LIMIT_PROFILES.AUTH_STRICT);
+  if (!rateLimitResult.success) {
+    const retryText = formatRetryAfter(rateLimitResult.resetSeconds);
+    return {
+      error: `Too many registration attempts. Please try again in ${retryText}.`,
+      fieldValues: {
+        email: sanitize((formData.get("email") as string) || ""),
+      },
+    };
+  }
+
+  // 2. Extract and sanitize input fields
   const fullName = sanitize((formData.get("full_name") as string) || "");
   const email = sanitize((formData.get("email") as string) || "");
   const phone = sanitize((formData.get("phone") as string) || "");
@@ -344,6 +432,7 @@ export async function signup(
   const shiftEndTimeRaw = sanitize((formData.get("shift_end_time") as string) || "");
   const shiftTimeRaw = sanitize((formData.get("shift_time") as string) || "");
   const supervisorIdRaw = sanitize((formData.get("supervisor_id") as string) || "");
+  const rawMachineCategory = sanitize((formData.get("machine_category") as string) || "");
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -354,9 +443,9 @@ export async function signup(
   const password = (formData.get("password") as string) || "";
   const confirmPassword = (formData.get("confirm_password") as string) || "";
   const requestedRole = sanitize((formData.get("role") as string) || "operator");
+  const machineCategory = requestedRole === "operator" ? (normalizeMachineCategory(rawMachineCategory) || rawMachineCategory || null) : null;
 
   // SECURITY (F07): Only allow non-admin roles during self-registration signup.
-  // Admin and super_admin roles must be explicitly assigned by existing admins post-approval.
   const allowedSignupRoles = [
     "manager",
     "supervisor",
@@ -369,6 +458,7 @@ export async function signup(
     email,
     phone,
     role: requestedRole,
+    machine_category: requestedRole === "operator" ? (machineCategory || rawMachineCategory) : "",
     supervisor_id: supervisorIdRaw,
     shift_start_time: shiftStartTimeRaw,
     shift_end_time: shiftEndTimeRaw,
@@ -418,9 +508,6 @@ export async function signup(
   if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Start time is required.";
   if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "End time is required.";
 
-  // Admin client for supervisor and duplicate checks
-  const adminSupabase = createSupabaseAdminClient();
-
   let safeSupervisorId: string | null = null;
   if (isSupervisedRole(role)) {
     if (!supervisorIdRaw) {
@@ -430,25 +517,16 @@ export async function signup(
       if (!uuidRegex.test(supervisorIdRaw)) {
         fieldErrors.supervisor_id = "Selected supervisor is invalid.";
       } else {
-        const { data: validSup } = await adminSupabase
-          .from("users")
-          .select("id, role, status")
-          .eq("id", supervisorIdRaw)
-          .maybeSingle();
-
-        if (
-          !validSup ||
-          (validSup.role !== "supervisor" &&
-            validSup.role !== "manager" &&
-            validSup.role !== "admin" &&
-            validSup.role !== "super_admin") ||
-          validSup.status !== "active"
-        ) {
-          fieldErrors.supervisor_id = "The selected supervisor is invalid or inactive.";
-        } else {
-          safeSupervisorId = supervisorIdRaw;
-        }
+        safeSupervisorId = supervisorIdRaw;
       }
+    }
+  }
+
+  if (role === "operator") {
+    if (!rawMachineCategory) {
+      fieldErrors.machine_category = "Machine category is required.";
+    } else if (!machineCategory) {
+      fieldErrors.machine_category = "Please select a valid machine category.";
     }
   }
 
@@ -495,30 +573,114 @@ export async function signup(
     }
   }
 
-  // File Upload Security & MIME Whitelisting
-  const bankFileRaw = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
-  const bankValidation = validateDocumentUpload(bankFileRaw, true, "Bank document");
-  if (bankValidation.error) {
-    fieldErrors.bank_document_file = bankValidation.error;
-  }
-
-  if (!aadhaarNumber) {
-    fieldErrors.aadhaar_number = "Aadhaar number is required.";
-  }
-  const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
-  const aadhaarValidation = validateDocumentUpload(aadhaarFileRaw, true, "Aadhaar document");
-  if (aadhaarValidation.error) {
-    fieldErrors.aadhaar_file = aadhaarValidation.error;
-  }
-
-  const licenseFileRaw = formData.get("license_file") as File | null;
-  const licenseValidation = validateDocumentUpload(licenseFileRaw, false, "Licence document");
-  if (licenseValidation.error) {
-    fieldErrors.license_file = licenseValidation.error;
-  }
-
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
+
+  if (password && confirmPassword && password !== confirmPassword) {
+    fieldErrors.password = "Passwords do not match.";
+    fieldErrors.confirm_password = "Passwords do not match.";
+  }
+
+  // SECURITY (DoS prevention): Max password length 128 characters
+  if (password && password.length > 128) {
+    fieldErrors.password = "Password cannot exceed 128 characters.";
+  }
+
+  // SECURITY (F08): Enforce minimum 8-character passwords with complexity requirements
+  if (password && password.length < 8) {
+    fieldErrors.password = "Must be at least 8 characters.";
+  } else if (password) {
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    if (!hasUppercase || !hasLowercase || !hasDigit) {
+      fieldErrors.password = "Must include uppercase, lowercase, and a number.";
+    }
+  }
+
+  const digitsOnly = phone.replace(/\D/g, "");
+  const is10DigitMobile =
+    digitsOnly.length === 10 ||
+    (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
+    (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
+
+  if (phone && !is10DigitMobile) {
+    fieldErrors.phone = "Valid 10-digit mobile number required.";
+  }
+
+  const emailLower = email.toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (email && !emailRegex.test(emailLower)) {
+    fieldErrors.email = "Enter a valid email address.";
+  }
+
+  // Aadhaar format validation
+  let cleanAadhaar: string | null = null;
+  if (aadhaarNumber) {
+    const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
+    if (!aadhaarResult.isValid) {
+      fieldErrors.aadhaar_number = aadhaarResult.error || "Valid 12-digit Aadhaar required.";
+    } else {
+      cleanAadhaar = aadhaarResult.clean || null;
+    }
+  }
+
+  // Driving licence format validation
+  let formattedLicense: string | null = null;
+  let licClean: string | null = null;
+  if (licenseNumber) {
+    const licResult = validateLicenseNumber(licenseNumber);
+    if (!licResult.isValid) {
+      fieldErrors.license_number = licResult.error || "Invalid licence format.";
+    } else {
+      formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
+      licClean = licResult.clean || licenseNumber.trim();
+    }
+  }
+
+  // Document Session Token Validation (Zero-Byte Staging Architecture)
+  const stagingSessionToken =
+    ((formData.get("staging_session_token") || formData.get("session")) as string | null)?.trim() || null;
+
+  let stagingUuid: string | null = null;
+  let bankFile: File | null = null;
+  let bankValidation: { error?: string; safeExt?: string } = {};
+  let aadhaarValidation: { error?: string; safeExt?: string } = {};
+  let licenseValidation: { error?: string; safeExt?: string } = {};
+
+  if (stagingSessionToken) {
+    const verifyRes = verifyUploadSessionToken(stagingSessionToken);
+    if (!verifyRes.valid) {
+      return {
+        error: verifyRes.error || "Upload session has expired. Please reselect your documents.",
+        fieldErrors: { bank_document_file: "Upload session expired." },
+        fieldValues,
+      };
+    }
+    stagingUuid = verifyRes.uuid;
+  } else {
+    // Legacy fallback for multipart file uploads
+    bankFile = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
+    bankValidation = validateDocumentUpload(bankFile, true, "Bank document");
+    if (bankValidation.error) {
+      fieldErrors.bank_document_file = bankValidation.error;
+    }
+
+    if (!aadhaarNumber) {
+      fieldErrors.aadhaar_number = "Aadhaar number is required.";
+    }
+    const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
+    aadhaarValidation = validateDocumentUpload(aadhaarFileRaw, true, "Aadhaar document");
+    if (aadhaarValidation.error) {
+      fieldErrors.aadhaar_file = aadhaarValidation.error;
+    }
+
+    const licenseFileRaw = formData.get("license_file") as File | null;
+    licenseValidation = validateDocumentUpload(licenseFileRaw, false, "Licence document");
+    if (licenseValidation.error) {
+      fieldErrors.license_file = licenseValidation.error;
+    }
+  }
 
   if (Object.keys(fieldErrors).length > 0) {
     return {
@@ -528,107 +690,73 @@ export async function signup(
     };
   }
 
-  if (password !== confirmPassword) {
-    return {
-      error: "Passwords do not match.",
-      fieldErrors: {
-        password: "Passwords do not match.",
-        confirm_password: "Passwords do not match.",
-      },
-      fieldValues,
-    };
+  const adminSupabase = createSupabaseAdminClient();
+  const last10Digits = digitsOnly.slice(-10);
+
+  // 3. Parallel checks (Promise.all): supervisor, email, phone, Aadhaar, licence, and staging list
+  const [
+    supervisorCheckResult,
+    emailCheckResult,
+    phoneCheckResult,
+    aadhaarCheckResult,
+    licenseCheckResult,
+    stagingListResult,
+  ] = await Promise.all([
+    safeSupervisorId
+      ? adminSupabase.from("users").select("id, role, status").eq("id", safeSupervisorId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+
+    adminSupabase.from("users").select("id").ilike("email", emailLower).maybeSingle(),
+
+    phone
+      ? adminSupabase.from("users").select("id, phone").or(`phone.eq.${phone},phone.ilike.%${last10Digits}`).limit(5)
+      : Promise.resolve({ data: [] as Array<{ id: string; phone: string | null }>, error: null }),
+
+    cleanAadhaar
+      ? adminSupabase.from("users").select("id").eq("aadhaar_number", cleanAadhaar).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+
+    licClean
+      ? adminSupabase.from("users").select("id").ilike("license_number", licClean).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+
+    stagingUuid
+      ? adminSupabase.storage.from("doc_staging").list(`signup/${stagingUuid}`)
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  // Evaluate supervisor validity
+  if (safeSupervisorId && isSupervisedRole(role)) {
+    const validSup = supervisorCheckResult.data;
+    if (
+      !validSup ||
+      (validSup.role !== "supervisor" &&
+        validSup.role !== "manager" &&
+        validSup.role !== "admin" &&
+        validSup.role !== "super_admin") ||
+      validSup.status !== "active"
+    ) {
+      return {
+        error: "The selected supervisor is invalid or inactive.",
+        fieldErrors: { supervisor_id: "The selected supervisor is invalid or inactive." },
+        fieldValues,
+      };
+    }
   }
 
-  // SECURITY (DoS prevention): Max password length 128 characters
-  if (password.length > 128) {
-    return {
-      error: "Password cannot exceed 128 characters.",
-      fieldErrors: {
-        password: "Password cannot exceed 128 characters.",
-      },
-      fieldValues,
-    };
-  }
-
-  // SECURITY (F08): Enforce minimum 8-character passwords with complexity requirements
-  if (password.length < 8) {
-    return {
-      error: "Must be at least 8 characters.",
-      fieldErrors: {
-        password: "Must be at least 8 characters.",
-      },
-      fieldValues,
-    };
-  }
-
-  // Require at least one uppercase, one lowercase, and one digit
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasLowercase = /[a-z]/.test(password);
-  const hasDigit = /\d/.test(password);
-  if (!hasUppercase || !hasLowercase || !hasDigit) {
-    return {
-      error: "Must include uppercase, lowercase, and a number.",
-      fieldErrors: {
-        password: "Must include uppercase, lowercase, and a number.",
-      },
-      fieldValues,
-    };
-  }
-
-  const digitsOnly = phone.replace(/\D/g, "");
-  const is10DigitMobile =
-    digitsOnly.length === 10 ||
-    (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
-    (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
-
-  if (!is10DigitMobile) {
-    return {
-      error: "Valid 10-digit mobile number required.",
-      fieldErrors: {
-        phone: "Valid 10-digit mobile number required.",
-      },
-      fieldValues,
-    };
-  }
-
-  const emailLower = email.toLowerCase();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(emailLower)) {
-    return {
-      error: "Enter a valid email address.",
-      fieldErrors: {
-        email: "Enter a valid email address.",
-      },
-      fieldValues,
-    };
-  }
-
-  // 1. Check duplicate email in public.users
-  const { data: existingEmailUser } = await adminSupabase
-    .from("users")
-    .select("id")
-    .ilike("email", emailLower)
-    .maybeSingle();
-
-  if (existingEmailUser) {
+  // Evaluate email uniqueness
+  if (emailCheckResult.data) {
     return {
       error: "Email already registered.",
-      fieldErrors: {
-        email: "Email already registered.",
-      },
+      fieldErrors: { email: "Email already registered." },
       fieldValues,
     };
   }
 
-  // 2. Check duplicate mobile number in public.users
-  if (phone) {
-    const { data: existingPhoneUsers } = await adminSupabase
-      .from("users")
-      .select("id, phone")
-      .not("phone", "is", null);
-
-    const targetDigits = phone.replace(/\D/g, "");
-    const hasDuplicatePhone = existingPhoneUsers?.some((u) => {
+  // Evaluate phone uniqueness
+  if (phoneCheckResult.data && phoneCheckResult.data.length > 0) {
+    const targetDigits = digitsOnly;
+    const hasDup = phoneCheckResult.data.some((u) => {
       if (!u.phone) return false;
       const uDigits = u.phone.replace(/\D/g, "");
       if (targetDigits.length >= 10 && uDigits.length >= 10) {
@@ -636,90 +764,130 @@ export async function signup(
       }
       return targetDigits === uDigits;
     });
-
-    if (hasDuplicatePhone) {
+    if (hasDup) {
       return {
         error: "Mobile number already registered.",
-        fieldErrors: {
-          phone: "Mobile number already registered.",
-        },
+        fieldErrors: { phone: "Mobile number already registered." },
         fieldValues,
       };
     }
   }
 
-  // 3. Validation & Duplicate check for Aadhaar Number
-  let cleanAadhaar: string | null = null;
-  if (aadhaarNumber) {
-    const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
-    if (!aadhaarResult.isValid) {
+  // Evaluate Aadhaar uniqueness
+  if (cleanAadhaar && aadhaarCheckResult.data) {
+    return {
+      error: "Aadhaar number already registered.",
+      fieldErrors: { aadhaar_number: "Aadhaar number already registered." },
+      fieldValues,
+    };
+  }
+
+  // Evaluate Driving Licence uniqueness
+  if (licClean && licenseCheckResult.data) {
+    return {
+      error: "Licence number already registered.",
+      fieldErrors: { license_number: "Licence number already registered." },
+      fieldValues,
+    };
+  }
+
+  // 4. Staged Document Metadata & Magic Bytes Validation
+  if (stagingUuid) {
+    const stagedFiles = stagingListResult.data;
+    if (stagingListResult.error || !stagedFiles) {
+      console.error("[Signup] Staging check error:", stagingListResult.error);
       return {
-        error: aadhaarResult.error || "Valid 12-digit Aadhaar required.",
-        fieldErrors: {
-          aadhaar_number: aadhaarResult.error || "Valid 12-digit Aadhaar required.",
-        },
+        error: "Failed to verify uploaded documents in staging.",
         fieldValues,
       };
     }
-    cleanAadhaar = aadhaarResult.clean || null;
 
-    if (cleanAadhaar) {
-      const { data: existingAadhaar } = await adminSupabase
-        .from("users")
-        .select("id")
-        .eq("aadhaar_number", cleanAadhaar)
-        .maybeSingle();
+    const stagedFileMap = new Map(stagedFiles.map((f) => [f.name, f]));
 
-      if (existingAadhaar) {
+    const validateSlotMetadata = (docType: string, label: string, required: boolean) => {
+      const mainName = `${docType}.jpg`;
+      const thumbName = `${docType}_thumb.jpg`;
+      const mainFile = stagedFileMap.get(mainName);
+      const thumbFile = stagedFileMap.get(thumbName);
+
+      if (!mainFile) {
+        if (required) return `${label} photo is required.`;
+        return null;
+      }
+
+      // Check MIME type
+      const mainMime = mainFile.metadata?.mimetype || "";
+      if (mainMime && mainMime !== "image/jpeg") {
+        return `${label} must be a JPEG image.`;
+      }
+
+      // Check size limit (max 1 MB)
+      const mainSize = mainFile.metadata?.size;
+      if (typeof mainSize === "number" && mainSize > DOC_UPLOAD.maxBytes) {
+        return `${label} exceeds maximum allowed size of 1 MB.`;
+      }
+
+      if (!thumbFile && required) {
+        return `${label} thumbnail is missing. Please re-upload.`;
+      }
+
+      return null;
+    };
+
+    const bankDocErr = validateSlotMetadata("bank_document", "Bank document", true);
+    if (bankDocErr) fieldErrors.bank_document_file = bankDocErr;
+
+    const aadhaarDocErr = validateSlotMetadata("aadhaar", "Aadhaar document", true);
+    if (aadhaarDocErr) fieldErrors.aadhaar_file = aadhaarDocErr;
+
+    if (stagedFileMap.has("driving_license.jpg")) {
+      const licDocErr = validateSlotMetadata("driving_license", "Licence document", false);
+      if (licDocErr) fieldErrors.license_file = licDocErr;
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+      return {
+        error: "Document verification failed. Please check your uploaded documents.",
+        fieldErrors,
+        fieldValues,
+      };
+    }
+
+    // 4b. Read first 3 bytes of each main file in parallel and confirm FF D8 FF
+    const magicByteChecks: Array<Promise<{ docType: string; valid: boolean }>> = [
+      verifyStagedJpegMagicBytes(adminSupabase, `signup/${stagingUuid}/bank_document.jpg`).then((valid) => ({
+        docType: "bank_document",
+        valid,
+      })),
+      verifyStagedJpegMagicBytes(adminSupabase, `signup/${stagingUuid}/aadhaar.jpg`).then((valid) => ({
+        docType: "aadhaar",
+        valid,
+      })),
+    ];
+
+    if (stagedFileMap.has("driving_license.jpg")) {
+      magicByteChecks.push(
+        verifyStagedJpegMagicBytes(adminSupabase, `signup/${stagingUuid}/driving_license.jpg`).then((valid) => ({
+          docType: "driving_license",
+          valid,
+        }))
+      );
+    }
+
+    const magicResults = await Promise.all(magicByteChecks);
+    for (const res of magicResults) {
+      if (!res.valid) {
         return {
-          error: "Aadhaar number already registered.",
-          fieldErrors: {
-            aadhaar_number: "Aadhaar number already registered.",
-          },
+          error: "Uploaded document file is invalid or corrupted. Please re-upload your document.",
           fieldValues,
         };
       }
     }
   }
 
-  // 4. Validation & Duplicate check for Driving Licence Number
-  let formattedLicense: string | null = null;
-  if (licenseNumber) {
-    const licResult = validateLicenseNumber(licenseNumber);
-    if (!licResult.isValid) {
-      return {
-        error: licResult.error || "Invalid licence format.",
-        fieldErrors: {
-          license_number: licResult.error || "Invalid licence format.",
-        },
-        fieldValues,
-      };
-    }
-    formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
-
-    const { data: existingLic } = await adminSupabase
-      .from("users")
-      .select("id")
-      .ilike("license_number", licResult.clean || licenseNumber.trim())
-      .maybeSingle();
-
-    if (existingLic) {
-      return {
-        error: "Licence number already registered.",
-        fieldErrors: {
-          license_number: "Licence number already registered.",
-        },
-        fieldValues,
-      };
-    }
-  }
-
+  // 5. Create auth user with supabase.auth.signUp()
   const supabase = await createSupabaseServerClient();
 
-  // Create the auth user. The handle_new_user() DB trigger automatically
-  // inserts a row into public.users with status = 'pending', so no
-  // app-side status update is needed (and none would work pre-confirmation
-  // because RLS blocks writes without a session).
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -728,6 +896,7 @@ export async function signup(
         full_name: fullName,
         phone,
         role: role,
+        machine_category: role === "operator" ? machineCategory : null,
         shift_time: resolvedShiftTime || null,
         shift_start_time: shiftStartTimeRaw || null,
         shift_end_time: shiftEndTimeRaw || null,
@@ -751,7 +920,7 @@ export async function signup(
   if (error) {
     console.error("Signup error:", error);
     const message = error.message.toLowerCase();
-    
+
     if (message.includes("already registered") || message.includes("user already exists") || message.includes("already exists")) {
       return {
         error: "An account with this email already exists.",
@@ -795,7 +964,7 @@ export async function signup(
         fieldValues,
       };
     }
-    
+
     return {
       error: "Signup failed. Please check your details and try again.",
       fieldValues,
@@ -811,147 +980,223 @@ export async function signup(
 
   const userId = data.user.id;
 
-  // Direct sync to public.users for guaranteed bank account & IFSC persistence
+  // 6. Direct sync to public.users for guaranteed bank account & IFSC persistence
   try {
     const cleanBank = bankAccountNumber.replace(/[\s\-]/g, "");
     const cleanIfsc = bankIfscCode.replace(/[\s\-]/g, "");
     await adminSupabase.from("users").update({
       bank_account_number: cleanBank,
       bank_ifsc_code: cleanIfsc,
+      machine_category: role === "operator" ? machineCategory : null,
     }).eq("id", userId);
   } catch (syncErr) {
     console.warn("Direct bank info sync warning:", syncErr);
   }
 
-  // Upload Bank Document (Passbook Front Page / Cancelled Cheque / Statement)
-  const bankFile = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
-  if (bankFile && bankFile.size > 0 && bankValidation.safeExt) {
-    try {
-      const storagePath = `documents/${userId}/bank_document${bankValidation.safeExt}`;
-      const fileBytes = await bankFile.arrayBuffer();
+  // 7 & 8. Move files to user_files, batch upsert user_documents, and log audit
+  // 9. Failure after step 5 is not atomic: if step 7 or 8 fails, delete the new auth user (cascades)
+  //    return "Please try again", and leave staged files in place for retry.
+  try {
+    let finalizedLicense = false;
+    let finalizeDocsList: Array<{ docType: string; mainPath: string; thumbPath: string | null; sizeBytes: number }> = [];
 
-      const { error: uploadErr } = await adminSupabase.storage
-        .from("user_files")
-        .upload(storagePath, fileBytes, {
-          contentType: bankFile.type,
-          upsert: true,
-        });
+    if (stagingSessionToken && stagingUuid) {
+      const finalizeResult = await finalizeStagedSignupDocuments({
+        userId,
+        stagingUuid,
+      });
 
-      if (!uploadErr) {
-        await adminSupabase.from("user_documents").upsert(
-          {
-            user_id: userId,
-            document_type_code: "bank_document",
-            storage_path: storagePath,
-            mime_type: bankFile.type,
-            file_size_bytes: bankFile.size,
-            file_name: sanitizeDocumentFileName(bankFile.name),
-            status: "pending",
-          },
-          { onConflict: "user_id,document_type_code" }
-        );
-      } else {
-        console.error("Failed to upload signup Bank document file:", uploadErr);
+      if (!finalizeResult.success) {
+        throw new Error(finalizeResult.error || "Failed to finalize staged documents");
       }
-    } catch (err) {
-      console.error("Exception uploading signup Bank document file:", err);
-    }
-  }
 
-  // Upload Aadhaar & Driving Licence documents if provided during signup
-  const aadhaarFile = formData.get("aadhaar_file") as File | null;
-  const licenseFile = formData.get("license_file") as File | null;
+      finalizedLicense = finalizeResult.documents.some((d) => d.docType === "driving_license");
+      finalizeDocsList = finalizeResult.documents;
+    } else {
+      // Legacy multipart file upload fallback
+      bankFile = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
+      if (bankFile && bankFile.size > 0 && bankValidation.safeExt) {
+        const storagePath = `documents/${userId}/bank_document${bankValidation.safeExt}`;
+        const fileBytes = await bankFile.arrayBuffer();
 
-  if (aadhaarFile && aadhaarFile.size > 0 && aadhaarValidation.safeExt) {
-    try {
-      const storagePath = `documents/${userId}/aadhaar${aadhaarValidation.safeExt}`;
-      const fileBytes = await aadhaarFile.arrayBuffer();
+        const { error: uploadErr } = await adminSupabase.storage
+          .from("user_files")
+          .upload(storagePath, fileBytes, {
+            contentType: bankFile.type,
+            upsert: true,
+          });
 
-      const { error: uploadErr } = await adminSupabase.storage
-        .from("user_files")
-        .upload(storagePath, fileBytes, {
-          contentType: aadhaarFile.type,
-          upsert: true,
-        });
-
-      if (!uploadErr) {
-        await adminSupabase.from("user_documents").upsert(
-          {
-            user_id: userId,
-            document_type_code: "aadhaar",
-            storage_path: storagePath,
-            mime_type: aadhaarFile.type,
-            file_size_bytes: aadhaarFile.size,
-            file_name: sanitizeDocumentFileName(aadhaarFile.name),
-            status: "pending",
-          },
-          { onConflict: "user_id,document_type_code" }
-        );
-      } else {
-        console.error("Failed to upload signup Aadhaar file:", uploadErr);
+        if (!uploadErr) {
+          await adminSupabase.from("user_documents").upsert(
+            {
+              user_id: userId,
+              document_type_code: "bank_document",
+              storage_path: storagePath,
+              mime_type: bankFile.type,
+              file_size_bytes: bankFile.size,
+              file_name: sanitizeDocumentFileName(bankFile.name),
+              status: "pending",
+              verification_status: "pending",
+            },
+            { onConflict: "user_id,document_type_code" }
+          );
+        }
       }
-    } catch (err) {
-      console.error("Exception uploading signup Aadhaar file:", err);
-    }
-  }
 
-  if (licenseFile && licenseFile.size > 0 && licenseValidation.safeExt) {
-    try {
-      const storagePath = `documents/${userId}/driving_license${licenseValidation.safeExt}`;
-      const fileBytes = await licenseFile.arrayBuffer();
+      const aadhaarFile = formData.get("aadhaar_file") as File | null;
+      const licenseFile = formData.get("license_file") as File | null;
 
-      const { error: uploadErr } = await adminSupabase.storage
-        .from("user_files")
-        .upload(storagePath, fileBytes, {
-          contentType: licenseFile.type,
-          upsert: true,
-        });
+      if (aadhaarFile && aadhaarFile.size > 0 && aadhaarValidation.safeExt) {
+        const storagePath = `documents/${userId}/aadhaar${aadhaarValidation.safeExt}`;
+        const fileBytes = await aadhaarFile.arrayBuffer();
 
-      if (!uploadErr) {
-        await adminSupabase.from("user_documents").upsert(
-          {
-            user_id: userId,
-            document_type_code: "driving_license",
-            storage_path: storagePath,
-            mime_type: licenseFile.type,
-            file_size_bytes: licenseFile.size,
-            file_name: sanitizeDocumentFileName(licenseFile.name),
-            status: "pending",
-          },
-          { onConflict: "user_id,document_type_code" }
-        );
-      } else {
-        console.error("Failed to upload signup Licence file:", uploadErr);
+        const { error: uploadErr } = await adminSupabase.storage
+          .from("user_files")
+          .upload(storagePath, fileBytes, {
+            contentType: aadhaarFile.type,
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          await adminSupabase.from("user_documents").upsert(
+            {
+              user_id: userId,
+              document_type_code: "aadhaar",
+              storage_path: storagePath,
+              mime_type: aadhaarFile.type,
+              file_size_bytes: aadhaarFile.size,
+              file_name: sanitizeDocumentFileName(aadhaarFile.name),
+              status: "pending",
+              verification_status: "pending",
+            },
+            { onConflict: "user_id,document_type_code" }
+          );
+        }
       }
-    } catch (err) {
-      console.error("Exception uploading signup Licence file:", err);
+
+      if (licenseFile && licenseFile.size > 0 && licenseValidation.safeExt) {
+        const storagePath = `documents/${userId}/driving_license${licenseValidation.safeExt}`;
+        const fileBytes = await licenseFile.arrayBuffer();
+
+        const { error: uploadErr } = await adminSupabase.storage
+          .from("user_files")
+          .upload(storagePath, fileBytes, {
+            contentType: licenseFile.type,
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          finalizedLicense = true;
+          await adminSupabase.from("user_documents").upsert(
+            {
+              user_id: userId,
+              document_type_code: "driving_license",
+              storage_path: storagePath,
+              mime_type: licenseFile.type,
+              file_size_bytes: licenseFile.size,
+              file_name: sanitizeDocumentFileName(licenseFile.name),
+              status: "pending",
+              verification_status: "pending",
+            },
+            { onConflict: "user_id,document_type_code" }
+          );
+        }
+      }
     }
+
+    // Step 8: Write Audit Log Entry
+    await logAudit({
+      action: "user.signup",
+      entity_type: "user",
+      entity_id: userId,
+      user_id: userId,
+      target_user_id: userId,
+      metadata: {
+        user_name: fullName,
+        user_email: email,
+        phone,
+        role: role,
+        machine_category: role === "operator" ? machineCategory : null,
+        shift_time: resolvedShiftTime || null,
+        city,
+        district,
+        state: resolvedStateName,
+        state_id: resolvedStateId,
+        location: `${city}, ${district}, ${resolvedStateName}`,
+        has_bank_details: !!bankAccountNumber,
+        has_bank_document: !!stagingUuid || !!bankFile,
+        has_aadhaar: !!aadhaarNumber,
+        has_license: finalizedLicense || !!licenseNumber,
+        staging_session: stagingUuid,
+      },
+    });
+
+    // Step 8.1: Submit Registration Request to Centralized Approval Engine
+    await submitToApprovalEngineSafely({
+      type_key: "registration",
+      subject_type: "user",
+      subject_id: userId,
+      subject_label: `${fullName} (${role})`,
+      requested_by: userId,
+      summary: `New registration: ${fullName} (${role})`,
+      payload: {
+        user_id: userId,
+        full_name: fullName,
+        email,
+        phone,
+        role,
+        supervisor_id: safeSupervisorId || supervisorIdRaw || null,
+        address: address || null,
+        city,
+        district,
+        state: resolvedStateName,
+        machine_category: role === "operator" ? machineCategory : null,
+      },
+    });
+
+    // Step 8.2: Submit Initial Document Verification Requests to Centralized Approval Engine
+    if (finalizeDocsList && finalizeDocsList.length > 0) {
+      for (const fDoc of finalizeDocsList) {
+        await submitToApprovalEngineSafely({
+          type_key: "document_verify",
+          subject_type: "document",
+          subject_id: userId,
+          subject_label: `${fDoc.docType.toUpperCase()} - ${fullName}`,
+          requested_by: userId,
+          summary: `Initial verification for ${fDoc.docType} (${fullName})`,
+          payload: {
+            user_id: userId,
+            document_type_code: fDoc.docType,
+            storage_path: fDoc.mainPath,
+            thumb_path: fDoc.thumbPath,
+            size_bytes: fDoc.sizeBytes,
+          },
+        });
+      }
+    }
+
+    return {
+      message:
+        "Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in.",
+    };
+  } catch (postAuthErr) {
+    console.error("[Signup] Post-auth document processing failed, executing compensation rollback:", postAuthErr);
+
+    // Step 9 Rollback: Delete the newly created user (cascades to public.users & user_documents)
+    // Staged files stay in doc_staging for user retry
+    try {
+      await adminSupabase.from("user_documents").delete().eq("user_id", userId);
+      await adminSupabase.from("users").delete().eq("id", userId);
+      await adminSupabase.auth.admin.deleteUser(userId);
+    } catch (cleanupErr) {
+      console.error("[Signup] Compensation rollback user cleanup error:", cleanupErr);
+    }
+
+    return {
+      error: "Registration processing failed. Please try again.",
+      fieldValues,
+    };
   }
-
-  await logAudit({
-    action: "user.signup",
-    entity_type: "user",
-    entity_id: userId,
-    user_id: userId,
-    metadata: { 
-      user_name: fullName, 
-      user_email: email, 
-      phone, 
-      role: role, 
-      shift_time: resolvedShiftTime || null,
-      city, 
-      district, 
-      state: resolvedStateName, 
-      state_id: resolvedStateId,
-      location: `${city}, ${district}, ${resolvedStateName}`,
-      has_bank_details: !!bankAccountNumber,
-      has_bank_document: !!bankFile,
-      has_aadhaar: !!aadhaarNumber,
-      has_license: !!licenseNumber,
-    },
-  });
-
-  return { message: "Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in." };
 }
 
 /**
@@ -1068,6 +1313,22 @@ export async function changePasswordAction(params: {
       metadata: { user_email: user.email },
     });
 
+    // Enqueue SEC1 security alert (Critical priority, ignores quiet hours/preferences)
+    try {
+      await supabase.rpc('enqueue_notification', {
+        p_user_id: user.id,
+        p_category: 'security',
+        p_priority: 'critical',
+        p_title: 'Security Alert: Password Changed',
+        p_body: 'Your account password was successfully updated. If you did not make this change, contact support immediately.',
+        p_deep_link: '/settings/account',
+        p_dedupe_key: `sec:${user.id}:${Math.floor(Date.now() / 1000)}`,
+        p_source: 'action:change_password',
+      });
+    } catch (notifErr) {
+      console.warn('[changePasswordAction] Failed to enqueue security notification:', notifErr);
+    }
+
     return { success: true };
   } catch (err: unknown) {
     const error = err as { message?: string };
@@ -1131,6 +1392,22 @@ export async function resetPasswordAction(params: {
       user_id: user.id,
       metadata: { user_email: user.email },
     });
+
+    // Enqueue SEC1 security alert (Critical priority, ignores quiet hours/preferences)
+    try {
+      await supabase.rpc('enqueue_notification', {
+        p_user_id: user.id,
+        p_category: 'security',
+        p_priority: 'critical',
+        p_title: 'Security Alert: Password Reset',
+        p_body: 'Your account password has been reset. If you did not make this change, contact support immediately.',
+        p_deep_link: '/settings/account',
+        p_dedupe_key: `sec:${user.id}:${Math.floor(Date.now() / 1000)}`,
+        p_source: 'action:reset_password',
+      });
+    } catch (notifErr) {
+      console.warn('[resetPasswordAction] Failed to enqueue security notification:', notifErr);
+    }
 
     return { success: true };
   } catch (err: unknown) {

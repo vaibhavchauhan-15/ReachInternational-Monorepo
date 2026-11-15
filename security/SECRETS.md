@@ -9,9 +9,9 @@
 
 | Classification | Definition | Target Scope | Permitted Storage | Examples |
 |---|---|---|---|---|
-| **Tier 1: Privileged Server Secrets** | Grants full administrative bypass, database access, or external infrastructure control. | Server-Only (`import "server-only"`) | Vercel Environment Variables, GitHub Actions Secrets | `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `INTERNAL_AUTH_SECRET`, `UPSTASH_REDIS_REST_TOKEN`, `SENDGRID_API_KEY`, `TWILIO_AUTH_TOKEN`, `CRON_SECRET` |
-| **Tier 2: Public Client Configuration** | Publicly accessible metadata required by client applications to connect to standard gateways. Protected by RLS / CORS. | Web Browser & Mobile Client | `.env`, `.env.example`, `eas.json` (public profiles) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID` |
-| **Tier 3: Transient User Credentials** | User session tokens and encryption keys generated at runtime. | User Device Storage | Web: `HttpOnly` Cookies<br>Mobile: `expo-secure-store` Keystore | Supabase Auth Access Token, Refresh Token, Biometric Keys |
+| **Tier 1: Privileged Server Secrets** | Grants full administrative bypass, database access, or external infrastructure control. | Server-Only (`import "server-only"`) | Vercel Environment Variables, GitHub Actions Secrets, Supabase Vault | `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `INTERNAL_AUTH_SECRET`, `UPSTASH_REDIS_REST_TOKEN`, `SENDGRID_API_KEY`, `TWILIO_AUTH_TOKEN`, `CRON_SECRET`, `NOTIFY_SECRET`, `VAPID_PRIVATE_KEY` |
+| **Tier 2: Public Client Configuration** | Publicly accessible metadata required by client applications to connect to standard gateways. Protected by RLS / CORS. | Web Browser & Mobile Client | `.env`, `.env.example`, `eas.json` (public profiles) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` |
+| **Tier 3: Transient User Credentials** | User session tokens and encryption keys generated at runtime. | User Device Storage | Web: `HttpOnly` Cookies<br>Mobile: `expo-secure-store` Keystore | Supabase Auth Access Token, Refresh Token, Biometric Keys, Push Notification Device Tokens |
 
 ---
 

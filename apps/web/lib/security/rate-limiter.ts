@@ -1,5 +1,5 @@
 import "server-only";
-import { getUpstashRedisConfig } from "@/lib/env/server";
+import { getUpstashRedisConfig } from "../env/server.ts";
 
 /**
  * ReachInternational Edge & Server Rate Limiter (LPDoS & Brute-Force Safeguard)
@@ -34,6 +34,8 @@ export const RATE_LIMIT_PROFILES = {
   MUTATION_API: { windowMs: 60000, maxRequests: 60 },   // Server Actions & API POSTs (60 req/min)
   GENERAL_ROUTES: { windowMs: 60000, maxRequests: 120 }, // Standard Page Navigations (120 req/min)
   AUTHENTICATED_USER: { windowMs: 60000, maxRequests: 300 }, // User Session (300 req/min)
+  SIGNUP_UPLOAD: { windowMs: 10 * 60 * 1000, maxRequests: 30 }, // Document staging uploads (30 req / 10 min)
+  SIGNUP_SESSION: { windowMs: 60 * 60 * 1000, maxRequests: 10 }, // Staging session creation cap (10 sessions / 1 hr)
 };
 
 export interface RateLimitResult {
@@ -50,8 +52,8 @@ export function checkRateLimit(
   identifier: string,
   profile: RateLimitConfig = RATE_LIMIT_PROFILES.GENERAL_ROUTES
 ): RateLimitResult {
-  // In development and test environments, bypass rate limiting to prevent developer friction
-  if (process.env.NODE_ENV !== "production") {
+  // In development and test environments, bypass rate limiting unless explicitly enabled for testing
+  if (process.env.NODE_ENV !== "production" && process.env.ENABLE_RATE_LIMIT_IN_DEV !== "true") {
     return {
       success: true,
       limit: profile.maxRequests,
@@ -99,8 +101,8 @@ export async function checkRateLimitAsync(
   identifier: string,
   profile: RateLimitConfig = RATE_LIMIT_PROFILES.GENERAL_ROUTES
 ): Promise<RateLimitResult> {
-  // In development and test environments, bypass rate limiting to prevent developer friction
-  if (process.env.NODE_ENV !== "production") {
+  // In development and test environments, bypass rate limiting unless explicitly enabled for testing
+  if (process.env.NODE_ENV !== "production" && process.env.ENABLE_RATE_LIMIT_IN_DEV !== "true") {
     return {
       success: true,
       limit: profile.maxRequests,

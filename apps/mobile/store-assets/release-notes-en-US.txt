@@ -1,6 +1,5 @@
-What's New in v1.4.0:
-• Shift Personnel Assignment: Seamless single-row shift buttons (Shift A, B, C) and silky Reanimated dropdowns.
-• Machine Details: Enhanced card layouts, eliminated height collapse, and 1-tap client code copy.
-• Performance & Theme: Zero-lag theme switching with precomputed palettes and optimized render allocations.
-• Operations Validation: Real-time shift overlap protection and 1-tap switch to assigned shifts.
-• Ergonomics: 44px+ touch targets and refined haptic feedback.
+What's New in v1.5.0:
+• Universal Approvals: Dedicated approvals queue & bottom sheet review for registrations, profile edits, and documents.
+• Push Notifications: Instant shift reminder alerts, 4 Android notification channels, and quiet-hours preference sync.
+• 7-Day Shift Window: Retrospective shift entry (IST) with automated carry-forward and conflict guards.
+• Dashboard Ergonomics: Enhanced machine KPI cards, static button view switchers, and silky 60fps haptic feedback.

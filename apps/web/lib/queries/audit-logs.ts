@@ -11,6 +11,7 @@ export type AuditTab =
   | "rentals"
   | "employees"
   | "auth"
+  | "documents"
   | "others";
 
 export interface AuditLogFilterParams {
@@ -33,7 +34,19 @@ export interface AuditTabCounts {
   rentals: number;
   employees: number;
   auth: number;
+  documents: number;
   others: number;
+}
+
+export interface DocumentViewVolumeAlert {
+  viewer_id: string;
+  viewer_name: string;
+  viewer_email: string;
+  viewer_role: string;
+  view_count: number;
+  timeframe_hours: number;
+  first_view_at: string;
+  last_view_at: string;
 }
 
 export interface AuditLogQueryResult {
@@ -43,6 +56,7 @@ export interface AuditLogQueryResult {
   limit: number;
   totalPages: number;
   tabCounts: AuditTabCounts;
+  volumeAlerts?: DocumentViewVolumeAlert[];
 }
 
 /** Map legacy category param to modern audit tab */
@@ -54,6 +68,7 @@ export function mapCategoryToAuditTab(category?: string): AuditTab {
   if (category === "rental" || category === "client") return "rentals";
   if (category === "employee") return "employees";
   if (category === "auth") return "auth";
+  if (category === "document" || category === "documents") return "documents";
   return "others";
 }
 
@@ -71,7 +86,7 @@ export const getAuditLogsFiltered = cache(
         page: 1,
         limit: 50,
         totalPages: 0,
-        tabCounts: { all: 0, machine: 0, assignments: 0, rentals: 0, employees: 0, auth: 0, others: 0 },
+        tabCounts: { all: 0, machine: 0, assignments: 0, rentals: 0, employees: 0, auth: 0, documents: 0, others: 0 },
       };
     }
 
@@ -90,7 +105,7 @@ export const getAuditLogsFiltered = cache(
         page: 1,
         limit: 50,
         totalPages: 0,
-        tabCounts: { all: 0, machine: 0, assignments: 0, rentals: 0, employees: 0, auth: 0, others: 0 },
+        tabCounts: { all: 0, machine: 0, assignments: 0, rentals: 0, employees: 0, auth: 0, documents: 0, others: 0 },
       };
     }
 
@@ -151,6 +166,11 @@ export const getAuditLogsFiltered = cache(
     } else if (activeTab === "auth") {
       // Sign-in, sign-out, failed logins, user registration
       query = query.or("category.eq.auth,action.ilike.auth.%,action.eq.user.signup");
+    } else if (activeTab === "documents") {
+      // Document views, statutory reveal, approvals, rejections, replacements (DPDP Act compliance)
+      query = query.or(
+        "category.in.(document,documents),action.ilike.document.%,action.ilike.%.reveal,action.in.(document.view,document.verify,document.reject,document.replace_approve,document.replace_reject,aadhaar.reveal,bank_account.reveal)"
+      );
     } else if (activeTab === "others") {
       // Running hour logs, breakdowns, security, system settings, crons
       query = query.or(
@@ -218,13 +238,21 @@ export const getAuditLogsFiltered = cache(
     const fromIndex = (page - 1) * limit;
     const toIndex = fromIndex + limit - 1;
 
-    // Fetch tab counts and main filtered data concurrently
-    const [countRes, queryRes] = await Promise.all([
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch tab counts, main filtered data, and 24h document view logs concurrently
+    const [countRes, queryRes, volumeRes] = await Promise.all([
       supabase.from("audit_logs").select("action, category"),
       query
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(fromIndex, toIndex),
+      supabase
+        .from("audit_logs")
+        .select("user_id, created_at, actor_name, actor_role, user:users(id, full_name, email, role)")
+        .eq("action", "document.view")
+        .gte("created_at", twentyFourHoursAgo)
+        .order("created_at", { ascending: false }),
     ]);
 
     // Aggregate counts for all tabs
@@ -233,6 +261,7 @@ export const getAuditLogsFiltered = cache(
     let rentalCount = 0;
     let employeeCount = 0;
     let authCount = 0;
+    let documentCount = 0;
     let othersCount = 0;
 
     for (const row of countRes.data || []) {
@@ -240,6 +269,14 @@ export const getAuditLogsFiltered = cache(
       const cat = (row.category || "").toLowerCase();
 
       if (
+        act.startsWith("document.") ||
+        act === "aadhaar.reveal" ||
+        act === "bank_account.reveal" ||
+        cat === "document" ||
+        cat === "documents"
+      ) {
+        documentCount++;
+      } else if (
         act === "machine.assigned_to_client" ||
         act === "machine.removed_from_client" ||
         act.startsWith("rental.") ||
@@ -271,14 +308,56 @@ export const getAuditLogsFiltered = cache(
       rentals: rentalCount,
       employees: employeeCount,
       auth: authCount,
+      documents: documentCount,
       others: othersCount,
     };
+
+    // Calculate document view volume alerts (>20 views in 24h by a single viewer)
+    interface ViewerVolumeEntry {
+      viewer_id: string;
+      viewer_name: string;
+      viewer_email: string;
+      viewer_role: string;
+      views: string[];
+    }
+
+    const volumeMap = new Map<string, ViewerVolumeEntry>();
+
+    for (const row of (volumeRes.data || []) as any[]) {
+      if (!row.user_id) continue;
+      const u = row.user;
+      const entry: ViewerVolumeEntry = volumeMap.get(row.user_id) || {
+        viewer_id: row.user_id,
+        viewer_name: row.actor_name || u?.full_name || "Unknown",
+        viewer_email: u?.email || "",
+        viewer_role: row.actor_role || u?.role || "unknown",
+        views: [],
+      };
+      entry.views.push(row.created_at);
+      volumeMap.set(row.user_id, entry);
+    }
+
+    const volumeAlerts: DocumentViewVolumeAlert[] = [];
+    for (const item of volumeMap.values()) {
+      if (item.views.length > 20) {
+        volumeAlerts.push({
+          viewer_id: item.viewer_id,
+          viewer_name: item.viewer_name,
+          viewer_email: item.viewer_email,
+          viewer_role: item.viewer_role,
+          view_count: item.views.length,
+          timeframe_hours: 24,
+          first_view_at: item.views[item.views.length - 1],
+          last_view_at: item.views[0],
+        });
+      }
+    }
 
     const { data: logs, count, error } = queryRes;
 
     if (error) {
       console.error("Error fetching audit logs:", error.message || error);
-      return { logs: [], totalCount: 0, page, limit, totalPages: 0, tabCounts };
+      return { logs: [], totalCount: 0, page, limit, totalPages: 0, tabCounts, volumeAlerts };
     }
 
     const totalCount = count ?? 0;
@@ -335,6 +414,7 @@ export const getAuditLogsFiltered = cache(
       limit,
       totalPages,
       tabCounts,
+      volumeAlerts,
     };
   }
 );

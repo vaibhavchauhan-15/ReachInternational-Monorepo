@@ -17,3 +17,4 @@ export * from "./operations-assignments";
 export * from "./operations-search";
 export * from "./operations-log-detail";
 export * from "./operations-read-model";
+export * from "./today-shift-monitor";

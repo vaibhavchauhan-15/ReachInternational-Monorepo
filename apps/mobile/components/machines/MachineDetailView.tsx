@@ -1397,7 +1397,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <Text
                   variant="title"
                   weight="bold"
-                  style={{ color: theme.colors.ink, letterSpacing: -0.3 }}
+                  style={{ color: theme.colors.ink }}
                   numberOfLines={1}
                 >
                   {machine.model || 'Machine Model'}
@@ -1794,9 +1794,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   style={[
                     styles.personnelSubBox,
                     {
-                      flex: isMobile ? undefined : 1,
-                      width: isMobile ? '100%' : undefined,
+                      flexGrow: isMobile ? 0 : 1,
                       flexShrink: 0,
+                      flexBasis: isMobile ? 'auto' : 0,
+                      width: isMobile ? '100%' : undefined,
                       backgroundColor: theme.colors.canvas,
                       borderColor: theme.colors.hairline,
                     },
@@ -1914,9 +1915,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   style={[
                     styles.personnelSubBox,
                     {
-                      flex: isMobile ? undefined : 1,
-                      width: isMobile ? '100%' : undefined,
+                      flexGrow: isMobile ? 0 : 1,
                       flexShrink: 0,
+                      flexBasis: isMobile ? 'auto' : 0,
+                      width: isMobile ? '100%' : undefined,
                       backgroundColor: theme.colors.canvas,
                       borderColor: theme.colors.hairline,
                     },

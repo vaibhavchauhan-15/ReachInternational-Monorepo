@@ -13,3 +13,5 @@ export * from "./client-sites";
 export * from "./equipment";
 export * from "./careers";
 export * from "./rfq";
+export * from "./documents";
+export * from "./approvals";

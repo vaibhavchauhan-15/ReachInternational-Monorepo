@@ -79,7 +79,11 @@ export function SearchableSelect({
 
   const selectedOption = useMemo(() => {
     if (isAllSelected) return null;
-    return options.find((opt) => opt.value === value) || null;
+    return (
+      options.find((opt) => opt.value === value) ||
+      options.find((opt) => opt.label.toLowerCase() === value.toLowerCase()) ||
+      null
+    );
   }, [options, value, isAllSelected]);
 
   const filteredOptions = useMemo(() => {

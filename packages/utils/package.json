@@ -9,14 +9,19 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./documents": {
+      "types": "./src/documents.ts",
+      "default": "./src/documents.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/payroll.test.ts src/shift-overlap.test.ts src/errors.test.ts src/slugify.test.ts",
+    "test": "node --test --experimental-strip-types src/payroll.test.ts src/shift-overlap.test.ts src/errors.test.ts src/slugify.test.ts src/documents.test.ts src/machine-categories.test.ts src/approvals-client.test.ts",
     "build": "echo \"@reachinternational/utils built\""
   },
   "dependencies": {
+    "@reachinternational/types": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

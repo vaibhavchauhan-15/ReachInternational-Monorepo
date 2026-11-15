@@ -9,10 +9,11 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   error?: string;
   hint?: string;
   icon?: ReactNode;
+  isSuccess?: boolean;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, labelRight, error, hint, icon, type, className = "", id, required, ...props }, ref) => {
+  ({ label, labelRight, error, hint, icon, isSuccess, type, className = "", id, required, ...props }, ref) => {
     const inputId = id || props.name;
     const [showPassword, setShowPassword] = useState(false);
     const isPasswordType = type === "password";
@@ -38,6 +39,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               className={`absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center transition-colors ${
                 error
                   ? "text-rose-500 dark:text-rose-400"
+                  : isSuccess
+                  ? "text-emerald-500 dark:text-emerald-400"
                   : "text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]"
               }`}
             >
@@ -48,14 +51,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             type={currentType}
-            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-[13.5px] sm:text-[14px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/70 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal transition-all focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 ${
+            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] text-[13.5px] sm:text-[14px] font-medium rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[#969CA3]/70 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:font-normal transition-all focus:outline-none ${
               icon ? "pl-9.5 sm:pl-10" : "px-3.5"
             } ${
               isPasswordType ? "pr-10 sm:pr-11" : "pr-3.5"
             } ${
               error
-                ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
-                : "border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15"
+                : isSuccess
+                ? "border-emerald-500 dark:border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                : "border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1] focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15"
             } ${className}`}
             {...props}
           />

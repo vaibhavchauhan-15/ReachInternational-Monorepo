@@ -1344,35 +1344,30 @@ export async function updateMachineOperatorsAction(
     // 5. Deactivate assignments on this machine that are not in the new resolved list
     const { data: currentActiveOnMachine } = await supabaseAdmin
       .from("operator_machine_assignments")
-      .select("id, operator_id, shift_code")
+      .select("id, operator_id, shift_code, valid_from")
       .eq("machine_id", machineId)
       .eq("is_active", true);
 
-    const toDeactivateIds = (currentActiveOnMachine || [])
-      .filter(
-        (curr) =>
-          !resolvedAssignments.some(
-            (r) =>
-              r.operatorId === curr.operator_id &&
-              (r.shiftCode || "").toUpperCase() === (curr.shift_code || "").toUpperCase()
-          )
-      )
-      .map((curr) => curr.id);
+    const toDeactivate = (currentActiveOnMachine || []).filter(
+      (curr) =>
+        !resolvedAssignments.some(
+          (r) =>
+            r.operatorId === curr.operator_id &&
+            (r.shiftCode || "").toUpperCase() === (curr.shift_code || "").toUpperCase()
+        )
+    );
 
-    if (toDeactivateIds.length > 0) {
-      const { error: deactError } = await supabaseAdmin
-        .from("operator_machine_assignments")
-        .update({
-          is_active: false,
-          ended_at: new Date().toISOString(),
-          ended_by: caller.id,
-          end_reason: "removed",
-          updated_at: new Date().toISOString(),
-        })
-        .in("id", toDeactivateIds);
+    if (toDeactivate.length > 0) {
+      for (const curr of toDeactivate) {
+        const { error: endErr } = await supabaseAdmin.rpc("end_assignment_range", {
+          p_assignment_id: curr.id,
+          p_caller_id: caller.id,
+          p_end_reason: "removed",
+        });
 
-      if (deactError) {
-        console.error("Failed to deactivate removed operator assignments:", deactError);
+        if (endErr) {
+          console.error("[updateMachineOperatorsAction] Failed to end assignment range:", endErr);
+        }
       }
     }
 
@@ -1830,32 +1825,31 @@ export async function updateMachinePersonnelAction(
       // Deactivate assignments on this machine that are not in the new resolved list
       const { data: currentActiveOnMachine } = await supabaseAdmin
         .from("operator_machine_assignments")
-        .select("id, operator_id, shift_code")
+        .select("id, operator_id, shift_code, valid_from")
         .eq("machine_id", machineId)
         .eq("is_active", true);
 
-      const toDeactivateIds = (currentActiveOnMachine || [])
-        .filter(
-          (curr) =>
-            !resolvedAssignments.some(
-              (r) =>
-                r.operatorId === curr.operator_id &&
-                (r.shiftCode || "").toUpperCase() === (curr.shift_code || "").toUpperCase()
-            )
-        )
-        .map((curr) => curr.id);
+      const toDeactivate = (currentActiveOnMachine || []).filter(
+        (curr) =>
+          !resolvedAssignments.some(
+            (r) =>
+              r.operatorId === curr.operator_id &&
+              (r.shiftCode || "").toUpperCase() === (curr.shift_code || "").toUpperCase()
+          )
+      );
 
-      if (toDeactivateIds.length > 0) {
-        await supabaseAdmin
-          .from("operator_machine_assignments")
-          .update({
-            is_active: false,
-            ended_at: new Date().toISOString(),
-            ended_by: caller.id,
-            end_reason: "removed",
-            updated_at: new Date().toISOString(),
-          })
-          .in("id", toDeactivateIds);
+      if (toDeactivate.length > 0) {
+        for (const curr of toDeactivate) {
+          const { error: endErr } = await supabaseAdmin.rpc("end_assignment_range", {
+            p_assignment_id: curr.id,
+            p_caller_id: caller.id,
+            p_end_reason: "removed",
+          });
+
+          if (endErr) {
+            console.error("[updateMachinePersonnelAction] Failed to end assignment range:", endErr);
+          }
+        }
       }
 
       // Atomically persist/update each operator assignment

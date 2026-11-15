@@ -7,6 +7,7 @@ import { CACHE_TAGS } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { OnboardingProfileSchema } from "@reachinternational/validation";
 import { getStateById } from "@reachinternational/utils";
+import { validateDocumentUpload } from "@/lib/utils/document-upload-validation";
 
 export interface OnboardingFormState {
   success?: boolean;
@@ -131,6 +132,28 @@ export async function completeOnboardingAction(
 
   const cleanAadhaar = aadhaar_number.replace(/\D/g, "");
 
+  // File Upload Security & MIME Whitelisting
+  const aadhaarFile = formData.get("aadhaar_file") as File | null;
+  const licenseFile = formData.get("license_file") as File | null;
+
+  const aadhaarValidation = validateDocumentUpload(aadhaarFile, false, "Aadhaar document");
+  if (aadhaarValidation.error) {
+    return {
+      error: aadhaarValidation.error,
+      fieldErrors: { aadhaar_file: aadhaarValidation.error },
+      fieldValues,
+    };
+  }
+
+  const licenseValidation = validateDocumentUpload(licenseFile, false, "Driving license");
+  if (licenseValidation.error) {
+    return {
+      error: licenseValidation.error,
+      fieldErrors: { license_file: licenseValidation.error },
+      fieldValues,
+    };
+  }
+
   try {
     const { error: rpcError } = await supabase.rpc("complete_user_onboarding_atomic", {
       p_user_id: user.id,
@@ -193,14 +216,11 @@ export async function completeOnboardingAction(
     }
 
     // Process document uploads if attached to onboarding formData
-    const aadhaarFile = formData.get("aadhaar_file") as File | null;
-    const licenseFile = formData.get("license_file") as File | null;
     const adminUploadClient = createSupabaseAdminClient();
 
-    if (aadhaarFile && aadhaarFile.size > 0) {
+    if (aadhaarFile && aadhaarFile.size > 0 && aadhaarValidation.safeExt) {
       try {
-        const ext = aadhaarFile.name.split(".").pop()?.toLowerCase() || "bin";
-        const storagePath = `documents/${user.id}/aadhaar.${ext}`;
+        const storagePath = `documents/${user.id}/aadhaar${aadhaarValidation.safeExt}`;
         const fileBytes = await aadhaarFile.arrayBuffer();
 
         const { error: uploadErr } = await adminUploadClient.storage
@@ -227,10 +247,9 @@ export async function completeOnboardingAction(
       }
     }
 
-    if (licenseFile && licenseFile.size > 0) {
+    if (licenseFile && licenseFile.size > 0 && licenseValidation.safeExt) {
       try {
-        const ext = licenseFile.name.split(".").pop()?.toLowerCase() || "bin";
-        const storagePath = `documents/${user.id}/driving_license.${ext}`;
+        const storagePath = `documents/${user.id}/driving_license${licenseValidation.safeExt}`;
         const fileBytes = await licenseFile.arrayBuffer();
 
         const { error: uploadErr } = await adminUploadClient.storage

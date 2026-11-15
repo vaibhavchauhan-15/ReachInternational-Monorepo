@@ -7,3 +7,4 @@ export * from "./common";
 export * from "./audit";
 export * from "./dashboard";
 export * from "./careers";
+export * from "./approvals";

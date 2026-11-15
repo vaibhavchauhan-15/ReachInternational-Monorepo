@@ -238,9 +238,11 @@ assert(notifsScreen.includes('requestNotificationPermission'), 'Can request syst
 assert(notifsScreen.includes('shiftReminders'), 'Includes shiftReminders channel');
 assert(notifsScreen.includes('breakdownAlerts'), 'Includes breakdownAlerts channel');
 assert(notifsScreen.includes('assignmentAlerts'), 'Includes assignmentAlerts channel');
-assert(notifsScreen.includes('overtimeAlerts'), 'Includes overtimeAlerts channel');
-assert(notifsScreen.includes('logSubmissions'), 'Includes logSubmissions channel');
-console.log('  ✓ Notifications screen has master toggle, permission sync, and 5 alert channels');
+assert(notifsScreen.includes('payrollAlerts'), 'Includes payrollAlerts channel');
+assert(notifsScreen.includes('adminAlerts'), 'Includes adminAlerts channel');
+assert(notifsScreen.includes('quietHoursEnabled'), 'Includes quietHoursEnabled channel');
+assert(notifsScreen.includes('overtimeAlerts'), 'Includes overtimeAlerts note');
+console.log('  ✓ Notifications screen has master toggle, permission sync, and server-synced alert channels');
 
 // Preferences Screen
 const prefsScreen = fs.readFileSync(path.join(mobileDir, 'app/(app)/settings/preferences/index.tsx'), 'utf-8');

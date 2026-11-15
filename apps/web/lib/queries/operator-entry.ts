@@ -14,13 +14,15 @@ import type { OperatorEntryContext } from "@reachinternational/types";
  * - Last valid HMR
  */
 async function fetchOperatorEntryContextFromDb(
-  operatorId: string
+  operatorId: string,
+  targetDate?: string
 ): Promise<OperatorEntryContext> {
   const supabase = createSupabaseAdminClient();
 
   try {
     const { data, error } = await supabase.rpc("get_operator_entry_context", {
       p_operator_id: operatorId,
+      p_target_date: targetDate || null,
     });
 
     if (error) {
@@ -39,6 +41,7 @@ async function fetchOperatorEntryContextFromDb(
 
     const res = data as Record<string, unknown> | null;
     return {
+      assignment_id: (res?.assignment_id as string | null) || null,
       operator: (res?.operator as OperatorEntryContext["operator"]) || null,
       machine: (res?.machine as OperatorEntryContext["machine"]) || null,
       client: (res?.client as OperatorEntryContext["client"]) || null,
@@ -81,13 +84,20 @@ async function fetchOperatorEntryContextFromDb(
  * - 15-second operational cache tier via `unstable_cache`
  * - Tagged with `operator-entry:${operatorId}` for instant targeted revalidation on log submit
  */
-export const getOperatorEntryContext = cache(async (operatorId: string): Promise<OperatorEntryContext> => {
-  return unstable_cache(
-    async () => fetchOperatorEntryContextFromDb(operatorId),
-    [`operator-entry-context-${operatorId}`],
-    {
-      revalidate: 15,
-      tags: [CACHE_TAGS.operations, `operator-entry:${operatorId}`],
-    }
-  )();
-});
+export const getOperatorEntryContext = cache(
+  async (operatorId: string, targetDate?: string): Promise<OperatorEntryContext> => {
+    const dateKey = targetDate || "today";
+    return unstable_cache(
+      async () => fetchOperatorEntryContextFromDb(operatorId, targetDate),
+      [`operator-entry-context-${operatorId}-${dateKey}`],
+      {
+        revalidate: 15,
+        tags: [
+          CACHE_TAGS.operations,
+          `operator-entry:${operatorId}`,
+          `operator-entry:${operatorId}:${dateKey}`,
+        ],
+      }
+    )();
+  }
+);

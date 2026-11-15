@@ -8,7 +8,7 @@ import { AlertCircle, CheckCircle2 } from '../ui/icon';
 import { haptics } from '../../lib/haptics';
 
 export interface MobileSubmitButtonProps {
-  isReady: boolean;
+  isReady?: boolean;
   isLoading: boolean;
   onPress: () => void | Promise<any>;
   label: string;
@@ -16,34 +16,36 @@ export interface MobileSubmitButtonProps {
   missingCount?: number;
   missingFields?: string[];
   helperText?: string;
+  showHelperChip?: boolean;
   style?: ViewStyle;
 }
 
 export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
-  isReady,
+  isReady = true,
   isLoading,
   onPress,
   label,
   loadingLabel = 'Submitting Request...',
   missingCount = 0,
   missingFields,
+  showHelperChip = false,
   style,
 }) => {
   const { isDark } = useTheme();
   const isExecutingRef = useRef(false);
 
   const handlePress = async () => {
-    if (!isReady || isLoading || isExecutingRef.current) return;
+    if (isLoading || isExecutingRef.current) return;
     isExecutingRef.current = true;
     haptics.light();
     try {
       await onPress();
     } finally {
-      isExecutingRef.current = false;
+      setTimeout(() => {
+        isExecutingRef.current = false;
+      }, 500);
     }
   };
-
-  const isLocked = !isReady || isLoading;
 
   const missingDescription = React.useMemo(() => {
     if (missingCount > 0) {
@@ -60,8 +62,8 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {/* 1. Status Banner: Incomplete (Amber) or Ready (Emerald) with 100% solid opacity */}
-      {!isReady && !isLoading && (
+      {/* 1. Status Banner: Shown only when showHelperChip is enabled */}
+      {showHelperChip && !isReady && !isLoading && (
         <View
           style={[
             styles.statusBanner,
@@ -95,7 +97,7 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
         </View>
       )}
 
-      {isReady && !isLoading && (
+      {showHelperChip && isReady && !isLoading && (
         <View
           style={[
             styles.statusBanner,
@@ -129,14 +131,14 @@ export const MobileSubmitButton: React.FC<MobileSubmitButtonProps> = ({
         </View>
       )}
 
-      {/* 2. Submit Button backed by RNR Button */}
+      {/* 2. Submit Button backed by RNR Button — Always clickable unless loading */}
       <Button
         variant="default"
         size="lg"
         fullWidth
         label={isLoading ? loadingLabel : label}
         isLoading={isLoading}
-        disabled={isLocked}
+        disabled={isLoading}
         onPress={handlePress}
       />
     </View>

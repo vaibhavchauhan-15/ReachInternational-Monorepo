@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Skeleton, useTheme } from '../ui';
+import { Skeleton, useTheme, KPIGrid } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface AttendanceCardSkeletonProps {
@@ -127,53 +127,51 @@ export const AttendanceKpiStripSkeleton: React.FC<{ animate?: boolean }> = ({ an
   const { theme } = useTheme();
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.kpiRow}
-    >
-      {[
-        { labelWidth: 80, valWidth: 32 },
-        { labelWidth: 50, valWidth: 28 },
-        { labelWidth: 48, valWidth: 24 },
-        { labelWidth: 58, valWidth: 26 },
-      ].map((kpi, idx) => (
-        <View
-          key={`kpi-att-skel-${idx}`}
-          style={[
-            styles.kpiCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.kpiHeaderRow}>
+    <View style={styles.kpiContainer}>
+      <KPIGrid columns={4}>
+        {[
+          { labelWidth: 80, valWidth: 32 },
+          { labelWidth: 50, valWidth: 28 },
+          { labelWidth: 48, valWidth: 24 },
+          { labelWidth: 58, valWidth: 26 },
+        ].map((kpi, idx) => (
+          <View
+            key={`kpi-att-skel-${idx}`}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <View style={styles.kpiHeaderRow}>
+              <Skeleton
+                width={kpi.labelWidth}
+                height={12}
+                borderRadius={radiusNumeric.xs}
+                animate={animate}
+                style={styles.noMargin}
+              />
+              <Skeleton
+                width={20}
+                height={20}
+                borderRadius={radiusNumeric.full}
+                animate={animate}
+                style={styles.noMargin}
+              />
+            </View>
             <Skeleton
-              width={kpi.labelWidth}
-              height={12}
+              width={kpi.valWidth}
+              height={24}
               borderRadius={radiusNumeric.xs}
               animate={animate}
-              style={styles.noMargin}
-            />
-            <Skeleton
-              width={16}
-              height={16}
-              borderRadius={radiusNumeric.xs}
-              animate={animate}
-              style={styles.noMargin}
+              style={{ marginTop: 8, marginBottom: 0 }}
             />
           </View>
-          <Skeleton
-            width={kpi.valWidth}
-            height={24}
-            borderRadius={radiusNumeric.xs}
-            animate={animate}
-            style={{ marginTop: 8, marginBottom: 0 }}
-          />
-        </View>
-      ))}
-    </ScrollView>
+        ))}
+      </KPIGrid>
+    </View>
   );
 };
 
@@ -415,16 +413,17 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
   },
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingBottom: spacingNumeric.md,
+  kpiContainer: {
+    width: '100%',
+    marginBottom: spacingNumeric.md,
   },
   kpiCard: {
-    width: 140,
-    padding: spacingNumeric.md,
+    width: '100%',
+    minHeight: 84,
+    padding: spacingNumeric.sm + 4,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
+    justifyContent: 'space-between',
   },
   kpiHeaderRow: {
     flexDirection: 'row',

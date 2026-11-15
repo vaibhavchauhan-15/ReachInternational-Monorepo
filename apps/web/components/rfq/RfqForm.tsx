@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ItemCard, type RfqFormItem } from "./ItemCard";
 import type { SlimEquipment } from "@/lib/queries/rfq";
@@ -83,6 +83,7 @@ export function RfqForm({
   const [consentGiven, setConsentGiven] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const isSubmittingRef = useRef(false);
 
   // Machine Item Handlers
   const handleAddItem = () => {
@@ -190,6 +191,8 @@ export function RfqForm({
   // Form Submit Handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPending || isSubmittingRef.current || isUploading) return;
+
     setFormError(null);
     setFieldErrors({});
 
@@ -207,60 +210,67 @@ export function RfqForm({
       }
     }
 
+    isSubmittingRef.current = true;
     startTransition(async () => {
-      const payload = {
-        full_name: contactName.trim(),
-        email: contactEmail.trim().toLowerCase(),
-        phone: contactPhone.trim(),
-        company_name: companyName.trim() || contactName.trim(),
-        company_city: projectCity.trim() || undefined,
-        company_state_code: projectStateCode,
-        project_city: projectCity.trim(),
-        project_state_code: projectStateCode,
-        project_site_address: projectSiteAddress.trim() || undefined,
-        required_from: requiredFrom || undefined,
-        client_notes: clientNotes.trim() || undefined,
-        source: "website" as const,
-        consent: true,
-        items: items.map((it, idx) => ({
-          requirement_type: it.requirement_type,
-          equipment_id: it.equipment_id || undefined,
-          category_id: it.category_id || undefined,
-          brand_id: it.brand_id || undefined,
-          custom_description: it.custom_description || undefined,
-          quantity: it.quantity,
-          min_height_m: it.min_height_m || undefined,
-          min_capacity_kg: it.min_capacity_kg || undefined,
-          duration_value: it.duration_value || undefined,
-          duration_unit: it.duration_unit || undefined,
-          notes: it.notes || undefined,
-          sort_order: idx,
-        })),
-        attachments: attachments.map((a) => ({
-          storage_path: a.storage_path,
-          original_name: a.original_name,
-          mime_type: a.mime_type,
-          size_bytes: a.size_bytes,
-        })),
-        attribution: {
-          referrer: typeof document !== "undefined" ? document.referrer : "",
-          url: typeof window !== "undefined" ? window.location.href : "",
-        },
-      };
+      try {
+        const payload = {
+          full_name: contactName.trim(),
+          email: contactEmail.trim().toLowerCase(),
+          phone: contactPhone.trim(),
+          company_name: companyName.trim() || contactName.trim(),
+          company_city: projectCity.trim() || undefined,
+          company_state_code: projectStateCode,
+          project_city: projectCity.trim(),
+          project_state_code: projectStateCode,
+          project_site_address: projectSiteAddress.trim() || undefined,
+          required_from: requiredFrom || undefined,
+          client_notes: clientNotes.trim() || undefined,
+          source: "website" as const,
+          consent: true,
+          items: items.map((it, idx) => ({
+            requirement_type: it.requirement_type,
+            equipment_id: it.equipment_id || undefined,
+            category_id: it.category_id || undefined,
+            brand_id: it.brand_id || undefined,
+            custom_description: it.custom_description || undefined,
+            quantity: it.quantity,
+            min_height_m: it.min_height_m || undefined,
+            min_capacity_kg: it.min_capacity_kg || undefined,
+            duration_value: it.duration_value || undefined,
+            duration_unit: it.duration_unit || undefined,
+            notes: it.notes || undefined,
+            sort_order: idx,
+          })),
+          attachments: attachments.map((a) => ({
+            storage_path: a.storage_path,
+            original_name: a.original_name,
+            mime_type: a.mime_type,
+            size_bytes: a.size_bytes,
+          })),
+          attribution: {
+            referrer: typeof document !== "undefined" ? document.referrer : "",
+            url: typeof window !== "undefined" ? window.location.href : "",
+          },
+        };
 
-      const result = await submitRfqAction(payload);
+        const result = await submitRfqAction(payload);
 
-      if (!result.success) {
-        setFormError(result.error || "Failed to submit quote request. Please check your inputs.");
-        if (result.fieldErrors) {
-          setFieldErrors(result.fieldErrors);
+        if (!result.success) {
+          isSubmittingRef.current = false;
+          setFormError(result.error || "Failed to submit quote request. Please check your inputs.");
+          if (result.fieldErrors) {
+            setFieldErrors(result.fieldErrors);
+          }
+          window.scrollTo({ top: 300, behavior: "smooth" });
+          return;
         }
-        window.scrollTo({ top: 300, behavior: "smooth" });
-        return;
-      }
 
-      // Success: redirect to thank-you page with RFQ reference number
-      router.push(`/request-a-quote/thank-you?ref=${encodeURIComponent(result.rfq_number || "")}`);
+        // Success: redirect to thank-you page with RFQ reference number
+        router.push(`/request-a-quote/thank-you?ref=${encodeURIComponent(result.rfq_number || "")}`);
+      } catch (err: any) {
+        isSubmittingRef.current = false;
+        setFormError(err?.message || "An unexpected error occurred while submitting your request.");
+      }
     });
   };
 

@@ -19,13 +19,22 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
   } else if (isDesktop) {
     effectiveCols = columns;
   } else if (isTablet) {
-    effectiveCols = Math.min(columns, 4);
+    if (columns === 2) {
+      effectiveCols = 2;
+    } else if (columns === 3) {
+      effectiveCols = 3;
+    } else if (columns === 5 && width >= 768) {
+      effectiveCols = 5;
+    } else if (columns === 6 && width >= 860) {
+      effectiveCols = 6;
+    } else {
+      effectiveCols = Math.min(columns, 4);
+    }
   } else {
     effectiveCols = Math.min(columns, 2);
   }
 
   const validChildren = React.Children.toArray(children).filter(Boolean);
-  const totalCount = validChildren.length;
 
   if (Platform.OS === 'web') {
     return (
@@ -40,17 +49,20 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
           style,
         ]}
       >
-        {validChildren.map((child, index) => {
-          const isLastOdd = effectiveCols === 2 && index === totalCount - 1 && totalCount % 2 === 1;
-          return (
-            <View
-              key={index}
-              style={isLastOdd ? ({ gridColumn: 'span 2' } as any) : undefined}
-            >
-              {child}
-            </View>
-          );
-        })}
+        {validChildren.map((child, index) => (
+          <View
+            key={index}
+            style={{
+              height: '100%',
+              minWidth: 0,
+              minHeight: 104,
+              display: 'flex' as any,
+              flexDirection: 'column' as any,
+            }}
+          >
+            {child}
+          </View>
+        ))}
       </View>
     );
   }
@@ -60,26 +72,22 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ children, columns = 4, style }
     effectiveCols === 1
       ? '100%'
       : effectiveCols === 3
-      ? '31%'
+      ? '31.5%'
       : effectiveCols === 4
-      ? '23%'
+      ? '23.2%'
       : effectiveCols === 5
-      ? '18%'
+      ? '18.2%'
       : effectiveCols === 6
-      ? '15%'
+      ? '14.9%'
       : '48.5%';
 
   return (
     <View style={[styles.nativeGrid, style]}>
-      {validChildren.map((child, index) => {
-        const isLastOdd = effectiveCols === 2 && index === totalCount - 1 && totalCount % 2 === 1;
-        const width = isLastOdd ? '100%' : itemPercent;
-        return (
-          <View key={index} style={{ width, minHeight: 92 }}>
-            {child}
-          </View>
-        );
-      })}
+      {validChildren.map((child, index) => (
+        <View key={index} style={{ width: itemPercent, minHeight: 104 }}>
+          {child}
+        </View>
+      ))}
     </View>
   );
 };

@@ -282,14 +282,14 @@ export function formatAadhaar(aadhaar?: string | null): string {
 }
 
 /**
- * Masks an Aadhaar number to show only the last 4 digits (e.g. XXXX-XXXX-1234)
- * complying with AI/RULES/DATA-PROTECTION-PRIVACY.md.
+ * Masks an Aadhaar number to show only the last 4 digits (e.g. XXXX XXXX 1234)
+ * complying with AI/RULES/DATA-PROTECTION-PRIVACY.md, UIDAI regulations, and DPDP Act 2023.
  */
 export function maskAadhaar(aadhaar?: string | null): string {
   if (!aadhaar || !aadhaar.trim()) return "—";
   const clean = aadhaar.replace(/[^0-9]/g, "");
   if (clean.length < 4) return aadhaar.trim();
-  return `XXXX-XXXX-${clean.slice(-4)}`;
+  return `XXXX XXXX ${clean.slice(-4)}`;
 }
 
 // List of all 36 Indian State and Union Territory 2-letter RTO codes (MoRTH Sarathi)
@@ -449,13 +449,13 @@ export function isValidBankAccount(account?: string | null): boolean {
 }
 
 /**
- * Masks a bank account number showing only the last 4 digits (e.g. ••••••••1234).
+ * Masks a bank account number showing only the last 4 digits (e.g. ••••1234).
  */
 export function maskBankAccount(account?: string | null): string {
   if (!account || !account.trim()) return "—";
   const clean = account.replace(/\D/g, "");
   if (clean.length < 4) return account.trim();
-  return `••••••••${clean.slice(-4)}`;
+  return `••••${clean.slice(-4)}`;
 }
 
 export interface IfscValidationResult {

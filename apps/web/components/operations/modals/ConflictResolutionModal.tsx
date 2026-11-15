@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button, CustomTimePicker, useToast } from "@/components/ui";
 import { AnimatedX } from "@/components/ui/animated-icons";
@@ -33,6 +33,25 @@ export function ConflictResolutionModal({
   const [conflictAdjustedEndTime, setConflictAdjustedEndTime] = useState("");
   const [conflictNotes, setConflictNotes] = useState("");
   const [resolvingConflict, setResolvingConflict] = useState(false);
+
+  const resetForm = useCallback(() => {
+    setConflictAction("acknowledge");
+    setConflictAdjustedEndTime("");
+    setConflictNotes("");
+    setResolvingConflict(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (resolvingConflict) return;
+    resetForm();
+    onClose();
+  }, [resolvingConflict, resetForm, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen, log?.id, resetForm]);
 
   // Parse structured conflict details for the modal
   const modalConflictDetails = useMemo(() => {
@@ -78,9 +97,8 @@ export function ConflictResolutionModal({
           "success",
           `Overtime conflict ${conflictAction === "acknowledge" ? "acknowledged" : "adjusted"} successfully.`
         );
+        resetForm();
         onClose();
-        setConflictNotes("");
-        setConflictAdjustedEndTime("");
         if (onSuccess) onSuccess(conflictAction, conflictAdjustedEndTime);
       } else {
         toast("error", res.error || "Failed to resolve conflict");
@@ -112,7 +130,7 @@ export function ConflictResolutionModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer transition-colors"
             aria-label="Close modal"
           >
@@ -316,7 +334,7 @@ export function ConflictResolutionModal({
             type="button"
             variant="secondary"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={resolvingConflict}
           >
             Cancel

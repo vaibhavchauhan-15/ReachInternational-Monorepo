@@ -10,6 +10,55 @@ import type { ReleaseItem } from './types';
 
 export const RELEASE_MANIFEST: ReleaseItem[] = [
   {
+    releaseId: 'v1.5.0-native-release',
+    version: '1.5.0',
+    versionCode: 6,
+    runtimeVersion: '1.5.0',
+    releaseDate: '2026-11-16',
+    type: 'native',
+    title: "What's New in Reach Ops v1.5.0",
+    subtitle: 'Universal approvals queue, push notifications & shift alerts, 7-day retrospective shift logging, and refined dashboard ergonomics.',
+    isMajor: true,
+    targetEnv: 'all',
+    highlights: [
+      {
+        id: 'approvals-engine-150',
+        title: 'Universal Multi-Flow Approvals',
+        description: 'Dedicated approvals queue and review drawer with dual-control support for registrations, profile changes, and document verifications.',
+        iconName: 'shield-check',
+        category: 'feature',
+      },
+      {
+        id: 'push-notifications-150',
+        title: 'Push Notifications & Shift Alerts',
+        description: 'Real-time shift reminder ladder, 4 Android notification channels, fast-path delivery, and quiet-hours preference sync.',
+        iconName: 'zap',
+        category: 'feature',
+      },
+      {
+        id: 'retrospective-shifts-150',
+        title: '7-Day Retrospective Shift Window',
+        description: 'Log and review shifts across a 7-day rolling window (Asia/Kolkata) with automatic carry-forward and database-level overlap prevention.',
+        iconName: 'calendar',
+        category: 'feature',
+      },
+      {
+        id: 'dashboard-polish-150',
+        title: 'Ergonomic KPI Cards & View Switcher',
+        description: 'Yoga flexbox layout optimization across all role dashboards, enriched machine KPI strip with semantic icons, and static button view switchers.',
+        iconName: 'gauge',
+        category: 'improvement',
+      },
+      {
+        id: 'security-hardware-150',
+        title: 'Android 15+ & Hardware Security',
+        description: 'Edge-to-edge layouts, hardware-backed SecureStore token encryption, zero-byte document staging, and ProGuard R8 DEX optimization.',
+        iconName: 'lock',
+        category: 'improvement',
+      },
+    ],
+  },
+  {
     releaseId: 'v1.4.0-native-release',
     version: '1.4.0',
     versionCode: 5,

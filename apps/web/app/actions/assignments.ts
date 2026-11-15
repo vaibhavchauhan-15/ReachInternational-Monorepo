@@ -188,11 +188,13 @@ export async function endAssignmentAction(payload: {
     const supabase = createSupabaseAdminClient();
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      "end_operator_machine_assignment_atomic",
+      "end_assignment_range",
       {
         p_assignment_id: parsed.data.assignmentId,
-        p_ended_by: caller.id,
+        p_caller_id: caller.id,
         p_end_reason: parsed.data.endReason || "removed",
+        p_effective_date: parsed.data.effectiveDate || null,
+        p_notes: parsed.data.notes || null,
       }
     );
 
@@ -344,6 +346,7 @@ export async function getMachineActiveAssignmentsAction(
     if (!machineId) return { assignments: [] };
 
     const supabase = createSupabaseAdminClient();
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const { data, error } = await supabase
       .from("operator_machine_assignments")
       .select(`
@@ -354,6 +357,8 @@ export async function getMachineActiveAssignmentsAction(
         shift_end_time,
         crosses_midnight,
         is_active,
+        valid_from,
+        valid_to,
         assigned_by,
         assigned_at,
         ended_at,
@@ -365,7 +370,8 @@ export async function getMachineActiveAssignmentsAction(
         assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name)
       `)
       .eq("machine_id", machineId)
-      .eq("is_active", true)
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
       .order("shift_start_time", { ascending: true });
 
     if (error || !data) return { assignments: [] };
@@ -382,6 +388,7 @@ export async function getMachineActiveAssignmentsAction(
  */
 export async function updateAssignmentAction(payload: {
   assignmentId: string;
+  shiftCode?: string | null;
   shiftStartTime: string;
   shiftEndTime: string;
   notes?: string | null;
@@ -414,37 +421,104 @@ export async function updateAssignmentAction(payload: {
 
     const supabase = createSupabaseAdminClient();
 
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
     // Verify assignment exists and is active
     const { data: existing, error: fetchErr } = await supabase
       .from("operator_machine_assignments")
-      .select("id, machine_id, operator_id, is_active")
+      .select("id, machine_id, operator_id, shift_code, valid_from, valid_to, is_active")
       .eq("id", payload.assignmentId)
-      .eq("is_active", true)
       .single();
 
-    if (fetchErr || !existing) {
+    if (fetchErr || !existing || existing.is_active === false || existing.valid_to !== null) {
       return { success: false, error: "Active assignment not found." };
     }
 
-    // Update assignment shift times (trigger trg_sync_operator_shift_ranges enforces GiST exclusion)
-    const { error: updateErr } = await supabase
-      .from("operator_machine_assignments")
-      .update({
-        shift_start_time: start24,
-        shift_end_time: end24,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", payload.assignmentId);
+    // Check if logs already exist for today on this assignment
+    const { data: todayLogs } = await supabase
+      .from("machine_hour_logs")
+      .select("id")
+      .eq("assignment_id", existing.id)
+      .eq("log_date", todayDate)
+      .limit(1);
 
-    if (updateErr) {
-      if (updateErr.message?.includes("23P01") || updateErr.code === "23P01") {
+    const hasEntryToday = Boolean(todayLogs && todayLogs.length > 0);
+
+    if (hasEntryToday) {
+      return {
+        success: false,
+        error: "A shift log has already been submitted for this assignment today. Shift changes cannot alter a completed day's assignment.",
+      };
+    }
+
+    let resultAssignmentId = existing.id;
+
+    if (existing.valid_from < todayDate) {
+      // Historical range: Close old range as of yesterday so history is 100% immutable
+      const yesterdayDate = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const closeDate = existing.valid_from <= yesterdayDate ? yesterdayDate : existing.valid_from;
+
+      const { data: endRes, error: endErr } = await supabase.rpc("end_assignment_range", {
+        p_assignment_id: existing.id,
+        p_caller_id: caller.id,
+        p_end_reason: "shift_changed",
+        p_effective_date: closeDate,
+        p_notes: payload.notes || "Shift timings updated",
+      });
+
+      if (endErr || (endRes && !endRes.success)) {
         return {
           success: false,
-          code: "SHIFT_OVERLAP_CONFLICT",
-          error: "This shift timing conflicts with another active shift assignment for this operator.",
+          error: endErr?.message || (endRes as any)?.error || "Failed to close previous shift range.",
         };
       }
-      return { success: false, error: updateErr.message || "Failed to update assignment shift." };
+
+      // Open new assignment starting today with updated timings
+      const { data: newAssignRes, error: newAssignErr } = await supabase.rpc(
+        "assign_operator_machine_atomic",
+        {
+          p_machine_id: existing.machine_id,
+          p_operator_id: existing.operator_id,
+          p_shift_start: start24,
+          p_shift_end: end24,
+          p_shift_start_time: start24,
+          p_shift_end_time: end24,
+          p_assigned_by: caller.id,
+          p_notes: parsed.data.notes || null,
+          p_shift_code: parsed.data.shiftCode || existing.shift_code || null,
+        }
+      );
+
+      if (newAssignErr || (newAssignRes && !newAssignRes.success)) {
+        return {
+          success: false,
+          error: newAssignErr?.message || (newAssignRes as any)?.error || "Failed to open new shift range.",
+        };
+      }
+
+      resultAssignmentId = newAssignRes.assignment_id;
+    } else {
+      // Created today with zero logs: safe to update timings in place
+      const { error: updateErr } = await supabase
+        .from("operator_machine_assignments")
+        .update({
+          shift_start_time: start24,
+          shift_end_time: end24,
+          ...(parsed.data.shiftCode ? { shift_code: parsed.data.shiftCode } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payload.assignmentId);
+
+      if (updateErr) {
+        if (updateErr.message?.includes("23P01") || updateErr.code === "23P01") {
+          return {
+            success: false,
+            code: "SHIFT_OVERLAP_CONFLICT",
+            error: "This shift timing conflicts with another active shift assignment for this operator.",
+          };
+        }
+        return { success: false, error: updateErr.message || "Failed to update assignment shift." };
+      }
     }
 
     // Revalidate tags
@@ -631,7 +705,8 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
       }
     }
 
-    // 3. Fetch active machine assignments for this operator (without non-existent notes column)
+    // 3. Fetch active machine assignments for this operator valid for today IST
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const { data: rawAssignments, error: assErr } = await supabase
       .from("operator_machine_assignments")
       .select(`
@@ -641,6 +716,8 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
         shift_start_time,
         shift_end_time,
         is_active,
+        valid_from,
+        valid_to,
         machine:machines(
           id,
           machine_id,
@@ -654,49 +731,15 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
         )
       `)
       .eq("operator_id", operatorId)
-      .eq("is_active", true)
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
       .order("assigned_at", { ascending: false });
 
     if (assErr) {
       return { success: false, error: assErr.message };
     }
 
-    // Fallback: Check if machines table points to this operator even if assignment record is missing
-    const assignedMachineIds = new Set((rawAssignments || []).map((r: any) => r.machine_id));
-    const { data: fallbackMachines } = await supabase
-      .from("machines")
-      .select(`
-        id,
-        machine_id,
-        machine_name,
-        model,
-        serial_number,
-        client_id,
-        supervisor_ids,
-        current_supervisor_id,
-        client:clients(id, company_name)
-      `)
-      .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`);
-
     const allAssignmentMachines = [...(rawAssignments || []).map((r: any) => r.machine).filter(Boolean)];
-    const syntheticAssignments: any[] = [];
-    if (fallbackMachines) {
-      fallbackMachines.forEach((m: any) => {
-        if (!assignedMachineIds.has(m.id)) {
-          assignedMachineIds.add(m.id);
-          allAssignmentMachines.push(m);
-          syntheticAssignments.push({
-            id: `assigned-${m.id}`,
-            machine_id: m.id,
-            shift_code: "S1",
-            shift_start_time: "06:00:00",
-            shift_end_time: "14:00:00",
-            is_active: true,
-            machine: m,
-          });
-        }
-      });
-    }
 
     // C. Also collect site supervisors assigned to the operator's machines
     const missingSupIds = new Set<string>();
@@ -762,7 +805,7 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
     }
 
     // 5. Build assignments with clientShifts attached and reconciled
-    const combinedRawAssignments = [...(rawAssignments || []), ...syntheticAssignments];
+    const combinedRawAssignments = rawAssignments || [];
     const assignments = combinedRawAssignments.map((row: any) => {
       const m = row.machine || {};
       const cl = m.client || {};
@@ -933,12 +976,14 @@ export async function updateOperatorMachineAssignmentsAction(
       }
     }
 
-    // 4. Query current active assignments for this operator
+    // 4. Query current active assignments for this operator valid for today IST
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const { data: currentActive, error: fetchErr } = await supabase
       .from("operator_machine_assignments")
-      .select("id, machine_id, shift_code, shift_start_time, shift_end_time, is_active")
+      .select("id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, valid_from, valid_to")
       .eq("operator_id", operatorId)
-      .eq("is_active", true);
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
 
     if (fetchErr) {
       return { success: false, error: fetchErr.message };
@@ -952,12 +997,15 @@ export async function updateOperatorMachineAssignmentsAction(
     const assignmentsToRelieve = currentActiveList.filter(
       (a) => !targetKeys.has(`${a.machine_id}:${a.shift_code || "S1"}`)
     );
+    const yesterdayDate = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     for (const relieved of assignmentsToRelieve) {
       targetMachineIds.add(relieved.machine_id);
-      await supabase.rpc("end_operator_machine_assignment_atomic", {
+      const closeDate = (relieved.valid_from && relieved.valid_from <= yesterdayDate) ? yesterdayDate : (relieved.valid_from || todayDate);
+      await supabase.rpc("end_assignment_range", {
         p_assignment_id: relieved.id,
-        p_ended_by: caller.id,
+        p_caller_id: caller.id,
         p_end_reason: "reassigned",
+        p_effective_date: closeDate,
       });
 
       // Check if operator still has any other active assignment on that machine
@@ -966,7 +1014,8 @@ export async function updateOperatorMachineAssignmentsAction(
         .select("id")
         .eq("operator_id", operatorId)
         .eq("machine_id", relieved.machine_id)
-        .eq("is_active", true);
+        .lte("valid_from", todayDate)
+        .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
 
       if (!remainingOnMachine || remainingOnMachine.length === 0) {
         // Remove operator from that machine's operator_ids array

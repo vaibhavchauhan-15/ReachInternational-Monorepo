@@ -25,6 +25,7 @@ export interface MobileSignupDraftValues {
   phone: string;
   selectedRole: string;
   selectedSupervisorId: string;
+  selectedMachineCategory?: string;
   shiftStartTime: string;
   shiftEndTime: string;
   street: string;
@@ -56,6 +57,7 @@ export function hasMeaningfulMobileDraft(d: Partial<MobileSignupDraftValues> | n
   if (d.fullName && d.fullName.trim().length > 0) return true;
   if (d.email && d.email.trim().length > 0) return true;
   if (d.phone && d.phone.trim().length > 0) return true;
+  if (d.selectedMachineCategory && d.selectedMachineCategory.trim().length > 0) return true;
   if (d.street && d.street.trim().length > 0) return true;
   if (d.city && d.city.trim().length > 0) return true;
   if (d.district && d.district.trim().length > 0) return true;

@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 import type { ApplicationStatus } from "@reachinternational/types";
+import { canTransitionApplication } from "./application-transitions";
 
 interface MutationResponse<T = any> {
   success: boolean;
@@ -38,6 +39,13 @@ export async function updateApplicationStatus(
       return { success: false, error: "Application not found" };
     }
 
+    if (!canTransitionApplication(previous.status as ApplicationStatus, status)) {
+      return {
+        success: false,
+        error: `Invalid application status transition from "${previous.status}" to "${status}".`,
+      };
+    }
+
     const updates: Record<string, any> = {
       status,
       status_changed_at: new Date().toISOString(),
@@ -54,12 +62,20 @@ export async function updateApplicationStatus(
       .from("job_applications")
       .update(updates)
       .eq("id", id)
+      .eq("status", previous.status)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("[updateApplicationStatus] error:", error);
       return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: "Application status was concurrently modified by another user. Please refresh and try again.",
+      };
     }
 
     await logAudit({

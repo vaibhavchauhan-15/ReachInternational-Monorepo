@@ -264,6 +264,7 @@ export function MachineClientView({
     const t = searchParams.get("tab");
     if (t === "running_hours" || t === "logs" || t === "hmr") setActiveTab("running_hours");
     else if (t === "audit_trail" || t === "audit") setActiveTab("audit_trail");
+    else setActiveTab("overview");
   }, [searchParams]);
 
   // Local state representing live machine record (instantly updated on modal save)

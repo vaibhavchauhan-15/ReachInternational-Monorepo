@@ -14,7 +14,7 @@
 import { useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import { formatTo12Hour, isAbortError } from '@reachinternational/utils';
+import { formatTo12Hour, isAbortError, getISTDateString } from '@reachinternational/utils';
 
 const EMPTY_ARRAY: any[] = Object.freeze([]) as any;
 
@@ -96,10 +96,13 @@ export function useFleetAssignments(visible: boolean) {
     gcTime: 5 * 60_000,
     placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
+      const todayDate = getISTDateString();
       const { data, error } = await supabase
         .from('operator_machine_assignments')
         .select('id, operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, machine:machines(id, machine_id, model)')
         .eq('is_active', true)
+        .lte('valid_from', todayDate)
+        .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
         .abortSignal(signal);
 
       if (error) {

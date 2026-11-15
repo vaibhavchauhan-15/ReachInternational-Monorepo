@@ -391,6 +391,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       AsyncStorage.removeItem(`${PROFILE_CACHE_PREFIX}${user.id}`).catch(() => {});
     }
 
+    try {
+      const { unregisterPushNotifications } = await import('../notifications/registerPush');
+      await unregisterPushNotifications();
+    } catch (err) {
+      console.warn('[useAuth] Error unregistering push notifications on signout:', err);
+    }
+
     setSession(null);
     setUser(null);
     setRole(null);

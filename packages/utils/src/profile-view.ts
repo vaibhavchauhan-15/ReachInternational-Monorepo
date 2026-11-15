@@ -115,6 +115,20 @@ export function toProfileView(
       value: shiftDisplay,
       isMonospace: false,
     },
+    ...(u.role === "operator" || u.machine_category
+      ? [
+          {
+            label: "Machine Category",
+            value: u.machine_category || "Not Specified",
+            badge: u.machine_category
+              ? {
+                  label: u.machine_category,
+                  variant: "info" as const,
+                }
+              : undefined,
+          },
+        ]
+      : []),
     {
       label: "Site Supervisor",
       value: supervisorName || "Not Assigned",

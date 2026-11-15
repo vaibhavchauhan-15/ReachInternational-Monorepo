@@ -1,5 +1,6 @@
 import React from 'react';
 import { KPIGrid, KPICard } from '../ui';
+import { Wrench, CheckCircle2, Building2, AlertTriangle } from '../ui/icon';
 import { useAuth } from '../../lib/auth/useAuth';
 
 export interface MachineKPIStats {
@@ -27,6 +28,7 @@ export function MachineKPIStrip({
         label={isOperator ? 'Assigned Fleet' : 'Total Fleet'}
         value={stats.totalCount}
         isLoading={isLoading}
+        icon={Wrench}
         variant="default"
         labelVariant="micro"
         valueVariant="title"
@@ -35,6 +37,7 @@ export function MachineKPIStrip({
         label="Available"
         value={stats.availableCount}
         isLoading={isLoading}
+        icon={CheckCircle2}
         variant="success"
         labelVariant="micro"
         valueVariant="title"
@@ -43,6 +46,7 @@ export function MachineKPIStrip({
         label="On Rent"
         value={stats.rentedCount}
         isLoading={isLoading}
+        icon={Building2}
         variant="info"
         labelVariant="micro"
         valueVariant="title"
@@ -51,6 +55,7 @@ export function MachineKPIStrip({
         label="Breakdown Events"
         value={stats.breakdownCount}
         isLoading={isLoading}
+        icon={AlertTriangle}
         variant={stats.breakdownCount > 0 ? 'error' : 'default'}
         labelVariant="micro"
         valueVariant="title"

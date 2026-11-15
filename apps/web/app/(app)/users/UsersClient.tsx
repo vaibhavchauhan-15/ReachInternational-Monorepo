@@ -9,15 +9,13 @@ import {
   ConfirmationDialog,
 } from "@/components/ui";
 import { AnimatedTrash2 } from "@/components/ui/animated-icons";
-import { FileSpreadsheet, Download, FileText } from "lucide-react";
+import { FileSpreadsheet, Download, FileText, ShieldAlert } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRegisterPageActions } from "@/components/layout/PageActionContext";
-import type { User, UserRole, ProfileChangeRequest, AccountDeletionRequest } from "@/lib/types/database";
+import type { User, UserRole } from "@/lib/types/database";
 
 import {
-  approveUser,
-  rejectUser,
   createUser,
   resetUserPassword,
   toggleUserStatus,
@@ -25,24 +23,12 @@ import {
   updateUserSupervisor,
   deleteUser,
   bulkDeleteUsers,
-  bulkApproveUsers,
-  bulkRejectUsers,
   editUser,
   getPaginatedUsersAction,
   exportUsersFilteredAction,
   searchUsersServerAction,
 } from "@/app/actions/users";
 import { getSupervisorsAction } from "@/app/actions/auth";
-import {
-  approveProfileChangeRequest,
-  rejectProfileChangeRequest,
-  bulkApproveProfileChangeRequests,
-  bulkRejectProfileChangeRequests,
-} from "@/app/actions/profile";
-import {
-  approveAccountDeletionRequestAction,
-  rejectAccountDeletionRequestAction,
-} from "@/app/actions/account-deletion";
 
 import {
   UserListAggregates,
@@ -52,7 +38,6 @@ import {
 import { UsersHeader } from "./UsersHeader";
 import { UsersFilters } from "./UsersFilters";
 import { UsersTable } from "./UsersTable";
-import { PendingApprovalsSection } from "./PendingApprovalsSection";
 import { PasswordResetModal } from "./PasswordResetModal";
 
 // Re-export helper functions and types for backwards compatibility
@@ -69,7 +54,7 @@ export {
 } from "./users-helpers";
 export type { UserListAggregates, FilterOption } from "./users-helpers";
 
-// Dynamic Imports for Modals & Heavy Sections
+// Dynamic Imports for Modals
 const UserCreateModal = dynamic(
   () => import("./UserCreateModal").then((mod) => mod.UserCreateModal),
   { ssr: false }
@@ -78,20 +63,9 @@ const UserEditModal = dynamic(
   () => import("./UserEditModal").then((mod) => mod.UserEditModal),
   { ssr: false }
 );
-const ProfileChangeRequests = dynamic(
-  () => import("./ProfileChangeRequests").then((mod) => mod.ProfileChangeRequests),
-  { ssr: false }
-);
-const AccountDeletionRequestsSection = dynamic(
-  () => import("./AccountDeletionRequestsSection").then((mod) => mod.AccountDeletionRequestsSection),
-  { ssr: false }
-);
 
 export interface UsersPageClientProps {
   users: User[];
-  pendingUsers: User[];
-  profileChangeRequests?: ProfileChangeRequest[];
-  accountDeletionRequests?: AccountDeletionRequest[];
   currentUser: User;
   isSuperAdmin: boolean;
   totalPages: number;
@@ -99,13 +73,11 @@ export interface UsersPageClientProps {
   currentPage: number;
   aggregates?: UserListAggregates;
   readOnly?: boolean;
+  pendingApprovalCounts?: { total: number; by_type: Record<string, number> };
 }
 
 export function UsersPageClient({
   users,
-  pendingUsers,
-  profileChangeRequests = [],
-  accountDeletionRequests = [],
   currentUser,
   isSuperAdmin,
   totalPages,
@@ -113,6 +85,7 @@ export function UsersPageClient({
   currentPage,
   aggregates,
   readOnly = false,
+  pendingApprovalCounts,
 }: UsersPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -121,13 +94,8 @@ export function UsersPageClient({
 
   // Optimistic local state synchronized with server props
   const [usersList, setUsersList] = useState<User[]>(users);
-  const [pendingUsersList, setPendingUsersList] = useState<User[]>(pendingUsers);
-  const [profileRequestsList, setProfileRequestsList] = useState<ProfileChangeRequest[]>(profileChangeRequests);
-  const [deletionRequestsList, setDeletionRequestsList] = useState<AccountDeletionRequest[]>(accountDeletionRequests);
 
   useEffect(() => { setUsersList(users); }, [users]);
-  useEffect(() => { setPendingUsersList(pendingUsers); }, [pendingUsers]);
-  useEffect(() => { setProfileRequestsList(profileChangeRequests); }, [profileChangeRequests]);
 
   // ── Pure High-Scale Server-Side Search Engine (Engineered for 100,000+ Users)
   // Queries PostgreSQL via GIN Trigram indexes on (name, phone, email, etc.)
@@ -150,14 +118,11 @@ export function UsersPageClient({
 
   const isSearchActive = localSearchTerm.trim().length > 0;
   const filteredUsers = isSearchActive ? (searchResults ?? []) : usersList;
-  useEffect(() => { setDeletionRequestsList(accountDeletionRequests); }, [accountDeletionRequests]);
 
   const [loading, setLoading] = useState<{
     type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "supervisor" | "delete" | "edit";
     id: string;
   } | null>(null);
-  const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
-  const [deletionLoading, setDeletionLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToToggleStatus, setUserToToggleStatus] = useState<User | null>(null);
@@ -219,15 +184,6 @@ export function UsersPageClient({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-
-  // Bulk Approvals / Rejections State
-  const [isBulkApproving, setIsBulkApproving] = useState(false);
-  const [isBulkRejecting, setIsBulkRejecting] = useState(false);
-  const [showRejectAllConfirm, setShowRejectAllConfirm] = useState(false);
-
-  // Bulk Profile Approvals State
-  const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
-  const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
   // Search, Filter and Pagination State
   const PAGE_SIZE = 10;
@@ -544,132 +500,7 @@ export function UsersPageClient({
     if (e) e.preventDefault();
   }, []);
 
-  // Optimistic User Mutation Handlers
-  const handleApprove = useCallback(
-    async (userId: string) => {
-      const prevPending = pendingUsersList;
-      const prevUsers = usersList;
-      const targetUser = pendingUsersList.find((u) => u.id === userId);
 
-      setPendingUsersList((prev) => prev.filter((u) => u.id !== userId));
-      setUsersList((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: "active" as const } : u))
-      );
-      setLoading({ type: "approve", id: userId });
-
-      try {
-        const result = await approveUser(userId);
-        setLoading(null);
-        if (result.error) {
-          setPendingUsersList(prevPending);
-          setUsersList(prevUsers);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || `User ${targetUser?.full_name || ""} approved successfully`);
-          router.refresh();
-        }
-      } catch (err: any) {
-        setLoading(null);
-        setPendingUsersList(prevPending);
-        setUsersList(prevUsers);
-        toast("error", err?.message || "Failed to approve user. Please try again.");
-      }
-    },
-    [pendingUsersList, usersList, router, toast]
-  );
-
-  const handleReject = useCallback(
-    async (userId: string) => {
-      const prevPending = pendingUsersList;
-      const prevUsers = usersList;
-      const targetUser = pendingUsersList.find((u) => u.id === userId);
-
-      setPendingUsersList((prev) => prev.filter((u) => u.id !== userId));
-      setUsersList((prev) => prev.filter((u) => u.id !== userId));
-      setLoading({ type: "reject", id: userId });
-
-      try {
-        const result = await rejectUser(userId);
-        setLoading(null);
-        if (result.error) {
-          setPendingUsersList(prevPending);
-          setUsersList(prevUsers);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || `User ${targetUser?.full_name || ""} rejected`);
-          router.refresh();
-        }
-      } catch (err: any) {
-        setLoading(null);
-        setPendingUsersList(prevPending);
-        setUsersList(prevUsers);
-        toast("error", err?.message || "Failed to reject user. Please try again.");
-      }
-    },
-    [pendingUsersList, usersList, router, toast]
-  );
-
-  const handleApproveAll = useCallback(async () => {
-    if (pendingUsersList.length === 0) return;
-    const prevPending = pendingUsersList;
-    const prevUsers = usersList;
-    const pendingIds = pendingUsersList.map((u) => u.id);
-
-    setUsersList((prev) =>
-      prev.map((u) => (pendingIds.includes(u.id) ? { ...u, status: "active" as const } : u))
-    );
-    setPendingUsersList([]);
-    setIsBulkApproving(true);
-
-    try {
-      const result = await bulkApproveUsers(pendingIds);
-      setIsBulkApproving(false);
-      if (result.error) {
-        setPendingUsersList(prevPending);
-        setUsersList(prevUsers);
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || `Successfully approved ${result.successCount || prevPending.length} users`);
-        router.refresh();
-      }
-    } catch (err: any) {
-      setIsBulkApproving(false);
-      setPendingUsersList(prevPending);
-      setUsersList(prevUsers);
-      toast("error", err?.message || "Failed to approve all users. Please try again.");
-    }
-  }, [pendingUsersList, usersList, router, toast]);
-
-  const handleRejectAllConfirm = useCallback(async () => {
-    if (pendingUsersList.length === 0) return;
-    const prevPending = pendingUsersList;
-    const prevUsers = usersList;
-    const pendingIds = pendingUsersList.map((u) => u.id);
-
-    setUsersList((prev) => prev.filter((u) => !pendingIds.includes(u.id)));
-    setPendingUsersList([]);
-    setIsBulkRejecting(true);
-
-    try {
-      const result = await bulkRejectUsers(pendingIds);
-      setIsBulkRejecting(false);
-      setShowRejectAllConfirm(false);
-      if (result.error) {
-        setPendingUsersList(prevPending);
-        setUsersList(prevUsers);
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || `Successfully rejected ${result.successCount || prevPending.length} users`);
-        router.refresh();
-      }
-    } catch (err: any) {
-      setIsBulkRejecting(false);
-      setShowRejectAllConfirm(false);
-      setPendingUsersList(prevPending);
-      setUsersList(prevUsers);
-      toast("error", err?.message || "Failed to reject all users. Please try again.");
-    }
-  }, [pendingUsersList, usersList, router, toast]);
 
   const handleCreateUser = async (formData: any) => {
     setLoading({ type: "create", id: "new" });
@@ -887,157 +718,6 @@ export function UsersPageClient({
     [router, toast]
   );
 
-  // Profile and Account Deletion Request Handlers
-  const handleApproveProfileChange = useCallback(
-    async (requestId: string) => {
-      const prevRequests = profileRequestsList;
-      const targetReq = profileRequestsList.find((r) => r.id === requestId);
-      setProfileRequestsList((prev) => prev.filter((r) => r.id !== requestId));
-      setProfileLoading({ type: "approve", id: requestId });
-
-      try {
-        const result = await approveProfileChangeRequest(requestId);
-        setProfileLoading(null);
-        if (result.error) {
-          setProfileRequestsList(prevRequests);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || `Profile changes for ${targetReq?.user?.full_name || "user"} approved`);
-          router.refresh();
-        }
-      } catch (err: any) {
-        setProfileLoading(null);
-        setProfileRequestsList(prevRequests);
-        toast("error", err?.message || "Failed to approve profile change request.");
-      }
-    },
-    [profileRequestsList, router, toast]
-  );
-
-  const handleRejectProfileChange = useCallback(
-    async (requestId: string, reason?: string) => {
-      const prevRequests = profileRequestsList;
-      const targetReq = profileRequestsList.find((r) => r.id === requestId);
-      setProfileRequestsList((prev) => prev.filter((r) => r.id !== requestId));
-      setProfileLoading({ type: "reject", id: requestId });
-
-      try {
-        const result = await rejectProfileChangeRequest(requestId, reason);
-        setProfileLoading(null);
-        if (result.error) {
-          setProfileRequestsList(prevRequests);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || `Profile changes for ${targetReq?.user?.full_name || "user"} rejected`);
-          router.refresh();
-        }
-      } catch (err: any) {
-        setProfileLoading(null);
-        setProfileRequestsList(prevRequests);
-        toast("error", err?.message || "Failed to reject profile change request.");
-      }
-    },
-    [profileRequestsList, router, toast]
-  );
-
-  const handleApproveAllProfileChanges = useCallback(async () => {
-    if (profileRequestsList.length === 0) return;
-    const prevRequests = profileRequestsList;
-    setProfileRequestsList([]);
-    setIsBulkApprovingProfile(true);
-
-    try {
-      const requestIds = prevRequests.map((r) => r.id);
-      const result = await bulkApproveProfileChangeRequests(requestIds);
-      setIsBulkApprovingProfile(false);
-      if (result.error) {
-        setProfileRequestsList(prevRequests);
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || `Approved all ${prevRequests.length} profile change requests`);
-        router.refresh();
-      }
-    } catch (err: any) {
-      setIsBulkApprovingProfile(false);
-      setProfileRequestsList(prevRequests);
-      toast("error", err?.message || "Failed to bulk approve profile requests.");
-    }
-  }, [profileRequestsList, router, toast]);
-
-  const handleRejectAllProfileChanges = useCallback(async () => {
-    if (profileRequestsList.length === 0) return;
-    const prevRequests = profileRequestsList;
-    setProfileRequestsList([]);
-    setIsBulkRejectingProfile(true);
-
-    try {
-      const requestIds = prevRequests.map((r) => r.id);
-      const result = await bulkRejectProfileChangeRequests(requestIds);
-      setIsBulkRejectingProfile(false);
-      if (result.error) {
-        setProfileRequestsList(prevRequests);
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || `Rejected all ${prevRequests.length} profile change requests`);
-        router.refresh();
-      }
-    } catch (err: any) {
-      setIsBulkRejectingProfile(false);
-      setProfileRequestsList(prevRequests);
-      toast("error", err?.message || "Failed to bulk reject profile requests.");
-    }
-  }, [profileRequestsList, router, toast]);
-
-  const handleApproveDeletion = useCallback(
-    async (request: AccountDeletionRequest, notes?: string) => {
-      const prevRequests = deletionRequestsList;
-      setDeletionRequestsList((prev) => prev.filter((r) => r.id !== request.id));
-      setDeletionLoading({ type: "approve", id: request.id });
-
-      try {
-        const result = await approveAccountDeletionRequestAction(request.id, notes);
-        setDeletionLoading(null);
-        if (result.error) {
-          setDeletionRequestsList(prevRequests);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || "Account deletion request approved.");
-          router.refresh();
-        }
-      } catch (err: any) {
-        setDeletionLoading(null);
-        setDeletionRequestsList(prevRequests);
-        toast("error", err?.message || "Failed to approve account deletion request.");
-      }
-    },
-    [deletionRequestsList, router, toast]
-  );
-
-  const handleRejectDeletion = useCallback(
-    async (request: AccountDeletionRequest, notes?: string) => {
-      const prevRequests = deletionRequestsList;
-      setDeletionRequestsList((prev) => prev.filter((r) => r.id !== request.id));
-      setDeletionLoading({ type: "reject", id: request.id });
-
-      try {
-        const result = await rejectAccountDeletionRequestAction(request.id, notes);
-        setDeletionLoading(null);
-        if (result.error) {
-          setDeletionRequestsList(prevRequests);
-          toast("error", result.error);
-        } else {
-          toast("success", result.message || "Account deletion request rejected.");
-          router.refresh();
-        }
-      } catch (err: any) {
-        setDeletionLoading(null);
-        setDeletionRequestsList(prevRequests);
-        toast("error", err?.message || "Failed to reject account deletion request.");
-      }
-    },
-    [deletionRequestsList, router, toast]
-  );
-
   // Bulk Selection & Export Handlers
   const handleToggleSelect = useCallback((userId: string) => {
     setSelectedUserIds((prev) =>
@@ -1168,7 +848,7 @@ export function UsersPageClient({
     async (format: "xlsx" | "csv" | "pdf") => {
       if (selectedUserIds.length === 0) return;
       try {
-        const selectedUsers = [...usersList, ...pendingUsersList].filter((u) => selectedUserIds.includes(u.id));
+        const selectedUsers = usersList.filter((u) => selectedUserIds.includes(u.id));
         const { exportUsersToExcel, exportUsersToCSV, exportUsersToPDF } = await import("@/lib/utils/users-export");
         if (format === "xlsx") {
           exportUsersToExcel(selectedUsers, "Users-Selected", "Selected Users");
@@ -1182,7 +862,7 @@ export function UsersPageClient({
         toast("error", err?.message || "Failed to export selected users.");
       }
     },
-    [selectedUserIds, usersList, pendingUsersList, toast]
+    [selectedUserIds, usersList, toast]
   );
 
   useEffect(() => {
@@ -1331,9 +1011,9 @@ export function UsersPageClient({
         statusFilter={statusFilter}
         aggregates={aggregates}
         usersCount={usersList.length}
-        pendingCount={pendingUsersList.length}
-        profileRequestsCount={profileRequestsList.length}
-        deletionRequestsCount={deletionRequestsList.length}
+        pendingCount={pendingApprovalCounts?.by_type?.registration || 0}
+        profileRequestsCount={pendingApprovalCounts?.by_type?.profile_change || 0}
+        deletionRequestsCount={pendingApprovalCounts?.by_type?.account_deletion || 0}
         selectedCount={selectedUserIds.length}
         onRoleFilterChange={(val) => updateFilter("role", val)}
         onStatusFilterChange={(val) => updateFilter("status", val)}
@@ -1343,56 +1023,41 @@ export function UsersPageClient({
         onExportAll={handleExportAll}
         onExportSelected={handleExportSelected}
         onScrollToProfileRequests={() => {
-          const el = document.getElementById("profile-change-requests-section");
-          if (el) el.scrollIntoView({ behavior: "smooth" });
+          router.push("/approvals?type=profile_change");
         }}
         onScrollToDeletionRequests={() => {
-          const el = document.getElementById("account-deletion-requests-section");
-          if (el) el.scrollIntoView({ behavior: "smooth" });
+          router.push("/approvals?type=account_deletion");
         }}
         onScrollToPendingApprovals={() => {
-          const el = document.getElementById("pending-approvals-section");
-          if (el) el.scrollIntoView({ behavior: "smooth" });
+          router.push("/approvals?type=registration");
         }}
       />
 
-      {/* 2. Account Deletion Requests Section */}
-      {!readOnly && deletionRequestsList.length > 0 && (
-        <AccountDeletionRequestsSection
-          requests={deletionRequestsList}
-          onApprove={handleApproveDeletion}
-          onReject={handleRejectDeletion}
-          loadingState={deletionLoading}
-        />
-      )}
-
-      {/* 3. Profile Change Requests Section */}
-      {!readOnly && profileRequestsList.length > 0 && (
-        <ProfileChangeRequests
-          requests={profileRequestsList}
-          onApprove={handleApproveProfileChange}
-          onReject={handleRejectProfileChange}
-          onApproveAll={handleApproveAllProfileChanges}
-          onRejectAll={handleRejectAllProfileChanges}
-          loadingState={profileLoading}
-          isBulkApproving={isBulkApprovingProfile}
-          isBulkRejecting={isBulkRejectingProfile}
-        />
-      )}
-
-      {/* 4. Pending Registrations Section */}
-      {!readOnly && pendingUsersList.length > 0 && (
-        <PendingApprovalsSection
-          pendingUsers={pendingUsersList}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onApproveAll={handleApproveAll}
-          onRejectAllConfirm={() => setShowRejectAllConfirm(true)}
-          onSelectUser={(u) => router.push(`/users/${u.id}`)}
-          loadingState={loading}
-          isBulkApproving={isBulkApproving}
-          isBulkRejecting={isBulkRejecting}
-        />
+      {/* Centralized Approvals Alert Banner */}
+      {!readOnly && (pendingApprovalCounts?.total || 0) > 0 && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-[var(--color-ink)]">
+                Pending Approvals in Central Queue
+              </h4>
+              <p className="text-[11px] text-[var(--color-mute)]">
+                {pendingApprovalCounts?.total} approval request{(pendingApprovalCounts?.total || 0) === 1 ? "" : "s"} awaiting review in the Centralized Approval Engine.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => router.push("/approvals")}
+            className="h-8 text-xs px-3 font-semibold shrink-0 cursor-pointer"
+          >
+            Review in Approvals →
+          </Button>
+        </div>
       )}
 
       {/* 5. Filter Toolbar & Dropdowns */}
@@ -1709,27 +1374,6 @@ export function UsersPageClient({
           confirmLabel={`Delete ${selectedUserIds.length} User${selectedUserIds.length > 1 ? "s" : ""}`}
           variant="danger"
           loading={isBulkDeleting}
-        />
-      )}
-
-      {showRejectAllConfirm && (
-        <ConfirmationDialog
-          isOpen={showRejectAllConfirm}
-          onClose={() => setShowRejectAllConfirm(false)}
-          onConfirm={handleRejectAllConfirm}
-          title={`Reject All ${pendingUsersList.length} Pending Registration Request${pendingUsersList.length > 1 ? "s" : ""}`}
-          description={
-            <span>
-              Are you sure you want to reject and remove all{" "}
-              <strong className="text-[var(--color-ink)] font-bold">
-                {pendingUsersList.length} pending user request{pendingUsersList.length > 1 ? "s" : ""}
-              </strong>
-              ? This action will decline and permanently delete their registration records, and cannot be undone.
-            </span>
-          }
-          confirmLabel={`Reject All (${pendingUsersList.length})`}
-          variant="danger"
-          loading={isBulkRejecting}
         />
       )}
     </div>

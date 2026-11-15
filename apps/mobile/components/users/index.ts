@@ -12,6 +12,4 @@ export * from './UserDetailSkeletons';
 export * from './DeleteUserConfirmDialog';
 export * from './UserTouchCard';
 export * from './UserActionsPopover';
-export * from './ProfileChangeRequestsSection';
-export * from './AccountDeletionRequestsSection';
 export * from './UserFiltersPanel';

@@ -142,6 +142,7 @@ export const SignupSchema = z.object({
   supervisor_id: z.string().trim().max(100).optional().nullable(),
   working_location_id: z.string().trim().max(100).optional().nullable(),
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
+  machine_category: z.string().trim().optional().nullable(),
   bank_account_number: BankAccountNumberSchema,
   bank_ifsc_code: BankIfscSchema,
   aadhaar_number: AadhaarRequiredFieldSchema,
@@ -159,6 +160,13 @@ export const SignupSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["supervisor_id"],
       message: "Supervisor required",
+    });
+  }
+  if (data.role === "operator" && (!data.machine_category || !data.machine_category.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["machine_category"],
+      message: "Machine category is required",
     });
   }
   if (data.shift_start_time && data.shift_end_time) {
@@ -184,6 +192,7 @@ export interface SignupValidationFields {
   phone: string;
   role: string;
   supervisorId?: string | null;
+  machineCategory?: string | null;
   shiftStartTime: string;
   shiftEndTime: string;
   street: string;
@@ -225,6 +234,10 @@ export function validateSignupFormData(fields: SignupValidationFields): {
 
   if (fields.role === "operator" && (!fields.supervisorId || !fields.supervisorId.trim())) {
     errors.supervisor_id = "Supervisor required";
+  }
+
+  if (fields.role === "operator" && (!fields.machineCategory || !fields.machineCategory.trim())) {
+    errors.machine_category = "Machine category is required";
   }
 
   if (!fields.shiftStartTime?.trim()) {
@@ -348,6 +361,7 @@ export const CreateUserSchema = z.object({
   daily_rate: z.number().min(0).optional().nullable(),
   ot_hourly_rate: z.number().min(0).optional().nullable(),
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
+  machine_category: z.string().trim().optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
 }).superRefine((data, ctx) => {
@@ -356,6 +370,13 @@ export const CreateUserSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["monthly_salary"],
       message: "Monthly salary is mandatory for operator accounts (minimum ₹1)",
+    });
+  }
+  if (data.role === "operator" && (!data.machine_category || !data.machine_category.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["machine_category"],
+      message: "Machine category is required for operator accounts",
     });
   }
 });
@@ -375,6 +396,7 @@ export const UpdateUserSchema = z.object({
   daily_rate: z.number().min(0).optional().nullable(),
   ot_hourly_rate: z.number().min(0).optional().nullable(),
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
+  machine_category: z.string().trim().optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
 }).superRefine((data, ctx) => {
@@ -383,6 +405,13 @@ export const UpdateUserSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["monthly_salary"],
       message: "Monthly salary is mandatory for operator accounts (minimum ₹1)",
+    });
+  }
+  if (data.role === "operator" && (!data.machine_category || !data.machine_category.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["machine_category"],
+      message: "Machine category is required for operator accounts",
     });
   }
 });
@@ -403,6 +432,7 @@ export const ProfileUpdateSchema = z.object({
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
   state_id: z.number().int().positive().optional().nullable(),
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
+  machine_category: z.string().trim().optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
   bank_account_number: OptionalBankAccountFieldSchema,
@@ -464,6 +494,7 @@ export interface SignupSectionFields {
   phone?: string | null;
   role?: string | null;
   supervisor_id?: string | null;
+  machine_category?: string | null;
   shift_start_time?: string | null;
   shift_end_time?: string | null;
   street?: string | null;
@@ -487,9 +518,10 @@ export function isSignupSection1Complete(fields: SignupSectionFields): boolean {
   const emailOk = Boolean(fields.email && fields.email.trim().includes("@"));
   const phoneOk = Boolean(fields.phone && fields.phone.replace(/\D/g, "").length >= 10);
   const roleOk = Boolean(fields.role && fields.role.trim().length > 0);
-  const isOperator = fields.role === "operator";
+  const isOperator = fields.role ? fields.role.trim().toLowerCase() === "operator" : false;
   const supOk = !isOperator || Boolean(fields.supervisor_id && fields.supervisor_id.trim().length > 0);
-  return nameOk && emailOk && phoneOk && roleOk && supOk;
+  const catOk = !isOperator || Boolean(fields.machine_category && fields.machine_category.trim().length > 0);
+  return nameOk && emailOk && phoneOk && roleOk && supOk && catOk;
 }
 
 export function isSignupSection2Complete(fields: SignupSectionFields): boolean {

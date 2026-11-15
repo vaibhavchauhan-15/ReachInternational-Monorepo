@@ -15,10 +15,12 @@ import {
   QueueEventListener,
   ServerConflictDetails,
 } from './types';
+import { getISTDateString, addDaysToDateStr } from '@reachinternational/utils';
 
 export const QUEUE_STORAGE_KEY = '@reach:offline_queue_v1';
 export const MAX_QUEUE_CAPACITY = 50; // T-14-03 DoS mitigation
 export const RETRY_BACKOFF_DELAYS_MS = [2000, 5000, 10000]; // 2s, 5s, 10s per D-04
+export const SYNC_LOCK_STALE_TIMEOUT_MS = 60000; // 60s stale lock recovery threshold (BUG-01)
 
 import { generateUUID } from '../optimistic/tempId';
 export { generateUUID };
@@ -52,6 +54,7 @@ export class OfflineQueueManager {
   private static instance: OfflineQueueManager | null = null;
   private queue: QueuedMutation[] = [];
   private isSyncing = false;
+  private syncStartedAt: number | null = null;
   private isInitialized = false;
   private listeners: Set<QueueEventListener> = new Set();
   private syncCompleteCallbacks: Set<(syncedCount: number) => void> = new Set();
@@ -156,7 +159,16 @@ export class OfflineQueueManager {
    * Proactively checks network state and triggers queue drain if items exist
    */
   public async checkAndAutoDrain(): Promise<void> {
-    if (this.isSyncing) return;
+    if (this.isSyncing) {
+      const isStale = this.syncStartedAt !== null && (Date.now() - this.syncStartedAt > SYNC_LOCK_STALE_TIMEOUT_MS);
+      if (isStale) {
+        console.warn('[OfflineQueueManager] Stale sync lock detected in auto-drain (>60s). Recovering lock.');
+        this.isSyncing = false;
+        this.syncStartedAt = null;
+      } else {
+        return;
+      }
+    }
     const hasWork = this.queue.some(
       (item) => item.status === 'pending' || item.status === 'failed' || item.status === 'syncing'
     );
@@ -214,6 +226,8 @@ export class OfflineQueueManager {
     this.listeners.clear();
     this.syncCompleteCallbacks.clear();
     this.isInitialized = false;
+    this.isSyncing = false;
+    this.syncStartedAt = null;
   }
 
   /**
@@ -257,6 +271,7 @@ export class OfflineQueueManager {
       failedCount,
       conflictCount,
       isSyncing: this.isSyncing,
+      syncStartedAt: this.syncStartedAt,
     };
   }
 
@@ -533,7 +548,14 @@ export class OfflineQueueManager {
    */
   public async drainQueue(): Promise<void> {
     if (this.isSyncing) {
-      return; // Mutex guard: already syncing (Pitfall 2)
+      const isStale = this.syncStartedAt !== null && (Date.now() - this.syncStartedAt > SYNC_LOCK_STALE_TIMEOUT_MS);
+      if (isStale) {
+        console.warn('[OfflineQueueManager] Stale sync lock detected (>60s). Recovering lock.');
+        this.isSyncing = false;
+        this.syncStartedAt = null;
+      } else {
+        return; // Mutex guard: already syncing (Pitfall 2)
+      }
     }
 
     if (!this.isInitialized) {
@@ -551,6 +573,7 @@ export class OfflineQueueManager {
     }
 
     this.isSyncing = true;
+    this.syncStartedAt = Date.now();
     this.notifyListeners();
 
     let totalSyncedInRun = 0;
@@ -580,67 +603,88 @@ export class OfflineQueueManager {
         const currentItem = this.queue.find((q) => q.id === item.id);
         if (!currentItem || currentItem.status === 'conflict') continue;
 
-        // Transition status to syncing in memory
-        currentItem.status = 'syncing';
-
         try {
-          await this.executeMutation(currentItem);
+          // Transition status to syncing in memory
+          currentItem.status = 'syncing';
 
-          // Success: record synced item ID to prune
-          totalSyncedInRun++;
-          syncedItemIds.add(item.id);
-        } catch (error: any) {
-          // Check if error is due to idempotency duplicate key or matching unique shift constraint (row already exists in DB!)
-          const errorMsg = (error?.message || '').toLowerCase();
-          const errorCode = error?.code || '';
-          const isIdempotencyReplay =
-            (errorCode === '23505' || errorMsg.includes('unique constraint') || errorMsg.includes('already been recorded') || errorMsg.includes('already has a log') || errorMsg.includes('uq_machine_hour_logs')) &&
-            (errorMsg.includes('idempotency_key') ||
-              error?.details?.toLowerCase?.().includes('idempotency_key') ||
-              errorMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
-              errorMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
-              errorMsg.includes('already been recorded for this equipment'));
+          try {
+            await this.executeMutation(currentItem);
 
-          if (isIdempotencyReplay) {
-            // Already synced previously! Prune from queue without false conflict
+            // Success: record synced item ID to prune
             totalSyncedInRun++;
             syncedItemIds.add(item.id);
-            continue;
-          }
+          } catch (error: any) {
+            // Check if error is due to idempotency duplicate key or matching unique shift constraint (row already exists in DB!)
+            const errorMsg = (error?.message || '').toLowerCase();
+            const errorCode = error?.code || '';
+            const isIdempotencyReplay =
+              (errorCode === '23505' || errorMsg.includes('unique constraint') || errorMsg.includes('already been recorded') || errorMsg.includes('already has a log') || errorMsg.includes('uq_machine_hour_logs')) &&
+              (errorMsg.includes('idempotency_key') ||
+                error?.details?.toLowerCase?.().includes('idempotency_key') ||
+                errorMsg.includes('uq_machine_hour_logs_machine_date_shift') ||
+                errorMsg.includes('uq_machine_hour_logs_operator_date_shift') ||
+                errorMsg.includes('already been recorded for this equipment'));
 
-          const isBusinessConflict = this.isConflictError(error);
+            if (isIdempotencyReplay) {
+              // Already synced previously! Prune from queue without false conflict
+              totalSyncedInRun++;
+              syncedItemIds.add(item.id);
+              continue;
+            }
 
-          if (isBusinessConflict) {
-            // D-05: Preserve draft, flag as conflict, extract collision details
-            const serverConflict: ServerConflictDetails = {
-              server_message: error.message || 'Shift conflict detected by server',
-              conflicting_operator: error.conflicting_operator || error.operator_name,
-              conflicting_start_time: error.conflicting_start_time || error.start_time,
-              conflicting_end_time: error.conflicting_end_time || error.end_time,
-            };
+            const isExpired =
+              errorCode === 'EXPIRED_7_DAYS' ||
+              errorMsg.includes('previous 7 days ist') ||
+              errorMsg.includes('outside the 7-day') ||
+              errorMsg.includes('has expired');
 
-            currentItem.status = 'conflict';
-            currentItem.last_error = error.message || 'Database validation conflict';
-            currentItem.server_conflict = serverConflict;
-          } else {
-            // Transient network error: Exponential backoff retry (D-04)
-            const nextRetryCount = (currentItem.retry_count || 0) + 1;
-
-            if (nextRetryCount < 3) {
-              const backoffMs = RETRY_BACKOFF_DELAYS_MS[nextRetryCount - 1] || 10000;
-              currentItem.status = 'pending';
-              currentItem.retry_count = nextRetryCount;
-              currentItem.last_error = `Network error: ${error.message || 'Request dropped'}. Retrying in ${backoffMs / 1000}s...`;
-
-              // Wait backoff interval before next retry
-              await new Promise((resolve) => setTimeout(resolve, backoffMs));
-            } else {
-              // Max retries reached: mark failed with manual retry CTA
+            if (isExpired) {
+              // 7-day window expired: permanently mark failed with clear operator message
               currentItem.status = 'failed';
-              currentItem.retry_count = nextRetryCount;
-              currentItem.last_error = error.message || 'Sync failed after network attempts. Will retry when connection stabilizes.';
+              currentItem.retry_count = 3;
+              currentItem.last_error = error.message || 'Shift log has expired (outside 7-day submission window). Contact administrator.';
+              continue;
+            }
+
+            const isBusinessConflict = this.isConflictError(error);
+
+            if (isBusinessConflict) {
+              // D-05: Preserve draft, flag as conflict, extract collision details
+              const serverConflict: ServerConflictDetails = {
+                server_message: error.message || 'Shift conflict detected by server',
+                conflicting_operator: error.conflicting_operator || error.operator_name,
+                conflicting_start_time: error.conflicting_start_time || error.start_time,
+                conflicting_end_time: error.conflicting_end_time || error.end_time,
+              };
+
+              currentItem.status = 'conflict';
+              currentItem.last_error = error.message || 'Database validation conflict';
+              currentItem.server_conflict = serverConflict;
+            } else {
+              // Transient network error: Exponential backoff retry (D-04)
+              const nextRetryCount = (currentItem.retry_count || 0) + 1;
+
+              if (nextRetryCount < 3) {
+                const backoffMs = RETRY_BACKOFF_DELAYS_MS[nextRetryCount - 1] || 10000;
+                currentItem.status = 'pending';
+                currentItem.retry_count = nextRetryCount;
+                currentItem.last_error = `Network error: ${error.message || 'Request dropped'}. Retrying in ${backoffMs / 1000}s...`;
+
+                // Wait backoff interval before next retry
+                await new Promise((resolve) => setTimeout(resolve, backoffMs));
+              } else {
+                // Max retries reached: mark failed with manual retry CTA
+                currentItem.status = 'failed';
+                currentItem.retry_count = nextRetryCount;
+                currentItem.last_error = error.message || 'Sync failed after network attempts. Will retry when connection stabilizes.';
+              }
             }
           }
+        } catch (unhandledItemError: any) {
+          console.error(`[OfflineQueueManager] Unhandled error processing mutation ${item.id}:`, unhandledItemError);
+          currentItem.status = 'failed';
+          currentItem.retry_count = (currentItem.retry_count || 0) + 1;
+          currentItem.last_error = unhandledItemError?.message || 'Unexpected mutation failure';
         }
       }
 
@@ -651,6 +695,7 @@ export class OfflineQueueManager {
       await this.persistQueue();
     } finally {
       this.isSyncing = false;
+      this.syncStartedAt = null;
       this.notifyListeners();
       if (totalSyncedInRun > 0) {
         this.notifySyncComplete(totalSyncedInRun);
@@ -710,6 +755,20 @@ export class OfflineQueueManager {
     const { mutation_type, payload, idempotency_key } = mutation;
 
     if (mutation_type === 'SUBMIT_HOUR_LOG') {
+      // 7-day expiration check (IST timezone)
+      const targetLogDate = ((payload.log_date || (payload.start_datetime ? String(payload.start_datetime).split('T')[0] : '')) as string) || '';
+      if (targetLogDate) {
+        const todayIST = getISTDateString();
+        const minAllowedDate = addDaysToDateStr(todayIST, -7);
+        if (targetLogDate < minAllowedDate) {
+          const expiredError = new Error(
+            `Shift log has expired: logged date (${targetLogDate}) is outside the 7-day allowable window (${minAllowedDate} to ${todayIST}). Contact administrator.`
+          );
+          (expiredError as any).code = 'EXPIRED_7_DAYS';
+          throw expiredError;
+        }
+      }
+
       // Ensure user session exists/is valid if available
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUserId = sessionData?.session?.user?.id || null;
@@ -725,6 +784,7 @@ export class OfflineQueueManager {
       const effectiveKey = idempotency_key || (payload.idempotency_key as string) || generateUUID();
 
       const rpcParams = {
+        p_assignment_id: (payload.assignment_id as string) || null,
         p_machine_id: payload.machine_id,
         p_operator_id: effectiveOperatorId,
         p_client_id: payload.client_id || null,
@@ -805,6 +865,7 @@ export class OfflineQueueManager {
       // 2. Fallback direct table insert if RPC unavailable or had non-conflict error
       if (!rpcSucceeded) {
         const insertPayload: Record<string, any> = {
+          assignment_id: (payload.assignment_id as string) || null,
           machine_id: payload.machine_id,
           operator_id: effectiveOperatorId,
           client_id: payload.client_id || null,
@@ -873,6 +934,32 @@ export class OfflineQueueManager {
             })
             .eq('id', machineId);
         }
+      }
+    } else if (mutation_type === 'UPLOAD_STAGING_DOCUMENT') {
+      const { session, docType, mainUri, thumbUri } = payload as {
+        session?: string;
+        docType: string;
+        mainUri: string;
+        thumbUri: string;
+      };
+
+      const { fetchSignupUploadUrl } = await import('@reachinternational/utils');
+      const { getAppUrl } = await import('../env');
+      const { uploadMobileStagedImage } = await import('../utils/mobileImageCompression');
+
+      const urlRes = await fetchSignupUploadUrl({
+        baseUrl: getAppUrl(),
+        session,
+        docType: docType as any,
+      });
+
+      const [mainOk, thumbOk] = await Promise.all([
+        uploadMobileStagedImage(urlRes.main.signedUrl, mainUri),
+        uploadMobileStagedImage(urlRes.thumb.signedUrl, thumbUri),
+      ]);
+
+      if (!mainOk || !thumbOk) {
+        throw new Error(`Failed to upload staged ${docType} to Supabase storage.`);
       }
     } else {
       console.warn(`[OfflineQueueManager] Unhandled mutation type: ${mutation_type}`);

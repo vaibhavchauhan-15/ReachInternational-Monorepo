@@ -92,6 +92,8 @@ export async function isOperatorUnderSupervisor(
       .select("client_id")
       .eq("supervisor_id", supervisorId);
 
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
     if (clientSupervised && clientSupervised.length > 0) {
       const clientIds = clientSupervised.map((cs) => cs.client_id).filter(Boolean);
       if (clientIds.length > 0) {
@@ -100,6 +102,8 @@ export async function isOperatorUnderSupervisor(
           .select("id, machines!inner(client_id)")
           .eq("operator_id", operatorId)
           .eq("is_active", true)
+          .lte("valid_from", todayDate)
+          .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
           .in("machines.client_id", clientIds)
           .limit(1);
 
@@ -112,7 +116,9 @@ export async function isOperatorUnderSupervisor(
       .from("operator_machine_assignments")
       .select("machine_id, machines!inner(current_supervisor_id, supervisor_ids)")
       .eq("operator_id", operatorId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
 
     if (activeAssignments && activeAssignments.length > 0) {
       const isSupervisedMachine = activeAssignments.some((a: any) => {

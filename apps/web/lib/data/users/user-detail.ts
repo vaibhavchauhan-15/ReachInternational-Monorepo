@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/dal";
+import { requireRole, getCurrentUser } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { User } from "@/lib/types/database";
 import { hydrateUsersPersonnel } from "./user-list";
@@ -12,7 +12,7 @@ import { hydrateUsersPersonnel } from "./user-list";
  * Includes sensitive and heavy fields: employee_id, aadhaar_number, license_number, address, shift details.
  */
 export const USER_DETAIL_COLUMNS =
-  "id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, complete_profile, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, doj, bank_account_number, bank_ifsc_code, total_pl_quota, pl_used_as_on_date, created_at, updated_at";
+  "id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, machine_category, street, shift_start_time, shift_end_time, complete_profile, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, doj, bank_account_number, bank_ifsc_code, total_pl_quota, pl_used_as_on_date, created_at, updated_at";
 
 export interface UserMachineItem {
   id: string;
@@ -134,6 +134,7 @@ export async function getUserAssignedMachines(userId: string): Promise<UserMachi
       .order("machine_id");
 
     // 2. Active assignments from operator_machine_assignments
+    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const { data: activeAssignments } = await adminClient
       .from("operator_machine_assignments")
       .select(`
@@ -141,7 +142,9 @@ export async function getUserAssignedMachines(userId: string): Promise<UserMachi
         machines (id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter)
       `)
       .eq("operator_id", userId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
 
     const machineMap = new Map<string, UserMachineItem>();
     (directMachines || []).forEach((m: any) => {
@@ -237,7 +240,7 @@ export async function getUserAssignments(userId: string): Promise<UserAssignment
     const { data } = await adminClient
       .from("operator_machine_assignments")
       .select(`
-        id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, assigned_at, ended_at,
+        id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, valid_from, valid_to, assigned_at, ended_at,
         machines (id, machine_id, machine_name, model)
       `)
       .eq("operator_id", userId)
@@ -376,6 +379,19 @@ export async function getUserById(userId: string): Promise<User | null> {
   const user = hydrated[0] || null;
   if (user) {
     user.assigned_machines = machines;
+
+    // Phase 8: Financial & banking columns restricted to HR & Admin (and self-view)
+    const currentUser = await getCurrentUser();
+    const isPrivileged = currentUser?.role && ["super_admin", "admin", "hr"].includes(currentUser.role);
+    const isSelf = currentUser?.id === userId;
+
+    if (!isPrivileged && !isSelf) {
+      user.monthly_salary = null;
+      user.daily_rate = null;
+      user.ot_hourly_rate = null;
+      user.bank_account_number = null;
+      user.bank_ifsc_code = null;
+    }
   }
   return user;
 }
@@ -405,6 +421,19 @@ export async function getUserDetail(userId: string): Promise<User | null> {
   const user = hydrated[0] || null;
   if (user) {
     user.assigned_machines = machines;
+
+    // Phase 8: Financial & banking columns restricted to HR & Admin (and self-view)
+    const currentUser = await getCurrentUser();
+    const isPrivileged = currentUser?.role && ["super_admin", "admin", "hr"].includes(currentUser.role);
+    const isSelf = currentUser?.id === userId;
+
+    if (!isPrivileged && !isSelf) {
+      user.monthly_salary = null;
+      user.daily_rate = null;
+      user.ot_hourly_rate = null;
+      user.bank_account_number = null;
+      user.bank_ifsc_code = null;
+    }
   }
   return user;
 }

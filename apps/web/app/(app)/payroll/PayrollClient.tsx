@@ -126,6 +126,16 @@ export function PayrollClient({
     return "statement";
   });
 
+  // Sync viewMode on browser Back/Forward navigation
+  useEffect(() => {
+    const v = searchParams?.get("view");
+    if (v === "attendance" || v === "earnings" || v === "deductions" || v === "payouts" || v === "leaves") {
+      setViewMode(v);
+    } else {
+      setViewMode("statement");
+    }
+  }, [searchParams]);
+
   // Search state with debouncing to URL
   const [searchQuery, setSearchQuery] = useState(() => searchParams?.get("search") || "");
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -557,6 +567,7 @@ export function PayrollClient({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     toast("success", `Exported ${listToExport.length} operator records to Excel CSV format.`);
   }, [selectedIds, operators, optimisticMonth, currentMonth, toast]);
 

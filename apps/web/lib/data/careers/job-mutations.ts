@@ -6,7 +6,8 @@ import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 import { slugify } from "@reachinternational/utils";
 import type { JobPostingInput } from "@reachinternational/validation";
-import type { JobPosting } from "@reachinternational/types";
+import type { JobPosting, JobStatus } from "@reachinternational/types";
+import { canTransitionJob } from "./job-transitions";
 
 interface MutationResponse<T = any> {
   success: boolean;
@@ -214,15 +215,42 @@ export async function updateJob(id: string, input: JobPostingInput, userId?: str
 export async function publishJob(id: string, userId?: string): Promise<MutationResponse> {
   try {
     const supabase = await createSupabaseServerClient();
+
+    const { data: current, error: fetchErr } = await supabase
+      .from("job_postings")
+      .select("id, status, title, job_code, slug")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single();
+
+    if (fetchErr || !current) {
+      return { success: false, error: "Job posting not found" };
+    }
+
+    if (!canTransitionJob(current.status as JobStatus, "published")) {
+      return {
+        success: false,
+        error: `Cannot publish job: invalid transition from "${current.status}" to "published".`,
+      };
+    }
+
     const { data, error } = await supabase
       .from("job_postings")
       .update({ status: "published", updated_by: userId ?? null })
       .eq("id", id)
+      .eq("status", current.status)
       .select("id, job_code, slug, title, status")
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Failed to publish job" };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: "Job status was concurrently modified by another user. Please refresh.",
+      };
     }
 
     await logAudit({
@@ -245,15 +273,42 @@ export async function publishJob(id: string, userId?: string): Promise<MutationR
 export async function unpublishJob(id: string, userId?: string): Promise<MutationResponse> {
   try {
     const supabase = await createSupabaseServerClient();
+
+    const { data: current, error: fetchErr } = await supabase
+      .from("job_postings")
+      .select("id, status, title, job_code, slug")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single();
+
+    if (fetchErr || !current) {
+      return { success: false, error: "Job posting not found" };
+    }
+
+    if (!canTransitionJob(current.status as JobStatus, "draft")) {
+      return {
+        success: false,
+        error: `Cannot unpublish job: invalid transition from "${current.status}" to "draft".`,
+      };
+    }
+
     const { data, error } = await supabase
       .from("job_postings")
       .update({ status: "draft", updated_by: userId ?? null })
       .eq("id", id)
+      .eq("status", current.status)
       .select("id, job_code, slug, title, status")
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Failed to unpublish job" };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: "Job status was concurrently modified by another user. Please refresh.",
+      };
     }
 
     await logAudit({
@@ -276,6 +331,25 @@ export async function unpublishJob(id: string, userId?: string): Promise<Mutatio
 export async function closeJob(id: string, reason: string = "filled", userId?: string): Promise<MutationResponse> {
   try {
     const supabase = await createSupabaseServerClient();
+
+    const { data: current, error: fetchErr } = await supabase
+      .from("job_postings")
+      .select("id, status, title, job_code, slug")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single();
+
+    if (fetchErr || !current) {
+      return { success: false, error: "Job posting not found" };
+    }
+
+    if (!canTransitionJob(current.status as JobStatus, "closed")) {
+      return {
+        success: false,
+        error: `Cannot close job: invalid transition from "${current.status}" to "closed".`,
+      };
+    }
+
     const { data, error } = await supabase
       .from("job_postings")
       .update({
@@ -285,11 +359,19 @@ export async function closeJob(id: string, reason: string = "filled", userId?: s
         updated_by: userId ?? null,
       })
       .eq("id", id)
+      .eq("status", current.status)
       .select("id, job_code, slug, title, status, close_reason")
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Failed to close job" };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: "Job status was concurrently modified by another user. Please refresh.",
+      };
     }
 
     await logAudit({
@@ -312,6 +394,25 @@ export async function closeJob(id: string, reason: string = "filled", userId?: s
 export async function reopenJob(id: string, userId?: string): Promise<MutationResponse> {
   try {
     const supabase = await createSupabaseServerClient();
+
+    const { data: current, error: fetchErr } = await supabase
+      .from("job_postings")
+      .select("id, status, title, job_code, slug")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single();
+
+    if (fetchErr || !current) {
+      return { success: false, error: "Job posting not found" };
+    }
+
+    if (current.status !== "closed") {
+      return {
+        success: false,
+        error: `Cannot reopen job: current status is "${current.status}", only closed jobs can be reopened.`,
+      };
+    }
+
     const { data, error } = await supabase
       .from("job_postings")
       .update({
@@ -321,11 +422,19 @@ export async function reopenJob(id: string, userId?: string): Promise<MutationRe
         updated_by: userId ?? null,
       })
       .eq("id", id)
+      .eq("status", "closed")
       .select("id, job_code, slug, title, status")
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Failed to reopen job" };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: "Job status was concurrently modified by another user. Please refresh.",
+      };
     }
 
     await logAudit({

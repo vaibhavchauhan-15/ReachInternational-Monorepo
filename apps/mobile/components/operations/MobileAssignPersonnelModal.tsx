@@ -1014,9 +1014,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           );
 
           if (!stillPresent && initAss.id) {
-            await supabase.rpc('end_operator_machine_assignment_atomic', {
+            await supabase.rpc('end_assignment_range', {
               p_assignment_id: initAss.id,
-              p_ended_by: currentUserId,
+              p_caller_id: currentUserId,
               p_end_reason: 'Updated via mobile assign dialog',
             });
           }

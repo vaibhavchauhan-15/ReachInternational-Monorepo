@@ -33,11 +33,15 @@ import { AuthProvider, useAuth } from '../lib/auth/useAuth';
 import { supabase } from '../lib/supabase';
 import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
 import { NAV_THEME, useIsDark, useThemeColor } from '../lib/theming';
-import { PostNotificationBanner } from '../components/notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import { postNotification } from '../lib/notifications/postNotification';
+import {
+  setupForegroundNotificationHandler,
+  setupNotificationResponseListener,
+  registerForPushNotifications,
+} from '../lib/notifications/registerPush';
 import { TypeScaleProvider, useTypeScale } from '../lib/typography/TypeScaleProvider';
 import { offlineQueueManager, syncCoordinator, networkConnectivityManager } from '../lib/offline';
 
@@ -275,6 +279,11 @@ const queryClient = new QueryClient({
 
 syncCoordinator.setQueryClient(queryClient);
 
+// Initialize foreground notification display handler on native platforms
+if (Platform.OS !== 'web') {
+  setupForegroundNotificationHandler();
+}
+
 function MobileOperatorAlertsListener() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -292,18 +301,7 @@ function MobileOperatorAlertsListener() {
 
       if (error || !unreadNotifications || unreadNotifications.length === 0) return;
 
-      const idsToMarkRead: string[] = [];
-      for (const notif of unreadNotifications) {
-        idsToMarkRead.push(notif.id);
-        postNotification({
-          id: notif.id,
-          category: (notif.category as any) || 'log_entry',
-          title: notif.title || 'Shift Logged on Your Behalf',
-          body: notif.message,
-          severity: (notif.severity as any) || 'info',
-          metadata: notif.metadata,
-        });
-      }
+      const idsToMarkRead: string[] = unreadNotifications.map((n) => n.id);
 
       if (idsToMarkRead.length > 0) {
         await supabase
@@ -339,20 +337,14 @@ function MobileOperatorAlertsListener() {
       }
     });
 
-    // 3. Realtime WebSocket listener for immediate delivery while active
+    // 3. Realtime WebSocket listener for immediate background data cache invalidation
     const alertChannel = supabase.channel(`operator-alerts:${user.id}`);
     alertChannel
       .on('broadcast', { event: 'assisted_shift_logged' }, (eventPayload) => {
         const data = eventPayload?.payload;
         if (data) {
-          postNotification({
-            category: 'log_entry',
-            title: data.title || 'Shift Logged on Your Behalf',
-            body: data.body || `A supervisor recorded your shift on equipment ${data.machineCode || 'Equipment'} (${data.runningHours}h).`,
-            severity: 'info',
-            metadata: data,
-          });
-
+          // Zero in-app toast popup: push notifications are delivered to device OS tray.
+          // Invalidate React Query cache so data is fresh without user pull-to-refresh.
           queryClient.invalidateQueries({
             queryKey: ['operator', 'entry-context', user.id],
           });
@@ -375,6 +367,18 @@ function MobileOperatorAlertsListener() {
       supabase.removeChannel(alertChannel);
     };
   }, [user?.id, queryClient, syncOfflineNotifications]);
+
+  // Push Notifications: Register device token and handle incoming notification taps
+  React.useEffect(() => {
+    if (!user?.id) return;
+
+    registerForPushNotifications().catch(() => {});
+    const unsubscribeResponse = setupNotificationResponseListener();
+
+    return () => {
+      unsubscribeResponse();
+    };
+  }, [user?.id]);
 
   return null;
 }
@@ -502,7 +506,6 @@ function ThemedAppContainer() {
           />
         </Stack>
         <PortalHost />
-        <PostNotificationBanner />
         <MobileOperatorAlertsListener />
         <MobileOfflineSyncListener />
         <MobileScreenSyncWatcher />

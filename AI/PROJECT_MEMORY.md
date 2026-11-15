@@ -20,6 +20,30 @@
 5. **hr**: Human resources, personnel lifecycle, profile change requests, user records management.
 6. **operator**: Daily machine operation, HMR meter logging (`/operations?tab=entry`), shift execution.
 
+## Date-Independent Operator Shift Architecture (Phases 0-6 Rollout)
+- **Effective-Dated Ranges**: Table `operator_machine_assignments` uses `valid_from` (DATE) and `valid_to` (DATE, NULL = open/ongoing).
+- **Default Carry-Forward**: An open assignment (`valid_to IS NULL`) automatically carries forward indefinitely without requiring daily reassignment rows.
+- **Historical Immutability**: Modifying or ending an assignment today closes the range (`valid_to = yesterday`) and opens a new range (`valid_from = today`). Past days' assignments and logs are 100% immutable.
+- **7-Day Rolling Window (IST)**: Operators can view and submit shift entries for the last 7 calendar days (`[today_ist - 6, today_ist]`) based strictly on `Asia/Kolkata` time.
+- **Read-Time Status Derivation**: `get_shift_tasks()` dynamically derives pending/entered states by `LEFT JOIN` between assignment ranges and logs over the 7-day window. No synthetic pending rows are stored in the database.
+- **Authoritative Foreign Key**: `machine_hour_logs.assignment_id` references the specific assignment range covering that `log_date`.
+- **Overlap Prevention**: Enforced at the database engine level via `btree_gist` exclusion constraint `ex_oma_no_overlapping_shifts` (`[valid_from, COALESCE(valid_to, '9999-12-31'::date)]`).
+- **Offline Resilience**: Offline entries store `machine_id`, `operator_id`, `log_date`, `shift_code`, and `idempotency_key`. On sync, the server resolves `assignment_id` from the valid range on `log_date`. Expired mutations (> 7 days) fail cleanly without retry loops.
+- **Storage Efficiency**: Requires ~5,500 rows/yr for 5,000 operators vs 1,825,000 rows/yr for daily rows (99.7% reduction in row count and storage).
+
+## Push Notification & Alert System Architecture
+- **Unified Inbox & Outbox**: `public.notifications` serves as both in-app notification inbox and transactional outbox.
+- **Delivery Channels**: Dual delivery pipelines supporting Expo SDK 58 Push Notifications (`expo-server-sdk`) for native mobile (`apps/mobile`) and Web Push API (`web-push`, VAPID, `/sw.js`) for browser desktop/mobile (`apps/web`).
+- **Sub-Second Fast-Path Dispatch**: Database trigger `trg_notifications_fastpath` leverages `pg_net` to invoke Next.js route `/api/notify/dispatch` asynchronously on high/critical notifications, backed by a 1-minute `pg_cron` sweeper (`push_notifications_sweeper`).
+- **High Concurrency & Fault Tolerance**: Dispatcher claims notification batches via `claim_push_batch` using `FOR UPDATE SKIP LOCKED`, reclaiming abandoned leases after 2 minutes. Status updates (`finish_push_batch`) support exponential retry backoff and automatic token deactivation on `DeviceNotRegistered` receipts.
+- **Shift Reminder Ladder**: 4 automated `pg_cron` scanners drive shift entry adherence within the 7-day retrospective logging window (`[today_IST - 6, today_IST]`):
+  - `SP1-s1` & `SP1-s2`: Shift end + 15m and +90m prompt for closing hour meter.
+  - `SP2`: Daily 09:00 IST morning digest of pending shifts.
+  - `SL1`: Daily 18:00 IST final lock warning (critical priority) for shifts expiring at midnight.
+  - `SUP1`: Daily 09:30 IST supervisor digest of team members with aged pending shifts (≥ 3 days).
+- **Producers & Zero-PII Security**: Triggers on `machine_hour_logs` (`BD1` breakdown, `AS1` assisted entry), `machines` (`EM1` maintenance), `operator_machine_assignments` (`SA1`), `users` (`REG1`), and `quote_requests` (`ENQ1`). Server Actions dispatch `SEC1` (security alerts, always-on) and `PAY1` (payroll statement updates, zero PII).
+- **Role-Aware Preference Sync**: Synchronized across Web and Native Mobile via `public.user_notification_preferences` with quiet-hours deferral (IST) and 5/day non-critical capping.
+
 ## Fundamental Architectural Rules
 1. **Memory First**: Always check `AI/PROJECT_MEMORY.md`, `AI/STATE.md`, and `AI/CURRENT_TASK.md` before reading code.
 2. **Selective File Inspection**: Use `AI/FILE_INDEX.md` to locate and read ONLY the relevant files for a task.

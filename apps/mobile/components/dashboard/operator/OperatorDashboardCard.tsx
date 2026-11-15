@@ -2,6 +2,8 @@ import React from 'react';
 import {
   View,
   StyleSheet,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
@@ -37,6 +39,8 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   const isSubmitted = data?.today?.entryStatus === 'submitted';
   const isPartial = data?.today?.entryStatus === 'partial';
@@ -141,7 +145,9 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
             </Text>
           </View>
 
-          <View style={styles.oneColCol}>
+          <View
+            style={isTabletOrDesktop ? styles.shiftGrid : styles.oneColCol}
+          >
             {(data?.assigned_shifts || []).map((s) => {
               const isLogged = s.is_logged_today;
               const shiftClean = s.code.replace(/^shift\s*/i, '').trim();
@@ -150,134 +156,156 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
               const displayEndTime = formatTo12Hour(s.end_time) || s.end_time;
 
               return (
-                <Card
-                  key={s.code}
-                  className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
-                  style={
-                    isLogged
-                      ? {
-                          backgroundColor: isDark
-                            ? 'rgba(16, 185, 129, 0.05)'
-                            : 'rgba(16, 185, 129, 0.03)',
-                          borderColor: isDark
-                            ? 'rgba(16, 185, 129, 0.30)'
-                            : 'rgba(16, 185, 129, 0.35)',
-                        }
-                      : undefined
-                  }
-                >
-                  <View style={styles.shiftCardTopRow}>
-                    <Badge
-                      variant="neutral"
-                      label={shiftCodeName}
-                      className="px-2.5 py-1"
-                    />
-
-                    {!isLogged && (
+                <View key={s.code} style={isTabletOrDesktop ? styles.gridItem : undefined}>
+                  <Card
+                    className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
+                    style={[
+                      styles.shiftCard,
+                      isLogged
+                        ? {
+                            backgroundColor: isDark
+                              ? 'rgba(16, 185, 129, 0.05)'
+                              : 'rgba(16, 185, 129, 0.03)',
+                            borderColor: isDark
+                              ? 'rgba(16, 185, 129, 0.30)'
+                              : 'rgba(16, 185, 129, 0.35)',
+                          }
+                        : undefined,
+                    ]}
+                  >
+                    <View style={styles.shiftCardTopRow}>
                       <Badge
-                        variant="warning"
-                        label="Ready to Log"
+                        variant="neutral"
+                        label={shiftCodeName}
                         className="px-2.5 py-1"
                       />
-                    )}
-                  </View>
 
-                  <View style={styles.shiftMetadataStack}>
-                    <View style={styles.shiftMetaRow}>
-                      <View style={styles.metaLabelGroup}>
-                        <Clock size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
-                        <Text
-                          variant="caption"
-                          style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
-                        >
-                          Timings:
-                        </Text>
-                      </View>
-                      <Text
-                        variant="mono"
-                        style={[styles.metaValueText, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
-                      >
-                        {displayStartTime} – {displayEndTime} {s.crosses_midnight ? '🌙' : ''}
-                      </Text>
+                      {!isLogged && (
+                        <Badge
+                          variant="warning"
+                          label="Ready to Log"
+                          className="px-2.5 py-1"
+                        />
+                      )}
                     </View>
 
-                    {isLogged && (
+                    <View style={styles.shiftMetadataStack}>
                       <View style={styles.shiftMetaRow}>
                         <View style={styles.metaLabelGroup}>
-                          <Timer size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                          <Clock size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
                           <Text
                             variant="caption"
                             style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
                           >
-                            Machine RT :
+                            Timings:
                           </Text>
                         </View>
                         <Text
                           variant="mono"
-                          style={[
-                            styles.metaValueText,
-                            { color: isDark ? '#34d399' : '#059669' },
-                          ]}
+                          style={[styles.metaValueText, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
                         >
-                          {s.running_hours_today != null ? `${Number(s.running_hours_today.toFixed(1))}h` : '0h'}
+                          {displayStartTime} – {displayEndTime} {s.crosses_midnight ? '🌙' : ''}
                         </Text>
                       </View>
-                    )}
 
-                    {isLogged && s.end_meter_today != null && (
-                      <View style={styles.shiftMetaRow}>
-                        <View style={styles.metaLabelGroup}>
-                          <Gauge size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                      {isLogged && (
+                        <View style={styles.shiftMetaRow}>
+                          <View style={styles.metaLabelGroup}>
+                            <Timer size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                            <Text
+                              variant="caption"
+                              style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                            >
+                              Machine RT :
+                            </Text>
+                          </View>
+                          <Text
+                            variant="mono"
+                            style={[
+                              styles.metaValueText,
+                              { color: isDark ? '#34d399' : '#059669' },
+                            ]}
+                          >
+                            {s.running_hours_today != null ? `${Number(s.running_hours_today.toFixed(1))}h` : '0h'}
+                          </Text>
+                        </View>
+                      )}
+
+                      {isLogged && s.end_meter_today != null && (
+                        <View style={styles.shiftMetaRow}>
+                          <View style={styles.metaLabelGroup}>
+                            <Gauge size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                            <Text
+                              variant="caption"
+                              style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                            >
+                              End Meter:
+                            </Text>
+                          </View>
+                          <Text
+                            variant="mono"
+                            style={[
+                              styles.metaValueText,
+                              { color: isDark ? '#34d399' : '#059669' },
+                            ]}
+                          >
+                            {s.end_meter_today.toFixed(1)} hrs
+                          </Text>
+                        </View>
+                      )}
+
+                      {!isLogged && (
+                        <View style={styles.shiftMetaRow}>
+                          <View style={styles.metaLabelGroup}>
+                            <Timer size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                            <Text
+                              variant="caption"
+                              style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                            >
+                              Submission:
+                            </Text>
+                          </View>
                           <Text
                             variant="caption"
-                            style={[styles.metaLabelText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                            style={[styles.metaValueText, { color: isDark ? '#fbbf24' : '#d97706' }]}
                           >
-                            End Meter:
+                            Pending Entry
                           </Text>
                         </View>
-                        <Text
-                          variant="mono"
-                          style={[
-                            styles.metaValueText,
-                            { color: isDark ? '#34d399' : '#059669' },
-                          ]}
-                        >
-                          {s.end_meter_today.toFixed(1)} hrs
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                      )}
+                    </View>
 
-                  <View style={[styles.shiftCardActionRow, { borderTopColor: theme.colors.hairline }]}>
-                    {isLogged ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onPress={() =>
-                          handleNavigate(
-                            `/operations?tab=history&shift=${encodeURIComponent(s.code)}`
-                          )
-                        }
-                        className="w-full flex-row items-center justify-between px-2"
-                        label="View Shift Log"
-                        rightIcon={<ArrowRight size={14} color={theme.colors.link} />}
-                      />
-                    ) : (
-                      <Button
-                        variant="default"
-                        size="default"
-                        fullWidth
-                        onPress={() =>
-                          handleNavigate(
-                            `/operations?tab=entry&shift=${encodeURIComponent(s.code)}`
-                          )
-                        }
-                        label={`Log ${shiftCodeName}`}
-                        rightIcon={<ArrowRight size={15} color="#ffffff" />}
-                      />
-                    )}
-                  </View>
-                </Card>
+                    <View style={[styles.shiftCardActionRow, { borderTopColor: theme.colors.hairline }]}>
+                      {isLogged ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onPress={() =>
+                            handleNavigate(
+                              `/operations?tab=history&shift=${encodeURIComponent(s.code)}`
+                            )
+                          }
+                          className="w-full flex-row items-center justify-between px-2"
+                          label="View Shift Log"
+                          rightIcon={<ArrowRight size={14} color={theme.colors.link} />}
+                        />
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="default"
+                          fullWidth
+                          onPress={() =>
+                            handleNavigate(
+                              `/operations?tab=entry&shift=${encodeURIComponent(s.code)}`
+                            )
+                          }
+                          label={`Log ${shiftCodeName}`}
+                          rightIcon={<ArrowRight size={15} color="#ffffff" />}
+                        />
+                      )}
+                    </View>
+                  </Card>
+                </View>
               );
             })}
           </View>
@@ -298,7 +326,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
             </Text>
           </View>
           <View style={styles.oneColCol}>
-            <Card className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+            <Card className="rounded-2xl border border-border bg-card p-3.5 sm:p-4" style={styles.shiftCard}>
               <View style={styles.shiftCardTopRow}>
                 <Skeleton width={80} height={20} borderRadius={radiusNumeric.xs} />
                 <Skeleton width={90} height={20} borderRadius={radiusNumeric.xs} />
@@ -323,185 +351,193 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({
         >
           Equipment & Worksite Assignment
         </Text>
-        <View style={styles.oneColCol}>
+        <View
+          style={isTabletOrDesktop ? styles.assignmentGrid : styles.oneColCol}
+        >
           {/* Machine Card */}
-          <Card
-            className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
-          >
-            <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View
-                style={[
-                  styles.assignmentIconBox,
-                  {
-                    backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(100, 116, 139, 0.12)',
-                  },
-                ]}
-              >
-                <Wrench size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
+          <View style={isTabletOrDesktop ? styles.gridItem : undefined}>
+            <Card
+              className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
+              style={styles.assignmentCard}
+            >
+              <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
+                <View
+                  style={[
+                    styles.assignmentIconBox,
+                    {
+                      backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(100, 116, 139, 0.12)',
+                    },
+                  ]}
+                >
+                  <Wrench size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                </View>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.assignmentHeaderTitle,
+                    { color: isDark ? '#f8fafc' : theme.colors.ink },
+                  ]}
+                >
+                  ASSIGNED MACHINE
+                </Text>
               </View>
-              <Text
-                variant="caption"
-                style={[
-                  styles.assignmentHeaderTitle,
-                  { color: isDark ? '#f8fafc' : theme.colors.ink },
-                ]}
-              >
-                ASSIGNED MACHINE
-              </Text>
-            </View>
 
-            {isLoading && !data ? (
-              <View style={styles.assignmentDetailsStack}>
-                <View style={styles.detailRow}>
-                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
-                  <Skeleton width={130} height={16} borderRadius={radiusNumeric.xs} />
+              {isLoading && !data ? (
+                <View style={styles.assignmentDetailsStack}>
+                  <View style={styles.detailRow}>
+                    <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                    <Skeleton width={130} height={16} borderRadius={radiusNumeric.xs} />
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Skeleton width={70} height={13} borderRadius={radiusNumeric.xs} />
+                    <Skeleton width={90} height={14} borderRadius={radiusNumeric.xs} />
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Skeleton width={80} height={13} borderRadius={radiusNumeric.xs} />
+                    <Skeleton width={110} height={14} borderRadius={radiusNumeric.xs} />
+                  </View>
                 </View>
-                <View style={styles.detailRow}>
-                  <Skeleton width={70} height={13} borderRadius={radiusNumeric.xs} />
-                  <Skeleton width={90} height={14} borderRadius={radiusNumeric.xs} />
-                </View>
-                <View style={styles.detailRow}>
-                  <Skeleton width={80} height={13} borderRadius={radiusNumeric.xs} />
-                  <Skeleton width={110} height={14} borderRadius={radiusNumeric.xs} />
-                </View>
-              </View>
-            ) : data?.machine ? (
-              <View style={styles.assignmentDetailsStack}>
-                <View style={styles.detailRow}>
-                  <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                    Model:
-                  </Text>
-                  <Text
-                    variant="subheading"
-                    style={[styles.detailValueBold, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
-                  >
-                    {data.machine.model || '—'}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                    Machine ID:
-                  </Text>
-                  <Text
-                    variant="mono"
-                    style={[styles.detailValueMono, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
-                  >
-                    {data.machine.name || '—'}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                    Serial Number:
-                  </Text>
-                  <Text
-                    variant="mono"
-                    style={[styles.detailValueMonoMuted, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
-                  >
-                    {data.machine.serialNumber || '—'}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Text
-                variant="caption"
-                style={[styles.emptyNoticeText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
-              >
-                No active machine assigned. Contact your site supervisor.
-              </Text>
-            )}
-          </Card>
-
-          {/* Client & Worksite Card */}
-          <Card
-            className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
-          >
-            <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View
-                style={[
-                  styles.assignmentIconBox,
-                  {
-                    backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(100, 116, 139, 0.12)',
-                  },
-                ]}
-              >
-                <Building2 size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
-              </View>
-              <Text
-                variant="caption"
-                style={[
-                  styles.assignmentHeaderTitle,
-                  { color: isDark ? '#f8fafc' : theme.colors.ink },
-                ]}
-              >
-                CLIENT & LOCATION
-              </Text>
-            </View>
-
-            {isLoading && !data ? (
-              <View style={styles.assignmentDetailsStack}>
-                <View style={styles.detailRow}>
-                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
-                  <Skeleton width={140} height={16} borderRadius={radiusNumeric.xs} />
-                </View>
-                <View style={styles.detailRowStart}>
-                  <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
-                  <Skeleton width={160} height={14} borderRadius={radiusNumeric.xs} />
-                </View>
-              </View>
-            ) : data?.client ? (
-              <View style={styles.assignmentDetailsStack}>
-                <View style={styles.detailRow}>
-                  <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                    Client:
-                  </Text>
-                  <Text
-                    variant="subheading"
-                    style={[styles.detailValueBold, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
-                    numberOfLines={1}
-                  >
-                    {data.client.name || '—'}
-                  </Text>
-                </View>
-                <View style={styles.detailRowStart}>
-                  <View style={styles.metaLabelGroup}>
-                    <MapPin size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+              ) : data?.machine ? (
+                <View style={styles.assignmentDetailsStack}>
+                  <View style={styles.detailRow}>
                     <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                      Site:
+                      Model:
+                    </Text>
+                    <Text
+                      variant="subheading"
+                      style={[styles.detailValueBold, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
+                    >
+                      {data.machine.model || '—'}
                     </Text>
                   </View>
-                  <Text
-                    variant="body"
-                    style={[styles.detailValueSite, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
-                  >
-                    {data.client.site || '—'}
-                  </Text>
-                </View>
-                {(data.shift?.start || data.shift?.end) && (
-                  <View style={[styles.detailRowShift, { borderTopColor: theme.colors.hairline }]}>
-                    <View style={styles.metaLabelGroup}>
-                      <Clock size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
-                      <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
-                        Shift:
-                      </Text>
-                    </View>
+                  <View style={styles.detailRow}>
+                    <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
+                      Machine ID:
+                    </Text>
                     <Text
                       variant="mono"
                       style={[styles.detailValueMono, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
                     >
-                      {data.shift.start} – {data.shift.end}
+                      {data.machine.name || '—'}
                     </Text>
                   </View>
-                )}
+                  <View style={styles.detailRow}>
+                    <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
+                      Serial Number:
+                    </Text>
+                    <Text
+                      variant="mono"
+                      style={[styles.detailValueMonoMuted, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                    >
+                      {data.machine.serialNumber || '—'}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text
+                  variant="caption"
+                  style={[styles.emptyNoticeText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                >
+                  No active machine assigned. Contact your site supervisor.
+                </Text>
+              )}
+            </Card>
+          </View>
+
+          {/* Client & Worksite Card */}
+          <View style={isTabletOrDesktop ? styles.gridItem : undefined}>
+            <Card
+              className="rounded-2xl border border-border bg-card p-3.5 sm:p-4"
+              style={styles.assignmentCard}
+            >
+              <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
+                <View
+                  style={[
+                    styles.assignmentIconBox,
+                    {
+                      backgroundColor: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(100, 116, 139, 0.12)',
+                    },
+                  ]}
+                >
+                  <Building2 size={14} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                </View>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.assignmentHeaderTitle,
+                    { color: isDark ? '#f8fafc' : theme.colors.ink },
+                  ]}
+                >
+                  CLIENT & LOCATION
+                </Text>
               </View>
-            ) : (
-              <Text
-                variant="caption"
-                style={[styles.emptyNoticeText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
-              >
-                Client site will be determined by machine deployment.
-              </Text>
-            )}
-          </Card>
+
+              {isLoading && !data ? (
+                <View style={styles.assignmentDetailsStack}>
+                  <View style={styles.detailRow}>
+                    <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                    <Skeleton width={140} height={16} borderRadius={radiusNumeric.xs} />
+                  </View>
+                  <View style={styles.detailRowStart}>
+                    <Skeleton width={50} height={13} borderRadius={radiusNumeric.xs} />
+                    <Skeleton width={160} height={14} borderRadius={radiusNumeric.xs} />
+                  </View>
+                </View>
+              ) : data?.client ? (
+                <View style={styles.assignmentDetailsStack}>
+                  <View style={styles.detailRow}>
+                    <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
+                      Client:
+                    </Text>
+                    <Text
+                      variant="subheading"
+                      style={[styles.detailValueBold, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
+                      numberOfLines={1}
+                    >
+                      {data.client.name || '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRowStart}>
+                    <View style={styles.metaLabelGroup}>
+                      <MapPin size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                      <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
+                        Site:
+                      </Text>
+                    </View>
+                    <Text
+                      variant="body"
+                      style={[styles.detailValueSite, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
+                    >
+                      {data.client.site || '—'}
+                    </Text>
+                  </View>
+                  {(data.shift?.start || data.shift?.end) && (
+                    <View style={[styles.detailRowShift, { borderTopColor: theme.colors.hairline }]}>
+                      <View style={styles.metaLabelGroup}>
+                        <Clock size={12} color={isDark ? '#94a3b8' : theme.colors.mute} />
+                        <Text variant="caption" style={[styles.detailLabel, { color: isDark ? '#94a3b8' : theme.colors.mute }]}>
+                          Shift:
+                        </Text>
+                      </View>
+                      <Text
+                        variant="mono"
+                        style={[styles.detailValueMono, { color: isDark ? '#f8fafc' : theme.colors.ink }]}
+                      >
+                        {data.shift.start} – {data.shift.end}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <Text
+                  variant="caption"
+                  style={[styles.emptyNoticeText, { color: isDark ? '#94a3b8' : theme.colors.mute }]}
+                >
+                  Client site will be determined by machine deployment.
+                </Text>
+              )}
+            </Card>
+          </View>
         </View>
       </View>
     </View>
@@ -529,6 +565,21 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: spacingNumeric.sm,
   },
+  shiftGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  shiftCard: {
+    minHeight: 210,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
   shiftCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -538,6 +589,8 @@ const styles = StyleSheet.create({
   },
   shiftMetadataStack: {
     gap: 6,
+    minHeight: 74,
+    justifyContent: 'center',
     marginVertical: spacingNumeric.xs + 2,
   },
   shiftMetaRow: {
@@ -558,6 +611,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: spacingNumeric.xs + 2,
     marginTop: spacingNumeric.xs,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  assignmentGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  assignmentCard: {
+    minHeight: 180,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    flex: 1,
+    minWidth: 0,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
   assignmentHeaderRow: {
     flexDirection: 'row',
@@ -580,6 +657,8 @@ const styles = StyleSheet.create({
   },
   assignmentDetailsStack: {
     gap: 6,
+    minHeight: 88,
+    justifyContent: 'space-between',
   },
   detailRow: {
     flexDirection: 'row',

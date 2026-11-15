@@ -1,12 +1,13 @@
 /**
  * ReachInternational Mobile — Post Notification Service
- * Universal event dispatcher delivering notifications to:
- * 1. Native/OS Notification Center (via Web Notification API / system permissions)
- * 2. In-App Ambient Floating Banner (animated banner at top of viewport)
- * 3. Persistent Operational Feed in AsyncStorage (@reach:operational_notifications_feed)
+ * Universal event dispatcher delivering notifications strictly OUTSIDE the application:
+ * 1. Native OS Notification Center (via expo-notifications on Android/iOS)
+ * 2. Web Notification API (when on browser/PWA)
+ * Zero inside-the-app toast popups or floating banners.
  */
 
 import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNotificationPermissionStatus } from '../permissions';
 
@@ -30,7 +31,7 @@ const STORAGE_KEY_FEED = '@reach:operational_notifications_feed';
 const MAX_FEED_ITEMS = 40;
 
 /**
- * Subscribe to real-time in-app notification events
+ * Subscribe to notification events (maintained for backward-compatible interface)
  */
 export function subscribeToPostNotifications(listener: NotificationListener): () => void {
   listeners.add(listener);
@@ -40,7 +41,7 @@ export function subscribeToPostNotifications(listener: NotificationListener): ()
 }
 
 /**
- * Dispatch an operational post notification
+ * Dispatch an operational post notification strictly OUTSIDE the native app
  */
 export async function postNotification(payload: PostNotificationPayload): Promise<PostNotificationPayload> {
   const item: PostNotificationPayload = {
@@ -50,16 +51,10 @@ export async function postNotification(payload: PostNotificationPayload): Promis
     timestamp: payload.timestamp || Date.now(),
   };
 
-  // 1. Deliver to In-App Listeners (Floating Banner)
-  listeners.forEach((listener) => {
-    try {
-      listener(item);
-    } catch (err) {
-      console.warn('[PostNotification] Listener error:', err);
-    }
-  });
+  // Inside-the-app notification toasts have been removed per specification.
+  // Pushed notifications are delivered strictly OUTSIDE the app to the device OS.
 
-  // 2. Deliver to OS / Browser Notification Center (if granted)
+  // 1. Deliver to OS / Browser Notification Center outside the app (if granted)
   try {
     const permStatus = await getNotificationPermissionStatus();
     if (permStatus === 'granted') {
@@ -71,6 +66,22 @@ export async function postNotification(payload: PostNotificationPayload): Promis
             tag: item.category,
           });
         }
+      } else if (Platform.OS !== 'web') {
+        // Native Android / iOS: Present notification in the system notification shade / tray
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: item.title,
+            body: item.body,
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            data: {
+              id: item.id,
+              category: item.category,
+              metadata: item.metadata,
+            },
+          },
+          trigger: null, // deliver immediately to device OS
+        });
       }
     }
   } catch (err) {

@@ -39,10 +39,28 @@ const SUITES = [
     domain: '6 Canonical Roles, Route Guards & Operations',
   },
   {
+    name: 'Shared Validation Schemas Suite',
+    cmd: 'pnpm',
+    args: ['--filter', '@reachinternational/validation', 'test'],
+    domain: 'Zod Schemas, Payloads, Passwords & Validation',
+  },
+  {
     name: 'Shared Utils Suite',
     cmd: 'pnpm',
     args: ['--filter', '@reachinternational/utils', 'test'],
     domain: 'Calculations, Overlaps, Sanitization & Errors',
+  },
+  {
+    name: 'Unified Approval Engine Exhaustive Verification Suite',
+    cmd: 'node',
+    args: ['tests/approvals/test-approval-engine-exhaustive.mjs'],
+    domain: 'State Machine, Dual-Control, Concurrency, RBAC & Outbox',
+  },
+  {
+    name: 'Native Mobile Unified Approvals Suite',
+    cmd: 'node',
+    args: ['apps/mobile/test/test-unified-approval-engine.mjs'],
+    domain: 'Universal Queue, BottomSheet, Touch Targets, Haptics & Parity',
   },
   {
     name: 'Mobile Unit & Integration Suite',
@@ -97,6 +115,48 @@ const SUITES = [
     cmd: 'node',
     args: ['apps/web/scripts/test-contact-page.mjs'],
     domain: 'Contact Information, Schema.org JSON-LD & SEO Meta',
+  },
+  {
+    name: 'Push Notifications Dispatcher Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-push-dispatcher.mjs'],
+    domain: 'Bearer Auth, Channels, Payloads, Kill-Switches & Outbox Status',
+  },
+  {
+    name: 'Push Notifications Phase 1 SQL Pipeline Suite',
+    cmd: 'node',
+    args: ['supabase/tests/test_push_notifications_phase1_sql.mjs'],
+    domain: 'Outbox Schema, Slot Detection, Dedupe, Recheck, Quiet Hours & RPCs (26 tests)',
+  },
+  {
+    name: 'Push Notifications Reminders, Producers & Observability Suite',
+    cmd: 'node',
+    args: ['supabase/tests/test_push_notifications_phase5_6.mjs'],
+    domain: 'Reminder Scanners, BD1/AS1 Triggers, RLS Denial & Observability Views',
+  },
+  {
+    name: 'Web Push Notifications Full Lifecycle Suite',
+    cmd: 'node',
+    args: ['apps/web/test/test-web-push-notifications.mjs'],
+    domain: 'Service Worker /sw.js, WebPush VAPID, Tab Focus & Shell Skip',
+  },
+  {
+    name: 'Native Mobile Push Notifications Lifecycle Suite',
+    cmd: 'node',
+    args: ['apps/mobile/test/test-mobile-push-notifications.mjs'],
+    domain: '4 Android Channels, Notification Icon, Deep Linking & Device RPCs',
+  },
+  {
+    name: 'Push Notifications Live End-to-End Pipeline Suite',
+    cmd: 'node',
+    args: ['scripts/test-push-end-to-end.mjs'],
+    domain: 'Dual-Platform Registration, Enqueue, Batch Claim, Dispatch & Outbox Status',
+  },
+  {
+    name: 'Cross-Platform Shift Assignment Push Suite',
+    cmd: 'node',
+    args: ['scripts/test-cross-platform-shift-assignment-push.mjs'],
+    domain: 'Web/Mobile Supervisor to Web/Mobile Operator Shift Assignment & Dual Delivery',
   },
 ];
 

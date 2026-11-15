@@ -153,6 +153,7 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
   // Intra-file duplicate tracking (maps lower-case string to first row number seen)
   const seenInFileSerials = new Map<string, number>();
   const seenInFileMachineIds = new Map<string, number>();
+  const validRows: { rowNum: number; payload: Record<string, any>; lowerSerial: string; machineIdVal: string }[] = [];
 
   // Process each data row (skip header)
   for (let i = 1; i < rows.length; i++) {
@@ -275,26 +276,19 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
         insertPayload.machine_id = machineIdVal;
       }
 
-      const { data: insertedData, error } = await supabase
-        .from("machines")
-        .insert(insertPayload)
-        .select("id, machine_id")
-        .single();
+      validRows.push({
+        rowNum,
+        payload: insertPayload,
+        lowerSerial,
+        machineIdVal,
+      });
 
-      if (error) {
-        result.failed++;
-        const formatted = formatMachineDatabaseError(error);
-        result.errors.push({ row: rowNum, reason: formatted.error });
-      } else {
-        result.success++;
-        // Track as seen so subsequent rows in the same spreadsheet cannot collide
-        seenInFileSerials.set(lowerSerial, rowNum);
-        const resolvedMachineId = insertedData?.machine_id || machineIdVal || "New Machine";
-        existingSerialMap.set(lowerSerial, resolvedMachineId);
-        if (machineIdVal) {
-          seenInFileMachineIds.set(machineIdVal, rowNum);
-          existingMachineIdMap.set(machineIdVal, machineIdVal);
-        }
+      // Track as seen so subsequent rows in the same spreadsheet cannot collide
+      seenInFileSerials.set(lowerSerial, rowNum);
+      existingSerialMap.set(lowerSerial, machineIdVal || "New Machine");
+      if (machineIdVal) {
+        seenInFileMachineIds.set(machineIdVal, rowNum);
+        existingMachineIdMap.set(machineIdVal, machineIdVal);
       }
     } catch (err: unknown) {
       result.failed++;
@@ -303,6 +297,33 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
         ? "Permission denied: Account role unauthorized to add machines."
         : rawMsg;
       result.errors.push({ row: rowNum, reason: friendlyReason });
+    }
+  }
+
+  // Atomic batch insertion for all validated rows
+  if (validRows.length > 0) {
+    try {
+      const payloads = validRows.map((r) => r.payload);
+      const { data: insertedData, error } = await supabase
+        .from("machines")
+        .insert(payloads)
+        .select("id, machine_id");
+
+      if (error) {
+        const formatted = formatMachineDatabaseError(error);
+        for (const item of validRows) {
+          result.failed++;
+          result.errors.push({ row: item.rowNum, reason: formatted.error });
+        }
+      } else {
+        result.success += insertedData?.length ?? validRows.length;
+      }
+    } catch (err: unknown) {
+      const rawMsg = err instanceof Error ? err.message : "Database batch insert failed";
+      for (const item of validRows) {
+        result.failed++;
+        result.errors.push({ row: item.rowNum, reason: rawMsg });
+      }
     }
   }
 

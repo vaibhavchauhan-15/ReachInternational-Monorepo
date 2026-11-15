@@ -63,16 +63,36 @@ export interface UserAssignmentItem {
   ended_at: string | null;
 }
 
+export interface UserDocumentPendingReplacement {
+  id: string;
+  staging_path: string;
+  staging_thumb_path?: string | null;
+  signed_url?: string | null;
+  thumb_signed_url?: string | null;
+  created_at: string;
+  status: 'pending';
+}
+
 export interface UserDocumentItem {
   id: string;
   user_id: string;
   document_type_code: string;
   storage_path: string;
+  thumb_path?: string | null;
   mime_type: string;
   file_size_bytes: number;
+  verification_status?: "pending" | "verified" | "rejected";
+  verified_by?: string | null;
+  verified_at?: string | null;
+  rejection_reason?: string | null;
   created_at: string;
   type_label?: string;
   signed_url?: string | null;
+  thumb_signed_url?: string | null;
+  has_pending_replacement?: boolean;
+  pending_replacement?: UserDocumentPendingReplacement | null;
+  is_pending_request?: boolean;
+  pending_request_id?: string;
 }
 
 export interface UserAuditItem {
@@ -743,7 +763,7 @@ export function useUserDetailDocuments(userId?: string, enabled = false) {
       const [docsRes, typesRes] = await Promise.all([
         supabase
           .from('user_documents')
-          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at')
+          .select('id, user_id, document_type_code, storage_path, thumb_path, mime_type, file_size_bytes, verification_status, verified_by, verified_at, rejection_reason, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false }),
         supabase
@@ -805,16 +825,22 @@ export function useUserDetailDocumentsInfinite(
       const from = (currentPage - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      const [docsRes, typesRes] = await Promise.all([
+      const [docsRes, typesRes, changeReqsRes] = await Promise.all([
         supabase
           .from('user_documents')
-          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at', { count: 'exact' })
+          .select('id, user_id, document_type_code, storage_path, thumb_path, mime_type, file_size_bytes, verification_status, rejection_reason, created_at', { count: 'exact' })
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .range(from, to),
         supabase
           .from('user_document_types')
           .select('code, label'),
+        supabase
+          .from('document_change_requests')
+          .select('id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at')
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
       ]);
 
       const typeMap = new Map<string, string>();
@@ -822,10 +848,21 @@ export function useUserDetailDocumentsInfinite(
         typeMap.set(t.code, t.label);
       });
 
+      const changeReqMap = new Map<string, any>();
+      (changeReqsRes.data || []).forEach((cr: any) => {
+        if (!changeReqMap.has(cr.document_type_code)) {
+          changeReqMap.set(cr.document_type_code, cr);
+        }
+      });
+
       const docsList = docsRes.data || [];
+      const covered = new Set<string>();
+
       const withSignedUrls = await Promise.all(
         docsList.map(async (doc: any) => {
+          covered.add(doc.document_type_code);
           let signedUrl: string | null = null;
+          let thumbSignedUrl: string | null = null;
           if (doc.storage_path) {
             try {
               const cleanPath = doc.storage_path.replace(/^\/+/, '');
@@ -837,13 +874,101 @@ export function useUserDetailDocumentsInfinite(
               // Storage fallback
             }
           }
+          if (doc.thumb_path) {
+            try {
+              const cleanThumb = doc.thumb_path.replace(/^\/+/, '');
+              const { data: thumbData } = await supabase.storage
+                .from('user_files')
+                .createSignedUrl(cleanThumb, 3600);
+              thumbSignedUrl = thumbData?.signedUrl || null;
+            } catch {
+              // Storage fallback
+            }
+          }
+
+          const cr = changeReqMap.get(doc.document_type_code);
+          let pendingReplacement = null;
+          if (cr) {
+            let crSignedUrl: string | null = null;
+            let crThumbUrl: string | null = null;
+            try {
+              const { data: crSign } = await supabase.storage
+                .from('doc_staging')
+                .createSignedUrl(cr.staging_path, 3600);
+              crSignedUrl = crSign?.signedUrl || null;
+            } catch {}
+            if (cr.staging_thumb_path) {
+              try {
+                const { data: crThumb } = await supabase.storage
+                  .from('doc_staging')
+                  .createSignedUrl(cr.staging_thumb_path, 3600);
+                crThumbUrl = crThumb?.signedUrl || null;
+              } catch {}
+            }
+            pendingReplacement = {
+              id: cr.id,
+              staging_path: cr.staging_path,
+              staging_thumb_path: cr.staging_thumb_path,
+              signed_url: crSignedUrl,
+              thumb_signed_url: crThumbUrl || crSignedUrl,
+              created_at: cr.created_at,
+              status: 'pending',
+            };
+          }
+
           return {
             ...doc,
             type_label: typeMap.get(doc.document_type_code) || doc.document_type_code,
             signed_url: signedUrl,
+            thumb_signed_url: thumbSignedUrl || signedUrl,
+            pending_replacement: pendingReplacement,
+            has_pending_replacement: Boolean(pendingReplacement),
           };
         })
       );
+
+      // On first page, also append any pending requests that have no user_documents row yet
+      if (currentPage === 1) {
+        for (const [code, cr] of changeReqMap.entries()) {
+          if (!covered.has(code)) {
+            let crSignedUrl: string | null = null;
+            let crThumbUrl: string | null = null;
+            try {
+              const { data: crSign } = await supabase.storage
+                .from('doc_staging')
+                .createSignedUrl(cr.staging_path, 3600);
+              crSignedUrl = crSign?.signedUrl || null;
+            } catch {}
+            if (cr.staging_thumb_path) {
+              try {
+                const { data: crThumb } = await supabase.storage
+                  .from('doc_staging')
+                  .createSignedUrl(cr.staging_thumb_path, 3600);
+                crThumbUrl = crThumb?.signedUrl || null;
+              } catch {}
+            }
+
+            withSignedUrls.push({
+              id: cr.id,
+              user_id: userId,
+              document_type_code: code,
+              storage_path: cr.staging_path,
+              thumb_path: cr.staging_thumb_path,
+              mime_type: 'image/jpeg',
+              file_size_bytes: 0,
+              verification_status: 'pending',
+              created_at: cr.created_at,
+              type_label: typeMap.get(code) || code,
+              signed_url: crSignedUrl,
+              thumb_signed_url: crThumbUrl || crSignedUrl,
+              is_pending_request: true,
+              pending_request_id: cr.id,
+              pending_replacement: null,
+              has_pending_replacement: true,
+            });
+          }
+        }
+      }
 
       const totalCount = docsRes.count || 0;
       return {
@@ -1079,4 +1204,45 @@ export async function fetchUpdatedUserRecord(
     return null;
   }
 }
+
+/**
+ * Administrative Document Review Mutation (Mobile Native)
+ * Calls /api/documents/review with Bearer token authentication to execute
+ * atomic verification, rejection, and cross-bucket replacement promotion.
+ */
+export async function reviewDocumentMobile(params: {
+  action: 'approve_replacement' | 'reject_replacement' | 'verify_document' | 'reject_document';
+  requestId?: string;
+  documentId?: string;
+  rejectionReason?: string;
+  isPendingRequest?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      return { success: false, error: 'Authentication session expired. Please log in again.' };
+    }
+
+    const appUrl = getAppUrl();
+    const response = await fetch(`${appUrl}/api/documents/review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(params),
+    });
+
+    const json = await response.json();
+    if (!response.ok || !json.success) {
+      return { success: false, error: json.error || 'Failed to review document' };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error while reviewing document' };
+  }
+}
+
 

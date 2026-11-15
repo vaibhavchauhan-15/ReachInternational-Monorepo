@@ -1,4 +1,5 @@
 import type { UserRole } from "@reachinternational/types";
+export type { UserRole };
 
 export const CANONICAL_ROLES: UserRole[] = [
   "super_admin",

@@ -15,6 +15,12 @@ import {
   parseProfileShiftTime,
 } from "@reachinternational/utils";
 import type { UserRole, ProfileChangeRequest, User } from "@/lib/types/database";
+import {
+  canTransitionProfileRequest,
+  canApproveProfileChange,
+  type ProfileRequestStatus,
+} from "@/lib/utils/profile-change-transitions";
+import { submitToApprovalEngineSafely } from "@/lib/server/approval-engine-bridge";
 
 export interface ProfileFormState {
   error?: string;
@@ -65,20 +71,6 @@ async function resolveStateInfo(
   }
 
   return { state_id: stateIdNum, state: stateName };
-}
-
-/**
- * Determine if an approver has authority to review a request from a specific requester role.
- */
-function canApproveProfileChange(approverRole: UserRole, requesterRole: UserRole): boolean {
-  if (approverRole === "super_admin") return true;
-  if (approverRole === "admin") {
-    return requesterRole !== "super_admin" && requesterRole !== "admin";
-  }
-  if (["manager", "hr"].includes(approverRole)) {
-    return !["super_admin", "admin", "manager", "hr"].includes(requesterRole);
-  }
-  return false;
 }
 
 /**
@@ -468,6 +460,22 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
           });
       }
 
+      // Submit to Centralized Approval Engine
+      await submitToApprovalEngineSafely({
+        type_key: "profile_change",
+        subject_type: "user",
+        subject_id: currentUser.id,
+        subject_label: currentUser.full_name,
+        requested_by: currentUser.id,
+        summary: `Profile changes requested by ${currentUser.full_name}`,
+        payload: {
+          target_user_id: currentUser.id,
+          requester_role: currentUser.role,
+          changes: requestPayload,
+          current_snapshot: currentSnapshot,
+        },
+      });
+
       const approverLabel =
         targetApproverRole === "super_admin"
           ? "Super Admin"
@@ -577,17 +585,22 @@ export async function cancelMyProfileChangeRequest(requestId: string): Promise<P
 
     if (fetchErr || !req) return { error: "Request not found." };
     if (req.user_id !== currentUser.id) return { error: "Unauthorized." };
-    if (req.status !== "pending") return { error: "Request is no longer pending." };
+    if (!canTransitionProfileRequest(req.status as ProfileRequestStatus, "cancelled")) {
+      return { error: "Request is no longer pending." };
+    }
 
-    const { error: cancelErr } = await adminSupabase
+    const { data: updatedReq, error: cancelErr } = await adminSupabase
       .from("profile_change_requests")
       .update({
         status: "cancelled",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", requestId);
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select()
+      .maybeSingle();
 
-    if (cancelErr) return { error: "Failed to cancel request." };
+    if (cancelErr || !updatedReq) return { error: "Failed to cancel request or request already processed." };
 
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
@@ -621,7 +634,7 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       return { error: "Profile change request not found." };
     }
 
-    if (request.status !== "pending") {
+    if (!canTransitionProfileRequest(request.status as ProfileRequestStatus, "approved")) {
       return { error: `Request is already ${request.status}.` };
     }
 
@@ -630,10 +643,28 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       return { error: "You do not have authorization to approve profile changes for this role." };
     }
 
+    // 3. Atomically lock and transition request to approved (prevents concurrent race conditions)
+    const { data: approvedReq, error: reqApproveErr } = await adminSupabase
+      .from("profile_change_requests")
+      .update({
+        status: "approved",
+        reviewed_by: currentUser.id,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select()
+      .maybeSingle();
+
+    if (reqApproveErr || !approvedReq) {
+      return { error: "Request is no longer pending or was concurrently reviewed." };
+    }
+
     const requestedData = request.requested_data || {};
     const targetUserId = request.user_id;
 
-    // 3. Apply changes to public.users selectively
+    // 4. Apply changes to public.users selectively
     const userUpdatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -723,21 +754,6 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       }
     }
 
-    // 7. Mark request as approved
-    const { error: reqApproveErr } = await adminSupabase
-      .from("profile_change_requests")
-      .update({
-        status: "approved",
-        reviewed_by: currentUser.id,
-        reviewed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", requestId);
-
-    if (reqApproveErr) {
-      console.error("Error updating profile request status:", reqApproveErr);
-    }
-
     // 7. Structured audit logging
     await logAudit({
       action: "user.profile_change_approved",
@@ -761,6 +777,25 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
     revalidateTag(CACHE_TAGS.dashboard, "max");
+
+    // Synchronize with unified approval engine if an open request exists
+    try {
+      const { data: engineReq } = await adminSupabase
+        .from("approval_requests")
+        .select("id, version")
+        .eq("type_key", "profile_change")
+        .eq("subject_id", requestId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (engineReq) {
+        await adminSupabase.rpc("approval_decide", {
+          p_request_id: engineReq.id,
+          p_decision: "approve",
+          p_expected_version: engineReq.version,
+        });
+      }
+    } catch {}
 
     return {
       success: true,
@@ -794,7 +829,7 @@ export async function rejectProfileChangeRequest(requestId: string, reason?: str
       return { error: "Profile change request not found." };
     }
 
-    if (request.status !== "pending") {
+    if (!canTransitionProfileRequest(request.status as ProfileRequestStatus, "rejected")) {
       return { error: `Request is already ${request.status}.` };
     }
 
@@ -804,7 +839,7 @@ export async function rejectProfileChangeRequest(requestId: string, reason?: str
 
     const rejectionReasonText = reason?.trim() || "Profile detail update request was rejected by reviewer.";
 
-    const { error: rejectErr } = await adminSupabase
+    const { data: updatedReq, error: rejectErr } = await adminSupabase
       .from("profile_change_requests")
       .update({
         status: "rejected",
@@ -813,11 +848,13 @@ export async function rejectProfileChangeRequest(requestId: string, reason?: str
         rejection_reason: rejectionReasonText,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", requestId);
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select()
+      .maybeSingle();
 
-    if (rejectErr) {
-      console.error("Error rejecting profile change request:", rejectErr);
-      return { error: "Failed to reject request." };
+    if (rejectErr || !updatedReq) {
+      return { error: "Request is no longer pending or was concurrently reviewed." };
     }
 
     await logAudit({
@@ -840,6 +877,26 @@ export async function rejectProfileChangeRequest(requestId: string, reason?: str
 
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
+
+    // Synchronize with unified approval engine if an open request exists
+    try {
+      const { data: engineReq } = await adminSupabase
+        .from("approval_requests")
+        .select("id, version")
+        .eq("type_key", "profile_change")
+        .eq("subject_id", requestId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (engineReq) {
+        await adminSupabase.rpc("approval_decide", {
+          p_request_id: engineReq.id,
+          p_decision: "reject",
+          p_note: rejectionReasonText,
+          p_expected_version: engineReq.version,
+        });
+      }
+    } catch {}
 
     return {
       success: true,
@@ -868,12 +925,15 @@ export async function bulkApproveProfileChangeRequests(requestIds: string[]): Pr
     const validIds = requestIds.filter((id) => isValidUuid(id));
     if (validIds.length === 0) return { error: "Invalid request IDs." };
 
+    const results = await Promise.allSettled(
+      validIds.map((id) => approveProfileChangeRequest(id))
+    );
+
     let successCount = 0;
     let failedCount = 0;
 
-    for (const id of validIds) {
-      const res = await approveProfileChangeRequest(id);
-      if (res.success) {
+    for (const res of results) {
+      if (res.status === "fulfilled" && res.value.success) {
         successCount++;
       } else {
         failedCount++;
@@ -911,12 +971,15 @@ export async function bulkRejectProfileChangeRequests(
     const validIds = requestIds.filter((id) => isValidUuid(id));
     if (validIds.length === 0) return { error: "Invalid request IDs." };
 
+    const results = await Promise.allSettled(
+      validIds.map((id) => rejectProfileChangeRequest(id, reason))
+    );
+
     let successCount = 0;
     let failedCount = 0;
 
-    for (const id of validIds) {
-      const res = await rejectProfileChangeRequest(id, reason);
-      if (res.success) {
+    for (const res of results) {
+      if (res.status === "fulfilled" && res.value.success) {
         successCount++;
       } else {
         failedCount++;

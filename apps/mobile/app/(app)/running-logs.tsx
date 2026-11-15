@@ -16,8 +16,7 @@ import {
   ErrorState,
   PermissionDeniedView,
   SearchInput,
-  ToggleSwitch,
-  SegmentedToggle,
+  Button,
   Text,
 } from '../../components/ui';
 import {
@@ -472,20 +471,45 @@ export default function RunningLogsScreen() {
         </View>
       )}
 
-      {/* 2. Top Navbar: Segmented Mode Toggle (Clients | Machine | Operator) */}
+      {/* 2. Top Navbar: Static View Mode Buttons (Clients | Machine | Operator) */}
       <View style={styles.segmentedToggleWrapper}>
-        <View style={[styles.segmentedToggleInner, isWide && styles.segmentedToggleInnerWide]}>
-          <ToggleSwitch<LogsViewMode>
-            options={[
-              { id: 'client', label: 'Clients' },
-              { id: 'machine', label: 'Machine' },
-              { id: 'operator', label: 'Operator' },
-            ]}
-            value={logsViewMode}
-            onChange={(mode) => setLogsViewMode(mode)}
+        <View style={[styles.tabButtonGroup, isWide && styles.segmentedToggleInnerWide]}>
+          <Button
+            variant={logsViewMode === 'client' ? 'primary' : 'outline'}
             size="md"
-            fullWidth={!isWide}
-          />
+            shape="rounded"
+            style={styles.tabOptionBtn}
+            onPress={() => setLogsViewMode('client')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: logsViewMode === 'client' }}
+            haptic="select"
+          >
+            Clients
+          </Button>
+          <Button
+            variant={logsViewMode === 'machine' ? 'primary' : 'outline'}
+            size="md"
+            shape="rounded"
+            style={styles.tabOptionBtn}
+            onPress={() => setLogsViewMode('machine')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: logsViewMode === 'machine' }}
+            haptic="select"
+          >
+            Machine
+          </Button>
+          <Button
+            variant={logsViewMode === 'operator' ? 'primary' : 'outline'}
+            size="md"
+            shape="rounded"
+            style={styles.tabOptionBtn}
+            onPress={() => setLogsViewMode('operator')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: logsViewMode === 'operator' }}
+            haptic="select"
+          >
+            Operator
+          </Button>
         </View>
       </View>
 
@@ -778,6 +802,16 @@ const styles = StyleSheet.create({
   },
   segmentedToggleInnerWide: {
     maxWidth: 420,
+  },
+  tabButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  tabOptionBtn: {
+    flex: 1,
+    minHeight: 44,
   },
   resultsCountRow: {
     paddingHorizontal: 2,

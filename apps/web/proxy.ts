@@ -23,32 +23,51 @@ export async function proxy(request: NextRequest) {
 
 
   // Step 1: LPDoS Edge Rate Limiting Guard
-  const clientIp = getClientIp(request);
-  const isAuthMutation = (path.startsWith("/api/auth") || isPublicRoute) && request.method !== "GET";
-  const rateLimitProfile = isAuthMutation 
-    ? RATE_LIMIT_PROFILES.AUTH_STRICT 
-    : request.method === "POST" 
-      ? RATE_LIMIT_PROFILES.MUTATION_API 
-      : RATE_LIMIT_PROFILES.GENERAL_ROUTES;
+  // Next.js Server Actions (indicated by the `next-action` header) must NOT receive raw JSON 429
+  // responses from edge middleware, as it corrupts the React Server Action client dispatcher.
+  // Instead, Server Actions perform their own in-action rate limiting (e.g. inside signup())
+  // returning structured action error objects.
+  const isServerAction = request.headers.has("next-action");
 
-  const rateLimitResult = await checkRateLimitAsync(`${clientIp}:${isAuthMutation ? 'auth' : 'gen'}`, rateLimitProfile);
-  if (!rateLimitResult.success) {
-    return new NextResponse(
-      JSON.stringify({
-        error: "Too Many Requests",
-        message: "Request rate limit exceeded. LPDoS / Brute-force safeguard active.",
-        retryAfter: rateLimitResult.resetSeconds,
-      }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          "Retry-After": String(rateLimitResult.resetSeconds),
-          "X-RateLimit-Limit": String(rateLimitResult.limit),
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    );
+  if (!isServerAction) {
+    const clientIp = getClientIp(request);
+    const isSignupUploadUrl = path === "/api/signup/upload-urls";
+    const isAuthMutation = (path.startsWith("/api/auth") || isPublicRoute) && request.method !== "GET";
+
+    let rateLimitProfile = RATE_LIMIT_PROFILES.GENERAL_ROUTES;
+    let rateLimitKey = `${clientIp}:gen`;
+
+    if (isSignupUploadUrl) {
+      // Phase 3 & 9 spec: 30 requests per 10 minutes (generous profile for shared Indian mobile network IPs)
+      rateLimitProfile = RATE_LIMIT_PROFILES.SIGNUP_UPLOAD;
+      rateLimitKey = `${clientIp}:signup_upload`;
+    } else if (isAuthMutation) {
+      rateLimitProfile = RATE_LIMIT_PROFILES.AUTH_STRICT;
+      rateLimitKey = `${clientIp}:auth`;
+    } else if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS") {
+      rateLimitProfile = RATE_LIMIT_PROFILES.MUTATION_API;
+      rateLimitKey = `${clientIp}:mut`;
+    }
+
+    const rateLimitResult = await checkRateLimitAsync(rateLimitKey, rateLimitProfile);
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({
+          error: "Too Many Requests",
+          message: "Request rate limit exceeded. LPDoS / Brute-force safeguard active.",
+          retryAfter: rateLimitResult.resetSeconds,
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.resetSeconds),
+            "X-RateLimit-Limit": String(rateLimitResult.limit),
+            "X-RateLimit-Remaining": "0",
+          },
+        }
+      );
+    }
   }
 
   const requestHeaders = new Headers(request.headers);
@@ -136,7 +155,6 @@ export async function proxy(request: NextRequest) {
   // React Server Actions (requests carrying 'next-action' header) handle their own redirects,
   // mutations, and authorization in App Router. Intercepting a Server Action with an HTTP 30x redirect
   // causes Next.js React DOM action dispatcher to crash with "An unexpected response was received from the server."
-  const isServerAction = Boolean(request.headers.get("next-action"));
   if (isServerAction) {
     return response;
   }

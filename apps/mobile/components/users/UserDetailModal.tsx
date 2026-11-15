@@ -69,6 +69,7 @@ export interface UserRecord {
   full_name: string;
   phone?: string | null;
   role: string;
+  machine_category?: string | null;
   status: string;
   shift_time?: string | null;
   shift_start_time?: string | null;
@@ -83,6 +84,8 @@ export interface UserRecord {
   location?: string | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
+  bank_account_number?: string | null;
+  bank_ifsc_code?: string | null;
   supervisor_id?: string | null;
   supervisor_ids?: string[] | null;
   supervisor?: {

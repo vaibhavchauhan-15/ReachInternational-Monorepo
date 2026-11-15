@@ -1,8 +1,8 @@
-import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
 import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { AdminDashboardDTO } from '@reachinternational/types';
@@ -27,6 +27,8 @@ export interface AdminDashboardCardProps {
 export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   const totalMachines = data?.totalMachines ?? 0;
   const activeUsers = data?.activeUsers ?? 0;
@@ -109,21 +111,30 @@ export const AdminDashboardCard: React.FC<AdminDashboardCardProps> = ({ data }) 
         >
           Quick Management
         </Text>
-        <View style={styles.actionList}>
-          <PrimaryAction
-            title="Operations Hub & Running Logs"
-            description="Review daily operator submissions, meter readings, and client worksites"
-            href="/operations"
-            icon={FileSpreadsheet}
-            variant="primary"
-          />
-          <PrimaryAction
-            title="Machinery Fleet & Maintenance"
-            description="Configure machine assignments, track hours, and update equipment status"
-            href="/machines"
-            icon={Wrench}
-            variant="secondary"
-          />
+        <View
+          style={[
+            styles.actionList,
+            isTabletOrDesktop && styles.actionGrid,
+          ]}
+        >
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Operations Hub & Running Logs"
+              description="Review daily operator submissions, meter readings, and client worksites"
+              href="/operations"
+              icon={FileSpreadsheet}
+              variant="primary"
+            />
+          </View>
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Machinery Fleet & Maintenance"
+              description="Configure machine assignments, track hours, and update equipment status"
+              href="/machines"
+              icon={Wrench}
+              variant="secondary"
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -143,5 +154,18 @@ const styles = StyleSheet.create({
   },
   actionList: {
     gap: spacingNumeric.sm,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  actionGridItem: {
+    flex: 1,
+    minWidth: 0,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
 });

@@ -601,80 +601,64 @@ export function useUsersInfiniteQuery({
 }
 
 /**
- * 4. Pending Approval & Deletion Requests Query
+ * 4. Central Approvals Count Query (Integrated with Unified Approval Engine)
  */
-export function usePendingApprovalRequests({ enabled = true }: { enabled?: boolean } = {}) {
+export function useCentralApprovalCounts({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: ['users', 'pending_requests'],
+    queryKey: ['approvals', 'counts'],
     enabled,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
     queryFn: async () => {
-      // 1. Profile change requests
-      const { data: pReqs } = await supabase
-        .from('profile_change_requests')
-        .select(`
-          id,
-          user_id,
-          requester_role,
-          current_data,
-          requested_data,
-          target_approver_role,
-          status,
-          created_at,
-          user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone)
-        `)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      const standardProfileReqs = (pReqs as any[] || []).filter(
-        (r) => r.requested_data?.type !== 'account_deletion'
-      );
-
-      // 2. Account deletion requests
-      let delList: any[] = [];
       try {
-        const { data: directReqs, error: directErr } = await supabase
-          .from('account_deletion_requests')
-          .select('*')
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false });
-
-        if (!directErr && directReqs && directReqs.length > 0) {
-          delList = directReqs;
+        const { data, error } = await supabase.rpc('approval_counts');
+        if (!error && data) {
+          return {
+            total: Number(data.total || 0),
+            by_type: (data.by_type || {}) as Record<string, number>,
+          };
         }
       } catch {
-        // Direct table fallback
+        // Fallback to table count if RPC cache is updating
       }
 
-      if (pReqs && pReqs.length > 0) {
-        const delFromProfile = (pReqs as any[]).filter(
-          (r) => r.requested_data?.type === 'account_deletion'
-        );
-        const directIds = new Set(delList.map((d) => d.id));
-        for (const pr of delFromProfile) {
-          if (!directIds.has(pr.id)) {
-            delList.push({
-              id: pr.id,
-              user_id: pr.user_id,
-              email: pr.requested_data?.email || pr.user?.email || '',
-              phone: pr.requested_data?.phone || pr.user?.phone || null,
-              reason: pr.requested_data?.reason || 'Account deletion requested via mobile settings',
-              status: pr.status,
-              source: pr.requested_data?.source || 'mobile',
-              created_at: pr.created_at,
-              user: pr.user,
-              _isProfileChangeRequest: true,
-            });
-          }
+      try {
+        const { count, error } = await supabase
+          .from('approval_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending');
+
+        if (!error && count !== null) {
+          return {
+            total: count,
+            by_type: {},
+          };
         }
+      } catch {
+        // Table not ready
       }
 
-      return {
-        profileRequests: standardProfileReqs,
-        deletionRequests: delList,
-      };
+      return { total: 0, by_type: {} };
     },
   });
+}
+
+/**
+ * Backwards-compatibility wrapper for legacy pending approval calls.
+ */
+export function usePendingApprovalRequests({ enabled = true }: { enabled?: boolean } = {}) {
+  const { data: countsData, refetch } = useCentralApprovalCounts({ enabled });
+
+  return {
+    data: {
+      pendingUsers: [],
+      profileRequests: [],
+      deletionRequests: [],
+      total: countsData?.total || 0,
+      by_type: countsData?.by_type || {},
+    },
+    refetch,
+    isLoading: false,
+  };
 }
 
 /**

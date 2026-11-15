@@ -7,6 +7,7 @@ interface AuditLogParams {
   action: string;
   entity_type?: string;
   entity_id?: string;
+  target_user_id?: string;
   metadata?: Record<string, unknown>;
   details?: Record<string, unknown>;
   user_id?: string;
@@ -35,6 +36,7 @@ export async function logAudit({
   action,
   entity_type,
   entity_id,
+  target_user_id,
   metadata,
   details,
   user_id,
@@ -84,6 +86,7 @@ export async function logAudit({
 
     await supabase.from("audit_logs").insert({
       user_id: resolvedUserId ?? null,
+      target_user_id: target_user_id ?? (entity_type === "user" ? entity_id : null) ?? null,
       action,
       entity_type: entity_type ?? null,
       entity_id: entity_id ?? null,

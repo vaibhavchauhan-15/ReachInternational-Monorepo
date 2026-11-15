@@ -21,6 +21,7 @@ import {
   formatAadhaar,
   getStateById,
   getStateByName,
+  MACHINE_CATEGORY_SELECT_OPTIONS,
 } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import {
@@ -99,6 +100,7 @@ export function UserEditModal({
     full_name: user.full_name,
     phone: user.phone || "+91 ",
     role: user.role,
+    machine_category: user.machine_category || "",
     supervisor_id: user.supervisor_id || user.supervisor?.id || "",
     shift_time: user.shift_time || "",
     shift_start_time: user.shift_start_time || "08:00",
@@ -121,6 +123,7 @@ export function UserEditModal({
           setEditForm((prev) => ({
             ...prev,
             street: prev.street || res.user?.street || res.user?.address || "",
+            machine_category: prev.machine_category || res.user?.machine_category || "",
             monthly_salary: prev.monthly_salary || (res.user?.monthly_salary ? String(res.user.monthly_salary) : ""),
             shift_start_time: prev.shift_start_time || res.user?.shift_start_time || "08:00",
             shift_end_time: prev.shift_end_time || res.user?.shift_end_time || "20:00",
@@ -196,6 +199,9 @@ export function UserEditModal({
     }
 
     if (editForm.role === "operator") {
+      if (!editForm.machine_category.trim()) {
+        newErrors.machine_category = "Machine category is mandatory for operator accounts.";
+      }
       const sal = Number(editForm.monthly_salary);
       if (!editForm.monthly_salary || isNaN(sal) || sal <= 0) {
         newErrors.monthly_salary = "Monthly salary is mandatory for operator accounts and must be greater than 0.";
@@ -248,7 +254,11 @@ export function UserEditModal({
 
   const section4Complete = Boolean(
     editForm.role &&
-    (editForm.role !== "operator" || (editForm.monthly_salary && Number(editForm.monthly_salary) > 0))
+    (editForm.role !== "operator" || (
+      editForm.machine_category.trim() &&
+      editForm.monthly_salary &&
+      Number(editForm.monthly_salary) > 0
+    ))
   );
 
   const isAllMandatoryFilled = Boolean(section1Complete && section2Complete && section4Complete);
@@ -259,8 +269,9 @@ export function UserEditModal({
   if (!editForm.city.trim()) missingFields.push("City/Town/Village");
   if (!editForm.district.trim()) missingFields.push("District");
   if (!editForm.state.trim() && !editForm.state_id.trim()) missingFields.push("State");
-  if (editForm.role === "operator" && (!editForm.monthly_salary || Number(editForm.monthly_salary) <= 0)) {
-    missingFields.push("Monthly Salary");
+  if (editForm.role === "operator") {
+    if (!editForm.machine_category.trim()) missingFields.push("Machine Category");
+    if (!editForm.monthly_salary || Number(editForm.monthly_salary) <= 0) missingFields.push("Monthly Salary");
   }
   const missingMandatoryCount = missingFields.length;
 
@@ -277,6 +288,7 @@ export function UserEditModal({
         className="flex flex-col gap-5"
       >
         <input type="hidden" name="role" value={editForm.role} />
+        <input type="hidden" name="machine_category" value={editForm.role === "operator" ? editForm.machine_category : ""} />
         <input type="hidden" name="supervisor_id" value={editForm.supervisor_id} />
         <input type="hidden" name="state" value={editForm.state} />
         <input type="hidden" name="state_id" value={editForm.state_id} />
@@ -407,10 +419,43 @@ export function UserEditModal({
             label="User Access Role *"
             options={roleOptions}
             value={editForm.role}
-            onChange={(val) => setEditForm((prev) => ({ ...prev, role: val as UserRole }))}
+            onChange={(val) =>
+              setEditForm((prev) => ({
+                ...prev,
+                role: val as UserRole,
+                machine_category: val === "operator" ? prev.machine_category : "",
+              }))
+            }
             placeholder="Select access role..."
             clearable={false}
           />
+
+          {/* Conditional Machine Category for Operators */}
+          {editForm.role === "operator" && (
+            <div className="pt-2">
+              <SearchableSelect
+                label="Machine Category *"
+                options={MACHINE_CATEGORY_SELECT_OPTIONS as unknown as SelectOption[]}
+                value={editForm.machine_category}
+                onChange={(val) => {
+                  setEditForm((prev) => ({ ...prev, machine_category: val }));
+                  if (errors.machine_category) {
+                    setErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.machine_category;
+                      return copy;
+                    });
+                  }
+                }}
+                placeholder="Select designated machine category..."
+                clearable={false}
+                error={errors.machine_category}
+              />
+              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
+                Designate the primary machinery type this operator is certified to operate.
+              </p>
+            </div>
+          )}
 
           {/* Conditional Supervisor Selector for Supervised Roles */}
           {isSupervisedRole(editForm.role) && (

@@ -166,6 +166,22 @@ export async function updateOperatorSalaryStatementAction(
     return { success: false, error: error.message };
   }
 
+  // Enqueue PAY1 notification (Normal priority, operator only, generic body with zero PII)
+  try {
+    await supabase.rpc('enqueue_notification', {
+      p_user_id: operatorId,
+      p_category: 'payroll',
+      p_priority: 'normal',
+      p_title: 'Salary Statement Updated',
+      p_body: `Your salary statement for ${targetDate.slice(0, 7)} has been updated.`,
+      p_deep_link: '/settings/account',
+      p_dedupe_key: `pay:${targetDate.slice(0, 7)}:${operatorId}`,
+      p_source: 'action:payroll_statement_update',
+    });
+  } catch (notifErr) {
+    console.warn('[updateOperatorSalaryStatementAction] Failed to enqueue payroll notification:', notifErr);
+  }
+
   revalidatePath("/payroll");
   revalidatePath("/hr");
   revalidateTag(CACHE_TAGS.users, "max");

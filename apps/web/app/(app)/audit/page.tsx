@@ -63,6 +63,7 @@ export default async function AuditPage({ searchParams }: AuditPageProps) {
       tabCounts={result.tabCounts}
       activeTab={activeTab}
       userRole={user.role}
+      volumeAlerts={result.volumeAlerts}
       initialParams={{
         tab: activeTab,
         search: params.search,

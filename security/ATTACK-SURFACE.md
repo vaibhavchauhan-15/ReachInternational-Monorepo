@@ -57,6 +57,8 @@
 | **WEB-07** | Document Upload Flow (`confirmDocumentUploadAction`) | Supabase Storage Direct Upload + Action | Untrusted Client → Storage & DB | Malicious file upload, path traversal, quota exhaustion | 2MB file size limit, private storage bucket, path scoping (`documents/{user_id}/{type_code}`), RLS on `storage.objects` | `Partially Verified` (Bucket `allowed_mime_types` is NULL at DB level; app validates MIME) |
 | **WEB-08** | Audit Trail Access (`/audit`, `app/actions/audit.ts`) | Server Component & Action | Authenticated Staff → Server DAL | Unauthorized viewing of system activity | Role restriction (`requireRole('super_admin', 'admin', 'manager')`), RLS on `audit_logs` | `Verified` |
 | **WEB-09** | Health Check (`/api/health`) | HTTP `GET` | Public Monitor → Server Route | Information leakage | Returns minimal `{ status: "ok", timestamp }` without leaking versions or environment | `Verified` |
+| **WEB-10** | Push Dispatcher (`/api/notify/dispatch`) | HTTP `POST` with Bearer | Internal Sweeper / pg_net → Web API | Dispatch hijacking, timing attacks, unauthorized push spam | Constant-time `crypto.timingSafeEqual` Bearer check, `NOTIFY_SECRET` in Supabase Vault, `PUSH_ENABLED` kill-switch, `SKIP LOCKED` batch claiming | `Verified` |
+| **WEB-11** | Push Receipts Reconciliation (`/api/notify/receipts`) | HTTP `POST` with Bearer | Cron Sweeper → Web API | Receipt tampering, false token deactivation | Constant-time Bearer check, batch reconciliation against Expo Push API, auto-deactivation of invalid device tokens | `Verified` |
 
 ---
 
@@ -70,6 +72,7 @@
 | **MOB-04** | Direct Supabase REST/PostgREST Calls | HTTPS / TLS 1.3 | Mobile Client → Supabase Gateway | BOLA, privilege escalation, unauthorized query execution | PostgREST respects user JWT, table-level RLS, input sanitization via Zod schemas, zero service-role key in mobile bundle | `Verified` |
 | **MOB-05** | Operating System Permissions | Android / iOS Manifest | Mobile OS → Native Runtime | Unnecessary permission exploitation, spyware perception | Android `blockedPermissions` stripping in `app.json`, `withAndroidLargeScreenAndPermissions` plugin, `allowBackup: false` | `Verified` |
 | **MOB-06** | Document / Image Picker (`expo-document-picker`) | Native File Intent | OS File System → Mobile Sandbox | Upload of malicious executables, oversized payloads | File size limit checks (2MB), MIME type checks before upload to Supabase storage | `Verified` |
+| **MOB-07** | Push Notifications & Deep Links (`expo-notifications`) | Native Push Intent | Android / iOS OS → Mobile App | Unsafe navigation, intent spoofing, lock-screen PII leak | Channel importance separation, `isValidDeepLink()` route allowlist, zero PII payload policy (IDs and relative path only) | `Verified` |
 
 ---
 
@@ -82,6 +85,8 @@
 | **EXT-03** | Upstash QStash & Redis | HTTPS REST API | Server Action / Edge Proxy → Upstash | Unauthorized cron execution, rate limit bypass | Bearer token authentication, server-only environment protection | `Partially Verified` |
 | **EXT-04** | Sentry Error Reporting | HTTPS API | Web & Mobile → Sentry Cloud | PII / token leakage in stack traces | Data sanitization in Sentry client configs, explicit masking of passwords/tokens | `Verified` |
 | **EXT-05** | SendGrid / Twilio Dispatch | HTTPS API | Server Actions → Dispatch Providers | Email spoofing, SMS flooding, token leakage | Server-only credential isolation, recipient input validation via Zod | `Partially Verified` |
+| **EXT-06** | Expo Push & Web Push (VAPID) Gateways | HTTPS / TLS 1.3 | Web Server → Apple/Google/Web Push Gateways | Credential compromise, token invalidation | FCM v1 service account via EAS, VAPID key isolation (private key server-only), auto-deactivation on 410 Gone / `DeviceNotRegistered` | `Verified` |
+| **EXT-07** | Push Database Infrastructure (`push_devices`, `push_tickets`, `user_notification_preferences`) | PostgREST / RPC | Client / Server → Supabase Database | Cross-tenant device hijacking, preference spoofing | RLS denial on devices/tickets for direct client queries; device registration via SECURITY DEFINER RPCs bound to `auth.uid()`; user preference RLS policy `own_prefs` | `Verified` |
 
 ---
 

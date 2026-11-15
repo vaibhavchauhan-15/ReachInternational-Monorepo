@@ -1,8 +1,8 @@
-import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
 import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { SuperAdminDashboardDTO } from '@reachinternational/types';
@@ -31,6 +31,8 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   const totalUsers = data?.totalUsers ?? 0;
   const activeMachines = data?.activeMachines ?? 0;
@@ -121,28 +123,39 @@ export const SuperAdminDashboardCard: React.FC<SuperAdminDashboardCardProps> = (
         >
           Governance & System Controls
         </Text>
-        <View style={styles.actionList}>
-          <PrimaryAction
-            title="System Audit Trail"
-            description="Inspect recent administrative mutations and security events"
-            href="/audit"
-            icon={Shield}
-            variant="primary"
-          />
-          <PrimaryAction
-            title="User & Access Directory"
-            description="Manage administrative roles, supervisor scopes, and operators"
-            href="/users"
-            icon={Users}
-            variant="secondary"
-          />
-          <PrimaryAction
-            title="Machinery Fleet Registry"
-            description="Global view of all equipment, client sites, and telemetry"
-            href="/machines"
-            icon={SlidersHorizontal}
-            variant="secondary"
-          />
+        <View
+          style={[
+            styles.actionList,
+            isTabletOrDesktop && styles.actionGrid,
+          ]}
+        >
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="System Audit Trail"
+              description="Inspect recent administrative mutations and security events"
+              href="/audit"
+              icon={Shield}
+              variant="primary"
+            />
+          </View>
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="User & Access Directory"
+              description="Manage administrative roles, supervisor scopes, and operators"
+              href="/users"
+              icon={Users}
+              variant="secondary"
+            />
+          </View>
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Machinery Fleet Registry"
+              description="Global view of all equipment, client sites, and telemetry"
+              href="/machines"
+              icon={SlidersHorizontal}
+              variant="secondary"
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -162,5 +175,18 @@ const styles = StyleSheet.create({
   },
   actionList: {
     gap: spacingNumeric.sm,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  actionGridItem: {
+    flex: 1,
+    minWidth: 0,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
 });

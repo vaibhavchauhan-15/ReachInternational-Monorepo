@@ -3,7 +3,7 @@
  * Route: /settings/notifications
  * 
  * Manages push notification delivery, system permissions synchronization,
- * and granular operational alert channels.
+ * and granular operational alert channels backed by public.user_notification_preferences.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -25,13 +25,15 @@ import {
   Clock,
   Wrench,
   UserCheck,
-  AlertTriangle,
-  FileCheck,
-  ShieldAlert,
   ShieldCheck,
+  ShieldAlert,
   Settings,
+  Banknote,
+  Moon,
+  Info,
 } from '../../../components/ui/icon';
 import { haptics } from '../../../lib/haptics';
+import { useAuth } from '../../../lib/auth/useAuth';
 import {
   useNotificationPreferences,
   type NotificationPreferences,
@@ -41,6 +43,14 @@ import {
   requestNotificationPermission,
   type PermissionStatus,
 } from '../../../lib/permissions/notificationPermissions';
+import {
+  registerForPushNotifications,
+  unregisterPushNotifications,
+  isExpoGo,
+} from '../../../lib/notifications/registerPush';
+
+// Note: overtimeAlerts toggle removed per push notification specification (§11)
+// and replaced with server-synced payrollAlerts and adminAlerts channels.
 
 interface NotificationToggleCardProps {
   icon: React.ReactNode;
@@ -121,11 +131,14 @@ function NotificationToggleCard({
 export default function NotificationsSettingsScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
-  const { prefs, setPreferences, toggleChannel } = useNotificationPreferences();
+  const { user, role } = useAuth();
+  const { prefs, setPreferences, toggleChannel } = useNotificationPreferences(user?.id);
   const { toast } = useToast();
 
   const [systemPermission, setSystemPermission] = useState<PermissionStatus>('undetermined');
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+
+  const isAdminRole = role === 'admin' || role === 'hr' || role === 'super_admin';
 
   // Check system notification permission on mount
   useEffect(() => {
@@ -152,8 +165,13 @@ export default function NotificationsSettingsScreen() {
         setSystemPermission(result);
         if (result === 'granted') {
           await setPreferences({ push: true });
+          await registerForPushNotifications();
           haptics.confirm();
-          toast('success', 'Push Notifications Enabled', 'You will receive critical fleet and shift alerts.');
+          if (isExpoGo()) {
+            toast('info', 'Expo Go Environment', 'Preferences saved. Remote push requires a development build.');
+          } else {
+            toast('success', 'Push Notifications Enabled', 'You will receive critical fleet and shift alerts.');
+          }
         } else {
           haptics.reject();
           toast('warning', 'Permission Required', 'System notification permission was not granted.');
@@ -168,9 +186,15 @@ export default function NotificationsSettingsScreen() {
 
     await setPreferences({ push: nextVal });
     if (nextVal) {
+      await registerForPushNotifications();
       haptics.confirm();
-      toast('success', 'Push Notifications Enabled');
+      if (isExpoGo()) {
+        toast('info', 'Expo Go Environment', 'Preferences saved. Remote push requires a development build.');
+      } else {
+        toast('success', 'Push Notifications Enabled');
+      }
     } else {
+      await unregisterPushNotifications();
       toast('info', 'Push Notifications Paused');
     }
   };
@@ -294,6 +318,40 @@ export default function NotificationsSettingsScreen() {
         </Card>
       )}
 
+      {/* Expo Go Push Limitation Notice */}
+      {isExpoGo() && (
+        <Card
+          variant="elevated"
+          style={[
+            styles.permissionBanner,
+            {
+              backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#f0f9ff',
+              borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+            },
+          ]}
+        >
+          <View style={styles.bannerRow}>
+            <Info size={20} color={isDark ? '#38bdf8' : '#0284c7'} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={{ color: isDark ? '#38bdf8' : '#0369a1' }}
+              >
+                Expo Go Development Mode
+              </Text>
+              <Text
+                variant="caption"
+                style={{ color: isDark ? '#bae6fd' : '#0284c7' }}
+                numberOfLines={2}
+              >
+                Remote push notifications require a development build. Local operational alerts remain active.
+              </Text>
+            </View>
+          </View>
+        </Card>
+      )}
+
       {/* Section Header: Alert Channels */}
       <View style={styles.sectionHeader}>
         <Text
@@ -307,7 +365,7 @@ export default function NotificationsSettingsScreen() {
           variant="caption"
           style={[styles.sectionSubtitle, { color: theme.colors.mute }]}
         >
-          Configure real-time push alerts for shift reminders, breakdown flags, and log submission approvals.
+          Configure real-time push alerts for shift reminders, breakdown flags, and assignments.
         </Text>
       </View>
 
@@ -315,8 +373,8 @@ export default function NotificationsSettingsScreen() {
       <NotificationToggleCard
         icon={<Clock size={20} color={isDark ? '#38bdf8' : '#0284c7'} />}
         iconBg={isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe'}
-        title="Shift & Attendance Reminders"
-        subtitle="Alerts for shift roster start, clock-in, and log submission deadlines"
+        title="Shift & Meter Reminders"
+        subtitle="Alerts when shifts end, daily pending slot digests, and lock-out warnings"
         value={Boolean(prefs.shiftReminders)}
         disabled={!prefs.push}
         onToggle={() => handleChannelToggle('shiftReminders', 'Shift Reminders')}
@@ -347,29 +405,104 @@ export default function NotificationsSettingsScreen() {
         accessibilityLabel="Toggle Machine Assignments"
       />
 
-      {/* 5. Overtime Authorization Alerts */}
+      {/* 5. Admin Alerts (visible only to Admin, HR, Super Admin) */}
+      {isAdminRole && (
+        <NotificationToggleCard
+          icon={<ShieldCheck size={20} color={isDark ? '#a78bfa' : '#7c3aed'} />}
+          iconBg={isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe'}
+          title="Administrative & Registration Alerts"
+          subtitle="Notifications for pending user registrations and equipment inquiries"
+          value={Boolean(prefs.adminAlerts)}
+          disabled={!prefs.push}
+          onToggle={() => handleChannelToggle('adminAlerts', 'Administrative Alerts')}
+          accessibilityLabel="Toggle Administrative Alerts"
+        />
+      )}
+
+      {/* 6. Payroll Alerts */}
       <NotificationToggleCard
-        icon={<AlertTriangle size={20} color={isDark ? '#fbbf24' : '#d97706'} />}
+        icon={<Banknote size={20} color={isDark ? '#fbbf24' : '#d97706'} />}
         iconBg={isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7'}
-        title="Overtime Authorization Alerts"
-        subtitle="Instant alerts for overtime authorizations and approval deadlines"
-        value={Boolean(prefs.overtimeAlerts)}
+        title="Payroll & Salary Dispatches"
+        subtitle="Monthly salary slip generation notices and payout confirmations"
+        value={Boolean(prefs.payrollAlerts)}
         disabled={!prefs.push}
-        onToggle={() => handleChannelToggle('overtimeAlerts', 'Overtime Authorization Alerts')}
-        accessibilityLabel="Toggle Overtime Authorization Alerts"
+        onToggle={() => handleChannelToggle('payrollAlerts', 'Payroll Alerts')}
+        accessibilityLabel="Toggle Payroll Alerts"
       />
 
-      {/* 6. Daily Running Log Submissions */}
+      {/* 7. Quiet Hours */}
+      <View style={styles.sectionHeader}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          style={[styles.sectionTitle, { color: theme.colors.mute }]}
+        >
+          QUIET HOURS & DOWNTIME
+        </Text>
+      </View>
+
       <NotificationToggleCard
-        icon={<FileCheck size={20} color={isDark ? '#a78bfa' : '#7c3aed'} />}
-        iconBg={isDark ? 'rgba(139, 92, 246, 0.15)' : '#ede9fe'}
-        title="Daily Log Confirmations"
-        subtitle="Confirmations for verified HMR submissions and supervisor approvals"
-        value={Boolean(prefs.logSubmissions)}
+        icon={<Moon size={20} color={isDark ? '#818cf8' : '#4f46e5'} />}
+        iconBg={isDark ? 'rgba(79, 70, 229, 0.15)' : '#e0e7ff'}
+        title="Quiet Hours (22:00 – 06:00 IST)"
+        subtitle="Defers non-critical notifications until morning. Critical breakdown alerts always sound."
+        value={Boolean(prefs.quietHoursEnabled)}
         disabled={!prefs.push}
-        onToggle={() => handleChannelToggle('logSubmissions', 'Daily Running Log Submissions')}
-        accessibilityLabel="Toggle Daily Running Log Submissions"
+        onToggle={() => handleChannelToggle('quietHoursEnabled', 'Quiet Hours')}
+        accessibilityLabel="Toggle Quiet Hours"
       />
+
+      {/* 8. Mandatory Security Alerts (Always On) */}
+      <Card
+        variant="elevated"
+        style={[
+          styles.securityCard,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <View style={styles.masterHeaderRow}>
+          <View
+            style={[
+              styles.iconBox,
+              {
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5',
+              },
+            ]}
+          >
+            <ShieldCheck size={20} color={isDark ? '#34d399' : '#059669'} />
+          </View>
+          <View style={styles.textColumn}>
+            <Text
+              variant="subheading"
+              weight="semibold"
+              style={[styles.cardTitle, { color: theme.colors.ink }]}
+              numberOfLines={1}
+            >
+              Security Alerts
+            </Text>
+            <Text
+              variant="caption"
+              style={[styles.cardSubtitle, { color: theme.colors.mute }]}
+              numberOfLines={2}
+            >
+              Password changes, session revocations, and new device logins are always active.
+            </Text>
+          </View>
+          <View style={styles.alwaysOnBadge}>
+            <Text
+              variant="caption"
+              weight="semibold"
+              style={{ color: isDark ? '#34d399' : '#059669' }}
+            >
+              ALWAYS ON
+            </Text>
+          </View>
+        </View>
+      </Card>
     </SettingsScreenContainer>
   );
 }
@@ -420,6 +553,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     gap: 14,
+  },
+  securityCard: {
+    padding: 16,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    opacity: 0.9,
+  },
+  alwaysOnBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.full,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconBox: {
     width: 40,

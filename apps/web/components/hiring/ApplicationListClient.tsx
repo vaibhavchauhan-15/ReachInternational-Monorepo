@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { ApplicationDetailDrawer } from "./ApplicationDetailDrawer";
 import type { JobApplication, ApplicationStatus } from "@reachinternational/types";
+import { formatDate } from "@reachinternational/utils";
 import { cn } from "@/lib/utils";
 
 interface JobOption {
@@ -243,8 +244,8 @@ export function ApplicationListClient({
       id: "created_at",
       header: "Applied",
       cell: (row: JobApplication) => (
-        <span className="text-[11px] text-[var(--color-mute)]">
-          {new Date(row.created_at).toLocaleDateString()}
+        <span suppressHydrationWarning className="text-[11px] text-[var(--color-mute)]">
+          {formatDate(row.created_at)}
         </span>
       ),
     },
@@ -394,8 +395,8 @@ export function ApplicationListClient({
                 </div>
 
                 <div className="pt-2 border-t border-[var(--color-hairline)] flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-[var(--color-mute)]">
-                    {new Date(app.created_at).toLocaleDateString()}
+                  <span suppressHydrationWarning className="text-[11px] text-[var(--color-mute)]">
+                    {formatDate(app.created_at)}
                   </span>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <AnimatedEye size={12} />

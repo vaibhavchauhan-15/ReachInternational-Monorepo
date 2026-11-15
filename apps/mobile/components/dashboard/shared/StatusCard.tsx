@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
@@ -106,7 +106,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
     <Card
       onPress={targetRoute ? handlePress : undefined}
       className="p-3.5 sm:p-4 rounded-2xl border border-border bg-card flex-col justify-between"
-      style={style}
+      style={[styles.card, style]}
     >
       <View style={styles.topRow}>
         <Text
@@ -182,11 +182,21 @@ export const StatusCard: React.FC<StatusCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  card: {
+    width: '100%',
+    minHeight: 124,
+    justifyContent: 'space-between',
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacingNumeric.xs + 2,
+    minHeight: 20,
   },
   eyebrow: {
     textTransform: 'uppercase',
@@ -195,6 +205,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacingNumeric.sm + 2,
+    flex: 1,
+    minHeight: 52,
   },
   iconCircle: {
     width: 34,
@@ -208,10 +220,12 @@ const styles = StyleSheet.create({
   textContainer: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
   },
   label: {},
   description: {
     marginTop: 2,
+    minHeight: 32,
   },
   childrenWithLabel: {
     marginTop: spacingNumeric.sm,

@@ -23,7 +23,12 @@ import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
 import type { UserRole } from "@/lib/types/database";
 import type { Branch } from "@/lib/queries/branches";
-import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  formatAadhaar,
+  MACHINE_CATEGORY_SELECT_OPTIONS,
+} from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import {
   FormSectionCard,
@@ -98,6 +103,7 @@ export function UserCreateModal({
     phone: "+91 ",
     password: "",
     role: "operator" as UserRole,
+    machine_category: "",
     supervisor_id: "",
     branch_id: "none",
     shift_time: "08:00 - 20:00",
@@ -188,7 +194,12 @@ export function UserCreateModal({
   // Section 4: User Access Role & System Permissions (Mandatory)
   const section4Complete = Boolean(
     createForm.role &&
-    (!isOperator || (createForm.monthly_salary && Number(createForm.monthly_salary) > 0 && !errors.monthly_salary))
+    (!isOperator || (
+      createForm.machine_category.trim() &&
+      createForm.monthly_salary &&
+      Number(createForm.monthly_salary) > 0 &&
+      !errors.monthly_salary
+    ))
   );
 
   const isAllMandatoryFilled =
@@ -222,6 +233,9 @@ export function UserCreateModal({
     }
 
     if (createForm.role === "operator") {
+      if (!createForm.machine_category.trim()) {
+        newErrors.machine_category = "Machine category is mandatory for operator accounts.";
+      }
       const sal = Number(createForm.monthly_salary);
       if (!createForm.monthly_salary || isNaN(sal) || sal <= 0) {
         newErrors.monthly_salary = "Monthly salary is mandatory for operator accounts and must be greater than 0.";
@@ -271,6 +285,7 @@ export function UserCreateModal({
         {/* Hidden inputs for custom select values */}
         <input type="hidden" name="branch_id" value={createForm.branch_id} />
         <input type="hidden" name="role" value={createForm.role} />
+        <input type="hidden" name="machine_category" value={createForm.role === "operator" ? createForm.machine_category : ""} />
         <input type="hidden" name="supervisor_id" value={createForm.supervisor_id} />
 
         {/* Informational banner: Direct activation without approval request */}
@@ -424,10 +439,43 @@ export function UserCreateModal({
             label="User Access Role *"
             options={roleOptions}
             value={createForm.role}
-            onChange={(val) => setCreateForm((prev) => ({ ...prev, role: val as UserRole }))}
+            onChange={(val) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                role: val as UserRole,
+                machine_category: val === "operator" ? prev.machine_category : "",
+              }))
+            }
             placeholder="Select user role..."
             clearable={false}
           />
+
+          {/* Conditional Machine Category for Operators */}
+          {createForm.role === "operator" && (
+            <div className="pt-2">
+              <SearchableSelect
+                label="Machine Category *"
+                options={MACHINE_CATEGORY_SELECT_OPTIONS as unknown as SelectOption[]}
+                value={createForm.machine_category}
+                onChange={(val) => {
+                  setCreateForm((prev) => ({ ...prev, machine_category: val }));
+                  if (errors.machine_category) {
+                    setErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.machine_category;
+                      return copy;
+                    });
+                  }
+                }}
+                placeholder="Select designated machine category..."
+                clearable={false}
+                error={errors.machine_category}
+              />
+              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
+                Designate the primary machinery type this operator is certified to operate.
+              </p>
+            </div>
+          )}
 
           {/* Conditional Supervisor Selector for Supervised Roles */}
           {isSupervisedRole(createForm.role) && (

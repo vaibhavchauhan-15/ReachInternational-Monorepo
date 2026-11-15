@@ -20,6 +20,7 @@ import {
   getStateById,
   getStateByName,
   sanitizeDatabaseError,
+  MACHINE_CATEGORY_SELECT_OPTIONS,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserUpdated } from '../../lib/notifications';
@@ -38,6 +39,7 @@ import {
   Clock,
   ChevronDown,
   Check,
+  Wrench,
 } from '../ui/icon';
 import type { UserRecord } from './UserDetailModal';
 
@@ -72,6 +74,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('operator');
+  const [machineCategory, setMachineCategory] = useState('');
   const [shiftTime, setShiftTime] = useState('');
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
@@ -94,6 +97,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setFullName(user.full_name || '');
       setPhone(user.phone || '');
       setRole(user.role || 'operator');
+      setMachineCategory((user as any).machine_category || '');
       setShiftTime(user.shift_time || '');
       setStreet(user.street || user.address || '');
       setCity(user.city || '');
@@ -160,7 +164,9 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const section1Complete = Boolean(fullName.trim().length >= 2 && cleanPhone.length >= 10);
   const section2Complete = Boolean(shiftTime.trim().length > 0);
   const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateName.trim());
-  const section4Complete = isSalaryRequired ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+  const section4Complete = isSalaryRequired
+    ? Boolean(machineCategory.trim() && monthlySalary && Number(monthlySalary) > 0)
+    : true;
 
   const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
   const missingMandatoryCount = [
@@ -185,6 +191,10 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     }
 
     if (role === 'operator') {
+      if (!machineCategory.trim()) {
+        showToast('warning', 'Validation Error', 'Machine category is mandatory for operator accounts.');
+        return;
+      }
       const sal = Number(monthlySalary);
       if (!monthlySalary || isNaN(sal) || sal <= 0) {
         showToast('warning', 'Validation Error', 'Monthly salary is mandatory for operator accounts and must be greater than 0.');
@@ -224,6 +234,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           full_name: fullName.trim(),
           phone: cleanPhone,
           role,
+          machine_category: role === 'operator' ? machineCategory.trim() || null : null,
           shift_start_time: parsedShift?.startTime || null,
           shift_end_time: parsedShift?.endTime || null,
           street: street.trim() || null,
@@ -261,6 +272,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         full_name: fullName.trim(),
         phone: cleanPhone,
         role,
+        machine_category: role === 'operator' ? machineCategory.trim() || null : null,
         shift_start_time: parsedShift?.startTime || null,
         shift_end_time: parsedShift?.endTime || null,
         shift_time: shiftTime.trim() || null,
@@ -453,11 +465,30 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 required
                 options={roleSelectOptions}
                 value={role}
-                onChange={(val) => setRole(val)}
+                onChange={(val) => {
+                  setRole(val);
+                  if (val !== 'operator') {
+                    setMachineCategory('');
+                  }
+                }}
                 placeholder="Select designated role..."
                 modalTitle="Select System Role"
                 leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
               />
+
+              {/* Conditional Machine Category Selector for Operators */}
+              {role === 'operator' && (
+                <SearchableSelect
+                  label="Machine Category"
+                  required
+                  options={MACHINE_CATEGORY_SELECT_OPTIONS as unknown as SelectOption[]}
+                  value={machineCategory}
+                  onChange={(val) => setMachineCategory(val)}
+                  placeholder="Select designated machine category..."
+                  modalTitle="Select Machine Category"
+                  leftIcon={<Wrench size={16} color={theme.colors.mute} />}
+                />
+              )}
 
               {/* Conditional Supervisor Selector */}
               {isSupervisedRole(role) && (

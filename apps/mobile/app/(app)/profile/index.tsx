@@ -1034,8 +1034,8 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
               },
             ]}
           >
-            {/* Header: Title */}
-            <View style={styles.docSectionHeader}>
+            {/* Header: Title & Manage Link */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text
                 variant="micro"
                 weight="bold"
@@ -1043,6 +1043,18 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
               >
                 IDENTITY & BANKING DOCUMENTS
               </Text>
+              <Pressable
+                onPress={() => {
+                  haptics.select();
+                  router.push('/(app)/profile/documents');
+                }}
+                hitSlopToMin48
+                accessibilityLabel="Open My Documents screen"
+              >
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
+                  Manage
+                </Text>
+              </Pressable>
             </View>
 
             {/* Document Slots Responsive Grid */}

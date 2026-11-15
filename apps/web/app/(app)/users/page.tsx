@@ -3,13 +3,11 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import {
   getUserList,
-  getPendingUsersCached,
-  getPendingProfileChangeRequests,
-  getPendingAccountDeletionRequestsCached,
   getUserListAggregatesCached,
   getSupervisorUserListAggregatesCached,
   USERS_PAGE_SIZE,
 } from "@/lib/data/users";
+import { getApprovalCountsDAL } from "@/lib/dal/approvals";
 import { canViewUsers, canCreateUser } from "@reachinternational/permissions";
 import { UsersPageClient } from "./UsersClient";
 import { UsersSkeleton } from "@/components/ui";
@@ -57,20 +55,17 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const dateRange = typeof params?.dateRange === "string" ? params.dateRange : "all";
   const sort = typeof params?.sort === "string" ? params.sort : "newest";
 
-  const [{ users, totalPages, total }, pendingUsers, profileChangeRequests, accountDeletionRequests, aggregates] = await Promise.all([
+  const [{ users, totalPages, total }, aggregates, approvalCountsResult] = await Promise.all([
     getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: USERS_PAGE_SIZE }),
-    isSupervisor ? Promise.resolve([]) : getPendingUsersCached(),
-    isSupervisor ? Promise.resolve([]) : getPendingProfileChangeRequests(currentUser.role),
-    isSupervisor ? Promise.resolve([]) : getPendingAccountDeletionRequestsCached(),
     isSupervisor ? getSupervisorUserListAggregatesCached(currentUser.id) : getUserListAggregatesCached(),
+    readOnly ? Promise.resolve({ data: { total: 0, by_type: {} }, error: null }) : getApprovalCountsDAL(),
   ]);
+
+  const approvalCounts = approvalCountsResult?.data || { total: 0, by_type: {} };
 
   return (
     <UsersPageClient
       users={users}
-      pendingUsers={pendingUsers}
-      profileChangeRequests={profileChangeRequests}
-      accountDeletionRequests={accountDeletionRequests}
       currentUser={currentUser}
       isSuperAdmin={isSuperAdmin}
       totalPages={totalPages}
@@ -78,6 +73,7 @@ async function UsersPageContent({ searchParams }: PageProps) {
       currentPage={page}
       aggregates={aggregates}
       readOnly={readOnly}
+      pendingApprovalCounts={approvalCounts}
     />
   );
 }

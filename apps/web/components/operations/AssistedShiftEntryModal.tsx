@@ -93,13 +93,15 @@ export function AssistedShiftEntryModal({
       setAssignedShiftCodes([]);
       return;
     }
+    const targetDate = logDate || row.log_date || selectedDate || getISTDateString();
     const supabase = createSupabaseBrowserClient();
     supabase
       .from("operator_machine_assignments")
       .select("shift_code")
       .eq("machine_id", row.machine_id)
       .eq("operator_id", row.operator_id)
-      .eq("is_active", true)
+      .lte("valid_from", targetDate)
+      .or(`valid_to.is.null,valid_to.gte.${targetDate}`)
       .then(({ data }: { data: any }) => {
         const codes = (data || []).map((d: any) => d.shift_code?.trim()).filter(Boolean);
         if (codes.length > 0) {

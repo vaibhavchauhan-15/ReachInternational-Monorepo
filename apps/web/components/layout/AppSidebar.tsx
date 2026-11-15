@@ -14,6 +14,7 @@ import {
   AnimatedCalendarCheck,
   AnimatedBriefcase,
   AnimatedFileText,
+  AnimatedCheckCheck,
 } from "@/components/ui/animated-icons";
 import {
   Sidebar,
@@ -70,6 +71,12 @@ export const mainNavItems: NavItem[] = [
     label: "Users",
     icon: AnimatedUsers,
     roles: ["super_admin", "admin", "manager", "hr", "supervisor"],
+  },
+  {
+    href: "/approvals",
+    label: "Approvals",
+    icon: AnimatedCheckCheck,
+    roles: ["super_admin", "admin", "manager", "supervisor", "hr"],
   },
   {
     href: "/attendance",

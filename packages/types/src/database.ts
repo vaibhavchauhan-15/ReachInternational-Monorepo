@@ -99,6 +99,7 @@ export interface User {
   state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
+  machine_category?: string | null;
   complete_profile?: boolean | "yes" | "no" | null;
   supervisor_id?: string | null;
   supervisor_ids?: string[] | null;
@@ -158,6 +159,7 @@ export interface UserDocumentType {
   visibility: "private" | "public";
   allowed_mime_types: string[];
   max_size_bytes: number;
+  requires_approval?: boolean;
   created_at: string;
 }
 
@@ -166,15 +168,33 @@ export interface UserDocument {
   user_id: string;
   document_type_code: string;
   storage_path: string;
+  thumb_path?: string | null;
   file_name?: string | null;
   mime_type: string;
   file_size_bytes: number;
   status: "pending" | "verified" | "rejected";
+  verification_status?: "pending" | "verified" | "rejected";
+  verified_by?: string | null;
+  verified_at?: string | null;
+  rejection_reason?: string | null;
   uploaded_by?: string | null;
   created_at: string;
   updated_at: string;
   signed_url?: string | null;
   document_type?: UserDocumentType | null;
+}
+
+export interface DocumentChangeRequest {
+  id: string;
+  user_id: string;
+  document_type_code: string;
+  staging_path: string;
+  staging_thumb_path?: string | null;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
 }
 
 export interface OperatorPayroll {
@@ -528,6 +548,8 @@ export interface OperatorMachineAssignment {
   shift_code?: string | null;
   crosses_midnight: boolean;
   is_active: boolean;
+  valid_from?: string;
+  valid_to?: string | null;
   assigned_by: string;
   assigned_at: string;
   ended_at: string | null;
@@ -577,6 +599,7 @@ export interface MachineHourLog {
   id: string;
   machine_id: string;
   operator_id: string;
+  assignment_id?: string | null;
   supervisor_id?: string | null;
   client_id?: string | null;
   site_id?: string | null;
@@ -667,6 +690,7 @@ export interface OperatorLastLogSummary {
 }
 
 export interface OperatorEntryContext {
+  assignment_id?: string | null;
   operator: {
     id: string;
     name: string;
@@ -738,6 +762,46 @@ export interface TodayShiftMonitorRow {
   remarks: string | null;
   machine_status?: string | null;
   machine_health_status?: "active" | "under_maintenance" | "breakdown" | "spare" | string | null;
+}
+
+export interface ShiftTaskRow {
+  assignment_id: string;
+  operator_id: string;
+  operator_name: string | null;
+  operator_employee_id: string | null;
+  machine_id: string;
+  machine_code: string;
+  serial_number: string | null;
+  model: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  site_id: string | null;
+  site_name: string | null;
+  current_meter: number | null;
+  machine_status: string | null;
+  machine_health_status: string | null;
+  shift_code: string;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  work_date: string;
+  log_id: string | null;
+  start_meter: number | null;
+  end_meter: number | null;
+  running_hours: number | null;
+  is_breakdown: boolean | null;
+  remarks: string | null;
+  log_created_at: string | null;
+  status: "pending" | "entered";
+}
+
+export interface ShiftTasksResponse {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasMore: boolean;
+  fromDate: string;
+  toDate: string;
+  rows: ShiftTaskRow[];
 }
 
 export interface MachineComplaint {

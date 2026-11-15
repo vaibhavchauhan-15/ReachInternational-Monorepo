@@ -1,8 +1,8 @@
-import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
 import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { ManagerDashboardDTO } from '@reachinternational/types';
@@ -30,6 +30,8 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   const totalFleet = data?.machineUtilization?.total ?? 0;
   const rentedFleet = data?.machineUtilization?.rented ?? 0;
@@ -141,21 +143,30 @@ export const ManagerDashboardCard: React.FC<ManagerDashboardCardProps> = ({
         >
           Operations Management
         </Text>
-        <View style={styles.actionList}>
-          <PrimaryAction
-            title="Daily Operations Review"
-            description="Examine shift logs, running hours, and site location records"
-            href="/operations"
-            icon={FileSpreadsheet}
-            variant="primary"
-          />
-          <PrimaryAction
-            title="Machinery Fleet Roster"
-            description="Reassign equipment, update rental status, and track maintenance"
-            href="/machines"
-            icon={Wrench}
-            variant="secondary"
-          />
+        <View
+          style={[
+            styles.actionList,
+            isTabletOrDesktop && styles.actionGrid,
+          ]}
+        >
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Daily Operations Review"
+              description="Examine shift logs, running hours, and site location records"
+              href="/operations"
+              icon={FileSpreadsheet}
+              variant="primary"
+            />
+          </View>
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Machinery Fleet Roster"
+              description="Reassign equipment, update rental status, and track maintenance"
+              href="/machines"
+              icon={Wrench}
+              variant="secondary"
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -175,5 +186,18 @@ const styles = StyleSheet.create({
   },
   actionList: {
     gap: spacingNumeric.sm,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  actionGridItem: {
+    flex: 1,
+    minWidth: 0,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
 });

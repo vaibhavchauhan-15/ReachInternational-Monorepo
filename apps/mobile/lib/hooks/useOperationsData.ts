@@ -10,7 +10,13 @@ import {
   getISTDateString,
   addDaysToDateStr,
 } from '@reachinternational/utils';
-import type { OperatorEntryContext, TodayShiftMonitorRow, ClientShiftCode } from '@reachinternational/types';
+import type {
+  OperatorEntryContext,
+  TodayShiftMonitorRow,
+  ClientShiftCode,
+  ShiftTaskRow,
+  ShiftTasksResponse,
+} from '@reachinternational/types';
 import type { QueuedMutation, MutationStatus } from '../offline/types';
 import { supabase } from '../supabase';
 
@@ -394,13 +400,14 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled
  * Ultra-fast read-model hook for Operator Landing screen.
  * Queries ONLY the authenticated operator, assigned machine, client, and latest HMR in ONE RPC call.
  */
-export function useOperatorEntryContext(operatorId?: string) {
+export function useOperatorEntryContext(operatorId?: string, targetDate?: string) {
   return useQuery<OperatorEntryContext | null>({
-    queryKey: ['operator', 'entry-context', operatorId],
+    queryKey: ['operator', 'entry-context', operatorId, targetDate || 'today'],
     queryFn: async () => {
       if (!operatorId) return null;
       const { data, error } = await supabase.rpc('get_operator_entry_context', {
         p_operator_id: operatorId,
+        p_target_date: targetDate || null,
       });
 
       if (error) {
@@ -411,6 +418,7 @@ export function useOperatorEntryContext(operatorId?: string) {
 
       const res = data as any;
       return {
+        assignment_id: res?.assignment_id || null,
         operator: res?.operator || null,
         machine: res?.machine || null,
         client: res?.client || null,
@@ -419,10 +427,100 @@ export function useOperatorEntryContext(operatorId?: string) {
         shift_codes: res?.shift_codes || [],
         assigned_shift_code: res?.assigned_shift_code || null,
         assigned_shift_codes: Array.isArray(res?.assigned_shift_codes) ? res.assigned_shift_codes : [],
+        today_logged_shift_codes: Array.isArray(res?.today_logged_shift_codes) ? res.today_logged_shift_codes : [],
+        today_logs: Array.isArray(res?.today_logs) ? res.today_logs : [],
       };
     },
     enabled: Boolean(operatorId),
     staleTime: 15_000, // 15 seconds operational cache
+  });
+}
+
+/**
+ * Hook for 7-Day Shift Tasks (Pending & Entered) on Mobile.
+ * Queries get_shift_tasks RPC with IST 7-day window.
+ */
+export function useShiftTasks(
+  actorId?: string,
+  params?: {
+    operatorId?: string;
+    fromDate?: string;
+    toDate?: string;
+    status?: 'all' | 'pending' | 'entered';
+    page?: number;
+    pageSize?: number;
+  },
+  enabled: boolean = true
+) {
+  const effectiveToday = getISTDateString();
+  const effectiveFrom = params?.fromDate || addDaysToDateStr(effectiveToday, -6);
+  const effectiveTo = params?.toDate || effectiveToday;
+
+  return useQuery<ShiftTasksResponse>({
+    queryKey: [
+      'operations',
+      'shift-tasks',
+      actorId,
+      params?.operatorId || 'all',
+      effectiveFrom,
+      effectiveTo,
+      params?.status || 'all',
+      params?.page || 1,
+      params?.pageSize || 50,
+    ],
+    enabled: Boolean(actorId) && enabled,
+    queryFn: async () => {
+      if (!actorId) {
+        return {
+          page: 1,
+          pageSize: 50,
+          totalCount: 0,
+          hasMore: false,
+          fromDate: effectiveFrom,
+          toDate: effectiveTo,
+          rows: [],
+        };
+      }
+
+      const { data, error } = await supabase.rpc('get_shift_tasks', {
+        p_actor_id: actorId,
+        ...(params?.operatorId ? { p_operator_id: params.operatorId } : {}),
+        p_from_date: effectiveFrom,
+        p_to_date: effectiveTo,
+        ...(params?.status ? { p_status: params.status } : {}),
+        p_page: params?.page || 1,
+        p_page_size: params?.pageSize || 50,
+      });
+
+      if (error) {
+        if (isAbortError(error)) {
+          return {
+            page: 1,
+            pageSize: 50,
+            totalCount: 0,
+            hasMore: false,
+            fromDate: effectiveFrom,
+            toDate: effectiveTo,
+            rows: [],
+          };
+        }
+        console.error('[useShiftTasks] RPC Error:', error);
+        throw error;
+      }
+
+      return (data as unknown as ShiftTasksResponse) || {
+        page: 1,
+        pageSize: 50,
+        totalCount: 0,
+        hasMore: false,
+        fromDate: effectiveFrom,
+        toDate: effectiveTo,
+        rows: [],
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -436,14 +534,15 @@ export function useTodayShiftMonitor(
   enabled: boolean = true,
   clientId?: string
 ) {
+  const effectiveDate = logDate || getISTDateString();
   return useQuery<TodayShiftMonitorRow[]>({
-    queryKey: ['operations', 'today-shift-monitor', actorId, logDate || 'today', clientId || 'all'],
+    queryKey: ['operations', 'today-shift-monitor', actorId, effectiveDate, clientId || 'all'],
     enabled: Boolean(actorId) && enabled,
     queryFn: async () => {
       if (!actorId) return [];
       const { data, error } = await supabase.rpc('get_today_shift_log_monitor', {
         p_actor_id: actorId,
-        ...(logDate ? { p_log_date: logDate } : {}),
+        p_log_date: effectiveDate,
         ...(clientId ? { p_client_id: clientId } : {}),
       });
 
@@ -501,16 +600,17 @@ export function useTodayShiftSummary(
   clientId?: string,
   enabled: boolean = true
 ) {
+  const effectiveDate = logDate || getISTDateString();
   const effectiveClientId = clientId === 'all' || !clientId ? undefined : (clientId.startsWith('name:') ? undefined : clientId);
 
   return useQuery<TodayShiftSummaryData>({
-    queryKey: ['operations', 'today-shift-summary', actorId, logDate || 'today', clientId || 'all'],
+    queryKey: ['operations', 'today-shift-summary', actorId, effectiveDate, clientId || 'all'],
     enabled: Boolean(actorId) && enabled,
     queryFn: async () => {
       if (!actorId) return { total: 0, entered: 0, pending: 0, unassigned: 0 };
       const { data, error } = await supabase.rpc('get_today_shift_monitor_summary', {
         p_actor_id: actorId,
-        ...(logDate ? { p_log_date: logDate } : {}),
+        p_log_date: effectiveDate,
         ...(effectiveClientId ? { p_client_id: effectiveClientId } : {}),
       });
 

@@ -34,6 +34,7 @@ import {
   generateJobPreviewTokenAction,
 } from "@/app/actions/hiring";
 import type { JobPostingListItem, JobDepartment } from "@reachinternational/types";
+import { formatDate } from "@reachinternational/utils";
 import { cn } from "@/lib/utils";
 
 interface JobListClientProps {
@@ -269,12 +270,12 @@ export function JobListClient({
       cell: (row: JobPostingListItem) => (
         <div className="flex flex-col text-[11px] text-[var(--color-mute)]">
           {row.apply_by ? (
-            <span>Apply by: {new Date(row.apply_by).toLocaleDateString()}</span>
+            <span suppressHydrationWarning>Apply by: {formatDate(row.apply_by)}</span>
           ) : (
             <span>No deadline</span>
           )}
-          <span className="text-[10px]">
-            {row.published_at ? `Pub: ${new Date(row.published_at).toLocaleDateString()}` : "Unpublished"}
+          <span suppressHydrationWarning className="text-[10px]">
+            {row.published_at ? `Pub: ${formatDate(row.published_at)}` : "Unpublished"}
           </span>
         </div>
       ),

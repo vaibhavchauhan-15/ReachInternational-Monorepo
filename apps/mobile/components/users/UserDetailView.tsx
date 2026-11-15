@@ -15,6 +15,7 @@ import {
   Platform,
   TextInput,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -38,8 +39,10 @@ import {
   formatDate,
   formatTimeAgo,
   maskAadhaar,
+  maskBankAccount,
   formatLicenseNumber,
   getUserInitials,
+  formatMachineCategoryLabel,
 } from '@reachinternational/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { RunningLogShiftCard } from '../operations/RunningLogShiftCard';
@@ -404,6 +407,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const canResetPwdUsers = canManageUsers;
   const canViewSalary = canManageUsers || isSelf;
   const canRevealDocs = isSuperAdmin || isAdmin || isHr || isSelf;
+  const canVerifyReject = (isSuperAdmin || isAdmin || isHr) && !isSelf;
   const canViewAudit = canManageUsers;
 
   const {
@@ -495,16 +499,15 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     try {
       let targetUrl = doc.signed_url;
       if (!targetUrl && doc.storage_path) {
+        const bucket = doc.is_pending_request ? 'doc_staging' : 'user_files';
         const cleanPath = doc.storage_path.replace(/^\/+/, '');
         const { data: signedData, error: signErr } = await supabase.storage
-          .from('user_files')
+          .from(bucket)
           .createSignedUrl(cleanPath, 3600);
 
-        if (signErr) {
-          showToast('error', 'Unable to retrieve document from storage');
-          return;
+        if (!signErr && signedData?.signedUrl) {
+          targetUrl = signedData.signedUrl;
         }
-        targetUrl = signedData?.signedUrl || null;
       }
 
       if (!targetUrl) {
@@ -519,7 +522,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         url: targetUrl,
         uri: targetUrl,
         fileSize: doc.file_size_bytes,
-        fileName: doc.storage_path.split('/').pop() || doc.document_type_code,
+        fileName: doc.storage_path?.split('/').pop() || doc.document_type_code,
       });
     } catch (err: any) {
       showToast('error', err?.message || 'Failed to open document');
@@ -527,6 +530,27 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       setOpeningDocId(null);
     }
   }, [openingDocId]);
+
+  // Preview Staged Replacement Document Image
+  const handlePreviewReplacement = useCallback((doc: UserDocumentItem) => {
+    const rep = doc.pending_replacement;
+    if (!rep) return;
+    const targetUrl = rep.signed_url || rep.thumb_signed_url;
+    if (!targetUrl) {
+      showToast('error', 'Replacement image unavailable');
+      return;
+    }
+    haptics.select();
+    setActiveViewerDoc({
+      id: rep.id,
+      title: `${doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()} (Replacement)`,
+      mimeType: 'image/jpeg',
+      url: targetUrl,
+      uri: targetUrl,
+      fileSize: 0,
+      fileName: `${doc.document_type_code}_replacement.jpg`,
+    });
+  }, []);
 
   // Administrative Password Reset Trigger (Web Parity)
   const handleExecuteResetPassword = useCallback(async () => {
@@ -905,6 +929,13 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               <View style={styles.heroBadgeRow}>
                 <Badge role={user.role} />
 
+                {user.role === 'operator' && user.machine_category && (
+                  <Badge
+                    variant="info"
+                    label={formatMachineCategoryLabel(user.machine_category)}
+                  />
+                )}
+
                 <Badge
                   status={user.status}
                   dot
@@ -1071,6 +1102,22 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                   {supervisorDisplay}
                 </Text>
               </View>
+
+              {user.role === 'operator' && (
+                <View style={styles.infoRow}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Machine Category</Text>
+                  {user.machine_category ? (
+                    <Badge
+                      variant="info"
+                      label={formatMachineCategoryLabel(user.machine_category)}
+                    />
+                  ) : (
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                      —
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
@@ -1707,59 +1754,208 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             ) : (
               <>
                 <View style={styles.cardsList}>
-                  {documents.map((doc) => (
-                    <View
-                      key={doc.id}
-                      style={[
-                        styles.docListItem,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.docLeftRow}>
-                        <View style={[styles.docIconBox, { backgroundColor: theme.colors.canvasElevated }]}>
-                          <FileText size={16} color="#0d9488" />
-                        </View>
-                        <View>
-                          <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
-                            {doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()}
-                          </Text>
-                          <Text variant="micro" style={{ color: theme.colors.mute }}>
-                            Uploaded {formatDate(doc.created_at)}
-                          </Text>
-                        </View>
-                      </View>
+                  {documents.map((doc) => {
+                    const isVerified = doc.verification_status === "verified";
+                    const isRejected = doc.verification_status === "rejected";
+                    const isPending = !isVerified && !isRejected;
 
-                      <Pressable
-                        variant="outline"
-                        haptic="tap"
-                        hitSlopToMin48
-                        disabled={openingDocId === doc.id}
-                        onPress={() => handleViewDocument(doc)}
+                    let matchedValue = "";
+                    if (doc.document_type_code === "aadhaar") {
+                      matchedValue = user.aadhaar_number ? maskAadhaar(user.aadhaar_number) : "—";
+                    } else if (doc.document_type_code === "driving_license") {
+                      matchedValue = user.license_number || "—";
+                    } else if (doc.document_type_code === "bank_document") {
+                      matchedValue = user.bank_account_number
+                        ? `${maskBankAccount(user.bank_account_number)} (${user.bank_ifsc_code || "No IFSC"})`
+                        : "—";
+                    }
+
+                    return (
+                      <View
+                        key={doc.id}
                         style={[
-                          styles.viewDocBtn,
+                          styles.docListItem,
                           {
-                            backgroundColor: theme.colors.canvasElevated,
+                            backgroundColor: theme.colors.canvas,
                             borderColor: theme.colors.hairline,
                           },
                         ]}
-                        accessibilityLabel={`View ${doc.type_label || 'Document'}`}
                       >
-                        {openingDocId === doc.id ? (
-                          <ActivityIndicator size="small" color={theme.colors.ink} />
-                        ) : (
-                          <>
-                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                              View Document
+                        <View style={styles.docLeftRow}>
+                          <View style={[styles.docIconBox, { backgroundColor: theme.colors.canvasElevated }]}>
+                            <FileText size={16} color="#0d9488" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
+                                {doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()}
+                              </Text>
+                              {isVerified && (
+                                <Badge status="active" customLabel="Verified" />
+                              )}
+                              {isRejected && (
+                                <Badge status="overdue" customLabel="Rejected" />
+                              )}
+                              {isPending && (
+                                <Badge status="pending" customLabel={doc.is_pending_request ? "Pending Review" : "Pending"} />
+                              )}
+                            </View>
+                            <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                              Uploaded {formatDate(doc.created_at)}
                             </Text>
-                            <ChevronRight size={12} color={theme.colors.mute} />
-                          </>
+                            {matchedValue ? (
+                              <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                                Registered: <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>{matchedValue}</Text>
+                              </Text>
+                            ) : null}
+                            {isRejected && doc.rejection_reason && (
+                              <Text variant="micro" style={{ color: '#ef4444', marginTop: 2 }}>
+                                Reason: {doc.rejection_reason}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                          <Pressable
+                            variant="outline"
+                            haptic="tap"
+                            hitSlopToMin48
+                            disabled={openingDocId === doc.id}
+                            onPress={() => handleViewDocument(doc)}
+                            style={[
+                              styles.viewDocBtn,
+                              {
+                                backgroundColor: theme.colors.canvasElevated,
+                                borderColor: theme.colors.hairline,
+                              },
+                            ]}
+                            accessibilityLabel={`View ${doc.type_label || 'Document'}`}
+                          >
+                            {openingDocId === doc.id ? (
+                              <ActivityIndicator size="small" color={theme.colors.ink} />
+                            ) : (
+                              <>
+                                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                                  View
+                                </Text>
+                                <ChevronRight size={12} color={theme.colors.mute} />
+                              </>
+                            )}
+                          </Pressable>
+
+                          {!isVerified && canVerifyReject && (
+                            <Pressable
+                              variant="buttonPrimary"
+                              haptic="tap"
+                              hitSlopToMin48
+                              onPress={() => {
+                                haptics.select();
+                                router.push('/(app)/approvals');
+                              }}
+                              style={[
+                                styles.viewDocBtn,
+                                {
+                                  backgroundColor: theme.colors.primary,
+                                  borderColor: theme.colors.primary,
+                                  minHeight: 44,
+                                  paddingHorizontal: 12,
+                                },
+                              ]}
+                              accessibilityLabel="Review in Approvals"
+                            >
+                              <Text variant="caption" weight="bold" style={{ color: '#ffffff' }}>
+                                Review in Approvals →
+                              </Text>
+                            </Pressable>
+                          )}
+                        </View>
+
+                        {/* Staged Replacement Document Callout (100% Web Parity) */}
+                        {doc.pending_replacement && (
+                          <View
+                            style={[
+                              styles.replacementCallout,
+                              {
+                                backgroundColor: isDark ? 'rgba(245, 166, 35, 0.08)' : 'rgba(245, 166, 35, 0.05)',
+                                borderColor: isDark ? 'rgba(245, 166, 35, 0.3)' : 'rgba(245, 166, 35, 0.25)',
+                              },
+                            ]}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Clock size={13} color="#f59e0b" />
+                                <Text variant="caption" weight="bold" style={{ color: isDark ? '#fbbf24' : '#b45309' }}>
+                                  Replacement Pending Review
+                                </Text>
+                              </View>
+                              <Text variant="micro" style={{ color: theme.colors.mute }}>
+                                {formatDate(doc.pending_replacement.created_at)}
+                              </Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                              {doc.pending_replacement.thumb_signed_url ? (
+                                <Image
+                                  source={{ uri: doc.pending_replacement.thumb_signed_url }}
+                                  style={styles.replacementThumbImage}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={[styles.replacementThumbPlaceholder, { backgroundColor: isDark ? '#262626' : '#f5f5f5' }]}>
+                                  <FileText size={18} color="#f59e0b" />
+                                </View>
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                                  New replacement image uploaded
+                                </Text>
+                                <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                                  Inspect and verify before approving replacement
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <Pressable
+                                variant="outline"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={() => handlePreviewReplacement(doc)}
+                                style={[styles.replacementActionBtn, { borderColor: theme.colors.hairline }]}
+                                accessibilityLabel="Preview Replacement"
+                              >
+                                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                                  Preview New
+                                </Text>
+                              </Pressable>
+
+                              {canVerifyReject && (
+                                <Pressable
+                                  variant="buttonPrimary"
+                                  haptic="tap"
+                                  hitSlopToMin48
+                                  onPress={() => {
+                                    haptics.select();
+                                    router.push('/(app)/approvals');
+                                  }}
+                                  style={[
+                                    styles.replacementActionBtn,
+                                    { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary, minHeight: 44, paddingHorizontal: 12 },
+                                  ]}
+                                  accessibilityLabel="Review in Approvals"
+                                >
+                                  <Text variant="caption" weight="bold" style={{ color: '#ffffff' }}>
+                                    Review in Approvals →
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </View>
+                          </View>
                         )}
-                      </Pressable>
-                    </View>
-                  ))}
+                      </View>
+                    );
+                  })}
                 </View>
 
                 <TabPaginationFooter
@@ -2239,35 +2435,68 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   docListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    padding: 12,
+    padding: 14,
+    gap: 8,
   },
   docLeftRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   docIconBox: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: radiusNumeric.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   viewDocBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radiusNumeric.pill,
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  replacementCallout: {
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 8,
+  },
+  replacementThumbImage: {
+    width: 48,
+    height: 48,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 166, 35, 0.4)',
+  },
+  replacementThumbPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 166, 35, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  replacementActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radiusNumeric.pill,
     borderWidth: 1,
-    minHeight: 40,
+    minHeight: 44,
   },
   auditLogItem: {
     borderRadius: radiusNumeric.md,

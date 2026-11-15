@@ -58,6 +58,7 @@ export class SyncCoordinator {
   private queryClient: QueryClient | null = null;
   private currentScreen = 'dashboard';
   private isSynchronizing = false;
+  private syncStartedAt: number | null = null;
   private customRefreshers: Map<string, ScreenRefresher> = new Map();
   private syncListeners: Set<SyncListener> = new Set();
   private unsubscribeReconnect: (() => void) | null = null;
@@ -146,10 +147,18 @@ export class SyncCoordinator {
    */
   public async handleReconnection(telemetry?: NetworkTelemetry): Promise<SyncStats | null> {
     if (this.isSynchronizing) {
-      return null; // Mutex guard: already running
+      const isStale = this.syncStartedAt !== null && (Date.now() - this.syncStartedAt > 60000);
+      if (isStale) {
+        console.warn('[SyncCoordinator] Stale synchronization lock detected (>60s). Recovering lock.');
+        this.isSynchronizing = false;
+        this.syncStartedAt = null;
+      } else {
+        return null; // Mutex guard: already running
+      }
     }
 
     this.isSynchronizing = true;
+    this.syncStartedAt = Date.now();
     const startTime = Date.now();
     const activeScreen = this.currentScreen;
 
@@ -210,6 +219,7 @@ export class SyncCoordinator {
       }
     } finally {
       this.isSynchronizing = false;
+      this.syncStartedAt = null;
     }
 
     const durationMs = Date.now() - startTime;
@@ -338,6 +348,7 @@ export class SyncCoordinator {
     this.syncListeners.clear();
     this.queryClient = null;
     this.isSynchronizing = false;
+    this.syncStartedAt = null;
   }
 }
 

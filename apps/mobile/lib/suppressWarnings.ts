@@ -36,6 +36,11 @@ const IGNORED_WARNING_PATTERNS: (string | RegExp)[] = [
   'SafeAreaView has been deprecated',
   'ImageBackground is deprecated',
   'VirtualizedList: You have a large list that is slow to update',
+  // expo-notifications Expo Go limitations (Push notifications removed in SDK 53)
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+  '[expo-notifications] Push notifications (remote notifications) are unavailable in Expo Go',
+  'Push notifications (remote notifications) are unavailable in Expo Go',
+  'ExpoNotificationChannelManager.setNotificationChannelAsync',
 ];
 
 // Configure Reanimated Logger to disable strict mode warnings triggered by NativeWind v4 (react-native-css-interop)

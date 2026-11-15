@@ -48,6 +48,13 @@ export const SUITES = [
     category: 'auth',
     description: 'Zod password rules, Indian phone validation, role constraints, error mappings',
   },
+  {
+    id: 'doc-staging',
+    file: 'test-mobile-document-upload-staging.mjs',
+    name: 'Zero-Byte Document Upload & Staging',
+    category: 'auth',
+    description: 'Background upload directly to doc_staging, adaptive compression loop, zero-byte auth payload',
+  },
 
   // Operations & Fleet
   {
@@ -114,6 +121,13 @@ export const SUITES = [
     description: 'Role-gated dashboards (super_admin, admin, manager, supervisor, hr, operator)',
   },
   {
+    id: 'dashboard-card-dimensions',
+    file: 'test-dashboard-card-dimensions.mjs',
+    name: 'Dashboard Card Height & Width Uniformity',
+    category: 'operations',
+    description: '100% card height and width uniformity across mobile, tablet, and desktop for all roles',
+  },
+  {
     id: 'payroll',
     file: 'test-payroll-workflows.mjs',
     name: 'Payroll & Salary Statement',
@@ -141,6 +155,13 @@ export const SUITES = [
     category: 'operations',
     description: 'Client-level supervisor assignment, inherited equipment oversight, 2-section assignments tab, zero raw typography',
   },
+  {
+    id: 'attendance-kpi',
+    file: 'test-attendance-kpi-optimization.mjs',
+    name: 'Attendance KPI Optimization & Style Property Separation',
+    category: 'operations',
+    description: 'Canonical KPIGrid 4-col responsive layout, skeleton parity, flex/flexShrink shorthand separation',
+  },
 
   // User Management
   {
@@ -156,6 +177,20 @@ export const SUITES = [
     name: 'User Detail Infinite Pagination',
     category: 'users',
     description: '6 tab infinite queries, skeleton loading, SegmentedToggle APK width safety',
+  },
+  {
+    id: 'users-approvals',
+    file: 'test-users-approvals.mjs',
+    name: 'User Registration & Profile Update Approvals',
+    category: 'users',
+    description: 'Pending user registration approvals, profile update diffs, atomic RPCs, confirm dialogs, zero raw typography',
+  },
+  {
+    id: 'unified-approvals',
+    file: 'test-unified-approval-engine.mjs',
+    name: 'Unified Approval Engine & Queue',
+    category: 'users',
+    description: 'Universal operational queue, segmented tabs, multi-type bottom sheet renderers, optimistic updates & 0 raw typography',
   },
 
   // Documents & Storage
@@ -181,6 +216,13 @@ export const SUITES = [
     name: 'Offline Queue & Duplicate Prevention',
     category: 'offline',
     description: 'AsyncStorage persistent mutation queue, NetInfo connectivity, idempotency',
+  },
+  {
+    id: 'offline-lock',
+    file: 'test-offline-queue-lock.mjs',
+    name: 'Offline Queue Lock Resilience & Stale Recovery',
+    category: 'offline',
+    description: 'Guaranteed mutex release, per-item error isolation, 60s stale lock recovery',
   },
 
   // Navigation & Lifecycle
@@ -291,6 +333,15 @@ export const SUITES = [
     category: 'ui',
     description: 'Account settings, notification toggles, theme switcher, account deletion',
   },
+
+  // Notifications & Realtime
+  {
+    id: 'mobile-push',
+    file: 'test-mobile-push-notifications.mjs',
+    name: 'Push Notifications (Expo SDK 58)',
+    category: 'notifications',
+    description: 'Channels, icon, foreground handlers, deep-link allowlist, settings sync, DB RPCs',
+  },
 ];
 
 export const CATEGORIES = {
@@ -302,6 +353,7 @@ export const CATEGORIES = {
   offline: 'Offline Queue & Synchronization',
   navigation: 'Navigation, Transitions & Lifecycle',
   ui: 'UI System, Layout & Components',
+  notifications: 'Push Notifications & Messaging',
 };
 
 // ─── CLI ARGUMENT PARSER ───

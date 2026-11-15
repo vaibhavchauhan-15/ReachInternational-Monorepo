@@ -142,6 +142,24 @@ check('drainQueue correctly detects PostgreSQL 23505 unique constraint replays',
   assert(offlineQueueSource.includes('syncedItemIds.add(item.id)'), 'Replay must be treated as synced and pruned rather than permanently failing');
 });
 
+check('OfflineQueueManager enforces 7-day expiration window and flags expired entries', () => {
+  assert(offlineQueueSource.includes('minAllowedDate'), 'must calculate 7-day window boundary');
+  assert(offlineQueueSource.includes('EXPIRED_7_DAYS'), 'must throw or catch EXPIRED_7_DAYS');
+  assert(offlineQueueSource.includes('isExpired'), 'drainQueue must check isExpired to permanently mark failed without retrying');
+});
+
+check('OfflineQueueManager passes assignment_id into rpcParams and insertPayload', () => {
+  assert(offlineQueueSource.includes('p_assignment_id:'), 'rpcParams must include p_assignment_id');
+  assert(offlineQueueSource.includes('assignment_id: (payload.assignment_id'), 'fallback insertPayload must include assignment_id');
+});
+
+const opsDataSource = fs.readFileSync(path.join(__dirname, 'lib', 'hooks', 'useOperationsData.ts'), 'utf8');
+
+check('useOperationsData exports useShiftTasks and maps assignment_id in entry context', () => {
+  assert(opsDataSource.includes('export function useShiftTasks'), 'useOperationsData must export useShiftTasks');
+  assert(opsDataSource.includes('assignment_id: res?.assignment_id || null'), 'useOperatorEntryContext must map assignment_id');
+});
+
 // -----------------------------------------------------------------------------
 // [4/6] Pre-Queue Validation in Mobile Entry Points
 // -----------------------------------------------------------------------------
@@ -154,6 +172,8 @@ check('MobileOperatorEntryCard integrates checkDuplicateShiftLog before submissi
   assert(operatorEntrySource.includes('checkDuplicateShiftLog'), 'MobileOperatorEntryCard must call checkDuplicateShiftLog');
   assert(operatorEntrySource.includes('submittingRef.current'), 'MobileOperatorEntryCard must use submittingRef mutex against rapid taps');
   assert(operatorEntrySource.includes('idempotencyKey'), 'MobileOperatorEntryCard must compute deterministic idempotency key');
+  assert(operatorEntrySource.includes('p_assignment_id: entryContext?.assignment_id'), 'MobileOperatorEntryCard must pass assignment_id in rpcParams');
+  assert(operatorEntrySource.includes('assignment_id: entryContext?.assignment_id'), 'MobileOperatorEntryCard must pass assignment_id in logPayload');
   assert(!operatorEntrySource.includes('Alert.alert'), 'MobileOperatorEntryCard must not use raw Alert.alert');
 });
 

@@ -45,6 +45,8 @@ const ASSIGNMENT_EXACT_PROJECTION = `
   shift_code,
   crosses_midnight,
   is_active,
+  valid_from,
+  valid_to,
   assigned_by,
   assigned_at,
   ended_at,
@@ -66,6 +68,8 @@ const ASSIGNMENT_HISTORY_PROJECTION = `
   shift_code,
   crosses_midnight,
   is_active,
+  valid_from,
+  valid_to,
   assigned_by,
   assigned_at,
   ended_at,
@@ -83,6 +87,7 @@ const ASSIGNMENT_HISTORY_PROJECTION = `
  */
 async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsResult> {
   const supabase = createSupabaseAdminClient();
+  const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
   const [machinesRes, operatorsRes, assignmentsRes] = await Promise.all([
     supabase
@@ -100,6 +105,8 @@ async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsRe
       .from("operator_machine_assignments")
       .select(ASSIGNMENT_EXACT_PROJECTION)
       .eq("is_active", true)
+      .lte("valid_from", todayDate)
+      .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
       .is("ended_at", null)
       .order("assigned_at", { ascending: false }),
   ]);

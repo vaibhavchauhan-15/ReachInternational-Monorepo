@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
@@ -185,7 +185,7 @@ export const KPICard: React.FC<KPICardProps> = ({
       <Card
         interactive={isInteractive}
         onPress={isInteractive ? handlePress : undefined}
-        className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 flex-col justify-between h-full"
+        className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 flex-col justify-between"
         style={[
           styles.kpiCard,
           active && {
@@ -265,16 +265,23 @@ export const KPICard: React.FC<KPICardProps> = ({
 
 const styles = StyleSheet.create({
   touchWrapper: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
     minWidth: 0,
     width: '100%',
-    height: '100%',
+    minHeight: 84,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacingNumeric.xs,
+    minHeight: 36,
   },
   label: {
     flex: 1,
@@ -289,6 +296,8 @@ const styles = StyleSheet.create({
   },
   valueRow: {
     marginTop: spacingNumeric.xs + 2,
+    justifyContent: 'flex-end',
+    minHeight: 32,
   },
   value: {},
   subtitle: {
@@ -299,6 +308,10 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.sm + 4,
     flexDirection: 'column',
     justifyContent: 'space-between',
-    minHeight: 84,
+    minHeight: 104,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
 });

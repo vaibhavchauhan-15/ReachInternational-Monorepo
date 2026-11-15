@@ -337,6 +337,7 @@ function formatOperatorDatabaseError(error: any): string {
 
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
+  assignmentId?: string;
   operatorId?: string;
   clientId?: string;
   startDate?: string;
@@ -610,6 +611,7 @@ export async function submitOperatorHourLogAction(payload: {
   // Machine, Site, and Client Linking resolution:
   let targetClientId = payload.clientId || null;
   let targetLocation = payload.location?.trim() || null;
+  let activeAssignments: Array<{ id: string; shift_code: string | null }> | null = null;
 
   // BUG-OP-08 & BUG-OP-05: Check machine status and client deployment alignment
   try {
@@ -641,13 +643,16 @@ export async function submitOperatorHourLogAction(payload: {
       }
     }
 
-    // Verify operator assignment & shift code alignment
-    const { data: activeAssignments } = await supabase
+    // Verify operator assignment & shift code alignment for the specific work date
+    const { data: fetchedAssignments } = await supabase
       .from("operator_machine_assignments")
-      .select("shift_code")
+      .select("id, shift_code")
       .eq("machine_id", payload.machineId)
       .eq("operator_id", targetOperatorId)
-      .eq("is_active", true);
+      .lte("valid_from", timing.resolvedStartDate)
+      .or(`valid_to.is.null,valid_to.gte.${timing.resolvedStartDate}`);
+
+    activeAssignments = fetchedAssignments;
 
     const activeAssignedShiftCodes = (activeAssignments || [])
       .map((a: any) => a.shift_code?.trim())
@@ -765,9 +770,11 @@ export async function submitOperatorHourLogAction(payload: {
 
   // Resilient Fallback Path: Guarantees 100% successful log registration & status update
   if (!rpcSucceeded) {
+    const fallbackAssignmentId = payload.assignmentId || activeAssignments?.[0]?.id || null;
     // 1. Insert machine hour log (Fallback path with graceful column fallback)
     const insertPayload: Record<string, any> = {
       machine_id: payload.machineId,
+      assignment_id: fallbackAssignmentId,
       operator_id: targetOperatorId,
       client_id: targetClientId,
       log_date: timing.resolvedStartDate,
@@ -1725,7 +1732,10 @@ export async function getActiveOperatorsAction(): Promise<{
 /**
  * Server action: fetch fresh operator entry context (machine, client, shift codes, assigned shift).
  */
-export async function getOperatorEntryContextAction(operatorId?: string): Promise<{
+export async function getOperatorEntryContextAction(
+  operatorId?: string,
+  targetDate?: string
+): Promise<{
   success: boolean;
   data?: import("@reachinternational/types").OperatorEntryContext | null;
   error?: string;
@@ -1736,7 +1746,7 @@ export async function getOperatorEntryContextAction(operatorId?: string): Promis
   try {
     const targetId = operatorId || user.id;
     const { getOperatorEntryContext } = await import("@/lib/queries/operator-entry");
-    const context = await getOperatorEntryContext(targetId);
+    const context = await getOperatorEntryContext(targetId, targetDate);
     return { success: true, data: context };
   } catch (err: any) {
     console.error("[getOperatorEntryContextAction] Exception:", err);

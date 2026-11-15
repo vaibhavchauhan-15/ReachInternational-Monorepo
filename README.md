@@ -461,7 +461,7 @@
 - **Mobile Field Settings Screen**: Tailored for field operators and mobile device behavior.
   - **Bottom Floating Navbar**: Promoted Settings to the 4th primary bottom navigation tab in `MobileBottomNav.tsx`.
   - **My Account Touch Card**: Compact card with Avatar, Name, Role badge, and email; tapping opens `AccountSettingsModal` containing shift schedule, assigned yard, KYC compliance, Edit Profile launcher, Change Password modal trigger, and link to full Profile screen.
-  - **Notifications Touch Card**: Compact card with active alert count badge; tapping opens `NotificationSettingsModal` with switches for Push Notifications, Shift Reminders, Breakdown Alerts, Assignment Alerts, and Overtime Alerts.
+  - **Notifications Touch Card**: Compact card with active alert count badge; tapping opens `NotificationSettingsModal` synchronized with `public.user_notification_preferences` across Web and Native Mobile, supporting Push Notifications, Shift Reminders, Breakdown Alerts, Assignment Alerts, Admin Alerts, and Payroll Alerts (with dead Overtime Alerts toggle eliminated and Security Alerts marked Always On).
   - **App Appearance**: Dedicated theme selector for `Light`, `Dark`, and `System` appearance adhering to Vercel Geist tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`).
   - **App Permissions**: Push notification permission status badge and `NotificationPermissionModal` launcher.
   - **What's New & Release Notes System (`apps/mobile/lib/whats-new/*`, `components/whats-new/*`, `/settings/about/whats-new`)**: Automated post-update announcement bottom sheet (`WhatsNewSheet.tsx`) triggered after native app release or compatible EAS OTA update. Features typed release manifest (`releaseManifest.ts`), environment isolation (preview/production separation), AsyncStorage acknowledgement tracking (`@reach:whats_new:acknowledged_ids`), in-memory session dismissal locks, role-based highlight filtering, dedicated `/settings/about/whats-new` changelog screen, and Mobile Command Palette indexing.
@@ -478,10 +478,27 @@
   - Deletion requests from both Web and Mobile stream directly into the Admin Users management console alongside pending employee approvals.
   - **Web Admin Review (`AccountDeletionRequestsSection.tsx`)**: Side-by-side review cards with requester identity, origin badge (`Web App` vs `Mobile App` vs `Public Web Portal`), reason, and action triggers. Approving sets user `status = 'inactive'`, scrubs sensitive KYC identity numbers (`aadhaar_number = NULL`, `license_number = NULL`), and records structured audit log `user.account_deleted`.
   - **Mobile Admin Review (`apps/mobile/app/(app)/users.tsx`)**: High-contrast native review cards with alert notification badges, Approve & Deactivate modal, and Decline modal.
-- **Statutory Heavy Equipment Compliance**: In full accordance with Indian Factories Act 1948, Motor Vehicles Act, and insurance regulations, daily machine running logs (HMR), maintenance records, and safety inspections are decoupled from personal identity and preserved anonymously under machine asset codes (e.g. `#SL-004`) for statutory audits.
-- **Database & Backend Resilience**: Dedicated table `account_deletion_requests` backed by automatic fallback to `profile_change_requests` (`requested_data.type = 'account_deletion'`) to ensure 100% immediate runtime availability across environments.
+  - **Statutory Heavy Equipment Compliance**: In full accordance with Indian Factories Act 1948, Motor Vehicles Act, and insurance regulations, daily machine running logs (HMR), maintenance records, and safety inspections are decoupled from personal identity and preserved anonymously under machine asset codes (e.g. `#SL-004`) for statutory audits.
+  - **Database & Backend Resilience**: Dedicated table `account_deletion_requests` backed by automatic fallback to `profile_change_requests` (`requested_data.type = 'account_deletion'`) to ensure 100% immediate runtime availability across environments.
 
-### 11. 📱 Unified Mobile Navigation & Reachability Architecture (Web & Native)
+### 11. 🔔 Enterprise Push Notification & Alert System (Web & Native Mobile)
+- **Unified Inbox & Transactional Outbox Pipeline**:
+  - `public.notifications` functions as both the user notification inbox and the transactional push outbox, preventing split-brain states.
+  - Sub-second notification dispatch powered by `trg_notifications_fastpath` (`pg_net` invoking `/api/notify/dispatch`) with an automated 1-minute `pg_cron` sweeper (`push_notifications_sweeper`).
+  - Batch claims utilize `FOR UPDATE SKIP LOCKED` (`claim_push_batch`) to eliminate race conditions, with 2-minute zombie lease recovery.
+  - Multi-platform push delivery engine supporting Expo SDK 58 Push Notifications (`expo-server-sdk`) on Native Mobile and Web Push API (`web-push`, VAPID, `/sw.js`) on Desktop and Mobile Web.
+- **7-Day Shift Reminder Ladder**:
+  - `enqueue_shift_end_reminders` (`SP1-s1` & `SP1-s2`): Triggered at shift end + 15m and +90m for unlogged closing hour meter entries.
+  - `enqueue_pending_digest` (`SP2`): Daily 09:00 IST morning digest notifying operators with unlogged past shifts.
+  - `enqueue_final_lock_warning` (`SL1`): Daily 18:00 IST critical warning for shifts locking tonight at midnight (00:00 IST of D+7).
+  - `enqueue_supervisor_digest` (`SUP1`): Daily 09:30 IST supervisor alert summarizing team members with overdue shift logs.
+- **Automated Event Producers & Security Invariants**:
+  - Database Triggers: `BD1` (breakdowns; 24h+ old offline logs downgraded to low-priority inbox), `AS1` (assisted shift entry notifications), `EM1` (emergency machine maintenance/stop), `SA1` (operator machine assignment modifications), `REG1` (pending registration alerts), `ENQ1` (quote requests/RFQs).
+  - Server Actions: `SEC1` (critical password and session security alerts, always on), `PAY1` (monthly salary statement release, zero PII).
+  - Zero PII Invariant: Lock-screen push payloads exclude full names, salary amounts, Aadhaar, and phone numbers.
+  - Observability & Health: Real-time views `v_push_delivery_metrics` and `v_push_device_health`.
+
+### 12. 📱 Unified Mobile Navigation & Reachability Architecture (Web & Native)
 - **Manifest-Driven Navigation (`@reachinternational/permissions`)**:
   - Web and Native navigation layout is driven by a single source of truth (`packages/permissions/src/navigation.ts`).
   - **$\le 2$ Taps Reachability Guarantee**: Every allowed page per role is reachable in 2 taps or fewer across phone viewports ($\le 640$px web and native mobile).
@@ -500,7 +517,7 @@
   - **Mobile Slide-in Menu Drawer**: Right-side slide-in drawer on Web (`MobileMenuDrawer.tsx`) and Native (`MobileMenuDrawer.tsx`) displaying all overflow destinations as touch cards ($\ge 56$px tall) with a pinned profile card (avatar, name, email, direct profile link) and sign-out confirmation. Completely eliminates the legacy `/more` route with zero traces.
   - **Automated Reachability Test**: Enforced by `packages/permissions/src/navigation.test.ts` via `node:test`, verifying 100% route reachability, home-first ordering, and bar length $\le 5$ across all roles.
 
-### 12. 🔄 Global URL Query State Persistence & Anti-Caching Architecture
+### 13. 🔄 Global URL Query State Persistence & Anti-Caching Architecture
 - **Web App URL Query State Persistence (`useListQueryState`)**:
   - Implements bidirectional synchronization of search terms, dropdown filters, date ranges, and sorting parameters into the browser URL (`?search=...&page=1&role=...`) across all operational tables (`/users`, `/machines`, `/clients`, `/attendance`, `/payroll`, `/audit`, `/operations`).
   - **Zero History Bloat**: Search updates are debounced (~300ms) and synchronized via `window.history.replaceState` or `router.replace(..., { scroll: false })` instead of `router.push`, ensuring the browser Back button navigates between distinct views rather than cycling through individual keystrokes.
@@ -514,7 +531,7 @@
   - Injected strict anti-caching headers (`Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0`, `Pragma: no-cache`, `Expires: 0`, `CDN-Cache-Control: no-store`, `Vercel-CDN-Cache-Control: no-store`) into `apps/web/proxy.ts` and `apps/web/next.config.ts`.
   - Prohibits service workers and edge CDNs from caching intermediate navigation redirect headers (`307`/`308`/`302`) or authenticated dynamic App Router HTML pages (`/(app)/*`), eliminating stale redirect loops.
 
-### 13. 👤 Comprehensive User Profile & Operational Shift Timings (`/profile`)
+### 14. 👤 Comprehensive User Profile & Operational Shift Timings (`/profile`)
 - **Full Spectrum User Data Projection**: Exposes all operational, payroll, banking, statutory, and personal fields for every user account:
   - **Work & Operations**: Shift Timing with 12-hour AM/PM format and calculated duration (e.g., `09:00 AM — 06:00 PM (9 hrs)`), Assigned Fleet Machinery units with direct links, Site Supervisor, Working Location, Date of Joining (`doj`), and Profile Status.
   - **Compensation & Payroll**: Monthly Base Salary (formatted INR), Daily Rate, Overtime Hourly Rate, Annual PL Quota, and Available PL Balance.
@@ -526,7 +543,7 @@
 - **Unified Shift Editing**: `EditProfileModal` features `<CustomTimePicker>` / `<TimeInput>` integration with 12-hour AM/PM inputs, live duration computation, and automated 24-hour SQL persistence (`shift_start_time` and `shift_end_time`).
 - **Cross-Platform Mobile App Parity (`apps/mobile/app/(app)/profile.tsx`)**: Synchronized mobile screen featuring touch cards for shift times, assigned machines, compensation, leave balances, and banking details with clipboard copy buttons and mobile `EditProfileModal`.
 
-### 14. 🌐 Public Marketing & Contact Desks (`/contact`)
+### 15. 🌐 Public Marketing & Contact Desks (`/contact`)
 - **Dedicated Equipment Desks & Direct Telemetry**:
   - **Rental Desk**: Mobile **+91 88000 40308** (`8800040308`), Email **rental@reachinternational.co.in**, direct WhatsApp, click-to-call, and one-tap clipboard copy actions. Handles short/long term hire for boom lifts (12m–58m), scissor lifts (6m–22m), forklifts, 24/7 emergency dispatch, and certified operators.
   - **Sales Desk**: Mobile **+91 98677 32204** (`9867732204`), Email **sale@reachinternational.co.in**, direct WhatsApp, click-to-call, and one-tap clipboard copy actions. Handles brand-new and certified pre-owned equipment acquisitions from authorized OEM partners (JLG, Genie, JCB, Toyota, Hyundai, BYD), warranty, financing, and genuine parts.
@@ -543,7 +560,7 @@
   - Synchronized `apps/web/app/llms.txt/route.ts` with direct department contacts, numbers, emails, SLAs, and contact URL.
 - **Web-to-Mobile Parity**: Synchronized mobile Support & Contact screen (`apps/mobile/app/(app)/settings/about/support.tsx`) with direct Rental Desk (+91 88000 40308) and Sales Desk (+91 98677 32204) cards.
 
-### 15. 🚜 Dynamic Equipment Management & Marketing Fleet Admin (`/marketing/equipment`)
+### 16. 🚜 Dynamic Equipment Management & Marketing Fleet Admin (`/marketing/equipment`)
 - **Dynamic Supabase Backend & Schema Architecture (Migration 181)**:
   - Transitioned equipment from static placeholders to a fully dynamic, Supabase-backed catalogue (`equipment_models`, `equipment_media`, `equipment_docs`, `equipment_enquiries`).
   - **Hybrid Schema**: Combines indexed numerical columns (`max_platform_height_m`, `max_working_height_m`, `capacity_kg`, `weight_kg`, `indoor_use`, `outdoor_use`) for fast faceted querying with a flexible JSONB `specs` column supporting unlimited technical specifications and printed datasheet overrides (`display_override` / `d`).

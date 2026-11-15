@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
@@ -99,7 +99,7 @@ export const PrimaryAction: React.FC<PrimaryActionProps> = ({
               styles.description,
               { color: isDark ? '#94a3b8' : '#64748b' },
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {description}
           </Text>
@@ -120,6 +120,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacingNumeric.md,
     borderRadius: radiusNumeric.lg,
+    minHeight: 82,
+    width: '100%',
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
   leftRow: {
     flexDirection: 'row',
@@ -143,10 +149,12 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 22,
   },
   title: {},
   description: {
     marginTop: 2,
+    minHeight: 34,
   },
   arrowContainer: {
     paddingLeft: spacingNumeric.sm,

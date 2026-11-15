@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 export interface FormSubmitButtonProps {
-  isReady: boolean;
+  isReady?: boolean;
   loading: boolean;
   label?: string;
   loadingLabel?: string;
@@ -14,6 +14,7 @@ export interface FormSubmitButtonProps {
   missingMessage?: string;
   missingFields?: string[];
   hideWhenIncomplete?: boolean;
+  showHelperChip?: boolean;
   variant?: "primary" | "secondary" | "danger" | "ghost";
   size?: "sm" | "md" | "lg";
   fullWidth?: boolean;
@@ -23,13 +24,13 @@ export interface FormSubmitButtonProps {
 
 /**
  * Reusable Form Submission Button
- * 1. Remains non-responsive / disabled while mandatory inputs are incomplete.
- * 2. Displays specific missing input boxes tailored to the active user role.
+ * 1. Remains clickable so validation errors can be triggered on user action.
+ * 2. Displays specific missing input boxes tailored to the active user role when helper chip is enabled.
  * 3. Enforces an instant submission lock to prevent duplicate network calls.
  * 4. Animates icons cleanly on hover via data-hover-parent.
  */
 export function FormSubmitButton({
-  isReady,
+  isReady = true,
   loading,
   label = "Save & Submit",
   loadingLabel = "Submitting Request...",
@@ -37,6 +38,7 @@ export function FormSubmitButton({
   missingMessage,
   missingFields,
   hideWhenIncomplete = false,
+  showHelperChip = false,
   variant = "primary",
   size = "lg",
   fullWidth = true,
@@ -52,7 +54,7 @@ export function FormSubmitButton({
   }, [loading, isReady, missingCount]);
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!isReady || loading || isSubmittingRef.current) {
+    if (loading || isSubmittingRef.current) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -96,9 +98,9 @@ export function FormSubmitButton({
   }
 
   return (
-    <div className="space-y-2 pt-1 w-full">
+    <div className={`pt-1 w-full ${showHelperChip ? "space-y-2" : ""}`}>
       {/* Helper chip when incomplete and button is visible but non-responsive */}
-      {!isReady && !loading && (
+      {showHelperChip && !isReady && !loading && (
         <div
           data-hover-parent
           className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 transition-colors"
@@ -114,7 +116,7 @@ export function FormSubmitButton({
       )}
 
       {/* When ready, subtle success chip */}
-      {isReady && !loading && (
+      {showHelperChip && isReady && !loading && (
         <div
           data-hover-parent
           className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 transition-colors"
@@ -135,10 +137,10 @@ export function FormSubmitButton({
         size={size}
         fullWidth={fullWidth}
         loading={loading}
-        disabled={loading || !isReady}
+        disabled={loading}
         onClick={handleClick}
         className={`h-11 sm:h-11.5 font-semibold text-xs sm:text-sm shadow-xs transition-all duration-200 ${
-          !isReady || loading
+          loading
             ? "cursor-not-allowed opacity-50 pointer-events-none select-none"
             : "hover:scale-[1.005] active:scale-[0.99] cursor-pointer"
         } ${className}`}

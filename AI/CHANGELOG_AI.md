@@ -1,3 +1,323 @@
+## 2026-11-15 — Machine Category Number Removal & Section 1 Incompleteness Root Cause Fix
+
+### Summary
+1. **Removed Numbers from Category Options & Labels**:
+   - Dropped number prefixes across all machine category options and display labels.
+   - Updated MACHINE_CATEGORY_SELECT_OPTIONS to { value: name, label: name }.
+   - Updated formatMachineCategoryLabel() to return clean category names without numbers.
+   - Added automatic regex normalizer in normalizeMachineCategory() so legacy drafts with '3. Reach Truck' cleanly resolve to 'Reach Truck'.
+   - Category names are now strictly: Stacker, Reach Truck, Order Picker, Electric Pallet Truck, Forklift, Scissor Lift, Boom Lift.
+
+2. **Root Cause Analysis & Fix for Section 1 'Incompletely' State**:
+   - **Root Cause**: Next.js Turbopack dev server was running on a stale chunk generated before machine_category was passed to isSignupSection1Complete. In addition, apps/web/next.config.ts lacked transpilePackages for monorepo packages (@reachinternational/*), preventing Turbopack from invalidating and re-bundling workspace packages on change.
+   - **Resolution**:
+     - Configured transpilePackages: ['@reachinternational/design-tokens', '@reachinternational/permissions', '@reachinternational/types', '@reachinternational/utils', '@reachinternational/validation'] in apps/web/next.config.ts.
+     - Hardened isSignupSection1Complete with case-insensitive role check: fields.role ? fields.role.trim().toLowerCase() === 'operator' : false.
+     - Added legacy machine category normalization on draft restore in both Web (apps/web/app/signup/page.tsx) and Mobile (apps/mobile/app/(auth)/signup.tsx).
+     - Verified fresh Turbopack chunks actively evaluate machine_category: formValues.machine_category. Selecting a category immediately marks Section 1 as complete (green checkmark, emerald border, emerald step badge).
+
+3. **Monorepo Quality Gates**:
+   - pnpm typecheck: 0 errors monorepo-wide across 7 packages.
+   - pnpm --filter @reachinternational/utils test: 42/42 tests passed.
+   - pnpm --filter @reachinternational/validation test: 27/27 tests passed.
+   - pnpm --filter @reachinternational/permissions test: 20/20 tests passed.
+   - node apps/mobile/test/test-signup-workflows.mjs: 48/48 tests passed.
+   - node apps/mobile/run-tests.mjs: 357/357 tests passed (100%).
+   - node scripts/check-typography.mjs: 0 violations.
+
+---
+
+# Changelog AI
+
+## [2026-11-15] - Operator Machine Category Registration & Profile Parity
+
+### Added & Verified
+- **Canonical Machine Categories**: Added 7 mandatory machine categories in `packages/utils/src/machine-categories.ts` (1. Stacker, 3. Reach Truck, 4. Order Picker, 7. Electric Pallet Truck, 14. Forklift, 15. Scissor Lift, 16. Boom Lift) with validation and label formatting helpers.
+- **Database Engine Invariants**: Migration 198 applied to Supabase Dev DB (`vlmxciuogczumumrwyot`). Column `public.users.machine_category`, trigger `trg_users_machine_category_role` automatically setting `machine_category := NULL` for non-operator roles, and updated `handle_new_user()` & `approve_profile_change_request_atomic`.
+- **Validation Schemas**: Added conditional requirements for `role === "operator"` across `SignupSchema`, `validateSignupFormData`, `CreateUserSchema`, and `UpdateUserSchema` in `@reachinternational/validation`.
+- **Web & Native Registration Flow**: Section 1 renders Machine Category `SearchableSelect` dropdown when operator is selected; resets when another role is chosen.
+- **Profile & User Details Parity**: Displayed Machine Category badge and metadata row in Web User Details (`UserDetailClient.tsx`), Mobile User Details (`UserDetailView.tsx`), User Modals (`UserCreateModal`, `UserEditModal`), and profile view generator (`toProfileView`).
+- **Automated Verification**: Monorepo typecheck clean across all 7 packages (`pnpm typecheck`), 42/42 utils unit tests, 48/48 mobile signup workflow checks, 357/357 core mobile test suite, 29/29 live natural registration scenarios, 47/47 live database trigger invariant checks.
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Live Natural Registration & Valid/Invalid Scenarios Verification
+
+### Added & Verified
+- **Live Server Natural Registration Suite (`scripts/test-live-natural-registration.mjs`)**:
+  - Live Next.js server testing on `http://localhost:3000` against Dev Supabase Project `vlmxciuogczumumrwyot`.
+  - Live `/api/signup/upload-urls` generation with HMAC session token and direct Supabase Storage signed URLs.
+  - Direct PUT streaming of 3 document pairs (bank, aadhaar, license) to `doc_staging`.
+  - Universal finalization via `POST /api/signup/finalize` verifying database insertion and cross-bucket transfer to `user_files`.
+  - Live Admin endpoints `GET /api/admin/documents/<userId>` (batched 60s thumbnails) and `GET /api/admin/documents/<userId>/<docType>` (full image).
+  - Live replacement upload URL `POST /api/documents/upload-url` and direct streaming to staging.
+  - Scheduled cleanup cron endpoints (`/api/cron/cleanup-staging`, `/api/cron/cleanup-superseded`).
+  - Automated verification: **37/37 checks passed (100% pass rate)**.
+- **Valid/Invalid Signup Scenarios Suite (`scripts/test-live-signup-scenarios.mjs`)**:
+  - **Scenario 1**: Valid natural registration & finalization end-to-end.
+  - **Scenario 2**: Duplicate email detection in existing users table with staging file preservation.
+  - **Scenario 3**: Duplicate phone detection with staging file preservation.
+  - **Scenario 4**: Corrupt magic byte detection via Range 0-2 inspection (rejecting non-JPEG files lacking `FF D8 FF`).
+  - **Scenario 5**: Expired session token rejection (HTTP 403).
+  - **Scenario 6**: Tampered session token signature mismatch rejection (HTTP 403).
+  - **Scenario 7**: Empty staging / missing documents safe zero-record handling.
+  - **Scenario 8**: Double submit / replay resilience (idempotent, 0 duplicate rows).
+  - **Scenario 9**: Post-approval document replacement workflow, duplicate pending request block, atomic RPC `approve_document_change` execution, pointer swap in `user_documents`.
+  - **Scenario 10**: Complete test fixture teardown from database and storage.
+  - Automated verification: **29/29 checks passed (100% pass rate)**.
+- **54-Point Monorepo Component Audit (`scripts/reverify-all-components.mjs`)**:
+  - Verified buckets, RLS policies, tables, stored procedures, routes, client hooks, and code invariants. **54/54 checks passed (100%)**.
+- **Component Extraction (`apps/web/components/documents/DocumentUploadCard.tsx`)**:
+  - Extracted standalone reusable client component per Monorepo Rule 3. Clean typecheck.
+- **Regression Quality Gates**:
+  - Mobile Automated Verification Suite (`apps/mobile/run-tests.mjs`): **357/357 tests passed (100%)**.
+  - Permissions Test Suite (`packages/permissions`): **20/20 tests passed (100%)**.
+  - Validation Test Suite (`packages/validation`): **27/27 tests passed (100%)**.
+  - Mobile TypeScript: **0 errors (`tsc --noEmit`)**.
+  - Web TypeScript: **0 errors (`tsc --noEmit`)**.
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Phase 11 — Complete Test Checklist (20 Scenarios Verified)
+
+### Added & Verified
+- **Full 20-Scenario Acceptance Test Suite (`apps/web/scripts/test-phase11-test-checklist.mjs`)**:
+  - **Scenario 1 (8 MB camera photo ×3)**: Verified `DOC_UPLOAD` enforces 400 KB target and 1 MB hard ceiling; signup POST payload serialized to 484 bytes (well under 10 KB limit).
+  - **Scenario 2 (Upload target check)**: Verified signed upload URLs direct traffic straight to `*.supabase.co` with 0 bytes traversing Vercel.
+  - **Scenario 3 (Throttled 3G)**: Verified background direct streaming at pick time completes before form submit; final submit takes a single sub-second round trip.
+  - **Scenario 4 (Network killed mid-upload)**: Verified retry upload to same signed URL uses `{ upsert: true }`, ensuring exactly one clean file in staging without duplicates.
+  - **Scenario 5 (Double-click submit)**: Verified `isSubmittingRef` re-entrancy lock and database unique constraints yield exactly one registration.
+  - **Scenario 6 (Duplicate email after upload)**: Verified pre-auth validation displays field error while preserving staged files in `doc_staging` and in-memory upload state; user re-submits without re-uploading.
+  - **Scenario 7 (Text file renamed .jpg)**: Verified Range 0-2 magic byte inspection rejects fake `.jpg` files failing `0xFF 0xD8 0xFF`.
+  - **Scenario 8 (HEIC / undecodable image)**: Verified bitmap decoders throw clear error `"Unsupported image, please choose a JPG or PNG."` and block pass-through.
+  - **Scenario 9 (Image under 600 px)**: Verified resolution gate rejects images with shortest edge `< 600 px`.
+  - **Scenario 10 (Tampered or expired session)**: Verified HMAC tampering check and 2-hour TTL rejection before touching storage.
+  - **Scenario 11 (Another user's folder)**: Verified storage RLS policy `users read own documents` enforces `(storage.foldername(name))[2] = auth.uid()::text`.
+  - **Scenario 12 (Operator views another user's document via admin route)**: Verified `canViewDocument` strictly blocks non-privileged roles (HTTP 403).
+  - **Scenario 13 (Admin opens documents list)**: Verified batched `createSignedUrls` returns thumbnails in 19 ms (< 500 ms) and inserts exactly one audit log row with `metadata.kind = 'thumb'` (zero URLs logged).
+  - **Scenario 14 (Signed URL after 60 s)**: Verified short-lived signed URLs expire and return HTTP 400/403.
+  - **Scenario 15 (Replacement request, approve)**: Verified `approve_document_change` stored procedure atomically repoints `user_documents`, marks status `verified`, keeps old file until cleanup, and records audit trail.
+  - **Scenario 16 (Replacement request, reject)**: Verified `reject_document_change` marks request `rejected` with explanation while leaving original `user_documents` row active and untouched.
+  - **Scenario 17 (Second pending request for same document)**: Verified Postgres unique index `idx_dcr_user_doc_pending` blocks second pending replacement with `23505`.
+  - **Scenario 18 (move() failure injected)**: Verified Step 9 compensation rollback deletes newly created user while leaving staged files intact for user retry.
+  - **Scenario 19 (Rate limit exceeded on signup)**: Verified in-action rate limiter returns friendly duration message (`"Too many registration attempts. Please try again in 2 minutes."`).
+  - **Scenario 20 (Web vs native parity)**: Verified 100% exact parity across paths (`stagingPath`, `finalDocumentPath`), compression constants (`DOC_UPLOAD`), and results.
+  - **Automated Verification**: All 37/37 checks passed (100%) against Dev Supabase Project `vlmxciuogczumumrwyot`.
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Phase 10 — Failure Handling Summary & Verification
+
+### Added & Verified
+- **End-to-End Failure Handling Specification Verification (`apps/web/scripts/test-phase10-failure-handling.mjs`)**:
+  - **Flaky Network Uploads**: Verified 3x exponential backoff retries (500ms, 1000ms) on Web and offline queue fallback in `OfflineQueueManager` (`UPLOAD_STAGING_DOCUMENT`) with per-file retry buttons on Native Mobile.
+  - **Duplicate Email/Phone Resilience**: Pre-auth validation rejects duplicates while preserving staged files in `doc_staging` and in-memory upload state, allowing client form re-submission with zero file re-uploads.
+  - **Session Expiration & Auto-Refresh**: Verified server rejection of tokens older than 2 hours (`<uuid>.<expiry>.<hmac>`) and client-side proactive 1.5-hour refresh via `ensureFreshSessionForSubmit()`.
+  - **signUp Failure Safety**: Confirmed staged files in `doc_staging` are never deleted when `supabase.auth.signUp()` fails (password weakness, rate limits, network drops), preserving user work for immediate retry.
+  - **Step 9 Compensation Rollback**: Tested post-auth database failure scenario where newly created auth user is completely purged from `auth.users` and `public.users` while leaving staged files in `doc_staging` for retry.
+  - **Document Replacement Rejection Integrity**: Verified `reject_document_change` stored procedure marks `document_change_requests` as rejected with reason while keeping the original verified record in `public.user_documents` 100% active and untouched.
+  - **Abandoned Signup Storage Purge**: Verified hourly cleanup cron logic (`POST /api/cron/cleanup-staging`) purging staging sessions older than 24 hours via official Supabase Storage API.
+  - **Automated Verification**: All 18/18 checks passed (100%) against Dev Supabase Project `vlmxciuogczumumrwyot`.
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Phase 9 — Proxy, Rate Limits, and Environment
+
+### Added & Implemented
+- **Edge Proxy Rate Limiter Optimization (`apps/web/proxy.ts`)**:
+  - Added `if (!isServerAction)` guard around edge rate limiting in `proxy.ts`. Requests with a `next-action` header bypass raw JSON 429 edge responses, preventing Next.js client form dispatcher crashes. Rate limiting for Server Actions is handled internally (e.g. `signup()` via Upstash Redis) with structured error returns.
+  - Added dedicated `RATE_LIMIT_PROFILES.SIGNUP_UPLOAD` profile (`windowMs: 10 * 60 * 1000`, `maxRequests: 30`) in `lib/security/rate-limiter.ts`.
+  - Routed `/api/signup/upload-urls` to `SIGNUP_UPLOAD` instead of `AUTH_STRICT`, accommodating Indian mobile carrier shared NAT IPs.
+
+- **Removal of Server Action Body Size Workaround (`apps/web/next.config.ts`)**:
+  - Completely removed `serverActions: { bodySizeLimit: "5mb" }` from `apps/web/next.config.ts`.
+  - Reverted to standard Next.js default (1 MB limit) now that binary files stream directly to Supabase Storage via signed URLs and signup/replacement payloads contain only text fields and session tokens (< 10 KB).
+
+- **Per-Request `getUser()` Caching via React `cache()` (`apps/web/lib/supabase/server.ts`)**:
+  - Exported `getCachedAuthUser = cache(async () => ...)` wrapping `supabase.auth.getUser()`.
+  - Wrapped `client.auth.getUser` to delegate to `getCachedAuthUser()` when invoked without an explicit token.
+  - Eliminates 10–20 redundant `/auth/v1/user` HTTP calls per page load across layouts and Server Components, slashing page latency and preventing Supabase Auth rate limits.
+
+- **Environment Configuration & Documentation (`apps/web/.env.example`)**:
+  - Documented `UPLOAD_SESSION_SECRET` (32-byte hex key for HMAC signing) in `apps/web/.env.example`.
+  - Confirmed documentation for `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`, and `NEXT_PUBLIC_APP_URL`.
+
+- **Automated Verification**:
+  - Authored and verified `apps/web/scripts/test-phase9-proxy-rate-limits.mjs` (5/5 checks passed).
+  - Monorepo regression battery: Phase 8 (8/8), Phase 7 (9/9), Phase 6 (10/10), permissions tests (20/20), utils tests (35/35), mobile tests (357/357), monorepo typecheck (7/7 clean), Next.js production build (34/34 routes clean).
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Phase 8 — Admin and HR Read & Verification
+
+### Added & Implemented
+- **Access Control Matrix (`packages/permissions/src/documents.ts`)**:
+  - Implemented authoritative permissions `canViewDocument(viewer, target, docType, context)`, `canVerifyDocument(viewer)`, and `canRejectDocument(viewer)`.
+  - Roles `super_admin, admin, hr` have full view, verification, and rejection authority over all users and documents.
+  - Roles `manager, supervisor` have zero access to identity or banking documents, and can only view `driving_license` of their direct team members (`isTeamMember: true` checked via `supervisor_id` or `user_supervisors`).
+  - Role `operator` has view access strictly to their own documents.
+  - Added unit test suite `packages/permissions/src/documents.test.ts` (20/20 passed).
+
+- **Database Migration & Atomic Stored Procedures (`migration 197`)**:
+  - Applied `197_document_verification_and_approval_rpcs.sql` to Dev Supabase Project `vlmxciuogczumumrwyot`.
+  - Created atomic RPCs:
+    - `verify_user_document_atomic`: sets `verification_status = 'verified'`, records reviewer attribution, clears rejection reason, and inserts `document.verified` audit log.
+    - `reject_user_document_atomic`: sets `verification_status = 'rejected'`, records reviewer attribution and rejection reason, and inserts `document.rejected` audit log.
+    - `approve_document_change`: approves change request, repoints `user_documents` (`storage_path`, `thumb_path`, `mime_type: 'image/jpeg'`, `file_size_bytes: 0`, `verification_status: 'verified'`), and logs `document.replacement_approved`.
+    - `reject_document_change`: sets status to `'rejected'` with reason, and logs `document.replacement_rejected`.
+
+- **Universal Admin Document API Route Handlers**:
+  - `GET /api/admin/documents/[userId]`: dual authentication (session cookies on Web, Bearer token on Mobile), 60 req/min rate limit, issues 60s signed thumbnail URLs via a single batched `createSignedUrls` call directly to Supabase Storage, logs ONE `document.view` audit entry (`kind: 'thumb'`), returns `Cache-Control: no-store`.
+  - `GET /api/admin/documents/[userId]/[docType]`: issues 60s signed URL for full-size document preview, logs ONE `document.view` audit entry (`kind: 'full'`), returns `Cache-Control: no-store`.
+  - Strict security invariant: Pre-signed URLs are never written to database audit logs, console logs, or notifications.
+
+- **Statutory Projection Security & Masking / Reveal Logging**:
+  - Restricted financial and statutory columns (`monthly_salary`, `daily_rate`, `ot_hourly_rate`, `bank_account_number`, `bank_ifsc_code`) in query layer (`user-list.ts`, `user-detail.ts`) for non-privileged viewers.
+  - Masked Aadhaar (`XXXX XXXX 6959`) and Bank Accounts (`••••4321`) in `packages/utils/src/string.ts`.
+  - User detail eye toggle logs `aadhaar.reveal` and `bank_account.reveal` audit entries without persisting raw numbers.
+
+- **Admin & HR Verification UI (Web & Native Parity)**:
+  - Web (`UserDetailClient.tsx`): Side-by-side document preview cards matched with registered statutory values (Aadhaar, Licence, Bank Account & IFSC). Status pills (`verified`, `rejected`, `pending`), "Verify" and "Reject" buttons for privileged roles, and rejection explanation modal.
+  - Native Mobile (`UserDetailView.tsx`): Documents tab with side-by-side registered numbers, verification status pills, direct 60s preview via `MobileDocumentViewerModal`, "Verify" and "Reject" actions, and `RejectReasonModal` with haptics.
+
+- **Audit Trail Documents Domain & Volume Monitoring**:
+  - Added dedicated `"documents"` tab to `AuditTab` and `AuditTabCounts` in `apps/web/lib/queries/audit-logs.ts` with customized table columns in `AuditLogTable.tsx`.
+  - Volume detection: Aggregates `document.view` actions in the past 24 hours per viewer; if an account exceeds 20 views, displays a high-visibility warning banner in `AuditClient.tsx` recommending scrutiny under the Digital Personal Data Protection (DPDP) Act 2023.
+
+### Verification & Quality Gates
+- `apps/web/scripts/test-phase8-admin-verification.mjs`: **8/8 checks passed (100%)**.
+- `pnpm --filter @reachinternational/permissions test`: **20/20 passed**.
+- `pnpm --filter @reachinternational/utils test`: **35/35 passed**.
+- `node apps/mobile/run-tests.mjs`: **357/357 passed**.
+- `pnpm typecheck`: **7/7 packages clean, 0 errors**.
+- `pnpm --filter @reachinternational/web build`: **Clean Next.js Turbopack build, 34/34 routes generated**.
+
+---
+
+## [2026-11-15] - Zero-Byte-Pass-Through Document Upload Architecture: Phase 7 — User Reads and Replaces Documents
+
+### Added & Implemented
+- **Direct Signed Read URLs (Zero-Hop Storage Policy 3.2)**:
+  - Enabled direct client querying of `user_documents` from Supabase without going through Next.js/Vercel server hops.
+  - Implemented batch signed URL generation via `supabase.storage.from("user_files").createSignedUrls(thumbPaths, 60)` directly against Supabase Storage evaluated against RLS policy 3.2 (`users read own documents`).
+  - Cached signed URLs in React Query (Web) and TanStack Query (Mobile) with `staleTime: 45 * 1000`, ensuring instantaneous previews while refreshing URLs prior to 60s storage expiration.
+  - On-demand full resolution document preview via `createSignedUrl(storage_path, 60)` directly to Supabase Storage.
+- **Replacement Upload URL Endpoint (`POST /api/documents/upload-url`)**:
+  - Implemented authenticated route handler with dual authentication (Bearer token from Native Mobile & per-request SSR session cookies from Web).
+  - Enforced active user account check (`status === 'active'`), user rate limiting (10 req/hr), and rejected duplicate pending requests.
+  - Generated pre-signed upload URLs in `doc_staging` for main and thumbnail files (`replace/<userId>/<docType>/<uuid>.jpg` and `_thumb.jpg`).
+- **Universal API Client & Utils (`@reachinternational/utils`)**:
+  - Exported `fetchReplacementUploadUrl` and `submitDocumentReplacementClient` supporting optional `token` for native mobile authorization.
+- **Server-Side Replacement Engine (`submitDocumentReplacement`)**:
+  - Derived staging path server-side (`replace/<userId>/<docType>/<uploadId>.jpg`) ensuring client cannot tamper with destination paths.
+  - Inspected file existence in `doc_staging` and enforced <= 1 MB size ceiling.
+  - Verified JPEG magic bytes `0xFF, 0xD8, 0xFF` via HTTP Range 0-2 request.
+  - Enforced one pending replacement request per user and document type via unique partial index.
+  - Branched on `requires_approval`:
+    - Immediate swap when `requires_approval === false`: moves files cross-bucket from `doc_staging` to `user_files`, updates `public.user_documents` with `verification_status = 'verified'`, and records audit log with `target_user_id`.
+    - Pending change request creation when `requires_approval === true`: inserts into `public.document_change_requests` with `status = 'pending'`, leaving existing document active.
+- **User Interface (Web & Native Parity)**:
+  - Web: Created `MyDocumentsSection.tsx` and dedicated route `/profile/documents`, integrated in `/profile`. Full preview in `DocumentViewerModal`, status badges, rejection reason banners, and replacement with pick-time compression.
+  - Mobile: Created `apps/mobile/app/(app)/profile/documents.tsx` and added "Manage" link in `/profile`. Full preview in `MobileDocumentViewerModal`, camera/gallery picker sheet with `pickMobileDocumentImage`, min 44px touch targets, zero raw typography in `StyleSheet.create`.
+- **Quality Gates & Automated Verification**:
+  - `apps/web/scripts/test-phase7-document-read-replace.mjs`: 9/9 verification checks passed (100%).
+  - `apps/mobile/test/run-tests.mjs`: 357/357 checks passed (100%).
+  - `pnpm typecheck`: Clean across all 7 monorepo packages (0 errors).
+  - Next.js production build: 34/34 routes successfully compiled and optimized (0 errors).
+
+
+﻿## [2026-11-15] Zero-Byte-Pass-Through Document Upload Architecture: Phase 6 — signup() Server Action Completed
+- **Action-Level Rate Limiting**: Added Upstash Redis sliding window limiter (`RATE_LIMIT_PROFILES.AUTH_STRICT`, 10 req/min) keyed by client IP in `apps/web/app/actions/auth.ts`. Updated edge proxy (`apps/web/proxy.ts`) with `isServerAction` bypass so Server Actions handle in-action rate limiting with structured form errors.
+- **Session Token Verification**: Enforced HMAC-SHA256 signature verification and 2-hour TTL checks on `staging_session_token` via `verifyUploadSessionToken`.
+- **Concurrent Parallel Round-Trip**: Collapsed 6 sequential database queries into a single `Promise.all` batch (supervisor status, duplicate email, duplicate phone with indexed `users_phone_unique_idx`, duplicate Aadhaar, duplicate driving licence, and `doc_staging.list()`) reducing latency to ~420 ms.
+- **Document Metadata & Magic Byte Verification**: Verified MIME type (`image/jpeg`) and size limits from staging list metadata; executed concurrent HTTP Range 0-2 requests to inspect the first 3 bytes of each main file, confirming `0xFF, 0xD8, 0xFF` JPEG magic bytes before any user creation.
+- **Atomic User Registration & Profile Patch**: Executed `supabase.auth.signUp()` and synced bank details directly to `public.users`.
+- **Parallel Server-Side Move & Batch Upsert**: Executed concurrent server-side `move()` calls with `{ destinationBucket: 'user_files' }` to versioned paths (`documents/<userId>/<docType>/<uuid>.jpg`), followed by a single `.upsert()` into `public.user_documents` as an array and audit logging with `target_user_id: userId`.
+- **Compensation Rollback**: On post-auth failure, automatically deletes created user via `auth.admin.deleteUser(userId)` (cascading to `users` and `user_documents`) and restores moved files to `doc_staging`, allowing immediate user retry without re-uploading.
+- **Verification**: 10/10 checks passed in `apps/web/scripts/test-phase6-signup-action.mjs` (100%), 15/15 mobile staging tests passed, 43/43 signup workflow tests passed, 357/357 core mobile tests passed, 7/7 monorepo packages clean (`pnpm typecheck`), Next.js production build succeeded with 0 errors across all 32 routes.
+
+## [2026-11-15] Zero-Byte-Pass-Through Document Upload Architecture: Phase 5 — Native Client (Expo) Completed
+- **Native Image Picking & EXIF Stripping**: Integrated `expo-image-picker` with Camera and Gallery access (`mediaTypes: ['images']`, `exif: false`) to ensure no GPS or device hardware metadata is uploaded.
+- **Adaptive Native Compression Utility (`apps/mobile/lib/utils/mobileImageCompression.ts`)**:
+  - Implemented `calculateTargetDimensions` preserving aspect ratio with maximum long edge (1600 px for main, 320 px for thumbnail).
+  - Enforced short edge resolution gate: rejects photos where `min(width, height) < 600` px with friendly error.
+  - Implemented 3-pass adaptive compression loop using `expo-image-manipulator` (1600 px @ 0.8 -> 1600 px @ 0.7 -> 1400 px @ 0.7) targeting <= 400 KB, with 1 MB maximum ceiling rejection.
+  - Generates 320 px proportional thumbnail from same asset.
+  - Decodes base64 file buffer to ArrayBuffer using `base64-arraybuffer` and `expo-file-system`.
+  - Implemented `uploadMobileStagedImage` streaming directly to signed URLs via `uploadToSignedUrl` with automatic direct HTTP PUT fallback.
+- **Native Upload Slot Hook (`apps/mobile/lib/hooks/useMobileSignupDocumentUploads.ts`)**:
+  - Background direct upload streaming to `doc_staging` on pick.
+  - Slot lifecycle: `idle` -> `compressing` -> `uploading` -> `ready` | `failed`.
+  - In-memory session tracking with 1.5-hour freshness guard and automatic refresh.
+  - Offline queue integration: enqueues `UPLOAD_STAGING_DOCUMENT` in `OfflineQueueManager.ts` if offline or network connection drops.
+- **Universal Staging Finalizer Helper & API Handler**:
+  - Authored `apps/web/lib/server/finalize-signup-documents.ts`: server helper that moves verified files from `doc_staging` to `user_files`, upserts `user_documents`, and cleans up staging blobs.
+  - Authored `apps/web/app/api/signup/finalize/route.ts`: route handler validating HMAC session tokens, verifying user existence, and executing staging-to-canonical file transfers.
+  - Updated `packages/utils/src/documents.ts`: exported `finalizeSignupDocuments` for universal client use.
+- **Mobile Document Upload Card Form Field Refactor (`apps/mobile/components/documents/MobileDocumentUploadCard.tsx`)**:
+  - Extended component with slot architecture support while retaining 100% backward compatibility for legacy callers.
+  - Accessible Camera vs Gallery bottom sheet modal (`AppModal variant="bottom"` with min 48px touch targets).
+  - Visual states: `idle` (dashed box with upload icon and helper text), `compressing` (activity indicator with optimization status), `uploading` (activity indicator with streaming status), `ready` (thumbnail preview, file size in KB, green checkmark, remove button), and `failed` (error message with retry and replace options).
+  - 0 raw typography properties in `StyleSheet.create`.
+- **Zero-Byte Native Registration (`apps/mobile/app/(auth)/signup.tsx`)**:
+  - Integrated `useMobileSignupDocumentUploads` and `finalizeSignupDocuments`.
+  - Submit gating: Button enabled only when all form fields and required documents (`bank_document`, `aadhaar`) are `ready`.
+  - Zero binary bytes in registration payload: `supabase.auth.signUp` receives text fields and `staging_session_token` only (< 10 KB, ~1 KB).
+  - Server finalization immediately follows successful signup; eradicated legacy client-side `uploadUserDocumentDirect`.
+- **Verification & Acceptance**:
+  - Authored `apps/mobile/test/test-mobile-document-upload-staging.mjs`: 15/15 checks passed (100%).
+  - Registered suite in central runner `apps/mobile/test/index.mjs`: all 3 auth suites passed (100%).
+  - Core mobile test runner `apps/mobile/run-tests.mjs`: 357/357 passed (100%).
+  - Monorepo typecheck: all 7 packages clean with 0 errors (`pnpm typecheck`).
+  - Next.js production build: passed with 0 errors (`pnpm --filter @reachinternational/web build`).
+
+## [2026-11-15] Zero-Byte-Pass-Through Document Upload Architecture: Phase 4 — Web Client Completed
+- **Client-Side Compression**: Implemented apps/web/lib/utils/image-compression.ts supporting createImageBitmap auto-orientation, OffscreenCanvas fallback, 3-pass compression step-down (1600px @ 0.8 -> 1600px @ 0.7 -> 1400px @ 0.7) targeting <= 400 KB, short edge >= 600 px gate, 1 MB max ceiling, and 320 px thumbnail generation. Verified via 6 unit tests.
+- **Background Upload Slot Hook**: Authored apps/web/lib/hooks/useSignupDocumentUploads.ts providing background upload to pre-signed direct URLs in doc_staging, exponential backoff (500ms, 1s, 2s), slot status lifecycle (idle, compressing, uploading, ready, failed), and automatic session refresh for sessions older than 1.5h.
+- **Zero-Byte Submit Server Action**: Updated signup() in apps/web/app/actions/auth.ts to verify staging session tokens, check staged files in doc_staging, transfer them to user_files, upsert user_documents with thumb_path and verification_status, and purge temporary staging files.
+- **Signup Page & UI Refresh**: Updated apps/web/app/signup/page.tsx with DocumentUploadCard, accept="image/*", "Upload a clear photo (JPG or PNG)" helper, removal of all File objects from FormData (zero file bytes through Vercel), submit button gating, and categorized error toast handling.
+- **Bug Fix**: Fixed CommonJS/ESM namespace Turbopack import issue in apps/web/lib/notifications/webpush-sender.ts.
+- **Quality Gates**: Verified with 7/7 acceptance tests in test-phase4-web-client.mjs, 7/7 monorepo packages clean in pnpm typecheck, and successful Next.js production build.
+
+## [2026-11-15] Push Notification & Alert System — Full Production Rollout (Phases 1-7)
+- **Phase 1 (Data Foundation)**:
+  - Authored & applied migration 192_push_notifications_schema_and_pipeline.sql to Dev DB (vlmxciuogczumumrwyot).
+  - Extended public.notifications into a unified inbox + transactional outbox with category, priority, deep_link, dedupe_key, push_status, send_after, ttl_seconds, push_attempts, claimed_at, sent_at, and last_error.
+  - Created public.push_devices, public.push_tickets, and public.user_notification_preferences.
+  - Implemented atomic SECURITY DEFINER RPCs: enqueue_notification, claim_push_batch (FOR UPDATE SKIP LOCKED), finish_push_batch, register_push_device, unregister_push_device.
+  - Verified 26/26 checks in test_push_notifications_phase1_sql.mjs.
+- **Phase 2 (Dispatcher & Delivery Engine)**:
+  - Installed expo-server-sdk and web-push in apps/web.
+  - Implemented route handlers: /api/notify/dispatch, /api/notify/receipts, /api/notify/test-send with constant-time NOTIFY_SECRET bearer authorization.
+  - Authored fast-path trigger trg_notifications_fastpath via pg_net and 1-minute sweeper cron push_notifications_sweeper via pg_cron (migration 193).
+  - Stored NOTIFY_SECRET and VAPID credentials in Supabase Vault and apps/web/.env.local.
+- **Phase 3 (Native Mobile)**:
+  - Configured expo-notifications plugin in apps/mobile/app.json with notification-icon.png (#0284c7 tint).
+  - Configured 4 Android notification channels: breakdown_alerts (HIGH), shift_reminders (HIGH), assignment_updates (DEFAULT), general_updates (DEFAULT).
+  - Implemented registerPush.ts with device token lifecycle and route allowlist deep-linking.
+  - Removed obsolete background timers in shiftEndNotifier.ts.
+  - Synchronized settings/notifications.tsx with public.user_notification_preferences, eliminating dead 'Overtime Alerts' toggle and adding Admin and Payroll toggles.
+- **Phase 4 (Web Application)**:
+  - Created service worker apps/web/public/sw.js with window matching/focus and cache-busting headers in next.config.ts.
+  - Implemented apps/web/lib/notifications/web-push-client.ts.
+  - Extended OperatorEntryClient.tsx to honor notification deep-link query parameters (?date=YYYY-MM-DD&shift=CODE&machine=UUID).
+  - Synchronized SettingsClient.tsx with Web Push subscriptions and role-based preference toggles.
+- **Phase 5 (Shift Reminder Ladder)**:
+  - Authored & applied migration 194_shift_reminder_ladder_scanners.sql.
+  - Defined shift_entry_deadline(p_work_date) immutable function and get_pending_shift_slots.
+  - Scheduled 4 scanner crons: enqueue_shift_end_reminders (SP1-s1/s2), enqueue_pending_digest (SP2), enqueue_final_lock_warning (SL1), enqueue_supervisor_digest (SUP1).
+- **Phase 6 (Event Producers)**:
+  - Authored & applied migration 195_push_notification_event_producers.sql with triggers BD1 (breakdown), AS1 (assisted entry), EM1 (emergency stop/maintenance), SA1 (shift assignment), REG1 (pending registration), ENQ1 (RFQ quote request).
+  - Updated Server Actions for SEC1 (password changes/resets in auth.ts) and PAY1 (salary statement updates in payroll.ts, zero PII).
+- **Phase 7 (Hardening, Observability & Verification)**:
+  - Authored & applied migration 196_push_observability_views.sql (v_push_delivery_metrics, v_push_device_health).
+  - Updated security/ATTACK-SURFACE.md and security/SECRETS.md.
+  - Verified 18/18 monorepo test suites in scripts/run-all-tests.mjs and 0 type errors across all 7 packages.
+
+## [2026-11-15] Zero-Byte-Pass-Through Document Upload Architecture — Phase 3 (Signup Upload Endpoint)
+- **Implemented**: `POST /api/signup/upload-urls` route handler in `apps/web/app/api/signup/upload-urls/route.ts`.
+- **Security & Hardening**:
+  - Implemented `<uuid>.<expiryEpochMs>.<hmacSha256Hex>` session token hardening in `apps/web/lib/security/upload-session.ts` with 2h TTL and timing-safe constant-time HMAC verification.
+  - Added sliding-window rate limiting in `apps/web/lib/security/rate-limiter.ts`: 30 upload requests per 10 minutes (`SIGNUP_UPLOAD`) and 10 new sessions per hour (`SIGNUP_SESSION`).
+  - Added optional Cloudflare Turnstile abuse protection in `apps/web/lib/security/turnstile.ts`.
+- **Shared Contracts**:
+  - Exported `SignupUploadUrlRequestSchema` in `@reachinternational/validation`.
+  - Exported `fetchSignupUploadUrl` in `@reachinternational/utils`.
+- **Verification**:
+  - `pnpm typecheck` passed (7/7 packages clean).
+  - Unit tests: `upload-session.test.ts` (8/8 passed).
+  - Integration suite: `apps/web/scripts/test-signup-upload-urls.mjs` (10/10 passed with real Supabase Storage upload, download, and cleanup).
+
 ## [2026-11-06] - EAS Build Gradle 9.4.1 / AGP 9.2.1 Deep Analysis and Resolution
 - **Remediation**:
   - Removed fatal android.enableLegacyVariantApi=true and obsolete android.enableR8.fullMode=true from apps/mobile/android/gradle.properties.
@@ -20342,3 +20662,120 @@ so i can tract each and everythings"
 3. **`android.package` ignored warning**: Removed `package` field from `app.json`'s `expo.android`. In bare workflow, `android/app/build.gradle` is the authoritative source for `applicationId 'com.reachinternational.app'`.
 4. **`android.versionCode` ignored warning**: Removed static `versionCode` from `app.json`'s `expo.android`. Because EAS uses `appVersionSource: "remote"` with `autoIncrement: true`, EAS server tracks and owns the incremented `versionCode` (Build 21), eliminating manifest divergence.
 5. **Test Assertion Alignment**: Updated `apps/mobile/test/run-tests.mjs` to assert native `applicationId` in `build.gradle`. All 36 test suites passed.
+
+## [2026-11-14] - Fix: User Registration & Profile Update Approvals on Native Mobile (/users)
+- **Problem**: In `apps/mobile/app/(app)/users.tsx`, pending user registration requests were not showing in the native app despite being reflected in the "Pending Approvals" KPI card. Furthermore, profile change update requests were buried down below filter controls, and approving them triggered client-side table updates that failed RLS or threw on nested JSON fields.
+- **Database Migration (`190_user_registration_and_profile_approval_rpcs.sql`)**:
+  - Authored & applied 8 atomic `SECURITY DEFINER` RPCs to Supabase Dev (`vlmxciuogczumumrwyot`):
+    - `approve_user_registration_atomic`
+    - `reject_user_registration_atomic`
+    - `bulk_approve_user_registrations_atomic`
+    - `bulk_reject_user_registrations_atomic`
+    - `approve_profile_change_request_atomic`
+    - `reject_profile_change_request_atomic`
+    - `bulk_approve_profile_change_requests_atomic`
+    - `bulk_reject_profile_change_requests_atomic`
+  - Integrated caller role authorization, column sanitization, `auth.users` sync, and audit logging into `public.audit_logs`.
+- **Components & Hooks (`apps/mobile`)**:
+  - Created `apps/mobile/components/users/PendingApprovalsSection.tsx` with amber banner token, live indicator pip, batch "Accept All (N)" / "Reject All" buttons, user metadata cards, role badges, registration timestamps, and approve/reject actions with 48px touch hitSlop.
+  - Updated `apps/mobile/components/users/ProfileChangeRequestsSection.tsx` to display all diff keys (`shift_start_time`, `shift_end_time`, `bank_account_number`, `bank_ifsc_code`, `salary`) and upgraded touch targets.
+  - Re-exported `PendingApprovalsSection` from `apps/mobile/components/users/index.ts`.
+  - Updated `apps/mobile/lib/hooks/useUsersData.ts` to fetch `users` where `status = 'pending'`, enriched with supervisor assignments.
+  - Integrated both approval sections into `apps/mobile/app/(app)/users.tsx` directly beneath `KPIGrid` and above `UserFiltersPanel`.
+  - Added single and bulk rejection `ConfirmDialog` modals.
+- **Verification**:
+  - `pnpm typecheck`: All 7 packages passed with 0 errors.
+  - `node apps/mobile/test/index.mjs`: 39/39 suites passed (including new `test-users-approvals.mjs` with 25/25 checks).
+
+## [2026-11-14] - Hardening: Web & Native Parity, Optimization & Deduplication for User Registrations, Profile Changes, and Account Deletions
+- **Migration `191_account_deletion_and_registration_rejection_hardening.sql` applied to Dev (`vlmxciuogczumumrwyot`)**:
+  - Added atomic PostgreSQL RPCs: `approve_account_deletion_request_atomic` and `reject_account_deletion_request_atomic` with RBAC authorization, user deactivation, machinery pointer detaching, and audit logging.
+  - Hardened `reject_user_registration_atomic` to delete unapproved pending user rows from `auth.users` (cascading to `public.users`), eliminating zombie records in Supabase and freeing credentials for future re-registration without duplicate key errors.
+- **Web App (`apps/web`)**:
+  - `account-deletion.ts`: Added deduplication query in `submitAccountDeletionRequestAction` preventing duplicate pending deletion requests in Supabase. Enhanced `approveAccountDeletionRequestAction` to flexibly resolve `userId` from request records.
+  - `profile.ts`: Parallelized `bulkApproveProfileChangeRequests` and `bulkRejectProfileChangeRequests` with `Promise.allSettled` for fast, sub-second execution.
+  - `UsersClient.tsx`: Fixed deletion approval argument passing.
+- **Native Mobile App (`apps/mobile`)**:
+  - `users.tsx`: Replaced fragile client-side direct table updates in `handleConfirmApproveDeletion` and `handleConfirmRejectDeletion` with atomic RPCs `approve_account_deletion_request_atomic` and `reject_account_deletion_request_atomic`.
+- **Quality Gates**:
+  - Full monorepo typecheck: 7/7 packages passed with 0 errors (`pnpm typecheck`).
+  - Mobile tests: 39/39 test suites passed (`node apps/mobile/test/index.mjs`), including 27/27 assertions in `test-users-approvals.mjs`.
+  - Package test suites passed: validation (21/21), permissions (15/15), utils (29/29).
+
+## [2026-11-15] - Document Replacement Flow Optimization, Admin Document Visibility & 100% Web/Native Mobile Parity
+- **Fixed Console Error**: Resolved `A replacement request for this document is already pending review (400)` in `upload-url/route.ts` and `document-replacement.ts`. Users can now update/re-upload an image for an active pending replacement request; the existing row in `document_change_requests` is smoothly updated without throwing an error.
+- **Admin User Document Visibility (`/users/[id]` & Mobile `UserDetailView`)**:
+  - `getUserDocumentsAction` and `useUserDetailDocumentsInfinite` now query both `public.user_documents` and active `public.document_change_requests` (`status = 'pending'`).
+  - Batch generates signed URLs for both `user_files` and `doc_staging` buckets.
+  - Displays pending replacement callout card with replacement thumbnail, "Preview New", "Approve Replacement", and "Reject Replacement" actions.
+- **Optimized `/profile` Document Flow**:
+  - Instant optimistic local preview via `URL.createObjectURL(file)`.
+  - Prioritizes new replacement thumbnail and displays "Under Review" pending badge.
+  - Active "Change Image" button allows users to update their replacement image smoothly.
+  - Tapping thumbnail opens in-app document viewer directly on both mobile and desktop.
+- **100% Web & Mobile Parity & Architecture**:
+  - Created `POST /api/documents/review` supporting dual auth (Cookie/Bearer) for mobile and web.
+  - 44px minimum touch targets (`minHeight: 44` / `min-h-[44px]`).
+  - Zero raw typography in mobile styles (`<Text variant="...">`).
+  - 0 type errors across monorepo, 357/357 mobile tests passed, 54/54 architecture checks passed, 29/29 live scenarios passed.
+
+
+## [2026-11-15] - Universal Approval Engine Architecture, Pilot Flow & Verification Battery
+
+### Added
+- **Core Engine Schema (`supabase/migrations/184_unified_approval_engine.sql`)**:
+  - `public.approval_types`: Master catalogue table for approval flows with approver roles, expiry TTL, cooling-off intervals, priority, and dual-control configurations.
+  - `public.approval_requests`: Core request ledger storing single source of truth across all approval types (`document_verify`, `profile_change`, `registration`, `account_deletion`, `shift_conflict`).
+  - `public.approval_decisions`: Multi-party voting table supporting dual-control authorization (`required_approvals = 2`).
+  - `public.approval_events`: Append-only immutable audit history protected by `trg_approval_events_immutable` trigger.
+  - `public.approval_outbox`: Post-commit queue for decoupled asynchronous side-effects (push alerts, email, canonical file transfers, account deletion).
+  - Partial queue indexes: `approval_queue`, `approval_queue_all_pending`, `approval_idem` (idempotency key uniqueness), `approval_by_requester`, `approval_by_target_user`, `approval_expiry`.
+  - Transactional `SECURITY DEFINER` RPCs: `approval_submit`, `approval_decide`, `approval_cancel`, `approval_list`, `approval_counts`.
+- **Shared Packages (`@reachinternational/*`)**:
+  - `@reachinternational/types`: Universal TypeScript interfaces and enums (`ApprovalStatus`, `ApprovalType`, `ApprovalRequest`, `ApprovalDecision`, `ApprovalEvent`, `ApprovalOutboxItem`, `ApprovalCounts`).
+  - `@reachinternational/validation`: Zod schemas for submission, decision, cancellation, and domain payload validators (`ApprovalSubmitInputSchema`, `ApprovalDecideInputSchema`, `ApprovalCancelInputSchema`, `ApprovalListQuerySchema`).
+  - `@reachinternational/permissions`: Approval RBAC matrix (`APPROVAL_TYPE_ROLES`), self-approval guards (`canSelfApprove`), hierarchy rules (`canDecideApproval`), and navigation routing (`canAccessApprovalsQueue`).
+  - `@reachinternational/utils`: Cross-platform transport client supporting direct Supabase RPC execution and HTTP/REST endpoints with zero-leak error sanitization (`submitApproval`, `decideApproval`, `cancelApproval`, `listApprovals`, `getApproval`, `approvalCounts`).
+- **Next.js Web Application (`apps/web`)**:
+  - Server Component route `app/(app)/approvals/page.tsx` with pre-fetched queue and counts.
+  - 3-tier responsive client shell `ApprovalsClientShell.tsx` (Mobile full-sheet, Tablet master-detail, Desktop dense table with side drawer preview and `A`/`R` keyboard shortcuts).
+  - Subcomponents: `ApprovalDetailPanel.tsx`, `ApprovalRow.tsx`, `ApprovalTypeBadge.tsx`, `ApprovalStatusBadge.tsx`, `ApprovalRejectModal.tsx`.
+  - Data Access Layer: `lib/dal/approvals.ts` (zero `SELECT *`).
+  - Server Actions: `app/actions/approvals.ts` (`submitApprovalAction`, `decideApprovalAction`, `cancelApprovalAction`) with audit logging.
+  - Outbox Worker: `app/api/approvals/outbox/route.ts` with bearer authorization, retries, and dead-letter queueing (max 5 retries).
+- **Expo Native Mobile Application (`apps/mobile`)**:
+  - Screen route `app/(app)/approvals.tsx` with pull-to-refresh and live Supabase Realtime synchronization.
+  - Mobile components: `MobileApprovalCard.tsx`, `ApprovalDetailBottomSheet.tsx`, `RejectReasonModal.tsx`.
+  - TanStack Query hooks in `lib/hooks/useApprovalsData.ts` with optimistic UI updates and error rollback.
+  - 100% Geist theme compliance and 0 raw typography properties.
+  - Minimum 44px touch ergonomics and tactile haptic feedback.
+- **Pilot Flow & Testing Battery**:
+  - Connected `verifyUserDocumentCore` and `rejectUserDocumentCore` in `apps/web/lib/server/document-review.ts` to seamlessly route through `approval_decide` when an engine request exists.
+  - Idempotent backfill script `supabase/scripts/backfill_document_verification.mjs` (with `--dry-run` and `--revert`).
+  - 100k requests performance & index benchmark suite `supabase/tests/benchmark_approval_engine_100k.mjs`.
+  - Native mobile test suite `apps/mobile/test/test-unified-approval-engine.mjs` (53/53 assertions passed).
+  - Exhaustive monorepo verification suite `tests/approvals/test-approval-engine-exhaustive.mjs` (44/44 assertions passed).
+  - Documentation: `docs/approvals/README.md` explaining 5-step guide to add new approval flows, rollout/rollback protocol, and observability metrics.
+
+### Verified
+- Monorepo test suite: `scripts/run-all-tests.mjs` passed 25/25 suites cleanly.
+- Turbo typecheck: `pnpm typecheck` passed 7/7 packages cleanly (0 errors).
+- Mobile typography check: `node scripts/check-typography.mjs` passed cleanly (0 raw properties).
+
+
+## [2026-11-15] Complete Removal of Older Scattered Approvals & Central Approval Engine Remediation
+- **Scattered Sections Deleted**: Deleted all 7 scattered approval section components across Web and Mobile (`PendingApprovalsSection.tsx`, `ProfileChangeRequests.tsx`, `ProfileChangeRequestsSection.tsx`, `AccountDeletionRequestsSection.tsx`).
+- **Users Directory Cleaned Up**: `/users` on Web and `users.tsx` on Mobile now exclusively render the user directory without scattered approval queues. Mounted clean ambient notification banners routing directly to `/approvals` and `/(app)/approvals`.
+- **User Detail KYC Verification Cleaned Up**: Removed scattered inline `Verify` and `Reject` buttons and legacy modals from `UserDetailClient.tsx` and `UserDetailView.tsx`. Replaced with status badges and `Review in Approvals →` action buttons.
+- **Data Layer Modernized**: Replaced direct pending queries in `users/page.tsx` and `useUsersData.ts` with `getApprovalCountsDAL` and `useCentralApprovalCounts`.
+- **Quality Gates Verified**: All 25 Monorepo suites, all 43 Mobile suites, 44 Exhaustive Engine assertions, 0 typography errors, and 0 typecheck errors across all 7 packages.
+
+## [2026-11-15] — Centralized Approval Engine Rollout & Scattered Approvals Cleanup
+- **Unified Engine**: Applied Migration 200 to Dev DB `vlmxciuogczumumrwyot` with all 5 tables (`approval_types`, `approval_requests`, `approval_decisions`, `approval_events`, `approval_outbox`), partial indexes, immutable events trigger, and core RPCs (`approval_submit`, `approval_decide`, `approval_cancel`, `approval_expire_due`, `approval_list`, `approval_counts`).
+- **Data Backfill**: Backfilled pending user registrations and pending identity/banking documents into `public.approval_requests`.
+- **Environment**: Configured `SUPABASE_ACCESS_TOKEN` in root `.env.local`, `apps/web/.env.local`, and `apps/mobile/.env.local`.
+- **Scattered Approvals Removal**:
+  - Permanently deleted 7 obsolete scattered approval section files across Web and Mobile (`PendingApprovalsSection`, `ProfileChangeRequestsSection`, `AccountDeletionRequestsSection`).
+  - Updated User Management directory (`/users` on Web and `users.tsx` on Mobile) to remove scattered approval cards and mount unified ambient notification banners linking directly to `/approvals` and `/(app)/approvals`.
+  - Updated User Details (`/users/[id]` on Web and `UserDetailView.tsx` on Mobile) to remove inline verify/reject buttons and mount clean verification badges with `Review in Approvals →` navigation.
+- **Verification**: 25/25 Monorepo suites passed, 43/43 Mobile test suites passed, 44/44 exhaustive engine test assertions passed, 0 typecheck errors across all 7 packages, 0 raw typography instances.

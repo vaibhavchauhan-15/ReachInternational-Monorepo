@@ -1,8 +1,8 @@
-import { Text } from '../../ui/Text';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../ui/ThemeProvider';
+import { Text } from '../../ui/Text';
 import { EmptyState } from '../../ui/EmptyState';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import type { HRDashboardDTO } from '@reachinternational/types';
@@ -26,6 +26,8 @@ export interface HRDashboardCardProps {
 export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   const totalEmployees = data?.totalEmployees ?? 0;
   const activeOperators = data?.activeOperators ?? 0;
@@ -100,22 +102,31 @@ export const HRDashboardCard: React.FC<HRDashboardCardProps> = ({ data }) => {
         >
           Personnel Actions
         </Text>
-        <View style={styles.actionList}>
-          <PrimaryAction
-            title="Profile Change Requests"
-            description="Review and approve operator contact details, banking info, and document updates"
-            href="/users"
-            icon={FileEdit}
-            variant={pendingProfileChanges > 0 ? 'warning' : 'primary'}
-            badgeText={pendingProfileChanges > 0 ? `${pendingProfileChanges} Pending` : undefined}
-          />
-          <PrimaryAction
-            title="Employee Access Directory"
-            description="Manage user credentials, role assignments, supervisor hierarchy, and HR records"
-            href="/users"
-            icon={UserPlus}
-            variant="secondary"
-          />
+        <View
+          style={[
+            styles.actionList,
+            isTabletOrDesktop && styles.actionGrid,
+          ]}
+        >
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Profile Change Requests"
+              description="Review and approve operator contact details, banking info, and document updates"
+              href="/users"
+              icon={FileEdit}
+              variant={pendingProfileChanges > 0 ? 'warning' : 'primary'}
+              badgeText={pendingProfileChanges > 0 ? `${pendingProfileChanges} Pending` : undefined}
+            />
+          </View>
+          <View style={isTabletOrDesktop ? styles.actionGridItem : undefined}>
+            <PrimaryAction
+              title="Employee Access Directory"
+              description="Manage user credentials, role assignments, supervisor hierarchy, and HR records"
+              href="/users"
+              icon={UserPlus}
+              variant="secondary"
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -135,5 +146,18 @@ const styles = StyleSheet.create({
   },
   actionList: {
     gap: spacingNumeric.sm,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  actionGridItem: {
+    flex: 1,
+    minWidth: 0,
+    ...Platform.select({
+      web: { height: '100%' },
+      default: {},
+    }),
   },
 });

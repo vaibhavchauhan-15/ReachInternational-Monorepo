@@ -19,6 +19,8 @@ import {
   deleteApplicationAction,
 } from "@/app/actions/hiring";
 import type { JobApplication, ApplicationStatus } from "@reachinternational/types";
+import { formatExactTimestamp } from "@reachinternational/utils";
+import { getAllowedApplicationTransitions } from "@/lib/data/careers/application-transitions";
 import { cn } from "@/lib/utils";
 
 interface ApplicationDetailDrawerProps {
@@ -195,18 +197,29 @@ export function ApplicationDetailDrawer({
           <div className="p-4 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)] flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-[var(--color-body)]">Status:</span>
-              <select
-                value={currentStatus}
-                onChange={(e) => handleStatusChange(e.target.value as ApplicationStatus)}
-                disabled={isPending}
-                className="h-8 px-2.5 text-xs font-semibold bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-lg text-[var(--color-ink)] focus:outline-none"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {(() => {
+                const allowedTransitions = getAllowedApplicationTransitions(currentStatus);
+                const isTerminal = allowedTransitions.length === 0;
+                return (
+                  <select
+                    value={currentStatus}
+                    onChange={(e) => handleStatusChange(e.target.value as ApplicationStatus)}
+                    disabled={isPending || isTerminal}
+                    className="h-8 px-2.5 text-xs font-semibold bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-lg text-[var(--color-ink)] focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                    title={isTerminal ? `Application is in terminal state "${currentStatus}"` : undefined}
+                  >
+                    {STATUS_OPTIONS.map((opt) => {
+                      const isCurrent = opt.value === currentStatus;
+                      const isAllowed = isCurrent || allowedTransitions.includes(opt.value);
+                      return (
+                        <option key={opt.value} value={opt.value} disabled={!isAllowed}>
+                          {opt.label}{!isAllowed && !isCurrent ? " (Unavailable)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                );
+              })()}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -385,7 +398,7 @@ export function ApplicationDetailDrawer({
             {/* Application Meta & Consent */}
             <div className="p-3 bg-[var(--color-hairline-soft-surface)]/30 border border-[var(--color-hairline)] rounded-xl space-y-1 text-[11px] text-[var(--color-mute)]">
               <div>Source: <span className="font-semibold text-[var(--color-body)]">{application.source}</span></div>
-              <div>Submitted at: <span className="font-mono">{new Date(application.created_at).toLocaleString()}</span></div>
+              <div>Submitted at: <span suppressHydrationWarning className="font-mono">{formatExactTimestamp(application.created_at)}</span></div>
               <div>Privacy Consent: <span className="text-emerald-600 font-semibold">Granted (v{application.consent_version})</span></div>
             </div>
           </div>

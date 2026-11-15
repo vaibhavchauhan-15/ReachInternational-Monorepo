@@ -352,10 +352,49 @@ check('signup.tsx clears draft upon successful submission (clearDraft)', () => {
 
 check('signup.tsx implements handleStartFresh resetting all fields and documents', () => {
   assert(signupContent.includes('await clearDraft()'));
-  assert(signupContent.includes('setBankDoc(null)'));
-  assert(signupContent.includes('setAadhaarDoc(null)'));
-  assert(signupContent.includes('setLicenseDoc(null)'));
+  assert(signupContent.includes('clearDocUploads()') || signupContent.includes('setBankDoc(null)'));
 });
+// ============================================================
+// 8. Web & Mobile 100% Parity: Operator Machine Category
+// ============================================================
+console.log('\n[8/8] Verifying Operator Machine Category Implementation & Parity...');
+
+const utilsMachCatPath = path.join(rootDir, 'packages', 'utils', 'src', 'machine-categories.ts');
+const utilsMachCatContent = fs.readFileSync(utilsMachCatPath, 'utf8');
+
+check('packages/utils defines canonical MACHINE_CATEGORIES and MACHINE_CATEGORY_SELECT_OPTIONS', () => {
+  assert(utilsMachCatContent.includes('export const MACHINE_CATEGORIES'));
+  assert(utilsMachCatContent.includes('Stacker'));
+  assert(utilsMachCatContent.includes('Reach Truck'));
+  assert(utilsMachCatContent.includes('Order Picker'));
+  assert(utilsMachCatContent.includes('Electric Pallet Truck'));
+  assert(utilsMachCatContent.includes('Forklift'));
+  assert(utilsMachCatContent.includes('Scissor Lift'));
+  assert(utilsMachCatContent.includes('Boom Lift'));
+  assert(utilsMachCatContent.includes('export const MACHINE_CATEGORY_SELECT_OPTIONS'));
+});
+
+check('signup.tsx renders Machine Category dropdown for operators', () => {
+  assert(signupContent.includes('MACHINE_CATEGORY_SELECT_OPTIONS'));
+  assert(signupContent.includes("selectedRole === 'operator'"));
+  assert(signupContent.includes('selectedMachineCategory'));
+  assert(signupContent.includes('handleMachineCategoryChange'));
+});
+
+check('signup.tsx requires Machine Category in section1Complete and passes to signUp for operators', () => {
+  assert(signupContent.includes("selectedRole !== 'operator' || Boolean(selectedMachineCategory)"));
+  assert(signupContent.includes("machine_category: safeRole === 'operator' ? selectedMachineCategory || null : null"));
+});
+
+check('signup.tsx resets Machine Category when role changes to non-operator', () => {
+  assert(signupContent.includes("if (val !== 'operator')"));
+  assert(signupContent.includes("setSelectedMachineCategory('')"));
+});
+
+check('useFormDraft.ts includes selectedMachineCategory in draft values', () => {
+  assert(draftHookContent.includes('selectedMachineCategory?: string'));
+});
+
 console.log('\n------------------------------------------------------------');
 console.log(`Results: ${passed} / ${total} checks passed successfully.`);
 console.log('------------------------------------------------------------\n');

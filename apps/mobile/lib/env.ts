@@ -1,5 +1,5 @@
-/**
- * ReachInternational Mobile — Centralized Environment Configuration
+﻿/**
+ * ReachInternational Mobile â€” Centralized Environment Configuration
  * Authoritative single source of truth for runtime environment variables in Expo React Native.
  * Enforces reading directly from EXPO_PUBLIC_* without hardcoding URLs or fallback secrets.
  *
@@ -68,39 +68,64 @@ export function isAgentationEnabled(): boolean {
 
 /**
  * Returns the canonical Web Application URL from EXPO_PUBLIC_APP_URL or EXPO_PUBLIC_WEB_APP_URL.
+ *
+ * Dev-device safety rule:
+ * When running on a real device or Expo Go, `localhost` in the env file resolves to the
+ * device itself — not the developer's machine. We detect this and fall back to the Expo
+ * Metro bundler's LAN host IP (from Constants.expoConfig.hostUri) so API calls reach the
+ * Next.js dev server on the host machine over the local network automatically.
  */
 export function getAppUrl(): string {
-  const envUrl =
+  const envUrl = (
     process.env.EXPO_PUBLIC_APP_URL ||
     process.env.EXPO_PUBLIC_WEB_APP_URL ||
-    process.env.NEXT_PUBLIC_APP_URL;
-
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim().replace(/\/$/, "");
-  }
+    process.env.NEXT_PUBLIC_APP_URL ||
+    ""
+  ).trim().replace(/\/$/, "");
 
   if (__DEV__) {
-    // If running via Expo Go / dev client, infer host IP from debuggerHost
-    const debuggerHost =
-      Constants.expoConfig?.hostUri ||
-      Constants.manifest2?.extra?.expoGo?.debuggerHost;
+    // If the env URL is localhost/127.0.0.1 (meaningless on a physical device),
+    // override with the LAN IP that Expo Metro exposes via Constants.
+    const isLocalhostUrl =
+      !envUrl ||
+      envUrl.includes("localhost") ||
+      envUrl.includes("127.0.0.1");
 
-    if (debuggerHost) {
-      const hostIp = debuggerHost.split(":")[0];
-      if (hostIp) {
-        return `http://${hostIp}:3000`;
+    if (isLocalhostUrl) {
+      // Expo Go / Dev Client: Metro bundler exposes the host IP here
+      const debuggerHost: string | undefined =
+        Constants.expoConfig?.hostUri ||
+        (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost ||
+        (Constants as any).manifest?.debuggerHost;
+
+      if (debuggerHost) {
+        // debuggerHost is "192.168.x.x:8081" — take the IP, use port 3000
+        const hostIp = debuggerHost.split(":")[0];
+        if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
+          return `http://${hostIp}:3000`;
+        }
       }
+
+      // Android emulator: 10.0.2.2 is the special alias for the host loopback
+      if (Platform.OS === "android") {
+        return "http://10.0.2.2:3000";
+      }
+
+      // iOS simulator: host loopback is reachable via localhost
+      return "http://localhost:3000";
     }
 
-    if (Platform.OS === "android") {
-      return "http://10.0.2.2:3000";
-    }
+    // env URL is a real non-localhost address (LAN IP or tunnel) — use it directly
+    return envUrl;
+  }
 
-    return "http://localhost:3000";
+  // Production / preview: env URL must be explicitly configured
+  if (envUrl) {
+    return envUrl;
   }
 
   throw new Error(
-    "[ENV] Critical configuration error: EXPO_PUBLIC_APP_URL is not defined in mobile .env or eas.json."
+    "[ENV] Critical: EXPO_PUBLIC_APP_URL is not set. Add it to apps/mobile/.env or eas.json build profile."
   );
 }
 

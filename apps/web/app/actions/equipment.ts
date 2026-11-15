@@ -15,9 +15,9 @@ import {
 const ALLOWED_ADMIN_ROLES = ["super_admin", "admin", "manager"];
 
 /**
- * Revalidation helper that clears ISR and Next data cache for equipment
+ * Internal revalidation helper that clears ISR and Next data cache for equipment
  */
-export async function revalidateEquipmentCache(slug?: string) {
+async function revalidateEquipmentCacheInternal(slug?: string) {
   revalidateTag(TAGS.equipment, "max");
   revalidateTag(TAGS.equipmentList, "max");
   revalidateTag(TAGS.equipmentCategories, "max");
@@ -29,6 +29,18 @@ export async function revalidateEquipmentCache(slug?: string) {
   revalidatePath("/equipment");
   revalidatePath("/marketing/equipment");
   revalidatePath("/sitemap.xml");
+}
+
+/**
+ * Revalidation Server Action that clears ISR and Next data cache for equipment (requires manager or admin)
+ */
+export async function revalidateEquipmentCache(slug?: string) {
+  const user = await getCurrentUser();
+  if (!user || !ALLOWED_ADMIN_ROLES.includes(user.role)) {
+    return { success: false, error: "Unauthorized. Manager or Admin privileges required." };
+  }
+  await revalidateEquipmentCacheInternal(slug);
+  return { success: true };
 }
 
 /**
@@ -169,7 +181,7 @@ export async function saveEquipmentAction(input: unknown) {
     });
   }
 
-  await revalidateEquipmentCache(data.slug);
+  await revalidateEquipmentCacheInternal(data.slug);
   return { success: true, id: resultId };
 }
 
@@ -216,7 +228,7 @@ export async function publishEquipmentAction(id: string) {
     user_id: user.id,
   });
 
-  await revalidateEquipmentCache(model.slug);
+  await revalidateEquipmentCacheInternal(model.slug);
   return { success: true };
 }
 
@@ -258,7 +270,7 @@ export async function unpublishEquipmentAction(id: string) {
     user_id: user.id,
   });
 
-  await revalidateEquipmentCache(model?.slug);
+  await revalidateEquipmentCacheInternal(model?.slug);
   return { success: true };
 }
 
@@ -300,7 +312,7 @@ export async function archiveEquipmentAction(id: string) {
     user_id: user.id,
   });
 
-  await revalidateEquipmentCache(model?.slug);
+  await revalidateEquipmentCacheInternal(model?.slug);
   return { success: true };
 }
 
@@ -342,7 +354,7 @@ export async function restoreEquipmentAction(id: string) {
     user_id: user.id,
   });
 
-  await revalidateEquipmentCache(model?.slug);
+  await revalidateEquipmentCacheInternal(model?.slug);
   return { success: true };
 }
 
@@ -393,7 +405,7 @@ export async function deleteEquipmentAction(id: string, hard = false) {
     });
   }
 
-  await revalidateEquipmentCache(model?.slug);
+  await revalidateEquipmentCacheInternal(model?.slug);
   return { success: true };
 }
 
@@ -521,7 +533,7 @@ export async function duplicateEquipmentAction(id: string) {
     metadata: { source_id: id, new_slug: newSlug },
   });
 
-  await revalidateEquipmentCache(newSlug);
+  await revalidateEquipmentCacheInternal(newSlug);
   return { success: true, id: inserted.id };
 }
 

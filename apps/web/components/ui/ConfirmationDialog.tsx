@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { AnimatedTrash, AnimatedAlertTriangle, AnimatedInfo } from "./animated-icons";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
@@ -30,7 +30,16 @@ export function ConfirmationDialog({
   loading = false,
 }: ConfirmationDialogProps) {
   const [internalLoading, setInternalLoading] = useState(false);
+  const isConfirmingRef = useRef(false);
   const isLoading = Boolean(loading || internalLoading);
+
+  // Reset internal loading state whenever dialog closes or unmounts
+  useEffect(() => {
+    if (!isOpen) {
+      setInternalLoading(false);
+      isConfirmingRef.current = false;
+    }
+  }, [isOpen]);
 
   const iconConfig = {
     danger: {
@@ -60,18 +69,18 @@ export function ConfirmationDialog({
   };
 
   const handleConfirm = async () => {
-    if (isLoading) return;
+    if (isLoading || isConfirmingRef.current) return;
+    isConfirmingRef.current = true;
+    setInternalLoading(true);
     try {
-      const result = onConfirm();
-      if (result && typeof (result as any).then === "function") {
-        setInternalLoading(true);
-        await result;
-      }
+      await onConfirm();
     } catch (error) {
       if (isRedirectError(error)) {
         throw error;
       }
+    } finally {
       setInternalLoading(false);
+      isConfirmingRef.current = false;
     }
   };
 

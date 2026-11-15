@@ -99,27 +99,10 @@ export async function checkAndNotifyShiftEnded(
       } catch (err) {
         console.warn('[ShiftEndNotifier] Failed to process notification:', err);
       }
-    } else {
-      // Shift has not ended yet. Calculate remaining milliseconds for timer scheduling
-      let diffMinutes = endMinutes - currentMinutes;
-      if (diffMinutes < 0) diffMinutes += 24 * 60; // Next day
-      const diffMs = diffMinutes * 60 * 1000 - now.getSeconds() * 1000;
-
-      if (diffMs > 0 && diffMs <= 86400000) {
-        if (nearestFutureShiftMs === null || diffMs < nearestFutureShiftMs) {
-          nearestFutureShiftMs = diffMs;
-        }
-      }
     }
   }
 
-  // Schedule background timer for shift ending later today if app remains open
-  if (nearestFutureShiftMs !== null && nearestFutureShiftMs > 0) {
-    const timerId = setTimeout(() => {
-      checkAndNotifyShiftEnded(assignedShifts).catch(() => {});
-    }, Math.min(nearestFutureShiftMs + 1000, 2147483647));
-    return timerId;
-  }
-
+  // Obsolete local background timer removed: Shift end notifications are now authoritative
+  // and driven server-side by the push reminder engine (SP1-s1, SP1-s2, SP2, SL1, SUP1)
   return null;
 }

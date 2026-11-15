@@ -283,6 +283,22 @@ CREATE INDEX IF NOT EXISTS idx_qr_contact ON public.quote_requests (contact_id);
 CREATE INDEX IF NOT EXISTS idx_qr_company ON public.quote_requests (company_id);
 CREATE INDEX IF NOT EXISTS idx_qr_created ON public.quote_requests (created_at DESC);
 
+-- Attach push notification trigger if producer function exists (Migration 195)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'producer_enq1_rfq'
+  ) THEN
+    DROP TRIGGER IF EXISTS trg_notify_enq1_rfq ON public.quote_requests;
+    CREATE TRIGGER trg_notify_enq1_rfq
+      AFTER INSERT ON public.quote_requests
+      FOR EACH ROW
+      EXECUTE FUNCTION public.producer_enq1_rfq();
+  END IF;
+END $$;
+
 -- 9. Requested Items Table
 CREATE TABLE IF NOT EXISTS public.quote_request_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

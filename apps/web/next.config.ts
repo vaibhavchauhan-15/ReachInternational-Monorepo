@@ -42,6 +42,13 @@ const contentSecurityPolicy = [
   .join("; ");
 
 const nextConfig: NextConfig = {
+  transpilePackages: [
+    "@reachinternational/design-tokens",
+    "@reachinternational/permissions",
+    "@reachinternational/types",
+    "@reachinternational/utils",
+    "@reachinternational/validation",
+  ],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
@@ -55,9 +62,6 @@ const nextConfig: NextConfig = {
     staleTimes: {
       dynamic: 60,
       static: 180,
-    },
-    serverActions: {
-      bodySizeLimit: "5mb",
     },
     optimizePackageImports: [
       "lucide-react",
@@ -146,6 +150,19 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+          {
+            key: "Content-Type",
+            value: "application/javascript; charset=utf-8",
+          },
+        ],
+      },
       {
         source: "/:all*(svg|jpg|png|webp|woff2|woff|ttf)",
         headers: [

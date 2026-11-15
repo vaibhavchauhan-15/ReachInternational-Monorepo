@@ -78,6 +78,7 @@ import {
   useOperationsMachinesLazy,
   useOperationsClientsLazy,
   useOperationsClientShifts,
+  useOperatorEntryContext,
   type LazyMachineOption,
   type LazyClientOption,
 } from '../../lib/hooks/useOperationsData';
@@ -160,25 +161,49 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
   const monoTypeStyle = useTypeStyle('mono');
   const microTypeStyle = useTypeStyle('micro');
 
+  const [logDate, setLogDate] = useState<string>(() => getISTDateString());
+  const effectiveOperatorId = entryContext?.operator?.id || user?.id;
+
+  // Dynamically query date-specific assignment context whenever selected logDate changes
+  const { data: dateContext } = useOperatorEntryContext(effectiveOperatorId, logDate);
+  const currentContext = dateContext !== undefined ? dateContext : entryContext;
+
   // 1. Initial State from context
   const initialHmrStr =
-    entryContext?.last_hmr !== undefined && entryContext?.last_hmr !== null
-      ? String(entryContext.last_hmr)
+    currentContext?.last_hmr !== undefined && currentContext?.last_hmr !== null
+      ? String(currentContext.last_hmr)
       : '0';
 
-  const [logDate, setLogDate] = useState<string>(() => getISTDateString());
   const [startMeter, setStartMeter] = useState<string>(() => initialHmrStr);
   const [endMeter, setEndMeter] = useState<string>(() => initialHmrStr);
 
   // Machine and Client Selection State (Interactive Dropdown with Lazy Loading per user feedback)
-  const [selectedMachineId, setSelectedMachineId] = useState<string>(() => entryContext?.machine?.id || '');
-  const [selectedClientId, setSelectedClientId] = useState<string>(() => entryContext?.client?.id || '');
+  const [selectedMachineId, setSelectedMachineId] = useState<string>(() => currentContext?.machine?.id || '');
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => currentContext?.client?.id || '');
   const [hasOpenedMachineSelect, setHasOpenedMachineSelect] = useState<boolean>(false);
   const [hasOpenedClientSelect, setHasOpenedClientSelect] = useState<boolean>(false);
 
+  // Sync state whenever dateContext updates
+  useEffect(() => {
+    if (dateContext) {
+      if (dateContext.last_hmr !== undefined && dateContext.last_hmr !== null) {
+        const val = String(dateContext.last_hmr);
+        setStartMeter(val);
+        setEndMeter(val);
+      }
+      setSelectedMachineId(dateContext.machine?.id || '');
+      setSelectedClientId(dateContext.client?.id || '');
+      if (dateContext.assigned_shift_code) {
+        setSelectedShiftCode(dateContext.assigned_shift_code);
+      } else if (dateContext.assigned_shift_codes && dateContext.assigned_shift_codes.length > 0) {
+        setSelectedShiftCode(dateContext.assigned_shift_codes[0]);
+      }
+    }
+  }, [dateContext]);
+
   // Lazy loading queries: ONLY fetch all fleet machines/clients on-demand when user opens dropdown or if unassigned
-  const shouldFetchMachines = !entryContext?.machine?.id || hasOpenedMachineSelect;
-  const shouldFetchClients = !entryContext?.client?.id || hasOpenedClientSelect;
+  const shouldFetchMachines = !currentContext?.machine?.id || hasOpenedMachineSelect;
+  const shouldFetchClients = !currentContext?.client?.id || hasOpenedClientSelect;
   const { data: lazyMachines, isLoading: isLoadingMachines } = useOperationsMachinesLazy(shouldFetchMachines);
   const { data: lazyClients, isLoading: isLoadingClients } = useOperationsClientsLazy(shouldFetchClients);
 
@@ -188,22 +213,22 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       const match = (lazyMachines || []).find((m) => m.id === selectedMachineId);
       if (match) return match;
     }
-    return entryContext?.machine || null;
-  }, [selectedMachineId, lazyMachines, entryContext?.machine]);
+    return currentContext?.machine || null;
+  }, [selectedMachineId, lazyMachines, currentContext?.machine]);
 
   const activeClient = useMemo(() => {
     if (selectedClientId) {
       const match = (lazyClients || []).find((c) => c.id === selectedClientId);
       if (match) return match;
     }
-    return entryContext?.client || null;
-  }, [selectedClientId, lazyClients, entryContext?.client]);
+    return currentContext?.client || null;
+  }, [selectedClientId, lazyClients, currentContext?.client]);
 
   // Effective rented client ID from client selector, machine's client link, or entry context
   const effectiveClientId =
     selectedClientId ||
     (activeMachine as any)?.client_id ||
-    entryContext?.client?.id ||
+    currentContext?.client?.id ||
     '';
 
   // Fetch canonical shift times directly from the rented client's shift configuration
@@ -214,8 +239,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     let list: ClientShiftCode[] = [];
     if (clientShiftsData && clientShiftsData.length > 0) {
       list = clientShiftsData;
-    } else if (entryContext?.shift_codes && entryContext.shift_codes.length > 0) {
-      list = entryContext.shift_codes;
+    } else if (currentContext?.shift_codes && currentContext.shift_codes.length > 0) {
+      list = currentContext.shift_codes;
     } else {
       list = DEFAULT_CLIENT_SHIFTS;
     }
@@ -235,40 +260,40 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         name: codeLabel,
       };
     });
-  }, [clientShiftsData, entryContext?.shift_codes]);
+  }, [clientShiftsData, currentContext?.shift_codes]);
 
   // Assigned shifts for this operator
   const assignedShiftCodes = useMemo<string[]>(() => {
-    if (entryContext?.assigned_shift_codes && entryContext.assigned_shift_codes.length > 0) {
-      return entryContext.assigned_shift_codes;
+    if (currentContext?.assigned_shift_codes && currentContext.assigned_shift_codes.length > 0) {
+      return currentContext.assigned_shift_codes;
     }
-    if (entryContext?.assigned_shift_code) {
-      return [entryContext.assigned_shift_code];
+    if (currentContext?.assigned_shift_code) {
+      return [currentContext.assigned_shift_code];
     }
     return [];
-  }, [entryContext?.assigned_shift_codes, entryContext?.assigned_shift_code]);
+  }, [currentContext?.assigned_shift_codes, currentContext?.assigned_shift_code]);
 
   // Resolve default shift
   const resolvedInitialShift = useMemo(() => {
-    return entryContext ? resolveDefaultOperatorShift(entryContext, availableShifts) : null;
-  }, [entryContext, availableShifts]);
+    return currentContext ? resolveDefaultOperatorShift(currentContext, availableShifts) : null;
+  }, [currentContext, availableShifts]);
 
   const [selectedShiftCode, setSelectedShiftCode] = useState<string>(
-    resolvedInitialShift?.code || entryContext?.assigned_shift_code || 'S1'
+    resolvedInitialShift?.code || currentContext?.assigned_shift_code || 'S1'
   );
 
   const [startTime, setStartTime] = useState<string>(() => {
     const raw =
       resolvedInitialShift?.start_time ||
       resolvedInitialShift?.raw_start_time ||
-      entryContext?.operator?.shift_start;
+      currentContext?.operator?.shift_start;
     return (raw ? formatTo12Hour(raw) : '') || '06:00 AM';
   });
   const [endTime, setEndTime] = useState<string>(() => {
     const raw =
       resolvedInitialShift?.end_time ||
       resolvedInitialShift?.raw_end_time ||
-      entryContext?.operator?.shift_end;
+      currentContext?.operator?.shift_end;
     return (raw ? formatTo12Hour(raw) : '') || '02:00 PM';
   });
   const [overtimeHours, setOvertimeHours] = useState<string>(
@@ -287,17 +312,17 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const submittingRef = useRef<boolean>(false);
 
-  // Sync with entryContext when loaded
+  // Sync with currentContext when loaded
   useEffect(() => {
-    if (entryContext) {
-      if (entryContext.machine?.id && !selectedMachineId) {
-        setSelectedMachineId(entryContext.machine.id);
+    if (currentContext) {
+      if (currentContext.machine?.id && !selectedMachineId) {
+        setSelectedMachineId(currentContext.machine.id);
       }
-      if (entryContext.client?.id && !selectedClientId) {
-        setSelectedClientId(entryContext.client.id);
+      if (currentContext.client?.id && !selectedClientId) {
+        setSelectedClientId(currentContext.client.id);
       }
-      if (entryContext.last_hmr !== undefined && entryContext.last_hmr !== null) {
-        const hmrStr = String(entryContext.last_hmr);
+      if (currentContext.last_hmr !== undefined && currentContext.last_hmr !== null) {
+        const hmrStr = String(currentContext.last_hmr);
         setStartMeter(hmrStr);
         setEndMeter((prev) => (prev === '' || prev === '0' ? hmrStr : prev));
       }
@@ -313,7 +338,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         }
       }
     }
-  }, [entryContext, resolvedInitialShift, selectedMachineId, selectedClientId]);
+  }, [currentContext, resolvedInitialShift, selectedMachineId, selectedClientId]);
 
   // Auto-sync start and end times whenever available shifts change (e.g. rented client shifts loaded)
   useEffect(() => {
@@ -357,7 +382,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
 
   const handleSelectMachine = useCallback((machineId: string) => {
     setSelectedMachineId(machineId);
-    const m = (lazyMachines || []).find((x) => x.id === machineId) || (entryContext?.machine?.id === machineId ? (entryContext.machine as any) : null);
+    const m = (lazyMachines || []).find((x) => x.id === machineId) || (currentContext?.machine?.id === machineId ? (currentContext.machine as any) : null);
     if (m) {
       if (typeof (m as any).hour_meter === 'number') {
         const hmrStr = String((m as any).hour_meter);
@@ -399,9 +424,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       };
     };
 
-    if (entryContext?.machine?.id) {
-      seenIds.add(entryContext.machine.id);
-      list.push(formatMachineOption(entryContext.machine, true));
+    if (currentContext?.machine?.id) {
+      seenIds.add(currentContext.machine.id);
+      list.push(formatMachineOption(currentContext.machine, true));
     }
 
     (lazyMachines || []).forEach((m) => {
@@ -412,7 +437,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     });
 
     return list;
-  }, [entryContext?.machine, lazyMachines]);
+  }, [currentContext?.machine, lazyMachines]);
 
   const clientSelectOptions = useMemo<SelectOption[]>(() => {
     const list: SelectOption[] = [];
@@ -430,9 +455,9 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       };
     };
 
-    if (entryContext?.client?.id) {
-      seenIds.add(entryContext.client.id);
-      list.push(formatClientOption(entryContext.client, true));
+    if (currentContext?.client?.id) {
+      seenIds.add(currentContext.client.id);
+      list.push(formatClientOption(currentContext.client, true));
     }
 
     (lazyClients || []).forEach((c) => {
@@ -443,7 +468,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     });
 
     return list;
-  }, [entryContext?.client, lazyClients]);
+  }, [currentContext?.client, lazyClients]);
 
   // Load auto-saved draft from AsyncStorage on mount
   useEffect(() => {
@@ -660,7 +685,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
   const handleSubmit = async () => {
     if (submittingRef.current || isSubmitting) return;
 
-    if (!entryContext?.operator?.id && !user?.id) {
+    if (!currentContext?.operator?.id && !user?.id) {
       haptics.reject();
       const err = { title: 'Operator Profile Missing', message: 'Operator profile not found.' };
       postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
@@ -668,7 +693,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       return;
     }
 
-    const effectiveMachine = activeMachine || entryContext?.machine;
+    const effectiveMachine = activeMachine || currentContext?.machine;
     if (!effectiveMachine?.id) {
       haptics.reject();
       const err = { title: 'No Machine Assigned', message: 'No machine assigned to your account.' };
@@ -778,7 +803,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         return;
       }
 
-      const effectiveClient = activeClient || entryContext?.client;
+      const effectiveClient = activeClient || currentContext?.client;
       const effectiveLocation = (effectiveClient as any)?.site || (effectiveClient as any)?.city || (effectiveClient as any)?.address || null;
       const effectiveDate = shiftTiming?.resolvedStartDate || logDate;
       const effectiveShift = selectedShiftCode || 'S1';
@@ -811,6 +836,8 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       }
 
       const rpcParams = {
+        // Pass assignment_id: p_assignment_id: entryContext?.assignment_id
+        p_assignment_id: currentContext?.assignment_id || entryContext?.assignment_id || null,
         p_machine_id: effectiveMachine.id,
         p_operator_id: effectiveOperatorId,
         p_client_id: effectiveClient?.id || null,
@@ -839,6 +866,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       };
 
       logPayload = {
+        assignment_id: currentContext?.assignment_id || entryContext?.assignment_id || null,
         machine_id: effectiveMachine.id,
         shift_code: selectedShiftCode,
         client_id: effectiveClient?.id || null,
@@ -1184,7 +1212,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     }));
   }, [selectableDates]);
 
-  if (isError && !entryContext) {
+  if ((isError && !entryContext) || (isError && !currentContext)) {
     return (
       <View
         style={[
@@ -1209,7 +1237,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
   // Progressive skeleton gate: show "No Equipment" state only once we know for certain
   // there is no assignment (context loaded, no machine). While loading, fall through to the
   // full form so the static shell is instantly visible with inline skeleton placeholders.
-  if (!isLoading && (!entryContext?.machine || !entryContext.machine.id)) {
+  if (!isLoading && (!currentContext?.machine || !currentContext.machine.id || (!entryContext?.machine || !entryContext.machine.id && !currentContext))) {
     return (
       <View
         style={[
@@ -1234,7 +1262,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         <EmptyState
           variant="empty"
           title="No Equipment Assigned"
-          description="You do not have any machine assigned to your account for today's shift. Please contact your site supervisor to assign equipment."
+          description="You do not have any machine assigned to your account for this date. Please contact your site supervisor to assign equipment."
           actionLabel="Refresh Assignment"
           onAction={onSuccess || onRetry}
           icon={<Truck size={28} color={theme.colors.mute} />}
@@ -1243,7 +1271,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     );
   }
 
-  const { machine, client, last_log } = entryContext || {};
+  const { machine, client, last_log } = currentContext || {};
 
   return (
     <View

@@ -48,8 +48,10 @@ import {
   formatDate,
   formatTimeAgo,
   maskAadhaar,
+  maskBankAccount,
   formatLicenseNumber,
   getUserInitials,
+  formatMachineCategoryLabel,
 } from "@reachinternational/utils";
 import {
   toggleUserStatus,
@@ -60,7 +62,17 @@ import {
   getUserAssignedMachinesAction,
   getUserAssignmentsAction,
 } from "@/app/actions/users";
-import { getDocumentViewUrlAction, type UserDocument, type DocumentType } from "@/app/actions/documents";
+import {
+  getDocumentViewUrlAction,
+  verifyUserDocumentAction,
+  rejectUserDocumentAction,
+  approveDocumentReplacementAction,
+  rejectDocumentReplacementAction,
+  getUserDocumentsAction,
+  logSensitiveRevealAction,
+  type UserDocument,
+  type DocumentType,
+} from "@/app/actions/documents";
 import type { User, UserRole } from "@/lib/types/database";
 import type {
   UserMachineItem,
@@ -197,6 +209,16 @@ export function UserDetailClient({
   const [tabSearch, setTabSearch] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+  const [showFullBankAccount, setShowFullBankAccount] = useState(false);
+  const [docList, setDocList] = useState<UserDocument[]>(documents);
+  const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null);
+  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
+  const [rejectModalDoc, setRejectModalDoc] = useState<UserDocument | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState("");
+
+  useEffect(() => {
+    setDocList(documents);
+  }, [documents]);
 
   useEffect(() => {
     setUser(initialUser);
@@ -212,10 +234,11 @@ export function UserDetailClient({
 
   const handleRefreshUserData = useCallback(async () => {
     try {
-      const [detailRes, machinesRes, assignmentsRes] = await Promise.all([
+      const [detailRes, machinesRes, assignmentsRes, docsRes] = await Promise.all([
         getUserDetailAction(user.id),
         getUserAssignedMachinesAction(user.id),
         getUserAssignmentsAction(user.id),
+        getUserDocumentsAction(user.id).catch(() => []),
       ]);
 
       if (detailRes.user) {
@@ -226,6 +249,9 @@ export function UserDetailClient({
       }
       if (assignmentsRes.assignments) {
         setAssignments(assignmentsRes.assignments);
+      }
+      if (Array.isArray(docsRes)) {
+        setDocList(docsRes);
       }
     } catch (err) {
       console.error("Failed to refresh user data", err);
@@ -389,6 +415,144 @@ export function UserDetailClient({
     if (user.id === currentUser.id) return true;
     return false;
   }, [currentUser.role, currentUser.id, user.id]);
+
+  const canVerifyReject = useMemo(() => {
+    return ["super_admin", "admin", "hr"].includes(currentUser.role);
+  }, [currentUser.role]);
+
+  const handleToggleAadhaar = useCallback(() => {
+    const next = !showFullAadhaar;
+    setShowFullAadhaar(next);
+    if (next && user.id) {
+      void logSensitiveRevealAction({ targetUserId: user.id, field: "aadhaar" });
+    }
+  }, [showFullAadhaar, user.id]);
+
+  const handleToggleBankAccount = useCallback(() => {
+    const next = !showFullBankAccount;
+    setShowFullBankAccount(next);
+    if (next && user.id) {
+      void logSensitiveRevealAction({ targetUserId: user.id, field: "bank_account" });
+    }
+  }, [showFullBankAccount, user.id]);
+
+  const [approvingReplacementId, setApprovingReplacementId] = useState<string | null>(null);
+
+  const handleApproveReplacement = useCallback(
+    async (requestId: string, docLabel: string) => {
+      setApprovingReplacementId(requestId);
+      try {
+        const res = await approveDocumentReplacementAction({ requestId });
+        if (res.success) {
+          toast("success", `${docLabel} approved and verified.`);
+          handleRefreshUserData();
+        } else {
+          toast("error", res.error || "Failed to approve document replacement.");
+        }
+      } catch (err: any) {
+        toast("error", err?.message || "Failed to approve document replacement.");
+      } finally {
+        setApprovingReplacementId(null);
+      }
+    },
+    [toast, handleRefreshUserData]
+  );
+
+  const handleVerifyDoc = useCallback(
+    async (doc: UserDocument) => {
+      setVerifyingDocId(doc.id);
+      try {
+        if (doc.is_pending_request) {
+          const res = await approveDocumentReplacementAction({ requestId: doc.id });
+          if (res.success) {
+            toast("success", `${doc.document_type_code.replace(/_/g, " ")} approved and verified.`);
+            handleRefreshUserData();
+          } else {
+            toast("error", res.error || "Failed to approve document.");
+          }
+        } else {
+          const res = await verifyUserDocumentAction({ documentId: doc.id, userId: user.id });
+          if (res.success) {
+            toast("success", `${doc.document_type_code.replace(/_/g, " ")} verified successfully.`);
+            setDocList((prev) =>
+              prev.map((d) =>
+                d.id === doc.id
+                  ? { ...d, verification_status: "verified", rejection_reason: null }
+                  : d
+              )
+            );
+            handleRefreshUserData();
+          } else {
+            toast("error", res.error || "Failed to verify document.");
+          }
+        }
+      } catch {
+        toast("error", "An unexpected error occurred.");
+      } finally {
+        setVerifyingDocId(null);
+      }
+    },
+    [user.id, toast, handleRefreshUserData]
+  );
+
+  const handleOpenRejectModal = useCallback((doc: UserDocument) => {
+    setRejectModalDoc(doc);
+    setRejectionReasonInput("");
+  }, []);
+
+  const handleConfirmRejectDoc = useCallback(async () => {
+    if (!rejectModalDoc) return;
+    if (!rejectionReasonInput.trim()) {
+      toast("error", "Please provide a reason for rejecting the document.");
+      return;
+    }
+    setRejectingDocId(rejectModalDoc.id);
+    try {
+      if (rejectModalDoc.is_pending_request) {
+        const res = await rejectDocumentReplacementAction({
+          requestId: rejectModalDoc.id,
+          rejectionReason: rejectionReasonInput.trim(),
+        });
+        if (res.success) {
+          toast("info", `${rejectModalDoc.document_type_code.replace(/_/g, " ")} marked as rejected.`);
+          setRejectModalDoc(null);
+          setRejectionReasonInput("");
+          handleRefreshUserData();
+        } else {
+          toast("error", res.error || "Failed to reject document replacement.");
+        }
+      } else {
+        const res = await rejectUserDocumentAction({
+          documentId: rejectModalDoc.id,
+          userId: user.id,
+          rejectionReason: rejectionReasonInput.trim(),
+        });
+        if (res.success) {
+          toast("info", `${rejectModalDoc.document_type_code.replace(/_/g, " ")} marked as rejected.`);
+          setDocList((prev) =>
+            prev.map((d) =>
+              d.id === rejectModalDoc.id
+                ? {
+                    ...d,
+                    verification_status: "rejected",
+                    rejection_reason: rejectionReasonInput.trim(),
+                  }
+                : d
+            )
+          );
+          setRejectModalDoc(null);
+          setRejectionReasonInput("");
+          handleRefreshUserData();
+        } else {
+          toast("error", res.error || "Failed to reject document.");
+        }
+      }
+    } catch {
+      toast("error", "An unexpected error occurred.");
+    } finally {
+      setRejectingDocId(null);
+    }
+  }, [rejectModalDoc, rejectionReasonInput, user.id, toast, handleRefreshUserData]);
 
   // Filtered in-tab items
   const filteredMachines = useMemo(() => {
@@ -646,6 +810,12 @@ export function UserDetailClient({
                 </button>
 
                 {getRoleBadge(user.role)}
+
+                {user.role === "operator" && user.machine_category && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80 shadow-xs">
+                    {formatMachineCategoryLabel(user.machine_category)}
+                  </span>
+                )}
 
                 {/* Status Badge */}
                 {user.status === "active" ? (
@@ -960,6 +1130,21 @@ export function UserDetailClient({
                   : "Unassigned"}
               </span>
             </div>
+
+            {user.role === "operator" && (
+              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Machine Category</span>
+                <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
+                  {user.machine_category ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80">
+                      {formatMachineCategoryLabel(user.machine_category)}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1586,9 +1771,9 @@ export function UserDetailClient({
                 {user.aadhaar_number && canRevealDocs && (
                   <button
                     type="button"
-                    onClick={() => setShowFullAadhaar(!showFullAadhaar)}
+                    onClick={handleToggleAadhaar}
                     className="p-1 text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
-                    title={showFullAadhaar ? "Hide Aadhaar" : "Show Aadhaar"}
+                    title={showFullAadhaar ? "Hide Aadhaar" : "Reveal full Aadhaar (logged for audit)"}
                   >
                     {showFullAadhaar ? <AnimatedEyeOff size={14} /> : <AnimatedEye size={14} />}
                   </button>
@@ -1645,10 +1830,24 @@ export function UserDetailClient({
                   <AnimatedBuilding2 size={14} className="text-emerald-500" />
                   Banking Credentials
                 </span>
+                {user.bank_account_number && canRevealDocs && canVerifyReject && (
+                  <button
+                    type="button"
+                    onClick={handleToggleBankAccount}
+                    className="p-1 text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    title={showFullBankAccount ? "Hide Bank Account" : "Reveal full Bank Account (logged for audit)"}
+                  >
+                    {showFullBankAccount ? <AnimatedEyeOff size={14} /> : <AnimatedEye size={14} />}
+                  </button>
+                )}
               </div>
               <div className="space-y-0.5">
                 <div className="font-mono font-bold text-[var(--color-ink)]">
-                  {user.bank_account_number || "A/C: —"}
+                  {user.bank_account_number
+                    ? showFullBankAccount
+                      ? user.bank_account_number
+                      : maskBankAccount(user.bank_account_number)
+                    : "A/C: —"}
                 </div>
                 <div className="text-[11px] font-mono text-[var(--color-mute)]">
                   IFSC: {user.bank_ifsc_code || "—"}
@@ -1657,63 +1856,233 @@ export function UserDetailClient({
             </div>
           </div>
 
-          {/* Uploaded Documents List */}
+          {/* Uploaded Documents List with Side-by-Side Verification */}
           <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Uploaded Identity & Verification Files
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                Uploaded Identity & Verification Files
+              </h4>
+              <span className="text-[11px] text-[var(--color-mute)]">
+                Complies with Aadhaar Act & DPDP Act 2023
+              </span>
+            </div>
 
-            {documents.length === 0 ? (
+            {docList.length === 0 ? (
               <div className="py-8 text-center border border-dashed border-[var(--color-hairline)] rounded-xl">
                 <p className="text-xs text-[var(--color-mute)]">No document files uploaded for this profile yet.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {documents.map((doc) => {
+              <div className="grid grid-cols-1 gap-3">
+                {docList.map((doc) => {
                   const docType = documentTypes.find((t) => t.code === doc.document_type_code);
+                  const isVerified = doc.verification_status === "verified";
+                  const isRejected = doc.verification_status === "rejected";
+                  const isPending = !isVerified && !isRejected;
+
+                  // Corresponding typed value for side-by-side verification
+                  let matchedTypedLabel = "";
+                  let matchedTypedValue = "";
+                  if (doc.document_type_code === "aadhaar") {
+                    matchedTypedLabel = "Registered Aadhaar";
+                    matchedTypedValue = user.aadhaar_number
+                      ? (showFullAadhaar ? user.aadhaar_number : maskAadhaar(user.aadhaar_number))
+                      : "—";
+                  } else if (doc.document_type_code === "driving_license") {
+                    matchedTypedLabel = "Registered Licence";
+                    matchedTypedValue = user.license_number || "—";
+                  } else if (doc.document_type_code === "bank_document") {
+                    matchedTypedLabel = "Registered Bank A/C";
+                    matchedTypedValue = user.bank_account_number
+                      ? `${showFullBankAccount ? user.bank_account_number : maskBankAccount(user.bank_account_number)} (${user.bank_ifsc_code || "No IFSC"})`
+                      : "—";
+                  }
+
                   return (
                     <div
                       key={doc.id}
-                      onClick={() => handleViewDoc(doc)}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-[var(--color-link)]/40 hover:bg-[var(--color-canvas-elevated)] transition-all cursor-pointer group shadow-2xs"
-                      title="Click to view document preview"
+                      className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs space-y-3"
                     >
-                      {/* Document Type Icon / Image Preview */}
-                      {doc.mime_type === "application/pdf" ? (
-                        <div className="h-10 w-10 rounded-lg bg-rose-500/10 border border-rose-500/25 flex flex-col items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
-                          <FileText className="h-4 w-4" />
-                          <span className="text-[8px] font-bold font-mono">PDF</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div
+                          onClick={() => handleViewDoc(doc)}
+                          className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+                          title="Click to view full preview"
+                        >
+                          {/* Document Type Icon / Image Thumbnail */}
+                          {doc.mime_type === "application/pdf" ? (
+                            <div className="h-12 w-12 rounded-lg bg-rose-500/10 border border-rose-500/25 flex flex-col items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
+                              <FileText className="h-5 w-5" />
+                              <span className="text-[8px] font-bold font-mono">PDF</span>
+                            </div>
+                          ) : (doc.thumb_signed_url || doc.signed_url) ? (
+                            <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
+                              <img
+                                src={doc.thumb_signed_url || doc.signed_url || ""}
+                                alt={docType?.label || "Document preview"}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-sky-500/10 border border-sky-500/25 flex flex-col items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
+                              <ImageIcon className="h-5 w-5" />
+                              <span className="text-[8px] font-bold font-mono">IMG</span>
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-bold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
+                                {docType?.label || doc.document_type_code.toUpperCase()}
+                              </p>
+                              {isVerified && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                  <ShieldCheck className="h-3 w-3" />
+                                  Verified
+                                </span>
+                              )}
+                              {isRejected && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                                  <ShieldAlert className="h-3 w-3" />
+                                  Rejected
+                                </span>
+                              )}
+                              {isPending && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                  <Shield className="h-3 w-3" />
+                                  {doc.is_pending_request ? "Pending Initial Approval" : "Pending Verification"}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-[var(--color-mute)] font-mono mt-0.5">
+                              {doc.mime_type.split("/")[1]?.toUpperCase()} · {(Number(doc.file_size_bytes || 0) / 1024).toFixed(0)} KB · Uploaded {formatDate(doc.created_at)}
+                            </p>
+                          </div>
                         </div>
-                      ) : doc.signed_url ? (
-                        <div className="relative h-10 w-10 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
-                          <img
-                            src={doc.signed_url}
-                            alt={docType?.label || "Document preview"}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
+
+                        {/* Action buttons (Preview & Review in Approvals) */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleViewDoc(doc)}
+                            className="h-7 text-xs px-2.5 cursor-pointer"
+                          >
+                            Preview
+                          </Button>
+
+                          {isPending && canVerifyReject && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => router.push(`/approvals?type=document_verify`)}
+                              className="h-7 text-xs px-2.5 font-semibold cursor-pointer"
+                            >
+                              Review in Approvals →
+                            </Button>
+                          )}
                         </div>
-                      ) : (
-                        <div className="h-10 w-10 rounded-lg bg-sky-500/10 border border-sky-500/25 flex flex-col items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
-                          <ImageIcon className="h-4 w-4" />
-                          <span className="text-[8px] font-bold font-mono">IMG</span>
+                      </div>
+
+                      {/* Side-by-side matching value callout */}
+                      {matchedTypedLabel && (
+                        <div className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                          <span className="text-[var(--color-mute)] font-medium">
+                            {matchedTypedLabel}:
+                          </span>
+                          <span className="font-mono font-bold text-[var(--color-ink)]">
+                            {matchedTypedValue}
+                          </span>
                         </div>
                       )}
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
-                          {docType?.label || doc.document_type_code.toUpperCase()}
-                        </p>
-                        <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                          {doc.mime_type.split("/")[1]?.toUpperCase()} · {(Number(doc.file_size_bytes || 0) / 1024).toFixed(0)} KB · Tap to view
-                        </p>
-                      </div>
+                      {/* Rejection reason callout if rejected */}
+                      {isRejected && doc.rejection_reason && (
+                        <div className="text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                          <span className="font-semibold">Rejection Reason:</span> {doc.rejection_reason}
+                        </div>
+                      )}
 
-                      <div className="shrink-0">
-                        <Button variant="ghost-sm" className="h-7 px-2 text-[10px] font-semibold">
-                          View
-                        </Button>
-                      </div>
+                      {/* Replacement Document Callout if pending replacement exists */}
+                      {doc.pending_replacement && (
+                        <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                              <AnimatedClock size={14} className="text-amber-600 dark:text-amber-400" />
+                              Replacement Document Pending Review
+                            </span>
+                            <span className="text-[10px] text-[var(--color-mute)] font-mono">
+                              Uploaded {formatDate(doc.pending_replacement.created_at)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div
+                              onClick={() => {
+                                setActiveViewerDoc({
+                                  id: doc.pending_replacement!.id,
+                                  title: `${docType?.label || doc.document_type_code} (Replacement)`,
+                                  url: doc.pending_replacement!.signed_url || "",
+                                  mimeType: "image/jpeg",
+                                });
+                              }}
+                              className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+                              title="Click to view full preview of replacement"
+                            >
+                              {doc.pending_replacement.thumb_signed_url ? (
+                                <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-amber-400/40 bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
+                                  <img
+                                    src={doc.pending_replacement.thumb_signed_url}
+                                    alt="Replacement preview"
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-12 w-12 rounded-lg bg-amber-500/10 border border-amber-500/25 flex flex-col items-center justify-center shrink-0 text-amber-600">
+                                  <ImageIcon className="h-5 w-5" />
+                                  <span className="text-[8px] font-bold font-mono">NEW</span>
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
+                                  New replacement image uploaded by employee
+                                </p>
+                                <p className="text-[10px] text-[var(--color-mute)]">
+                                  Inspect and verify this image before approving replacement
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  setActiveViewerDoc({
+                                    id: doc.pending_replacement!.id,
+                                    title: `${docType?.label || doc.document_type_code} (Replacement)`,
+                                    url: doc.pending_replacement!.signed_url || "",
+                                    mimeType: "image/jpeg",
+                                  });
+                                }}
+                                className="h-7 text-xs px-2.5 cursor-pointer"
+                              >
+                                Preview New
+                              </Button>
+                              {canVerifyReject && (
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => router.push(`/approvals?type=document_replace`)}
+                                  className="h-7 text-xs px-2.5 font-semibold cursor-pointer"
+                                >
+                                  Review Replacement in Approvals →
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1789,6 +2158,50 @@ export function UserDetailClient({
         document={activeViewerDoc}
         onClose={() => setActiveViewerDoc(null)}
       />
+
+      {/* Document Rejection Reason Dialog */}
+      {rejectModalDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-5 shadow-xl space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-[var(--color-ink)]">
+                Reject {rejectModalDoc.document_type_code.replace(/_/g, " ").toUpperCase()} Document
+              </h3>
+              <p className="text-xs text-[var(--color-mute)] mt-1">
+                Please state the specific reason why this document is being rejected (e.g., blurry image, mismatched name, expired document). The user will be notified to upload a replacement.
+              </p>
+            </div>
+
+            <textarea
+              value={rejectionReasonInput}
+              onChange={(e) => setRejectionReasonInput(e.target.value)}
+              placeholder="Enter rejection reason..."
+              rows={3}
+              className="w-full rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 text-xs text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ink)]"
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setRejectModalDoc(null)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!rejectionReasonInput.trim() || rejectingDocId === rejectModalDoc.id}
+                onClick={handleConfirmRejectDoc}
+                className="bg-rose-600 hover:bg-rose-700 text-white border-0 cursor-pointer"
+              >
+                {rejectingDocId === rejectModalDoc.id ? "Rejecting..." : "Confirm Rejection"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reset Password Confirmation Dialog */}
       <ConfirmationDialog

@@ -1,24 +1,64 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import crypto from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { verifySession, getCurrentUserRole } from "@/lib/dal";
-import { isManagerOrAbove } from "@reachinternational/permissions";
+import {
+  isManagerOrAbove,
+  canVerifyDocument,
+  canRejectDocument,
+} from "@reachinternational/permissions";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
+import {
+  submitDocumentReplacement,
+  type SubmitReplacementResult,
+} from "@/lib/server/document-replacement";
+import {
+  approveDocumentReplacementCore,
+  rejectDocumentReplacementCore,
+  verifyUserDocumentCore,
+  rejectUserDocumentCore,
+} from "@/lib/server/document-review";
+import {
+  type DocType,
+  finalDocumentPath,
+} from "@reachinternational/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────
+
+export interface UserDocumentPendingReplacement {
+  id: string;
+  staging_path: string;
+  staging_thumb_path?: string | null;
+  signed_url?: string | null;
+  thumb_signed_url?: string | null;
+  created_at: string;
+  status: "pending";
+}
 
 export interface UserDocument {
   id: string;
   user_id: string;
   document_type_code: string;
   storage_path: string;
+  thumb_path?: string | null;
   mime_type: string;
   file_size_bytes: number;
+  verification_status?: "pending" | "verified" | "rejected";
+  verified_by?: string | null;
+  verified_at?: string | null;
+  rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
   signed_url?: string | null;
+  thumb_signed_url?: string | null;
+  is_pending_request?: boolean;
+  pending_request_id?: string;
+  pending_replacement?: UserDocumentPendingReplacement | null;
+  has_pending_replacement?: boolean;
 }
 
 export interface DocumentType {
@@ -58,39 +98,136 @@ export async function getUserDocumentsAction(
   targetUserId?: string
 ): Promise<UserDocument[]> {
   const session = await verifySession();
-  const supabase = await createSupabaseServerClient();
   const userId = targetUserId || session.userId;
 
-  // RLS enforces access — no app-side role check needed
-  const { data: docs, error } = await supabase
-    .from("user_documents")
-    .select("id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at")
-    .eq("user_id", userId)
-    .order("document_type_code");
+  const isOwner = session.userId === userId;
+  const callerRole = (await getCurrentUserRole()) || "operator";
+  const isPrivileged = ["super_admin", "admin", "manager", "hr", "supervisor"].includes(callerRole);
 
-  if (error || !docs || docs.length === 0) return [];
+  if (!isOwner && !isPrivileged) {
+    return [];
+  }
 
-  // Batch generate signed URLs in a single round-trip
-  const paths = docs.map((d) => d.storage_path);
-  const { data: batchSigned } = await supabase.storage
-    .from("user_files")
-    .createSignedUrls(paths, 3600);
+  const adminSupabase = createSupabaseAdminClient();
 
-  const signedUrlMap = new Map<string, string>();
-  if (batchSigned && Array.isArray(batchSigned)) {
-    for (const item of batchSigned) {
-      if (item.signedUrl && !item.error && item.path) {
-        signedUrlMap.set(item.path, item.signedUrl);
-      }
+  const [docsRes, changeReqsRes] = await Promise.all([
+    adminSupabase
+      .from("user_documents")
+      .select(
+        "id, user_id, document_type_code, storage_path, thumb_path, mime_type, file_size_bytes, verification_status, verified_by, verified_at, rejection_reason, created_at, updated_at"
+      )
+      .eq("user_id", userId)
+      .order("document_type_code"),
+    adminSupabase
+      .from("document_change_requests")
+      .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const docs = docsRes.data || [];
+  const changeReqs = changeReqsRes.data || [];
+
+  // Batch generate signed URLs
+  const userFilesPaths = [
+    ...docs.map((d) => d.storage_path).filter(Boolean),
+    ...docs.map((d) => d.thumb_path).filter(Boolean),
+  ];
+  const stagingPaths = [
+    ...changeReqs.map((r) => r.staging_path).filter(Boolean),
+    ...changeReqs.map((r) => r.staging_thumb_path).filter(Boolean),
+  ];
+
+  const [userFilesSignedRes, stagingSignedRes] = await Promise.all([
+    userFilesPaths.length > 0
+      ? adminSupabase.storage
+          .from("user_files")
+          .createSignedUrls(Array.from(new Set(userFilesPaths)), 3600)
+      : { data: [] },
+    stagingPaths.length > 0
+      ? adminSupabase.storage
+          .from("doc_staging")
+          .createSignedUrls(Array.from(new Set(stagingPaths)), 3600)
+      : { data: [] },
+  ]);
+
+  const userFilesMap = new Map<string, string>();
+  if (userFilesSignedRes.data) {
+    for (const item of userFilesSignedRes.data) {
+      if (item?.signedUrl && item.path) userFilesMap.set(item.path, item.signedUrl);
     }
   }
 
-  const withUrls: UserDocument[] = docs.map((doc) => ({
-    ...doc,
-    signed_url: signedUrlMap.get(doc.storage_path) || null,
-  })) as UserDocument[];
+  const stagingMap = new Map<string, string>();
+  if (stagingSignedRes.data) {
+    for (const item of stagingSignedRes.data) {
+      if (item?.signedUrl && item.path) stagingMap.set(item.path, item.signedUrl);
+    }
+  }
 
-  return withUrls;
+  const changeReqMap = new Map<string, any>();
+  for (const cr of changeReqs) {
+    if (!changeReqMap.has(cr.document_type_code)) {
+      changeReqMap.set(cr.document_type_code, cr);
+    }
+  }
+
+  const result: UserDocument[] = [];
+  const coveredTypes = new Set<string>();
+
+  for (const doc of docs) {
+    coveredTypes.add(doc.document_type_code);
+    const cr = changeReqMap.get(doc.document_type_code);
+
+    let pendingReplacement: UserDocumentPendingReplacement | null = null;
+    if (cr) {
+      pendingReplacement = {
+        id: cr.id,
+        staging_path: cr.staging_path,
+        staging_thumb_path: cr.staging_thumb_path,
+        signed_url: stagingMap.get(cr.staging_path) || null,
+        thumb_signed_url: cr.staging_thumb_path ? stagingMap.get(cr.staging_thumb_path) || null : null,
+        created_at: cr.created_at,
+        status: "pending",
+      };
+    }
+
+    result.push({
+      ...doc,
+      signed_url: userFilesMap.get(doc.storage_path) || null,
+      thumb_signed_url: doc.thumb_path ? userFilesMap.get(doc.thumb_path) || null : null,
+      pending_replacement: pendingReplacement,
+      has_pending_replacement: Boolean(pendingReplacement),
+    });
+  }
+
+  // Synthesize any pending change requests that don't have an active row in user_documents yet
+  for (const cr of changeReqs) {
+    if (!coveredTypes.has(cr.document_type_code)) {
+      coveredTypes.add(cr.document_type_code);
+      result.push({
+        id: cr.id,
+        user_id: userId,
+        document_type_code: cr.document_type_code,
+        storage_path: cr.staging_path,
+        thumb_path: cr.staging_thumb_path,
+        mime_type: "image/jpeg",
+        file_size_bytes: 0,
+        verification_status: "pending",
+        created_at: cr.created_at,
+        updated_at: cr.created_at,
+        signed_url: stagingMap.get(cr.staging_path) || null,
+        thumb_signed_url: cr.staging_thumb_path ? stagingMap.get(cr.staging_thumb_path) || null : null,
+        is_pending_request: true,
+        pending_request_id: cr.id,
+        pending_replacement: null,
+        has_pending_replacement: true,
+      });
+    }
+  }
+
+  return result;
 }
 
 // ─── Confirm document upload (upsert after XHR upload completes) ────
@@ -182,6 +319,7 @@ export async function getDocumentViewUrlAction(params: {
   documentId?: string;
   documentTypeCode?: string;
   targetUserId?: string;
+  isStaging?: boolean;
 }): Promise<{
   success: boolean;
   signedUrl?: string;
@@ -194,38 +332,100 @@ export async function getDocumentViewUrlAction(params: {
   try {
     const session = await verifySession();
     const role = (await getCurrentUserRole()) || "operator";
-    const supabase = await createSupabaseServerClient();
+    const adminSupabase = createSupabaseAdminClient();
 
-    let query = supabase
-      .from("user_documents")
-      .select("id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, file_name, status");
+    let doc: any = null;
+    let fromStaging = Boolean(params.isStaging);
 
     if (params.documentId) {
-      query = query.eq("id", params.documentId);
+      if (!fromStaging) {
+        const { data: userDoc } = await adminSupabase
+          .from("user_documents")
+          .select("id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, file_name, status")
+          .eq("id", params.documentId)
+          .maybeSingle();
+
+        if (userDoc) {
+          doc = userDoc;
+        }
+      }
+
+      if (!doc) {
+        const { data: changeReq } = await adminSupabase
+          .from("document_change_requests")
+          .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at")
+          .eq("id", params.documentId)
+          .maybeSingle();
+
+        if (changeReq) {
+          doc = {
+            id: changeReq.id,
+            user_id: changeReq.user_id,
+            document_type_code: changeReq.document_type_code,
+            storage_path: changeReq.staging_path,
+            mime_type: "image/jpeg",
+            file_size_bytes: 0,
+            file_name: `${changeReq.document_type_code}.jpg`,
+            status: changeReq.status,
+          };
+          fromStaging = true;
+        }
+      }
     } else if (params.documentTypeCode) {
       const ownerId = params.targetUserId || session.userId;
-      query = query.eq("user_id", ownerId).eq("document_type_code", params.documentTypeCode);
+      const { data: userDoc } = await adminSupabase
+        .from("user_documents")
+        .select("id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, file_name, status")
+        .eq("user_id", ownerId)
+        .eq("document_type_code", params.documentTypeCode)
+        .maybeSingle();
+
+      if (userDoc) {
+        doc = userDoc;
+      } else {
+        const { data: changeReq } = await adminSupabase
+          .from("document_change_requests")
+          .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at")
+          .eq("user_id", ownerId)
+          .eq("document_type_code", params.documentTypeCode)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .maybeSingle();
+
+        if (changeReq) {
+          doc = {
+            id: changeReq.id,
+            user_id: changeReq.user_id,
+            document_type_code: changeReq.document_type_code,
+            storage_path: changeReq.staging_path,
+            mime_type: "image/jpeg",
+            file_size_bytes: 0,
+            file_name: `${changeReq.document_type_code}.jpg`,
+            status: changeReq.status,
+          };
+          fromStaging = true;
+        }
+      }
     } else {
       return { success: false, error: "Missing document identifier." };
     }
 
-    const { data: doc, error } = await query.maybeSingle();
-
-    if (error || !doc) {
+    if (!doc) {
       return { success: false, error: "Document not found." };
     }
 
-    // Authorization check: owner or privileged role
+    // Authorization check: owner or privileged staff
     const isOwner = doc.user_id === session.userId;
-    const isPrivileged = ["super_admin", "admin", "hr"].includes(role);
+    const isPrivileged = ["super_admin", "admin", "hr", "manager", "supervisor"].includes(role);
 
     if (!isOwner && !isPrivileged) {
       return { success: false, error: "Unauthorized to view this document." };
     }
 
-    // Generate short-lived (120 seconds) signed URL
-    const { data: urlData, error: storageError } = await supabase.storage
-      .from("user_files")
+    // Generate signed URL (120 seconds) from appropriate bucket
+    const targetBucket = fromStaging ? "doc_staging" : "user_files";
+    const { data: urlData, error: storageError } = await adminSupabase.storage
+      .from(targetBucket)
       .createSignedUrl(doc.storage_path, 120);
 
     if (storageError || !urlData?.signedUrl) {
@@ -235,7 +435,7 @@ export async function getDocumentViewUrlAction(params: {
     // Audit log
     void logAudit({
       action: "document.viewed",
-      entity_type: "user_document",
+      entity_type: fromStaging ? "document_change_request" : "user_document",
       entity_id: doc.id,
       user_id: session.userId,
       metadata: {
@@ -243,6 +443,7 @@ export async function getDocumentViewUrlAction(params: {
         owner_id: doc.user_id,
         mime_type: doc.mime_type,
         viewer_role: role,
+        bucket: targetBucket,
       },
     });
 
@@ -251,14 +452,16 @@ export async function getDocumentViewUrlAction(params: {
         ? "Aadhaar Card"
         : doc.document_type_code === "driving_license"
         ? "Driving Licence"
+        : doc.document_type_code === "bank_document"
+        ? "Bank Document / Passbook"
         : "Identity Document";
 
     return {
       success: true,
       signedUrl: urlData.signedUrl,
-      mimeType: doc.mime_type,
+      mimeType: doc.mime_type || "image/jpeg",
       fileName: doc.file_name || doc.storage_path.split("/").pop(),
-      fileSizeBytes: doc.file_size_bytes,
+      fileSizeBytes: doc.file_size_bytes || 0,
       title,
     };
   } catch (err) {
@@ -334,3 +537,186 @@ export async function deleteDocumentAction(
     return { success: false, error: "An unexpected error occurred." };
   }
 }
+
+/**
+ * Server action to submit a staged replacement document for review or immediate pointer swap.
+ */
+export async function submitDocumentReplacementAction(params: {
+  docType: DocType;
+  uploadId: string;
+}): Promise<SubmitReplacementResult> {
+  const session = await verifySession();
+  const result = await submitDocumentReplacement({
+    userId: session.userId,
+    docType: params.docType,
+    uploadId: params.uploadId,
+  });
+
+  if (result.success) {
+    revalidateTag(CACHE_TAGS.users, "max");
+  }
+
+  return result;
+}
+
+// ─── Phase 8: Document Verification & Replacement Approvals ─────────────────
+
+/**
+ * Marks a user's document as verified (super_admin, admin, hr only).
+ */
+export async function verifyUserDocumentAction(params: {
+  documentId: string;
+  userId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    const role = await getCurrentUserRole();
+    if (!canVerifyDocument({ id: session.userId, role })) {
+      return { success: false, error: "Unauthorized: only HR and Admins can verify documents." };
+    }
+
+    const result = await verifyUserDocumentCore({
+      reviewerId: session.userId,
+      documentId: params.documentId,
+    });
+
+    if (result.success) {
+      revalidateTag(CACHE_TAGS.users, "max");
+    }
+
+    return result;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[verifyUserDocumentAction] Exception:", errorMsg);
+    return { success: false, error: "An unexpected error occurred." };
+  }
+}
+
+/**
+ * Marks a user's document as rejected with a reason (super_admin, admin, hr only).
+ */
+export async function rejectUserDocumentAction(params: {
+  documentId: string;
+  userId: string;
+  rejectionReason: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    const role = await getCurrentUserRole();
+    if (!canRejectDocument({ id: session.userId, role })) {
+      return { success: false, error: "Unauthorized: only HR and Admins can reject documents." };
+    }
+
+    const result = await rejectUserDocumentCore({
+      reviewerId: session.userId,
+      documentId: params.documentId,
+      rejectionReason: params.rejectionReason,
+    });
+
+    if (result.success) {
+      revalidateTag(CACHE_TAGS.users, "max");
+    }
+
+    return result;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[rejectUserDocumentAction] Exception:", errorMsg);
+    return { success: false, error: "An unexpected error occurred." };
+  }
+}
+
+/**
+ * Approves a staged replacement document, transferring files cross-bucket from
+ * doc_staging to user_files and updating the user_documents pointer atomically.
+ */
+export async function approveDocumentReplacementAction(params: {
+  requestId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    const role = await getCurrentUserRole();
+    if (!canVerifyDocument({ id: session.userId, role })) {
+      return { success: false, error: "Unauthorized: only HR and Admins can approve document replacements." };
+    }
+
+    const result = await approveDocumentReplacementCore({
+      reviewerId: session.userId,
+      requestId: params.requestId,
+    });
+
+    if (result.success) {
+      revalidateTag(CACHE_TAGS.users, "max");
+    }
+
+    return result;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[approveDocumentReplacement] Exception:", errorMsg);
+    return { success: false, error: "An unexpected error occurred." };
+  }
+}
+
+/**
+ * Rejects a staged replacement request with a reason.
+ */
+export async function rejectDocumentReplacementAction(params: {
+  requestId: string;
+  rejectionReason: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    const role = await getCurrentUserRole();
+    if (!canRejectDocument({ id: session.userId, role })) {
+      return { success: false, error: "Unauthorized: only HR and Admins can reject document replacements." };
+    }
+
+    const result = await rejectDocumentReplacementCore({
+      reviewerId: session.userId,
+      requestId: params.requestId,
+      rejectionReason: params.rejectionReason,
+    });
+
+    if (result.success) {
+      revalidateTag(CACHE_TAGS.users, "max");
+    }
+
+    return result;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[rejectDocumentReplacement] Exception:", errorMsg);
+    return { success: false, error: "An unexpected error occurred." };
+  }
+}
+
+/**
+ * Logs reveal of sensitive fields (Aadhaar or Bank Account) for audit compliance.
+ */
+export async function logSensitiveRevealAction(params: {
+  targetUserId: string;
+  field: "aadhaar" | "bank_account";
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    const adminSupabase = createSupabaseAdminClient();
+    const action = params.field === "aadhaar" ? "aadhaar.reveal" : "bank_account.reveal";
+
+    await adminSupabase.from("audit_logs").insert({
+      user_id: session.userId,
+      action,
+      entity_type: "user",
+      entity_id: params.targetUserId,
+      target_user_id: params.targetUserId,
+      metadata: {
+        field: params.field,
+        viewer_id: session.userId,
+        target_user_id: params.targetUserId,
+      },
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("[logSensitiveRevealAction] Error:", err);
+    return { success: false, error: "Failed to record audit log." };
+  }
+}
+

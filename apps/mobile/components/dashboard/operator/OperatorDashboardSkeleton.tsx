@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Skeleton } from '../../ui/Skeleton';
 import { useTheme } from '../../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -12,6 +12,8 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
   animate = true,
 }) => {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isTabletOrDesktop = width > 640;
 
   return (
     <View style={styles.container}>
@@ -96,63 +98,69 @@ export const OperatorDashboardSkeleton: React.FC<OperatorDashboardSkeletonProps>
           animate={animate}
           style={styles.eyebrowMargin}
         />
-        <View style={styles.oneColCol}>
+        <View
+          style={isTabletOrDesktop ? styles.assignmentGrid : styles.oneColCol}
+        >
           {/* Machine Card */}
-          <View
-            style={[
-              styles.assignmentCardShell,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <Skeleton width={28} height={28} borderRadius={8} animate={animate} />
-              <Skeleton width={130} height={14} borderRadius={radiusNumeric.xs} animate={animate} />
-            </View>
-            <View style={styles.assignmentDetailsStack}>
-              <View style={styles.detailRow}>
-                <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={110} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+          <View style={isTabletOrDesktop ? styles.gridItem : undefined}>
+            <View
+              style={[
+                styles.assignmentCardShell,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
+                <Skeleton width={28} height={28} borderRadius={8} animate={animate} />
+                <Skeleton width={130} height={14} borderRadius={radiusNumeric.xs} animate={animate} />
               </View>
-              <View style={styles.detailRow}>
-                <Skeleton width={70} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={85} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
-              </View>
-              <View style={styles.detailRow}>
-                <Skeleton width={80} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={120} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+              <View style={styles.assignmentDetailsStack}>
+                <View style={styles.detailRow}>
+                  <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={110} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={70} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={85} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={80} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={120} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
               </View>
             </View>
           </View>
 
           {/* Client & Location Card */}
-          <View
-            style={[
-              styles.assignmentCardShell,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-              },
-            ]}
-          >
-            <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <Skeleton width={28} height={28} borderRadius={8} animate={animate} />
-              <Skeleton width={140} height={14} borderRadius={radiusNumeric.xs} animate={animate} />
-            </View>
-            <View style={styles.assignmentDetailsStack}>
-              <View style={styles.detailRow}>
-                <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={140} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+          <View style={isTabletOrDesktop ? styles.gridItem : undefined}>
+            <View
+              style={[
+                styles.assignmentCardShell,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <View style={[styles.assignmentHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
+                <Skeleton width={28} height={28} borderRadius={8} animate={animate} />
+                <Skeleton width={140} height={14} borderRadius={radiusNumeric.xs} animate={animate} />
               </View>
-              <View style={styles.detailRow}>
-                <Skeleton width={40} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={180} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
-              </View>
-              <View style={styles.detailRow}>
-                <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
-                <Skeleton width={130} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+              <View style={styles.assignmentDetailsStack}>
+                <View style={styles.detailRow}>
+                  <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={140} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={40} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={180} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
+                <View style={styles.detailRow}>
+                  <Skeleton width={45} height={12} borderRadius={radiusNumeric.xs} animate={animate} />
+                  <Skeleton width={130} height={13} borderRadius={radiusNumeric.xs} animate={animate} />
+                </View>
               </View>
             </View>
           </View>
@@ -181,6 +189,16 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: spacingNumeric.sm,
   },
+  assignmentGrid: {
+    flexDirection: 'row',
+    gap: spacingNumeric.sm,
+    width: '100%',
+  },
+  gridItem: {
+    flex: 1,
+    minWidth: 0,
+    height: '100%',
+  },
   alertCardShell: {
     borderRadius: radiusNumeric.md || 14,
     borderWidth: 1,
@@ -204,7 +222,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md || 14,
     borderWidth: 1,
     padding: spacingNumeric.md - 2,
-    minHeight: 108,
+    minHeight: 124,
     justifyContent: 'space-between',
     gap: spacingNumeric.xs,
   },
@@ -217,6 +235,8 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md || 14,
     borderWidth: 1,
     padding: spacingNumeric.md - 2,
+    minHeight: 210,
+    justifyContent: 'space-between',
     gap: spacingNumeric.sm,
   },
   shiftCardTopRow: {
@@ -234,11 +254,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 10,
     marginTop: 2,
+    minHeight: 44,
   },
   assignmentCardShell: {
     borderRadius: radiusNumeric.md || 14,
     borderWidth: 1,
     padding: spacingNumeric.md - 2,
+    minHeight: 180,
+    justifyContent: 'space-between',
     gap: spacingNumeric.xs,
   },
   assignmentHeaderRow: {
@@ -251,6 +274,7 @@ const styles = StyleSheet.create({
   },
   assignmentDetailsStack: {
     gap: 8,
+    minHeight: 88,
   },
   detailRow: {
     flexDirection: 'row',

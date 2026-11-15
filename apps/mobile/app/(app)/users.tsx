@@ -38,15 +38,12 @@ import { DeleteUserConfirmDialog } from '../../components/users/DeleteUserConfir
 import {
   UserTouchCard,
   UserActionsPopover,
-  ProfileChangeRequestsSection,
-  AccountDeletionRequestsSection,
   UserFiltersPanel,
 } from '../../components/users';
 import { Pressable } from '../../components/ui/touch/Pressable';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { UserEditModal } from '../../components/users/UserEditModal';
 import { PasswordResetModal } from '../../components/users/PasswordResetModal';
-import { RejectReasonModal } from '../../components/users/RejectReasonModal';
 import { UserExportModal } from '../../components/users/UserExportModal';
 import { AssignSupervisorModal } from '../../components/users/AssignSupervisorModal';
 import { AssignMachineModal } from '../../components/users/AssignMachineModal';
@@ -266,21 +263,11 @@ export default function UsersScreen() {
   // 2. Pre-cache active supervisors across user cards
   useActiveSupervisors({ enabled: Boolean(canAccessUsers) });
 
-  // 3. Pending Profile & Deletion Requests
+  // 3. Central Approvals Queue State
   const {
     data: pendingRequestsData,
     refetch: refetchPendingRequests,
   } = usePendingApprovalRequests({ enabled: Boolean(canAccessUsers) });
-
-  const [profileRequests, setProfileRequests] = useState<any[]>([]);
-  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (pendingRequestsData) {
-      setProfileRequests(pendingRequestsData.profileRequests || []);
-      setDeletionRequests(pendingRequestsData.deletionRequests || []);
-    }
-  }, [pendingRequestsData]);
 
   // 4. Server-Side Infinite Paginated Staff Query with Deterministic Sorting
   const {
@@ -343,7 +330,7 @@ export default function UsersScreen() {
   const totalUsersCount = Math.max(0, (serverTotalCount || kpiStats?.totalCount || 0) + totalCountDelta);
   const activeCount = kpiStats?.activeCount ?? 0;
   const operatorCount = kpiStats?.operatorCount ?? 0;
-  const pendingCount = (kpiStats?.newRegistrationsCount ?? 0) + profileRequests.length + deletionRequests.length;
+  const pendingCount = (pendingRequestsData?.total || 0) > 0 ? (pendingRequestsData?.total || 0) : (kpiStats?.newRegistrationsCount ?? 0);
 
   const showLoading = (isUsersLoading && users.length === 0) || isSearching;
   const initialError = infiniteError ? 'Failed to load user accounts.' : null;
@@ -369,19 +356,6 @@ export default function UsersScreen() {
   const [assignSupervisorModalVisible, setAssignSupervisorModalVisible] = useState(false);
   const [assignMachineUser, setAssignMachineUser] = useState<UserRecord | null>(null);
   const [assignMachineModalVisible, setAssignMachineModalVisible] = useState(false);
-
-  // Profile Change Requests Actions State
-  const [approvingProfileId, setApprovingProfileId] = useState<string | null>(null);
-  const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
-  const [isRejectingProfileReq, setIsRejectingProfileReq] = useState(false);
-  const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
-  const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
-
-  // Account Deletion Requests Actions State
-  const [approvingDeletionId, setApprovingDeletionId] = useState<string | null>(null);
-  const [rejectingDeletionId, setRejectingDeletionId] = useState<string | null>(null);
-  const [approveDeletionReqTarget, setApproveDeletionReqTarget] = useState<any | null>(null);
-  const [rejectDeletionReqTarget, setRejectDeletionReqTarget] = useState<any | null>(null);
 
   // Multi-Selection State
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -507,248 +481,6 @@ export default function UsersScreen() {
     if (error) throw error;
     return data || [];
   }, [roleFilter, statusFilter, stateFilter, kycFilter, debouncedSearch, sortBy]);
-
-  // Profile Change Request Actions
-  const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
-    setApprovingProfileId(reqId);
-    try {
-      const { error: userErr } = await supabase
-        .from('users')
-        .update({
-          ...reqData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
-
-      if (userErr) throw userErr;
-
-      const { error: reqErr } = await supabase
-        .from('profile_change_requests')
-        .update({
-          status: 'approved',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', reqId);
-
-      if (reqErr) throw reqErr;
-
-      setProfileRequests((prev) => prev.filter((r) => r.id !== reqId));
-      updateSingleUserInState(userId, reqData);
-      refreshSingleUser(userId);
-      refetchKPIs();
-      toast('success', 'Profile Approved', 'Profile changes have been approved and applied.');
-    } catch (e: any) {
-      toast('error', 'Approval Failed', sanitizeDatabaseError(e, 'Failed to approve profile changes.').message);
-    } finally {
-      setApprovingProfileId(null);
-    }
-  };
-
-  const handleConfirmRejectProfileReq = async (reason: string) => {
-    if (!rejectModalReq) return;
-    setIsRejectingProfileReq(true);
-    try {
-      const { error } = await supabase
-        .from('profile_change_requests')
-        .update({
-          status: 'rejected',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', rejectModalReq.id);
-
-      if (error) throw error;
-      setProfileRequests((prev) => prev.filter((r) => r.id !== rejectModalReq.id));
-      setRejectModalReq(null);
-      refetchKPIs();
-      toast('info', 'Profile Request Declined', 'Profile change request has been declined.');
-    } catch (e: any) {
-      toast('error', 'Rejection Failed', sanitizeDatabaseError(e, 'Failed to reject profile changes.').message);
-    } finally {
-      setIsRejectingProfileReq(false);
-    }
-  };
-
-  const handleApproveAllProfileReqs = async () => {
-    if (profileRequests.length === 0) return;
-    setIsBulkApprovingProfile(true);
-    try {
-      for (const pr of profileRequests) {
-        await supabase
-          .from('users')
-          .update({
-            ...pr.requested_data,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', pr.user_id);
-
-        await supabase
-          .from('profile_change_requests')
-          .update({
-            status: 'approved',
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('id', pr.id);
-
-        updateSingleUserInState(pr.user_id, pr.requested_data);
-        refreshSingleUser(pr.user_id);
-      }
-      setProfileRequests([]);
-      refetchKPIs();
-      toast('success', 'Requests Approved', `Approved all ${profileRequests.length} profile requests.`);
-    } catch (e: any) {
-      toast('error', 'Bulk Approval Failed', sanitizeDatabaseError(e, 'Failed to bulk approve profile requests.').message);
-    } finally {
-      setIsBulkApprovingProfile(false);
-    }
-  };
-
-  const handleRejectAllProfileReqs = async () => {
-    if (profileRequests.length === 0) return;
-    setIsBulkRejectingProfile(true);
-    try {
-      const reqIds = profileRequests.map((r) => r.id);
-      await supabase
-        .from('profile_change_requests')
-        .update({
-          status: 'rejected',
-          reviewed_at: new Date().toISOString(),
-        })
-        .in('id', reqIds);
-
-      setProfileRequests([]);
-      refetchKPIs();
-      toast('info', 'Requests Declined', `Rejected all ${profileRequests.length} profile requests.`);
-    } catch (e: any) {
-      toast('error', 'Bulk Rejection Failed', sanitizeDatabaseError(e, 'Failed to bulk reject profile requests.').message);
-    } finally {
-      setIsBulkRejectingProfile(false);
-    }
-  };
-
-  // Account Deletion Handlers
-  const handleApproveDeletionReq = (req: any) => {
-    setApproveDeletionReqTarget(req);
-  };
-
-  const handleConfirmApproveDeletion = async () => {
-    const req = approveDeletionReqTarget;
-    if (!req) return;
-    const displayName = req.user?.full_name || req.email || 'this user';
-    setApprovingDeletionId(req.id);
-    try {
-      if (req.user_id) {
-        await supabase
-          .from('users')
-          .update({
-            status: 'inactive',
-            aadhaar_number: null,
-            license_number: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', req.user_id);
-      } else if (req.email) {
-        await supabase
-          .from('users')
-          .update({
-            status: 'inactive',
-            aadhaar_number: null,
-            license_number: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('email', req.email);
-      }
-
-      if (req._isProfileChangeRequest) {
-        await supabase
-          .from('profile_change_requests')
-          .update({
-            status: 'approved',
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('id', req.id);
-      } else {
-        try {
-          await supabase
-            .from('account_deletion_requests')
-            .update({
-              status: 'approved',
-              reviewed_at: new Date().toISOString(),
-            })
-            .eq('id', req.id);
-        } catch {
-          await supabase
-            .from('profile_change_requests')
-            .update({
-              status: 'approved',
-              reviewed_at: new Date().toISOString(),
-            })
-            .eq('id', req.id);
-        }
-      }
-
-      if (req.user_id) {
-        updateSingleUserInState(req.user_id, { status: 'inactive' });
-        refreshSingleUser(req.user_id);
-      }
-      setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
-      refetchKPIs();
-      toast('success', 'Account Deactivated', `Account for ${displayName} has been deactivated.`);
-      setApproveDeletionReqTarget(null);
-    } catch (err: any) {
-      toast('error', 'Deactivation Failed', sanitizeDatabaseError(err, 'Failed to approve account deletion.').message);
-    } finally {
-      setApprovingDeletionId(null);
-    }
-  };
-
-  const handleRejectDeletionReq = (req: any) => {
-    setRejectDeletionReqTarget(req);
-  };
-
-  const handleConfirmRejectDeletion = async () => {
-    const req = rejectDeletionReqTarget;
-    if (!req) return;
-    const displayName = req.user?.full_name || req.email || 'this user';
-    setRejectingDeletionId(req.id);
-    try {
-      if (req._isProfileChangeRequest) {
-        await supabase
-          .from('profile_change_requests')
-          .update({
-            status: 'rejected',
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('id', req.id);
-      } else {
-        try {
-          await supabase
-            .from('account_deletion_requests')
-            .update({
-              status: 'rejected',
-              reviewed_at: new Date().toISOString(),
-            })
-            .eq('id', req.id);
-        } catch {
-          await supabase
-            .from('profile_change_requests')
-            .update({
-              status: 'rejected',
-              reviewed_at: new Date().toISOString(),
-            })
-            .eq('id', req.id);
-        }
-      }
-
-      setDeletionRequests((prev) => prev.filter((d) => d.id !== req.id));
-      refetchKPIs();
-      toast('info', 'Request Declined', `Deletion request for ${displayName} has been declined.`);
-      setRejectDeletionReqTarget(null);
-    } catch (err: any) {
-      toast('error', 'Action Failed', sanitizeDatabaseError(err, 'Failed to decline deletion request.').message);
-    } finally {
-      setRejectingDeletionId(null);
-    }
-  };
 
   // Password Reset Trigger
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -1405,8 +1137,45 @@ export default function UsersScreen() {
                 isLoading={isKPIPending && !kpiStats}
                 icon={Clock}
                 variant={pendingCount > 0 ? 'purple' : 'default'}
+                onPress={() => {
+                  haptics.select();
+                  setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'));
+                }}
               />
             </KPIGrid>
+
+            {/* Centralized Approvals Ambient Banner */}
+            {(pendingRequestsData?.total || 0) > 0 && (
+              <Pressable
+                onPress={() => {
+                  haptics.select();
+                  router.push('/(app)/approvals');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open Centralized Approvals"
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvasElevated,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  minHeight: 48,
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text variant="small" weight="bold" style={{ color: theme.colors.ink }}>
+                    Pending Approvals in Central Queue
+                  </Text>
+                  <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                    {pendingRequestsData?.total} approval request{(pendingRequestsData?.total || 0) === 1 ? '' : 's'} awaiting review in Centralized Approvals · Tap to review →
+                  </Text>
+                </View>
+                <Badge variant="warning" label="Review" />
+              </Pressable>
+            )}
 
             {/* FilterToolbar & Dropdown Selectors */}
             <UserFiltersPanel
@@ -1464,27 +1233,6 @@ export default function UsersScreen() {
                 </Text>
               )}
             </View>
-
-            {/* Profile Detail Change Requests Section */}
-            <ProfileChangeRequestsSection
-              requests={profileRequests}
-              approvingProfileId={approvingProfileId}
-              isBulkApprovingProfile={isBulkApprovingProfile}
-              isBulkRejectingProfile={isBulkRejectingProfile}
-              onApproveAll={handleApproveAllProfileReqs}
-              onRejectAll={handleRejectAllProfileReqs}
-              onApprove={handleApproveProfileReq}
-              onReject={(pr) => setRejectModalReq(pr)}
-            />
-
-            {/* Account Deletion Requests Section */}
-            <AccountDeletionRequestsSection
-              requests={deletionRequests}
-              approvingDeletionId={approvingDeletionId}
-              rejectingDeletionId={rejectingDeletionId}
-              onApprove={handleApproveDeletionReq}
-              onReject={handleRejectDeletionReq}
-            />
           </View>
         }
         ListEmptyComponent={renderListEmpty}
@@ -1772,15 +1520,6 @@ export default function UsersScreen() {
         currentUserRole={normalizedRole}
       />
 
-      {/* Reject Reason Modal */}
-      <RejectReasonModal
-        visible={Boolean(rejectModalReq)}
-        onClose={() => setRejectModalReq(null)}
-        userName={rejectModalReq?.user?.full_name || 'user'}
-        onConfirm={handleConfirmRejectProfileReq}
-        isSubmitting={isRejectingProfileReq}
-      />
-
       {/* User Export Modal */}
       <UserExportModal
         visible={exportModalVisible}
@@ -1824,36 +1563,6 @@ export default function UsersScreen() {
         cancelText="Cancel"
         variant="danger"
         isLoading={isDeletingBulk}
-      />
-
-      {/* Approve Deletion Request Confirmation Dialog */}
-      <ConfirmDialog
-        visible={Boolean(approveDeletionReqTarget)}
-        onClose={() => {
-          if (!approvingDeletionId) setApproveDeletionReqTarget(null);
-        }}
-        onConfirm={handleConfirmApproveDeletion}
-        title="Approve Account Deletion"
-        message={`Are you sure you want to approve account deletion for ${approveDeletionReqTarget?.user?.full_name || approveDeletionReqTarget?.email || 'this user'}? The account will be deactivated and KYC details purged. Statutory machine hour logs (HMR) are permanently retained.`}
-        confirmText="Approve & Deactivate"
-        cancelText="Cancel"
-        variant="danger"
-        isLoading={Boolean(approvingDeletionId)}
-      />
-
-      {/* Decline Deletion Request Confirmation Dialog */}
-      <ConfirmDialog
-        visible={Boolean(rejectDeletionReqTarget)}
-        onClose={() => {
-          if (!rejectingDeletionId) setRejectDeletionReqTarget(null);
-        }}
-        onConfirm={handleConfirmRejectDeletion}
-        title="Decline Deletion Request"
-        message={`Are you sure you want to decline the account deletion request for ${rejectDeletionReqTarget?.user?.full_name || rejectDeletionReqTarget?.email || 'this user'}? The account will remain active.`}
-        confirmText="Decline Request"
-        cancelText="Cancel"
-        variant="primary"
-        isLoading={Boolean(rejectingDeletionId)}
       />
         </>
       )}

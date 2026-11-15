@@ -4,7 +4,11 @@
  * Conforms to decisions D-01, D-04, D-05, D-06, D-08.
  */
 
-export type MutationType = 'SUBMIT_HOUR_LOG' | 'SUBMIT_BREAKDOWN' | 'UPDATE_STATUS';
+export type MutationType =
+  | 'SUBMIT_HOUR_LOG'
+  | 'SUBMIT_BREAKDOWN'
+  | 'UPDATE_STATUS'
+  | 'UPLOAD_STAGING_DOCUMENT';
 
 export type MutationStatus = 'pending' | 'syncing' | 'synced' | 'failed' | 'conflict';
 
@@ -34,6 +38,7 @@ export interface OfflineQueueState {
   failedCount: number;
   conflictCount: number;
   isSyncing: boolean;
+  syncStartedAt?: number | null;
 }
 
 export type QueueEventListener = (state: OfflineQueueState) => void;

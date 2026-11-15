@@ -50,6 +50,14 @@ export function CommandPalette({
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // Reset search input and selection index upon reopening
+  useEffect(() => {
+    if (isOpen) {
+      setSearch("");
+      setSelectedIndex(0);
+    }
+  }, [isOpen]);
+
   const commandItems: CommandItem[] = useMemo(() => {
     const items: CommandItem[] = [
       {
@@ -148,6 +156,17 @@ export function CommandPalette({
         shortcut: "⌘A",
         keywords: ["audit", "logs", "security", "history", "compliance", "activities", "assignment audit", "employee logs", "machine logs"],
         roles: ["super_admin", "admin", "manager"],
+      },
+      {
+        id: "nav-approvals",
+        title: "Go to Approvals & Verifications",
+        subtitle: "Universal queue for document verification, registrations, and profile changes",
+        category: "Navigation",
+        icon: AnimatedClipboardList,
+        href: "/approvals",
+        shortcut: "⌘V",
+        keywords: ["approvals", "approval", "verify", "verification", "queue", "documents", "registrations", "profile changes", "kyc", "review"],
+        roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
       },
       {
         id: "nav-clients",

@@ -20,6 +20,7 @@ import {
   ErrorState,
   PermissionDeniedView,
   KPICard,
+  KPIGrid,
   type HeaderActionItem,
   Text,
   AppModal,
@@ -866,41 +867,39 @@ export default function AttendanceScreen() {
             />
           }
         >
-          {/* KPI Strip */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.kpiRow}
-          >
-            <KPICard
-              label="Total Operators"
-              value={managementQuery.kpis.totalEmployees}
-              icon={Users}
-              variant="default"
-              containerStyle={{ width: 140, flex: 0 }}
-            />
-            <KPICard
-              label="Present"
-              value={managementQuery.kpis.presentCount}
-              icon={UserCheck}
-              variant="success"
-              containerStyle={{ width: 140, flex: 0 }}
-            />
-            <KPICard
-              label="Absent"
-              value={managementQuery.kpis.absentCount}
-              icon={UserX}
-              variant={managementQuery.kpis.absentCount > 0 ? 'error' : 'default'}
-              containerStyle={{ width: 140, flex: 0 }}
-            />
-            <KPICard
-              label="Half Day"
-              value={managementQuery.kpis.halfDayCount}
-              icon={Clock}
-              variant={managementQuery.kpis.halfDayCount > 0 ? 'warning' : 'default'}
-              containerStyle={{ width: 140, flex: 0 }}
-            />
-          </ScrollView>
+          {/* 4-Card KPI Metric Grid (Responsive 2-col on Mobile, 4-col on Tablet & Desktop) */}
+          <View style={styles.kpiContainer}>
+            <KPIGrid columns={4}>
+              <KPICard
+                label="Total Operators"
+                value={managementQuery.kpis.totalEmployees}
+                isLoading={managementQuery.isLoading && !managementQuery.allRows.length}
+                icon={Users}
+                variant="default"
+              />
+              <KPICard
+                label="Present"
+                value={managementQuery.kpis.presentCount}
+                isLoading={managementQuery.isLoading && !managementQuery.allRows.length}
+                icon={UserCheck}
+                variant="success"
+              />
+              <KPICard
+                label="Absent"
+                value={managementQuery.kpis.absentCount}
+                isLoading={managementQuery.isLoading && !managementQuery.allRows.length}
+                icon={UserX}
+                variant={managementQuery.kpis.absentCount > 0 ? 'error' : 'default'}
+              />
+              <KPICard
+                label="Half Day"
+                value={managementQuery.kpis.halfDayCount}
+                isLoading={managementQuery.isLoading && !managementQuery.allRows.length}
+                icon={Clock}
+                variant={managementQuery.kpis.halfDayCount > 0 ? 'warning' : 'default'}
+              />
+            </KPIGrid>
+          </View>
 
           {/* Search & Filter Bar */}
           <View style={styles.searchFilterRow}>
@@ -1274,10 +1273,9 @@ const styles = StyleSheet.create({
   listHeaderContainer: {
     marginBottom: spacingNumeric.sm,
   },
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingBottom: spacingNumeric.md,
+  kpiContainer: {
+    width: '100%',
+    marginBottom: spacingNumeric.md,
   },
   filterStrip: {
     flexDirection: 'row',

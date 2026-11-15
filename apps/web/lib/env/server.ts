@@ -27,6 +27,12 @@ export function getInternalAuthSecret(): string | undefined {
   return process.env.INTERNAL_AUTH_SECRET?.trim() || undefined;
 }
 
+export function getUploadSessionSecret(): string {
+  const secret = process.env.UPLOAD_SESSION_SECRET || process.env.SUPABASE_SECRET_KEY;
+  if (!secret?.trim()) throw new Error("[ENV] UPLOAD_SESSION_SECRET or SUPABASE_SECRET_KEY is not configured.");
+  return secret.trim();
+}
+
 /**
  * Typed server-only environment configuration object
  */
@@ -42,5 +48,8 @@ export const serverEnv = {
   },
   get internalAuthSecret(): string | undefined {
     return getInternalAuthSecret();
+  },
+  get uploadSessionSecret(): string {
+    return getUploadSessionSecret();
   },
 } as const;

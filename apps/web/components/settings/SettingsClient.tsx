@@ -16,29 +16,39 @@ import {
   Lock,
   LogOut,
   BookOpen,
+  Moon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button, Modal, PasswordInput, Switch, useToast } from "@/components/ui";
 import { changePasswordAction, logout } from "@/app/actions/auth";
 import type { User as UserType } from "@/lib/types/database";
 import { UserProfileHeaderCard } from "@/components/profile/UserProfileHeaderCard";
+import {
+  subscribeToWebPush,
+  unsubscribeFromWebPush,
+} from "@/lib/notifications/web-push-client";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const NOTIF_PREFS_KEY = "@reach:notification_preferences";
+const NOTIF_PREFS_KEY = "@reach:notification_preferences_v2";
 
 interface NotificationPreferences {
+  pushEnabled: boolean;
   shiftReminders: boolean;
   breakdownAlerts: boolean;
   assignmentAlerts: boolean;
-  overtimeAlerts: boolean;
-  logSubmissions: boolean;
+  adminAlerts: boolean;
+  payrollAlerts: boolean;
+  quietHoursEnabled: boolean;
 }
 
 const DEFAULT_NOTIFS: NotificationPreferences = {
+  pushEnabled: true,
   shiftReminders: true,
   breakdownAlerts: true,
   assignmentAlerts: true,
-  overtimeAlerts: true,
-  logSubmissions: true,
+  adminAlerts: true,
+  payrollAlerts: true,
+  quietHoursEnabled: false,
 };
 
 interface SettingsClientProps {
@@ -57,6 +67,7 @@ export function SettingsClient({
 
   // Notifications State
   const [notifs, setNotifs] = useState<NotificationPreferences>(DEFAULT_NOTIFS);
+  const isAdminRole = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'super_admin';
 
   // Password Form State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -65,33 +76,85 @@ export function SettingsClient({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isPendingPassword, startPasswordTransition] = useTransition();
 
-  // Load notification preferences from localStorage
+  // Load notification preferences from Supabase and sync with localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(NOTIF_PREFS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        queueMicrotask(() => {
-          setNotifs((prev) => ({ ...prev, ...parsed }));
-        });
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
+    let isMounted = true;
+    async function loadPrefs() {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data } = await supabase
+          .from("user_notification_preferences")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-  const handleNotifToggle = (key: keyof NotificationPreferences, val: boolean) => {
+        if (data && isMounted) {
+          const mapped: NotificationPreferences = {
+            pushEnabled: Boolean(data.push_enabled),
+            shiftReminders: Boolean(data.shift_reminders),
+            breakdownAlerts: Boolean(data.breakdown_alerts),
+            assignmentAlerts: Boolean(data.assignment_alerts),
+            adminAlerts: Boolean(data.admin_alerts),
+            payrollAlerts: Boolean(data.payroll_alerts),
+            quietHoursEnabled: Boolean(data.quiet_hours_enabled),
+          };
+          setNotifs(mapped);
+          localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(mapped));
+          return;
+        }
+
+        const stored = localStorage.getItem(NOTIF_PREFS_KEY);
+        if (stored && isMounted) {
+          const parsed = JSON.parse(stored);
+          setNotifs((prev) => ({ ...prev, ...parsed }));
+        }
+      } catch (err) {
+        console.warn("[SettingsClient] Failed to load notification preferences:", err);
+      }
+    }
+    loadPrefs();
+    return () => {
+      isMounted = false;
+    };
+  }, [user.id]);
+
+  const handleMasterPushToggle = async (checked: boolean) => {
+    if (checked) {
+      const ok = await subscribeToWebPush();
+      if (!ok) {
+        toast("warning", "Permission Required", "Browser notifications could not be enabled.");
+        return;
+      }
+    } else {
+      await unsubscribeFromWebPush();
+    }
+    handleNotifToggle("pushEnabled", checked);
+  };
+
+  const handleNotifToggle = async (key: keyof NotificationPreferences, val: boolean) => {
     const updated = { ...notifs, [key]: val };
     setNotifs(updated);
     try {
       localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(updated));
+      const supabase = createSupabaseBrowserClient();
+      await supabase.from("user_notification_preferences").upsert({
+        user_id: user.id,
+        push_enabled: updated.pushEnabled,
+        shift_reminders: updated.shiftReminders,
+        breakdown_alerts: updated.breakdownAlerts,
+        assignment_alerts: updated.assignmentAlerts,
+        admin_alerts: updated.adminAlerts,
+        payroll_alerts: updated.payrollAlerts,
+        quiet_hours_enabled: updated.quietHoursEnabled,
+        updated_at: new Date().toISOString(),
+      });
       toast(
         "success",
         "Preferences Saved",
         "Your notification settings have been updated."
       );
     } catch {
-      // Ignore localStorage errors
+      // Ignore errors
     }
   };
 
@@ -260,16 +323,26 @@ export function SettingsClient({
 
             <div className="space-y-3 pt-1">
               <Switch
-                label="Shift & Attendance Reminders"
-                description="Alerts for shift start, clock-in, and log submission deadlines"
-                checked={notifs.shiftReminders}
-                onChange={(e) => handleNotifToggle("shiftReminders", e.target.checked)}
+                label="Allow Web Push Notifications"
+                description="Master switch for browser alerts, shift reminders, and operational notices"
+                checked={notifs.pushEnabled}
+                onChange={(e) => handleMasterPushToggle(e.target.checked)}
               />
               <div className="border-t border-[var(--color-hairline)] pt-3">
                 <Switch
+                  label="Shift & Meter Reminders"
+                  description="Alerts when shifts conclude, pending log digests, and midnight lock warnings"
+                  checked={notifs.shiftReminders}
+                  disabled={!notifs.pushEnabled}
+                  onChange={(e) => handleNotifToggle("shiftReminders", e.target.checked)}
+                />
+              </div>
+              <div className="border-t border-[var(--color-hairline)] pt-3">
+                <Switch
                   label="Breakdown & Maintenance Alerts"
-                  description="Instant notifications when assigned equipment flags a breakdown"
+                  description="Instant notifications when assigned equipment flags an urgent breakdown"
                   checked={notifs.breakdownAlerts}
+                  disabled={!notifs.pushEnabled}
                   onChange={(e) => handleNotifToggle("breakdownAlerts", e.target.checked)}
                 />
               </div>
@@ -278,24 +351,49 @@ export function SettingsClient({
                   label="Equipment Fleet Assignments"
                   description="Notifications when machines or operators are updated in your roster"
                   checked={notifs.assignmentAlerts}
+                  disabled={!notifs.pushEnabled}
                   onChange={(e) => handleNotifToggle("assignmentAlerts", e.target.checked)}
                 />
               </div>
+              {isAdminRole && (
+                <div className="border-t border-[var(--color-hairline)] pt-3">
+                  <Switch
+                    label="Administrative & Registration Alerts"
+                    description="Notifications for pending user registrations and equipment inquiries"
+                    checked={notifs.adminAlerts}
+                    disabled={!notifs.pushEnabled}
+                    onChange={(e) => handleNotifToggle("adminAlerts", e.target.checked)}
+                  />
+                </div>
+              )}
               <div className="border-t border-[var(--color-hairline)] pt-3">
                 <Switch
-                  label="Overtime Authorization Alerts"
-                  description="Instant alerts for overtime authorizations and approval deadlines"
-                  checked={notifs.overtimeAlerts}
-                  onChange={(e) => handleNotifToggle("overtimeAlerts", e.target.checked)}
+                  label="Payroll & Salary Dispatches"
+                  description="Monthly salary slip generation notices and payout confirmations"
+                  checked={notifs.payrollAlerts}
+                  disabled={!notifs.pushEnabled}
+                  onChange={(e) => handleNotifToggle("payrollAlerts", e.target.checked)}
                 />
               </div>
               <div className="border-t border-[var(--color-hairline)] pt-3">
                 <Switch
-                  label="Daily Log Confirmations"
-                  description="Confirmations for verified HMR submissions and approvals"
-                  checked={notifs.logSubmissions}
-                  onChange={(e) => handleNotifToggle("logSubmissions", e.target.checked)}
+                  label="Quiet Hours (22:00 – 06:00 IST)"
+                  description="Defers non-critical alerts until morning. Breakdown alerts always sound."
+                  checked={notifs.quietHoursEnabled}
+                  disabled={!notifs.pushEnabled}
+                  onChange={(e) => handleNotifToggle("quietHoursEnabled", e.target.checked)}
                 />
+              </div>
+              <div className="border-t border-[var(--color-hairline)] pt-3 flex items-start gap-2.5 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 p-3">
+                <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                <div className="space-y-0.5 text-left">
+                  <p className="text-xs font-semibold text-[var(--color-ink)]">
+                    Security Alerts: Always On
+                  </p>
+                  <p className="text-[11px] text-[var(--color-mute)] leading-tight">
+                    Password updates, session revocations, and login verifications are mandatory security events and cannot be turned off.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

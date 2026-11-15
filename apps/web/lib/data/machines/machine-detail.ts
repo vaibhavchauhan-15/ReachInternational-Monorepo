@@ -37,6 +37,7 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
   if (!machine) return null;
 
   // 1. Fetch active assignments from operator_machine_assignments
+  const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   const { data: assignmentsData } = await supabase
     .from("operator_machine_assignments")
     .select(`
@@ -58,6 +59,8 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     `)
     .eq("machine_id", machine.id)
     .eq("is_active", true)
+    .lte("valid_from", todayDate)
+    .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
     .order("shift_start_time", { ascending: true });
 
   const activeAssignmentsRaw = assignmentsData || [];
@@ -381,12 +384,15 @@ export const getOperatorAssignedMachine = cache(async (operatorId: string): Prom
       const supabase = createSupabaseAdminClient();
 
       // Priority 1: Active record in operator_machine_assignments
+      const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
       const { data: omaData } = await supabase
         .from("operator_machine_assignments")
         .select("machine_id")
         .eq("operator_id", operatorId)
         .eq("is_active", true)
-        .order("assigned_at", { ascending: false })
+        .lte("valid_from", todayDate)
+        .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
+        .order("valid_from", { ascending: false })
         .limit(1)
         .maybeSingle();
 

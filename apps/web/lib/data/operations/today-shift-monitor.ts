@@ -5,8 +5,52 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS } from "@/lib/cache/tags";
 
-import type { TodayShiftMonitorRow } from "@reachinternational/types";
-export type { TodayShiftMonitorRow };
+import type { TodayShiftMonitorRow, ShiftTaskRow, ShiftTasksResponse } from "@reachinternational/types";
+export type { TodayShiftMonitorRow, ShiftTaskRow, ShiftTasksResponse };
+
+/**
+ * Fetches shift tasks for the 7-day window via get_shift_tasks RPC.
+ * Actor RBAC and operator-scoped view are enforced inside the RPC.
+ */
+export const getShiftTasks = cache(
+  async (
+    actorId: string,
+    params?: {
+      operatorId?: string;
+      fromDate?: string;
+      toDate?: string;
+      status?: "all" | "pending" | "entered";
+      page?: number;
+      pageSize?: number;
+    }
+  ): Promise<ShiftTasksResponse> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase.rpc("get_shift_tasks", {
+      p_actor_id: actorId,
+      ...(params?.operatorId ? { p_operator_id: params.operatorId } : {}),
+      ...(params?.fromDate ? { p_from_date: params.fromDate } : {}),
+      ...(params?.toDate ? { p_to_date: params.toDate } : {}),
+      ...(params?.status ? { p_status: params.status } : {}),
+      ...(params?.page ? { p_page: params.page } : {}),
+      ...(params?.pageSize ? { p_page_size: params.pageSize } : {}),
+    });
+
+    if (error) {
+      console.error("[getShiftTasks] RPC error:", error);
+      throw new Error(`Failed to load shift tasks: ${error.message}`);
+    }
+
+    return (data as unknown as ShiftTasksResponse) || {
+      page: 1,
+      pageSize: 50,
+      totalCount: 0,
+      hasMore: false,
+      fromDate: "",
+      toDate: "",
+      rows: [],
+    };
+  }
+);
 
 /**
  * Fetches the today's shift log monitor data via the get_today_shift_log_monitor RPC.

@@ -146,12 +146,15 @@ export function useInstantSearch<T extends { id?: string | number }>({
   }, [mode, fetchServerSearch, effectiveCount, scaleThreshold]);
 
   const isFetchingRef = useRef(false);
+  const clientRequestIdRef = useRef(0);
   const cacheRef = useRef<{ data: T[]; filterKey: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Invalidate cache when external filter key changes
   useEffect(() => {
+    clientRequestIdRef.current++; // Invalidate any pending in-flight client fetch
+    isFetchingRef.current = false;
     cacheRef.current = null;
     setFullDataset(null);
     setServerResults(null);
@@ -164,6 +167,7 @@ export function useInstantSearch<T extends { id?: string | number }>({
   // Clean up timers and in-flight requests on unmount
   useEffect(() => {
     return () => {
+      clientRequestIdRef.current++;
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
@@ -174,18 +178,25 @@ export function useInstantSearch<T extends { id?: string | number }>({
   // -------------------------------------------------------------------------
   const loadFullDataset = useCallback(async () => {
     if (activeMode !== "client" || !fetchFullDataset || isFetchingRef.current) return;
+    const currentRequestId = ++clientRequestIdRef.current;
     isFetchingRef.current = true;
     setIsSearchLoading(true);
 
     try {
       const data = await fetchFullDataset();
-      cacheRef.current = { data, filterKey };
-      setFullDataset(data);
+      if (currentRequestId === clientRequestIdRef.current) {
+        cacheRef.current = { data, filterKey };
+        setFullDataset(data);
+      }
     } catch (err) {
-      console.error("[useInstantSearch] Failed to fetch full dataset:", err);
+      if (currentRequestId === clientRequestIdRef.current) {
+        console.error("[useInstantSearch] Failed to fetch full dataset:", err);
+      }
     } finally {
-      setIsSearchLoading(false);
-      isFetchingRef.current = false;
+      if (currentRequestId === clientRequestIdRef.current) {
+        setIsSearchLoading(false);
+        isFetchingRef.current = false;
+      }
     }
   }, [activeMode, fetchFullDataset, filterKey]);
 

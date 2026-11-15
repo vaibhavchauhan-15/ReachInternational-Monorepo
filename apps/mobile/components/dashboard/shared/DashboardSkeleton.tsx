@@ -50,7 +50,7 @@ export const DashboardSkeleton: React.FC<DashboardSkeletonProps> = ({
           <View key={idx} style={styles.kpiCardWrapper}>
             <Skeleton
               width="100%"
-              height={96}
+              height={104}
               borderRadius={radiusNumeric.md || 14}
             />
           </View>
@@ -69,8 +69,8 @@ export const DashboardSkeleton: React.FC<DashboardSkeletonProps> = ({
 
           {/* Action Cards */}
           <View style={styles.actions}>
-            <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
-            <Skeleton width="100%" height={68} borderRadius={radiusNumeric.md || 14} />
+            <Skeleton width="100%" height={82} borderRadius={radiusNumeric.md || 14} />
+            <Skeleton width="100%" height={82} borderRadius={radiusNumeric.md || 14} />
           </View>
         </>
       ) : null}

@@ -1,46 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { DocumentUploadSection } from "@/components/documents/DocumentUploadSection";
+import { MyDocumentsSection } from "@/components/documents/MyDocumentsSection";
 import type { UserDocument, DocumentType } from "@/app/actions/documents";
 
 interface ProfileDocumentsSectionProps {
   userId: string;
-  documentTypes: DocumentType[];
-  initialDocuments: UserDocument[];
+  documentTypes?: DocumentType[];
+  initialDocuments?: UserDocument[];
 }
 
-export function ProfileDocumentsSection({
-  userId,
-  documentTypes,
-  initialDocuments,
-}: ProfileDocumentsSectionProps) {
-  const router = useRouter();
-  const [documents, setDocuments] = useState(initialDocuments);
-
-  useEffect(() => {
-    setDocuments(initialDocuments);
-  }, [initialDocuments]);
-
-  const handleDocumentChange = useCallback(() => {
-    // Refresh page data from server to get updated signed URLs
-    router.refresh();
-  }, [router]);
-
-  const validDocumentTypes = documentTypes.filter(
-    (d) => d.code !== "profile_photo" && d.code !== "bank_passbook"
-  );
-
-  if (validDocumentTypes.length === 0) return null;
-
+export function ProfileDocumentsSection({}: ProfileDocumentsSectionProps) {
   return (
-    <DocumentUploadSection
-      userId={userId}
-      mode="edit"
-      documentTypes={validDocumentTypes}
-      existingDocuments={documents}
-      onDocumentChange={handleDocumentChange}
-    />
+    <section
+      aria-label="My Documents"
+      className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-4 sm:p-5 shadow-xs transition-colors"
+    >
+      <MyDocumentsSection />
+    </section>
   );
 }

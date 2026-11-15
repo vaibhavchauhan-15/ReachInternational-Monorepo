@@ -13,6 +13,7 @@ export const CreateHourLogSchema = z.object({
   shift: z.string().max(50, "Shift cannot exceed 50 characters").optional().nullable(),
   shift_code: z.string().max(20, "Shift code cannot exceed 20 characters").optional().nullable(),
   operator_id: z.string().uuid("Invalid operator ID format").optional().nullable(),
+  assignment_id: z.string().uuid("Invalid assignment ID format").optional().nullable(),
   client_id: z.string().uuid("Invalid client ID format").optional().nullable(),
   machine_condition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
   start_time: z.string().max(20, "Start time string cannot exceed 20 characters").optional().nullable(),
@@ -68,6 +69,7 @@ export type CreateHourLogInput = z.infer<typeof CreateHourLogSchema>;
 export const SubmitHourLogSchema = z.object({
   machineId: z.string().min(1, "Machine ID is required"),
   operatorId: z.string().uuid("Invalid operator ID").optional().nullable(),
+  assignmentId: z.string().uuid("Invalid assignment ID").optional().nullable(),
   clientId: z.string().uuid("Invalid client ID").optional().nullable(),
   startDate: z.string().max(50).optional().nullable(),
   logDate: z.string().max(50).optional().nullable(),

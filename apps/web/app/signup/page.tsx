@@ -5,8 +5,10 @@ import { useFormDraft, saveFileDraft, removeFileDraft, readFileDraft, clearFileD
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Info, FileText, X } from "lucide-react";
-import { validateDocumentFile, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES } from "@/lib/upload";
+import { Info, FileText, X, Loader2, RefreshCw, FileCheck2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useSignupDocumentUploads, type DocumentUploadSlot } from "@/lib/hooks/useSignupDocumentUploads";
+import type { DocType } from "@reachinternational/utils";
+import { DocumentUploadCard } from "@/components/documents/DocumentUploadCard";
 import {
   AnimatedMail,
   AnimatedLock,
@@ -18,6 +20,7 @@ import {
   AnimatedClock,
   AnimatedUpload,
   AnimatedBuilding2,
+  AnimatedBriefcase,
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -55,6 +58,8 @@ import {
   INDIAN_STATES,
   getStateById,
   computeShiftTiming,
+  MACHINE_CATEGORY_SELECT_OPTIONS,
+  normalizeMachineCategory,
 } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
@@ -71,7 +76,7 @@ const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
 
 // Allowlist for draft persistence — passwords are strictly excluded for security
 const DRAFT_FIELDS = [
-  "full_name", "email", "phone", "role", "supervisor_id",
+  "full_name", "email", "phone", "role", "supervisor_id", "machine_category",
   "shift_start_time", "shift_end_time",
   "street", "city", "district", "state", "state_id", "address",
   "bank_account_number", "bank_ifsc_code",
@@ -87,12 +92,15 @@ export default function SignupPage() {
   const [state, setState] = useState<AuthFormState>({});
   const [pending, setPending] = useState(false);
   const isSubmittingRef = useRef(false);
+  const [draftDismissed, setDraftDismissed] = useState(false);
+  const [isSubmittedSuccess, setIsSubmittedSuccess] = useState(false);
   const [formValues, setFormValues] = useState({
     full_name: "",
     email: "",
     phone: "",
     role: "operator",
     supervisor_id: "",
+    machine_category: "",
     shift_start_time: "08:00 AM",
     shift_end_time: "08:00 PM",
     street: "",
@@ -127,9 +135,13 @@ export default function SignupPage() {
     DRAFT_FIELDS,
     draftValues,
     (d) => {
+      const cleanMachineCat = d.machine_category
+        ? normalizeMachineCategory(d.machine_category) || d.machine_category
+        : "";
       setFormValues((v) => ({
         ...v,
         ...d,
+        machine_category: cleanMachineCat || v.machine_category,
         password: v.password,
         confirm_password: v.confirm_password,
       }));
@@ -142,105 +154,39 @@ export default function SignupPage() {
   const [filesRestoredAt, setFilesRestoredAt] = useState<number | null>(null);
   const restoredAt = textRestoredAt || filesRestoredAt;
 
-  const [bankFile, setBankFile] = useState<File | null>(null);
-  const [bankPreviewUrl, setBankPreviewUrl] = useState<string | null>(null);
-  const [bankFileError, setBankFileError] = useState<string | null>(null);
+  const {
+    slots: docSlots,
+    uploadFile,
+    retryUpload,
+    ensureFreshSessionForSubmit,
+    clearAll: clearDocumentSlots,
+    isMandatoryReady,
+    isAnyUploading,
+  } = useSignupDocumentUploads();
 
-  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
-  const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState<string | null>(null);
-  const [aadhaarFileError, setAadhaarFileError] = useState<string | null>(null);
-
-  const [licenseFile, setLicenseFile] = useState<File | null>(null);
-  const [licensePreviewUrl, setLicensePreviewUrl] = useState<string | null>(null);
-  const [licenseFileError, setLicenseFileError] = useState<string | null>(null);
-
-  const handleBankFileChange = (file: File | null) => {
-    if (bankPreviewUrl) URL.revokeObjectURL(bankPreviewUrl);
-    if (!file) {
-      setBankFile(null);
-      setBankPreviewUrl(null);
-      setBankFileError(null);
-      removeFileDraft(DRAFT_KEY, "bank_document");
-      return;
-    }
-    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
-    if (!val.valid) {
-      setBankFile(null);
-      setBankPreviewUrl(null);
-      setBankFileError(val.error || "Invalid file");
-    } else {
-      setBankFile(file);
-      setBankFileError(null);
-      saveFileDraft(DRAFT_KEY, "bank_document", file); // fire-and-forget
+  const handleSlotFileChange = useCallback(
+    (docType: DocType, file: File | null) => {
+      if (file) {
+        saveFileDraft(DRAFT_KEY, docType === "driving_license" ? "license" : docType, file);
+      } else {
+        removeFileDraft(DRAFT_KEY, docType === "driving_license" ? "license" : docType);
+      }
+      uploadFile(docType, file);
+      const errKey =
+        docType === "bank_document"
+          ? "bank_document_file"
+          : docType === "aadhaar"
+          ? "aadhaar_file"
+          : "license_file";
       setFieldErrors((prev) => {
+        if (!prev[errKey]) return prev;
         const copy = { ...prev };
-        delete copy.bank_document_file;
+        delete copy[errKey];
         return copy;
       });
-      if (file.type.startsWith("image/")) {
-        setBankPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setBankPreviewUrl(null);
-      }
-    }
-  };
-
-  const handleAadhaarFileChange = (file: File | null) => {
-    if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
-    if (!file) {
-      setAadhaarFile(null);
-      setAadhaarPreviewUrl(null);
-      setAadhaarFileError(null);
-      removeFileDraft(DRAFT_KEY, "aadhaar");
-      return;
-    }
-    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
-    if (!val.valid) {
-      setAadhaarFile(null);
-      setAadhaarPreviewUrl(null);
-      setAadhaarFileError(val.error || "Invalid file");
-    } else {
-      setAadhaarFile(file);
-      setAadhaarFileError(null);
-      saveFileDraft(DRAFT_KEY, "aadhaar", file); // fire-and-forget
-      setFieldErrors((prev) => {
-        const copy = { ...prev };
-        delete copy.aadhaar_file;
-        return copy;
-      });
-      if (file.type.startsWith("image/")) {
-        setAadhaarPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setAadhaarPreviewUrl(null);
-      }
-    }
-  };
-
-  const handleLicenseFileChange = (file: File | null) => {
-    if (licensePreviewUrl) URL.revokeObjectURL(licensePreviewUrl);
-    if (!file) {
-      setLicenseFile(null);
-      setLicensePreviewUrl(null);
-      setLicenseFileError(null);
-      removeFileDraft(DRAFT_KEY, "license");
-      return;
-    }
-    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
-    if (!val.valid) {
-      setLicenseFile(null);
-      setLicensePreviewUrl(null);
-      setLicenseFileError(val.error || "Invalid file");
-    } else {
-      setLicenseFile(file);
-      setLicenseFileError(null);
-      saveFileDraft(DRAFT_KEY, "license", file); // fire-and-forget
-      if (file.type.startsWith("image/")) {
-        setLicensePreviewUrl(URL.createObjectURL(file));
-      } else {
-        setLicensePreviewUrl(null);
-      }
-    }
-  };
+    },
+    [uploadFile]
+  );
 
   // Restore files from IndexedDB on mount
   useEffect(() => {
@@ -255,18 +201,15 @@ export default function SignupPage() {
         if (cancelled) return;
         let restoredCount = 0;
         if (bank) {
-          setBankFile(bank);
-          setBankPreviewUrl(bank.type.startsWith("image/") ? URL.createObjectURL(bank) : null);
+          uploadFile("bank_document", bank);
           restoredCount++;
         }
         if (aadhaar) {
-          setAadhaarFile(aadhaar);
-          setAadhaarPreviewUrl(aadhaar.type.startsWith("image/") ? URL.createObjectURL(aadhaar) : null);
+          uploadFile("aadhaar", aadhaar);
           restoredCount++;
         }
         if (license) {
-          setLicenseFile(license);
-          setLicensePreviewUrl(license.type.startsWith("image/") ? URL.createObjectURL(license) : null);
+          uploadFile("driving_license", license);
           restoredCount++;
         }
         if (restoredCount > 0) {
@@ -279,31 +222,41 @@ export default function SignupPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [uploadFile]);
 
   const handleStartFresh = useCallback(() => {
     clearDraft();
     clearFileDrafts(DRAFT_KEY);
+    clearDocumentSlots();
     setFilesRestoredAt(null);
+    setDraftDismissed(true);
+    setIsSubmittedSuccess(false);
     setFormValues({
-      full_name: "", email: "", phone: "", role: "operator", supervisor_id: "",
-      shift_start_time: "08:00 AM", shift_end_time: "08:00 PM",
-      street: "", city: "", district: "", state: "", state_id: "", address: "",
-      bank_account_number: "", bank_ifsc_code: "",
-      aadhaar_number: "", license_number: "",
-      password: "", confirm_password: "",
+      full_name: "",
+      email: "",
+      phone: "",
+      role: "operator",
+      supervisor_id: "",
+      machine_category: "",
+      shift_start_time: "08:00 AM",
+      shift_end_time: "08:00 PM",
+      street: "",
+      city: "",
+      district: "",
+      state: "",
+      state_id: "",
+      address: "",
+      bank_account_number: "",
+      bank_ifsc_code: "",
+      aadhaar_number: "",
+      license_number: "",
+      password: "",
+      confirm_password: "",
     });
-    // Clear file states
-    if (bankPreviewUrl) URL.revokeObjectURL(bankPreviewUrl);
-    setBankFile(null); setBankPreviewUrl(null); setBankFileError(null);
-    if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
-    setAadhaarFile(null); setAadhaarPreviewUrl(null); setAadhaarFileError(null);
-    if (licensePreviewUrl) URL.revokeObjectURL(licensePreviewUrl);
-    setLicenseFile(null); setLicensePreviewUrl(null); setLicenseFileError(null);
     setFieldErrors({});
     setState({});
     setAgreedToTerms(false);
-  }, [clearDraft, bankPreviewUrl, aadhaarPreviewUrl, licensePreviewUrl]);
+  }, [clearDraft, clearDocumentSlots]);
 
   useEffect(() => {
     let isMounted = true;
@@ -347,8 +300,16 @@ export default function SignupPage() {
       phone: formValues.phone,
       role: formValues.role,
       supervisor_id: formValues.supervisor_id,
+      machine_category: formValues.machine_category,
     });
-  }, [formValues.full_name, formValues.email, formValues.phone, formValues.role, formValues.supervisor_id]);
+  }, [
+    formValues.full_name,
+    formValues.email,
+    formValues.phone,
+    formValues.role,
+    formValues.supervisor_id,
+    formValues.machine_category,
+  ]);
 
   const section2Complete = useMemo(() => {
     return isSignupSection2Complete({
@@ -379,16 +340,16 @@ export default function SignupPage() {
     return isSignupSection4Complete({
       bank_account_number: formValues.bank_account_number,
       bank_ifsc_code: formValues.bank_ifsc_code,
-      has_bank_doc: Boolean(bankFile),
+      has_bank_doc: docSlots.bank_document.status === "ready",
     });
-  }, [formValues.bank_account_number, formValues.bank_ifsc_code, bankFile]);
+  }, [formValues.bank_account_number, formValues.bank_ifsc_code, docSlots.bank_document.status]);
 
   const section5Complete = useMemo(() => {
     return isSignupSection5Complete({
       aadhaar_number: formValues.aadhaar_number,
-      has_aadhaar_doc: Boolean(aadhaarFile),
+      has_aadhaar_doc: docSlots.aadhaar.status === "ready",
     });
-  }, [formValues.aadhaar_number, aadhaarFile]);
+  }, [formValues.aadhaar_number, docSlots.aadhaar.status]);
 
   const section6Complete = useMemo(() => {
     return isSignupSection6Complete({
@@ -397,6 +358,14 @@ export default function SignupPage() {
       agreed_to_terms: agreedToTerms,
     });
   }, [formValues.password, formValues.confirm_password, agreedToTerms]);
+
+  const passwordsMatch = useMemo(() => {
+    return Boolean(
+      formValues.password &&
+      formValues.confirm_password &&
+      formValues.password === formValues.confirm_password
+    );
+  }, [formValues.password, formValues.confirm_password]);
 
   const isAllMandatoryFilled = useMemo(() => {
     return (
@@ -416,6 +385,44 @@ export default function SignupPage() {
     section6Complete,
   ]);
 
+  const completedSectionsCount = useMemo(() => {
+    return [
+      section1Complete,
+      section2Complete,
+      section3Complete,
+      section4Complete,
+      section5Complete,
+      section6Complete,
+    ].filter(Boolean).length;
+  }, [
+    section1Complete,
+    section2Complete,
+    section3Complete,
+    section4Complete,
+    section5Complete,
+    section6Complete,
+  ]);
+
+  const progressPercent = Math.round((completedSectionsCount / 6) * 100);
+
+  const scrollToSection = useCallback((secNum: number) => {
+    const elementIdMap: Record<number, string> = {
+      1: "section-account-role",
+      2: "section-work-shift",
+      3: "section-address-details",
+      4: "section-banking-details",
+      5: "section-identity-verification",
+      6: "section-security-credentials",
+    };
+    const targetId = elementIdMap[secNum];
+    if (targetId) {
+      const elem = document.getElementById(targetId);
+      if (elem) {
+        elem.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, []);
+
   const missingMandatoryList = useMemo(() => {
     const list: string[] = [];
     if (!formValues.full_name.trim() || formValues.full_name.trim().length < 2) {
@@ -429,6 +436,9 @@ export default function SignupPage() {
     }
     if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
       list.push("Supervisor");
+    }
+    if (formValues.role === "operator" && !formValues.machine_category.trim()) {
+      list.push("Machine Category");
     }
     if (!formValues.shift_start_time.trim() || !formValues.shift_end_time.trim()) {
       list.push("Shift Timing");
@@ -451,14 +461,22 @@ export default function SignupPage() {
     if (!formValues.bank_ifsc_code.trim() || !validateIfscCode(formValues.bank_ifsc_code).isValid) {
       list.push("IFSC Code");
     }
-    if (!bankFile) {
-      list.push("Bank Document");
+    if (docSlots.bank_document.status !== "ready") {
+      list.push(
+        docSlots.bank_document.status === "uploading" || docSlots.bank_document.status === "compressing"
+          ? "Bank Document (Uploading...)"
+          : "Bank Document Photo"
+      );
     }
     if (formValues.aadhaar_number.trim().replace(/\D/g, "").length !== 12) {
       list.push("Aadhaar Number");
     }
-    if (!aadhaarFile) {
-      list.push("Aadhaar Document");
+    if (docSlots.aadhaar.status !== "ready") {
+      list.push(
+        docSlots.aadhaar.status === "uploading" || docSlots.aadhaar.status === "compressing"
+          ? "Aadhaar Document (Uploading...)"
+          : "Aadhaar Document Photo"
+      );
     }
     if (formValues.password.length < 8) {
       list.push("Password");
@@ -476,6 +494,7 @@ export default function SignupPage() {
     formValues.phone,
     formValues.role,
     formValues.supervisor_id,
+    formValues.machine_category,
     formValues.shift_start_time,
     formValues.shift_end_time,
     formValues.street,
@@ -486,9 +505,9 @@ export default function SignupPage() {
     formValues.state_id,
     formValues.bank_account_number,
     formValues.bank_ifsc_code,
-    bankFile,
+    docSlots.bank_document.status,
     formValues.aadhaar_number,
-    aadhaarFile,
+    docSlots.aadhaar.status,
     formValues.password,
     formValues.confirm_password,
     agreedToTerms,
@@ -549,8 +568,31 @@ export default function SignupPage() {
       setFormValues((prev) => ({ ...prev, street: formattedVal, address: formattedVal }));
     } else if (field === "address") {
       setFormValues((prev) => ({ ...prev, address: formattedVal, street: formattedVal }));
+    } else if (field === "machine_category") {
+      const norm = normalizeMachineCategory(value) || value;
+      setFormValues((prev) => ({ ...prev, machine_category: norm }));
+      setFieldErrors((prev) => {
+        if (!prev.machine_category) return prev;
+        const copy = { ...prev };
+        delete copy.machine_category;
+        return copy;
+      });
+      return;
     } else {
       setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
+    }
+
+    if (field === "password" || field === "confirm_password") {
+      const p = field === "password" ? formattedVal : formValues.password;
+      const cp = field === "confirm_password" ? formattedVal : formValues.confirm_password;
+      if (p && cp && p === cp) {
+        setFieldErrors((prev) => {
+          if (!prev.confirm_password) return prev;
+          const copy = { ...prev };
+          delete copy.confirm_password;
+          return copy;
+        });
+      }
     }
 
     // Instant validation for Bank Account Number
@@ -661,6 +703,9 @@ export default function SignupPage() {
     if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
       errors.supervisor_id = "Please select your supervisor.";
     }
+    if (formValues.role === "operator" && !formValues.machine_category.trim()) {
+      errors.machine_category = "Please select a machine category.";
+    }
     if (!formValues.shift_start_time.trim()) {
       errors.shift_start_time = "Shift start time is required.";
     }
@@ -699,9 +744,8 @@ export default function SignupPage() {
         errors.bank_ifsc_code = ifscRes.error || "Valid 11-character IFSC code required.";
       }
     }
-    if (!bankFile) {
-      errors.bank_document_file = "Bank document is required.";
-      setBankFileError("Bank document is required.");
+    if (docSlots.bank_document.status !== "ready") {
+      errors.bank_document_file = "Bank document photo is required.";
     }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Valid 12-digit Aadhaar required.";
@@ -711,9 +755,11 @@ export default function SignupPage() {
         errors.aadhaar_number = aadhaarRes.error || "Valid 12-digit Aadhaar required.";
       }
     }
-    if (!aadhaarFile) {
-      errors.aadhaar_file = "Aadhaar document is required.";
-      setAadhaarFileError("Aadhaar document is required.");
+    if (docSlots.aadhaar.status !== "ready") {
+      errors.aadhaar_file = "Aadhaar document photo is required.";
+    }
+    if (docSlots.driving_license.status === "failed") {
+      errors.license_file = docSlots.driving_license.error || "Licence document upload failed.";
     }
     if (formValues.license_number.trim()) {
       const licRes = validateLicenseNumber(formValues.license_number);
@@ -731,7 +777,9 @@ export default function SignupPage() {
         errors.password = "Must include uppercase, lowercase, and a number.";
       }
     }
-    if (formValues.password !== formValues.confirm_password) {
+    if (!formValues.confirm_password) {
+      errors.confirm_password = "Confirm password is required.";
+    } else if (formValues.password !== formValues.confirm_password) {
       errors.confirm_password = "Passwords do not match.";
     }
     if (!agreedToTerms) {
@@ -742,7 +790,51 @@ export default function SignupPage() {
       setFieldErrors(errors);
       isSubmittingRef.current = false;
       setPending(false);
-      toast("error", "Validation Incomplete", "Please complete all mandatory fields.");
+      toast("error", "Please Complete All Required Fields", "Please fill in all highlighted fields to submit your registration.");
+
+      // Auto-scroll to first error element
+      const firstErrorKey = Object.keys(errors)[0];
+      const elementIdMap: Record<string, string> = {
+        full_name: "signup-full-name",
+        email: "signup-email",
+        phone: "signup-phone",
+        role: "signup-role-container",
+        supervisor_id: "signup-supervisor",
+        machine_category: "signup-machine-category",
+        shift_start_time: "signup-shift-start",
+        shift_end_time: "signup-shift-end",
+        street: "signup-street",
+        address: "signup-street",
+        city: "signup-city",
+        district: "signup-district",
+        state: "signup-state-container",
+        bank_account_number: "signup-bank-account",
+        bank_ifsc_code: "signup-bank-ifsc",
+        bank_document_file: "doc-upload-bank_document",
+        aadhaar_number: "signup-aadhaar",
+        aadhaar_file: "doc-upload-aadhaar",
+        license_number: "signup-license",
+        license_file: "doc-upload-driving_license",
+        password: "signup-password",
+        confirm_password: "signup-confirm-password",
+        terms: "agree_to_terms_container",
+      };
+      const targetId = elementIdMap[firstErrorKey] || `signup-${firstErrorKey}`;
+      const elem = document.getElementById(targetId);
+      if (elem) {
+        elem.scrollIntoView({ behavior: "smooth", block: "center" });
+        elem.focus?.();
+      }
+      return;
+    }
+
+    if (isAnyUploading) {
+      toast("info", "Uploads in Progress", "Please wait for your documents to finish uploading.");
+      return;
+    }
+
+    if (!isMandatoryReady) {
+      toast("error", "Documents Required", "Please ensure your mandatory documents are uploaded.");
       return;
     }
 
@@ -751,12 +843,39 @@ export default function SignupPage() {
     setState({});
     setFieldErrors({});
 
-    const formData = new FormData(e.currentTarget);
+    // Ensure session is fresh (< 1.5h) before finalizing
+    let sessionToken: string | null = null;
+    try {
+      const sessionRes = await ensureFreshSessionForSubmit();
+      if (!sessionRes.ok || !sessionRes.session) {
+        isSubmittingRef.current = false;
+        setPending(false);
+        toast("error", "Upload Session Expired", sessionRes.error || "Please reselect your document photos.");
+        return;
+      }
+      sessionToken = sessionRes.session;
+    } catch (sessionErr: unknown) {
+      isSubmittingRef.current = false;
+      setPending(false);
+      console.error("[Signup] Session refresh error:", sessionErr);
+      toast("error", "Session Error", "Could not establish secure upload session. Please try again.");
+      return;
+    }
+
+    const formData = new FormData();
+
+    // Pass staging session tokens
+    formData.set("staging_session_token", sessionToken);
+    formData.set("session", sessionToken);
+
     formData.set("full_name", formValues.full_name.trim());
     formData.set("email", formValues.email.trim());
     formData.set("phone", formValues.phone.trim());
     formData.set("role", formValues.role);
     formData.set("supervisor_id", formValues.supervisor_id.trim());
+    if (formValues.role === "operator" && formValues.machine_category.trim()) {
+      formData.set("machine_category", formValues.machine_category.trim());
+    }
     formData.set("shift_start_time", formValues.shift_start_time.trim());
     formData.set("shift_end_time", formValues.shift_end_time.trim());
     formData.set(
@@ -782,28 +901,20 @@ export default function SignupPage() {
     formData.set("password", formValues.password);
     formData.set("confirm_password", formValues.confirm_password);
 
-    if (bankFile) {
-      formData.set("bank_document_file", bankFile);
-    }
-    if (aadhaarFile) {
-      formData.set("aadhaar_file", aadhaarFile);
-    }
-    if (licenseFile) {
-      formData.set("license_file", licenseFile);
-    }
-
     try {
       const result = await signup({}, formData);
       setState(result);
 
       // On successful signup: clear draft, trigger toast notification, and redirect to login page
       if (result.message && !result.error) {
+        setIsSubmittedSuccess(true);
         clearDraft();
         clearFileDrafts(DRAFT_KEY);
+        clearDocumentSlots();
         setFilesRestoredAt(null);
         toast(
           "success",
-          "Registration Request Submitted",
+          "Registration Request Submitted! 🎉",
           "Your account is pending administrator approval. After approval from the administrator, you can log in."
         );
         setTimeout(() => {
@@ -813,7 +924,7 @@ export default function SignupPage() {
                 "Registration request submitted successfully! Your account is pending administrator approval. After approval from the administrator, you can log in."
               )
           );
-        }, 500);
+        }, 1200);
         return;
       }
 
@@ -835,6 +946,7 @@ export default function SignupPage() {
           phone: result.fieldValues?.phone ?? prev.phone,
           role: result.fieldValues?.role ?? prev.role,
           supervisor_id: result.fieldValues?.supervisor_id ?? prev.supervisor_id,
+          machine_category: result.fieldValues?.machine_category ?? prev.machine_category,
           shift_start_time: result.fieldValues?.shift_start_time ?? prev.shift_start_time,
           shift_end_time: result.fieldValues?.shift_end_time ?? prev.shift_end_time,
           city: result.fieldValues?.city ?? prev.city,
@@ -856,10 +968,25 @@ export default function SignupPage() {
       if (isRedirectError(err)) {
         throw err;
       }
+      console.error("[Signup] Submission error:", err);
       isSubmittingRef.current = false;
       setPending(false);
-      setState({ error: "An unexpected error occurred. Please try again." });
-      toast("error", "Registration Failed", "An unexpected error occurred. Please try again.");
+
+      const msg = err instanceof Error ? err.message : String(err);
+      const lower = msg.toLowerCase();
+      let userFriendlyError = "An unexpected error occurred. Please try again.";
+
+      if (lower.includes("rate limit") || lower.includes("too many requests") || lower.includes("429")) {
+        userFriendlyError = "Too many attempts from this network. Please wait a few minutes before trying again.";
+        toast("error", "Rate Limit Exceeded", userFriendlyError);
+      } else if (lower.includes("network") || lower.includes("fetch") || lower.includes("failed to fetch") || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        userFriendlyError = "Unable to connect to the server. Please check your internet connection and try again.";
+        toast("error", "Network Connection Error", userFriendlyError);
+      } else {
+        toast("error", "Registration Error", userFriendlyError);
+      }
+
+      setState({ error: userFriendlyError });
     }
   }
 
@@ -950,16 +1077,21 @@ export default function SignupPage() {
             {/* Global Error Banner */}
             {state.error && Object.keys(fieldErrors).length === 0 && (
               <div className="mb-3">
-                <Alert variant="error">{state.error}</Alert>
+                <Alert
+                  variant="error"
+                  onDismiss={() => setState((prev) => ({ ...prev, error: undefined }))}
+                >
+                  {state.error}
+                </Alert>
               </div>
             )}
 
             {/* Draft Restored Notice */}
-            {restoredAt && (
+            {restoredAt && !draftDismissed && (
               <div className="mb-3">
                 <Alert
                   variant="info"
-                  onDismiss={() => {}}
+                  onDismiss={() => setDraftDismissed(true)}
                   action={
                     <button
                       type="button"
@@ -975,8 +1107,55 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* Registration Progress Stepper */}
+            <div className="mb-3.5 p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-ink)]">
+                  Registration Progress
+                </span>
+                <span className="text-[11px] font-medium text-[var(--color-mute)]">
+                  {completedSectionsCount} of 6 steps completed ({progressPercent}%)
+                </span>
+              </div>
+              {/* Progress Bar Track */}
+              <div className="w-full h-1.5 rounded-full bg-[var(--color-hairline)] overflow-hidden mb-2.5">
+                <motion.div
+                  className="h-full bg-emerald-500 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                />
+              </div>
+              {/* Quick Section Jump Chips */}
+              <div className="grid grid-cols-6 gap-1 sm:gap-1.5">
+                {[
+                  { num: 1, label: "Role", done: section1Complete },
+                  { num: 2, label: "Shift", done: section2Complete },
+                  { num: 3, label: "Address", done: section3Complete },
+                  { num: 4, label: "Bank", done: section4Complete },
+                  { num: 5, label: "ID", done: section5Complete },
+                  { num: 6, label: "Login", done: section6Complete },
+                ].map((step) => (
+                  <button
+                    key={step.num}
+                    type="button"
+                    onClick={() => scrollToSection(step.num)}
+                    className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] sm:text-[11px] font-semibold border transition-all cursor-pointer ${
+                      step.done
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
+                        : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:border-[var(--color-hairline-hover)] hover:text-[var(--color-ink)]"
+                    }`}
+                    title={`Jump to step ${step.num}: ${step.label}`}
+                  >
+                    <span>{step.done ? "✓" : step.num}</span>
+                    <span className="truncate hidden sm:inline">{step.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Registration Form */}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 sm:gap-3">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-2.5 sm:gap-3">
               {/* Hidden Inputs for Shift Timing */}
               <input type="hidden" name="shift_start_time" value={formValues.shift_start_time} />
               <input type="hidden" name="shift_end_time" value={formValues.shift_end_time} />
@@ -992,6 +1171,7 @@ export default function SignupPage() {
 
               {/* Section 1: Account Information & Role */}
               <FormSectionCard
+                id="section-account-role"
                 stepNumber={1}
                 title="Account & Role"
                 isMandatory={true}
@@ -1010,6 +1190,7 @@ export default function SignupPage() {
                     required
                     autoComplete="name"
                     error={fieldErrors.full_name}
+                    hint="Enter your official name as shown on your Aadhaar card."
                     icon={<AnimatedUser size={15} />}
                   />
 
@@ -1024,6 +1205,7 @@ export default function SignupPage() {
                     required
                     autoComplete="email"
                     error={fieldErrors.email}
+                    hint="Used for account login and notifications."
                     icon={<AnimatedMail size={15} />}
                   />
                 </div>
@@ -1041,11 +1223,12 @@ export default function SignupPage() {
                     required
                     autoComplete="tel"
                     error={fieldErrors.phone}
+                    hint="10-digit mobile number for shift alerts and WhatsApp updates."
                     icon={<AnimatedPhone size={15} />}
                   />
 
                   {/* Account Role Dropdown */}
-                  <div className="flex flex-col gap-1 w-full">
+                  <div id="signup-role-container" className="flex flex-col gap-1 w-full">
                     <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
                       <span>Role Requested</span>
                       <span className="text-rose-500 font-semibold">*</span>
@@ -1059,6 +1242,9 @@ export default function SignupPage() {
                         if (!isSupervisedRole(val)) {
                           handleChange("supervisor_id", "");
                         }
+                        if (val !== "operator") {
+                          handleChange("machine_category", "");
+                        }
                       }}
                       placeholder="Select role..."
                       clearable={false}
@@ -1066,12 +1252,13 @@ export default function SignupPage() {
                       icon={<AnimatedUser size={15} />}
                       className="w-full text-xs sm:text-[13px]"
                     />
+                    <p className="text-[11px] text-[var(--color-mute)] mt-0.5">Select your job position at Reach International.</p>
                   </div>
                 </div>
 
-                {/* Row 3: Conditional Supervisor Selector when Role is Operator, Service Engineer, or Mechanic */}
+                {/* Row 3: Conditional Supervisor Selector when Role is Operator */}
                 {isSupervisedRole(formValues.role) && (
-                  <div className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
+                  <div id="signup-supervisor" className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
                     <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
                       <span>Select Supervisor</span>
                       <span className="text-rose-500 font-semibold">*</span>
@@ -1093,12 +1280,36 @@ export default function SignupPage() {
                       icon={<AnimatedShieldCheck size={15} />}
                       className="w-full text-xs sm:text-[13px]"
                     />
+                    <p className="text-[11px] text-[var(--color-mute)] mt-0.5">Choose the site manager who oversees your work shift.</p>
+                  </div>
+                )}
+
+                {/* Row 4: Conditional Machine Category Selector when Role is Operator */}
+                {formValues.role === "operator" && (
+                  <div id="signup-machine-category" className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
+                    <label className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center gap-1">
+                      <span>Machine Category</span>
+                      <span className="text-rose-500 font-semibold">*</span>
+                    </label>
+                    <input type="hidden" name="machine_category" value={formValues.machine_category} />
+                    <SearchableSelect
+                      options={MACHINE_CATEGORY_SELECT_OPTIONS}
+                      value={formValues.machine_category}
+                      onChange={(val) => handleChange("machine_category", val)}
+                      placeholder="Select machine category..."
+                      clearable={true}
+                      error={fieldErrors.machine_category}
+                      icon={<AnimatedBriefcase size={15} />}
+                      className="w-full text-xs sm:text-[13px]"
+                    />
+                    <p className="text-[11px] text-[var(--color-mute)] mt-0.5">Select the primary equipment you are certified to operate.</p>
                   </div>
                 )}
               </FormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
               <FormSectionCard
+                id="section-work-shift"
                 stepNumber={2}
                 title="Work Shift Schedule"
                 isMandatory={true}
@@ -1115,29 +1326,34 @@ export default function SignupPage() {
               >
                 {/* Shift Start Time | Shift End Time */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                  <CustomTimePicker
-                    label="Shift Start Time"
-                    value={formValues.shift_start_time}
-                    onChange={(val) => handleChange("shift_start_time", val)}
-                    placeholder="08:00 AM"
-                    required
-                    hideIcon
-                    error={fieldErrors.shift_start_time}
-                  />
-                  <CustomTimePicker
-                    label="Shift End Time"
-                    value={formValues.shift_end_time}
-                    onChange={(val) => handleChange("shift_end_time", val)}
-                    placeholder="08:00 PM"
-                    required
-                    hideIcon
-                    error={fieldErrors.shift_end_time}
-                  />
+                  <div id="signup-shift-start">
+                    <CustomTimePicker
+                      label="Shift Start Time"
+                      value={formValues.shift_start_time}
+                      onChange={(val) => handleChange("shift_start_time", val)}
+                      placeholder="08:00 AM"
+                      required
+                      hideIcon
+                      error={fieldErrors.shift_start_time}
+                    />
+                  </div>
+                  <div id="signup-shift-end">
+                    <CustomTimePicker
+                      label="Shift End Time"
+                      value={formValues.shift_end_time}
+                      onChange={(val) => handleChange("shift_end_time", val)}
+                      placeholder="08:00 PM"
+                      required
+                      hideIcon
+                      error={fieldErrors.shift_end_time}
+                    />
+                  </div>
                 </div>
               </FormSectionCard>
 
               {/* Section 3: Address Details */}
               <FormSectionCard
+                id="section-address-details"
                 stepNumber={3}
                 title="Address Details"
                 isMandatory={true}
@@ -1159,12 +1375,19 @@ export default function SignupPage() {
 
               {/* Section 4: Banking Details */}
               <FormSectionCard
+                id="section-banking-details"
                 stepNumber={4}
                 title="Banking Details"
                 isMandatory={true}
                 isCompleted={section4Complete}
               >
                 <div className="space-y-2.5 sm:space-y-3">
+                  {/* Salary Transfer Guidance Notice */}
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[11px] sm:text-xs text-sky-800 dark:text-sky-200">
+                    <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                    <span>Your monthly salary will be transferred to this bank account. Please ensure the Account Number and IFSC match your passbook or cheque.</span>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                     <Input
                       id="signup-bank-account"
@@ -1179,6 +1402,7 @@ export default function SignupPage() {
                       maxLength={20}
                       required
                       error={fieldErrors.bank_account_number}
+                      hint="Enter 9 to 18 digits printed on your passbook."
                       icon={<AnimatedCreditCard size={15} />}
                     />
 
@@ -1195,84 +1419,28 @@ export default function SignupPage() {
                       required
                       autoCapitalize="characters"
                       error={fieldErrors.bank_ifsc_code}
+                      hint="11-character code printed on cheque or passbook (e.g. SBIN0001234)."
                       icon={<AnimatedBuilding2 size={15} />}
                     />
                   </div>
 
                   {/* Bank Document Upload Card (Mandatory: Passbook / Cheque / Statement) */}
-                  <div
-                    className={`rounded-xl border ${
-                      bankFileError || fieldErrors.bank_document_file
-                        ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
-                        : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
-                    } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
-                        <span>Bank Account Document</span>
-                        <span className="text-rose-500 font-semibold">*</span>
-                      </span>
-                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
-                    </div>
-
-                    {!bankFile ? (
-                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                        <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                        <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                          Upload Passbook / Cheque / Statement (JPG, PNG, PDF)
-                        </span>
-                        <input
-                          type="file"
-                          name="bank_document_file"
-                          className="hidden"
-                          accept="image/*,application/pdf,.doc,.docx,.txt"
-                          onChange={(e) => handleBankFileChange(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                        {bankPreviewUrl ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={bankPreviewUrl}
-                            alt="Bank document preview"
-                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-sky-600" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                            {bankFile.name}
-                          </p>
-                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                            {(bankFile.size / 1024).toFixed(0)} KB · Attached
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleBankFileChange(null)}
-                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
-                          title="Remove file"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {(bankFileError || fieldErrors.bank_document_file) && (
-                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                        {bankFileError || fieldErrors.bank_document_file}
-                      </p>
-                    )}
-                  </div>
+                  <DocumentUploadCard
+                    title="Bank Account Document"
+                    required
+                    helperText="Upload Passbook / Cheque / Statement (JPG or PNG)"
+                    docType="bank_document"
+                    slot={docSlots.bank_document}
+                    onFileSelect={(file) => handleSlotFileChange("bank_document", file)}
+                    onRetry={() => retryUpload("bank_document")}
+                    fieldError={fieldErrors.bank_document_file}
+                  />
                 </div>
               </FormSectionCard>
 
               {/* Section 5: Identity Verification */}
               <FormSectionCard
+                id="section-identity-verification"
                 stepNumber={5}
                 title="Identity Verification"
                 isMandatory={true}
@@ -1293,6 +1461,7 @@ export default function SignupPage() {
                       maxLength={14}
                       required
                       error={fieldErrors.aadhaar_number}
+                      hint="12-digit UIDAI number. Will be formatted as XXXX XXXX XXXX."
                       icon={<AnimatedShieldCheck size={15} />}
                     />
 
@@ -1311,6 +1480,7 @@ export default function SignupPage() {
                       placeholder="e.g. MH12 20110012345"
                       maxLength={25}
                       error={fieldErrors.license_number}
+                      hint="Required if operating Forklift, Boom Lift, or other equipment."
                       icon={<AnimatedCreditCard size={15} />}
                     />
                   </div>
@@ -1318,145 +1488,35 @@ export default function SignupPage() {
                   {/* Document Uploads: Aadhaar Card & Driving Licence */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                     {/* Aadhaar Upload Card */}
-                    <div
-                      className={`rounded-xl border ${
-                        aadhaarFileError || fieldErrors.aadhaar_file
-                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
-                          : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
-                      } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
-                          <span>Aadhaar Document</span>
-                          <span className="text-rose-500 font-semibold">*</span>
-                        </span>
-                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
-                      </div>
-
-                      {!aadhaarFile ? (
-                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                          <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                            Upload Aadhaar (JPG, PNG, PDF)
-                          </span>
-                          <input
-                            type="file"
-                            name="aadhaar_file"
-                            className="hidden"
-                            accept="image/*,application/pdf,.doc,.docx,.txt"
-                            onChange={(e) => handleAadhaarFileChange(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                      ) : (
-                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                          {aadhaarPreviewUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={aadhaarPreviewUrl}
-                              alt="Aadhaar preview"
-                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                              <FileText className="h-5 w-5 text-sky-600" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                              {aadhaarFile.name}
-                            </p>
-                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                              {(aadhaarFile.size / 1024).toFixed(0)} KB · Attached
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAadhaarFileChange(null)}
-                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
-                            title="Remove file"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {(aadhaarFileError || fieldErrors.aadhaar_file) && (
-                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                          {aadhaarFileError || fieldErrors.aadhaar_file}
-                        </p>
-                      )}
-                    </div>
+                    <DocumentUploadCard
+                      title="Aadhaar Document"
+                      required
+                      helperText="Upload Aadhaar (JPG or PNG)"
+                      docType="aadhaar"
+                      slot={docSlots.aadhaar}
+                      onFileSelect={(file) => handleSlotFileChange("aadhaar", file)}
+                      onRetry={() => retryUpload("aadhaar")}
+                      fieldError={fieldErrors.aadhaar_file}
+                    />
 
                     {/* Licence Upload Card */}
-                    <div
-                      className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] flex items-center gap-1">
-                          <span>Licence Document</span>
-                        </span>
-                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
-                      </div>
-
-                      {!licenseFile ? (
-                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <AnimatedUpload size={15} className="h-[15px] w-[15px] text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
-                          <span className="text-[12px] sm:text-[13px] text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                            Upload Licence (JPG, PNG, PDF)
-                          </span>
-                          <input
-                            type="file"
-                            name="license_file"
-                            className="hidden"
-                            accept="image/*,application/pdf,.doc,.docx,.txt"
-                            onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                      ) : (
-                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                          {licensePreviewUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={licensePreviewUrl}
-                              alt="Licence preview"
-                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                              <FileText className="h-5 w-5 text-sky-600" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                              {licenseFile.name}
-                            </p>
-                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                              {(licenseFile.size / 1024).toFixed(0)} KB · Attached
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleLicenseFileChange(null)}
-                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors cursor-pointer"
-                            title="Remove file"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {licenseFileError && (
-                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                          {licenseFileError}
-                        </p>
-                      )}
-                    </div>
+                    <DocumentUploadCard
+                      title="Licence Document"
+                      required={false}
+                      helperText="Upload Licence (JPG or PNG)"
+                      docType="driving_license"
+                      slot={docSlots.driving_license}
+                      onFileSelect={(file) => handleSlotFileChange("driving_license", file)}
+                      onRetry={() => retryUpload("driving_license")}
+                      fieldError={fieldErrors.license_file}
+                    />
                   </div>
                 </div>
               </FormSectionCard>
 
               {/* Section 6: Security Credentials */}
               <FormSectionCard
+                id="section-security-credentials"
                 stepNumber={6}
                 title="Security Credentials"
                 isMandatory={true}
@@ -1475,6 +1535,8 @@ export default function SignupPage() {
                     required
                     autoComplete="new-password"
                     error={fieldErrors.password}
+                    isSuccess={passwordsMatch && !fieldErrors.password}
+                    hint="At least 8 characters with letters and numbers. Keep it secret."
                     icon={<AnimatedLock size={15} />}
                   />
 
@@ -1489,29 +1551,58 @@ export default function SignupPage() {
                     required
                     autoComplete="new-password"
                     error={fieldErrors.confirm_password}
+                    isSuccess={passwordsMatch && !fieldErrors.confirm_password}
+                    hint="Type the exact same password again to verify."
                     icon={<AnimatedLock size={15} />}
                   />
                 </div>
+                {passwordsMatch && !fieldErrors.password && !fieldErrors.confirm_password && (
+                  <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    <CheckCircle2 size={12} className="shrink-0" />
+                    Passwords match
+                  </p>
+                )}
                 <p className="text-[11px] text-[var(--color-mute)] mt-2">
                   Password must be at least 8 characters long. Make sure both passwords match.
                 </p>
               </FormSectionCard>
 
-              {/* Note banner */}
-              <div className="flex items-start gap-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 p-2.5 sm:p-3 text-[11px] sm:text-xs leading-relaxed text-sky-800 dark:text-sky-200">
-                <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="font-bold text-sky-900 dark:text-sky-100">Note: </strong>
-                  Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+              {/* Note banner: Shown ONLY after successful submit */}
+              {isSubmittedSuccess && (
+                <div className="flex items-start gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2.5 sm:p-3 text-[11px] sm:text-xs leading-relaxed text-emerald-800 dark:text-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold text-emerald-900 dark:text-emerald-100">Note: </strong>
+                    Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Terms and Privacy Policy Agreement Checkbox */}
-              <div className="space-y-1 pt-1">
-                <label
-                  htmlFor="agree_to_terms"
-                  className="flex items-start gap-2.5 cursor-pointer select-none group"
-                >
+              <div
+                id="agree_to_terms_container"
+                onClick={() => {
+                  setAgreedToTerms((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setFieldErrors((prevErr) => {
+                        const copy = { ...prevErr };
+                        delete copy.terms;
+                        return copy;
+                      });
+                    }
+                    return next;
+                  });
+                }}
+                className={`p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                  fieldErrors.terms
+                    ? "border-rose-500/60 bg-rose-500/5 dark:bg-rose-500/10 ring-1 ring-rose-500/30"
+                    : agreedToTerms
+                    ? "border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-500/10"
+                    : "border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-[var(--color-hairline-hover)]"
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
                   <input
                     type="checkbox"
                     id="agree_to_terms"
@@ -1528,48 +1619,56 @@ export default function SignupPage() {
                         });
                       }
                     }}
-                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-hairline)] text-sky-600 focus:ring-sky-500/20 focus:ring-2 focus:ring-offset-0 cursor-pointer accent-sky-600 shrink-0"
+                    className="mt-0.5 h-4.5 w-4.5 rounded border-[var(--color-hairline)] text-sky-600 focus:ring-sky-500/20 focus:ring-2 focus:ring-offset-0 cursor-pointer accent-sky-600 shrink-0"
                   />
-                  <span className="text-[11px] sm:text-xs text-[var(--color-mute)] leading-relaxed group-hover:text-[var(--color-ink)] transition-colors">
-                    I have read and agree to the{" "}
-                    <Link
-                      href="/terms"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
+                  <div className="flex-1">
+                    <label
+                      htmlFor="agree_to_terms"
+                      className="text-[11px] sm:text-xs text-[var(--color-mute)] leading-relaxed cursor-pointer block"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      Terms of Service
-                    </Link>{" "}
-                    and{" "}
-                    <Link
-                      href="/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Privacy Policy
-                    </Link>
-                    .
-                  </span>
-                </label>
-                {fieldErrors.terms && (
-                  <p className="text-[11px] text-red-600 dark:text-red-400 font-medium pl-6.5">
-                    {fieldErrors.terms}
-                  </p>
-                )}
+                      I have read and agree to the{" "}
+                      <Link
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Terms of Service
+                      </Link>{" "}
+                      and{" "}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
+                    </label>
+                    {fieldErrors.terms && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} className="shrink-0" />
+                        {fieldErrors.terms}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Submit CTA Button with mandatory completeness gating & double-click guard */}
+              {/* Submit CTA Button with validation feedback & double-click guard */}
               <div className="pt-0.5">
                 <FormSubmitButton
-                  isReady={isAllMandatoryFilled}
-                  loading={pending}
-                  label="Request Platform Access"
-                  loadingLabel="Submitting Registration Request..."
+                  isReady={isAllMandatoryFilled && isMandatoryReady && !isAnyUploading}
+                  loading={pending || isAnyUploading}
+                  label={isAnyUploading ? "Uploading Documents..." : "Request Platform Access"}
+                  loadingLabel={isAnyUploading ? "Uploading Documents to Secure Storage..." : "Submitting Registration Request..."}
                   missingCount={missingMandatoryList.length}
                   missingFields={missingMandatoryList}
+                  showHelperChip={false}
                 />
               </div>
             </form>

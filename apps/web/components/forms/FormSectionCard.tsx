@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { AnimatedLock } from "@/components/ui/animated-icons";
 
 export interface FormSectionCardProps {
+  id?: string;
   stepNumber: number | string;
   title: string;
   description?: string;
@@ -23,6 +24,7 @@ export interface FormSectionCardProps {
  * read-only badge, and card-level hover micro-interaction via data-hover-parent.
  */
 export function FormSectionCard({
+  id,
   stepNumber,
   title,
   description,
@@ -36,6 +38,7 @@ export function FormSectionCard({
 }: FormSectionCardProps) {
   return (
     <div
+      id={id}
       className={`rounded-xl border bg-[var(--color-canvas)]/60 p-3 sm:p-4 space-y-2.5 sm:space-y-3 transition-all duration-200 ${
         isCompleted && !isReadOnly
           ? "border-emerald-500 dark:border-emerald-400/80 shadow-[0_0_0_1px_rgba(16,185,129,0.35)] dark:shadow-[0_0_0_1px_rgba(52,211,153,0.3)]"

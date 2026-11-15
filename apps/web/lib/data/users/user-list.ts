@@ -30,12 +30,18 @@ export interface UserListResponse {
 }
 
 /**
- * Lean column projection strictly required for the User Directory list view.
- * Excludes heavy, sensitive fields: aadhaar_number, license_number, and address.
- * Reuses the machine-list.ts projection pattern.
+ * Lean column projection strictly required for privileged User Directory list view (Admin, HR).
+ * Includes compensation fields.
  */
 export const USER_LIST_COLUMNS =
-  "id, employee_id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
+  "id, employee_id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, machine_category, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
+
+/**
+ * Redacted column projection for non-privileged viewers (Supervisors, Managers, Operators).
+ * Excludes sensitive salary, daily rate, and overtime compensation fields per Phase 8 security policy.
+ */
+export const USER_LIST_NON_SENSITIVE_COLUMNS =
+  "id, employee_id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, machine_category, shift_start_time, shift_end_time, supervisor_id, complete_profile, created_at, updated_at";
 
 export function sanitizeSearchToken(token: string): string {
   return token
@@ -229,9 +235,12 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
   const to = from + pageSize - 1;
 
   const isExport = pageSize > 100;
+  const canViewFinancials = ["super_admin", "admin", "hr"].includes(currentUser.role);
+  const projectedColumns = canViewFinancials ? USER_LIST_COLUMNS : USER_LIST_NON_SENSITIVE_COLUMNS;
+
   let query = supabase
     .from("users")
-    .select(USER_LIST_COLUMNS, isExport ? {} : { count: "exact" });
+    .select(projectedColumns, isExport ? {} : { count: "exact" });
 
   if (sort) {
     if (sort === "newest") query = query.order("created_at", { ascending: false });
@@ -333,9 +342,21 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
   const rawUsers = (data as unknown as User[]) || [];
   const hydratedUsers = await hydrateUsersPersonnel(rawUsers);
 
+  // Deep defense: ensure compensation fields are completely redacted for non-privileged viewers
+  const sanitizedUsers = canViewFinancials
+    ? hydratedUsers
+    : hydratedUsers.map((u) => ({
+        ...u,
+        monthly_salary: null,
+        daily_rate: null,
+        ot_hourly_rate: null,
+        bank_account_number: null,
+        bank_ifsc_code: null,
+      }));
+
   return {
-    users: hydratedUsers,
-    total: isExport ? hydratedUsers.length : (count ?? 0),
+    users: sanitizedUsers,
+    total: isExport ? sanitizedUsers.length : (count ?? 0),
     page,
     pageSize,
     totalPages: isExport ? 1 : Math.ceil((count ?? 0) / pageSize),

@@ -214,18 +214,22 @@ assert.ok(
   'operations.tsx must bind memoized handleTabChange'
 );
 
-// Check running-logs.tsx
+// Check running-logs.tsx (Static View Mode buttons verified)
 const runningLogsSource = fs.readFileSync(
   path.join(MOBILE_ROOT, 'app/(app)/running-logs.tsx'),
   'utf8'
 );
 assert.ok(
-  runningLogsSource.includes('ToggleSwitch'),
-  'running-logs.tsx must import ToggleSwitch'
+  runningLogsSource.includes('tabOptionBtn'),
+  'running-logs.tsx must use dedicated tabOptionBtn for static view mode buttons'
 );
 assert.ok(
-  runningLogsSource.includes('<ToggleSwitch<LogsViewMode>'),
-  'running-logs.tsx must render ToggleSwitch with LogsViewMode'
+  !runningLogsSource.includes('<ToggleSwitch'),
+  'running-logs.tsx must completely eradicate ToggleSwitch'
+);
+assert.ok(
+  runningLogsSource.includes('setLogsViewMode'),
+  'running-logs.tsx must bind setLogsViewMode for static view mode selection'
 );
 
 // Check preferences/index.tsx (Theme buttons verified)

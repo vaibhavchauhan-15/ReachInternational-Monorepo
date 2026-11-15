@@ -87,6 +87,7 @@ export const metadata: Metadata = {
 import dynamic from "next/dynamic";
 import { ToastProvider } from "@/components/ui/Toast";
 import { WebOfflineBanner } from "@/components/ui/WebOfflineBanner";
+import { QueryClientProvider } from "@/components/providers/QueryClientProvider";
 
 const AgentationWrapper = dynamic(
   () => import("@/components/AgentationWrapper").then((m) => m.AgentationWrapper)
@@ -128,14 +129,16 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
-          <ToastProvider>
-            <WebOfflineBanner />
-            {children}
-            <AgentationWrapper />
-            <CookieConsent />
-            <GoogleAnalytics />
-            {process.env.VERCEL ? <Analytics /> : null}
-          </ToastProvider>
+          <QueryClientProvider>
+            <ToastProvider>
+              <WebOfflineBanner />
+              {children}
+              <AgentationWrapper />
+              <CookieConsent />
+              <GoogleAnalytics />
+              {process.env.VERCEL ? <Analytics /> : null}
+            </ToastProvider>
+          </QueryClientProvider>
         </ThemeProvider>
       </body>
     </html>

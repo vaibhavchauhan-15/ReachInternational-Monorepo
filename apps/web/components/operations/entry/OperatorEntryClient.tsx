@@ -148,16 +148,68 @@ export function OperatorEntryClient({
     };
   }, [user?.id, router, toast]);
 
-  // Form State initialized directly from fast read-model
-  const initialHmrStr = initialContext.last_hmr !== undefined && initialContext.last_hmr !== null
-    ? String(initialContext.last_hmr)
+  // Context state initialized from server read-model, synchronized on date selection
+  const [context, setContext] = useState<OperatorEntryContext>(initialContext);
+  const [isContextLoading, setIsContextLoading] = useState<boolean>(false);
+
+  // Form State initialized directly from context
+  const initialHmrStr = context.last_hmr !== undefined && context.last_hmr !== null
+    ? String(context.last_hmr)
     : "0";
-  const [logDate, setLogDate] = useState<string>(() => getISTDateString());
+  const [logDate, setLogDate] = useState<string>(() => {
+    const paramDate = searchParams?.get("date");
+    if (paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate)) {
+      return paramDate;
+    }
+    return getISTDateString();
+  });
   const [submittedLastLog, setSubmittedLastLog] = useState<OperatorLastLogSummary | null>(null);
-  const activeLastLog = submittedLastLog ?? initialContext.last_log;
+  const activeLastLog = submittedLastLog ?? context.last_log;
   const [startMeter, setStartMeter] = useState<string>(() => initialHmrStr);
   const [endMeter, setEndMeter] = useState<string>(() => initialHmrStr);
   const [isStartMeterLocked, setIsStartMeterLocked] = useState<boolean>(true);
+
+  // Synchronize context when logDate changes to support 100% date-independent assignment history
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    let isCancelled = false;
+    async function syncDateContext() {
+      setIsContextLoading(true);
+      try {
+        const res = await getOperatorEntryContextAction(user.id, logDate);
+        if (!isCancelled && res.success && res.data) {
+          const newCtx = res.data;
+          setContext(newCtx);
+          setTodayLoggedCodes(newCtx.today_logged_shift_codes || []);
+          setTodayLogs(newCtx.today_logs || []);
+          if (newCtx.last_hmr !== undefined && newCtx.last_hmr !== null) {
+            const hmrStr = String(newCtx.last_hmr);
+            setStartMeter(hmrStr);
+            setEndMeter(hmrStr);
+          }
+          if (newCtx.assigned_shift_code) {
+            setSelectedShiftCode(newCtx.assigned_shift_code);
+          } else if (newCtx.assigned_shift_codes && newCtx.assigned_shift_codes.length > 0) {
+            setSelectedShiftCode(newCtx.assigned_shift_codes[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load operator context for date:", err);
+      } finally {
+        if (!isCancelled) setIsContextLoading(false);
+      }
+    }
+
+    syncDateContext();
+    return () => {
+      isCancelled = true;
+    };
+  }, [logDate, user.id]);
 
   const handleStartMeterChange = useCallback((val: string) => {
     // If endMeter is equal to startMeter or empty, auto-fill/keep in sync
@@ -167,45 +219,59 @@ export function OperatorEntryClient({
 
   // Compute effective shifts available for this machine / client
   const availableShifts = useMemo<ClientShiftCode[]>(() => {
-    return initialContext.shift_codes && initialContext.shift_codes.length > 0
-      ? initialContext.shift_codes
+    return context.shift_codes && context.shift_codes.length > 0
+      ? context.shift_codes
       : DEFAULT_CLIENT_SHIFTS;
-  }, [initialContext.shift_codes]);
+  }, [context.shift_codes]);
 
   // Active assigned shift codes for operator on this machine
   const assignedShiftCodes = useMemo<string[]>(() => {
-    if (initialContext.assigned_shift_codes && initialContext.assigned_shift_codes.length > 0) {
-      return initialContext.assigned_shift_codes;
+    if (context.assigned_shift_codes && context.assigned_shift_codes.length > 0) {
+      return context.assigned_shift_codes;
     }
-    if (initialContext.assigned_shift_code) {
-      return [initialContext.assigned_shift_code];
+    if (context.assigned_shift_code) {
+      return [context.assigned_shift_code];
     }
     return [];
-  }, [initialContext.assigned_shift_codes, initialContext.assigned_shift_code]);
+  }, [context.assigned_shift_codes, context.assigned_shift_code]);
 
   // Track today's logged shifts and logs for continuous 24h coverage
   const [todayLoggedCodes, setTodayLoggedCodes] = useState<string[]>(
-    () => initialContext.today_logged_shift_codes || []
+    () => context.today_logged_shift_codes || []
   );
   const [todayLogs, setTodayLogs] = useState<any[]>(
-    () => initialContext.today_logs || []
+    () => context.today_logs || []
   );
 
   // Resolve operator's own shift by code, timing, or distance
   const resolvedInitialShift = useMemo(() => {
-    return resolveDefaultOperatorShift(initialContext, availableShifts);
-  }, [initialContext, availableShifts]);
+    return resolveDefaultOperatorShift(context, availableShifts);
+  }, [context, availableShifts]);
 
-  const [selectedShiftCode, setSelectedShiftCode] = useState<string>(
-    resolvedInitialShift?.code || initialContext.assigned_shift_code || "S1"
-  );
+  const [selectedShiftCode, setSelectedShiftCode] = useState<string>(() => {
+    const paramShift = searchParams?.get("shift");
+    if (paramShift) return paramShift;
+    return resolvedInitialShift?.code || context.assigned_shift_code || "S1";
+  });
+
+  // Deep Link Parameter Handlers (?date=YYYY-MM-DD&shift=CODE&machine=UUID)
+  useEffect(() => {
+    const paramDate = searchParams?.get("date");
+    if (paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate) && paramDate !== logDate) {
+      setLogDate(paramDate);
+    }
+    const paramShift = searchParams?.get("shift");
+    if (paramShift && paramShift !== selectedShiftCode) {
+      setSelectedShiftCode(paramShift);
+    }
+  }, [searchParams, logDate, selectedShiftCode]);
 
   const [startTime, setStartTime] = useState<string>(() => {
-    const raw = resolvedInitialShift?.start_time || resolvedInitialShift?.raw_start_time || initialContext.operator?.shift_start;
+    const raw = resolvedInitialShift?.start_time || resolvedInitialShift?.raw_start_time || context.operator?.shift_start;
     return (raw ? formatTo12Hour(raw) : "") || "06:00 AM";
   });
   const [endTime, setEndTime] = useState<string>(() => {
-    const raw = resolvedInitialShift?.end_time || resolvedInitialShift?.raw_end_time || initialContext.operator?.shift_end;
+    const raw = resolvedInitialShift?.end_time || resolvedInitialShift?.raw_end_time || context.operator?.shift_end;
     return (raw ? formatTo12Hour(raw) : "") || "02:00 PM";
   });
   const [overtimeHours, setOvertimeHours] = useState<string>(
@@ -411,7 +477,7 @@ export function OperatorEntryClient({
 
     if (submitting || submittingRef.current) return;
 
-    if (!initialContext.machine?.id) {
+    if (!context.machine?.id) {
       toast("error", "No Machine Assigned", "You cannot submit a log without an assigned machine.");
       return;
     }
@@ -477,13 +543,14 @@ export function OperatorEntryClient({
       isBreakdown && breakdownReason.trim() ? `[Breakdown: ${breakdownReason.trim()}]` : undefined;
 
     const effectiveShift = (selectedShiftCode || "").replace(/^shift\s*/i, "").trim().toUpperCase();
-    const deterministicKey = `ihl_web_${initialContext.machine.id}_${user.id}_${logDate}_${effectiveShift || "S1"}`;
+    const deterministicKey = `ihl_web_${context.machine.id}_${user.id}_${logDate}_${effectiveShift || "S1"}`;
 
     try {
       const res = await submitOperatorHourLogAction({
-        machineId: initialContext.machine.id,
-        clientId: initialContext.client?.id || undefined,
-        location: initialContext.client?.site || undefined,
+        machineId: context.machine.id,
+        assignmentId: context.assignment_id || undefined,
+        clientId: context.client?.id || undefined,
+        location: context.client?.site || undefined,
         startDate: logDate,
         startMeter: startNum,
         endMeter: endNum,
@@ -505,7 +572,7 @@ export function OperatorEntryClient({
         toast("success", "Log Submitted Successfully", "Daily machine running hours recorded.");
 
         // Broadcast log_entered to operations-roster channel for supervisors/admins
-        if (initialContext.machine?.id) {
+        if (context.machine?.id) {
           try {
             const supabase = createSupabaseBrowserClient();
             const rosterChannel = supabase.channel("operations-roster");
@@ -515,7 +582,7 @@ export function OperatorEntryClient({
                   type: "broadcast",
                   event: "log_entered",
                   payload: {
-                    machineId: initialContext.machine!.id,
+                    machineId: context.machine!.id,
                     operatorId: user.id,
                     shiftCode: selectedShiftCode || undefined,
                     startMeter: startNum,
@@ -614,9 +681,9 @@ export function OperatorEntryClient({
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Section A: Assigned Machine & Client Info */}
             <OperatorMachineInfo
-              machine={initialContext.machine}
-              client={initialContext.client}
-              operator={initialContext.operator}
+              machine={context.machine}
+              client={context.client}
+              operator={context.operator}
             />
 
             {/* Section B: HMR Meter Inputs & Live RT Calculation */}
@@ -633,7 +700,7 @@ export function OperatorEntryClient({
             {/* Section C: Previous Shift Log on Assigned Machine */}
             <LastMachineLogCard
               lastLog={activeLastLog}
-              machineId={initialContext.machine?.machine_id}
+              machineId={context.machine?.machine_id}
             />
 
             {/* Section D: Shift Timings & Overtime */}
@@ -688,8 +755,8 @@ export function OperatorEntryClient({
                 <Button
                   type="submit"
                   variant="primary"
-                  loading={submitting}
-                  disabled={!initialContext.machine?.id || !endMeter.trim() || endNum < startNum}
+                  loading={submitting || isContextLoading}
+                  disabled={!context.machine?.id || !endMeter.trim() || endNum < startNum}
                   icon={<Send className="h-3.5 w-3.5" />}
                   className="flex-1 sm:flex-none text-xs font-semibold"
                 >
@@ -706,12 +773,12 @@ export function OperatorEntryClient({
         <OperatorHistoryTab
           user={user}
           assignedMachine={
-            initialContext.machine
+            context.machine
               ? ({
-                  id: initialContext.machine.id,
-                  machine_id: initialContext.machine.machine_id,
-                  model: initialContext.machine.model || "",
-                  serial_number: initialContext.machine.serial_number || "",
+                  id: context.machine.id,
+                  machine_id: context.machine.machine_id,
+                  model: context.machine.model || "",
+                  serial_number: context.machine.serial_number || "",
                 } as unknown as Machine)
               : null
           }

@@ -31,7 +31,7 @@ const AuditDetailDrawer = dynamic(
   { ssr: false }
 );
 import type { AuditLogWithUser } from "@/lib/types/database";
-import type { AuditTab, AuditTabCounts } from "@/lib/queries/audit-logs";
+import type { AuditTab, AuditTabCounts, DocumentViewVolumeAlert } from "@/lib/queries/audit-logs";
 import { AuditLogTable } from "./AuditLogTable";
 import {
   AuditLogMobileCard,
@@ -46,6 +46,7 @@ interface AuditClientProps {
   tabCounts: AuditTabCounts;
   activeTab: AuditTab;
   userRole?: string;
+  volumeAlerts?: DocumentViewVolumeAlert[];
   initialParams: {
     tab?: string;
     search?: string;
@@ -112,6 +113,15 @@ const AUDIT_TABS: AuditTabDef[] = [
     badgeColor: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20",
   },
   {
+    id: "documents",
+    label: "Documents & Statutory",
+    shortLabel: "Documents",
+    description:
+      "Tracks document views, statutory Aadhaar & bank detail reveals, identity verification, and replacement approvals in compliance with Aadhaar Act & DPDP Act 2023.",
+    icon: AnimatedEye,
+    badgeColor: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+  },
+  {
     id: "others",
     label: "Others",
     description:
@@ -137,6 +147,7 @@ export function AuditClient({
   tabCounts,
   activeTab,
   userRole,
+  volumeAlerts,
   initialParams,
 }: AuditClientProps) {
   const router = useRouter();
@@ -305,6 +316,33 @@ export function AuditClient({
           </Button>
         }
       />
+
+      {/* High Volume Document View Alerts (Aadhaar Act & DPDP Act 2023 Compliance) */}
+      {volumeAlerts && volumeAlerts.length > 0 && (
+        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300 space-y-2">
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            <span>⚠️ Unusual Document View Volume Detected (&gt;20 views / 24 hours)</span>
+          </div>
+          <p className="text-xs text-[var(--color-ink)] opacity-90">
+            The following accounts have accessed an unusually high volume of employee statutory documents or sensitive data in the past 24 hours. Scrutiny is advised under the Digital Personal Data Protection (DPDP) Act 2023.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {volumeAlerts.map((alert) => (
+              <div
+                key={alert.viewer_id}
+                className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[var(--color-canvas-elevated)] border border-red-500/20 text-xs text-[var(--color-ink)]"
+              >
+                <span className="font-semibold">{alert.viewer_name}</span>
+                <span className="text-[11px] font-mono text-[var(--color-mute)]">({alert.viewer_role})</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-600 dark:text-red-400">
+                  {alert.view_count} views
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI Activity Strip */}
       <AuditKpis

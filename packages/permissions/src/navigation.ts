@@ -7,6 +7,7 @@ export type NavKey =
   | "machines"
   | "clients"
   | "users"
+  | "approvals"
   | "audit"
   | "payroll"
   | "attendance"
@@ -138,6 +139,21 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    key: "approvals",
+    label: "Approvals",
+    href: "/approvals",
+    icon: "check-check",
+    match: ["/approvals"],
+    roles: [
+      "super_admin",
+      "admin",
+      "manager",
+      "supervisor",
+      "hr",
+      "operator",
+    ],
+  },
+  {
     key: "audit",
     label: "Audit",
     href: "/audit",
@@ -260,6 +276,7 @@ export const ACTIVE_PROTECTED_ROUTES: readonly string[] = [
   "/running-logs",
   "/clients",
   "/users",
+  "/approvals",
   "/payroll",
   "/attendance",
   "/hiring",

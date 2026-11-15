@@ -75,6 +75,14 @@ export const AuditLogTable: React.FC<AuditLogTableProps> = ({
                   <th className="py-3 px-4">IP Origin</th>
                   <th className="py-3 px-4 min-w-[180px]">Status / Details</th>
                 </>
+              ) : activeTab === "documents" ? (
+                <>
+                  <th className="py-3 px-4">Action / Event</th>
+                  <th className="py-3 px-4">Target Employee</th>
+                  <th className="py-3 px-4">Accessed By</th>
+                  <th className="py-3 px-4">IP Origin</th>
+                  <th className="py-3 px-4 min-w-[200px]">Compliance Details</th>
+                </>
               ) : (
                 <>
                   <th className="py-3 px-4">Activity</th>
@@ -296,6 +304,44 @@ export const AuditLogTable: React.FC<AuditLogTableProps> = ({
                       {/* IP Origin */}
                       <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px] text-[var(--color-mute)]">
                         {log.ip_address || "Internal / System"}
+                      </td>
+                      {/* Details */}
+                      <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">
+                        <Highlight text={description || JSON.stringify(details || meta)} query={currentSearch} />
+                      </td>
+                    </>
+                  ) : activeTab === "documents" ? (
+                    <>
+                      {/* Action / Event */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${actionStyle.bgClass} ${actionStyle.textClass}`}>
+                          {formatAuditAction(log.action)}
+                        </span>
+                        <div className="text-[10px] text-[var(--color-mute)] font-mono mt-0.5">
+                          {log.action}
+                        </div>
+                      </td>
+                      {/* Target Employee */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="font-medium text-[var(--color-ink)]">
+                          <Highlight text={log.entity_name || (meta.target_user_id ? String(meta.target_user_id).slice(0, 8) : "—")} query={currentSearch} />
+                        </div>
+                        <div className="text-[10px] text-[var(--color-mute)] font-mono">
+                          {log.entity_id ? `ID: ${String(log.entity_id).slice(0, 8)}` : ""}
+                        </div>
+                      </td>
+                      {/* Accessed By */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="font-medium text-[var(--color-ink)]">
+                          <Highlight text={log.actor_name || log.user?.full_name || "Staff"} query={currentSearch} />
+                        </div>
+                        <div className="text-[10px] text-[var(--color-mute)] font-mono capitalize">
+                          {log.actor_role || log.user?.role || "admin"}
+                        </div>
+                      </td>
+                      {/* IP Origin */}
+                      <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px] text-[var(--color-mute)]">
+                        {log.ip_address || "—"}
                       </td>
                       {/* Details */}
                       <td className="py-3 px-4 max-w-xs truncate text-[var(--color-subtle)]">

@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserOrNull } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache/tags";
+import { submitToApprovalEngineSafely } from "@/lib/server/approval-engine-bridge";
 import type {
   AccountDeletionRequest,
   AccountDeletionSource,
@@ -18,6 +19,13 @@ export interface AccountDeletionResult {
   message?: string;
   error?: string;
   requestId?: string;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
 }
 
 /**
@@ -65,6 +73,22 @@ export async function submitAccountDeletionRequestAction(payload: {
     // Server-side enforcement: Super Admin accounts cannot be deleted
     if (role === "super_admin" || currentUser?.role === "super_admin") {
       return { success: false, error: "Super Administrator accounts cannot be deleted." };
+    }
+
+    // Deduplication check: Prevent duplicate pending deletion requests in Supabase
+    const { data: existingPendingDirect } = await adminClient
+      .from("account_deletion_requests")
+      .select("id")
+      .or(`email.ilike.${rawEmail}${userId ? `,user_id.eq.${userId}` : ""}`)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (existingPendingDirect) {
+      return {
+        success: true,
+        requestId: existingPendingDirect.id,
+        message: "Your account deletion request has already been registered and is pending compliance review.",
+      };
     }
 
     // Dual-path resilience:
@@ -150,6 +174,26 @@ export async function submitAccountDeletionRequestAction(payload: {
       });
     } catch (auditErr) {
       console.warn("[AccountDeletion] Non-blocking audit log warning:", auditErr);
+    }
+
+    // Submit to Centralized Approval Engine
+    if (userId) {
+      await submitToApprovalEngineSafely({
+        type_key: "account_deletion",
+        subject_type: "user",
+        subject_id: userId,
+        subject_label: `${fullName || "User"} (${rawEmail})`,
+        requested_by: userId,
+        summary: `Account deletion request for ${fullName || rawEmail}`,
+        payload: {
+          user_id: userId,
+          email: rawEmail,
+          full_name: fullName,
+          role,
+          reason,
+          source,
+        },
+      });
     }
 
     try {
@@ -293,7 +337,7 @@ export async function getAccountDeletionRequestsAction(): Promise<AccountDeletio
  */
 export async function approveAccountDeletionRequestAction(
   requestId: string,
-  userId?: string,
+  userId?: string | null,
   adminNotes?: string
 ): Promise<AccountDeletionResult> {
   try {
@@ -305,13 +349,49 @@ export async function approveAccountDeletionRequestAction(
     const adminClient = createSupabaseAdminClient();
     const now = new Date().toISOString();
 
+    // Resolve target userId and admin notes flexibly
+    let effectiveUserId: string | null = null;
+    let finalAdminNotes: string = "Approved by administrator. Account de-provisioned.";
+
+    if (userId) {
+      if (isValidUuid(userId)) {
+        effectiveUserId = userId;
+        if (adminNotes && adminNotes.trim()) {
+          finalAdminNotes = adminNotes.trim();
+        }
+      } else {
+        finalAdminNotes = userId.trim();
+      }
+    } else if (adminNotes && adminNotes.trim()) {
+      finalAdminNotes = adminNotes.trim();
+    }
+
+    if (!effectiveUserId) {
+      const { data: reqRow } = await adminClient
+        .from("account_deletion_requests")
+        .select("user_id, email")
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (reqRow?.user_id) {
+        effectiveUserId = reqRow.user_id;
+      } else if (reqRow?.email) {
+        const { data: userByEmail } = await adminClient
+          .from("users")
+          .select("id")
+          .ilike("email", reqRow.email)
+          .maybeSingle();
+        effectiveUserId = userByEmail?.id || null;
+      }
+    }
+
     // 1. Try updating direct account_deletion_requests
     let directUpdated = false;
     const { error: directErr } = await adminClient
       .from("account_deletion_requests")
       .update({
         status: "approved",
-        admin_notes: adminNotes || "Approved by administrator. Account de-provisioned.",
+        admin_notes: finalAdminNotes,
         reviewed_by: currentUser.id,
         reviewed_at: now,
         updated_at: now,
@@ -334,7 +414,7 @@ export async function approveAccountDeletionRequestAction(
       .eq("id", requestId);
 
     // 3. De-provision / deactivate the user account in users table
-    if (userId) {
+    if (effectiveUserId) {
       const { error: userUpdateErr } = await adminClient
         .from("users")
         .update({
@@ -343,7 +423,7 @@ export async function approveAccountDeletionRequestAction(
           license_number: null,
           updated_at: now,
         })
-        .eq("id", userId);
+        .eq("id", effectiveUserId);
 
       if (userUpdateErr) {
         console.warn("[AccountDeletion] Note updating user status:", userUpdateErr);
@@ -356,13 +436,13 @@ export async function approveAccountDeletionRequestAction(
         action: "user.account_deleted",
         entity_type: "account_deletion_request",
         entity_id: requestId,
-        user_id: userId,
+        user_id: effectiveUserId || undefined,
         actor_name: currentUser.full_name || currentUser.email,
         actor_role: currentUser.role,
         metadata: {
           requestId,
-          userId,
-          adminNotes,
+          userId: effectiveUserId,
+          adminNotes: finalAdminNotes,
           deactivatedAt: now,
         },
       });
@@ -373,6 +453,25 @@ export async function approveAccountDeletionRequestAction(
     try {
       revalidateTag(TAGS.users, "max");
       revalidatePath("/users");
+    } catch {}
+
+    // Synchronize with unified approval engine if an open request exists
+    try {
+      const { data: engineReq } = await adminClient
+        .from("approval_requests")
+        .select("id, version")
+        .eq("type_key", "account_deletion")
+        .eq("subject_id", requestId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (engineReq) {
+        await adminClient.rpc("approval_decide", {
+          p_request_id: engineReq.id,
+          p_decision: "approve",
+          p_expected_version: engineReq.version,
+        });
+      }
     } catch {}
 
     return {
@@ -445,6 +544,26 @@ export async function rejectAccountDeletionRequestAction(
     try {
       revalidateTag(TAGS.users, "max");
       revalidatePath("/users");
+    } catch {}
+
+    // Synchronize with unified approval engine if an open request exists
+    try {
+      const { data: engineReq } = await adminClient
+        .from("approval_requests")
+        .select("id, version")
+        .eq("type_key", "account_deletion")
+        .eq("subject_id", requestId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (engineReq) {
+        await adminClient.rpc("approval_decide", {
+          p_request_id: engineReq.id,
+          p_decision: "reject",
+          p_note: adminNotes || "Request declined by administrator.",
+          p_expected_version: engineReq.version,
+        });
+      }
     } catch {}
 
     return {

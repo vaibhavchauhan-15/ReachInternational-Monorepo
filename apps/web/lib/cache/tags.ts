@@ -111,6 +111,12 @@ export const TAGS = {
 
   // Class D / User Scoped
   users: "users",
+
+  // Approvals Domain (Canonical)
+  approvals: "approvals",
+  approvalsList: "approvals:list",
+  approvalsCounts: "approvals:counts",
+  approvalDetail: (id: string) => `approvals:${id}`,
 } as const;
 
 export type TagName = string;

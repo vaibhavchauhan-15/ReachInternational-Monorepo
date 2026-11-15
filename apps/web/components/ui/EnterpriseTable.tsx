@@ -133,9 +133,12 @@ export function EnterpriseTable<T extends { id: string | number }>({
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onSelectionChange) return;
     if (e.target.checked) {
-      onSelectionChange(data.map((item) => item.id));
+      const currentDataIds = data.map((item) => item.id);
+      const combined = Array.from(new Set([...selectedIds, ...currentDataIds]));
+      onSelectionChange(combined);
     } else {
-      onSelectionChange([]);
+      const currentDataIdSet = new Set(data.map((item) => item.id));
+      onSelectionChange(selectedIds.filter((id) => !currentDataIdSet.has(id)));
     }
   };
 
@@ -205,7 +208,8 @@ export function EnterpriseTable<T extends { id: string | number }>({
     });
   }, [data, sortColumn, sortDirection, columns]);
 
-  const allSelected = data.length > 0 && selectedIds.length === data.length;
+  const allSelected = data.length > 0 && data.every((item) => selectedIds.includes(item.id));
+  const someSelected = !allSelected && data.some((item) => selectedIds.includes(item.id));
 
   return (
     <div className="w-full flex flex-col gap-3">
@@ -352,6 +356,9 @@ export function EnterpriseTable<T extends { id: string | number }>({
                   <input
                     type="checkbox"
                     checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
                     onChange={handleSelectAll}
                     className="rounded text-[var(--color-ink)] focus:ring-0 cursor-pointer"
                   />

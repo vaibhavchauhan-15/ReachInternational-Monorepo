@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { Modal, Button, useToast } from "@/components/ui";
 import { importMachinesFromExcel } from "@/app/actions/machine-import";
 import type { BulkImportResult } from "@/app/actions/machine-import";
@@ -25,6 +25,16 @@ export function MachineImportModal({ open, onClose, onSuccess }: MachineImportMo
   const [result, setResult] = useState<BulkImportResult | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setResult(null);
+      setDragActive(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }, [open]);
 
   const handleFileChange = (file: File | undefined) => {
     if (!file) return;

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reach Ops",
     "slug": "reachinternational-monorepo",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "reachinternational",
@@ -15,6 +15,7 @@
       "bundleIdentifier": "com.reachinternational.app"
     },
     "android": {
+      "package": "com.reachinternational.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -65,9 +66,16 @@
       "enabled": false,
       "checkAutomatically": "NEVER"
     },
-    "runtimeVersion": "1.4.0",
+    "runtimeVersion": "1.5.0",
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0284c7"
+        }
+      ],
       [
         "expo-splash-screen",
         {

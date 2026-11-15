@@ -16,6 +16,7 @@ import {
   validateLicenseNumber,
   formatAadhaar,
   parseProfileShiftTime,
+  MACHINE_CATEGORY_SELECT_OPTIONS,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserCreated } from '../../lib/notifications';
@@ -38,6 +39,7 @@ import {
   CreditCard,
   Clock,
   CheckCircle2,
+  Wrench,
 } from '../ui/icon';
 
 const USER_ROLES: Array<{ value: string; label: string }> = [
@@ -70,6 +72,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('operator');
+  const [machineCategory, setMachineCategory] = useState('');
   const [shiftTime, setShiftTime] = useState('Day Shift (08:00 AM - 08:00 PM)');
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
@@ -135,7 +138,9 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   );
   const section2Complete = Boolean(shiftTime.trim().length > 0);
   const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateVal.trim());
-  const section4Complete = isOperator ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+  const section4Complete = isOperator
+    ? Boolean(machineCategory.trim() && monthlySalary && Number(monthlySalary) > 0)
+    : true;
 
   const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
   const missingMandatoryCount = [
@@ -168,6 +173,10 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     }
 
     if (role === 'operator') {
+      if (!machineCategory.trim()) {
+        showToast('warning', 'Validation Error', 'Machine category is mandatory for operator accounts.');
+        return;
+      }
       const sal = Number(monthlySalary);
       if (!monthlySalary || isNaN(sal) || sal <= 0) {
         showToast('warning', 'Validation Error', 'Monthly salary is mandatory for operator accounts and must be greater than 0.');
@@ -207,6 +216,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             full_name: fullName.trim(),
             phone: cleanPhone,
             role,
+            machine_category: role === 'operator' ? machineCategory.trim() || null : null,
             supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
             shift_time: shiftTime.trim() || null,
             street: street.trim() || null,
@@ -236,6 +246,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             .update({
               status: 'active',
               role,
+              machine_category: role === 'operator' ? machineCategory.trim() || null : null,
               supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
               shift_start_time: parsedShift?.startTime || null,
               shift_end_time: parsedShift?.endTime || null,
@@ -372,11 +383,30 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 required
                 options={roleSelectOptions}
                 value={role}
-                onChange={(val) => setRole(val)}
+                onChange={(val) => {
+                  setRole(val);
+                  if (val !== 'operator') {
+                    setMachineCategory('');
+                  }
+                }}
                 placeholder="Select designated role..."
                 modalTitle="Select System Role"
                 leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
               />
+
+              {/* Conditional Machine Category Selector for Operators */}
+              {role === 'operator' && (
+                <SearchableSelect
+                  label="Machine Category"
+                  required
+                  options={MACHINE_CATEGORY_SELECT_OPTIONS as unknown as SelectOption[]}
+                  value={machineCategory}
+                  onChange={(val) => setMachineCategory(val)}
+                  placeholder="Select designated machine category..."
+                  modalTitle="Select Machine Category"
+                  leftIcon={<Wrench size={16} color={theme.colors.mute} />}
+                />
+              )}
 
               {/* Conditional Supervisor Selector */}
               {isSupervisedRole(role) && (
