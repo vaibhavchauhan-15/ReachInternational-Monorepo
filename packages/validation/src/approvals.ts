@@ -31,6 +31,15 @@ export const ApprovalCancelInputSchema = z.object({
 
 export type ApprovalCancelInput = z.infer<typeof ApprovalCancelInputSchema>;
 
+export const ApprovalApproveAllInputSchema = z.object({
+  type_key: z.string().trim().optional(),
+  request_ids: z.array(z.string().uuid("Invalid request ID")).optional(),
+  note: z.string().trim().max(1000).optional(),
+});
+
+export type ApprovalApproveAllInput = z.infer<typeof ApprovalApproveAllInputSchema>;
+
+
 export const ApprovalListQuerySchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "cancelled", "expired", "all"]).optional().default("pending"),
   type_key: z.string().trim().optional(),

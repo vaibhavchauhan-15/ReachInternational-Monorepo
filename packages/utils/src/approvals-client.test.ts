@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   submitApproval,
   decideApproval,
+  approveAll,
   cancelApproval,
   listApprovals,
   getApproval,
@@ -99,6 +100,36 @@ test("cancelApproval calls approval_cancel RPC", async () => {
   assert.equal(res.data?.success, true);
   assert.equal(res.data?.status, "cancelled");
 });
+
+test("approveAll calls approval_approve_all RPC and activates users", async () => {
+  const mockRpc: ApprovalRpcClient = {
+    rpc: async <T = any>(fn: string, args?: Record<string, unknown>) => {
+      assert.equal(fn, "approval_approve_all");
+      assert.equal(args?.p_type_key, "registration");
+      assert.equal(args?.p_actor_id, "admin-1");
+      return {
+        data: {
+          success: true,
+          approved_count: 3,
+          approved_ids: ["req-1", "req-2", "req-3"],
+          activated_user_ids: ["user-1", "user-2", "user-3"],
+        } as unknown as T,
+        error: null,
+      };
+    },
+  };
+
+  const res = await approveAll(mockRpc, {
+    type_key: "registration",
+    actor_id: "admin-1",
+  });
+
+  assert.equal(res.error, null);
+  assert.equal(res.data?.success, true);
+  assert.equal(res.data?.approved_count, 3);
+  assert.deepEqual(res.data?.activated_user_ids, ["user-1", "user-2", "user-3"]);
+});
+
 
 test("listApprovals calls approval_list RPC with keyset pagination params", async () => {
   const mockRpc: ApprovalRpcClient = {

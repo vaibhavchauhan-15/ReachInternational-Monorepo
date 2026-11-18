@@ -9,6 +9,7 @@ import type {
   ApprovalRequest,
   ApprovalRequestListItem,
   ApprovalStatus,
+  ApprovalApproveAllResult,
 } from "@reachinternational/types";
 import { sanitizeUserErrorMessage } from "./errors.ts";
 
@@ -51,6 +52,13 @@ export interface DecideApprovalInput {
   decision: "approve" | "reject";
   note?: string;
   expected_version?: number;
+  actor_id?: string | null;
+}
+
+export interface ApproveAllInput {
+  type_key?: string;
+  request_ids?: string[];
+  note?: string;
   actor_id?: string | null;
 }
 
@@ -147,6 +155,50 @@ export async function decideApproval(
     if (transport.token) headers["Authorization"] = `Bearer ${transport.token}`;
 
     const res = await fetchImpl(`${base}/api/approvals/${input.request_id}/decide`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(input),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
+    if (!res.ok) {
+      return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
+    }
+    return { data: json.data || json, error: null };
+  } catch (err) {
+    return { data: null, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
+/**
+ * Record a bulk approval decision ("Approve All").
+ * Invariant: For user registrations, activates users immediately while keeping all user documents pending.
+ */
+export async function approveAll(
+  transport: ApprovalClientTransport,
+  input: ApproveAllInput = {}
+): Promise<ClientResult<ApprovalApproveAllResult>> {
+  try {
+    if (isRpcClient(transport)) {
+      const { data, error } = await transport.rpc<ApprovalApproveAllResult>("approval_approve_all", {
+        p_actor_id: input.actor_id ?? null,
+        p_type_key: input.type_key ?? null,
+        p_request_ids: input.request_ids ?? null,
+        p_note: input.note ?? null,
+      });
+
+      if (error) {
+        return { data: null, error: sanitizeUserErrorMessage(error) };
+      }
+      return { data, error: null };
+    }
+
+    const fetchImpl = transport.fetchFn || fetch;
+    const base = transport.baseUrl || "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (transport.token) headers["Authorization"] = `Bearer ${transport.token}`;
+
+    const res = await fetchImpl(`${base}/api/approvals/approve-all`, {
       method: "POST",
       headers,
       body: JSON.stringify(input),

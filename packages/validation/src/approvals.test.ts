@@ -9,6 +9,7 @@ import {
   DocumentVerifyPayloadSchema,
   DocumentReplacePayloadSchema,
   AccountDeletionPayloadSchema,
+  ApprovalApproveAllInputSchema,
 } from "./approvals.ts";
 
 test("ApprovalSubmitInputSchema validates correct submission", () => {
@@ -95,3 +96,25 @@ test("AccountDeletionPayloadSchema validates reason and source", () => {
   const res = AccountDeletionPayloadSchema.safeParse(valid);
   assert.equal(res.success, true);
 });
+
+test("ApprovalApproveAllInputSchema validates empty payload (all pending)", () => {
+  const res = ApprovalApproveAllInputSchema.safeParse({});
+  assert.equal(res.success, true);
+});
+
+test("ApprovalApproveAllInputSchema validates type_key and request_ids", () => {
+  const res = ApprovalApproveAllInputSchema.safeParse({
+    type_key: "registration",
+    request_ids: ["123e4567-e89b-12d3-a456-426614174000"],
+    note: "Approve all pending registration cards",
+  });
+  assert.equal(res.success, true);
+});
+
+test("ApprovalApproveAllInputSchema rejects invalid UUID in request_ids", () => {
+  const res = ApprovalApproveAllInputSchema.safeParse({
+    request_ids: ["not-a-uuid"],
+  });
+  assert.equal(res.success, false);
+});
+

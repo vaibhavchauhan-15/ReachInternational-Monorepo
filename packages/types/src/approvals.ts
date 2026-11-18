@@ -208,3 +208,11 @@ export interface ShiftConflictPayload {
   adjusted_end_time?: string;
   remarks?: string;
 }
+
+export interface ApprovalApproveAllResult {
+  success: boolean;
+  approved_count: number;
+  approved_ids: string[];
+  activated_user_ids: string[];
+}
+
