@@ -6,6 +6,7 @@ import {
   RefreshControl,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type {
@@ -28,6 +29,7 @@ import { useAuth } from "../../lib/auth/useAuth";
 import { MobileApprovalCard } from "../../components/approvals/MobileApprovalCard";
 import { ApprovalDetailBottomSheet } from "../../components/approvals/ApprovalDetailBottomSheet";
 import { RejectReasonModal } from "../../components/approvals/RejectReasonModal";
+import { ApproveAllConfirmModal } from "../../components/approvals/ApproveAllConfirmModal";
 import {
   MobileDocumentViewerModal,
   type MobileViewerDoc,
@@ -37,6 +39,7 @@ import {
   useApprovalCountsQuery,
   useApprovalDetailQuery,
   useDecideApprovalMutation,
+  useApproveAllMutation,
   useVerifyDocumentMutation,
   useRejectDocumentMutation,
   useApprovalsRealtimeSync,
@@ -46,6 +49,7 @@ import { haptics } from "../../lib/haptics";
 import {
   Clock,
   CheckCircle2,
+  CheckCheck,
   XCircle,
   X,
   RotateCcw,
@@ -101,6 +105,10 @@ export default function ApprovalsScreen() {
     | null
   >(null);
 
+  // Bulk Approve All State
+  const [approveAllModalVisible, setApproveAllModalVisible] = useState(false);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
+
   // Queries & Mutations (disabled if not authorized)
   const {
     data: items = [],
@@ -122,6 +130,7 @@ export default function ApprovalsScreen() {
     useApprovalDetailQuery(selectedRequestId);
 
   const decideMutation = useDecideApprovalMutation();
+  const approveAllMutation = useApproveAllMutation();
   const verifyDocMutation = useVerifyDocumentMutation();
   const rejectDocMutation = useRejectDocumentMutation();
 
@@ -230,6 +239,47 @@ export default function ApprovalsScreen() {
       setSubmittingRequestId(null);
     }
   };
+
+  // Pending approvals count for Approve All button badge
+  const pendingApprovalsCount = useMemo(() => {
+    if (typeKey && typeKey !== "all") {
+      const typeCount = counts.by_type[typeKey];
+      if (typeCount !== undefined && typeCount > 0) return typeCount;
+      return items.filter((i) => i.status === "pending" && i.type_key === typeKey).length;
+    }
+    const regCount = counts.by_type["registration"];
+    if (regCount !== undefined && regCount > 0) return regCount;
+    return counts.total || items.filter((i) => i.status === "pending").length;
+  }, [counts, items, typeKey]);
+
+  const canApproveAll =
+    canAccessApprovals &&
+    (pendingApprovalsCount > 0 || items.some((i) => i.status === "pending"));
+
+  // Action: Approve All Pending Requests
+  const handleApproveAll = async () => {
+    if (isApprovingAll) return;
+    setIsApprovingAll(true);
+    haptics.confirm();
+    try {
+      const res = await approveAllMutation.mutateAsync({
+        typeKey: typeKey && typeKey !== "all" ? typeKey : undefined,
+      });
+      const approvedCount = res?.approved_count ?? pendingApprovalsCount;
+      showToast(
+        "success",
+        "Approved All",
+        `Activated ${approvedCount} user account${approvedCount === 1 ? "" : "s"}. Documents remain pending verification.`
+      );
+      setApproveAllModalVisible(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", "Approve All Error", msg);
+    } finally {
+      setIsApprovingAll(false);
+    }
+  };
+
 
   // Action: Prompt Reject for Request
   const handleCardRejectPrompt = useCallback((cardItem: ApprovalRequestListItem) => {
@@ -384,7 +434,7 @@ export default function ApprovalsScreen() {
       style={[styles.container, { backgroundColor: colors.canvas }]}
       edges={["top"]}
     >
-      {/* ── Top Clean Header (Matching Web: Clean Title, No Clutter Badge) ── */}
+      {/* ── Top Clean Header (Matching Web: Clean Title & Approve All Action) ── */}
       <View
         style={[
           styles.header,
@@ -392,6 +442,33 @@ export default function ApprovalsScreen() {
         ]}
       >
         <Text variant="title">Approvals &amp; Verifications</Text>
+        {canApproveAll ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Approve All Pending Requests"
+            disabled={isApprovingAll}
+            onPress={() => {
+              haptics.select();
+              setApproveAllModalVisible(true);
+            }}
+            style={({ pressed }) => [
+              styles.approveAllBtn,
+              {
+                backgroundColor: isApprovingAll ? colors.mute : "#10b981",
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            {isApprovingAll ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <CheckCheck size={16} color="#ffffff" />
+            )}
+            <Text variant="caption" style={styles.approveAllBtnText}>
+              Approve All {pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ""}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* ── Filter Toolbar with Custom Dropdowns (Matching Web Feedback 4 & 5) ── */}
@@ -610,6 +687,20 @@ export default function ApprovalsScreen() {
           isActionLoading={verifyDocMutation.isPending || rejectDocMutation.isPending}
         />
       ) : null}
+
+      {/* ── Bulk Approve All Confirmation Modal ── */}
+      <ApproveAllConfirmModal
+        visible={approveAllModalVisible}
+        onClose={() => setApproveAllModalVisible(false)}
+        onConfirm={handleApproveAll}
+        count={pendingApprovalsCount}
+        typeLabel={
+          typeKey && typeKey !== "all"
+            ? BASE_TYPE_OPTIONS.find((t) => t.id === typeKey)?.label
+            : undefined
+        }
+        isSubmitting={isApprovingAll}
+      />
     </SafeAreaView>
   );
 }
@@ -620,8 +711,22 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  approveAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  approveAllBtnText: {
+    color: "#ffffff",
   },
   filterSection: {
     borderBottomWidth: 1,

@@ -1,3 +1,37 @@
+## [2026-11-19] - Atomic Bulk "Approve All" Engine with Statutory Document Protection (/approvals)
+
+### Added & Enhanced
+- **Atomic Database Bulk Approval Engine (`Migration 218`)**:
+  - Implemented `public.approval_approve_all(p_actor_id UUID, p_type_key TEXT, p_request_ids UUID[], p_note TEXT) RETURNS JSONB` on Supabase Dev database (`vlmxciuogczumumrwyot`).
+  - Utilizes `FOR UPDATE SKIP LOCKED` for concurrency safety and zero lock contention.
+  - Activates users immediately (`status = 'active'`).
+  - **Statutory Document Protection Invariant**: Explicitly updates all user documents to `verification_status = 'pending'`, `status = 'pending'`, `verified_by = NULL`, `verified_at = NULL`. Only the user is activated; documents remain pending.
+  - Automatically consolidates pending documents into an open `document_verify` request (`pending_document_ids`) for each user to preserve visibility in the "Document Verifications" queue.
+  - Explicitly excludes standalone `document_verify` and `document_replace` requests from bulk approval to prevent uninspected document bypass.
+  - Authored rollback migration `219_rollback_approve_all_pending_registrations.sql`.
+- **Shared Packages (`@reachinternational/*`)**:
+  - `@reachinternational/types`: Added `ApprovalApproveAllResult` to `packages/types/src/approvals.ts`.
+  - `@reachinternational/validation`: Added `ApprovalApproveAllInputSchema` & `ApprovalApproveAllInput` to `packages/validation/src/approvals.ts`.
+  - `@reachinternational/utils`: Added `approveAll()` supporting direct RPC execution with HTTP REST fallback in `packages/utils/src/approvals-client.ts`.
+- **Web App (`apps/web`)**:
+  - Server Action `approveAllAction` in `apps/web/app/actions/approvals.ts` with session check, admin RBAC validation, audit logging (`approval.approve_all`), and cache revalidation (`revalidateTag` for approvals, lists, counts, users, documents).
+  - Dual-authenticated API route `POST /api/approvals/approve-all` in `apps/web/app/api/approvals/approve-all/route.ts`.
+  - Confirmation modal `ApproveAllConfirmModal.tsx` in `apps/web/app/(app)/approvals/components/` detailing user activation and statutory document pending status.
+  - UI integration in `ApprovalsClientShell.tsx` with "Approve All" button, pending count badge, optimistic exit animations, and real-time count sync.
+- **Native Mobile App (`apps/mobile`)**:
+  - Hook `useApproveAllMutation` in `apps/mobile/lib/hooks/useApprovalsData.ts` with optimistic UI dismiss, count updates, dual transport, and rollback on error.
+  - Confirmation modal `ApproveAllConfirmModal.tsx` adhering to 0 raw typography properties, min 44px touch targets, and `haptics.confirm()`.
+  - Header "Approve All" button in `apps/mobile/app/(app)/approvals.tsx` with min 44px touch targets, loading spinner, and toast notifications.
+
+### Verified
+- **Approvals Engine Test Suite**: `tests/approvals/test-approve-all-engine.mjs` passed (14/14 checks).
+- **Full Monorepo Typecheck**: `turbo run typecheck` passed cleanly across all 7 packages (0 errors).
+- **Mobile Touch & Typography Guards**: 0 raw typography properties found; 100% touch targets & haptics compliant.
+- **Mobile Verification Scenarios**: `node apps/mobile/run-tests.mjs` passed (357/357 scenarios).
+- **Monorepo Test Suites**: `node scripts/run-all-tests.mjs` passed (28/28 suites, 100%).
+
+---
+
 ## [2026-11-17] - Role-Based Driving Licence Enforcement & Unwanted Validation Error Eradication
 
 ### Fixed & Enhanced

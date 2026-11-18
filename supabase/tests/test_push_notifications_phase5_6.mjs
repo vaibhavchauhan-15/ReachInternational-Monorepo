@@ -89,8 +89,8 @@ async function run() {
     // Pick existing operator Rohit Singh
     const operatorId = 'b3400740-3e79-44c7-9aec-a0ec3ccd22ce';
 
-    // Insert a breakdown hour log on 2026-11-10 (non-overlapping within 7-day window)
-    const testDate = '2026-11-10';
+    // Insert a breakdown hour log 2 days ago (non-overlapping within 7-day window and older than 24h)
+    const testDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const { data: lData, error: logErr } = await admin
       .from('machine_hour_logs')
       .insert({
@@ -125,7 +125,7 @@ async function run() {
     // 3. Test AS1 Assisted Log Trigger
     console.log('3. Testing AS1 Assisted Log Event Trigger...');
     const supervisorId = '13841eaa-c894-448f-b60f-093b341605e7'; // supervisor@reachinternational.co.in
-    const asTestDate = '2026-11-11';
+    const asTestDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const { data: asData, error: asErr } = await admin
       .from('machine_hour_logs')
       .insert({

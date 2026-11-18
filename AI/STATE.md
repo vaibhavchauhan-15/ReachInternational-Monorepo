@@ -1,10 +1,44 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: User Directory (/users) Feedback & Quality Remediation (`apps/web` & `apps/mobile`)
-- **Status**: 🟢 Clean / Verified & Production Ready (0 typecheck errors across all 7 packages, all 357 mobile tests, 42/42 users workflow tests, and 27/27 monorepo suites passing; full Web & Mobile zero-drift parity)
+- **Current Task**: Atomic Bulk "Approve All" Engine with Statutory Document Protection (`apps/web` & `apps/mobile`)
+- **Status**: 🟢 Clean / Verified & Production Ready (0 typecheck errors across all 7 packages, all 357 mobile tests, 14/14 approve all checks, and 28/28 monorepo suites passing; full Web & Mobile zero-drift parity)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
-- **Last Verified**: 2026-11-17
+- **Last Verified**: 2026-11-19
+- **Atomic Bulk "Approve All" Engine with Statutory Document Protection**:
+  - `User Request`: In the approval page implement "Approve All". If approve all, then all user documents should be pending, only the user is active. Read the codebase properly, implement properly, and ensure it is fast, responsive, and optimized.
+  - `Implementation Summary`:
+    1. **Database Tier (Migration 218 `approval_approve_all`)**:
+       - Implemented atomic `SECURITY DEFINER` function with `FOR UPDATE SKIP LOCKED` on pending registration requests.
+       - Enforced role check (`super_admin` / `admin`).
+       - Updates registration requests to `approved`.
+       - Updates `users.status = 'active'`.
+       - **Statutory Document Invariant**: Explicitly updates `user_documents` setting `verification_status = 'pending'`, `status = 'pending'`, `verified_by = NULL`, `verified_at = NULL`. Only the user becomes active; all documents remain pending.
+       - Consolidates pending documents into an open `document_verify` request (`pending_document_ids`) for each user to preserve visibility in the "Document Verifications" queue.
+       - Excludes standalone `document_verify` and `document_replace` requests from bulk approval.
+       - Migration 218 applied to Dev DB `vlmxciuogczumumrwyot`. Rollback migration 219 created.
+    2. **Shared Packages (`types`, `validation`, `utils`)**:
+       - `@reachinternational/types`: Added `ApprovalApproveAllResult`.
+       - `@reachinternational/validation`: Added `ApprovalApproveAllInputSchema` & `ApprovalApproveAllInput` (43/43 tests passing).
+       - `@reachinternational/utils`: Added `approveAll()` with direct RPC and HTTP REST fallback (50/50 tests passing).
+    3. **Web Tier (`apps/web`)**:
+       - `approveAllAction` Server Action with session check, admin RBAC validation, audit logging (`approval.approve_all`), and cache revalidation (`revalidateTag` for approvals, lists, counts, users, documents).
+       - `POST /api/approvals/approve-all` dual-authenticated API route.
+       - `ApproveAllConfirmModal.tsx` explaining user activation and statutory document pending status.
+       - `ApprovalsClientShell.tsx` with "Approve All" button, pending count badge, optimistic exit animations, and real-time count sync.
+    4. **Native Mobile Tier (`apps/mobile`)**:
+       - `useApproveAllMutation` hook with optimistic UI updates, count updates, dual transport, and rollback on error.
+       - `ApproveAllConfirmModal.tsx` adhering to 0 raw typography properties, min 44px touch targets, and `haptics.confirm()`.
+       - `approvals.tsx` header "Approve All" button with min 44px touch targets, loading spinner, and toast notifications.
+  - `Verification`:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 workspace packages clean (0 errors).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations.
+    - `node scripts/test-touch-haptics.mjs`: 100% passed.
+    - `node tests/approvals/test-approve-all-engine.mjs`: 14/14 passed.
+    - `node apps/mobile/run-tests.mjs`: 357/357 passed.
+    - `node scripts/run-all-tests.mjs`: 28/28 monorepo suites passed.
 - **User Directory (/users) Feedback & Quality Remediation**:
   - `User Request`:
     1. Show employee ID below the user's name with small text.

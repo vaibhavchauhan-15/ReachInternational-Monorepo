@@ -69,6 +69,12 @@ const SUITES = [
     domain: 'Admin-Only Route Guards, Dual Auth, RLS & Composite Indexes',
   },
   {
+    name: 'Bulk Approve All Engine & Document Invariants Suite',
+    cmd: 'node',
+    args: ['tests/approvals/test-approve-all-engine.mjs'],
+    domain: 'Approve All, User Activation, Documents Pending Invariant & Parity',
+  },
+  {
     name: 'Mobile Unit & Integration Suite',
     cmd: 'node',
     args: ['apps/mobile/test/run-tests.mjs'],

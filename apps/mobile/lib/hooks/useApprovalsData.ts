@@ -13,6 +13,7 @@ import {
   getApproval,
   approvalCounts,
   decideApproval,
+  approveAll,
   cancelApproval,
 } from "@reachinternational/utils";
 import type {
@@ -20,6 +21,7 @@ import type {
   ApprovalRequest,
   ApprovalRequestListItem,
   ApprovalStatus,
+  ApprovalApproveAllResult,
 } from "@reachinternational/types";
 import { haptics } from "../haptics";
 
@@ -306,6 +308,136 @@ export function useDecideApprovalMutation() {
     },
   });
 }
+
+/**
+ * Mutation to approve all pending approval requests ("Approve All").
+ * Invariant: For user registrations, activates users immediately while keeping all user documents pending.
+ */
+export function useApproveAllMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      typeKey,
+      requestIds,
+      note,
+    }: {
+      typeKey?: string;
+      requestIds?: string[];
+      note?: string;
+    } = {}) => {
+      // 1. Dual-transport: Attempt rich Next.js API route with Bearer auth
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (token) {
+          const appUrl = getAppUrl();
+          const res = await fetch(`${appUrl}/api/approvals/approve-all`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              type_key: typeKey,
+              request_ids: requestIds,
+              note,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            return data as ApprovalApproveAllResult;
+          }
+        }
+      } catch (err) {
+        console.warn("[useApproveAllMutation] Web API call fallback to direct RPC:", err);
+      }
+
+      // 2. Direct RPC fallback
+      const { data: sessionData } = await supabase.auth.getSession();
+      const actorId = sessionData?.session?.user?.id || null;
+
+      const res = await approveAll(supabase, {
+        type_key: typeKey,
+        request_ids: requestIds,
+        note,
+        actor_id: actorId,
+      });
+
+      if (res.error) {
+        throw new Error(res.error);
+      }
+      return res.data;
+    },
+    onMutate: async ({ typeKey }) => {
+      haptics.confirm();
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
+
+      // Snapshot previous state
+      const previousLists = queryClient.getQueriesData({
+        queryKey: APPROVALS_QUERY_KEYS.lists(),
+      });
+      const previousCounts = queryClient.getQueryData<ApprovalCounts>(
+        APPROVALS_QUERY_KEYS.counts()
+      );
+
+      // Optimistically remove approved items from cached lists
+      queryClient.setQueriesData<ApprovalRequestListItem[]>(
+        { queryKey: APPROVALS_QUERY_KEYS.lists() },
+        (old) => {
+          if (!old) return [];
+          return old.filter((item) => {
+            if (typeKey && typeKey !== "all") {
+              return item.type_key !== typeKey;
+            }
+            return item.type_key !== "registration";
+          });
+        }
+      );
+
+      // Optimistically clear counts for approved type
+      queryClient.setQueryData<ApprovalCounts>(
+        APPROVALS_QUERY_KEYS.counts(),
+        (old) => {
+          if (!old) return old;
+          const newByType = { ...old.by_type };
+          if (typeKey && typeKey !== "all") {
+            newByType[typeKey] = 0;
+          } else {
+            newByType["registration"] = 0;
+          }
+          const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
+          return {
+            total: Math.max(0, newTotal),
+            by_type: newByType,
+          };
+        }
+      );
+
+      return { previousLists, previousCounts };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback on error
+      if (context?.previousLists) {
+        for (const [key, data] of context.previousLists) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      if (context?.previousCounts) {
+        queryClient.setQueryData(APPROVALS_QUERY_KEYS.counts(), context.previousCounts);
+      }
+    },
+    onSettled: () => {
+      // Invalidate queries to sync with backend truth
+      queryClient.invalidateQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
 
 /**
  * Mutation to verify an individual document directly or via its approval request
