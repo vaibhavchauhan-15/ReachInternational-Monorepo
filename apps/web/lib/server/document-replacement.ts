@@ -1,7 +1,8 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { DOC_UPLOAD, type DocType, isDocType, DOCUMENT_ERROR_MESSAGES } from "@reachinternational/utils";
-import { submitToApprovalEngineSafely } from "./approval-engine-bridge";
+import { TAGS } from "@/lib/cache/tags";
+import { revalidateTag } from "next/cache";
 import crypto from "node:crypto";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -118,56 +119,7 @@ export async function submitDocumentReplacement(
     return { success: false, error: "Uploaded replacement file is not a valid JPEG image." };
   }
 
-  // 3. Check for existing pending request: if one exists, update it with the new staging image
-  const { data: existingPending, error: pendingErr } = await adminSupabase
-    .from("document_change_requests")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("document_type_code", docType)
-    .eq("status", "pending")
-    .maybeSingle();
-
-  if (pendingErr) {
-    console.error("[Replacement] Error checking pending requests:", pendingErr);
-  }
-
-  if (existingPending) {
-    const { error: updateErr } = await adminSupabase
-      .from("document_change_requests")
-      .update({
-        staging_path: mainStagingPath,
-        staging_thumb_path: thumbFile ? thumbStagingPath : null,
-        created_at: new Date().toISOString(),
-      })
-      .eq("id", existingPending.id);
-
-    if (updateErr) {
-      console.error("[Replacement] Update existing change request error:", updateErr);
-      return { success: false, error: "Failed to update pending replacement request." };
-    }
-
-    await logAudit({
-      action: "document.replacement_updated",
-      entity_type: "document_change_request",
-      entity_id: existingPending.id,
-      user_id: userId,
-      target_user_id: userId,
-      metadata: {
-        document_type: docType,
-        staging_path: mainStagingPath,
-        request_id: existingPending.id,
-      },
-    });
-
-    return {
-      success: true,
-      approvedImmediately: false,
-      requestId: existingPending.id,
-      message: "Replacement request updated with new image and submitted for administrator review.",
-    };
-  }
-
-  // 4. Check if document type requires approval
+  // 3. Check if document type requires approval
   const { data: docTypeRow, error: typeErr } = await adminSupabase
     .from("user_document_types")
     .select("requires_approval")
@@ -254,61 +206,189 @@ export async function submitDocumentReplacement(
     };
   }
 
-  // Requires approval: create pending request in document_change_requests
-  const { data: requestRow, error: insertErr } = await adminSupabase
-    .from("document_change_requests")
-    .insert({
-      user_id: userId,
-      document_type_code: docType,
-      staging_path: mainStagingPath,
-      staging_thumb_path: thumbFile ? thumbStagingPath : null,
-      status: "pending",
-    })
-    .select("id")
-    .single();
+  // 4. Requires approval: Create or update pending change request & submit to approval queue
+  const { data: userProfile } = await adminSupabase
+    .from("users")
+    .select("id, full_name, email, phone, role, employee_id, machine_category")
+    .eq("id", userId)
+    .maybeSingle();
 
-  if (insertErr || !requestRow) {
-    console.error("[Replacement] Insert change request error:", insertErr);
-    if (insertErr?.code === "23505") {
-      return { success: false, error: DOCUMENT_ERROR_MESSAGES.DUPLICATE_PENDING_REQUEST };
-    }
-    return { success: false, error: "Failed to submit replacement request." };
+  // Check for existing pending row in document_change_requests
+  const { data: existingPending, error: pendingErr } = await adminSupabase
+    .from("document_change_requests")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("document_type_code", docType)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (pendingErr) {
+    console.error("[Replacement] Error checking pending requests:", pendingErr);
   }
 
+  let changeRequestId: string;
+
+  if (existingPending) {
+    changeRequestId = existingPending.id;
+    const { error: updateErr } = await adminSupabase
+      .from("document_change_requests")
+      .update({
+        staging_path: mainStagingPath,
+        staging_thumb_path: thumbFile ? thumbStagingPath : null,
+        status: "pending",
+        rejection_reason: null,
+        reviewed_by: null,
+        reviewed_at: null,
+        created_at: new Date().toISOString(),
+      })
+      .eq("id", changeRequestId);
+
+    if (updateErr) {
+      console.error("[Replacement] Update existing change request error:", updateErr);
+      return { success: false, error: "Failed to update pending replacement request." };
+    }
+  } else {
+    const { data: inserted, error: insertErr } = await adminSupabase
+      .from("document_change_requests")
+      .insert({
+        user_id: userId,
+        document_type_code: docType,
+        staging_path: mainStagingPath,
+        staging_thumb_path: thumbFile ? thumbStagingPath : null,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !inserted) {
+      console.error("[Replacement] Insert change request error:", insertErr);
+      if (insertErr?.code === "23505") {
+        return { success: false, error: DOCUMENT_ERROR_MESSAGES.DUPLICATE_PENDING_REQUEST };
+      }
+      return { success: false, error: "Failed to submit replacement request." };
+    }
+    changeRequestId = inserted.id;
+  }
+
+  // 5. Ensure Centralized Approval Engine ledger row is active & pending
+  const payloadData = {
+    user_id: userId,
+    document_type_code: docType,
+    staging_path: mainStagingPath,
+    staging_thumb_path: thumbFile ? thumbStagingPath : null,
+    request_id: changeRequestId,
+    file_size_bytes: fileSize,
+    mime_type: DOC_UPLOAD.mime,
+    file_name: `${docType}.jpg`,
+    full_name: userProfile?.full_name || null,
+    role: userProfile?.role || null,
+    employee_id: userProfile?.employee_id || null,
+    email: userProfile?.email || null,
+    phone: userProfile?.phone || null,
+    machine_category: userProfile?.machine_category || null,
+  };
+
+  const docLabel = docType.replace(/_/g, " ").toUpperCase();
+  const summaryText = `Document replacement request for ${docType.replace(/_/g, " ")}`;
+
+  // Check if an approval request already exists for this subject or this user & docType
+  const { data: existingApproval } = await adminSupabase
+    .from("approval_requests")
+    .select("id, version, status")
+    .eq("type_key", "document_replace")
+    .or(`subject_id.eq.${changeRequestId},and(requested_by.eq.${userId},payload->>document_type_code.eq.${docType})`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let approvalRequestId: string;
+
+  if (existingApproval) {
+    approvalRequestId = existingApproval.id;
+    const { error: appUpdateErr } = await adminSupabase
+      .from("approval_requests")
+      .update({
+        status: "pending",
+        subject_id: changeRequestId,
+        subject_label: `${docLabel} replacement`,
+        summary: summaryText,
+        payload: payloadData,
+        decision_note: null,
+        decided_by: null,
+        decided_at: null,
+        version: (existingApproval.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      })
+      .eq("id", approvalRequestId);
+
+    if (appUpdateErr) {
+      console.error("[Replacement] Error updating approval_request:", appUpdateErr);
+    }
+  } else {
+    const { data: newApproval, error: appInsertErr } = await adminSupabase
+      .from("approval_requests")
+      .insert({
+        type_key: "document_replace",
+        subject_type: "document",
+        subject_id: changeRequestId,
+        subject_label: `${docLabel} replacement`,
+        requested_by: userId,
+        status: "pending",
+        summary: summaryText,
+        payload: payloadData,
+      })
+      .select("id")
+      .single();
+
+    if (appInsertErr || !newApproval) {
+      console.error("[Replacement] Error inserting approval_request:", appInsertErr);
+      return { success: false, error: "Failed to submit approval request to administrator queue." };
+    }
+    approvalRequestId = newApproval.id;
+  }
+
+  // 6. Enqueue notification in approval_outbox for administrators
+  await adminSupabase.from("approval_outbox").insert({
+    topic: "approval.submitted",
+    request_id: approvalRequestId,
+    payload: {
+      request_id: approvalRequestId,
+      type_key: "document_replace",
+      requested_by: userId,
+      summary: summaryText,
+    },
+  });
+
+  // 7. Revalidate cache tags so admin instantly sees the approval card in queue
+  try {
+    revalidateTag(TAGS.approvals, "max");
+    revalidateTag(TAGS.approvalsList, "max");
+    revalidateTag(TAGS.approvalsCounts, "max");
+    revalidateTag(TAGS.users, "max");
+  } catch {}
+
+  // 8. Log audit trail
   await logAudit({
-    action: "document.replacement_requested",
+    action: existingPending ? "document.replacement_updated" : "document.replacement_requested",
     entity_type: "document_change_request",
-    entity_id: requestRow.id,
+    entity_id: changeRequestId,
     user_id: userId,
     target_user_id: userId,
     metadata: {
       document_type: docType,
       staging_path: mainStagingPath,
-      request_id: requestRow.id,
-    },
-  });
-
-  // Submit to Centralized Approval Engine
-  await submitToApprovalEngineSafely({
-    type_key: "document_replace",
-    subject_type: "document",
-    subject_id: requestRow.id,
-    subject_label: `${docType.toUpperCase()} replacement`,
-    requested_by: userId,
-    summary: `Document replacement request for ${docType}`,
-    payload: {
-      user_id: userId,
-      document_type_code: docType,
-      staging_path: mainStagingPath,
-      staging_thumb_path: thumbFile ? thumbStagingPath : null,
-      request_id: requestRow.id,
+      request_id: changeRequestId,
+      approval_request_id: approvalRequestId,
     },
   });
 
   return {
     success: true,
     approvedImmediately: false,
-    requestId: requestRow.id,
-    message: "Replacement request submitted for administrator review.",
+    requestId: changeRequestId,
+    message: existingPending
+      ? "Replacement request updated with new image and submitted for administrator review."
+      : "Replacement request submitted for administrator review.",
   };
 }

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs/config";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
@@ -42,6 +43,7 @@ const contentSecurityPolicy = [
   .join("; ");
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   transpilePackages: [
     "@reachinternational/design-tokens",
     "@reachinternational/permissions",

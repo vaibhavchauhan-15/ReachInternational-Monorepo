@@ -100,7 +100,7 @@ export function CareersApplyForm({ jobId, jobTitle, onSuccess }: CareersApplyFor
           body: formData,
         });
 
-        const data = await response.json();
+        const data = (await response.json()) as any;
 
         if (response.ok && data.success) {
           if (onSuccess) {

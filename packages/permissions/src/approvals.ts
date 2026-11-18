@@ -29,6 +29,7 @@ function normalizeRole(role?: string | null): UserRole | "" {
 
 /**
  * Base matrix defining allowed roles for each approval type.
+ * Queue review and decision rights are restricted strictly to admin users.
  */
 export const APPROVAL_TYPE_ROLES: Record<
   string,
@@ -40,33 +41,33 @@ export const APPROVAL_TYPE_ROLES: Record<
 > = {
   profile_change: {
     submit: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    view: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    decide: ["super_admin", "admin", "manager", "hr"],
+    view: ["super_admin", "admin"],
+    decide: ["super_admin", "admin"],
   },
   registration: {
     submit: ["super_admin", "admin", "hr", "operator"],
-    view: ["super_admin", "admin", "manager", "hr"],
-    decide: ["super_admin", "admin", "manager", "hr"],
+    view: ["super_admin", "admin"],
+    decide: ["super_admin", "admin"],
   },
   document_verify: {
     submit: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    view: ["super_admin", "admin", "hr"],
-    decide: ["super_admin", "admin", "hr"],
+    view: ["super_admin", "admin"],
+    decide: ["super_admin", "admin"],
   },
   document_replace: {
     submit: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    view: ["super_admin", "admin", "hr"],
-    decide: ["super_admin", "admin", "hr"],
+    view: ["super_admin", "admin"],
+    decide: ["super_admin", "admin"],
   },
   account_deletion: {
     submit: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    view: ["super_admin", "admin", "manager", "hr"],
+    view: ["super_admin", "admin"],
     decide: ["super_admin", "admin"],
   },
   shift_conflict: {
     submit: ["operator", "supervisor"],
-    view: ["super_admin", "admin", "manager", "supervisor", "operator"],
-    decide: ["super_admin", "admin", "manager", "supervisor"],
+    view: ["super_admin", "admin"],
+    decide: ["super_admin", "admin"],
   },
 };
 
@@ -88,7 +89,7 @@ export function canSubmitApproval(
  * Checks whether a user can view an approval request.
  * - Requesters can always view their own request.
  * - Target users can view their own request.
- * - Privileged roles matching the type's view roles can view.
+ * - Queue inspection is restricted strictly to admin users (super_admin, admin).
  */
 export function canViewApproval(
   viewer: ApprovalPermissionSubject | null | undefined,
@@ -105,22 +106,16 @@ export function canViewApproval(
   if (!role) return false;
 
   // Super admin and admin can view all requests
-  if (role === "super_admin" || role === "admin") {
-    return true;
-  }
-
-  const config = APPROVAL_TYPE_ROLES[typeKey];
-  if (!config) return false;
-
-  return config.view.includes(role);
+  return role === "super_admin" || role === "admin";
 }
 
 /**
  * Checks whether a user can decide (approve/reject) an approval request.
+ * Restricted strictly to admin users (super_admin, admin).
  * Enforces role hierarchy:
  * - Super admin can decide for all roles.
- * - Admin can decide for manager, supervisor, hr, operator, and fellow admins.
- * - Manager and HR can only decide for supervisor and operator (never admin or super_admin).
+ * - Admin cannot decide super_admin requests.
+ * - Non-admin roles (manager, supervisor, hr, operator) cannot decide.
  * - Self-approval is blocked by default unless allowSelfApprove is true.
  */
 export function canDecideApproval(
@@ -139,6 +134,11 @@ export function canDecideApproval(
   const approverRole = normalizeRole(approver.role);
   if (!approverRole) return false;
 
+  // Strictly admin users can decide
+  if (approverRole !== "super_admin" && approverRole !== "admin") {
+    return false;
+  }
+
   const config = APPROVAL_TYPE_ROLES[typeKey];
   if (!config) return false;
 
@@ -147,20 +147,10 @@ export function canDecideApproval(
     return false;
   }
 
-  // Hierarchy check on target user role
+  // Hierarchy check on target user role: admin cannot decide super_admin requests
   const targetRole = normalizeRole(target?.role);
-  if (targetRole) {
-    if (approverRole === "super_admin") {
-      return true;
-    }
-    if (approverRole === "admin") {
-      // Admin cannot decide super_admin requests
-      return targetRole !== "super_admin";
-    }
-    if (approverRole === "manager" || approverRole === "hr") {
-      // Manager/HR can only decide for supervisor and operator
-      return targetRole === "supervisor" || targetRole === "operator";
-    }
+  if (targetRole && approverRole === "admin") {
+    return targetRole !== "super_admin";
   }
 
   return true;

@@ -3,30 +3,30 @@
  * Platform-independent date, currency, string, and object helpers.
  */
 
-export * from './date';
-export * from './currency';
-export * from './string';
-export * from './slugify';
-export * from './clipboard';
-export * from './ssti';
-export * from './sanitize';
-export * from './states';
-export * from './conflict';
-export * from './operations-keys';
-export * from './operations-dates';
-export * from './client-keys';
-export * from './search';
-export * from './shift';
-export * from './maintenance';
-export * from './address';
-export * from './profile-view';
-export * from './payroll';
-export * from './shift-overlap';
-export * from './errors';
-export * from './domain-keys';
-export * from './brand';
-export * from './documents';
-export * from './machine-categories';
-export * from './approvals-client';
+export * from './date.ts';
+export * from './currency.ts';
+export * from './string.ts';
+export * from './slugify.ts';
+export * from './clipboard.ts';
+export * from './ssti.ts';
+export * from './sanitize.ts';
+export * from './states.ts';
+export * from './conflict.ts';
+export * from './operations-keys.ts';
+export * from './operations-dates.ts';
+export * from './client-keys.ts';
+export * from './search.ts';
+export * from './shift.ts';
+export * from './maintenance.ts';
+export * from './address.ts';
+export * from './profile-view.ts';
+export * from './payroll.ts';
+export * from './shift-overlap.ts';
+export * from './errors.ts';
+export * from './domain-keys.ts';
+export * from './brand.ts';
+export * from './documents.ts';
+export * from './machine-categories.ts';
+export * from './approvals-client.ts';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";

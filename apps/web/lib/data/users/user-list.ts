@@ -15,6 +15,7 @@ export interface UserListParams {
   status?: string;
   kyc?: string;
   state?: string;
+  supervisor?: string;
   dateRange?: string;
   sort?: string;
   page?: number;
@@ -230,7 +231,7 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
     supabase = createSupabaseAdminClient();
   }
 
-  const { search, role, status, kyc, state, dateRange, sort, page = 1, pageSize = USERS_PAGE_SIZE } = params;
+  const { search, role, status, kyc, state, supervisor, dateRange, sort, page = 1, pageSize = USERS_PAGE_SIZE } = params;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -294,6 +295,23 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
 
   if (state && state !== "all") {
     query = query.eq("state", state);
+  }
+
+  if (!isSupervisor && supervisor && supervisor !== "all") {
+    let assignedIds: string[] = [];
+    try {
+      const { data: supRows } = await supabase
+        .from("user_supervisors")
+        .select("user_id")
+        .eq("supervisor_id", supervisor);
+      assignedIds = (supRows || []).map((r: any) => r.user_id);
+    } catch {}
+
+    if (assignedIds.length > 0) {
+      query = query.or(`supervisor_id.eq.${supervisor},id.in.(${assignedIds.join(",")})`);
+    } else {
+      query = query.eq("supervisor_id", supervisor);
+    }
   }
 
   if (kyc && kyc !== "all") {

@@ -10,7 +10,7 @@
  * composite B-tree index scans on `(entity_id, log_date DESC)`.
  */
 
-import { getISTDateString } from "./date";
+import { getISTDateString } from "./date.ts";
 
 export interface OperationsDateRangeInput {
   month?: string | null;

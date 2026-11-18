@@ -51,6 +51,7 @@ export interface UseUsersInfiniteQueryOptions {
   roleFilter?: string;
   statusFilter?: string;
   stateFilter?: string;
+  supervisorFilter?: string;
   kycFilter?: string;
   dateRangeFilter?: string;
   sortBy?: string;
@@ -406,6 +407,7 @@ export function useUsersInfiniteQuery({
   roleFilter = 'all',
   statusFilter = 'all',
   stateFilter = 'all',
+  supervisorFilter = 'all',
   kycFilter = 'all',
   dateRangeFilter = 'all',
   sortBy = 'newest',
@@ -427,6 +429,7 @@ export function useUsersInfiniteQuery({
         role: roleFilter,
         status: statusFilter,
         state: stateFilter,
+        supervisorFilter,
         kyc: kycFilter,
         dateRange: dateRangeFilter,
         sortBy,
@@ -522,6 +525,22 @@ export function useUsersInfiniteQuery({
       // State Filter
       if (stateFilter !== 'all') {
         query = query.ilike('state', `%${stateFilter}%`);
+      }
+
+      // Supervisor Filter (when selected by Admin/HR/Manager)
+      if (!isSupervisor && supervisorFilter && supervisorFilter !== 'all') {
+        const { data: usJunction } = await supabase
+          .from('user_supervisors')
+          .select('user_id')
+          .eq('supervisor_id', supervisorFilter)
+          .abortSignal(signal);
+
+        const junctionUserIds = (usJunction || []).map((u: any) => u.user_id).filter(Boolean);
+        if (junctionUserIds.length > 0) {
+          query = query.or(`supervisor_id.eq.${supervisorFilter},id.in.(${junctionUserIds.join(',')})`);
+        } else {
+          query = query.eq('supervisor_id', supervisorFilter);
+        }
       }
 
       // KYC Filter

@@ -6,6 +6,7 @@ import {
   getUserById,
   getUserSummaryKPIs,
   getUserAssignedMachines,
+  getUserSupervisedOperators,
   getUserRunningLogs,
   getUserAssignments,
   getUserAuditLogs,
@@ -183,9 +184,18 @@ export async function GET(
 
     switch (tab) {
       case "machines": {
-        const machines = await getUserAssignedMachines(userId);
+        const targetUser = await getUserById(userId);
+        const machines = await getUserAssignedMachines(userId, targetUser?.role);
         return jsonResponse(
           { success: true, tab: "machines", machines, count: machines.length },
+          { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } }
+        );
+      }
+
+      case "operators": {
+        const operators = await getUserSupervisedOperators(userId);
+        return jsonResponse(
+          { success: true, tab: "operators", operators, count: operators.length },
           { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } }
         );
       }
@@ -267,11 +277,7 @@ export async function GET(
 
       case "overview":
       default: {
-        const [user, kpis, supervisors] = await Promise.all([
-          getUserById(userId),
-          getUserSummaryKPIs(userId),
-          getSupervisorsAction().catch(() => []),
-        ]);
+        const user = await getUserById(userId);
 
         if (!user) {
           return jsonResponse(
@@ -279,6 +285,12 @@ export async function GET(
             { status: 404 }
           );
         }
+
+        const [kpis, supervisors, operators] = await Promise.all([
+          getUserSummaryKPIs(userId, user.role),
+          getSupervisorsAction().catch(() => []),
+          user.role === "supervisor" ? getUserSupervisedOperators(userId).catch(() => []) : Promise.resolve([]),
+        ]);
 
         // PII & Compensation Masking
         const sanitizedUser: any = { ...user };
@@ -301,6 +313,7 @@ export async function GET(
             user: sanitizedUser,
             kpis,
             supervisors: Array.isArray(supervisors) ? supervisors : [],
+            operators: Array.isArray(operators) ? operators : [],
           },
           { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } }
         );
@@ -390,7 +403,7 @@ export async function POST(
       );
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const action = body?.action || "reset-password";
 
     if (action === "reset-password") {

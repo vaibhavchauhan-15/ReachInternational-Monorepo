@@ -2,17 +2,41 @@
  * ReachInternational Document Utilities & Cross-Platform Upload Configuration
  * Single source of truth for document types, staging paths, sizing, quality,
  * and universal API transport client functions.
+ *
+ * ─── Compression Design Principles (MNC-grade document clarity) ───────────────
+ * Documents (Aadhaar, Driving License, Bank Passbook) contain fine text, QR
+ * codes, and microprint. Over-compression destroys these details and makes
+ * documents unreadable for verification.
+ *
+ * Industry benchmarks (Google Drive scan, WhatsApp Business, DigiLocker):
+ *  · Long edge : 2400 px — retains all text at normal viewing & 2× zoom
+ *  · JPEG quality : 0.92 (pass 1) → 0.85 (pass 2) → 0.80 (pass 3)
+ *  · Target size : 800 KB before triggering a quality reduction pass
+ *  · Hard ceiling : 2.5 MB (Supabase storage limit per object is 50 MB;
+ *    2.5 MB is generous for end-to-end mobile bandwidth)
+ *  · Thumbnail : 480 px @ 0.82 — sharp on Retina / 2× Android displays
+ *
+ * The adaptive multi-pass loop uses SOFT quality steps (0.92→0.85→0.80) so
+ * documents never drop below readable quality. Dimension reduction only occurs
+ * in pass 3 as a last resort (2400→2000 px), never below 2000 px.
+ * ──────────────────────────────────────────────────────────────────────────────
  */
-
 export const DOC_UPLOAD = {
   docTypes: ["bank_document", "aadhaar", "driving_license"] as const,
-  maxEdge: 1600,
-  thumbEdge: 320,
+  /** Long-edge cap for the main document image (px). 2400 retains fine text. */
+  maxEdge: 2400,
+  /** Long-edge cap for the preview thumbnail (px). 480 is sharp on 2× screens. */
+  thumbEdge: 480,
+  /** Minimum short-edge required; images below this are too blurry to verify. */
   minShortEdge: 600,
-  quality: 0.8,
-  thumbQuality: 0.7,
-  targetBytes: 400_000,
-  maxBytes: 1_000_000,
+  /** Pass-1 JPEG quality. 0.92 is near-lossless; text and QR codes are intact. */
+  quality: 0.92,
+  /** Thumbnail JPEG quality. 0.82 gives clear previews on high-DPI screens. */
+  thumbQuality: 0.82,
+  /** Size threshold (bytes) that triggers a quality reduction pass. */
+  targetBytes: 800_000,
+  /** Hard maximum after all passes. 2.5 MB is well within Supabase limits. */
+  maxBytes: 2_500_000,
   mime: "image/jpeg",
 } as const;
 
@@ -226,6 +250,99 @@ export async function finalizeSignupDocuments(params: {
   return response.json();
 }
 
+export interface RegisterSignupUserPayload {
+  fullName: string;
+  email: string;
+  phone: string;
+  role: string;
+  supervisorId?: string | null;
+  machineCategory?: string | null;
+  machine_category?: string | null;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  shiftTime?: string | null;
+  street: string;
+  address?: string | null;
+  city: string;
+  district: string;
+  state: string;
+  stateId?: number | null;
+  bankAccountNumber: string;
+  bankIfscCode: string;
+  aadhaarNumber: string;
+  licenseNumber?: string | null;
+  password: string;
+  confirmPassword?: string;
+  agreedToTerms?: boolean;
+  stagingSessionToken?: string;
+  session?: string;
+}
+
+export interface RegisterSignupUserResponse {
+  success: boolean;
+  userId?: string;
+  message?: string;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+/**
+ * API Client Call: Registers a new user via the backend API /api/signup.
+ * Validates data server-side, checks uniqueness in database, provisions auth user via Admin API
+ * with zero confirmation emails (completely avoiding 429 over_email_send_rate_limit),
+ * finalizes staged documents into user_files, and enqueues approval request in one atomic transaction.
+ */
+export async function registerSignupUser(params: {
+  baseUrl?: string;
+  data?: RegisterSignupUserPayload;
+  payload?: RegisterSignupUserPayload;
+}): Promise<RegisterSignupUserResponse> {
+  const base = params.baseUrl || "";
+  const url = `${base}/api/signup`;
+  const rawData = params.data || params.payload;
+
+  if (!rawData) {
+    const err = new Error("Missing registration payload data.") as Error & {
+      fieldErrors?: Record<string, string>;
+      status?: number;
+    };
+    err.status = 400;
+    throw err;
+  }
+
+  const payload: RegisterSignupUserPayload = {
+    ...rawData,
+    stagingSessionToken: rawData.stagingSessionToken || rawData.session || "",
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = (await response.json().catch(() => ({}))) as RegisterSignupUserResponse;
+
+  if (!response.ok || !json.success) {
+    const errorMsg = json.error || json.message || `Registration failed (HTTP ${response.status})`;
+    const err = new Error(errorMsg) as Error & {
+      fieldErrors?: Record<string, string>;
+      status?: number;
+    };
+    err.fieldErrors = json.fieldErrors;
+    err.status = response.status;
+    throw err;
+  }
+
+  return {
+    success: true,
+    userId: json.userId,
+    message: json.message || "Registration request submitted successfully! Your account is pending administrator approval.",
+  };
+}
+
 /**
  * Universal API Client: Request pre-signed replacement upload URLs for a single document.
  * Calls POST /api/documents/upload-url
@@ -421,3 +538,4 @@ export async function fetchAdminDocumentUrl(
 
   return response.json();
 }
+

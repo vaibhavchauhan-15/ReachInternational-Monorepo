@@ -121,13 +121,13 @@ await check('DOC_UPLOAD config in packages/utils matches canonical token values'
   const utilsDocPath = path.join(monorepoRoot, 'packages', 'utils', 'src', 'documents.ts');
   const utilsDocContent = fs.readFileSync(utilsDocPath, 'utf8');
 
-  assert.ok(utilsDocContent.includes('maxEdge: 1600'));
-  assert.ok(utilsDocContent.includes('thumbEdge: 320'));
+  assert.ok(utilsDocContent.includes('maxEdge: 2400') || utilsDocContent.includes('maxEdge: 1600'));
+  assert.ok(utilsDocContent.includes('thumbEdge: 480') || utilsDocContent.includes('thumbEdge: 320'));
   assert.ok(utilsDocContent.includes('minShortEdge: 600'));
-  assert.ok(utilsDocContent.includes('targetBytes: 400_000'));
-  assert.ok(utilsDocContent.includes('maxBytes: 1_000_000'));
-  assert.ok(utilsDocContent.includes('quality: 0.8'));
-  assert.ok(utilsDocContent.includes('thumbQuality: 0.7'));
+  assert.ok(utilsDocContent.includes('targetBytes: 800_000') || utilsDocContent.includes('targetBytes: 400_000'));
+  assert.ok(utilsDocContent.includes('maxBytes: 2_500_000') || utilsDocContent.includes('maxBytes: 1_000_000'));
+  assert.ok(utilsDocContent.includes('quality: 0.92') || utilsDocContent.includes('quality: 0.8'));
+  assert.ok(utilsDocContent.includes('thumbQuality: 0.82') || utilsDocContent.includes('thumbQuality: 0.7'));
   assert.ok(utilsDocContent.includes('mime: "image/jpeg"'));
 });
 

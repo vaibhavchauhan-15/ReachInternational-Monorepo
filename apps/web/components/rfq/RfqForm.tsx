@@ -144,11 +144,11 @@ export function RfqForm({
       });
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
+        const errJson = (await res.json().catch(() => ({}))) as any;
         throw new Error(errJson.error || "Failed to initialize upload session.");
       }
 
-      const sessionData = await res.json();
+      const sessionData = (await res.json()) as any;
       const uploadedList: UploadedAttachment[] = [];
 
       // 2. Upload each file directly to Supabase Storage via signed URL

@@ -13,8 +13,10 @@ import type { User, UserRole } from "@/lib/types/database";
 import {
   getUserAssignedMachines,
   getUserAssignments,
+  getUserSupervisedOperators,
   type UserMachineItem,
   type UserAssignmentItem,
+  type SupervisedOperatorItem,
 } from "@/lib/data/users";
 
 export interface UserFormState {
@@ -431,6 +433,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
 
     // 4. Driving Licence validation & duplicate check
     let formattedLicense: string | null = null;
+    if (role === "operator" && !licenseNumber) {
+      return { error: "Driving licence number is required for operator accounts." };
+    }
     if (licenseNumber) {
       const licResult = validateLicenseNumber(licenseNumber);
       if (!licResult.isValid) {
@@ -1064,6 +1069,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     }
 
     let formattedLicense: string | null = null;
+    if (role === "operator" && !licenseNumber) {
+      return { error: "Driving licence number is required for operator accounts." };
+    }
     if (licenseNumber) {
       const licResult = validateLicenseNumber(licenseNumber);
       if (!licResult.isValid) {
@@ -1664,17 +1672,32 @@ export async function getMyProfileCardDetailsAction(): Promise<{
 }
 
 /**
- * Fetches fresh active assigned machines for a specific user.
+ * Fetches fresh active assigned machines for a specific user (operator, supervisor, etc.).
  * Used for dynamic refetching upon assignment modifications.
  */
 export async function getUserAssignedMachinesAction(
-  userId: string
+  userId: string,
+  role?: string
 ): Promise<{ machines: UserMachineItem[]; error?: string }> {
   try {
-    const machines = await getUserAssignedMachines(userId);
+    const machines = await getUserAssignedMachines(userId, role);
     return { machines };
   } catch (err: any) {
     return { machines: [], error: err?.message || "Failed to fetch user machines" };
+  }
+}
+
+/**
+ * Fetches all operators reporting to a specific supervisor.
+ */
+export async function getUserSupervisedOperatorsAction(
+  supervisorId: string
+): Promise<{ operators: SupervisedOperatorItem[]; error?: string }> {
+  try {
+    const operators = await getUserSupervisedOperators(supervisorId);
+    return { operators };
+  } catch (err: any) {
+    return { operators: [], error: err?.message || "Failed to fetch supervisor operators" };
   }
 }
 

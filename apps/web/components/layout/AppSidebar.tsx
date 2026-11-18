@@ -76,7 +76,7 @@ export const mainNavItems: NavItem[] = [
     href: "/approvals",
     label: "Approvals",
     icon: AnimatedCheckCheck,
-    roles: ["super_admin", "admin", "manager", "supervisor", "hr"],
+    roles: ["super_admin", "admin"],
   },
   {
     href: "/attendance",

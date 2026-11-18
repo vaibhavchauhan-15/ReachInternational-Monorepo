@@ -29,7 +29,7 @@
  * Rule: The cache key MUST contain every parameter affecting the result.
  */
 
-import { resolveOperationsDateRange } from "./operations-dates";
+import { resolveOperationsDateRange } from "./operations-dates.ts";
 
 // ─── Filter Parameter Interfaces ─────────────────────────────────────────────
 

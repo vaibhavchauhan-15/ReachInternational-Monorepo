@@ -119,14 +119,13 @@ export function getAppUrl(): string {
     return envUrl;
   }
 
-  // Production / preview: env URL must be explicitly configured
+  // Production / preview: env URL with production dashboard fallback
   if (envUrl) {
     return envUrl;
   }
 
-  throw new Error(
-    "[ENV] Critical: EXPO_PUBLIC_APP_URL is not set. Add it to apps/mobile/.env or eas.json build profile."
-  );
+  // Resilient fallback for standalone production APK/AAB builds
+  return "https://dashboard-reachinternational.vercel.app";
 }
 
 /**

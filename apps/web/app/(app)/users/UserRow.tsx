@@ -13,8 +13,9 @@ import {
   AnimatedPower,
 } from "@/components/ui/animated-icons";
 import { Button, Select, TooltipWrapper } from "@/components/ui";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
+import { Wrench } from "lucide-react";
 import type { User, UserRole } from "@/lib/types/database";
 
 const allRoleOptions = [
@@ -293,20 +294,22 @@ export const UserRow = memo(function UserRow({
         </td>
       )}
 
-      {/* 1. User Name & Employee ID */}
+      {/* 1. User Name & Employee ID (Feedback 1: show the emp id below the user's name with small text) */}
       <td className="py-3 px-4">
-        <div className="flex items-center gap-2 min-w-0">
-          {user.employee_id && (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] shrink-0 shadow-2xs">
-              {user.employee_id}
-            </span>
-          )}
+        <div className="flex flex-col min-w-0">
           <span
             className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate max-w-full"
             title={user.full_name}
           >
-            {highlightText(truncateText(user.full_name, 15), searchTerm)}
+            {highlightText(user.full_name, searchTerm)}
           </span>
+          {user.employee_id ? (
+            <span className="font-mono text-[11px] text-[var(--color-mute)] tracking-tight">
+              {highlightText(user.employee_id, searchTerm)}
+            </span>
+          ) : (
+            <span className="text-[11px] text-[var(--color-mute)] italic">—</span>
+          )}
         </div>
       </td>
 
@@ -321,8 +324,8 @@ export const UserRow = memo(function UserRow({
             ) : (
               <span className="text-[var(--color-mute)] italic">No Phone</span>
             )}
-            <span className="text-[var(--color-mute)] block max-w-[220px]" title={user.email}>
-              {highlightText(truncateText(user.email, 20), searchTerm)}
+            <span className="text-[var(--color-mute)] block max-w-[200px] truncate" title={user.email}>
+              {highlightText(user.email, searchTerm)}
             </span>
           </div>
         ) : (
@@ -340,10 +343,10 @@ export const UserRow = memo(function UserRow({
         {isSupervisedRole(user.role) ? (
           assignedSupervisors.length > 0 ? (
             <span
-              className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[240px]"
+              className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[200px]"
               title={assignedSupervisors.map((s) => s.full_name).join(", ")}
             >
-              {assignedSupervisors.map((s) => truncateText(s.full_name, 15)).join(", ")}
+              {assignedSupervisors.map((s) => s.full_name).join(", ")}
             </span>
           ) : (
             <span className="text-xs text-[var(--color-mute)] font-mono">Unassigned</span>
@@ -353,23 +356,73 @@ export const UserRow = memo(function UserRow({
         )}
       </td>
 
-      {/* 5. Location */}
-      <td className="py-3 px-4">
-        {user.city || user.location ? (
-          <span className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[160px]" title={(user.city || user.location) ?? undefined}>
-            {user.city || user.location}
-          </span>
+      {/* 5. Machine Category (Feedback 2: machine category for the operator so we can know that which machine they operate) */}
+      <td className="py-3 px-4 whitespace-nowrap">
+        {user.role === "operator" ? (
+          user.machine_category ? (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20 max-w-[150px] truncate"
+              title={user.machine_category}
+            >
+              <Wrench size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="truncate">{user.machine_category}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--color-mute)] italic">Unassigned</span>
+          )
         ) : (
           <span className="text-xs text-[var(--color-mute)] font-normal">—</span>
         )}
       </td>
 
-      {/* 5. Status Badge */}
+      {/* 6. Identity / KYC (Feedback 2: Aadhaar and driving licence number) */}
+      <td className="py-3 px-4">
+        {user.aadhaar_number || user.license_number ? (
+          <div className="flex flex-col gap-0.5 text-xs font-mono leading-tight">
+            <div className="flex items-center gap-1 text-[var(--color-ink)]">
+              <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] font-sans">Aadhaar:</span>
+              <span className="font-medium whitespace-nowrap">{user.aadhaar_number ? maskAadhaar(user.aadhaar_number) : <span className="text-[var(--color-mute)] italic font-sans font-normal">—</span>}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[var(--color-mute)] text-[11px]">
+              <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] font-sans">DL:</span>
+              <span className="truncate max-w-[130px] whitespace-nowrap" title={user.license_number ?? undefined}>
+                {user.license_number ? formatLicenseNumber(user.license_number) : <span className="italic font-sans font-normal">—</span>}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-[var(--color-mute)] font-normal">—</span>
+        )}
+      </td>
+
+      {/* 7. Location (Feedback 3: in the location column show the user city+state name, above show city and below show state) */}
+      <td className="py-3 px-4">
+        {user.city || user.state || user.location ? (
+          <div className="flex flex-col min-w-0 leading-tight">
+            <span
+              className="text-xs font-semibold text-[var(--color-ink)] truncate block max-w-[140px]"
+              title={(user.city || user.location) ?? undefined}
+            >
+              {user.city || user.location || "—"}
+            </span>
+            <span
+              className="text-[11px] text-[var(--color-mute)] truncate block max-w-[140px]"
+              title={user.state ?? undefined}
+            >
+              {user.state || "—"}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-[var(--color-mute)] font-normal">—</span>
+        )}
+      </td>
+
+      {/* 8. Status Badge */}
       <td className="py-3 px-4 whitespace-nowrap">
         {getStatusBadge(user.status)}
       </td>
 
-      {/* 6. Created Date */}
+      {/* 9. Created Date */}
       <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap">
         {formatDate(user.created_at)}
       </td>

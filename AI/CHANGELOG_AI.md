@@ -1,3 +1,176 @@
+## [2026-11-17] - Role-Based Driving Licence Enforcement & Unwanted Validation Error Eradication
+
+### Fixed & Enhanced
+- **Eradicated Unwanted Licence Document Errors**: Removed unconditional `hasLicenseDoc === false` failure in `validateSignupFormData` (`packages/validation/src/auth.ts`). Licence documents are now required strictly when `fields.role === 'operator'`. Non-operator roles (`manager`, `supervisor`, `hr`) never trigger `license_doc` or `license_number` errors.
+- **Role-Aware Section 5 Identity Verification**:
+  - For `operator`: Renders and mandates both Aadhaar Card (number + document) and Driving Licence (number + document). Both are required to operate heavy machinery (Forklifts, Booms, Reach Trucks, Scissor Lifts).
+  - For non-operators (`manager`, `supervisor`, `hr`): Section 5 displays and validates strictly Aadhaar Card (number + document), and Section 4 prompts for Bank Details. Driving Licence fields and upload cards are completely hidden, eliminating user confusion and false errors.
+- **Dynamic Role-Switching State Purge**: Switching from `operator` to a non-operator role in Web (`apps/web/app/signup/page.tsx`) and Mobile (`apps/mobile/app/(auth)/signup.tsx`) automatically clears `machine_category`, `license_number`, removes staged licence files, and clears any active licence validation errors.
+- **Section 5 Checkmark Invariant**: Updated `isSignupSection5Complete` in `@reachinternational/validation` to require both Aadhaar and DL for operators, while non-operators achieve Section 5 completion immediately upon Aadhaar completion.
+- **Zod Schemas & Server Actions**: Updated `SignupSchema`, `CreateUserSchema`, `UpdateUserSchema`, and `OnboardingProfileSchema` with conditional `.superRefine` enforcing DL strictly for operators. Server Actions (`signup`, `completeOnboardingAction`, `createUser`, `editUser`) validate DL strictly for operators and allow non-operators to pass with only Aadhaar and bank details.
+- **100% Web & Mobile Parity**: Synchronized all changes across `apps/web` and `apps/mobile` (including onboarding screens), adhering strictly to the Geist design system and native mobile touch/typography standards.
+
+### Verified
+- **Validation Test Suite**: `packages/validation/src/auth.test.ts` added; all 40/40 tests passed cleanly.
+- **Mobile Workflows Test Suite**: `apps/mobile/test/test-signup-workflows.mjs` expanded to 52/52 checks (100% passing).
+- **Full Monorepo Typecheck**: `turbo run typecheck` passed cleanly across all 7 packages (0 errors).
+- **Mobile & Monorepo Test Suites**: 357/357 mobile verification scenarios passed (100%); 27/27 monorepo suites passed (100%).
+
+---
+
+## [2026-11-17] - Cloudflare Workers Dual Deployment & Wrangler CLI Validation
+
+### Added
+- **Dual Deployment Readiness**: Configured apps/web for simultaneous deployment to both Cloudflare Workers and Vercel.
+- **OpenNext Cloudflare Adapter**: Added @opennextjs/cloudflare and wrangler with configuration in apps/web/open-next.config.ts and apps/web/wrangler.jsonc.
+- **Automated OpenNext Windows & Workerd Patcher**: Created scripts/patch-opennext.js running on postinstall to handle Windows symlink junctions, shim native C++ sharp bindings, eliminate dynamic middleware-manifest.json requires, and enforce minimal serverless mode.
+- **Cloudflare Environment Types**: Generated apps/web/cloudflare-env.d.ts using isolated Wrangler CLI typegen.
+- **New Scripts**: Added build:worker, dev:worker, preview:worker, deploy:worker, cf-typegen, and wrangler in monorepo and web package scripts.
+
+### Verified
+- **Wrangler Local Runtime**: Tested http://127.0.0.1:8787 via wrangler dev: /api/health (200 OK), / (200 OK), /careers (200 OK), /robots.txt, /sitemap.xml, /llms.txt (200 OK).
+- **Monorepo Typecheck**: pnpm typecheck clean (7/7 packages, 0 errors).
+- **Vercel Build Pipeline**: pnpm build clean (7/7 packages, 0 errors).
+
+---
+
+## [2026-11-17] - Document Lightbox Modal Duplicate Approve Button Remediation (/approvals)
+- **User Feedback**:
+  1. Remove duplicate approve button from floating overlay at `.relative > .relative > .absolute > .flex`.
+  2. Keep only the canonical action buttons in the modal footer bar at `.fixed > .relative > .flex > .flex`.
+- **Fix**: Removed the floating action overlay over the document preview canvas in `apps/web/app/(app)/approvals/components/DocumentLightboxModal.tsx`. Kept the canonical footer action buttons.
+- **Verification**: 7/7 workspace packages typecheck clean (0 errors), 44/44 exhaustive approval engine tests passed, 20/20 admin approval tests passed, 35/35 native signup/documents tests passed, 25/25 permissions tests passed.
+
+## [2026-11-17] - Document Replacement Approval Lifecycle, Admin Review Queue & Storage Cleanup
+### Added
+- Created and applied Migration 207 (`207_document_replacement_approval_lifecycle_and_cleanup.sql` and rollback) on Supabase Dev DB (`vlmxciuogczumumrwyot`).
+- Updated `public.approval_apply_document_replace` to mark `document_change_requests` as `approved` upon decision settlement.
+- Updated `public.approval_decide` to handle `document_replace` rejection, marking `document_change_requests` as `rejected` with rejection reason.
+- Reconciled existing pending rows, restoring Operator Vaibhav's bank document replacement to `status = 'pending'` in `approval_requests`.
+- Added storage cleanup in `apps/web/lib/server/approvals-outbox.ts` (`file.transfer_staged_document`): fetches `oldDoc.storage_path` and `oldDoc.thumb_path` from `user_documents` and deletes old files permanently from `user_files` storage bucket upon approval.
+- Added storage cleanup in `apps/web/lib/server/document-review.ts` for manual approval and rejection flows.
+- Added dedicated test suite `tests/approvals/test-document-replacement-lifecycle.mjs` (7/7 passed).
+
+### Changed
+- Updated `apps/web/lib/server/document-replacement.ts` (`submitDocumentReplacement`): both initial replacement and subsequent "Change Image" submissions create/update `document_change_requests` and upsert `approval_requests` with `status: 'pending'`, incremented version, and full metadata, and revalidate cache tags.
+- Verified multi-user visibility invariant: while a replacement is pending, `getUserDocumentsAction` / `user_documents` retains the approved document in `user_files`. HR, Admin, Superadmin, and Supervisor viewing `/users/[id]` see the older approved document with a "Replacement Pending Review" badge.
+- Updated `apps/web/lib/dal/approvals.ts`: unshifts replacement document to index 0 of `attachedDocs` so the replacement image is the primary inspected target.
+- Updated `apps/web/app/(app)/approvals/components/ApprovalRow.tsx`: preview thumbnail shows replacement image with "Replacing: [Document Name]" and "View Current Active" comparison button.
+- Updated `apps/web/app/(app)/approvals/ApprovalsClientShell.tsx`: wired lightbox verify and reject buttons to decide replacement requests directly.
+- Full verification: 7/7 replacement lifecycle tests, 44/44 exhaustive engine tests, 20/20 admin tests, 35/35 native signup tests, 25/25 permissions tests, 357/357 mobile tests, 0 typography violations, 0 typecheck errors across all 7 workspace packages.
+
+## [2026-11-17] - Native Mobile User Details Pages UI & Backend Parity (apps/mobile)
+### Added
+- Created dedicated route screen `apps/mobile/app/(app)/users/[id].tsx` supporting direct deep links, notifications, and profile drilldowns.
+- Registered `<Tabs.Screen name="users/[id]" />` in `apps/mobile/app/(app)/_layout.tsx`.
+- Added `logSensitiveRevealMobile` in `apps/mobile/lib/hooks/useUserDetailData.ts` for sensitive statutory audit logging (`aadhaar.reveal`, `bank_account.reveal`).
+- Added in-tab `SearchInput` across all tabs in `apps/mobile/components/users/UserDetailView.tsx`.
+- Added Statutory Identity Cards (Aadhaar with reveal toggle, Driving Licence, Banking Credentials with reveal toggle) and DPDP Act 2023 compliance notice.
+
+### Changed
+- Updated `useUserDetailMachinesInfinite` to accept `userRole` and pass it to `get_user_assigned_machines` RPC for supervised machinery fleet.
+- Updated `useUserDetailOverview` and `useUserDetailOperatorsInfinite` to resolve Employee ID (`EMP-XXXX`) to UUID seamlessly.
+- Updated `apps/mobile/app/(app)/users.tsx` to synchronize `localParams.id` and handle profile drilldowns.
+- All 43/43 mobile test suites passed (100%), 357/357 verification scenarios passed, 0 typography property violations.
+
+## [2026-11-16] Native Mobile Approvals Parity & Backend Synchronization
+
+- **Screen & Header**: Clean header matching Web on apps/mobile/app/(app)/approvals.tsx with dual custom DropdownFilterSelector dropdowns (Status with live counts, Request Type across all 7 categories) and active filter chips strip with reset.
+- **Rich Approval Cards**: MobileApprovalCard.tsx updated with 100% parity to Web ApprovalRow.tsx across all 6 canonical approval types: document_verify thumbnail card, document_replace staged file card, profile_change diffs card, account_deletion 7-day grace warning card, shift_conflict machine/shift card, and registration KYC documents strip with per-document verify/reject actions.
+- **In-App Document Viewer**: MobileDocumentViewerModal.tsx enhanced with floating action overlay (Reject Document in red outline and Approve Document in emerald) when reviewer is authorized and document is pending.
+- **Backend & Cache**: useApprovalsData.ts updated with dual-transport decide mutation (calling /api/approvals/[id]/decide with Bearer auth, fallback to RPC with p_actor_id), useVerifyDocumentMutation, useRejectDocumentMutation, optimistic cache decrements, and status=all support.
+- **Verification**: 0 raw typography property violations, 100% touch targets >= 44px, 53/53 unified approval engine tests, 357/357 mobile tests, 44/44 exhaustive tests, 20/20 admin tests, 35/35 native signup tests, 95/95 parity rules tests, and 7/7 packages clean typecheck.
+
+﻿## 2026-11-16 — Supervisor Role User Details Adaptations (/users/[id])
+
+### Summary
+1. **Database & RPC Optimization (Migration 205)**:
+   - Created and applied Migration 205 (`205_user_detail_supervisor_machines_and_operators.sql`) on Supabase Dev DB (`vlmxciuogczumumrwyot`).
+   - Added `public.get_user_assigned_machines(target_user_id UUID, user_role TEXT DEFAULT NULL)` to return direct machines and machines operated by reporting operators.
+   - Added `public.get_supervisor_operators(target_supervisor_id UUID)` to return reporting operators with active equipment, shifts, and contact details with `DISTINCT ON (u.id)` deduplication.
+   - Added `public.get_user_summary_kpis(target_user_id UUID, user_role TEXT DEFAULT NULL)` to compute role-aware metrics for operators and supervisors.
+   - Added composite performance indexes: `idx_machines_supervisor_ids_gin`, `idx_user_supervisors_sup_user`, and `idx_users_supervisor_id_role`.
+
+2. **Web Backend & DAL (`apps/web`)**:
+   - Updated `apps/web/lib/data/users/user-detail.ts` with `SupervisedOperatorItem`, extended `UserMachineItem` and `UserSummaryKPIs`, and added `getUserSupervisedOperators`.
+   - Updated `apps/web/app/actions/users.ts` and `apps/web/app/api/users/[id]/route.ts` to expose operators endpoint and role-aware machines/kpis.
+   - Optimized `apps/web/app/(app)/users/[id]/page.tsx` to parallelize data loading and skip operator shift logs/assignments for supervisor accounts.
+   - Updated `UserDetailClient.tsx`: filtered out shift logs and assignments for supervisors, updated Employment Details (shows Supervised Operators count, hides Supervisor row), updated 4-card KPI strip (Supervised Fleet, Team Operators, Supervised Shifts, KYC Documents), added assigned operator badge on machine rows, and added full responsive `<OperatorsTab>`.
+
+3. **Native Mobile App (`apps/mobile`)**:
+   - Updated `apps/mobile/lib/hooks/useUserDetailData.ts` with `useUserDetailOperatorsInfinite` and role-aware KPI/machine fetching via new RPCs.
+   - Updated `apps/mobile/components/users/UserDetailView.tsx`: filtered tab chips, updated Employment Details, adapted 4-card KPI strip, added assigned operator badge on machine cards, and rendered Operators tab panel with operator touch cards (min 44px hit targets, avatar, equipment badge, shift hours, Call, WhatsApp, View Profile).
+
+4. **Verification & Quality Gates**:
+   - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+   - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+   - Typography guard: 0 raw typography property violations (`node scripts/check-typography.mjs`).
+   - Touch/Haptics guard: Passed (`node scripts/test-touch-haptics.mjs`).
+   - Permissions tests: 25/25 passed (`pnpm --filter @reachinternational/permissions test`).
+   - Mobile test suite: 357/357 scenarios verified (`node apps/mobile/run-tests.mjs`).
+
+
+## 2026-11-16 — Approvals Queue UI/UX & Card Feedback Remediation (/approvals)
+
+### Summary
+1. **Duplicate Circular Loading Spinner Remediation (Feedback 1, 2, 3)**:
+   - Root cause: Button.tsx automatically renders its own Loader2 spinner in place of icon when loading is true or during async onClick. ApprovalRow.tsx previously also rendered a second Loader2 inside children.
+   - Fix: Removed manual spinner from children; passed icon={<CheckCircle2 size={13} />} loading={isActionLoading} for Approve, and icon={<XCircle size={13} />} loading={isRejectLoading} for Reject. Cleaned up children to plain text.
+   - Fixed modal buttons in ApprovalRejectModal.tsx, ApprovalDetailModal.tsx, ApprovalDetailPanel.tsx, and DocumentLightboxModal.tsx so all buttons strictly render ONE loading spinner.
+   - Scoped loading states per item (submittingRequestId === item.id and rejectingRequestId === item.id) in ApprovalsClientShell.tsx.
+
+2. **Custom Dropdown Selection with Color Coding (Feedback 4 & 5)**:
+   - Replaced native HTML select with custom accessible combobox featuring color-coded indicator dots (Amber for Pending, Emerald for Approved, Red for Rejected, Neutral for All Statuses), styled badge pills, pending counts, and animated popover listbox with click-outside and Escape key dismissal.
+   - Replaced native HTML select with custom dropdown combobox featuring semantic icons (Layers, UserPlus, FileCheck2, RefreshCw, UserCog, ShieldAlert, AlertTriangle), request counts per category, active checkmarks, and outside click/Escape dismissal.
+
+3. **Multi-Flow Approval Rendering Support (Feedback 6)**:
+   - Enhanced ApprovalRow.tsx to support all 6 canonical approval types:
+     - **Only Document Approvals (document_verify)**: Single-document showcase card with thumbnail, statutory verification label, status pill, and one-click inspect lightbox.
+     - **Only Document Approvals (document_replace)**: Replacement showcase card with staged file thumbnail, "Replacing [doc_type]" label, and staged status badge.
+     - **Non-Document Approvals (profile_change)**: Proposed profile modifications diff card showing changed fields with strikethrough old values (red) and new values (emerald), plus stated reason. Suppresses misleading KYC documents strip.
+     - **Non-Document Approvals (account_deletion)**: Warning card with ShieldAlert, user-stated reason, and statutory 7-day cooling off grace period notice.
+     - **Non-Document Approvals (shift_conflict)**: Operations conflict card with machine code, operator, date & shift code, and conflict note.
+     - **New Registrations (registration)**: KYC documents horizontal strip with thumbnails when documents exist, or clean "No KYC statutory documents attached yet" card when empty.
+
+4. **Quality Gates & Verification**:
+   - pnpm typecheck: 0 errors across all 7 workspace packages.
+   - node tests/approvals/test-admin-only-approvals.mjs: 20/20 passed.
+   - node tests/approvals/test-approval-engine-exhaustive.mjs: 44/44 passed.
+   - node tests/approvals/test-native-signup-approvals-and-documents.mjs: 35/35 passed.
+   - node scripts/run-all-tests.mjs: 27/27 monorepo test suites passed.
+
+---
+
+## 2026-11-16 — Native App Signup Approvals & Document Lifecycle Guarantee Re-verification (Migrations 203 & 204)
+
+### Summary
+1. **Database Triggers & Approvals Invariant Guarantee (Migration 203)**:
+   - Added PostgreSQL trigger `trg_users_auto_create_registration_approval` on `public.users` to ensure any user inserted/updated with `status = 'pending'` automatically gets a `registration` approval request enqueued.
+   - Added PostgreSQL trigger `trg_user_documents_auto_create_verification_approval` on `public.user_documents` to ensure any document inserted/updated with `verification_status = 'pending'` automatically gets a `document_verify` approval request enqueued.
+   - Enhanced `approval_apply_registration` to atomically activate user (`status = 'active'`), verify all pending initial documents (`verification_status = 'verified'`), and resolve open document verify approvals, preventing document loss.
+
+2. **Storage Policy, Enriched RPC & Rejection Lifecycle (Migration 204)**:
+   - Installed RLS policy `"Admins and HR can read doc_staging"` on `storage.objects` for the private `doc_staging` bucket so admins and HR can generate signed URLs and view staged replacement documents.
+   - Enhanced `approval_list` RPC to return complete applicant metadata (`payload JSONB`, `role TEXT`, `employee_id TEXT`, `email TEXT`, `phone TEXT`, `machine_category TEXT`) and attached documents JSONB.
+   - Enhanced `approval_decide` registration rejection handling: sets `users.status = 'inactive'`, marks initial documents `verification_status = 'rejected'`, and resolves child approvals.
+
+3. **Native Mobile App Parity & Rich Documents Strip**:
+   - Rewrote `MobileApprovalCard.tsx` to render attached documents horizontal strip with thumbnails, status pills, and tap-to-inspect viewer modal (`MobileDocumentViewerModal`).
+   - Wired quick "View Details", "Reject", and "Approve" action buttons with soft haptics.
+   - Updated `useApprovalsListQuery` with dual transport and batch thumbnail signed URL resolution.
+   - Fully hardened `ApprovalDetailBottomSheet.tsx` for all 6 approval types with document inspection.
+
+4. **Verification & Quality Gates**:
+   - `tests/approvals/test-native-signup-approvals-and-documents.mjs`: 35/35 passed cleanly.
+   - `tests/approvals/test-approval-engine-exhaustive.mjs`: 44/44 passed cleanly.
+   - `tests/approvals/test-admin-only-approvals.mjs`: 20/20 passed cleanly.
+   - `scripts/check-typography.mjs`: 0 violations across `apps/mobile/`.
+   - `scripts/test-touch-haptics.mjs`: All touch and haptic guards passed.
+   - `apps/mobile/test/index.mjs`: 43/43 suites passed cleanly.
+   - `scripts/run-all-tests.mjs`: 27/27 monorepo suites passed cleanly.
+   - `pnpm typecheck`: 0 errors across all 7 workspace packages.
+
+
 ## 2026-11-15 — Machine Category Number Removal & Section 1 Incompleteness Root Cause Fix
 
 ### Summary
@@ -20779,3 +20952,105 @@ so i can tract each and everythings"
   - Updated User Management directory (`/users` on Web and `users.tsx` on Mobile) to remove scattered approval cards and mount unified ambient notification banners linking directly to `/approvals` and `/(app)/approvals`.
   - Updated User Details (`/users/[id]` on Web and `UserDetailView.tsx` on Mobile) to remove inline verify/reject buttons and mount clean verification badges with `Review in Approvals →` navigation.
 - **Verification**: 25/25 Monorepo suites passed, 43/43 Mobile test suites passed, 44/44 exhaustive engine test assertions passed, 0 typecheck errors across all 7 packages, 0 raw typography instances.
+
+## [2026-11-16] - Admin-Only Approvals Page Access, Route Hardening & Scalability Optimization
+- **Database & Migrations (`supabase/migrations/`)**:
+  - Authored and applied `202_admin_only_approvals_optimization.sql` to Dev Supabase (`vlmxciuogczumumrwyot`).
+  - Added multi-column composite indexes across statuses (`status, created_at DESC, id DESC`), types (`status, type_key, created_at DESC`), and decisions (`approver_id, created_at DESC`).
+  - Hardened RLS policies on `public.approval_requests`, `public.approval_decisions`, and `public.approval_events`.
+  - Updated RPCs `approval_list`, `approval_counts`, and `approval_decide` to strictly restrict review queue and counts to `super_admin` and `admin`.
+  - Authored rollback script `202_rollback_admin_only_approvals_optimization.sql`.
+- **Shared Permissions (`packages/permissions/`)**:
+  - Restricted `APPROVAL_TYPE_ROLES` view and decide matrices strictly to `["super_admin", "admin"]`.
+  - `canDecideApproval` enforces admin role, prevents self-approval, and blocks `admin` from deciding `super_admin` requests.
+  - Restricted `approvals` nav item in `NAV_ITEMS` to `roles: ["super_admin", "admin"]`.
+- **Web Navigation, UI, DAL & API Routes (`apps/web/`)**:
+  - `app/(app)/approvals/page.tsx` protected with `await requireRole("admin")`.
+  - Restricted Approvals nav item in `AppSidebar.tsx` and `CommandPalette.tsx` to `roles: ["super_admin", "admin"]`.
+  - Authored dual-auth helper `apps/web/lib/server/approvals-auth.ts` supporting Cookie session (Web) and Bearer token (Mobile).
+  - Hardened DAL `apps/web/lib/dal/approvals.ts` and Server Actions `apps/web/app/actions/approvals.ts` with explicit projections (zero `SELECT *`).
+  - Hardened all 5 API routes under `apps/web/app/api/approvals/` with dual auth and admin role enforcement.
+- **Native Mobile App (`apps/mobile/`)**:
+  - Protected `app/(app)/approvals.tsx` with `PermissionDeniedView` (`requiredRoles={["super_admin", "admin"]}`) for non-admin roles; disabled network queries when unauthorized.
+  - Restricted quick access item `nav-approvals` to `['super_admin', 'admin']`.
+  - Guarded Approvals ambient review banner in `users.tsx` for admin roles.
+- **Verification & Quality Gates**:
+  - 27/27 monorepo test suites passed cleanly.
+  - 43/43 mobile test suites passed cleanly.
+  - 0 TypeScript errors across all 7 workspace packages.
+  - 0 raw typography property violations.
+
+## 2026-11-16 — Document Compression Engine Optimization (MNC-grade clarity)
+
+### Problem
+Uploaded identity documents (Aadhaar, Driving License, Bank Passbook) appeared blurry and unreadable due to over-aggressive compression in the multi-pass adaptive pipeline.
+
+### Root Causes Fixed
+- maxEdge: 1600 px → too small; fine text became pixelated at zoom
+- quality: 0.8 → 0.7 → quality floor too low; destroyed QR codes and microprint
+- 	argetBytes: 400 KB → trigger too tight; forced 2–3 quality degradation passes on every upload
+- maxBytes: 1 MB → ceiling too low; forced unnecessary quality sacrifices
+- 	humbEdge: 320 px @ 0.7 → blurry thumbnails on Retina / 2× Android displays
+
+### Changes Made
+| File | Change |
+|------|--------|
+| packages/utils/src/documents.ts | maxEdge 1600→2400, quality 0.80→0.92, 	humbQuality 0.70→0.82, 	argetBytes 400KB→800KB, maxBytes 1MB→2.5MB, 	humbEdge 320→480 |
+| pps/web/lib/utils/image-compression.ts | 3-pass: 2400px@0.92 → 2400px@0.85 → 2000px@0.80; thumb 480px@0.82; ceiling 2.5MB |
+| pps/mobile/lib/utils/mobileImageCompression.ts | Same 3-pass soft-quality strategy; DOC_UPLOAD constants drive all values |
+| pps/web/lib/utils/document-upload-validation.ts | Pre-compression file gate raised to 5 MB (raw upload); post-compression ceiling 2.5 MB |
+| pps/mobile/components/documents/MobileDocumentUploadCard.tsx | UI copy updated: "≤2400px · High-quality JPEG" |
+
+### Verification
+- pnpm --filter @reachinternational/utils typecheck → exit 0 ✅
+- pnpm --filter @reachinternational/web typecheck → exit 0 ✅
+- pnpm --filter @reachinternational/mobile typecheck → exit 0 ✅
+
+## [2026-11-17] Native App Signup 429 "Too Many Requests" & Pre-Flight Validation Enforcement
+- **Root Cause 1 Resolved**: Eliminated GoTrue 429 `over_email_send_rate_limit` by moving user creation from client `supabase.auth.signUp()` to server-side `adminSupabase.auth.admin.createUser({ email, password, email_confirm: true, user_metadata })`. Pre-confirming the email bypasses outgoing confirmation emails while maintaining `pending` status in `public.users` for Administrator review.
+- **Root Cause 2 Resolved**: Client-side pre-flight validation enforced on both Mobile (`apps/mobile/app/(auth)/signup.tsx`) and Web (`apps/web/app/signup/page.tsx`). Clicking "Request Platform Access" immediately runs canonical `validateSignupFormData`; if any field is invalid or missing, field errors are shown, haptics fire, error section is scrolled to, and the flow returns without making any POST request.
+- **Universal Registration Endpoint**: Created `apps/web/lib/server/signup-user.ts` (`registerNewUserServer`) and `POST /api/signup` (`apps/web/app/api/signup/route.ts`).
+- **Monorepo Packages Updated**:
+  - `@reachinternational/validation`: Enhanced `validateSignupFormData` to rigorously validate all 20+ fields (names, email, 10-digit phone with +91/0 normalization, role, supervisor, machine category, shift times, address, city, district, state, bank account, IFSC, bank document ready flag, 12-digit Aadhaar, Aadhaar document ready flag, driving licence, password complexity, confirm password, terms).
+  - `@reachinternational/utils`: Added universal `registerSignupUser` client helper.
+- **Verification**: `pnpm typecheck` (7/7 clean), `node scripts/check-typography.mjs` (0 violations), `node scripts/test-touch-haptics.mjs` (100% pass), `apps/mobile/run-tests.mjs` (357/357 pass), `apps/mobile/test/test-signup-workflows.mjs` (48/48 pass), `tests/approvals/test-native-signup-approvals-and-documents.mjs` (35/35 pass).
+
+
+## [2026-11-17] Approval Requests Normalization, Deduplication & Multi-Document Consolidation
+
+### Context & Problem Statement
+On user registration, 3 separate "Document Initial Verification" approval request cards were generated alongside the "New User Registration" request card. Because the registration card already contains all attached documents and allows reviewing/approving/rejecting them, these 3 document cards were redundant duplicates. Furthermore, when active users uploaded multiple documents, separate cards were created for each document rather than consolidating them into a single request.
+
+### Changes Made
+1. **Database Migration 209 (`supabase/migrations/209_normalize_and_deduplicate_approval_requests.sql` & rollback)**:
+   - Updated trigger `public.trg_auto_create_document_verification_approval()` on `public.user_documents`:
+     - Skips creating separate `document_verify` requests when `users.status = 'pending'` or when an open `registration` approval request exists.
+     - For active users uploading documents: checks if an open `document_verify` request already exists for the user; if so, appends the document to `pending_document_ids` and updates the summary/subject line rather than inserting a duplicate row.
+   - Enhanced `public.approval_apply_document_verify(p_request_id UUID)` to verify all documents in `pending_document_ids` in a single atomic transaction.
+   - Enhanced `public.approval_decide` rejection logic to mark all documents in `pending_document_ids` as `rejected`.
+   - Applied migration to Reach International Dev DB (`vlmxciuogczumumrwyot`) and cleaned up orphan duplicate requests.
+2. **Shared Packages (`packages/types`, `packages/validation`)**:
+   - `packages/types/src/approvals.ts`: Added `bound_request_ids?: string[]` to `ApprovalRequestListItem`.
+   - `packages/validation/src/approvals.ts`: Added `bound_request_ids: z.array(z.string().uuid()).optional()` to `ApprovalDecideInputSchema`.
+3. **Data Access Layer (`apps/web/lib/dal/approvals.ts`)**:
+   - Suppresses standalone document requests if a pending registration request exists for the same user and binds their IDs to `bound_request_ids`.
+   - Groups multiple pending `document_verify` or `document_replace` requests for the same active user into a single consolidated card.
+4. **Server Actions (`apps/web/app/actions/approvals.ts`)**:
+   - In `decideApprovalAction`: if `bound_request_ids` is present, settles all bound requests in parallel via `Promise.allSettled`.
+5. **Web UI (`apps/web/app/(app)/approvals/components/ApprovalRow.tsx` & `ApprovalsClientShell.tsx`)**:
+   - Multi-document carousel rendering for multi-document verification cards.
+   - Passes `bound_request_ids` during approval/rejection.
+6. **Native Mobile UI (`apps/mobile/components/approvals/MobileApprovalCard.tsx`, `apps/mobile/app/(app)/approvals.tsx`, `apps/mobile/lib/hooks/useApprovalsData.ts`)**:
+   - 100% Web/Mobile parity: renders multi-document carousel with thumbnails, status pills, and review actions.
+   - Passes `boundRequestIds` on card decisions.
+7. **Verification**:
+   - `tests/approvals/test-approval-normalization-and-deduplication.mjs`: 16/16 passed.
+   - `tests/approvals/test-approval-engine-exhaustive.mjs`: 44/44 passed.
+   - `tests/approvals/test-admin-only-approvals.mjs`: 20/20 passed.
+   - `tests/approvals/test-document-replacement-lifecycle.mjs`: 10/10 passed.
+   - `tests/approvals/test-native-signup-approvals-and-documents.mjs`: 35/35 passed.
+   - `node scripts/check-typography.mjs`: 0 raw typography properties.
+   - `node scripts/test-touch-haptics.mjs`: 100% passed.
+   - `node apps/mobile/run-tests.mjs`: 357/357 passed.
+   - `node scripts/run-all-tests.mjs`: 27/27 suites passed.
+   - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).

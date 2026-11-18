@@ -4,7 +4,7 @@
  * into human-readable titles, severity ratings, compliance risk advisories, and supervisor resolution guidance.
  */
 
-import { formatShiftTimingRange, parseTimeToMinutes } from './date';
+import { formatShiftTimingRange, parseTimeToMinutes } from './date.ts';
 
 export interface ConflictLogMeta {
   machineCode?: string;

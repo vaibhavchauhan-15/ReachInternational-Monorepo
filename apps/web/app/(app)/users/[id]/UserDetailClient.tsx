@@ -13,6 +13,7 @@ import {
   ExternalLink,
   RotateCcw,
   MoreVertical,
+  Users,
 } from "lucide-react";
 import {
   AnimatedUser,
@@ -61,6 +62,7 @@ import {
   getUserDetailAction,
   getUserAssignedMachinesAction,
   getUserAssignmentsAction,
+  getUserSupervisedOperatorsAction,
 } from "@/app/actions/users";
 import {
   getDocumentViewUrlAction,
@@ -80,9 +82,10 @@ import type {
   UserAssignmentItem,
   UserAuditItem,
   UserSummaryKPIs,
+  SupervisedOperatorItem,
 } from "@/lib/data/users";
 
-export type UserDetailTabKey = "machines" | "logs" | "assignments" | "attendance" | "documents" | "audit";
+export type UserDetailTabKey = "machines" | "operators" | "logs" | "assignments" | "attendance" | "documents" | "audit";
 
 export interface UserDetailClientProps {
   user: User;
@@ -97,6 +100,7 @@ export interface UserDetailClientProps {
   documents: UserDocument[];
   documentTypes: DocumentType[];
   supervisors?: Array<{ value: string; label: string; description?: string }>;
+  operators?: SupervisedOperatorItem[];
 }
 
 function formatShiftTime(timeStr?: string | null): string {
@@ -198,6 +202,7 @@ export function UserDetailClient({
   documents,
   documentTypes,
   supervisors = [],
+  operators: initialOperators = [],
 }: UserDetailClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -205,6 +210,7 @@ export function UserDetailClient({
   const [user, setUser] = useState<User>(initialUser);
   const [machines, setMachines] = useState<UserMachineItem[]>(initialMachines);
   const [assignments, setAssignments] = useState<UserAssignmentItem[]>(initialAssignments);
+  const [operators, setOperators] = useState<SupervisedOperatorItem[]>(initialOperators);
   const [activeTab, setActiveTab] = useState<UserDetailTabKey>("machines");
   const [tabSearch, setTabSearch] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -215,6 +221,31 @@ export function UserDetailClient({
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectModalDoc, setRejectModalDoc] = useState<UserDocument | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState("");
+
+  const availableTabs = useMemo(() => {
+    const tabs: Array<{ key: UserDetailTabKey; label: string; count?: number }> = [
+      { key: "machines", label: "Machines", count: machines.length },
+    ];
+
+    if (user.role === "supervisor") {
+      tabs.push({ key: "operators", label: "Operators", count: operators.length });
+    } else if (user.role === "operator") {
+      tabs.push({ key: "logs", label: "Running Logs", count: runningLogs.length });
+      tabs.push({ key: "assignments", label: "Assignments", count: assignments.length });
+      tabs.push({ key: "attendance", label: "Attendance" });
+    }
+
+    tabs.push({ key: "documents", label: "KYC & Documents", count: docList.length });
+    tabs.push({ key: "audit", label: "Audit Trail", count: auditLogs.length });
+
+    return tabs;
+  }, [user.role, machines.length, operators.length, runningLogs.length, assignments.length, docList.length, auditLogs.length]);
+
+  useEffect(() => {
+    if (!availableTabs.some((t) => t.key === activeTab)) {
+      setActiveTab("machines");
+    }
+  }, [availableTabs, activeTab]);
 
   useEffect(() => {
     setDocList(documents);
@@ -232,13 +263,19 @@ export function UserDetailClient({
     setAssignments(initialAssignments);
   }, [initialAssignments]);
 
+  useEffect(() => {
+    setOperators(initialOperators);
+  }, [initialOperators]);
+
   const handleRefreshUserData = useCallback(async () => {
     try {
-      const [detailRes, machinesRes, assignmentsRes, docsRes] = await Promise.all([
+      const isSup = user.role === "supervisor";
+      const [detailRes, machinesRes, assignmentsRes, docsRes, opsRes] = await Promise.all([
         getUserDetailAction(user.id),
-        getUserAssignedMachinesAction(user.id),
+        getUserAssignedMachinesAction(user.id, user.role),
         getUserAssignmentsAction(user.id),
         getUserDocumentsAction(user.id).catch(() => []),
+        isSup ? getUserSupervisedOperatorsAction(user.id).catch(() => ({ operators: [] })) : Promise.resolve({ operators: [] }),
       ]);
 
       if (detailRes.user) {
@@ -253,12 +290,15 @@ export function UserDetailClient({
       if (Array.isArray(docsRes)) {
         setDocList(docsRes);
       }
+      if (opsRes.operators) {
+        setOperators(opsRes.operators);
+      }
     } catch (err) {
       console.error("Failed to refresh user data", err);
     } finally {
       router.refresh();
     }
-  }, [user.id, router]);
+  }, [user.id, user.role, router]);
 
   // Modals & Action States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -563,9 +603,28 @@ export function UserDetailClient({
         m.machine_id.toLowerCase().includes(q) ||
         m.machine_name.toLowerCase().includes(q) ||
         m.model.toLowerCase().includes(q) ||
-        (m.serial_number && m.serial_number.toLowerCase().includes(q))
+        (m.serial_number && m.serial_number.toLowerCase().includes(q)) ||
+        (m.assigned_operator_name && m.assigned_operator_name.toLowerCase().includes(q)) ||
+        (m.assigned_operator_code && m.assigned_operator_code.toLowerCase().includes(q))
     );
   }, [machines, tabSearch]);
+
+  const filteredOperators = useMemo(() => {
+    if (!tabSearch.trim()) return operators;
+    const q = tabSearch.toLowerCase().trim();
+    return operators.filter(
+      (op) =>
+        op.full_name.toLowerCase().includes(q) ||
+        (op.employee_id && op.employee_id.toLowerCase().includes(q)) ||
+        (op.phone && op.phone.toLowerCase().includes(q)) ||
+        (op.email && op.email.toLowerCase().includes(q)) ||
+        (op.machine_category && op.machine_category.toLowerCase().includes(q)) ||
+        (op.active_machine_name && op.active_machine_name.toLowerCase().includes(q)) ||
+        (op.active_machine_code && op.active_machine_code.toLowerCase().includes(q)) ||
+        (op.city && op.city.toLowerCase().includes(q)) ||
+        (op.state && op.state.toLowerCase().includes(q))
+    );
+  }, [operators, tabSearch]);
 
   const filteredLogs = useMemo(() => {
     if (!tabSearch.trim()) return runningLogs;
@@ -1122,14 +1181,29 @@ export function UserDetailClient({
               </span>
             </div>
 
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervisor</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {assignedSupervisors.length > 0
-                  ? assignedSupervisors.map((s) => s.full_name).join(", ")
-                  : "Unassigned"}
-              </span>
-            </div>
+            {user.role === "operator" && (
+              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervisor</span>
+                <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
+                  {assignedSupervisors.length > 0
+                    ? assignedSupervisors.map((s) => s.full_name).join(", ")
+                    : "Unassigned"}
+                </span>
+              </div>
+            )}
+
+            {user.role === "supervisor" && (
+              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervised Operators</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("operators")}
+                  className="font-semibold text-[var(--color-link)] hover:underline break-words sm:text-right cursor-pointer text-left"
+                >
+                  {operators.length} {operators.length === 1 ? "operator" : "operators"} assigned
+                </button>
+              </div>
+            )}
 
             {user.role === "operator" && (
               <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
@@ -1223,91 +1297,17 @@ export function UserDetailClient({
         </div>
       </div>
 
-      {/* ─── 4. 4-CARD KPI METRICS STRIP ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Metric 1: Assigned Fleet Machinery */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Assigned Fleet
-            </span>
-            <AnimatedTruck size={16} className="text-sky-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {kpis.assignedMachinesCount}
-          </div>
-        </div>
-
-        {/* Metric 2: Total Shift Running Hours */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Running Hours
-            </span>
-            <AnimatedClock size={16} className="text-emerald-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {kpis.totalRunningHours.toFixed(1)} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">hrs</span>
-          </div>
-        </div>
-
-        {/* Metric 3: Total Work Days Logged */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              Work Days
-            </span>
-            <AnimatedCalendarClock size={16} className="text-amber-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {kpis.totalDaysWorked} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">days</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Verified KYC Documents */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-1 transition-all hover:border-[var(--color-link)]/40 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-              KYC Documents
-            </span>
-            <AnimatedFileText size={16} className="text-teal-500 shrink-0" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-[var(--color-ink)]">
-            {kpis.documentsCount} <span className="text-xs font-normal font-sans text-[var(--color-mute)]">files</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── 5. TAB STRIP & SEARCH TOOLBAR ─── */}
+      {/* ─── 4. TAB STRIP & SEARCH TOOLBAR ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">
         {/* Scrollable Tab Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap -mx-2 px-2 sm:mx-0 sm:px-0 py-0.5">
-          {[
-            { key: "machines", label: "Machines", count: machines.length },
-            { key: "logs", label: "Running Logs", count: runningLogs.length },
-            { key: "assignments", label: "Assignments", count: assignments.length },
-            { key: "attendance", label: "Attendance" },
-            { key: "documents", label: "KYC & Documents", count: documents.length },
-            { key: "audit", label: "Audit Trail", count: auditLogs.length },
-          ].map((tab) => {
+          {availableTabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key as UserDetailTabKey)}
+                onClick={() => setActiveTab(tab.key)}
                 className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
                   isActive
                     ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-xs ring-1 ring-[var(--color-ink)]"
@@ -1359,13 +1359,13 @@ export function UserDetailClient({
 
       {/* ─── 6. TAB CONTENT PANELS ─── */}
 
-      {/* TAB 1: Assigned Machinery Fleet */}
+      {/* TAB 1: Assigned / Supervised Machinery Fleet */}
       {activeTab === "machines" && (
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
               <AnimatedTruck size={16} className="text-sky-500" />
-              <span>Assigned Machinery Fleet</span>
+              <span>{user.role === "supervisor" ? "Supervised Machinery Fleet" : "Assigned Machinery Fleet"}</span>
             </h3>
             <div className="flex items-center gap-2.5">
               <span className="text-xs text-[var(--color-mute)]">
@@ -1389,7 +1389,7 @@ export function UserDetailClient({
             <div className="py-12 text-center flex flex-col items-center">
               <EmptyState
                 title="No Machines Found"
-                description={tabSearch ? "No assigned machines match your search." : "No machinery currently assigned to this user."}
+                description={tabSearch ? "No assigned machines match your search." : user.role === "supervisor" ? "No machinery currently under supervision for this user or their operators." : "No machinery currently assigned to this user."}
               />
               {canManage && user.role === "operator" && !tabSearch && (
                 <div className="mt-3">
@@ -1414,6 +1414,7 @@ export function UserDetailClient({
                     <tr>
                       <th className="py-2.5 px-3">Machine ID</th>
                       <th className="py-2.5 px-3">Name / Model</th>
+                      {user.role === "supervisor" && <th className="py-2.5 px-3">Assigned Operator</th>}
                       <th className="py-2.5 px-3">Serial Number</th>
                       <th className="py-2.5 px-3">Manufacturer</th>
                       <th className="py-2.5 px-3">Hour Meter</th>
@@ -1431,6 +1432,20 @@ export function UserDetailClient({
                           <div className="font-semibold text-[var(--color-ink)]">{m.machine_name}</div>
                           <div className="text-[10px] text-[var(--color-mute)]">{m.model}</div>
                         </td>
+                        {user.role === "supervisor" && (
+                          <td className="py-2.5 px-3">
+                            {m.assigned_operator_name ? (
+                              <div>
+                                <div className="font-semibold text-[var(--color-ink)]">{m.assigned_operator_name}</div>
+                                {m.assigned_operator_code && (
+                                  <div className="font-mono text-[10px] text-[var(--color-mute)]">{m.assigned_operator_code}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[var(--color-mute)] italic">Unassigned</span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-2.5 px-3 font-mono text-[var(--color-mute)]">
                           {m.serial_number || "—"}
                         </td>
@@ -1478,6 +1493,15 @@ export function UserDetailClient({
                       </span>
                     </div>
                     <div className="font-semibold text-[var(--color-ink)]">{m.machine_name} ({m.model})</div>
+                    {user.role === "supervisor" && m.assigned_operator_name && (
+                      <div className="text-[11px] text-[var(--color-mute)]">
+                        <span>Operator: </span>
+                        <span className="font-semibold text-[var(--color-ink)]">{m.assigned_operator_name}</span>
+                        {m.assigned_operator_code && (
+                          <span className="font-mono text-[10px] text-[var(--color-mute)] ml-1">({m.assigned_operator_code})</span>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)] pt-1 border-t border-[var(--color-hairline)]">
                       <span>Meter: {m.hour_meter != null ? `${m.hour_meter} h` : "—"}</span>
                       <Link href={`/machines/${m.id}`} className="text-[var(--color-link)] font-semibold flex items-center gap-1">
@@ -1487,6 +1511,284 @@ export function UserDetailClient({
                     </div>
                   </div>
                 ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB: Supervised Operators (Supervisor Role Only) */}
+      {activeTab === "operators" && user.role === "supervisor" && (
+        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
+              <Users size={16} className="text-teal-500" />
+              <span>Supervised Operators</span>
+            </h3>
+            <span className="text-xs text-[var(--color-mute)]">
+              Showing {filteredOperators.length} of {operators.length} operators
+            </span>
+          </div>
+
+          {filteredOperators.length === 0 ? (
+            <div className="py-12 text-center flex flex-col items-center">
+              <EmptyState
+                title={tabSearch ? "No Operators Found" : "No Operators Assigned"}
+                description={
+                  tabSearch
+                    ? `No operators under this supervisor match "${tabSearch}".`
+                    : "No operators are currently assigned to report to this supervisor."
+                }
+              />
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                    <tr>
+                      <th className="py-2.5 px-3">Operator</th>
+                      <th className="py-2.5 px-3">Contact</th>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3">Current Equipment</th>
+                      <th className="py-2.5 px-3">Shift Hours</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Profile</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-hairline)]">
+                    {filteredOperators.map((op) => {
+                      const cleanOpPhone = (op.phone || "").replace(/[^0-9+]/g, "");
+                      const opWhatsappUrl = cleanOpPhone
+                        ? `https://wa.me/${cleanOpPhone.replace("+", "")}?text=${encodeURIComponent(
+                            `Hello ${op.full_name}, regarding operations under supervisor ${user.full_name}.`
+                          )}`
+                        : "";
+                      const shiftStr = op.shift_start_time && op.shift_end_time
+                        ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
+                        : "Standard";
+
+                      return (
+                        <tr key={op.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors group">
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-300/60 dark:border-amber-800/60">
+                                <span>{getInitials(op.full_name)}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <Link
+                                  href={`/users/${op.employee_id || op.id}`}
+                                  className="font-semibold text-[var(--color-ink)] hover:text-[var(--color-link)] transition-colors truncate block"
+                                >
+                                  {op.full_name}
+                                </Link>
+                                <div className="flex items-center gap-1 font-mono text-[10px] text-[var(--color-mute)]">
+                                  <span>{op.employee_id || `ID: ${op.id.slice(0, 8)}`}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="space-y-0.5">
+                              {op.phone ? (
+                                <div className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-ink)]">
+                                  <AnimatedPhone size={11} className="text-teal-500 shrink-0" />
+                                  <a href={`tel:${cleanOpPhone}`} className="hover:underline">
+                                    {op.phone}
+                                  </a>
+                                  {opWhatsappUrl && (
+                                    <a
+                                      href={opWhatsappUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-600 dark:text-emerald-400 hover:opacity-80 ml-0.5"
+                                      title="WhatsApp chat"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[var(--color-mute)]">—</span>
+                              )}
+                              {op.email && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-mute)] truncate max-w-[180px]">
+                                  <AnimatedMail size={11} className="text-sky-500 shrink-0" />
+                                  <span className="truncate">{op.email}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {op.machine_category ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80">
+                                {formatMachineCategoryLabel(op.machine_category)}
+                              </span>
+                            ) : (
+                              <span className="text-[var(--color-mute)]">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {op.active_machine_code ? (
+                              <div className="space-y-0.5">
+                                <Link
+                                  href={`/machines/${op.active_machine_id}`}
+                                  className="font-mono font-bold text-[11px] text-[var(--color-link)] hover:underline block"
+                                >
+                                  {op.active_machine_code}
+                                </Link>
+                                <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[160px]">
+                                  {op.active_machine_name}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)]">
+                                Unassigned
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-[11px] text-[var(--color-mute)]">
+                            {shiftStr}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                op.status === "active"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                              }`}
+                            >
+                              {op.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <Link
+                              href={`/users/${op.employee_id || op.id}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-link)] hover:underline"
+                            >
+                              <span>View</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Tablet & Mobile Touch Cards View */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:hidden">
+                {filteredOperators.map((op) => {
+                  const cleanOpPhone = (op.phone || "").replace(/[^0-9+]/g, "");
+                  const opWhatsappUrl = cleanOpPhone
+                    ? `https://wa.me/${cleanOpPhone.replace("+", "")}?text=${encodeURIComponent(
+                        `Hello ${op.full_name}, regarding operations under supervisor ${user.full_name}.`
+                      )}`
+                    : "";
+                  const shiftStr = op.shift_start_time && op.shift_end_time
+                    ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
+                    : "Standard";
+
+                  return (
+                    <div
+                      key={op.id}
+                      className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs space-y-3 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-sm border border-amber-300/60 dark:border-amber-800/60">
+                            <span>{getInitials(op.full_name)}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <Link
+                              href={`/users/${op.employee_id || op.id}`}
+                              className="font-bold text-sm text-[var(--color-ink)] hover:text-[var(--color-link)] transition-colors truncate block"
+                            >
+                              {op.full_name}
+                            </Link>
+                            <span className="font-mono text-[10px] text-[var(--color-mute)]">
+                              {op.employee_id || `ID: ${op.id.slice(0, 8)}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize shrink-0 ${
+                            op.status === "active"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          {op.status}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs text-[var(--color-mute)] border-t border-[var(--color-hairline)]/60 pt-2">
+                        {op.active_machine_code && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px]">Equipment:</span>
+                            <Link
+                              href={`/machines/${op.active_machine_id}`}
+                              className="font-mono font-bold text-xs text-[var(--color-link)] hover:underline truncate"
+                            >
+                              {op.active_machine_code} - {op.active_machine_name}
+                            </Link>
+                          </div>
+                        )}
+
+                        {op.machine_category && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px]">Category:</span>
+                            <span className="font-semibold text-[var(--color-ink)]">
+                              {formatMachineCategoryLabel(op.machine_category)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px]">Shift:</span>
+                          <span className="font-medium text-[var(--color-ink)]">{shiftStr}</span>
+                        </div>
+                      </div>
+
+                      {/* Touch Quick Actions */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--color-hairline)]/60">
+                        <div className="flex items-center gap-2">
+                          {cleanOpPhone && (
+                            <a
+                              href={`tel:${cleanOpPhone}`}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-teal-600 dark:text-teal-400 hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
+                              title="Call Operator"
+                            >
+                              <AnimatedPhone size={14} />
+                            </a>
+                          )}
+                          {opWhatsappUrl && (
+                            <a
+                              href={opWhatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-emerald-600 dark:text-emerald-400 hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
+                              title="Chat on WhatsApp"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+
+                        <Link
+                          href={`/users/${op.employee_id || op.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-ink)] text-[var(--color-canvas)] hover:opacity-90 transition-opacity shadow-2xs"
+                        >
+                          <span>View Profile</span>
+                          <AnimatedChevronLeft size={12} className="rotate-180" />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -1701,8 +2003,8 @@ export function UserDetailClient({
         </div>
       )}
 
-      {/* TAB 4: Attendance Overview & Deep Link */}
-      {activeTab === "attendance" && (
+      {/* TAB 4: Attendance Overview & Deep Link (Operator Role Only) */}
+      {activeTab === "attendance" && user.role === "operator" && (
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-5 sm:p-6 shadow-2xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[var(--color-hairline)]">
             <div className="space-y-1">
@@ -1917,7 +2219,7 @@ export function UserDetailClient({
                           ) : (doc.thumb_signed_url || doc.signed_url) ? (
                             <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
                               <img
-                                src={doc.thumb_signed_url || doc.signed_url || ""}
+                                src={(doc.thumb_signed_url || doc.signed_url)!}
                                 alt={docType?.label || "Document preview"}
                                 className="h-full w-full object-cover"
                                 loading="lazy"

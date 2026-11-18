@@ -185,8 +185,14 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
   // Section 5: Identity & Verification (Mandatory)
   const section5Complete = useMemo(() => {
     const clean = formValues.aadhaar_number.replace(/\D/g, "");
-    return Boolean(clean.length === 12 && validateAadhaarNumber(clean).isValid);
-  }, [formValues.aadhaar_number]);
+    const aadhaarOk = Boolean(clean.length === 12 && validateAadhaarNumber(clean).isValid);
+    if (!aadhaarOk) return false;
+    if (isOperator) {
+      const licClean = formValues.license_number.trim();
+      return Boolean(licClean && validateLicenseNumber(licClean).isValid);
+    }
+    return true;
+  }, [formValues.aadhaar_number, formValues.license_number, isOperator]);
 
   // Combined completeness guard for submission gating
   const isAllMandatoryFilled = useMemo(() => {
@@ -325,7 +331,16 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
         errors.aadhaar_number = aadhaarRes.error || "Invalid Aadhaar number.";
       }
     }
-    if (formValues.license_number.trim()) {
+    if (isOperator) {
+      if (!formValues.license_number.trim()) {
+        errors.license_number = "Driving licence number is required for operators.";
+      } else {
+        const licRes = validateLicenseNumber(formValues.license_number);
+        if (!licRes.isValid) {
+          errors.license_number = licRes.error || "Invalid driving licence format.";
+        }
+      }
+    } else if (formValues.license_number.trim()) {
       const licRes = validateLicenseNumber(formValues.license_number);
       if (!licRes.isValid) {
         errors.license_number = licRes.error || "Invalid driving licence format.";
@@ -669,8 +684,8 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                 isMandatory={true}
                 isCompleted={section5Complete}
               >
-                {/* Aadhaar Card Number | Driving Licence Number */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                {/* Aadhaar Card Number | Driving Licence Number (Mandatory for operators) */}
+                <div className={`grid ${isOperator ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 sm:gap-2.5`}>
                   <Input
                     id="onboarding-aadhaar"
                     name="aadhaar_number"
@@ -686,27 +701,27 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     icon={<AnimatedShieldCheck size={15} />}
                   />
 
-                  <Input
-                    id="onboarding-license"
-                    name="license_number"
-                    label={
-                      <span>
-                        Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
-                      </span>
-                    }
-                    type="text"
-                    value={formValues.license_number}
-                    onChange={(e) => handleChange("license_number", e.target.value)}
-                    onBlur={() => handleBlur("license_number")}
-                    placeholder="e.g. MH12 20110012345"
-                    maxLength={25}
-                    error={fieldErrors.license_number}
-                    icon={<AnimatedCreditCard size={15} />}
-                  />
+                  {isOperator && (
+                    <Input
+                      id="onboarding-license"
+                      name="license_number"
+                      label="Driving Licence Number"
+                      type="text"
+                      value={formValues.license_number}
+                      onChange={(e) => handleChange("license_number", e.target.value)}
+                      onBlur={() => handleBlur("license_number")}
+                      placeholder="e.g. MH12 20110012345"
+                      maxLength={25}
+                      required
+                      error={fieldErrors.license_number}
+                      hint="Mandatory for operators (Forklift, Boom Lift, Crane, etc.)."
+                      icon={<AnimatedCreditCard size={15} />}
+                    />
+                  )}
                 </div>
 
                 {/* Document Uploads: Aadhaar Card & Driving Licence */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+                <div className={`grid ${isOperator ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 sm:gap-2.5 pt-1`}>
                   {/* Aadhaar Upload Card */}
                   <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -771,69 +786,71 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     )}
                   </div>
 
-                  {/* Licence Upload Card */}
-                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
-                        Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
-                      </span>
-                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
-                    </div>
-
-                    {!licenseFile ? (
-                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                        <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
-                        <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                          Upload Licence (JPG, PNG, PDF)
+                  {/* Licence Upload Card: Only for operators */}
+                  {isOperator && (
+                    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                          <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
+                          Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
-                        <input
-                          type="file"
-                          name="license_file"
-                          className="hidden"
-                          accept="image/*,application/pdf,.doc,.docx,.txt"
-                          onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                        {licensePreviewUrl ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={licensePreviewUrl}
-                            alt="Licence preview"
-                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-sky-600" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                            {licenseFile.name}
-                          </p>
-                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                            {(licenseFile.size / 1024).toFixed(0)} KB · Attached
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleLicenseFileChange(null)}
-                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
-                          title="Remove file"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
                       </div>
-                    )}
 
-                    {licenseFileError && (
-                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                        {licenseFileError}
-                      </p>
-                    )}
-                  </div>
+                      {!licenseFile ? (
+                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                          <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                            Upload Licence (JPG, PNG, PDF)
+                          </span>
+                          <input
+                            type="file"
+                            name="license_file"
+                            className="hidden"
+                            accept="image/*,application/pdf,.doc,.docx,.txt"
+                            onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      ) : (
+                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                          {licensePreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={licensePreviewUrl}
+                              alt="Licence preview"
+                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                              <FileText className="h-5 w-5 text-sky-600" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                              {licenseFile.name}
+                            </p>
+                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                              {(licenseFile.size / 1024).toFixed(0)} KB · Attached
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleLicenseFileChange(null)}
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {licenseFileError && (
+                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                          {licenseFileError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </FormSectionCard>
 

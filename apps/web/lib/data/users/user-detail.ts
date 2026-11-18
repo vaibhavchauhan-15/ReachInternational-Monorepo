@@ -22,8 +22,31 @@ export interface UserMachineItem {
   status: string;
   serial_number?: string | null;
   manufacturer?: string | null;
-  year_of_mfg?: string | null;
+  year_of_mfg?: string | null | number;
   hour_meter?: number | null;
+  assigned_operator_name?: string | null;
+  assigned_operator_code?: string | null;
+}
+
+export interface SupervisedOperatorItem {
+  id: string;
+  employee_id: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  status: string;
+  machine_category: string | null;
+  city: string | null;
+  state: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  doj: string | null;
+  created_at: string;
+  active_machine_id: string | null;
+  active_machine_code: string | null;
+  active_machine_name: string | null;
+  active_machine_model: string | null;
 }
 
 export interface UserRunningLogItem {
@@ -80,6 +103,8 @@ export interface UserSummaryKPIs {
   totalRunningHours: number;
   totalDaysWorked: number;
   documentsCount: number;
+  supervisedOperatorsCount?: number;
+  supervisedShiftsCount?: number;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -120,20 +145,43 @@ export async function resolveUserId(idOrCode: string): Promise<string | null> {
 
 /**
  * Fetches active/assigned machines for an operator or supervisor.
+ * Uses high-performance Postgres RPC get_user_assigned_machines with fallback.
  */
-export async function getUserAssignedMachines(userId: string): Promise<UserMachineItem[]> {
+export async function getUserAssignedMachines(userId: string, role?: string): Promise<UserMachineItem[]> {
   if (!userId) return [];
   try {
     const adminClient = createSupabaseAdminClient();
+
+    // 1. Preferred path: high-performance PostgreSQL RPC
+    const { data: rpcData, error: rpcError } = await adminClient.rpc("get_user_assigned_machines", {
+      target_user_id: userId,
+      user_role: role || null,
+    });
+
+    if (!rpcError && Array.isArray(rpcData)) {
+      return rpcData.map((m: any) => ({
+        id: m.id,
+        machine_id: m.machine_id,
+        machine_name: m.machine_name,
+        model: m.model,
+        status: m.status,
+        serial_number: m.serial_number,
+        manufacturer: m.manufacturer,
+        year_of_mfg: m.year_of_mfg,
+        hour_meter: m.hour_meter != null ? Number(m.hour_meter) : null,
+        assigned_operator_name: m.assigned_operator_name || null,
+        assigned_operator_code: m.assigned_operator_code || null,
+      }));
+    }
     
-    // 1. Direct machine fields (current_operator_id, operator_ids, supervisor)
+    // 2. Direct machine fields (current_operator_id, operator_ids, supervisor)
     const { data: directMachines } = await adminClient
       .from("machines")
       .select("id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter")
       .or(`current_operator_id.eq.${userId},operator_ids.cs.{${userId}},current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`)
       .order("machine_id");
 
-    // 2. Active assignments from operator_machine_assignments
+    // 3. Active assignments from operator_machine_assignments
     const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const { data: activeAssignments } = await adminClient
       .from("operator_machine_assignments")
@@ -157,7 +205,7 @@ export async function getUserAssignedMachines(userId: string): Promise<UserMachi
         serial_number: m.serial_number,
         manufacturer: m.manufacturer,
         year_of_mfg: m.year_of_mfg,
-        hour_meter: m.hour_meter,
+        hour_meter: m.hour_meter != null ? Number(m.hour_meter) : null,
       });
     });
 
@@ -173,12 +221,52 @@ export async function getUserAssignedMachines(userId: string): Promise<UserMachi
           serial_number: m.serial_number,
           manufacturer: m.manufacturer,
           year_of_mfg: m.year_of_mfg,
-          hour_meter: m.hour_meter,
+          hour_meter: m.hour_meter != null ? Number(m.hour_meter) : null,
         });
       }
     });
 
     return Array.from(machineMap.values());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetches all operators reporting to a specific supervisor.
+ * Uses high-performance Postgres RPC get_supervisor_operators.
+ */
+export async function getUserSupervisedOperators(supervisorId: string): Promise<SupervisedOperatorItem[]> {
+  if (!supervisorId) return [];
+  try {
+    const adminClient = createSupabaseAdminClient();
+    const { data, error } = await adminClient.rpc("get_supervisor_operators", {
+      target_supervisor_id: supervisorId,
+    });
+
+    if (!error && Array.isArray(data)) {
+      return data.map((op: any) => ({
+        id: op.id,
+        employee_id: op.employee_id,
+        full_name: op.full_name,
+        email: op.email,
+        phone: op.phone,
+        role: op.role,
+        status: op.status,
+        machine_category: op.machine_category,
+        city: op.city,
+        state: op.state,
+        shift_start_time: op.shift_start_time,
+        shift_end_time: op.shift_end_time,
+        doj: op.doj,
+        created_at: op.created_at,
+        active_machine_id: op.active_machine_id,
+        active_machine_code: op.active_machine_code,
+        active_machine_name: op.active_machine_name,
+        active_machine_model: op.active_machine_model,
+      }));
+    }
+    return [];
   } catch {
     return [];
   }
@@ -305,19 +393,42 @@ export async function getUserAuditLogs(userId: string, limit = 50): Promise<User
 
 /**
  * Fetches lightweight KPI metrics for the user details header cards.
+ * Uses role-aware get_user_summary_kpis RPC with fallback.
  */
-export async function getUserSummaryKPIs(userId: string): Promise<UserSummaryKPIs> {
+export async function getUserSummaryKPIs(userId: string, role?: string): Promise<UserSummaryKPIs> {
   if (!userId) {
     return {
       assignedMachinesCount: 0,
       totalRunningHours: 0,
       totalDaysWorked: 0,
       documentsCount: 0,
+      supervisedOperatorsCount: 0,
+      supervisedShiftsCount: 0,
     };
   }
 
   try {
     const adminClient = createSupabaseAdminClient();
+
+    // 1. Preferred path: high-performance PostgreSQL RPC
+    const { data: rpcData, error: rpcError } = await adminClient.rpc("get_user_summary_kpis", {
+      target_user_id: userId,
+      user_role: role || null,
+    });
+
+    if (!rpcError && Array.isArray(rpcData) && rpcData[0]) {
+      const row = rpcData[0];
+      return {
+        assignedMachinesCount: Number(row.assigned_machines_count) || 0,
+        totalRunningHours: Number(row.total_running_hours) || 0,
+        totalDaysWorked: Number(row.total_days_worked) || 0,
+        documentsCount: Number(row.documents_count) || 0,
+        supervisedOperatorsCount: Number(row.supervised_operators_count) || 0,
+        supervisedShiftsCount: Number(row.supervised_shifts_count) || 0,
+      };
+    }
+
+    // Fallback path
     const [machinesRes, logsRes, docsRes] = await Promise.all([
       adminClient
         .from("machines")
@@ -342,6 +453,8 @@ export async function getUserSummaryKPIs(userId: string): Promise<UserSummaryKPI
       totalRunningHours: Math.round(totalRunningHours * 10) / 10,
       totalDaysWorked: distinctDates.size,
       documentsCount: docsRes.count || 0,
+      supervisedOperatorsCount: 0,
+      supervisedShiftsCount: 0,
     };
   } catch {
     return {
@@ -349,6 +462,8 @@ export async function getUserSummaryKPIs(userId: string): Promise<UserSummaryKPI
       totalRunningHours: 0,
       totalDaysWorked: 0,
       documentsCount: 0,
+      supervisedOperatorsCount: 0,
+      supervisedShiftsCount: 0,
     };
   }
 }
@@ -362,18 +477,17 @@ export async function getUserById(userId: string): Promise<User | null> {
   await requireRole("admin", "super_admin", "manager", "hr", "supervisor");
 
   const adminClient = createSupabaseAdminClient();
-  const [{ data, error }, machines] = await Promise.all([
-    adminClient
-      .from("users")
-      .select(USER_DETAIL_COLUMNS)
-      .eq("id", userId)
-      .single(),
-    getUserAssignedMachines(userId),
-  ]);
+  const { data, error } = await adminClient
+    .from("users")
+    .select(USER_DETAIL_COLUMNS)
+    .eq("id", userId)
+    .single();
 
   if (error || !data) {
     return null;
   }
+
+  const machines = await getUserAssignedMachines(userId, data.role);
 
   const hydrated = await hydrateUsersPersonnel([data]);
   const user = hydrated[0] || null;
@@ -404,18 +518,17 @@ export async function getUserDetail(userId: string): Promise<User | null> {
   if (!userId) return null;
 
   const adminClient = createSupabaseAdminClient();
-  const [{ data, error }, machines] = await Promise.all([
-    adminClient
-      .from("users")
-      .select(USER_DETAIL_COLUMNS)
-      .eq("id", userId)
-      .single(),
-    getUserAssignedMachines(userId),
-  ]);
+  const { data, error } = await adminClient
+    .from("users")
+    .select(USER_DETAIL_COLUMNS)
+    .eq("id", userId)
+    .single();
 
   if (error || !data) {
     return null;
   }
+
+  const machines = await getUserAssignedMachines(userId, data.role);
 
   const hydrated = await hydrateUsersPersonnel([data]);
   const user = hydrated[0] || null;

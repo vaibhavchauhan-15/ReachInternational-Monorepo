@@ -97,6 +97,7 @@ export const AvatarImage = React.forwardRef<
   HTMLImageElement,
   React.ImgHTMLAttributes<HTMLImageElement> & { onErrorCallback?: () => void }
 >(({ className, src, alt, onErrorCallback, ...props }, ref) => {
+  if (!src) return null;
   return (
     <img
       ref={ref}

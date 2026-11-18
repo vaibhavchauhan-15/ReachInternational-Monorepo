@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { userId, title, body, priority, category } = await req.json().catch(() => ({}));
+  const { userId, title, body, priority, category } = (await req.json().catch(() => ({}))) as Record<string, any>;
 
   if (!userId) {
     return NextResponse.json({ error: 'Missing userId in request body' }, { status: 400 });

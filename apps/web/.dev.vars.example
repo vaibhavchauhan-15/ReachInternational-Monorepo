@@ -1,0 +1,29 @@
+# Cloudflare Workers Local Development Environment Variables (.dev.vars)
+# Copy this file to `apps/web/.dev.vars` for local `wrangler dev` testing.
+# In production, set secrets using: `pnpm --filter @reachinternational/web wrangler secret put <NAME>`
+# Or in Cloudflare Dashboard -> Workers & Pages -> reachinternational-web -> Settings -> Variables & Secrets.
+
+# ==============================================================================
+# Public / Publishable Configuration (Matches Next.js NEXT_PUBLIC_ variables)
+# ==============================================================================
+NEXT_PUBLIC_SUPABASE_URL=https://vlmxciuogczumumrwyot.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
+NEXT_PUBLIC_APP_URL=http://localhost:8787
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-DC126P3SM9
+NEXT_PUBLIC_APP_VERSION=1.0.0
+NEXT_PUBLIC_SENTRY_DSN=
+NEXT_PUBLIC_ENABLE_AGENTATION=false
+NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH=true
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+
+# ==============================================================================
+# Server-Only Secrets
+# ==============================================================================
+SUPABASE_SECRET_KEY=your_supabase_service_role_secret_key_here
+INTERNAL_AUTH_SECRET=your_32_byte_hex_internal_auth_secret_here
+CRON_SECRET=your_cron_secret_here
+UPLOAD_SESSION_SECRET=your_32_byte_hex_upload_session_secret_here
+NOTIFY_SECRET=your_32_byte_hex_notify_secret_here
+PUSH_ENABLED=false
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:support@reachinternational.co.in

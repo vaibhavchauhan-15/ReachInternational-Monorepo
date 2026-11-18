@@ -69,6 +69,18 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
 };
 
 /**
+ * Normalizes an arbitrary role string into a canonical lowercase underscored role representation.
+ */
+export function normalizeRole(role?: string | null): UserRole | "" {
+  if (!role) return "";
+  const clean = role.toLowerCase().trim().replace(/[\s-]/g, "_");
+  if (CANONICAL_ROLES.includes(clean as UserRole)) {
+    return clean as UserRole;
+  }
+  return clean as UserRole;
+}
+
+/**
  * Checks whether a given role is Manager tier or above (super_admin, admin, manager).
  */
 export function isManagerOrAbove(role?: string | null): boolean {

@@ -145,13 +145,43 @@ export async function completeOnboardingAction(
     };
   }
 
-  const licenseValidation = validateDocumentUpload(licenseFile, false, "Driving license");
-  if (licenseValidation.error) {
-    return {
-      error: licenseValidation.error,
-      fieldErrors: { license_file: licenseValidation.error },
-      fieldValues,
-    };
+  let licenseValidation: { error?: string; safeExt?: string } = {};
+  if (role === "operator") {
+    const { data: existingLicenseDoc } = await supabase
+      .from("user_documents")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("document_type_code", "driving_license")
+      .maybeSingle();
+
+    if (!existingLicenseDoc) {
+      licenseValidation = validateDocumentUpload(licenseFile, true, "Driving licence");
+      if (licenseValidation.error) {
+        return {
+          error: licenseValidation.error,
+          fieldErrors: { license_file: licenseValidation.error },
+          fieldValues,
+        };
+      }
+    } else if (licenseFile) {
+      licenseValidation = validateDocumentUpload(licenseFile, false, "Driving licence");
+      if (licenseValidation.error) {
+        return {
+          error: licenseValidation.error,
+          fieldErrors: { license_file: licenseValidation.error },
+          fieldValues,
+        };
+      }
+    }
+  } else if (licenseFile) {
+    licenseValidation = validateDocumentUpload(licenseFile, false, "Driving licence");
+    if (licenseValidation.error) {
+      return {
+        error: licenseValidation.error,
+        fieldErrors: { license_file: licenseValidation.error },
+        fieldValues,
+      };
+    }
   }
 
   try {

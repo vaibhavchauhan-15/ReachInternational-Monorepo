@@ -423,10 +423,54 @@ export async function getDocumentViewUrlAction(params: {
     }
 
     // Generate signed URL (120 seconds) from appropriate bucket
-    const targetBucket = fromStaging ? "doc_staging" : "user_files";
-    const { data: urlData, error: storageError } = await adminSupabase.storage
+    let targetBucket = fromStaging ? "doc_staging" : "user_files";
+    let { data: urlData, error: storageError } = await adminSupabase.storage
       .from(targetBucket)
       .createSignedUrl(doc.storage_path, 120);
+
+    // Self-healing fallback: If user_files says Object not found, check if a newer file exists or if it's still in staging
+    if ((storageError || !urlData?.signedUrl) && !fromStaging) {
+      // 1. Check doc_staging in case transfer is in-flight
+      const { data: stgData } = await adminSupabase.storage
+        .from("doc_staging")
+        .createSignedUrl(doc.storage_path, 120);
+
+      if (stgData?.signedUrl) {
+        urlData = stgData;
+        storageError = null;
+        targetBucket = "doc_staging";
+      } else {
+        // 2. Check if a newer file exists in user_files under documents/<userId>/<docType>
+        const { data: userFilesList } = await adminSupabase.storage
+          .from("user_files")
+          .list(`documents/${doc.user_id}/${doc.document_type_code}`);
+
+        const validFile = userFilesList?.find(
+          (f) => !f.name.includes("_thumb") && f.name.endsWith(".jpg")
+        );
+
+        if (validFile) {
+          const healedPath = `documents/${doc.user_id}/${doc.document_type_code}/${validFile.name}`;
+          const { data: healedData, error: healErr } = await adminSupabase.storage
+            .from("user_files")
+            .createSignedUrl(healedPath, 120);
+
+          if (!healErr && healedData?.signedUrl) {
+            urlData = healedData;
+            storageError = null;
+            // Update pointer in user_documents so future queries are instant
+            await adminSupabase
+              .from("user_documents")
+              .update({
+                storage_path: healedPath,
+                thumb_path: `documents/${doc.user_id}/${doc.document_type_code}/${validFile.name.replace(".jpg", "")}_thumb.jpg`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", doc.id);
+          }
+        }
+      }
+    }
 
     if (storageError || !urlData?.signedUrl) {
       return { success: false, error: "Failed to generate secure preview link." };

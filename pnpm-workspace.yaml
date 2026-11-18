@@ -6,13 +6,17 @@ onlyBuiltDependencies:
   - "sharp"
   - "unrs-resolver"
   - "@sentry/cli"
+  - "esbuild"
+  - "workerd"
 
 minimumReleaseAge: 0
 
 allowBuilds:
   '@sentry/cli': true
+  esbuild: true
   sharp: true
   unrs-resolver: true
+  workerd: true
 
 overrides:
   "@types/react": "^19.0.0"

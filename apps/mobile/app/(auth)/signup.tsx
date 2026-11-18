@@ -40,6 +40,7 @@ import {
   formatIfscCode,
   computeShiftTiming,
   finalizeSignupDocuments,
+  registerSignupUser,
   MACHINE_CATEGORY_SELECT_OPTIONS,
   normalizeMachineCategory,
 } from '@reachinternational/utils';
@@ -319,12 +320,16 @@ export default function SignupScreen() {
     if (val !== 'operator') {
       setSelectedMachineCategory('');
       clearFieldError('machine_category');
+      setLicenseNumber('');
+      clearFieldError('license_number');
+      clearFieldError('license_doc');
+      removeDocFile('driving_license');
     }
     if (!isSupervisedRole(val)) {
       setSelectedSupervisorId('');
       clearFieldError('supervisor_id');
     }
-  }, [clearFieldError]);
+  }, [clearFieldError, removeDocFile]);
 
   const handleMachineCategoryChange = useCallback((val: string) => {
     const clean = normalizeMachineCategory(val) || val;
@@ -560,7 +565,16 @@ export default function SignupScreen() {
   const section5Complete = Boolean(
     aadhaarNumber.replace(/\D/g, '').length === 12 &&
     docSlots.aadhaar.status === 'ready' &&
-    (!docSlots.driving_license.mainUri || docSlots.driving_license.status === 'ready')
+    (selectedRole !== 'operator' ||
+      (licenseNumber.trim().length > 0 &&
+       validateLicenseNumber(licenseNumber.trim()).isValid &&
+       docSlots.driving_license.status === 'ready'))
+  );
+
+  const isDocReady = Boolean(
+    docSlots.bank_document.status === 'ready' &&
+    docSlots.aadhaar.status === 'ready' &&
+    (selectedRole !== 'operator' || docSlots.driving_license.status === 'ready')
   );
 
   const section6Complete = Boolean(
@@ -577,7 +591,7 @@ export default function SignupScreen() {
     section4Complete &&
     section5Complete &&
     section6Complete &&
-    isMandatoryReady &&
+    isDocReady &&
     !isAnyUploading
   );
 
@@ -619,7 +633,14 @@ export default function SignupScreen() {
     if (docSlots.bank_document.status !== 'ready') list.push('Bank Document');
     if (aadhaarNumber.replace(/\D/g, '').length !== 12) list.push('Aadhaar Number');
     if (docSlots.aadhaar.status !== 'ready') list.push('Aadhaar Document');
-    if (docSlots.driving_license.mainUri && docSlots.driving_license.status !== 'ready') list.push('Licence Document');
+    if (selectedRole === 'operator') {
+      if (!licenseNumber.trim() || !validateLicenseNumber(licenseNumber.trim()).isValid) {
+        list.push('Driving Licence Number');
+      }
+      if (docSlots.driving_license.status !== 'ready') {
+        list.push('Licence Document');
+      }
+    }
     if (isAnyUploading) list.push('Documents uploading...');
     if (!password || password.length < 8) list.push('Password');
     if (password !== confirmPassword) list.push('Confirm Password');
@@ -678,7 +699,8 @@ export default function SignupScreen() {
       hasBankDoc: docSlots.bank_document.status === 'ready',
       aadhaarNumber,
       hasAadhaarDoc: docSlots.aadhaar.status === 'ready',
-      licenseNumber,
+      licenseNumber: selectedRole === 'operator' ? licenseNumber : (licenseNumber || null),
+      hasLicenseDoc: docSlots.driving_license.status === 'ready',
       password,
       confirmPassword,
       agreedToTerms,
@@ -718,8 +740,8 @@ export default function SignupScreen() {
       return;
     }
 
-    if (!isMandatoryReady) {
-      toast('error', 'Documents Required', 'Please attach required bank and identity document photos.');
+    if (!isDocReady) {
+      toast('error', 'Documents Required', selectedRole === 'operator' ? 'Please attach bank, Aadhaar, and driving licence document photos.' : 'Please attach required bank and Aadhaar document photos.');
       haptics.error();
       return;
     }
@@ -748,62 +770,39 @@ export default function SignupScreen() {
     const safeRole = allowedRoleValues.includes(selectedRole) ? selectedRole : 'operator';
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+      // 3. Register user via dedicated server endpoint (admin createUser with email_confirm: true)
+      // Eliminates GoTrue public email rate limits (429 over_email_send_rate_limit)
+      const regPayload: any = {
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: cleanPhone,
+        role: safeRole,
+        supervisorId: isSupervisedRole(safeRole) ? selectedSupervisorId || null : null,
+        machineCategory: safeRole === 'operator' ? selectedMachineCategory || null : null,
+        machine_category: safeRole === 'operator' ? selectedMachineCategory || null : null,
+        shiftStartTime: shiftStartTime.trim(),
+        shiftEndTime: shiftEndTime.trim(),
+        street: street.trim(),
+        city: city.trim(),
+        district: district.trim(),
+        state: stateVal.trim(),
+        stateId,
+        bankAccountNumber: bankAccountNumber.trim(),
+        bankIfscCode: bankIfscCode.trim().toUpperCase(),
+        aadhaarNumber: aadhaarNumber.replace(/\D/g, ''),
+        licenseNumber: licenseNumber.trim().toUpperCase() || null,
         password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            phone: cleanPhone,
-            role: safeRole,
-            supervisor_id: isSupervisedRole(safeRole) ? selectedSupervisorId || null : null,
-            machine_category: safeRole === 'operator' ? selectedMachineCategory || null : null,
-            shift_time: finalShift,
-            shift_start_time: shiftStartTime.trim() || null,
-            shift_end_time: shiftEndTime.trim() || null,
-            street: street.trim(),
-            address: street.trim(),
-            city: city.trim(),
-            district: district.trim(),
-            state: stateVal.trim(),
-            state_id: stateId,
-            location: `${street.trim() ? `${street.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
-            monthly_salary: null,
-            bank_account_number: bankAccountNumber.trim(),
-            bank_ifsc_code: bankIfscCode.trim().toUpperCase(),
-            aadhaar_number: aadhaarNumber.replace(/\D/g, ''),
-            license_number: licenseNumber.trim().toUpperCase() || null,
-            staging_session_token: verifiedSession,
-            session: verifiedSession,
-          },
-        },
+        confirmPassword,
+        agreedToTerms,
+        session: verifiedSession,
+      };
+
+      await registerSignupUser({
+        baseUrl: getAppUrl(),
+        data: regPayload,
       });
 
-      if (error) {
-        const mapped = mapSignupError(error);
-        toast(mapped.type, mapped.title, mapped.message);
-        if (mapped.fieldErrors) {
-          setFieldErrors((prev) => ({ ...prev, ...mapped.fieldErrors }));
-        }
-        isSubmittingRef.current = false;
-        setIsLoading(false);
-        haptics.reject();
-        return;
-      }
-
       haptics.confirm();
-      if (data?.user?.id) {
-        const userId = data.user.id;
-        try {
-          await finalizeSignupDocuments({
-            baseUrl: getAppUrl(),
-            userId,
-            session: verifiedSession,
-          });
-        } catch (finErr) {
-          console.warn('[Signup] Finalize staged documents error:', finErr);
-        }
-      }
 
       // On successful signup: clear uploads & draft from storage
       clearDocUploads();
@@ -819,11 +818,38 @@ export default function SignupScreen() {
         router.replace('/(auth)/login');
       }, 1400);
     } catch (err: any) {
+      const fieldErrors = err?.fieldErrors;
       const mapped = mapSignupError(err);
       toast(mapped.type, mapped.title, mapped.message);
-      if (mapped.fieldErrors) {
+
+      if (fieldErrors && typeof fieldErrors === 'object' && Object.keys(fieldErrors).length > 0) {
+        setFieldErrors((prev) => ({ ...prev, ...fieldErrors }));
+
+        // Smooth auto-scroll to the first section that contains an error
+        const errKeys = Object.keys(fieldErrors);
+        let targetSection = 1;
+        if (errKeys.some((k) => ['full_name', 'email', 'phone', 'role', 'supervisor_id', 'machine_category'].includes(k))) {
+          targetSection = 1;
+        } else if (errKeys.some((k) => ['shift_start_time', 'shift_end_time', 'shift_time'].includes(k))) {
+          targetSection = 2;
+        } else if (errKeys.some((k) => ['street', 'city', 'district', 'state'].includes(k))) {
+          targetSection = 3;
+        } else if (errKeys.some((k) => ['bank_account_number', 'bank_ifsc_code', 'bank_doc'].includes(k))) {
+          targetSection = 4;
+        } else if (errKeys.some((k) => ['aadhaar_number', 'aadhaar_doc', 'license_number', 'license_doc'].includes(k))) {
+          targetSection = 5;
+        } else if (errKeys.some((k) => ['password', 'confirm_password', 'terms'].includes(k))) {
+          targetSection = 6;
+        }
+
+        const targetY = sectionYPositions.current[targetSection];
+        if (typeof targetY === 'number') {
+          scrollViewRef.current?.scrollTo({ y: Math.max(0, targetY - 16), animated: true });
+        }
+      } else if (mapped.fieldErrors) {
         setFieldErrors((prev) => ({ ...prev, ...mapped.fieldErrors }));
       }
+
       isSubmittingRef.current = false;
       setIsLoading(false);
       haptics.error();
@@ -1355,19 +1381,22 @@ export default function SignupScreen() {
                     leftIcon={<ShieldCheck size={15} color={iconColor} />}
                   />
 
-                  <Input
-                    label="Driving Licence Number (Optional)"
-                    placeholder="e.g. MH12 20110012345"
-                    helperText="Required if operating Forklift, Boom Lift, or other equipment."
-                    value={licenseNumber}
-                    onChangeText={handleLicenseChange}
-                    autoCapitalize="characters"
-                    autoComplete="off"
-                    importantForAutofill="no"
-                    maxLength={25}
-                    error={fieldErrors.license_number}
-                    leftIcon={<CreditCard size={15} color={iconColor} />}
-                  />
+                  {selectedRole === 'operator' && (
+                    <Input
+                      label="Driving Licence Number"
+                      required
+                      placeholder="e.g. MH12 20110012345"
+                      helperText="Required for equipment operators (e.g. MH12 20110012345)"
+                      value={licenseNumber}
+                      onChangeText={handleLicenseChange}
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      maxLength={25}
+                      error={fieldErrors.license_number}
+                      leftIcon={<CreditCard size={15} color={iconColor} />}
+                    />
+                  )}
 
                   <MobileDocumentUploadCard
                     title="Aadhaar Document"
@@ -1384,19 +1413,22 @@ export default function SignupScreen() {
                     errorMessage={fieldErrors.aadhaar_doc}
                   />
 
-                  <MobileDocumentUploadCard
-                    title="Licence Document (Optional)"
-                    subtitle="Optional - Take photo of your driving licence"
-                    docTypeCode="driving_license"
-                    slot={docSlots.driving_license}
-                    onPickSlot={(src) => {
-                      clearFieldError('license_doc');
-                      pickAndUploadDoc('driving_license', src);
-                    }}
-                    onRetrySlot={() => retryDocUpload('driving_license')}
-                    onRemoveSlot={() => removeDocFile('driving_license')}
-                    errorMessage={fieldErrors.license_doc}
-                  />
+                  {selectedRole === 'operator' && (
+                    <MobileDocumentUploadCard
+                      title="Licence Document"
+                      subtitle="Take photo of your driving licence"
+                      docTypeCode="driving_license"
+                      required
+                      slot={docSlots.driving_license}
+                      onPickSlot={(src) => {
+                        clearFieldError('license_doc');
+                        pickAndUploadDoc('driving_license', src);
+                      }}
+                      onRetrySlot={() => retryDocUpload('driving_license')}
+                      onRemoveSlot={() => removeDocFile('driving_license')}
+                      errorMessage={fieldErrors.license_doc}
+                    />
+                  )}
                 </MobileFormSectionCard>
               </View>
 
@@ -1750,7 +1782,7 @@ export default function SignupScreen() {
 
               {/* Gated Submit Button — ALWAYS clickable unless submitting */}
               <MobileSubmitButton
-                isReady={isAllMandatoryFilled && isMandatoryReady && !isAnyUploading}
+                isReady={isAllMandatoryFilled && isDocReady && !isAnyUploading}
                 isLoading={isLoading || isAnyUploading}
                 onPress={handleSignup}
                 label={isAnyUploading ? 'Uploading Documents...' : 'Request Platform Access'}

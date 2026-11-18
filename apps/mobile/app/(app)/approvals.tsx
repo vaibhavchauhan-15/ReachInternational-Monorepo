@@ -11,48 +11,97 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type {
   ApprovalRequestListItem,
   ApprovalStatus,
+  AttachedDocumentSummary,
 } from "@reachinternational/types";
 import { Text } from "../../components/ui/Text";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
+import { MobileHeader } from "../../components/ui/MobileHeader";
+import { PermissionDeniedView } from "../../components/ui/PermissionDeniedView";
+import {
+  DropdownFilterSelector,
+  type FilterOption,
+  showToast,
+} from "../../components/ui";
+import { useAuth } from "../../lib/auth/useAuth";
 import { MobileApprovalCard } from "../../components/approvals/MobileApprovalCard";
 import { ApprovalDetailBottomSheet } from "../../components/approvals/ApprovalDetailBottomSheet";
 import { RejectReasonModal } from "../../components/approvals/RejectReasonModal";
+import {
+  MobileDocumentViewerModal,
+  type MobileViewerDoc,
+} from "../../components/documents/MobileDocumentViewerModal";
 import {
   useApprovalsListQuery,
   useApprovalCountsQuery,
   useApprovalDetailQuery,
   useDecideApprovalMutation,
+  useVerifyDocumentMutation,
+  useRejectDocumentMutation,
   useApprovalsRealtimeSync,
 } from "../../lib/hooks/useApprovalsData";
 import { useTheme } from "../../lib/theming";
 import { haptics } from "../../lib/haptics";
-import { Clock, CheckCircle2, XCircle } from "lucide-react-native";
+import {
+  Clock,
+  CheckCircle2,
+  XCircle,
+  X,
+  RotateCcw,
+  SlidersHorizontal,
+} from "lucide-react-native";
 
-const TYPE_FILTERS = [
-  { key: undefined, label: "All Types" },
-  { key: "document_verify", label: "Documents" },
-  { key: "profile_change", label: "Profile" },
-  { key: "registration", label: "Registrations" },
-  { key: "document_replace", label: "Replacements" },
-  { key: "account_deletion", label: "Deletions" },
+const BASE_STATUS_OPTIONS: Array<{ id: ApprovalStatus | "all"; label: string; dotColor: string }> = [
+  { id: "pending", label: "Pending", dotColor: "#f59e0b" },
+  { id: "approved", label: "Approved", dotColor: "#10b981" },
+  { id: "rejected", label: "Rejected", dotColor: "#ef4444" },
+  { id: "all", label: "All Statuses", dotColor: "#a3a3a3" },
+];
+
+const BASE_TYPE_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "all", label: "All Request Types" },
+  { id: "registration", label: "New Registrations" },
+  { id: "document_verify", label: "Document Verifications" },
+  { id: "document_replace", label: "Document Replacements" },
+  { id: "profile_change", label: "Profile Changes" },
+  { id: "account_deletion", label: "Account Deletions" },
+  { id: "shift_conflict", label: "Shift Conflicts" },
 ];
 
 export default function ApprovalsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const { role: currentUserRole, isLoading: isAuthLoading } = useAuth();
 
-  // Filter State
-  const [status, setStatus] = useState<ApprovalStatus>("pending");
+  const normalizedRole = (currentUserRole || "").toLowerCase();
+  const canAccessApprovals = ["super_admin", "admin"].includes(normalizedRole);
+
+  // Filter State (Matching Web ApprovalsClientShell)
+  const [status, setStatus] = useState<ApprovalStatus | "all">("pending");
   const [typeKey, setTypeKey] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Modal State
+  // Modal & Selection State
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [activeCardDoc, setActiveCardDoc] = useState<{
+    doc: MobileViewerDoc;
+    isPending: boolean;
+  } | null>(null);
 
-  // Queries & Mutations
+  // Per-action loading indicators (Strictly single spinner per clicked item)
+  const [submittingRequestId, setSubmittingRequestId] = useState<string | null>(null);
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
+
+  // Polymorphic Rejection Target State (Request vs Document)
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<
+    | { kind: "request"; requestId: string; summary: string; version?: number }
+    | { kind: "document"; docId: string; userId?: string; summary: string }
+    | null
+  >(null);
+
+  // Queries & Mutations (disabled if not authorized)
   const {
     data: items = [],
     isLoading,
@@ -60,238 +109,407 @@ export default function ApprovalsScreen() {
     error,
     refetch,
     isRefetching,
-  } = useApprovalsListQuery({ status, typeKey });
+  } = useApprovalsListQuery({
+    status,
+    typeKey,
+    enabled: Boolean(canAccessApprovals),
+  });
 
   const { data: counts = { total: 0, by_type: {} }, refetch: refetchCounts } =
-    useApprovalCountsQuery();
+    useApprovalCountsQuery({ enabled: Boolean(canAccessApprovals) });
 
   const { data: selectedDetail, isLoading: isDetailLoading } =
     useApprovalDetailQuery(selectedRequestId);
 
   const decideMutation = useDecideApprovalMutation();
+  const verifyDocMutation = useVerifyDocumentMutation();
+  const rejectDocMutation = useRejectDocumentMutation();
 
-  // Enable Realtime sync
-  useApprovalsRealtimeSync();
+  // Enable Realtime sync for authorized approvers
+  useApprovalsRealtimeSync(Boolean(canAccessApprovals));
 
   const onRefresh = useCallback(async () => {
     haptics.threshold();
     await Promise.all([refetch(), refetchCounts()]);
   }, [refetch, refetchCounts]);
 
-  // Filter items in memory by search query
+  // Formatted Status Options with live badge counts
+  const statusOptions: FilterOption[] = useMemo(() => {
+    return BASE_STATUS_OPTIONS.map((opt) => ({
+      id: opt.id,
+      label:
+        opt.id === "pending" && counts.total > 0
+          ? `${opt.label} (${counts.total})`
+          : opt.label,
+      dotColor: opt.dotColor,
+    }));
+  }, [counts.total]);
+
+  // Formatted Type Options with live badge counts per category
+  const typeOptions: FilterOption[] = useMemo(() => {
+    return BASE_TYPE_OPTIONS.map((opt) => {
+      const typeCount = opt.id !== "all" ? counts.by_type[opt.id] : undefined;
+      return {
+        id: opt.id,
+        label:
+          typeCount && typeCount > 0
+            ? `${opt.label} (${typeCount})`
+            : opt.label,
+      };
+    });
+  }, [counts.by_type]);
+
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (status !== "pending") count += 1;
+    if (typeKey !== undefined && typeKey !== "all") count += 1;
+    if (searchQuery.trim() !== "") count += 1;
+    return count;
+  }, [status, typeKey, searchQuery]);
+
+  // Filter items in memory by search query (Matching Web ApprovalsClientShell)
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase().trim();
-    return items.filter(
-      (item) =>
-        item.summary.toLowerCase().includes(q) ||
-        (item.requester_name && item.requester_name.toLowerCase().includes(q)) ||
-        (item.subject_label && item.subject_label.toLowerCase().includes(q))
-    );
+    return items.filter((item) => {
+      const summaryMatch = item.summary.toLowerCase().includes(q);
+      const nameMatch = item.requester_name?.toLowerCase().includes(q);
+      const labelMatch = item.subject_label?.toLowerCase().includes(q);
+      const emailMatch = item.email?.toLowerCase().includes(q);
+      const phoneMatch = item.phone?.toLowerCase().includes(q);
+      const empIdMatch = item.employee_id?.toLowerCase().includes(q);
+      const roleMatch = item.role?.toLowerCase().includes(q);
+      return (
+        summaryMatch ||
+        Boolean(nameMatch) ||
+        Boolean(labelMatch) ||
+        Boolean(emailMatch) ||
+        Boolean(phoneMatch) ||
+        Boolean(empIdMatch) ||
+        Boolean(roleMatch)
+      );
+    });
   }, [items, searchQuery]);
 
-  // Select Item
+  // Reset all filters
+  const handleResetFilters = useCallback(() => {
+    haptics.select();
+    setStatus("pending");
+    setTypeKey(undefined);
+    setSearchQuery("");
+  }, []);
+
+  // Select Item for BottomSheet Detail
   const handleItemPress = (item: ApprovalRequestListItem) => {
     haptics.select();
     setSelectedRequestId(item.id);
     setIsDetailVisible(true);
   };
 
-  // Actions
+  // Action: Approve Entire Request
   const handleApprove = async (requestId: string) => {
-    await decideMutation.mutateAsync({
-      requestId,
-      decision: "approve",
-      expectedVersion: selectedDetail?.version,
-    });
-    setIsDetailVisible(false);
+    setSubmittingRequestId(requestId);
+    const targetItem = items.find((i) => i.id === requestId);
+    try {
+      await decideMutation.mutateAsync({
+        requestId,
+        decision: "approve",
+        expectedVersion:
+          selectedDetail?.id === requestId
+            ? selectedDetail?.version
+            : targetItem?.version,
+        boundRequestIds: targetItem?.bound_request_ids,
+      });
+      showToast("success", "Approved", "Request approved successfully.");
+      setIsDetailVisible(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", "Approval Error", msg);
+    } finally {
+      setSubmittingRequestId(null);
+    }
   };
 
-  const handleRejectPrompt = () => {
+  // Action: Prompt Reject for Request
+  const handleCardRejectPrompt = useCallback((cardItem: ApprovalRequestListItem) => {
+    setSelectedRequestId(cardItem.id);
+    setRejectTarget({
+      kind: "request",
+      requestId: cardItem.id,
+      summary: cardItem.summary || "Approval Request",
+      version: cardItem.version,
+    });
+    setRejectModalVisible(true);
+  }, []);
+
+  // Action: Prompt Reject for BottomSheet
+  const handleBottomSheetRejectPrompt = () => {
+    if (!selectedDetail) return;
+    setRejectTarget({
+      kind: "request",
+      requestId: selectedDetail.id,
+      summary: selectedDetail.summary || "Approval Request",
+      version: selectedDetail.version,
+    });
     setRejectModalVisible(true);
   };
 
+  // Action: Verify Individual Document
+  const handleVerifyDocument = useCallback(
+    async (documentId: string, userId?: string) => {
+      try {
+        await verifyDocMutation.mutateAsync({ documentId, userId });
+        showToast("success", "Document Verified", "Document marked as verified.");
+        if (activeCardDoc?.doc.id === documentId) {
+          setActiveCardDoc(null);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast("error", "Verification Error", msg);
+      }
+    },
+    [verifyDocMutation, activeCardDoc]
+  );
+
+  // Action: Prompt Reject for Individual Document
+  const handleRejectDocumentPrompt = useCallback(
+    (doc: AttachedDocumentSummary | MobileViewerDoc, userId?: string) => {
+      const docLabel = (doc as any).label || (doc as any).title || "Document";
+      setRejectTarget({
+        kind: "document",
+        docId: doc.id || "",
+        userId,
+        summary: `${docLabel} rejection`,
+      });
+      setRejectModalVisible(true);
+    },
+    []
+  );
+
+  // Action: Confirm Rejection with Reason (Request or Document)
   const handleConfirmReject = async (reason: string) => {
-    if (!selectedRequestId) return;
-    await decideMutation.mutateAsync({
-      requestId: selectedRequestId,
-      decision: "reject",
-      note: reason,
-      expectedVersion: selectedDetail?.version,
-    });
-    setRejectModalVisible(false);
-    setIsDetailVisible(false);
+    if (!rejectTarget) return;
+
+    if (rejectTarget.kind === "request") {
+      setRejectingRequestId(rejectTarget.requestId);
+      const targetItem = items.find((i) => i.id === rejectTarget.requestId);
+      try {
+        await decideMutation.mutateAsync({
+          requestId: rejectTarget.requestId,
+          decision: "reject",
+          note: reason,
+          expectedVersion:
+            selectedDetail?.id === rejectTarget.requestId
+              ? selectedDetail?.version
+              : rejectTarget.version,
+          boundRequestIds: targetItem?.bound_request_ids,
+        });
+        showToast("success", "Request Rejected", "Approval request has been rejected.");
+        setRejectModalVisible(false);
+        setIsDetailVisible(false);
+        setRejectTarget(null);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast("error", "Rejection Error", msg);
+      } finally {
+        setRejectingRequestId(null);
+      }
+    } else if (rejectTarget.kind === "document") {
+      try {
+        await rejectDocMutation.mutateAsync({
+          documentId: rejectTarget.docId,
+          rejectionReason: reason,
+          userId: rejectTarget.userId,
+        });
+        showToast("success", "Document Rejected", "Document has been marked as rejected.");
+        setRejectModalVisible(false);
+        setRejectTarget(null);
+        if (activeCardDoc?.doc.id === rejectTarget.docId) {
+          setActiveCardDoc(null);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast("error", "Rejection Error", msg);
+      }
+    }
   };
+
+  // Card Document Thumbnail Fullscreen Inspection
+  const handleCardDocViewer = useCallback(
+    (
+      title: string,
+      url: string,
+      fileName?: string,
+      docId?: string,
+      isDocPending?: boolean
+    ) => {
+      setActiveCardDoc({
+        doc: {
+          id: docId,
+          title,
+          url,
+          uri: url,
+          mimeType: "image/jpeg",
+          fileName: fileName || "document.jpg",
+        },
+        isPending: Boolean(isDocPending),
+      });
+    },
+    []
+  );
+
+  if (!isAuthLoading && currentUserRole && !canAccessApprovals) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.canvas }]}
+        edges={["top"]}
+      >
+        <MobileHeader
+          title="Approvals & Verifications"
+          showBack={true}
+          backRoute="/dashboard"
+        />
+        <PermissionDeniedView
+          featureName="Approvals"
+          currentRole={currentUserRole}
+          requiredRoles={["super_admin", "admin"]}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.canvas }]}
       edges={["top"]}
     >
-      {/* Top Header */}
+      {/* ── Top Clean Header (Matching Web: Clean Title, No Clutter Badge) ── */}
       <View
         style={[
           styles.header,
           { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
         ]}
       >
-        <View>
-          <View style={styles.titleRow}>
-            <Text variant="title">Approvals</Text>
-            {counts.total > 0 && (
-              <View style={styles.countBadge}>
-                <Text variant="label" style={{ color: "#d97706" }}>
-                  {counts.total}
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text variant="caption">Unified operational queue & verifications</Text>
-        </View>
+        <Text variant="title">Approvals &amp; Verifications</Text>
       </View>
 
-      {/* Status Segmented Tabs */}
+      {/* ── Filter Toolbar with Custom Dropdowns (Matching Web Feedback 4 & 5) ── */}
       <View
         style={[
-          styles.tabsRow,
+          styles.filterSection,
           { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
         ]}
       >
-        <Pressable
-          onPress={() => {
-            haptics.select();
-            setStatus("pending");
-          }}
-          style={[
-            styles.tabItem,
-            status === "pending" && [
-              styles.tabActive,
-              { backgroundColor: "rgba(245, 158, 11, 0.12)" },
-            ],
-          ]}
-        >
-          <Clock
-            size={14}
-            color={status === "pending" ? "#d97706" : colors.mute}
-          />
-          <Text
-            variant="label"
-            style={{
-              color: status === "pending" ? "#d97706" : colors.mute,
-            }}
-          >
-            Pending ({counts.total})
-          </Text>
-        </Pressable>
+        {/* Dual Custom Dropdowns Row */}
+        <View style={styles.dropdownsRow}>
+          <View style={styles.dropdownCol}>
+            <DropdownFilterSelector
+              label="Status"
+              value={status}
+              options={statusOptions}
+              onChange={(val) => {
+                setStatus(val as ApprovalStatus | "all");
+              }}
+              minMenuWidth={180}
+            />
+          </View>
+          <View style={styles.dropdownCol}>
+            <DropdownFilterSelector
+              label="Request Type"
+              value={typeKey || "all"}
+              options={typeOptions}
+              onChange={(val) => {
+                setTypeKey(val === "all" ? undefined : val);
+              }}
+              minMenuWidth={220}
+            />
+          </View>
+        </View>
 
-        <Pressable
-          onPress={() => {
-            haptics.select();
-            setStatus("approved");
-          }}
-          style={[
-            styles.tabItem,
-            status === "approved" && [
-              styles.tabActive,
-              { backgroundColor: "rgba(16, 185, 129, 0.12)" },
-            ],
-          ]}
-        >
-          <CheckCircle2
-            size={14}
-            color={status === "approved" ? "#10b981" : colors.mute}
+        {/* Search Input (Matching Web Search Across All Fields) */}
+        <View style={styles.searchContainer}>
+          <SearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by name, emp id, email, phone, role..."
           />
-          <Text
-            variant="label"
-            style={{
-              color: status === "approved" ? "#10b981" : colors.mute,
-            }}
-          >
-            Approved
-          </Text>
-        </Pressable>
+        </View>
 
-        <Pressable
-          onPress={() => {
-            haptics.select();
-            setStatus("rejected");
-          }}
-          style={[
-            styles.tabItem,
-            status === "rejected" && [
-              styles.tabActive,
-              { backgroundColor: "rgba(239, 68, 68, 0.12)" },
-            ],
-          ]}
-        >
-          <XCircle
-            size={14}
-            color={status === "rejected" ? "#ef4444" : colors.mute}
-          />
-          <Text
-            variant="label"
-            style={{
-              color: status === "rejected" ? "#ef4444" : colors.mute,
-            }}
-          >
-            Rejected
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Type Filter Pills (Horizontal Scroll) */}
-      <View style={styles.filterStripContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterStrip}
-        >
-          {TYPE_FILTERS.map((f) => {
-            const isSelected = typeKey === f.key;
-            return (
+        {/* Active Filter Chips Strip */}
+        {activeFilterCount > 0 ? (
+          <View style={[styles.activeFiltersStrip, { borderTopColor: colors.hairline }]}>
+            <Text variant="micro" style={{ color: colors.mute }}>
+              ACTIVE ({activeFilterCount}):
+            </Text>
+            {searchQuery.trim() !== "" ? (
               <Pressable
-                key={f.label}
-                onPress={() => {
-                  haptics.select();
-                  setTypeKey(f.key);
-                }}
+                onPress={() => setSearchQuery("")}
                 style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: isSelected
-                      ? "rgba(2, 132, 199, 0.12)"
-                      : colors.canvasElevated,
-                    borderColor: isSelected ? "#0284c7" : colors.hairline,
-                  },
+                  styles.activeFilterPill,
+                  { backgroundColor: colors.canvas, borderColor: colors.hairline },
                 ]}
               >
-                <Text
-                  variant="micro"
-                  style={{
-                    color: isSelected ? "#0284c7" : colors.mute,
-                  }}
-                >
-                  {f.label}
-                  {f.key && counts.by_type[f.key]
-                    ? ` (${counts.by_type[f.key]})`
-                    : ""}
+                <Text variant="micro" numberOfLines={1}>
+                  &ldquo;{searchQuery}&rdquo;
                 </Text>
+                <X size={12} color={colors.mute} style={{ marginLeft: 4 }} />
               </Pressable>
-            );
-          })}
-        </ScrollView>
+            ) : null}
+            {status !== "pending" ? (
+              <Pressable
+                onPress={() => setStatus("pending")}
+                style={[
+                  styles.activeFilterPill,
+                  { backgroundColor: colors.canvas, borderColor: colors.hairline },
+                ]}
+              >
+                <Text variant="micro">
+                  Status: {BASE_STATUS_OPTIONS.find((s) => s.id === status)?.label}
+                </Text>
+                <X size={12} color={colors.mute} style={{ marginLeft: 4 }} />
+              </Pressable>
+            ) : null}
+            {typeKey !== undefined && typeKey !== "all" ? (
+              <Pressable
+                onPress={() => setTypeKey(undefined)}
+                style={[
+                  styles.activeFilterPill,
+                  { backgroundColor: colors.canvas, borderColor: colors.hairline },
+                ]}
+              >
+                <Text variant="micro">
+                  Type: {BASE_TYPE_OPTIONS.find((t) => t.id === typeKey)?.label}
+                </Text>
+                <X size={12} color={colors.mute} style={{ marginLeft: 4 }} />
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={handleResetFilters}
+              style={styles.resetFiltersBtn}
+            >
+              <RotateCcw size={12} color="#0284c7" />
+              <Text variant="micro" style={{ color: "#0284c7", marginLeft: 4 }}>
+                Reset all
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <SearchInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search by title, requester..."
-        />
+      {/* ── Results Count Banner ── */}
+      <View style={styles.resultsBanner}>
+        <Text variant="caption" style={{ color: colors.mute }}>
+          Showing{" "}
+          <Text variant="label" style={{ color: colors.ink }}>
+            {filteredItems.length}
+          </Text>{" "}
+          approval requests
+        </Text>
       </View>
 
-      {/* Main List */}
+      {/* ── Main Approvals List ── */}
       {isError ? (
         <ErrorState
           title="Failed to Load Approvals"
@@ -305,7 +523,18 @@ export default function ApprovalsScreen() {
           data={filteredItems}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <MobileApprovalCard item={item} onPress={handleItemPress} />
+            <MobileApprovalCard
+              item={item}
+              onPress={handleItemPress}
+              onApprove={handleApprove}
+              onRejectPrompt={handleCardRejectPrompt}
+              onOpenDocViewer={handleCardDocViewer}
+              onVerifyDocument={handleVerifyDocument}
+              onRejectDocumentPrompt={handleRejectDocumentPrompt}
+              canDecide={canAccessApprovals}
+              isActionLoading={submittingRequestId === item.id}
+              isRejectLoading={rejectingRequestId === item.id}
+            />
           )}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -323,33 +552,64 @@ export default function ApprovalsScreen() {
                 description={
                   status === "pending"
                     ? "Great job! All approval requests have been reviewed."
+                    : status === "approved"
+                    ? "No approved requests found matching your active filters."
+                    : status === "rejected"
+                    ? "No rejected requests found matching your active filters."
                     : "No requests matching the selected filters."
                 }
+                actionLabel={activeFilterCount > 0 ? "Reset active filters" : undefined}
+                onAction={activeFilterCount > 0 ? handleResetFilters : undefined}
               />
             ) : undefined
           }
         />
       )}
 
-      {/* Bottom Sheet Detail */}
+      {/* ── Bottom Sheet Detail (All 6 Types Supported) ── */}
       <ApprovalDetailBottomSheet
         visible={isDetailVisible}
         request={selectedDetail ?? null}
         isLoading={isDetailLoading}
         onClose={() => setIsDetailVisible(false)}
         onApprove={handleApprove}
-        onRejectPrompt={handleRejectPrompt}
+        onRejectPrompt={handleBottomSheetRejectPrompt}
         isActionLoading={decideMutation.isPending}
       />
 
-      {/* Rejection Modal */}
+      {/* ── Polymorphic Rejection Reason Modal (Mandatory reason captured) ── */}
       <RejectReasonModal
         visible={rejectModalVisible}
-        onClose={() => setRejectModalVisible(false)}
+        onClose={() => {
+          setRejectModalVisible(false);
+          setRejectTarget(null);
+        }}
         onConfirm={handleConfirmReject}
-        requestSummary={selectedDetail?.summary}
-        isSubmitting={decideMutation.isPending}
+        title={rejectTarget?.kind === "document" ? "Reject Document" : "Reject Request"}
+        requestSummary={rejectTarget?.summary}
+        isSubmitting={decideMutation.isPending || rejectDocMutation.isPending}
       />
+
+      {/* ── Fullscreen Document Viewer with In-Viewer Verification Actions ── */}
+      {activeCardDoc ? (
+        <MobileDocumentViewerModal
+          document={activeCardDoc.doc}
+          onClose={() => setActiveCardDoc(null)}
+          canDecide={canAccessApprovals}
+          isPending={activeCardDoc.isPending}
+          onVerifyDocument={
+            canAccessApprovals && activeCardDoc.doc.id
+              ? (docId) => handleVerifyDocument(docId)
+              : undefined
+          }
+          onRejectDocumentPrompt={
+            canAccessApprovals
+              ? (doc) => handleRejectDocumentPrompt(doc)
+              : undefined
+          }
+          isActionLoading={verifyDocMutation.isPending || rejectDocMutation.isPending}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -360,61 +620,58 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  countBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    backgroundColor: "rgba(245, 158, 11, 0.18)",
-  },
-  tabsRow: {
-    flexDirection: "row",
-    padding: 6,
+  filterSection: {
     borderBottomWidth: 1,
-    gap: 6,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
-  tabItem: {
-    flex: 1,
+  dropdownsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minHeight: 44,
-  },
-  tabActive: {
-    borderRadius: 8,
-  },
-  filterStripContainer: {
-    paddingVertical: 8,
-  },
-  filterStrip: {
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 10,
+    marginBottom: 8,
   },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
+  dropdownCol: {
+    flex: 1,
   },
   searchContainer: {
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  activeFiltersStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  activeFilterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  resetFiltersBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: "auto",
+    minHeight: 44,
+  },
+  resultsBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
 });

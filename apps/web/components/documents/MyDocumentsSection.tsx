@@ -282,7 +282,7 @@ export function MyDocumentsSection() {
                   >
                     {(localPreviews[code] || doc?.thumbSignedUrl) ? (
                       <img
-                        src={localPreviews[code] || doc?.thumbSignedUrl || ""}
+                        src={(localPreviews[code] || doc?.thumbSignedUrl)!}
                         alt={meta.label}
                         className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-105"
                         loading="lazy"

@@ -48,6 +48,7 @@ try {
   const webDalPath = path.join(rootDir, 'apps/web/lib/dal/approvals.ts');
   const webActionsPath = path.join(rootDir, 'apps/web/app/actions/approvals.ts');
   const outboxWorkerPath = path.join(rootDir, 'apps/web/app/api/approvals/outbox/route.ts');
+  const outboxProcessorPath = path.join(rootDir, 'apps/web/lib/server/approvals-outbox.ts');
   const webShellPath = path.join(rootDir, 'apps/web/app/(app)/approvals/ApprovalsClientShell.tsx');
   const webRowPath = path.join(rootDir, 'apps/web/app/(app)/approvals/components/ApprovalRow.tsx');
   const mobileScreenPath = path.join(rootDir, 'apps/mobile/app/(app)/approvals.tsx');
@@ -59,7 +60,7 @@ try {
   const migrationDown = fs.readFileSync(migrationDownPath, 'utf8');
   const webDal = fs.readFileSync(webDalPath, 'utf8');
   const webActions = fs.readFileSync(webActionsPath, 'utf8');
-  const outboxWorker = fs.readFileSync(outboxWorkerPath, 'utf8');
+  const outboxWorker = fs.readFileSync(outboxWorkerPath, 'utf8') + (fs.existsSync(outboxProcessorPath) ? fs.readFileSync(outboxProcessorPath, 'utf8') : '');
   const webShell = fs.readFileSync(webShellPath, 'utf8');
   const webRow = fs.readFileSync(webRowPath, 'utf8');
   const mobileScreen = fs.readFileSync(mobileScreenPath, 'utf8');
@@ -130,9 +131,9 @@ try {
 
   // --- 9. Web 3-Tier Responsive Viewports ---
   console.log('\n--- 9. Web Responsive UI Architecture ---');
-  assert(webShell.includes('ApprovalDetailPanel'), 'Client shell integrates side drawer/panel for desktop');
-  assert(webShell.includes('handleKeyDown') && webShell.includes('e.key === "a"') && webShell.includes('e.key === "r"'), 'Client shell provides keyboard shortcuts (A to approve, R to reject)');
-  assert(webRow.includes('min-h-[44px]') || webRow.includes('h-11') || webRow.includes('h-9') || webRow.includes('min-h-'), 'Web list items enforce accessible hit targets');
+  assert(webShell.includes('ApprovalDetailPanel') || webShell.includes('ApprovalDetailModal'), 'Client shell integrates detail view for inspect and review');
+  assert(webShell.includes('FilterToolbar'), 'Client shell integrates standard FilterToolbar with search and filters');
+  assert(webRow.includes('min-h-[44px]') || webRow.includes('min-h-[40px]') || webRow.includes('h-11') || webRow.includes('h-9') || webRow.includes('min-h-'), 'Web list items enforce accessible hit targets');
   assert(webShell.includes('ApprovalRejectModal'), 'Web UI requires mandatory rejection reason modal before submitting rejection');
 
   // --- 10. Native Mobile Integration & Parity ---

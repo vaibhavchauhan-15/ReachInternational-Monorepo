@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { type DocType, finalDocumentPath } from "@reachinternational/utils";
+import { processPendingApprovalOutboxItems } from "@/lib/server/approvals-outbox";
 import crypto from "node:crypto";
 
 export async function approveDocumentReplacementCore(params: {
@@ -21,6 +22,39 @@ export async function approveDocumentReplacementCore(params: {
     if (request.status !== "pending") {
       return { success: false, error: `Request is already ${request.status}.` };
     }
+
+    // 1. Check if unified approval engine has a pending request for this document replacement
+    const { data: appReq } = await adminSupabase
+      .from("approval_requests")
+      .select("id, version")
+      .eq("type_key", "document_replace")
+      .eq("subject_id", params.requestId)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (appReq) {
+      const { error: decideErr } = await adminSupabase.rpc("approval_decide", {
+        p_request_id: appReq.id,
+        p_decision: "approve",
+        p_expected_version: appReq.version,
+        p_actor_id: params.reviewerId,
+      });
+
+      if (!decideErr) {
+        // Fast-path drain outbox so file movement and DB updates complete immediately
+        await processPendingApprovalOutboxItems(10);
+        return { success: true };
+      }
+      console.warn("[approveDocumentReplacementCore] approval_decide fallback:", decideErr.message);
+    }
+
+    // 2. Direct fallback execution
+    const { data: existingDoc } = await adminSupabase
+      .from("user_documents")
+      .select("id, storage_path, thumb_path, mime_type, file_size_bytes, file_name")
+      .eq("user_id", request.user_id)
+      .eq("document_type_code", request.document_type_code)
+      .maybeSingle();
 
     // Derive final paths in user_files
     const fileUuid = crypto.randomUUID();
@@ -60,11 +94,16 @@ export async function approveDocumentReplacementCore(params: {
     }
 
     // Call atomic SQL RPC
-    const { error: rpcErr } = await adminSupabase.rpc("approve_document_change", {
-      p_request_id: request.id,
-      p_reviewer_id: params.reviewerId,
+    const { error: rpcErr } = await adminSupabase.rpc("apply_document_replacement_pointer", {
+      p_user_id: request.user_id,
+      p_doc_type: request.document_type_code,
       p_final_storage_path: finalMainPath,
       p_final_thumb_path: finalThumbPath,
+      p_decided_by: params.reviewerId,
+      p_mime_type: existingDoc?.mime_type || "image/jpeg",
+      p_file_size_bytes: existingDoc?.file_size_bytes || 0,
+      p_file_name: existingDoc?.file_name || `${request.document_type_code}.jpg`,
+      p_change_request_id: request.id,
     });
 
     if (rpcErr) {
@@ -72,24 +111,18 @@ export async function approveDocumentReplacementCore(params: {
       return { success: false, error: rpcErr.message || "Database error approving replacement." };
     }
 
-    // Synchronize with unified approval engine if an open request exists
-    try {
-      const { data: appReq } = await adminSupabase
-        .from("approval_requests")
-        .select("id, version")
-        .eq("type_key", "document_replace")
-        .eq("subject_id", params.requestId)
-        .eq("status", "pending")
-        .maybeSingle();
-
-      if (appReq) {
-        await adminSupabase.rpc("approval_decide", {
-          p_request_id: appReq.id,
-          p_decision: "approve",
-          p_expected_version: appReq.version,
-        });
+    // Delete older document files from user_files ONLY AFTER successful DB update
+    if (existingDoc?.storage_path) {
+      const oldFiles = [existingDoc.storage_path, existingDoc.thumb_path].filter(
+        (p): p is string => Boolean(p) && p !== finalMainPath && p !== finalThumbPath
+      );
+      if (oldFiles.length > 0) {
+        await adminSupabase.storage
+          .from("user_files")
+          .remove(oldFiles)
+          .catch((e: unknown) => console.warn("[approveDocumentReplacementCore] Warning deleting old files:", e));
       }
-    } catch {}
+    }
 
     return { success: true };
   } catch (err: unknown) {
@@ -110,6 +143,14 @@ export async function rejectDocumentReplacementCore(params: {
     }
 
     const adminSupabase = createSupabaseAdminClient();
+
+    // Fetch staging paths to clean up
+    const { data: request } = await adminSupabase
+      .from("document_change_requests")
+      .select("id, staging_path, staging_thumb_path")
+      .eq("id", params.requestId)
+      .maybeSingle();
+
     const { error: rpcErr } = await adminSupabase.rpc("reject_document_change", {
       p_request_id: params.requestId,
       p_reviewer_id: params.reviewerId,
@@ -119,6 +160,17 @@ export async function rejectDocumentReplacementCore(params: {
     if (rpcErr) {
       console.error("[rejectDocumentReplacementCore] RPC error:", rpcErr);
       return { success: false, error: rpcErr.message || "Database error rejecting replacement." };
+    }
+
+    // Clean up staged files
+    if (request?.staging_path) {
+      const stagedFiles = [request.staging_path, request.staging_thumb_path].filter(Boolean) as string[];
+      if (stagedFiles.length > 0) {
+        await adminSupabase.storage
+          .from("doc_staging")
+          .remove(stagedFiles)
+          .catch((e: unknown) => console.warn("[rejectDocumentReplacementCore] Staging clean warn:", e));
+      }
     }
 
     // Synchronize with unified approval engine if an open request exists

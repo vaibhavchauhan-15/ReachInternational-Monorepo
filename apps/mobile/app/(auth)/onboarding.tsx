@@ -499,7 +499,21 @@ export default function OnboardingScreen() {
       setAadhaarDocError('Please upload your Aadhaar document.');
       errors.aadhaar_doc = 'Aadhaar document is required.';
     }
-    if (licenseNumber.trim()) {
+    const hasLicenseDoc = Boolean(licenseDoc || existingDocs['driving_license']);
+    if (selectedRole === 'operator') {
+      if (!licenseNumber.trim()) {
+        errors.license_number = 'Driving licence number is required for operators.';
+      } else {
+        const licRes = validateLicenseNumber(licenseNumber);
+        if (!licRes.isValid) {
+          errors.license_number = licRes.error || 'Invalid driving licence format.';
+        }
+      }
+      if (!hasLicenseDoc) {
+        setLicenseDocError('Please upload your driving licence document.');
+        errors.license_doc = 'Licence document is required for operators.';
+      }
+    } else if (licenseNumber.trim()) {
       const licRes = validateLicenseNumber(licenseNumber);
       if (!licRes.isValid) {
         errors.license_number = licRes.error || 'Invalid driving licence format.';
@@ -1051,16 +1065,19 @@ export default function OnboardingScreen() {
                   leftIcon={<ShieldCheck size={15} color={iconColor} />}
                 />
 
-                <Input
-                  label="Driving Licence Number (Optional)"
-                  placeholder="e.g. MH12 20110012345"
-                  value={licenseNumber}
-                  onChangeText={handleLicenseChange}
-                  autoCapitalize="characters"
-                  maxLength={25}
-                  error={fieldErrors.license_number}
-                  leftIcon={<CreditCard size={15} color={iconColor} />}
-                />
+                {selectedRole === 'operator' && (
+                  <Input
+                    label="Driving Licence Number"
+                    required
+                    placeholder="e.g. MH12 20110012345"
+                    value={licenseNumber}
+                    onChangeText={handleLicenseChange}
+                    autoCapitalize="characters"
+                    maxLength={25}
+                    error={fieldErrors.license_number}
+                    leftIcon={<CreditCard size={15} color={iconColor} />}
+                  />
+                )}
 
                 <MobileDocumentUploadCard
                   title="Aadhaar Document"
@@ -1089,30 +1106,33 @@ export default function OnboardingScreen() {
                   errorMessage={aadhaarDocError || fieldErrors.aadhaar_doc}
                 />
 
-                <MobileDocumentUploadCard
-                  title="Licence Document"
-                  docTypeCode="driving_license"
-                  selectedDoc={licenseDoc}
-                  existingDoc={existingDocs['driving_license']}
-                  onDocSelected={(doc) => {
-                    setLicenseDoc(doc);
-                    setLicenseDocError(null);
-                  }}
-                  onDocRemoved={async () => {
-                    if (existingDocs['driving_license']) {
-                      await deleteUserDocument(user!.id, 'driving_license', existingDocs['driving_license'].storage_path);
-                      setExistingDocs((prev) => {
-                        const copy = { ...prev };
-                        delete copy['driving_license'];
-                        return copy;
-                      });
-                      toast('success', 'Document Removed', 'Licence document has been removed.');
-                    }
-                    setLicenseDoc(null);
-                    setLicenseDocError(null);
-                  }}
-                  errorMessage={licenseDocError}
-                />
+                {selectedRole === 'operator' && (
+                  <MobileDocumentUploadCard
+                    title="Licence Document"
+                    docTypeCode="driving_license"
+                    required
+                    selectedDoc={licenseDoc}
+                    existingDoc={existingDocs['driving_license']}
+                    onDocSelected={(doc) => {
+                      setLicenseDoc(doc);
+                      setLicenseDocError(null);
+                    }}
+                    onDocRemoved={async () => {
+                      if (existingDocs['driving_license']) {
+                        await deleteUserDocument(user!.id, 'driving_license', existingDocs['driving_license'].storage_path);
+                        setExistingDocs((prev) => {
+                          const copy = { ...prev };
+                          delete copy['driving_license'];
+                          return copy;
+                        });
+                        toast('success', 'Document Removed', 'Licence document has been removed.');
+                      }
+                      setLicenseDoc(null);
+                      setLicenseDocError(null);
+                    }}
+                    errorMessage={licenseDocError}
+                  />
+                )}
               </MobileFormSectionCard>
 
               {/* Informational Note Banner */}

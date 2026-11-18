@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { X, AlertTriangle, Loader2 } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 
 export interface ApprovalRejectModalProps {
   isOpen: boolean;
@@ -111,10 +111,10 @@ export function ApprovalRejectModal({
               type="submit"
               variant="destructive"
               size="sm"
+              loading={isSubmitting}
               disabled={isSubmitting}
               className="gap-1.5"
             >
-              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
               Confirm Rejection
             </Button>
           </div>

@@ -18,6 +18,7 @@ export interface RejectReasonModalProps {
   visible: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;
+  title?: string;
   requestSummary?: string;
   isSubmitting?: boolean;
 }
@@ -26,6 +27,7 @@ export function RejectReasonModal({
   visible,
   onClose,
   onConfirm,
+  title,
   requestSummary,
   isSubmitting = false,
 }: RejectReasonModalProps) {
@@ -74,7 +76,7 @@ export function RejectReasonModal({
             <View style={styles.headerTitle}>
               <AlertTriangle size={18} color="#ef4444" />
               <Text variant="heading" style={{ color: "#ef4444" }}>
-                Reject Request
+                {title || "Reject Request"}
               </Text>
             </View>
             <Button

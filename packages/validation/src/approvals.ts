@@ -19,6 +19,7 @@ export const ApprovalDecideInputSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   note: z.string().trim().max(1000).optional(),
   expected_version: z.number().int().positive().optional(),
+  bound_request_ids: z.array(z.string().uuid()).optional(),
 });
 
 export type ApprovalDecideInput = z.infer<typeof ApprovalDecideInputSchema>;
@@ -31,7 +32,7 @@ export const ApprovalCancelInputSchema = z.object({
 export type ApprovalCancelInput = z.infer<typeof ApprovalCancelInputSchema>;
 
 export const ApprovalListQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected", "cancelled", "expired"]).optional().default("pending"),
+  status: z.enum(["pending", "approved", "rejected", "cancelled", "expired", "all"]).optional().default("pending"),
   type_key: z.string().trim().optional(),
   cursor_created_at: z.string().datetime().optional(),
   cursor_id: z.string().uuid().optional(),

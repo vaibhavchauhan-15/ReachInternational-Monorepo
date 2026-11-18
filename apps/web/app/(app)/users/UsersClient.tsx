@@ -30,8 +30,8 @@ import {
 } from "@/app/actions/users";
 import { getSupervisorsAction } from "@/app/actions/auth";
 
+import type { UserListAggregates, FilterOption } from "./users-helpers";
 import {
-  UserListAggregates,
   ROLE_OPTIONS,
   SUPERVISOR_ROLE_OPTIONS,
 } from "./users-helpers";
@@ -74,6 +74,7 @@ export interface UsersPageClientProps {
   aggregates?: UserListAggregates;
   readOnly?: boolean;
   pendingApprovalCounts?: { total: number; by_type: Record<string, number> };
+  initialSupervisors?: Array<{ id: string; full_name: string; email?: string | null; phone?: string | null; role?: string }>;
 }
 
 export function UsersPageClient({
@@ -86,6 +87,7 @@ export function UsersPageClient({
   aggregates,
   readOnly = false,
   pendingApprovalCounts,
+  initialSupervisors,
 }: UsersPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -159,8 +161,16 @@ export function UsersPageClient({
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState<{ userId: string; userName: string; password: string } | null>(null);
 
-  // Supervisor state for assignment
-  const [availableSupervisors, setAvailableSupervisors] = useState<Array<{ value: string; label: string; description?: string }>>([]);
+  // Supervisor state for assignment and filtering
+  const [availableSupervisors, setAvailableSupervisors] = useState<Array<{ value: string; label: string; description?: string }>>(() => {
+    return (
+      initialSupervisors?.map((s) => ({
+        value: s.id,
+        label: s.full_name,
+        description: s.email || undefined,
+      })) || []
+    );
+  });
 
   useEffect(() => {
     if (readOnly) return;
@@ -180,6 +190,16 @@ export function UsersPageClient({
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [usersList, availableSupervisors]);
 
+  const supervisorFilterOptions = useMemo<FilterOption[]>(() => {
+    return [
+      { id: "all", label: "All Supervisors" },
+      ...supervisorOptions.map((s) => ({
+        id: s.value,
+        label: s.label,
+      })),
+    ];
+  }, [supervisorOptions]);
+
   // Multi-Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -192,6 +212,7 @@ export function UsersPageClient({
   const roleFilter = searchParams?.get("role") || "all";
   const statusFilter = searchParams?.get("status") || "all";
   const stateFilter = searchParams?.get("state") || "all";
+  const supervisorFilter = searchParams?.get("supervisor") || "all";
   const kycFilter = searchParams?.get("kyc") || "all";
   const dateRangeFilter = searchParams?.get("dateRange") || "all";
   const sortBy = searchParams?.get("sort") || "newest";
@@ -199,7 +220,7 @@ export function UsersPageClient({
   const isQueryLoading = isPending || isSearchLoading;
 
   // Derive a key from current server-side filters to detect changes
-  const currentFilterKey = `${roleFilter}:${statusFilter}:${stateFilter}:${kycFilter}:${dateRangeFilter}:${sortBy}`;
+  const currentFilterKey = `${roleFilter}:${statusFilter}:${stateFilter}:${supervisorFilter}:${kycFilter}:${dateRangeFilter}:${sortBy}`;
 
   // Synchronize local search state when URL search param changes via browser back/forward navigation
   useEffect(() => {
@@ -269,6 +290,7 @@ export function UsersPageClient({
           role: roleFilter !== "all" ? roleFilter : undefined,
           status: statusFilter !== "all" ? statusFilter : undefined,
           state: stateFilter !== "all" ? stateFilter : undefined,
+          supervisor: supervisorFilter !== "all" ? supervisorFilter : undefined,
           kyc: kycFilter !== "all" ? kycFilter : undefined,
           dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
           sort: sortBy !== "newest" ? sortBy : undefined,
@@ -290,6 +312,7 @@ export function UsersPageClient({
           search: searchParams?.get("search") || undefined,
           role: roleFilter !== "all" ? roleFilter : undefined,
           status: statusFilter !== "all" ? statusFilter : undefined,
+          supervisor: supervisorFilter !== "all" ? supervisorFilter : undefined,
           kyc: kycFilter !== "all" ? kycFilter : undefined,
           state: stateFilter !== "all" ? stateFilter : undefined,
           dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
@@ -326,6 +349,7 @@ export function UsersPageClient({
     roleFilter,
     statusFilter,
     stateFilter,
+    supervisorFilter,
     kycFilter,
     dateRangeFilter,
     sortBy,
@@ -422,6 +446,7 @@ export function UsersPageClient({
             role: roleFilter !== "all" ? roleFilter : undefined,
             status: statusFilter !== "all" ? statusFilter : undefined,
             state: stateFilter !== "all" ? stateFilter : undefined,
+            supervisor: supervisorFilter !== "all" ? supervisorFilter : undefined,
             kyc: kycFilter !== "all" ? kycFilter : undefined,
             dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
             sort: sortBy !== "newest" ? sortBy : undefined,
@@ -444,7 +469,7 @@ export function UsersPageClient({
         }
       }, 180);
     },
-    [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]
+    [roleFilter, statusFilter, stateFilter, supervisorFilter, kycFilter, dateRangeFilter, sortBy]
   );
 
   const handleSearchChange = useCallback(
@@ -802,6 +827,7 @@ export function UsersPageClient({
           search: searchParams?.get("search") || undefined,
           role: searchParams?.get("role") || undefined,
           status: searchParams?.get("status") || undefined,
+          supervisor: searchParams?.get("supervisor") || undefined,
           kyc: searchParams?.get("kyc") || undefined,
           state: searchParams?.get("state") || undefined,
           dateRange: searchParams?.get("dateRange") || undefined,
@@ -979,6 +1005,7 @@ export function UsersPageClient({
     (roleFilter !== "all" ? 1 : 0) +
     (statusFilter !== "all" ? 1 : 0) +
     (stateFilter !== "all" ? 1 : 0) +
+    (supervisorFilter !== "all" ? 1 : 0) +
     (kycFilter !== "all" ? 1 : 0) +
     (dateRangeFilter !== "all" ? 1 : 0) +
     (sortBy !== "newest" ? 1 : 0) +
@@ -1033,8 +1060,8 @@ export function UsersPageClient({
         }}
       />
 
-      {/* Centralized Approvals Alert Banner */}
-      {!readOnly && (pendingApprovalCounts?.total || 0) > 0 && (
+      {/* Centralized Approvals Alert Banner (Admin Only) */}
+      {!readOnly && (currentUser.role === "admin" || currentUser.role === "super_admin") && (pendingApprovalCounts?.total || 0) > 0 && (
         <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
@@ -1076,6 +1103,8 @@ export function UsersPageClient({
         onStatusFilterChange={(val) => updateFilter("status", val)}
         stateFilter={stateFilter}
         onStateFilterChange={(val) => updateFilter("state", val)}
+        supervisorFilter={supervisorFilter}
+        onSupervisorFilterChange={(val) => updateFilter("supervisor", val)}
         kycFilter={kycFilter}
         onKycFilterChange={(val) => updateFilter("kyc", val)}
         dateRangeFilter={dateRangeFilter}
@@ -1084,6 +1113,7 @@ export function UsersPageClient({
         onSortByChange={(val) => updateFilter("sort", val)}
         roleOptions={currentRoleOptions}
         stateOptions={stateOptions}
+        supervisorOptions={supervisorFilterOptions}
       />
 
       {/* 6. Content View: Desktop Table / Mobile Cards */}

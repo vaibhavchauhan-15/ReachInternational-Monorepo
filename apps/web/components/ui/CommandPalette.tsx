@@ -166,7 +166,7 @@ export function CommandPalette({
         href: "/approvals",
         shortcut: "⌘V",
         keywords: ["approvals", "approval", "verify", "verification", "queue", "documents", "registrations", "profile changes", "kyc", "review"],
-        roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
+        roles: ["super_admin", "admin"],
       },
       {
         id: "nav-clients",

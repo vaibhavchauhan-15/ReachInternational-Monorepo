@@ -5,7 +5,11 @@ export const ALLOWED_DOCUMENT_MIMES: Record<string, string> = {
   "application/pdf": ".pdf",
 };
 
-export const MAX_DOCUMENT_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+/**
+ * Raw file size limit before compression (5 MB). Users may upload high-res
+ * photos; the compression engine will reduce to ≤ 2.5 MB after processing.
+ */
+export const MAX_DOCUMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB (pre-compression ceiling)
 
 export function validateDocumentUpload(
   file: File | null,
@@ -18,7 +22,7 @@ export function validateDocumentUpload(
   }
   if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
     return {
-      error: `${label} must be smaller than 2 MB (received ${(file.size / (1024 * 1024)).toFixed(1)} MB).`,
+      error: `${label} must be smaller than 5 MB (received ${(file.size / (1024 * 1024)).toFixed(1)} MB). Please choose a smaller photo.`,
     };
   }
   const safeExt = ALLOWED_DOCUMENT_MIMES[file.type.toLowerCase()];

@@ -176,6 +176,11 @@ check('validation/auth.ts requires bank document and Aadhaar document flags', ()
   assert(validationAuthContent.includes('Aadhaar document required'));
 });
 
+check('validation/auth.ts conditionally requires driving licence only for operator role', () => {
+  assert(validationAuthContent.includes('Driving licence is required for operators'));
+  assert(validationAuthContent.includes('Licence document required for operators'));
+});
+
 // ============================================================
 // 3. Error Mapping & Raw Database Error Sanitization
 // ============================================================
@@ -393,6 +398,29 @@ check('signup.tsx resets Machine Category when role changes to non-operator', ()
 
 check('useFormDraft.ts includes selectedMachineCategory in draft values', () => {
   assert(draftHookContent.includes('selectedMachineCategory?: string'));
+});
+
+// ============================================================
+// 9. Web & Mobile 100% Parity: Operator-Only Mandatory Driving Licence
+// ============================================================
+console.log('\n[9/9] Verifying Operator-Only Driving Licence Invariants & Parity...');
+
+check('signup.tsx renders Driving Licence input and upload card conditionally for operators only', () => {
+  assert(signupContent.includes("selectedRole === 'operator' && ("));
+  assert(signupContent.includes("label=\"Driving Licence Number\""));
+  assert(signupContent.includes("docTypeCode=\"driving_license\""));
+});
+
+check('signup.tsx resets and clears Driving Licence state when role changes to non-operator', () => {
+  assert(signupContent.includes("setLicenseNumber('')"));
+  assert(signupContent.includes("clearFieldError('license_number')"));
+  assert(signupContent.includes("clearFieldError('license_doc')"));
+  assert(signupContent.includes("removeDocFile('driving_license')"));
+});
+
+check('signup.tsx enforces driving licence in section5Complete, isDocReady and missingFields for operators only', () => {
+  assert(signupContent.includes("selectedRole !== 'operator' ||"));
+  assert(signupContent.includes("isDocReady"));
 });
 
 console.log('\n------------------------------------------------------------');

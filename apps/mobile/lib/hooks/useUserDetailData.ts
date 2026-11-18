@@ -15,6 +15,8 @@ export interface UserDetailKPIs {
   totalRunningHours: number;
   totalDaysWorked: number;
   documentsCount: number;
+  supervisedOperatorsCount?: number;
+  supervisedShiftsCount?: number;
 }
 
 export interface UserMachineItem {
@@ -25,8 +27,38 @@ export interface UserMachineItem {
   status: string;
   serial_number?: string | null;
   manufacturer?: string | null;
-  year_of_mfg?: string | null;
+  year_of_mfg?: string | null | number;
   hour_meter?: number | null;
+  assigned_operator_name?: string | null;
+  assigned_operator_code?: string | null;
+}
+
+export interface SupervisedOperatorItem {
+  id: string;
+  employee_id: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  status: string;
+  machine_category: string | null;
+  city: string | null;
+  state: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  doj: string | null;
+  created_at: string;
+  active_machine_id: string | null;
+  active_machine_code: string | null;
+  active_machine_name: string | null;
+  active_machine_model: string | null;
+}
+
+export interface UserOperatorsPageChunk {
+  operators: SupervisedOperatorItem[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
 }
 
 export interface UserRunningLogItem {
@@ -192,11 +224,27 @@ export function useUserDetailOverview(userId?: string) {
     queryFn: async (): Promise<{ user: UserRecord; kpis: UserDetailKPIs; supervisorName?: string }> => {
       if (!userId) throw new Error('User ID is required');
 
+      const trimmedId = userId.trim();
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      let targetId = trimmedId;
+
+      if (!UUID_REGEX.test(trimmedId)) {
+        const { data: resolvedUser } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('employee_id', trimmedId)
+          .maybeSingle();
+
+        if (resolvedUser?.id) {
+          targetId = resolvedUser.id;
+        }
+      }
+
       // 1. Fetch user record
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select(USER_DETAIL_COLUMNS)
-        .eq('id', userId)
+        .eq('id', targetId)
         .single();
 
       if (userError || !userData) {
@@ -217,32 +265,64 @@ export function useUserDetailOverview(userId?: string) {
         }
       }
 
-      // 3. Fetch KPI metrics in parallel
-      const [machinesRes, logsRes, docsRes] = await Promise.all([
-        supabase
-          .from('machines')
-          .select('id', { count: 'exact', head: true })
-          .or(`current_operator_id.eq.${userId},operator_ids.cs.{${userId}},current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`),
-        supabase
-          .from('machine_hour_logs')
-          .select('running_hours, log_date')
-          .or(`operator_id.eq.${userId},supervisor_id.eq.${userId}`),
-        supabase
-          .from('user_documents')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId),
-      ]);
-
-      const logs = logsRes.data || [];
-      const totalRunningHours = logs.reduce((acc, row) => acc + (Number(row.running_hours) || 0), 0);
-      const distinctDates = new Set(logs.map((l) => l.log_date).filter(Boolean));
-
-      const kpis: UserDetailKPIs = {
-        assignedMachinesCount: machinesRes.count || 0,
-        totalRunningHours: Math.round(totalRunningHours * 10) / 10,
-        totalDaysWorked: distinctDates.size,
-        documentsCount: docsRes.count || 0,
+      // 3. Fetch role-aware KPI metrics via RPC with fallback
+      let kpis: UserDetailKPIs = {
+        assignedMachinesCount: 0,
+        totalRunningHours: 0,
+        totalDaysWorked: 0,
+        documentsCount: 0,
+        supervisedOperatorsCount: 0,
+        supervisedShiftsCount: 0,
       };
+
+      try {
+        const { data: rpcKpiData, error: rpcKpiErr } = await supabase.rpc('get_user_summary_kpis', {
+          target_user_id: targetId,
+          user_role: userData.role || null,
+        });
+
+        if (!rpcKpiErr && Array.isArray(rpcKpiData) && rpcKpiData[0]) {
+          const row = rpcKpiData[0];
+          kpis = {
+            assignedMachinesCount: Number(row.assigned_machines_count) || 0,
+            totalRunningHours: Number(row.total_running_hours) || 0,
+            totalDaysWorked: Number(row.total_days_worked) || 0,
+            documentsCount: Number(row.documents_count) || 0,
+            supervisedOperatorsCount: Number(row.supervised_operators_count) || 0,
+            supervisedShiftsCount: Number(row.supervised_shifts_count) || 0,
+          };
+        } else {
+          throw new Error('RPC fallback');
+        }
+      } catch {
+        const [machinesRes, logsRes, docsRes] = await Promise.all([
+          supabase
+            .from('machines')
+            .select('id', { count: 'exact', head: true })
+            .or(`current_operator_id.eq.${targetId},operator_ids.cs.{${targetId}},current_supervisor_id.eq.${targetId},supervisor_ids.cs.{${targetId}}`),
+          supabase
+            .from('machine_hour_logs')
+            .select('running_hours, log_date')
+            .or(`operator_id.eq.${targetId},supervisor_id.eq.${targetId}`),
+          supabase
+            .from('user_documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', targetId),
+        ]);
+
+        const logs = logsRes.data || [];
+        const totalRunningHours = logs.reduce((acc, row) => acc + (Number(row.running_hours) || 0), 0);
+        const distinctDates = new Set(logs.map((l) => l.log_date).filter(Boolean));
+
+        kpis = {
+          assignedMachinesCount: machinesRes.count || 0,
+          totalRunningHours: Math.round(totalRunningHours * 10) / 10,
+          totalDaysWorked: distinctDates.size,
+          documentsCount: docsRes.count || 0,
+          supervisedOperatorsCount: 0,
+          supervisedShiftsCount: 0,
+        };
+      }
 
       return {
         user: userData as unknown as UserRecord,
@@ -322,9 +402,9 @@ export function useUserDetailMachines(userId?: string, enabled = false) {
 /**
  * Hook 2b: Assigned Machinery Fleet with Infinite Pagination (Chunked 20 per page)
  */
-export function useUserDetailMachinesInfinite(userId?: string, enabled = false, pageSize = 20) {
+export function useUserDetailMachinesInfinite(userId?: string, userRole?: string, enabled = false, pageSize = 20) {
   return useInfiniteQuery<UserMachinesPageChunk>({
-    queryKey: ['user_detail', userId, 'machines_infinite', pageSize],
+    queryKey: ['user_detail', userId, 'machines_infinite', userRole, pageSize],
     enabled: Boolean(userId) && enabled,
     initialPageParam: 1,
     staleTime: 30_000,
@@ -332,45 +412,72 @@ export function useUserDetailMachinesInfinite(userId?: string, enabled = false, 
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
     queryFn: async ({ pageParam = 1 }): Promise<UserMachinesPageChunk> => {
       if (!userId) return { machines: [], totalCount: 0, page: 1, hasMore: false };
+
+      const trimmedId = userId.trim();
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      let targetId = trimmedId;
+
+      if (!UUID_REGEX.test(trimmedId)) {
+        const { data: resolvedUser } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('employee_id', trimmedId)
+          .maybeSingle();
+
+        if (resolvedUser?.id) {
+          targetId = resolvedUser.id;
+        }
+      }
+
       const currentPage = Number(pageParam) || 1;
       const from = (currentPage - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      const [directMachinesRes, activeAssignmentsRes] = await Promise.all([
-        supabase
-          .from('machines')
-          .select('id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter')
-          .or(`current_operator_id.eq.${userId},operator_ids.cs.{${userId}},current_supervisor_id.eq.${userId},supervisor_ids.cs.{${userId}}`)
-          .order('machine_id'),
-        supabase
-          .from('operator_machine_assignments')
-          .select(`
-            machine_id,
-            machines (id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter)
-          `)
-          .eq('operator_id', userId)
-          .eq('is_active', true),
-      ]);
+      let all: UserMachineItem[] = [];
 
-      const machineMap = new Map<string, UserMachineItem>();
-
-      (directMachinesRes.data || []).forEach((m: any) => {
-        machineMap.set(m.id, {
-          id: m.id,
-          machine_id: m.machine_id,
-          machine_name: m.machine_name,
-          model: m.model,
-          status: m.status,
-          serial_number: m.serial_number,
-          manufacturer: m.manufacturer,
-          year_of_mfg: m.year_of_mfg,
-          hour_meter: m.hour_meter,
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('get_user_assigned_machines', {
+          target_user_id: targetId,
+          user_role: userRole || null,
         });
-      });
 
-      (activeAssignmentsRes.data || []).forEach((item: any) => {
-        const m = Array.isArray(item.machines) ? item.machines[0] : item.machines;
-        if (m && !machineMap.has(m.id)) {
+        if (!rpcErr && Array.isArray(rpcData)) {
+          all = rpcData.map((m: any) => ({
+            id: m.id,
+            machine_id: m.machine_id,
+            machine_name: m.machine_name,
+            model: m.model,
+            status: m.status,
+            serial_number: m.serial_number,
+            manufacturer: m.manufacturer,
+            year_of_mfg: m.year_of_mfg,
+            hour_meter: m.hour_meter != null ? Number(m.hour_meter) : null,
+            assigned_operator_name: m.assigned_operator_name || null,
+            assigned_operator_code: m.assigned_operator_code || null,
+          }));
+        } else {
+          throw new Error('RPC fallback');
+        }
+      } catch {
+        const [directMachinesRes, activeAssignmentsRes] = await Promise.all([
+          supabase
+            .from('machines')
+            .select('id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter')
+            .or(`current_operator_id.eq.${targetId},operator_ids.cs.{${targetId}},current_supervisor_id.eq.${targetId},supervisor_ids.cs.{${targetId}}`)
+            .order('machine_id'),
+          supabase
+            .from('operator_machine_assignments')
+            .select(`
+              machine_id,
+              machines (id, machine_id, machine_name, model, status, serial_number, manufacturer, year_of_mfg, hour_meter)
+            `)
+            .eq('operator_id', targetId)
+            .eq('is_active', true),
+        ]);
+
+        const machineMap = new Map<string, UserMachineItem>();
+
+        (directMachinesRes.data || []).forEach((m: any) => {
           machineMap.set(m.id, {
             id: m.id,
             machine_id: m.machine_id,
@@ -382,15 +489,114 @@ export function useUserDetailMachinesInfinite(userId?: string, enabled = false, 
             year_of_mfg: m.year_of_mfg,
             hour_meter: m.hour_meter,
           });
-        }
-      });
+        });
 
-      const all = Array.from(machineMap.values());
+        (activeAssignmentsRes.data || []).forEach((item: any) => {
+          const m = Array.isArray(item.machines) ? item.machines[0] : item.machines;
+          if (m && !machineMap.has(m.id)) {
+            machineMap.set(m.id, {
+              id: m.id,
+              machine_id: m.machine_id,
+              machine_name: m.machine_name,
+              model: m.model,
+              status: m.status,
+              serial_number: m.serial_number,
+              manufacturer: m.manufacturer,
+              year_of_mfg: m.year_of_mfg,
+              hour_meter: m.hour_meter,
+            });
+          }
+        });
+
+        all = Array.from(machineMap.values());
+      }
+
       const totalCount = all.length;
       const paged = all.slice(from, to + 1);
 
       return {
         machines: paged,
+        totalCount,
+        page: currentPage,
+        hasMore: to + 1 < totalCount,
+      };
+    },
+  });
+}
+
+/**
+ * Hook 2c: Supervised Operators with Infinite Pagination (Supervisor Role Only)
+ */
+export function useUserDetailOperatorsInfinite(supervisorId?: string, enabled = false, pageSize = 20) {
+  return useInfiniteQuery<UserOperatorsPageChunk>({
+    queryKey: ['user_detail', supervisorId, 'operators_infinite', pageSize],
+    enabled: Boolean(supervisorId) && enabled,
+    initialPageParam: 1,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    queryFn: async ({ pageParam = 1 }): Promise<UserOperatorsPageChunk> => {
+      if (!supervisorId) return { operators: [], totalCount: 0, page: 1, hasMore: false };
+
+      const trimmedId = supervisorId.trim();
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      let targetSupervisorId = trimmedId;
+
+      if (!UUID_REGEX.test(trimmedId)) {
+        const { data: resolvedUser } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('employee_id', trimmedId)
+          .maybeSingle();
+
+        if (resolvedUser?.id) {
+          targetSupervisorId = resolvedUser.id;
+        }
+      }
+
+      const currentPage = Number(pageParam) || 1;
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let all: SupervisedOperatorItem[] = [];
+      try {
+        const { data, error } = await supabase.rpc('get_supervisor_operators', {
+          target_supervisor_id: targetSupervisorId,
+        });
+
+        if (!error && Array.isArray(data)) {
+          all = data.map((op: any) => ({
+            id: op.id,
+            employee_id: op.employee_id,
+            full_name: op.full_name,
+            email: op.email,
+            phone: op.phone,
+            role: op.role,
+            status: op.status,
+            machine_category: op.machine_category,
+            city: op.city,
+            state: op.state,
+            shift_start_time: op.shift_start_time,
+            shift_end_time: op.shift_end_time,
+            doj: op.doj,
+            created_at: op.created_at,
+            active_machine_id: op.active_machine_id,
+            active_machine_code: op.active_machine_code,
+            active_machine_name: op.active_machine_name,
+            active_machine_model: op.active_machine_model,
+          }));
+        } else {
+          all = [];
+        }
+      } catch {
+        all = [];
+      }
+
+      const totalCount = all.length;
+      const paged = all.slice(from, to + 1);
+
+      return {
+        operators: paged,
         totalCount,
         page: currentPage,
         hasMore: to + 1 < totalCount,
@@ -1244,5 +1450,39 @@ export async function reviewDocumentMobile(params: {
     return { success: false, error: err?.message || 'Network error while reviewing document' };
   }
 }
+
+/**
+ * Audit Logging for Sensitive Identity Document Reveal (Mobile Native Parity)
+ * Complies with Aadhaar Act & DPDP Act 2023 by logging unmasked views to audit_logs.
+ */
+export async function logSensitiveRevealMobile(
+  targetUserId: string,
+  field: 'aadhaar' | 'bank_account'
+): Promise<boolean> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId || !targetUserId) return false;
+
+    const action = field === 'aadhaar' ? 'aadhaar.reveal' : 'bank_account.reveal';
+    const { error } = await supabase.from('audit_logs').insert({
+      user_id: userId,
+      action,
+      entity_type: 'user',
+      entity_id: targetUserId,
+      target_user_id: targetUserId,
+      metadata: {
+        field,
+        viewer_id: userId,
+        target_user_id: targetUserId,
+      },
+    });
+
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 
 

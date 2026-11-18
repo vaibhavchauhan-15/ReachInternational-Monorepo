@@ -232,9 +232,24 @@ export function useMobileMyDocuments() {
       return doc.pendingSignedUrl;
     }
 
-    const { data, error } = await supabase.storage
-      .from('user_files')
+    const bucket = storagePath.startsWith('replace/') ? 'doc_staging' : 'user_files';
+    let { data, error } = await supabase.storage
+      .from(bucket)
       .createSignedUrl(storagePath, 60);
+
+    if ((error || !data?.signedUrl) && bucket === 'doc_staging') {
+      const alt = await supabase.storage.from('user_files').createSignedUrl(storagePath, 60);
+      if (alt.data?.signedUrl) {
+        data = alt.data;
+        error = null;
+      }
+    } else if ((error || !data?.signedUrl) && bucket === 'user_files') {
+      const alt = await supabase.storage.from('doc_staging').createSignedUrl(storagePath, 60);
+      if (alt.data?.signedUrl) {
+        data = alt.data;
+        error = null;
+      }
+    }
 
     if (error || !data?.signedUrl) {
       throw new Error(error?.message || 'Failed to generate document view URL');

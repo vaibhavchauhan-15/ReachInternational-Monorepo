@@ -10,6 +10,8 @@ import {
   AnimatedMapPin,
   AnimatedChevronRight,
 } from "@/components/ui/animated-icons";
+import { Wrench } from "lucide-react";
+import { maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import type { User } from "@/lib/types/database";
 
 interface MobileUserCardProps {
@@ -215,21 +217,14 @@ export const MobileUserCard = memo(function MobileUserCard({
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {user.employee_id && (
-                <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] shrink-0 shadow-2xs">
-                  {user.employee_id}
-                </span>
-              )}
-              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
-                {highlightText(truncateText(user.full_name, 18), searchTerm)}
-              </h3>
-            </div>
-            {user.location && (
-              <span className="text-xs text-[var(--color-mute)] truncate mt-0.5">
-                {user.location}
+            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
+              {highlightText(user.full_name, searchTerm)}
+            </h3>
+            {user.employee_id ? (
+              <span className="font-mono text-[11px] text-[var(--color-mute)] tracking-tight mt-0.5">
+                {highlightText(user.employee_id, searchTerm)}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -249,7 +244,7 @@ export const MobileUserCard = memo(function MobileUserCard({
             <>
               <div className="flex items-center gap-1.5 font-mono text-xs truncate">
                 <AnimatedMail size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                <span className="truncate" title={user.email}>{highlightText(truncateText(user.email, 22), searchTerm)}</span>
+                <span className="truncate" title={user.email}>{highlightText(user.email, searchTerm)}</span>
               </div>
               {user.phone && (
                 <div className="flex items-center gap-1.5 font-mono text-xs truncate">
@@ -263,10 +258,19 @@ export const MobileUserCard = memo(function MobileUserCard({
               Restricted contact
             </div>
           )}
-          {(user.city || user.location) && (
-            <div className="flex items-center gap-1.5 text-xs truncate">
-              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-              <span className="truncate">{user.city || user.location}</span>
+          {(user.city || user.state || user.location) && (
+            <div className="flex items-start gap-1.5 text-xs">
+              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60 mt-0.5" />
+              <div className="flex flex-col min-w-0 leading-tight">
+                <span className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                  {user.city || user.location || "—"}
+                </span>
+                {user.state && (
+                  <span className="text-[11px] text-[var(--color-mute)] truncate">
+                    {user.state}
+                  </span>
+                )}
+              </div>
             </div>
           )}
           {(user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name ? (
@@ -274,16 +278,41 @@ export const MobileUserCard = memo(function MobileUserCard({
               <span className="text-[var(--color-mute)] font-medium">Sup:</span>
               <span className="text-[var(--color-ink)] font-semibold truncate">
                 {user.supervisors && user.supervisors.length > 0
-                  ? user.supervisors.map((s) => truncateText(s.full_name, 15)).join(", ")
-                  : truncateText(user.supervisor?.full_name, 15)}
+                  ? user.supervisors.map((s) => s.full_name).join(", ")
+                  : user.supervisor?.full_name}
               </span>
             </div>
           ) : null}
+          {user.role === "operator" && (
+            <div className="flex items-center gap-1.5 text-xs truncate">
+              <Wrench size={12} className={`flex-shrink-0 ${user.machine_category ? "text-amber-600 dark:text-amber-400" : "text-[var(--color-mute)]"}`} />
+              <span className="text-[var(--color-mute)] font-medium">Machine:</span>
+              <span className={`truncate ${user.machine_category ? "text-[var(--color-ink)] font-semibold" : "text-[var(--color-mute)] italic"}`}>
+                {user.machine_category || "Unassigned"}
+              </span>
+            </div>
+          )}
           {user.working_location?.name && (
             <div className="flex items-center gap-1.5 text-xs truncate">
               <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
               <span className="text-[var(--color-mute)] font-medium">Base:</span>
               <span className="text-[var(--color-ink)] font-semibold truncate">{user.working_location.name}</span>
+            </div>
+          )}
+          {(user.aadhaar_number || user.license_number) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pt-1 border-t border-[var(--color-hairline)]/60 text-xs font-mono">
+              {user.aadhaar_number && (
+                <div className="flex items-center gap-1 text-[var(--color-ink)]">
+                  <span className="text-[10px] font-sans font-bold uppercase text-[var(--color-mute)]">Aadhaar:</span>
+                  <span className="text-[11px] font-medium">{maskAadhaar(user.aadhaar_number)}</span>
+                </div>
+              )}
+              {user.license_number && (
+                <div className="flex items-center gap-1 text-[var(--color-ink)]">
+                  <span className="text-[10px] font-sans font-bold uppercase text-[var(--color-mute)]">DL:</span>
+                  <span className="text-[11px] font-medium truncate max-w-[150px]">{formatLicenseNumber(user.license_number)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>

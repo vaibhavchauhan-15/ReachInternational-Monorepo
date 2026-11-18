@@ -213,9 +213,24 @@ export function mapSignupError(error: unknown): MappedSignupError {
         },
       };
     }
+
+    if (lower.includes('license') || lower.includes('licence') || lower.includes('users_license_number_key')) {
+      return {
+        title: 'Licence Already Registered',
+        message: 'Driving licence number already registered.',
+        type: 'error',
+        fieldErrors: {
+          licenseNumber: 'Licence number already registered.',
+          license_number: 'Licence number already registered.',
+        },
+      };
+    }
   }
 
-  // 4. Default Sanitized Message (strip sqlstate, public., users_, schema references)
+  // 4. Preserve server-provided fieldErrors if available
+  const existingFieldErrors = (error as any)?.fieldErrors;
+
+  // 5. Default Sanitized Message (strip sqlstate, public., users_, schema references)
   let cleanMsg = rawMessage
     .replace(/\(sqlstate\s+[a-z0-9]+\)/gi, '')
     .replace(/public\./gi, '')
@@ -230,5 +245,6 @@ export function mapSignupError(error: unknown): MappedSignupError {
     title: 'Registration Error',
     message: cleanMsg,
     type: 'error',
+    ...(existingFieldErrors ? { fieldErrors: existingFieldErrors } : {}),
   };
 }

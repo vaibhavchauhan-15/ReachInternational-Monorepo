@@ -46,8 +46,10 @@ export interface UserFiltersPanelProps {
   setStatusFilter: (val: string) => void;
   stateFilter: string;
   setStateFilter: (val: string) => void;
-  kycFilter: string;
-  setKycFilter: (val: string) => void;
+  supervisorFilter?: string;
+  setSupervisorFilter?: (val: string) => void;
+  kycFilter?: string;
+  setKycFilter?: (val: string) => void;
   dateRangeFilter: string;
   setDateRangeFilter: (val: string) => void;
   sortBy: string;
@@ -59,7 +61,8 @@ export interface UserFiltersPanelProps {
   roleFilterOptions: FilterOption[];
   statusFilterOptions: FilterOption[];
   stateFilterOptions: FilterOption[];
-  kycFilterOptions: FilterOption[];
+  supervisorFilterOptions?: FilterOption[];
+  kycFilterOptions?: FilterOption[];
   dateRangeFilterOptions: FilterOption[];
   sortFilterOptions: FilterOption[];
   totalUsersCount?: number;
@@ -78,7 +81,9 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
   setStatusFilter,
   stateFilter,
   setStateFilter,
-  kycFilter,
+  supervisorFilter = 'all',
+  setSupervisorFilter,
+  kycFilter = 'all',
   setKycFilter,
   dateRangeFilter,
   setDateRangeFilter,
@@ -91,9 +96,10 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
   roleFilterOptions,
   statusFilterOptions,
   stateFilterOptions,
-  kycFilterOptions,
-  dateRangeFilterOptions,
-  sortFilterOptions,
+  supervisorFilterOptions = [],
+  kycFilterOptions = [],
+  dateRangeFilterOptions = [],
+  sortFilterOptions = [],
   totalUsersCount,
 }: UserFiltersPanelProps) {
   const { theme, isDark } = useTheme();
@@ -105,6 +111,8 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
     statusFilterOptions.find((o) => o.id === statusFilter)?.label || 'All Status';
   const currentStateLabel =
     stateFilterOptions.find((o) => o.id === stateFilter)?.label || 'All States';
+  const currentSupervisorLabel =
+    supervisorFilterOptions.find((o) => o.id === supervisorFilter)?.label || 'All Supervisors';
   const currentKycLabel =
     kycFilterOptions.find((o) => o.id === kycFilter)?.label || 'All KYC';
   const currentJoinedLabel =
@@ -355,7 +363,28 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
             </Pressable>
           )}
 
-          {kycFilter !== 'all' && (
+          {supervisorFilter !== 'all' && setSupervisorFilter && (
+            <Pressable
+              variant="chip"
+              haptic="select"
+              hitSlopToMin48
+              activeOpacity={1.0}
+              onPress={() => setSupervisorFilter('all')}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove supervisor filter ${currentSupervisorLabel}`}
+            >
+              <Badge variant="outline" size="md">
+                <View style={styles.filterBadgeContent}>
+                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
+                    Supervisor: {currentSupervisorLabel}
+                  </Text>
+                  <X size={12} color={theme.colors.mute} />
+                </View>
+              </Badge>
+            </Pressable>
+          )}
+
+          {kycFilter !== 'all' && setKycFilter && (
             <Pressable
               variant="chip"
               haptic="select"
@@ -495,20 +524,37 @@ export const UserFiltersPanel = React.memo(function UserFiltersPanel({
           />
         </FilterCategoryCard>
 
-        {/* Category 4: KYC Verification */}
-        <FilterCategoryCard
-          title="KYC Verification"
-          isFiltered={kycFilter !== 'all'}
-          testID="category-user-kyc"
-        >
-          <DropdownFilterSelector
-            label="KYC"
-            value={kycFilter}
-            options={kycFilterOptions}
-            onChange={setKycFilter}
-            minMenuWidth={280}
-          />
-        </FilterCategoryCard>
+        {/* Category 4: Supervisor Filter */}
+        {supervisorFilterOptions && supervisorFilterOptions.length > 0 && setSupervisorFilter ? (
+          <FilterCategoryCard
+            title="Supervisor"
+            isFiltered={supervisorFilter !== 'all'}
+            testID="category-user-supervisor"
+          >
+            <DropdownFilterSelector
+              label="Supervisor"
+              value={supervisorFilter}
+              options={supervisorFilterOptions}
+              onChange={setSupervisorFilter}
+              showSearch={true}
+              minMenuWidth={280}
+            />
+          </FilterCategoryCard>
+        ) : kycFilterOptions && kycFilterOptions.length > 0 && setKycFilter ? (
+          <FilterCategoryCard
+            title="KYC Verification"
+            isFiltered={kycFilter !== 'all'}
+            testID="category-user-kyc"
+          >
+            <DropdownFilterSelector
+              label="KYC"
+              value={kycFilter}
+              options={kycFilterOptions}
+              onChange={setKycFilter}
+              minMenuWidth={280}
+            />
+          </FilterCategoryCard>
+        ) : null}
 
         {/* Category 5: Joined Timeline */}
         <FilterCategoryCard

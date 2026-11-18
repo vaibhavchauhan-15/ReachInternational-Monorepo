@@ -625,10 +625,22 @@ export async function signup(
     }
   }
 
-  // Driving licence format validation
+  // Driving licence format validation (Mandatory for operators)
   let formattedLicense: string | null = null;
   let licClean: string | null = null;
-  if (licenseNumber) {
+  if (role === "operator") {
+    if (!licenseNumber || !licenseNumber.trim()) {
+      fieldErrors.license_number = "Driving licence is required for operators.";
+    } else {
+      const licResult = validateLicenseNumber(licenseNumber);
+      if (!licResult.isValid) {
+        fieldErrors.license_number = licResult.error || "Invalid licence format.";
+      } else {
+        formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
+        licClean = licResult.clean || licenseNumber.trim();
+      }
+    }
+  } else if (licenseNumber && licenseNumber.trim()) {
     const licResult = validateLicenseNumber(licenseNumber);
     if (!licResult.isValid) {
       fieldErrors.license_number = licResult.error || "Invalid licence format.";
@@ -840,7 +852,10 @@ export async function signup(
     const aadhaarDocErr = validateSlotMetadata("aadhaar", "Aadhaar document", true);
     if (aadhaarDocErr) fieldErrors.aadhaar_file = aadhaarDocErr;
 
-    if (stagedFileMap.has("driving_license.jpg")) {
+    if (role === "operator") {
+      const licDocErr = validateSlotMetadata("driving_license", "Driving licence document", true);
+      if (licDocErr) fieldErrors.license_file = licDocErr;
+    } else if (stagedFileMap.has("driving_license.jpg")) {
       const licDocErr = validateSlotMetadata("driving_license", "Licence document", false);
       if (licDocErr) fieldErrors.license_file = licDocErr;
     }
@@ -865,7 +880,7 @@ export async function signup(
       })),
     ];
 
-    if (stagedFileMap.has("driving_license.jpg")) {
+    if (role === "operator" || stagedFileMap.has("driving_license.jpg")) {
       magicByteChecks.push(
         verifyStagedJpegMagicBytes(adminSupabase, `signup/${stagingUuid}/driving_license.jpg`).then((valid) => ({
           docType: "driving_license",
@@ -885,35 +900,32 @@ export async function signup(
     }
   }
 
-  // 5. Create auth user with supabase.auth.signUp()
-  const supabase = await createSupabaseServerClient();
-
-  const { data, error } = await supabase.auth.signUp({
+  // 5. Create auth user with admin client (email_confirm: true prevents GoTrue email rate limits)
+  const { data, error } = await adminSupabase.auth.admin.createUser({
     email,
     password,
-    options: {
-      data: {
-        full_name: fullName,
-        phone,
-        role: role,
-        machine_category: role === "operator" ? machineCategory : null,
-        shift_time: resolvedShiftTime || null,
-        shift_start_time: shiftStartTimeRaw || null,
-        shift_end_time: shiftEndTimeRaw || null,
-        street: address || null,
-        address: address || null,
-        city,
-        district,
-        state: resolvedStateName,
-        state_id: resolvedStateId,
-        location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
-        bank_account_number: bankAccountNumber.replace(/[\s\-]/g, ""),
-        bank_ifsc_code: bankIfscCode.replace(/[\s\-]/g, ""),
-        aadhaar_number: cleanAadhaar,
-        license_number: formattedLicense,
-        supervisor_id: supervisorIdRaw || null,
-      },
-      emailRedirectTo: `${getAppUrl()}/login`,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      phone,
+      role: role,
+      machine_category: role === "operator" ? machineCategory : null,
+      shift_time: resolvedShiftTime || null,
+      shift_start_time: shiftStartTimeRaw || null,
+      shift_end_time: shiftEndTimeRaw || null,
+      street: address || null,
+      address: address || null,
+      city,
+      district,
+      state: resolvedStateName,
+      state_id: resolvedStateId,
+      location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
+      bank_account_number: bankAccountNumber.replace(/[\s\-]/g, ""),
+      bank_ifsc_code: bankIfscCode.replace(/[\s\-]/g, ""),
+      aadhaar_number: cleanAadhaar,
+      license_number: formattedLicense,
+      supervisor_id: supervisorIdRaw || null,
+      staging_session_token: stagingSessionToken || null,
     },
   });
 
@@ -998,7 +1010,7 @@ export async function signup(
   //    return "Please try again", and leave staged files in place for retry.
   try {
     let finalizedLicense = false;
-    let finalizeDocsList: Array<{ docType: string; mainPath: string; thumbPath: string | null; sizeBytes: number }> = [];
+    let finalizeDocsList: Array<{ id: string; docType: string; mainPath: string; thumbPath: string | null; sizeBytes: number }> = [];
 
     if (stagingSessionToken && stagingUuid) {
       const finalizeResult = await finalizeStagedSignupDocuments({
@@ -1160,11 +1172,12 @@ export async function signup(
         await submitToApprovalEngineSafely({
           type_key: "document_verify",
           subject_type: "document",
-          subject_id: userId,
+          subject_id: fDoc.id,
           subject_label: `${fDoc.docType.toUpperCase()} - ${fullName}`,
           requested_by: userId,
           summary: `Initial verification for ${fDoc.docType} (${fullName})`,
           payload: {
+            document_id: fDoc.id,
             user_id: userId,
             document_type_code: fDoc.docType,
             storage_path: fDoc.mainPath,

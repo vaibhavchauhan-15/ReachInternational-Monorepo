@@ -210,6 +210,17 @@ export function buildQuickAccessDestinations(
       roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr'],
     },
     {
+      id: 'nav-approvals',
+      title: 'Approvals & Verifications',
+      subtitle: 'Universal queue for document verification, registrations & profile changes',
+      category: 'Navigation',
+      breadcrumb: 'Administration → Approvals',
+      icon: FileText,
+      href: '/approvals',
+      keywords: ['approvals', 'approval', 'verify', 'verification', 'queue', 'documents', 'registrations', 'profile changes', 'kyc', 'review'],
+      roles: ['super_admin', 'admin'],
+    },
+    {
       id: 'nav-profile',
       title: 'User Profile & Identity',
       subtitle: 'Account credentials, employment details, shift timings & Aadhaar KYC',

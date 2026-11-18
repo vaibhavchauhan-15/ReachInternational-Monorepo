@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Parse payload
-    const body = await req.json().catch(() => ({}));
+    const body = (await req.json().catch(() => ({}))) as Record<string, any>;
     const { action, requestId, documentId, rejectionReason, isPendingRequest } = body;
 
     let result: { success: boolean; error?: string } = { success: false, error: "Invalid action." };

@@ -63,6 +63,22 @@ export interface ApprovalRequest<TPayload = Record<string, unknown>> {
   requester?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
 }
 
+// ─── Attached Document Summary ──────────────────────────────────────
+
+export interface AttachedDocumentSummary {
+  id: string;
+  document_type_code: string;
+  label: string;
+  storage_path?: string | null;
+  thumb_path?: string | null;
+  thumb_signed_url?: string | null;
+  signed_url?: string | null;
+  verification_status: string;
+  status?: string;
+  file_size_bytes?: number;
+  mime_type?: string;
+}
+
 export interface ApprovalRequestListItem {
   id: string;
   type_key: string;
@@ -78,6 +94,15 @@ export interface ApprovalRequestListItem {
   created_at: string;
   expires_at?: string | null;
   version: number;
+  // Enhanced metadata fields for rich card and fast review
+  payload?: Record<string, any>;
+  role?: string | null;
+  employee_id?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  machine_category?: string | null;
+  documents?: AttachedDocumentSummary[];
+  bound_request_ids?: string[];
 }
 
 // ─── Decisions & Multi-Approver ──────────────────────────────────────

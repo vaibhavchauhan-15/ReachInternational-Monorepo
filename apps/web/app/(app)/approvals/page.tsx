@@ -15,12 +15,9 @@ export default async function ApprovalsPage({
 }: {
   searchParams: Promise<{ type?: string; status?: string; id?: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
+  // Authorize view: strictly admin users (super_admin, admin)
+  const user = await requireRole("admin");
 
-  // Authorize view: all system roles can access their approvals (operators see their submitted requests, admins see queue)
   const sp = await searchParams;
   const initialStatus = (sp.status as any) || "pending";
   const initialType = sp.type || undefined;

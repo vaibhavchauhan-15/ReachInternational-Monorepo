@@ -45,9 +45,23 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
           <td className="py-3.5 px-4">
             <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
           </td>
+          {/* Machine Category */}
+          <td className="py-3.5 px-4">
+            <div className="h-5 w-20 rounded-md bg-[var(--color-hairline)]/70" />
+          </td>
+          {/* Identity / KYC */}
+          <td className="py-3.5 px-4">
+            <div className="space-y-1.5">
+              <div className="h-3 w-24 bg-[var(--color-hairline)]/80 rounded" />
+              <div className="h-2.5 w-20 bg-[var(--color-hairline)]/60 rounded" />
+            </div>
+          </td>
           {/* Location */}
           <td className="py-3.5 px-4">
-            <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
+            <div className="space-y-1.5">
+              <div className="h-3 w-16 bg-[var(--color-hairline)]/80 rounded" />
+              <div className="h-2.5 w-12 bg-[var(--color-hairline)]/60 rounded" />
+            </div>
           </td>
           {/* Status */}
           <td className="py-3.5 px-4">
@@ -361,19 +375,25 @@ export function UsersTable({
                       />
                     </th>
                   )}
-                  <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[14%] whitespace-nowrap">
                     Name
                   </th>
-                  <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[14%] whitespace-nowrap">
                     Contact Info
                   </th>
-                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[10%] whitespace-nowrap">
                     Role
                   </th>
-                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
                     Supervisor
                   </th>
-                  <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
+                    Machine
+                  </th>
+                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                    Identity / KYC
+                  </th>
+                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
                     Location
                   </th>
                   <th className="py-3 px-4 w-[8%] whitespace-nowrap">
@@ -392,7 +412,7 @@ export function UsersTable({
                   <TableSkeletonRows readOnly={readOnly} />
                 ) : usersList.length === 0 ? (
                   <tr>
-                    <td colSpan={readOnly ? 8 : 9} className="py-16 px-4 text-center">
+                    <td colSpan={readOnly ? 10 : 11} className="py-16 px-4 text-center">
                       <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
                         <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
                           <AnimatedSearch size={22} />

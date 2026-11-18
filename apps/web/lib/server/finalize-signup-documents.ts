@@ -12,6 +12,7 @@ export interface FinalizeStagedDocumentsResult {
   success: boolean;
   finalizedCount: number;
   documents: Array<{
+    id: string;
     docType: DocType;
     mainPath: string;
     thumbPath: string | null;
@@ -167,16 +168,17 @@ export async function finalizeStagedSignupDocuments(params: {
       updated_at: nowIso,
     }));
 
-    const { error: upsertErr } = await adminSupabase.from("user_documents").upsert(
-      recordsToUpsert,
-      { onConflict: "user_id,document_type_code" }
-    );
+    const { data: upsertedRows, error: upsertErr } = await adminSupabase
+      .from("user_documents").upsert(recordsToUpsert, { onConflict: "user_id,document_type_code" })
+      .select("id, document_type_code");
 
     if (upsertErr) {
       throw new Error(`Failed to batch upsert user_documents: ${upsertErr.message}`);
     }
 
+    const idMap = new Map((upsertedRows || []).map((r) => [r.document_type_code, r.id]));
     const finalizedDocs = pendingTransfers.map((item) => ({
+      id: idMap.get(item.docType) || crypto.randomUUID(),
       docType: item.docType,
       mainPath: item.finalMainPath,
       thumbPath: item.finalThumbPath,

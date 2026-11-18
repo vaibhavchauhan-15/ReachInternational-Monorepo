@@ -47,12 +47,14 @@ const equipmentLinks = {
 
 const serviceLinks = [
   {
+    id: 'equipment-rental',
     href: '/#quote-promo',
     label: 'Equipment Rental',
     desc: 'Flexible short & long term rental across India.',
     icon: Truck,
   },
   {
+    id: 'equipment-sales',
     href: '/#quote-promo',
     label: 'Equipment Sales',
     desc: 'New and certified pre-owned heavy machinery.',
@@ -439,7 +441,7 @@ export function Navigation() {
                         {serviceLinks.map((service) => {
                           const Icon = service.icon
                           return (
-                            <li key={service.href}>
+                            <li key={service.id}>
                               <Link
                                 href={service.href}
                                 onClick={() => setActiveMenu(null)}
@@ -663,7 +665,7 @@ export function Navigation() {
                         {serviceLinks.map((service) => {
                           const Icon = service.icon
                           return (
-                            <Dialog.Close asChild key={service.href}>
+                            <Dialog.Close asChild key={service.id}>
                               <Link
                                 href={service.href}
                                 className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px]"

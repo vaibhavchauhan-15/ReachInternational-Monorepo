@@ -8,7 +8,7 @@ const GENERIC_RESET_SUCCESS_MESSAGE =
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const email = typeof body?.email === "string" ? body.email.trim() : "";
 
     if (!email) {

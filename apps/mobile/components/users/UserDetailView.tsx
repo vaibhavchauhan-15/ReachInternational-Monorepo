@@ -28,10 +28,9 @@ import { supabase } from '../../lib/supabase';
 import {
   MobileHeader,
   type HeaderActionItem,
-  KPICard,
-  KPIGrid,
   AppRefreshControl,
   EmptyState,
+  SearchInput,
   showToast,
 } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -59,6 +58,7 @@ import {
 import {
   useUserDetailOverview,
   useUserDetailMachinesInfinite,
+  useUserDetailOperatorsInfinite,
   useUserDetailRunningLogsInfinite,
   useUserDetailAssignmentsInfinite,
   useUserDetailAttendanceInfinite,
@@ -66,7 +66,9 @@ import {
   useUserDetailAuditLogsInfinite,
   resetUserPasswordMobile,
   fetchUpdatedUserRecord,
+  logSensitiveRevealMobile,
   type UserMachineItem,
+  type SupervisedOperatorItem,
   type UserRunningLogItem,
   type UserAssignmentItem,
   type UserDocumentItem,
@@ -111,18 +113,24 @@ import {
   AlertTriangle,
   RotateCcw,
   ChevronDown,
+  Building2,
+  CreditCard,
+  Eye,
+  EyeOff,
 } from '../ui/icon';
 
-export type UserDetailTabKey = 'machines' | 'logs' | 'assignments' | 'attendance' | 'documents' | 'audit';
+export type UserDetailTabKey = 'machines' | 'operators' | 'logs' | 'assignments' | 'attendance' | 'documents' | 'audit';
 
 export interface UserDetailViewProps {
-  user: UserRecord;
+  user?: UserRecord | null;
+  userId?: string;
   onBack: () => void;
   currentUserRole?: string;
   currentUserId?: string;
   onUserUpdated?: (updatedUser?: any) => void;
   onUserDeleted?: () => void;
   initialTab?: UserDetailTabKey;
+  onViewUser?: (userId: string) => void;
 }
 
 function formatShiftTime(start?: string | null, end?: string | null): string {
@@ -262,12 +270,14 @@ const TabPaginationFooter: React.FC<TabPaginationFooterProps> = ({
 
 export const UserDetailView: React.FC<UserDetailViewProps> = ({
   user: initialUser,
+  userId: initialUserId,
   onBack,
   currentUserRole = 'super_admin',
   currentUserId,
   onUserUpdated,
   onUserDeleted,
   initialTab = 'machines',
+  onViewUser,
 }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -275,13 +285,19 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const isTablet = windowWidth >= 641 && windowWidth <= 1023;
   const isDesktop = windowWidth >= 1024;
 
-  const [user, setUser] = useState<UserRecord>(initialUser);
+  const [user, setUser] = useState<UserRecord | null>(initialUser || null);
   const [activeTab, setActiveTab] = useState<UserDetailTabKey>(initialTab);
+  const [tabSearch, setTabSearch] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+  const [showFullBankAccount, setShowFullBankAccount] = useState(false);
+
+  const effectiveUserId = user?.id || initialUserId || '';
 
   // Lazy tab navigation states: track which tabs have been navigated to
   const [visitedTabs, setVisitedTabs] = useState<Record<UserDetailTabKey, boolean>>({
     machines: initialTab === 'machines',
+    operators: initialTab === 'operators',
     logs: initialTab === 'logs',
     assignments: initialTab === 'assignments',
     attendance: initialTab === 'attendance',
@@ -292,23 +308,48 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const handleTabChange = useCallback((newTab: string) => {
     const tabKey = newTab as UserDetailTabKey;
     setActiveTab(tabKey);
+    setTabSearch('');
     setVisitedTabs((prev) => ({ ...prev, [tabKey]: true }));
     haptics.select();
   }, []);
+
+  const handleToggleAadhaar = useCallback(async () => {
+    const next = !showFullAadhaar;
+    setShowFullAadhaar(next);
+    haptics.select();
+    if (next && effectiveUserId) {
+      void logSensitiveRevealMobile(effectiveUserId, 'aadhaar');
+    }
+  }, [showFullAadhaar, effectiveUserId]);
+
+  const handleToggleBankAccount = useCallback(async () => {
+    const next = !showFullBankAccount;
+    setShowFullBankAccount(next);
+    haptics.select();
+    if (next && effectiveUserId) {
+      void logSensitiveRevealMobile(effectiveUserId, 'bank_account');
+    }
+  }, [showFullBankAccount, effectiveUserId]);
 
   // 1. Overview Hook: Loads User Details, KPIs, Supervisor
   const {
     data: overviewData,
     isLoading: isOverviewLoading,
     refetch: refetchOverview,
-  } = useUserDetailOverview(user.id);
+  } = useUserDetailOverview(effectiveUserId);
 
   // Synchronize user from overview if refreshed
   React.useEffect(() => {
     if (overviewData?.user) {
-      setUser((prev) => ({ ...prev, ...overviewData.user }));
+      setUser((prev) => ({ ...(prev || {}), ...overviewData.user } as UserRecord));
     }
   }, [overviewData?.user]);
+
+  React.useEffect(() => {
+    if (initialUser) {
+      setUser(initialUser);
+    }
+  }, [initialUser]);
 
   // 2. Tab Hooks: Strictly Lazy Loaded on Tab Activation with Infinite Pagination!
   const {
@@ -318,12 +359,26 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextMachines,
     fetchNextPage: fetchNextMachines,
     refetch: refetchMachines,
-  } = useUserDetailMachinesInfinite(user.id, visitedTabs.machines, 20);
+  } = useUserDetailMachinesInfinite(effectiveUserId, user?.role, visitedTabs.machines, 20);
 
   const machines = useMemo(() => {
     return machinesInfiniteData?.pages.flatMap((p) => p.machines) || [];
   }, [machinesInfiniteData?.pages]);
   const totalMachinesCount = machinesInfiniteData?.pages[0]?.totalCount ?? machines.length;
+
+  const {
+    data: operatorsInfiniteData,
+    isLoading: isOperatorsLoading,
+    isFetchingNextPage: isFetchingNextOperators,
+    hasNextPage: hasNextOperators,
+    fetchNextPage: fetchNextOperators,
+    refetch: refetchOperators,
+  } = useUserDetailOperatorsInfinite(effectiveUserId, visitedTabs.operators && user?.role === 'supervisor', 20);
+
+  const operators = useMemo(() => {
+    return operatorsInfiniteData?.pages.flatMap((p) => p.operators) || [];
+  }, [operatorsInfiniteData?.pages]);
+  const totalOperatorsCount = operatorsInfiniteData?.pages[0]?.totalCount ?? operators.length;
 
   const {
     data: logsInfiniteData,
@@ -332,7 +387,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextLogs,
     fetchNextPage: fetchNextLogs,
     refetch: refetchLogs,
-  } = useUserDetailRunningLogsInfinite(user.id, visitedTabs.logs, 20);
+  } = useUserDetailRunningLogsInfinite(effectiveUserId, visitedTabs.logs, 20);
 
   const runningLogs = useMemo(() => {
     return logsInfiniteData?.pages.flatMap((p) => p.logs) || [];
@@ -346,7 +401,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextAssignments,
     fetchNextPage: fetchNextAssignments,
     refetch: refetchAssignments,
-  } = useUserDetailAssignmentsInfinite(user.id, visitedTabs.assignments, 20);
+  } = useUserDetailAssignmentsInfinite(effectiveUserId, visitedTabs.assignments, 20);
 
   const assignments = useMemo(() => {
     return assignmentsInfiniteData?.pages.flatMap((p) => p.assignments) || [];
@@ -360,7 +415,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextAttendance,
     fetchNextPage: fetchNextAttendance,
     refetch: refetchAttendance,
-  } = useUserDetailAttendanceInfinite(user.id, visitedTabs.attendance, 20);
+  } = useUserDetailAttendanceInfinite(effectiveUserId, visitedTabs.attendance && user?.role === 'operator', 20);
 
   const attendanceData = useMemo(() => {
     const firstPage = attendanceInfiniteData?.pages[0];
@@ -381,7 +436,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextDocs,
     fetchNextPage: fetchNextDocs,
     refetch: refetchDocuments,
-  } = useUserDetailDocumentsInfinite(user.id, visitedTabs.documents, 20);
+  } = useUserDetailDocumentsInfinite(effectiveUserId, visitedTabs.documents, 20);
 
   const documents = useMemo(() => {
     return documentsInfiniteData?.pages.flatMap((p) => p.documents) || [];
@@ -396,14 +451,14 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   const isSupervisor = normalizedRole === 'supervisor';
   const isHr = normalizedRole === 'hr';
   const isOperator = normalizedRole === 'operator';
-  const isSelf = currentUserId === user.id;
+  const isSelf = currentUserId === user?.id;
 
   const canManageUsers = isSuperAdmin || isAdmin || isManager || isHr;
   const canEditUsers = canManageUsers;
   const canDeleteUsers = (isSuperAdmin || isAdmin) && !isSelf;
   const canActivateUsers = (isSuperAdmin || isAdmin || isHr) && !isSelf;
   const canAssignSupervisorUsers = canManageUsers;
-  const canAssignMachineUsers = (canManageUsers || isSupervisor) && user.role === 'operator';
+  const canAssignMachineUsers = (canManageUsers || isSupervisor) && user?.role === 'operator';
   const canResetPwdUsers = canManageUsers;
   const canViewSalary = canManageUsers || isSelf;
   const canRevealDocs = isSuperAdmin || isAdmin || isHr || isSelf;
@@ -417,7 +472,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     hasNextPage: hasNextAudit,
     fetchNextPage: fetchNextAudit,
     refetch: refetchAudit,
-  } = useUserDetailAuditLogsInfinite(user.id, visitedTabs.audit && canViewAudit, 20);
+  } = useUserDetailAuditLogsInfinite(effectiveUserId, visitedTabs.audit && canViewAudit, 20);
 
   const auditLogs = useMemo(() => {
     return auditInfiniteData?.pages.flatMap((p) => p.logs) || [];
@@ -433,6 +488,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       await Promise.all([
         refetchOverview(),
         visitedTabs.machines ? refetchMachines() : Promise.resolve(),
+        visitedTabs.operators && user?.role === 'supervisor' ? refetchOperators() : Promise.resolve(),
         visitedTabs.logs ? refetchLogs() : Promise.resolve(),
         visitedTabs.assignments ? refetchAssignments() : Promise.resolve(),
         visitedTabs.attendance ? refetchAttendance() : Promise.resolve(),
@@ -446,6 +502,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     refetchOverview,
     visitedTabs,
     refetchMachines,
+    refetchOperators,
     refetchLogs,
     refetchAssignments,
     refetchAttendance,
@@ -554,7 +611,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
 
   // Administrative Password Reset Trigger (Web Parity)
   const handleExecuteResetPassword = useCallback(async () => {
-    if (isResettingPassword) return;
+    if (!user || isResettingPassword) return;
     setIsResettingPassword(true);
     try {
       const res = await resetUserPasswordMobile(user.id, user.full_name);
@@ -565,7 +622,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       } else {
         haptics.confirm();
         setResetPasswordResult({
-          userName: res.userName || user.full_name,
+          userName: res.userName || user?.full_name || '',
           temporaryPassword: res.temporaryPassword,
         });
         showToast('success', 'Temporary password generated successfully');
@@ -577,7 +634,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     } finally {
       setIsResettingPassword(false);
     }
-  }, [isResettingPassword, user.id, user.full_name]);
+  }, [isResettingPassword, user?.id, user?.full_name]);
 
   // Status Toggle
   const handleToggleStatus = useCallback(() => {
@@ -585,22 +642,22 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       showToast('error', 'You cannot change your own account status.');
       return;
     }
-    if (normalizedRole === 'admin' && user.role === 'super_admin') {
+    if (normalizedRole === 'admin' && user?.role === 'super_admin') {
       showToast('error', 'Only Super Admins can modify Super Admin accounts.');
       return;
     }
     setStatusConfirmVisible(true);
-  }, [isSelf, normalizedRole, user.role]);
+  }, [isSelf, normalizedRole, user?.role]);
 
   const handleConfirmToggleStatus = useCallback(async () => {
-    if (statusSubmittingRef.current || isUpdatingStatus) return;
+    if (!user || statusSubmittingRef.current || isUpdatingStatus) return;
     statusSubmittingRef.current = true;
     setIsUpdatingStatus(true);
     setStatusConfirmVisible(false);
 
     const prevStatus = user.status;
     const targetStatus = prevStatus === 'active' ? 'inactive' : 'active';
-    setUser((prev) => ({ ...prev, status: targetStatus }));
+    setUser((prev) => (prev ? ({ ...prev, status: targetStatus } as UserRecord) : null));
 
     try {
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('toggle_user_status_atomic', {
@@ -608,14 +665,14 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       });
 
       if (rpcErr || (rpcRes && rpcRes.success === false)) {
-        setUser((prev) => ({ ...prev, status: prevStatus }));
+        setUser((prev) => (prev ? ({ ...prev, status: prevStatus } as UserRecord) : null));
         haptics.reject();
         showToast('error', 'Failed to update user status');
         return;
       }
 
       const updatedStatus = rpcRes?.status || targetStatus;
-      setUser((prev) => ({ ...prev, status: updatedStatus }));
+      setUser((prev) => (prev ? ({ ...prev, status: updatedStatus } as UserRecord) : null));
       onUserUpdated?.({ ...user, status: updatedStatus });
       haptics.confirm();
       showToast(
@@ -629,7 +686,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         onUserUpdated?.(freshUser);
       }
     } catch {
-      setUser((prev) => ({ ...prev, status: prevStatus }));
+      setUser((prev) => (prev ? ({ ...prev, status: prevStatus } as UserRecord) : null));
       haptics.reject();
       showToast('error', 'Failed to update status');
     } finally {
@@ -640,7 +697,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
 
   // Delete User Trigger
   const handleDeleteUser = useCallback(async () => {
-    if (deleteSubmittingRef.current || isDeleting) return;
+    if (!user || deleteSubmittingRef.current || isDeleting) return;
     deleteSubmittingRef.current = true;
     setIsDeleting(true);
 
@@ -669,11 +726,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       setIsDeleting(false);
       deleteSubmittingRef.current = false;
     }
-  }, [isDeleting, user.id, onUserUpdated, onUserDeleted, onBack]);
+  }, [isDeleting, user?.id, onUserUpdated, onUserDeleted, onBack]);
 
   // Communication Handlers
-  const cleanPhone = (user.phone || '').replace(/[^0-9+]/g, '');
-  const whatsappUrl = cleanPhone
+  const cleanPhone = (user?.phone || '').replace(/[^0-9+]/g, '');
+  const whatsappUrl = cleanPhone && user
     ? `https://wa.me/${cleanPhone.replace('+', '')}?text=${encodeURIComponent(
         `Hello ${user.full_name}, ReachInternational regarding your profile ${user.employee_id || ''}.`
       )}`
@@ -688,12 +745,12 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
   }, [cleanPhone]);
 
   const handleEmail = useCallback(() => {
-    if (user.email) {
+    if (user?.email) {
       Linking.openURL(`mailto:${user.email}`);
     } else {
       showToast('error', 'No email address registered for this user');
     }
-  }, [user.email]);
+  }, [user?.email]);
 
   const handleWhatsapp = useCallback(() => {
     if (whatsappUrl) {
@@ -743,7 +800,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       });
     }
 
-    if (canActivateUsers) {
+    if (canActivateUsers && user) {
       list.push({
         id: 'toggle-status',
         label: user.status === 'active' ? 'Deactivate Account' : 'Activate Account',
@@ -775,7 +832,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     canResetPwdUsers,
     canActivateUsers,
     canDeleteUsers,
-    user.status,
+    user?.status,
     theme.colors,
     handleToggleStatus,
   ]);
@@ -801,31 +858,42 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         icon: Truck,
         count: totalMachinesCount || kpis.assignedMachinesCount || 0,
       },
-      {
+    ];
+
+    if (user?.role === 'supervisor') {
+      tabs.push({
+        id: 'operators',
+        label: 'Operators',
+        icon: Users,
+        count: totalOperatorsCount || kpis.supervisedOperatorsCount || 0,
+      });
+    } else if (user?.role === 'operator') {
+      tabs.push({
         id: 'logs',
         label: 'Running Logs',
         icon: Clock,
         count: totalLogsCount || 0,
-      },
-      {
+      });
+      tabs.push({
         id: 'assignments',
         label: 'Assignments',
         icon: UserCheck,
         count: totalAssignmentsCount || 0,
-      },
-      {
+      });
+      tabs.push({
         id: 'attendance',
         label: 'Attendance',
         icon: Calendar,
         count: attendanceData.totalActiveWorkDays || kpis.totalDaysWorked || 0,
-      },
-      {
-        id: 'documents',
-        label: 'Documents',
-        icon: FileText,
-        count: totalDocumentsCount || kpis.documentsCount || 0,
-      },
-    ];
+      });
+    }
+
+    tabs.push({
+      id: 'documents',
+      label: 'Documents',
+      icon: FileText,
+      count: totalDocumentsCount || kpis.documentsCount || 0,
+    });
 
     if (canViewAudit) {
       tabs.push({
@@ -838,8 +906,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
 
     return tabs;
   }, [
+    user?.role,
     totalMachinesCount,
     kpis.assignedMachinesCount,
+    totalOperatorsCount,
+    kpis.supervisedOperatorsCount,
     totalLogsCount,
     totalAssignmentsCount,
     attendanceData.totalActiveWorkDays,
@@ -850,10 +921,105 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     totalAuditCount,
   ]);
 
-  const filteredMachines = machines;
-  const filteredLogs = runningLogs;
-  const filteredAssignments = assignments;
-  const filteredAuditLogs = auditLogs;
+  React.useEffect(() => {
+    if (tabChips.length > 0 && !tabChips.some((t) => t.id === activeTab)) {
+      setActiveTab('machines');
+    }
+  }, [tabChips, activeTab]);
+
+  const filteredMachines = useMemo(() => {
+    if (!tabSearch.trim()) return machines;
+    const q = tabSearch.toLowerCase().trim();
+    return machines.filter(
+      (m) =>
+        m.machine_id.toLowerCase().includes(q) ||
+        m.machine_name.toLowerCase().includes(q) ||
+        (m.model && m.model.toLowerCase().includes(q)) ||
+        (m.serial_number && m.serial_number.toLowerCase().includes(q)) ||
+        (m.assigned_operator_name && m.assigned_operator_name.toLowerCase().includes(q)) ||
+        (m.assigned_operator_code && m.assigned_operator_code.toLowerCase().includes(q))
+    );
+  }, [machines, tabSearch]);
+
+  const filteredOperators = useMemo(() => {
+    if (!tabSearch.trim()) return operators;
+    const q = tabSearch.toLowerCase().trim();
+    return operators.filter(
+      (op) =>
+        op.full_name.toLowerCase().includes(q) ||
+        (op.employee_id && op.employee_id.toLowerCase().includes(q)) ||
+        (op.phone && op.phone.toLowerCase().includes(q)) ||
+        (op.email && op.email.toLowerCase().includes(q)) ||
+        (op.machine_category && op.machine_category.toLowerCase().includes(q)) ||
+        (op.active_machine_name && op.active_machine_name.toLowerCase().includes(q)) ||
+        (op.active_machine_code && op.active_machine_code.toLowerCase().includes(q)) ||
+        (op.city && op.city.toLowerCase().includes(q)) ||
+        (op.state && op.state.toLowerCase().includes(q))
+    );
+  }, [operators, tabSearch]);
+
+  const filteredLogs = useMemo(() => {
+    if (!tabSearch.trim()) return runningLogs;
+    const q = tabSearch.toLowerCase().trim();
+    return runningLogs.filter(
+      (l) =>
+        l.machine_code.toLowerCase().includes(q) ||
+        l.machine_name.toLowerCase().includes(q) ||
+        l.log_date.includes(q) ||
+        (l.location && l.location.toLowerCase().includes(q)) ||
+        (l.remarks && l.remarks.toLowerCase().includes(q))
+    );
+  }, [runningLogs, tabSearch]);
+
+  const filteredAssignments = useMemo(() => {
+    if (!tabSearch.trim()) return assignments;
+    const q = tabSearch.toLowerCase().trim();
+    return assignments.filter(
+      (a) =>
+        a.machine_code.toLowerCase().includes(q) ||
+        a.machine_name.toLowerCase().includes(q) ||
+        (a.model && a.model.toLowerCase().includes(q))
+    );
+  }, [assignments, tabSearch]);
+
+  const filteredAuditLogs = useMemo(() => {
+    if (!tabSearch.trim()) return auditLogs;
+    const q = tabSearch.toLowerCase().trim();
+    return auditLogs.filter(
+      (a) =>
+        a.action.toLowerCase().includes(q) ||
+        (a.actor_name && a.actor_name.toLowerCase().includes(q)) ||
+        (a.actor_role && a.actor_role.toLowerCase().includes(q)) ||
+        (a.category && a.category.toLowerCase().includes(q))
+    );
+  }, [auditLogs, tabSearch]);
+
+  const filteredDocuments = useMemo(() => {
+    if (!tabSearch.trim()) return documents;
+    const q = tabSearch.toLowerCase().trim();
+    return documents.filter(
+      (d) =>
+        d.document_type_code.toLowerCase().includes(q) ||
+        (d.type_label && d.type_label.toLowerCase().includes(q)) ||
+        (d.verification_status && d.verification_status.toLowerCase().includes(q))
+    );
+  }, [documents, tabSearch]);
+
+  if (!user) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <MobileHeader
+          showBack={true}
+          onPressBack={onBack}
+          title="User Profile"
+          subtitle="Loading profile..."
+        />
+        <ScrollView style={styles.scrollArea} contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}>
+          <UserMachinesSkeleton count={3} />
+        </ScrollView>
+      </View>
+    );
+  }
 
   const roleAvatarStyle = getRoleAvatarColors(user.role, isDark);
   const avatarBg = isDark ? '#ffffff' : '#171717';
@@ -1096,12 +1262,30 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                 </Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Supervisor</Text>
-                <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
-                  {supervisorDisplay}
-                </Text>
-              </View>
+              {user.role === 'operator' && (
+                <View style={styles.infoRow}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervisor</Text>
+                  <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
+                    {supervisorDisplay}
+                  </Text>
+                </View>
+              )}
+
+              {user.role === 'supervisor' && (
+                <View style={styles.infoRow}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervised Operators</Text>
+                  <Pressable
+                    variant="plain"
+                    haptic="tap"
+                    hitSlopToMin48
+                    onPress={() => handleTabChange('operators')}
+                  >
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
+                      {totalOperatorsCount || kpis.supervisedOperatorsCount || 0} operators assigned
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
               {user.role === 'operator' && (
                 <View style={styles.infoRow}>
@@ -1210,44 +1394,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           </View>
         </View>
 
-        {/* ─── 4. 4-CARD KPI METRICS STRIP ─── */}
-        <View style={styles.kpiContainer}>
-          <KPIGrid columns={4}>
-            <KPICard
-              label="Assigned Fleet"
-              value={kpis.assignedMachinesCount}
-              icon={Truck}
-              variant="default"
-              isLoading={isOverviewLoading}
-            />
-
-            <KPICard
-              label="Running Hours"
-              value={`${kpis.totalRunningHours} h`}
-              icon={Clock}
-              variant="success"
-              isLoading={isOverviewLoading}
-            />
-
-            <KPICard
-              label="Work Days"
-              value={`${kpis.totalDaysWorked} days`}
-              icon={Calendar}
-              variant="warning"
-              isLoading={isOverviewLoading}
-            />
-
-            <KPICard
-              label="KYC Documents"
-              value={`${kpis.documentsCount} files`}
-              icon={FileText}
-              variant="default"
-              isLoading={isOverviewLoading}
-            />
-          </KPIGrid>
-        </View>
-
-        {/* ─── 5. HORIZONTAL TAB STRIP (CHIPS) ─── */}
+        {/* ─── 4. HORIZONTAL TAB STRIP (CHIPS) ─── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1288,6 +1435,19 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           })}
         </ScrollView>
 
+        {/* ─── 5B. IN-TAB SEARCH TOOLBAR (100% Web Parity) ─── */}
+        {activeTab !== 'attendance' && (
+          <View style={styles.tabSearchContainer}>
+            <SearchInput
+              value={tabSearch}
+              onChangeText={setTabSearch}
+              onClear={() => setTabSearch('')}
+              placeholder={`Search in ${tabChips.find((t) => t.id === activeTab)?.label || activeTab}...`}
+              size="sm"
+            />
+          </View>
+        )}
+
         {/* ─── 6. TAB CONTENT PANELS WITH LAZY LOADING & INFINITE PAGINATION ─── */}
 
         {/* TAB 1: Assigned Machinery Fleet */}
@@ -1305,7 +1465,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               <View style={styles.panelHeaderLeft}>
                 <Truck size={16} color="#0284c7" />
                 <Text variant="heading" weight="bold" style={{ color: theme.colors.ink }}>
-                  Assigned Fleet
+                  {user.role === 'supervisor' ? 'Supervised Machinery Fleet' : 'Assigned Fleet'}
                 </Text>
               </View>
 
@@ -1341,7 +1501,13 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             ) : filteredMachines.length === 0 ? (
               <EmptyState
                 title="No Machines Found"
-                description="No machinery currently assigned to this user."
+                description={
+                  tabSearch
+                    ? 'No assigned machines match your search.'
+                    : user.role === 'supervisor'
+                    ? 'No machinery currently under supervision for this user or their operators.'
+                    : 'No machinery currently assigned to this user.'
+                }
               />
             ) : (
               <>
@@ -1389,6 +1555,22 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                           {m.machine_name} {m.model ? `· ${m.model}` : ''}
                         </Text>
 
+                        {/* If viewing a supervisor, show assigned operator */}
+                        {user.role === 'supervisor' && (m.assigned_operator_name || m.assigned_operator_code) ? (
+                          <View style={styles.machineOperatorRow}>
+                            <UserCheck size={12} color="#0284c7" />
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>
+                              Operator:{' '}
+                            </Text>
+                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                              {m.assigned_operator_name || 'Assigned Operator'}
+                            </Text>
+                            {m.assigned_operator_code ? (
+                              <Badge status="default" customLabel={m.assigned_operator_code} />
+                            ) : null}
+                          </View>
+                        ) : null}
+
                         <View style={styles.machineItemSpecsRow}>
                           <Text variant="caption" style={{ color: theme.colors.mute }}>
                             S/N: {m.serial_number || '—'}
@@ -1418,8 +1600,222 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           </View>
         )}
 
+        {/* TAB 1B: Supervised Operators (Supervisor Role Only) */}
+        {activeTab === 'operators' && user.role === 'supervisor' && (
+          <View
+            style={[
+              styles.tabPanelCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <View style={[styles.panelHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <View style={styles.panelHeaderLeft}>
+                <Users size={16} color="#0284c7" />
+                <Text variant="heading" weight="bold" style={{ color: theme.colors.ink }}>
+                  Supervised Operators
+                </Text>
+              </View>
+
+              <Text variant="caption" style={{ color: theme.colors.mute }}>
+                Showing {filteredOperators.length} of {totalOperatorsCount} operators
+              </Text>
+            </View>
+
+            {isOperatorsLoading ? (
+              <UserMachinesSkeleton count={2} />
+            ) : filteredOperators.length === 0 ? (
+              <EmptyState
+                title="No Reporting Operators"
+                description={
+                  tabSearch
+                    ? 'No reporting operators match your search.'
+                    : 'No operators currently report to this supervisor.'
+                }
+              />
+            ) : (
+              <>
+                <View style={styles.cardsList}>
+                  {filteredOperators.map((op) => {
+                    const cleanPhone = op.phone ? op.phone.replace(/[^0-9+]/g, '') : '';
+                    const whatsappNumber = cleanPhone.replace(/^\+/, '');
+                    const opShift = formatShiftTime(op.shift_start_time, op.shift_end_time);
+
+                    return (
+                      <View
+                        key={op.id}
+                        style={[
+                          styles.machineListItem,
+                          {
+                            backgroundColor: theme.colors.canvas,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        {/* Operator Header: Avatar, Name, Employee ID & Status Badge */}
+                        <View style={styles.machineItemHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <View
+                              style={[
+                                styles.operatorAvatarBox,
+                                {
+                                  backgroundColor: isDark ? '#262626' : '#f5f5f5',
+                                  borderColor: theme.colors.hairline,
+                                },
+                              ]}
+                            >
+                              <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
+                                {getUserInitials(op.full_name)}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text variant="body" weight="semibold" numberOfLines={1} style={{ color: theme.colors.ink }}>
+                                {op.full_name}
+                              </Text>
+                              <Text variant="mono" style={{ color: theme.colors.mute }}>
+                                {op.employee_id || `ID: ${op.id.slice(0, 8)}`}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Badge
+                            status={op.status === 'active' ? 'active' : 'inactive'}
+                            customLabel={op.status}
+                          />
+                        </View>
+
+                        {/* Operator Assignment Details */}
+                        <View style={[styles.operatorDetailRows, { borderTopColor: theme.colors.hairline }]}>
+                          {op.active_machine_code ? (
+                            <View style={styles.operatorDetailRow}>
+                              <Text variant="caption" style={{ color: theme.colors.mute }}>
+                                Equipment:
+                              </Text>
+                              <Text
+                                variant="caption"
+                                weight="semibold"
+                                numberOfLines={1}
+                                style={[styles.truncateMax, { color: theme.colors.link }]}
+                              >
+                                {op.active_machine_code} - {op.active_machine_name || 'Machine'}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          {op.machine_category ? (
+                            <View style={styles.operatorDetailRow}>
+                              <Text variant="caption" style={{ color: theme.colors.mute }}>
+                                Category:
+                              </Text>
+                              <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                                {formatMachineCategoryLabel(op.machine_category)}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <View style={styles.operatorDetailRow}>
+                            <Text variant="caption" style={{ color: theme.colors.mute }}>
+                              Shift:
+                            </Text>
+                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                              {opShift}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Quick Contact & Profile Navigation Actions */}
+                        <View style={[styles.operatorActionsRow, { borderTopColor: theme.colors.hairline }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {cleanPhone ? (
+                              <Pressable
+                                variant="outline"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={() => {
+                                  Linking.openURL(`tel:${cleanPhone}`);
+                                }}
+                                style={[
+                                  styles.quickIconBtn,
+                                  {
+                                    backgroundColor: theme.colors.canvasElevated,
+                                    borderColor: theme.colors.hairline,
+                                  },
+                                ]}
+                                accessibilityLabel={`Call ${op.full_name}`}
+                              >
+                                <Phone size={14} color="#0d9488" />
+                              </Pressable>
+                            ) : null}
+
+                            {whatsappNumber ? (
+                              <Pressable
+                                variant="outline"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={() => {
+                                  Linking.openURL(`https://wa.me/${whatsappNumber}`);
+                                }}
+                                style={[
+                                  styles.quickIconBtn,
+                                  {
+                                    backgroundColor: theme.colors.canvasElevated,
+                                    borderColor: theme.colors.hairline,
+                                  },
+                                ]}
+                                accessibilityLabel={`WhatsApp ${op.full_name}`}
+                              >
+                                <ExternalLink size={14} color="#10b981" />
+                              </Pressable>
+                            ) : null}
+                          </View>
+
+                          <Pressable
+                            variant="buttonPrimary"
+                            haptic="tap"
+                            hitSlopToMin48
+                            onPress={() => {
+                              haptics.select();
+                              if (onViewUser) {
+                                onViewUser(op.id);
+                              } else {
+                                router.push(`/(app)/users?id=${op.id}`);
+                              }
+                            }}
+                            style={[
+                              styles.viewProfileBtn,
+                              {
+                                backgroundColor: theme.colors.ink,
+                              },
+                            ]}
+                            accessibilityLabel={`View ${op.full_name}'s profile`}
+                          >
+                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.canvas }}>
+                              View Profile →
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                <TabPaginationFooter
+                  currentCount={filteredOperators.length}
+                  totalCount={totalOperatorsCount}
+                  label="operators"
+                  hasNextPage={Boolean(hasNextOperators)}
+                  isFetchingNextPage={Boolean(isFetchingNextOperators)}
+                  onLoadMore={() => fetchNextOperators()}
+                />
+              </>
+            )}
+          </View>
+        )}
+
         {/* TAB 2: Shift Running Logs */}
-        {activeTab === 'logs' && (
+        {activeTab === 'logs' && user.role === 'operator' && (
           <View
             style={[
               styles.tabPanelCard,
@@ -1447,7 +1843,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             ) : filteredLogs.length === 0 ? (
               <EmptyState
                 title="No Running Logs"
-                description="No telemetry running logs recorded for this operator."
+                description={
+                  tabSearch
+                    ? 'No running logs match your search.'
+                    : 'No telemetry running logs recorded for this operator.'
+                }
               />
             ) : (
               <>
@@ -1497,7 +1897,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         )}
 
         {/* TAB 3: Machine Assignment History */}
-        {activeTab === 'assignments' && (
+        {activeTab === 'assignments' && user.role === 'operator' && (
           <View
             style={[
               styles.tabPanelCard,
@@ -1548,7 +1948,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             ) : filteredAssignments.length === 0 ? (
               <EmptyState
                 title="No Assignments Found"
-                description="No past or active machine assignments recorded."
+                description={
+                  tabSearch
+                    ? 'No assignments match your search.'
+                    : 'No past or active machine assignments recorded.'
+                }
               />
             ) : (
               <>
@@ -1612,8 +2016,8 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           </View>
         )}
 
-        {/* TAB 4: Attendance & Timesheet Ledger */}
-        {activeTab === 'attendance' && (
+        {/* TAB 4: Attendance & Timesheet Ledger (Operator Role Only) */}
+        {activeTab === 'attendance' && user.role === 'operator' && (
           <View
             style={[
               styles.tabPanelCard,
@@ -1740,21 +2144,201 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               </View>
 
               <Text variant="caption" style={{ color: theme.colors.mute }}>
-                Showing {documents.length} of {totalDocumentsCount} verified files
+                Showing {filteredDocuments.length} of {totalDocumentsCount} verified files
+              </Text>
+            </View>
+
+            {/* Statutory Identity Cards: Aadhaar, Licence, Bank */}
+            <View style={styles.statutoryCardsGrid}>
+              {/* Aadhaar Card */}
+              <View
+                style={[
+                  styles.statutoryCard,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.statutoryCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ShieldCheck size={14} color="#0284c7" />
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                      Aadhaar Number
+                    </Text>
+                  </View>
+                  {user.aadhaar_number && canRevealDocs && (
+                    <Pressable
+                      variant="plain"
+                      haptic="select"
+                      hitSlopToMin48
+                      onPress={handleToggleAadhaar}
+                      accessibilityLabel={showFullAadhaar ? 'Hide Aadhaar' : 'Reveal full Aadhaar'}
+                      style={{ padding: 4 }}
+                    >
+                      {showFullAadhaar ? <EyeOff size={14} color={theme.colors.mute} /> : <Eye size={14} color={theme.colors.mute} />}
+                    </Pressable>
+                  )}
+                </View>
+                <View style={styles.statutoryCardValueRow}>
+                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                    {user.aadhaar_number
+                      ? showFullAadhaar
+                        ? user.aadhaar_number
+                        : maskAadhaar(user.aadhaar_number)
+                      : 'Not provided'}
+                  </Text>
+                  {user.aadhaar_number && canRevealDocs && (
+                    <Pressable
+                      variant="plain"
+                      haptic="tap"
+                      hitSlopToMin48
+                      onPress={() => handleCopy(user.aadhaar_number!, 'Aadhaar')}
+                      accessibilityLabel="Copy Aadhaar"
+                      style={{ padding: 4 }}
+                    >
+                      {copiedKey === 'Aadhaar' ? (
+                        <Check size={12} color="#10b981" />
+                      ) : (
+                        <Copy size={12} color={theme.colors.mute} />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              {/* Driving Licence Card */}
+              <View
+                style={[
+                  styles.statutoryCard,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.statutoryCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <CreditCard size={14} color="#f59e0b" />
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                      Driving Licence
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.statutoryCardValueRow}>
+                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                    {user.license_number ? formatLicenseNumber(user.license_number) : 'Not provided'}
+                  </Text>
+                  {user.license_number && canRevealDocs && (
+                    <Pressable
+                      variant="plain"
+                      haptic="tap"
+                      hitSlopToMin48
+                      onPress={() => handleCopy(user.license_number!, 'Licence')}
+                      accessibilityLabel="Copy Licence"
+                      style={{ padding: 4 }}
+                    >
+                      {copiedKey === 'Licence' ? (
+                        <Check size={12} color="#10b981" />
+                      ) : (
+                        <Copy size={12} color={theme.colors.mute} />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              {/* Banking Credentials Card */}
+              <View
+                style={[
+                  styles.statutoryCard,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.statutoryCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Building2 size={14} color="#10b981" />
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                      Banking Credentials
+                    </Text>
+                  </View>
+                  {user.bank_account_number && canRevealDocs && (
+                    <Pressable
+                      variant="plain"
+                      haptic="select"
+                      hitSlopToMin48
+                      onPress={handleToggleBankAccount}
+                      accessibilityLabel={showFullBankAccount ? 'Hide Bank Account' : 'Reveal full Bank Account'}
+                      style={{ padding: 4 }}
+                    >
+                      {showFullBankAccount ? <EyeOff size={14} color={theme.colors.mute} /> : <Eye size={14} color={theme.colors.mute} />}
+                    </Pressable>
+                  )}
+                </View>
+                <View style={{ gap: 4 }}>
+                  <View style={styles.statutoryCardValueRow}>
+                    <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                      {user.bank_account_number
+                        ? showFullBankAccount
+                          ? user.bank_account_number
+                          : maskBankAccount(user.bank_account_number)
+                        : 'A/C: —'}
+                    </Text>
+                    {user.bank_account_number && canRevealDocs && (
+                      <Pressable
+                        variant="plain"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={() => handleCopy(user.bank_account_number!, 'Bank Account')}
+                        accessibilityLabel="Copy Bank Account"
+                        style={{ padding: 4 }}
+                      >
+                        {copiedKey === 'Bank Account' ? (
+                          <Check size={12} color="#10b981" />
+                        ) : (
+                          <Copy size={12} color={theme.colors.mute} />
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                  <Text variant="micro" style={{ color: theme.colors.mute }}>
+                    IFSC: <Text variant="mono" weight="semibold" style={{ color: theme.colors.ink }}>{user.bank_ifsc_code || '—'}</Text>
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* DPDP Act 2023 Compliance Notice */}
+            <View style={[styles.dpdpNoticeRow, { borderTopColor: theme.colors.hairline }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Shield size={12} color={theme.colors.mute} />
+                <Text variant="micro" weight="semibold" style={{ color: theme.colors.mute }}>
+                  Complies with Aadhaar Act & DPDP Act 2023
+                </Text>
+              </View>
+              <Text variant="micro" style={{ color: theme.colors.mute }}>
+                {filteredDocuments.length} files
               </Text>
             </View>
 
             {isDocumentsLoading ? (
               <UserDocumentsSkeleton count={2} />
-            ) : documents.length === 0 ? (
+            ) : filteredDocuments.length === 0 ? (
               <EmptyState
                 title="No Identity Documents"
-                description="No statutory identity or compliance documents have been verified for this account."
+                description={
+                  tabSearch
+                    ? 'No documents match your search.'
+                    : 'No statutory identity or compliance documents have been verified for this account.'
+                }
               />
             ) : (
               <>
                 <View style={styles.cardsList}>
-                  {documents.map((doc) => {
+                  {filteredDocuments.map((doc) => {
                     const isVerified = doc.verification_status === "verified";
                     const isRejected = doc.verification_status === "rejected";
                     const isPending = !isVerified && !isRejected;
@@ -1959,7 +2543,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                 </View>
 
                 <TabPaginationFooter
-                  currentCount={documents.length}
+                  currentCount={filteredDocuments.length}
                   totalCount={totalDocumentsCount}
                   label="documents"
                   hasNextPage={Boolean(hasNextDocs)}
@@ -2000,7 +2584,11 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             ) : filteredAuditLogs.length === 0 ? (
               <EmptyState
                 title="No Audit Records"
-                description="No administrative changes or profile updates recorded."
+                description={
+                  tabSearch
+                    ? 'No audit events match your search.'
+                    : 'No administrative changes or profile updates recorded.'
+                }
               />
             ) : (
               <>
@@ -2063,14 +2651,16 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         user={user}
         onSuccess={async (updated) => {
           if (updated) {
-            setUser((prev) => ({ ...prev, ...updated }));
-            onUserUpdated?.({ ...user, ...updated });
+            setUser((prev): UserRecord | null => (prev ? ({ ...prev, ...updated, id: prev.id } as UserRecord) : null));
+            if (user) onUserUpdated?.({ ...user, ...updated });
           }
           // Selective Query Optimization: Refetch only updated user row without full overview re-queries
-          const freshUser = await fetchUpdatedUserRecord(queryClient, user.id);
-          if (freshUser) {
-            setUser(freshUser);
-            onUserUpdated?.(freshUser);
+          if (user) {
+            const freshUser = await fetchUpdatedUserRecord(queryClient, user.id);
+            if (freshUser) {
+              setUser(freshUser);
+              onUserUpdated?.(freshUser);
+            }
           }
         }}
       />
@@ -2082,14 +2672,16 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         user={user}
         onSuccess={async (updated) => {
           if (updated) {
-            setUser((prev) => ({ ...prev, ...updated }));
-            onUserUpdated?.({ ...user, ...updated });
+            setUser((prev): UserRecord | null => (prev ? ({ ...prev, ...updated, id: prev.id } as UserRecord) : null));
+            if (user) onUserUpdated?.({ ...user, ...updated });
           }
           // Selective Query Optimization: Refetch only updated user row without full overview re-queries
-          const freshUser = await fetchUpdatedUserRecord(queryClient, user.id);
-          if (freshUser) {
-            setUser(freshUser);
-            onUserUpdated?.(freshUser);
+          if (user) {
+            const freshUser = await fetchUpdatedUserRecord(queryClient, user.id);
+            if (freshUser) {
+              setUser(freshUser);
+              onUserUpdated?.(freshUser);
+            }
           }
         }}
       />
@@ -2103,7 +2695,9 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         onSuccess={() => {
           refetchMachines();
           refetchAssignments();
-          fetchUpdatedUserRecord(queryClient, user.id);
+          if (user) {
+            fetchUpdatedUserRecord(queryClient, user.id);
+          }
         }}
       />
 
@@ -2121,12 +2715,12 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         visible={statusConfirmVisible}
         onClose={() => setStatusConfirmVisible(false)}
         onConfirm={handleConfirmToggleStatus}
-        title={user.status === 'active' ? 'Deactivate Account' : 'Activate Account'}
+        title={user?.status === 'active' ? 'Deactivate Account' : 'Activate Account'}
         message={`Are you sure you want to ${
-          user.status === 'active' ? 'deactivate' : 'activate'
-        } ${user.full_name}'s staff account?`}
-        confirmText={user.status === 'active' ? 'Deactivate' : 'Activate'}
-        variant={user.status === 'active' ? 'warning' : 'primary'}
+          user?.status === 'active' ? 'deactivate' : 'activate'
+        } ${user?.full_name || 'this user'}'s staff account?`}
+        confirmText={user?.status === 'active' ? 'Deactivate' : 'Activate'}
+        variant={user?.status === 'active' ? 'warning' : 'primary'}
         isLoading={isUpdatingStatus}
       />
 
@@ -2136,7 +2730,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         onClose={() => setResetPwdConfirmVisible(false)}
         onConfirm={handleExecuteResetPassword}
         title="Reset User Password"
-        message={`Are you sure you want to reset the password for ${user.full_name}? A new temporary password will be generated and displayed immediately.`}
+        message={`Are you sure you want to reset the password for ${user?.full_name || 'this user'}? A new temporary password will be generated and displayed immediately.`}
         confirmText="Reset Password"
         variant="warning"
         isLoading={isResettingPassword}
@@ -2146,7 +2740,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
       <PasswordResetModal
         visible={!!resetPasswordResult}
         onClose={() => setResetPasswordResult(null)}
-        userName={resetPasswordResult?.userName || user.full_name}
+        userName={resetPasswordResult?.userName || user?.full_name || ''}
         temporaryPassword={resetPasswordResult?.temporaryPassword || ''}
       />
 
@@ -2297,9 +2891,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  kpiContainer: {
-    marginBottom: 16,
   },
   tabStripContainer: {
     maxHeight: 48,
@@ -2513,5 +3104,90 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     padding: 8,
     marginTop: 4,
+  },
+  machineOperatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  operatorAvatarBox: {
+    width: 38,
+    height: 38,
+    borderRadius: radiusNumeric.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  operatorDetailRows: {
+    paddingTop: 8,
+    marginTop: 8,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  operatorDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  operatorActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    marginTop: 8,
+    borderTopWidth: 1,
+  },
+  quickIconBtn: {
+    width: 44,
+    height: 44,
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  viewProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.sm,
+    minHeight: 44,
+  },
+  tabSearchContainer: {
+    paddingHorizontal: 0,
+    paddingBottom: spacingNumeric.sm,
+  },
+  statutoryCardsGrid: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  statutoryCard: {
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+  },
+  statutoryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statutoryCardValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dpdpNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    marginBottom: 8,
   },
 });

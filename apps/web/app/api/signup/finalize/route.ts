@@ -31,14 +31,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify user exists and fetch metadata for approval request
-    const { data: userRow, error: userErr } = await adminSupabase
-      .from("users")
-      .select("id, full_name, email, phone, role, supervisor_id, address, city, district, state, machine_category")
-      .eq("id", userId)
-      .maybeSingle();
+    // Verify user exists with resilient retry (trigger may take a moment to commit)
+    let userRow: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data, error } = await adminSupabase
+        .from("users")
+        .select("id, full_name, email, phone, role, supervisor_id, address, city, district, state, machine_category")
+        .eq("id", userId)
+        .maybeSingle();
 
-    if (userErr || !userRow) {
+      if (data && !error) {
+        userRow = data;
+        break;
+      }
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }
+
+    if (!userRow) {
+      // Fallback: check auth user metadata directly if public.users is delayed
+      const { data: authUser } = await adminSupabase.auth.admin.getUserById(userId);
+      if (authUser?.user) {
+        const meta = authUser.user.user_metadata || {};
+        userRow = {
+          id: userId,
+          full_name: meta.full_name || authUser.user.email,
+          email: authUser.user.email,
+          phone: meta.phone,
+          role: meta.role || "operator",
+          supervisor_id: meta.supervisor_id || null,
+          address: meta.street || meta.address || null,
+          city: meta.city || null,
+          district: meta.district || null,
+          state: meta.state || null,
+          machine_category: meta.machine_category || null,
+        };
+      }
+    }
+
+    if (!userRow) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
@@ -84,11 +116,12 @@ export async function POST(req: NextRequest) {
         await submitToApprovalEngineSafely({
           type_key: "document_verify",
           subject_type: "document",
-          subject_id: userId,
+          subject_id: doc.id,
           subject_label: `${doc.docType.toUpperCase()} - ${userRow.full_name || "User"}`,
           requested_by: userId,
           summary: `Initial verification for ${doc.docType} (${userRow.full_name || "User"})`,
           payload: {
+            document_id: doc.id,
             user_id: userId,
             document_type_code: doc.docType,
             storage_path: doc.mainPath,

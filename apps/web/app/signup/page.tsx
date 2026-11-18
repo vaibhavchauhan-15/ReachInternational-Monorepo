@@ -31,6 +31,7 @@ import {
   isSignupSection4Complete,
   isSignupSection5Complete,
   isSignupSection6Complete,
+  validateSignupFormData,
 } from "@reachinternational/validation";
 import { useRouter } from "next/navigation";
 import {
@@ -346,10 +347,19 @@ export default function SignupPage() {
 
   const section5Complete = useMemo(() => {
     return isSignupSection5Complete({
+      role: formValues.role,
       aadhaar_number: formValues.aadhaar_number,
       has_aadhaar_doc: docSlots.aadhaar.status === "ready",
+      license_number: formValues.license_number,
+      has_license_doc: docSlots.driving_license.status === "ready",
     });
-  }, [formValues.aadhaar_number, docSlots.aadhaar.status]);
+  }, [
+    formValues.role,
+    formValues.aadhaar_number,
+    docSlots.aadhaar.status,
+    formValues.license_number,
+    docSlots.driving_license.status,
+  ]);
 
   const section6Complete = useMemo(() => {
     return isSignupSection6Complete({
@@ -478,6 +488,18 @@ export default function SignupPage() {
           : "Aadhaar Document Photo"
       );
     }
+    if (formValues.role === "operator") {
+      if (!formValues.license_number.trim() || !validateLicenseNumber(formValues.license_number).isValid) {
+        list.push("Driving Licence Number");
+      }
+      if (docSlots.driving_license.status !== "ready") {
+        list.push(
+          docSlots.driving_license.status === "uploading" || docSlots.driving_license.status === "compressing"
+            ? "Licence Document (Uploading...)"
+            : "Licence Document Photo"
+        );
+      }
+    }
     if (formValues.password.length < 8) {
       list.push("Password");
     }
@@ -508,6 +530,8 @@ export default function SignupPage() {
     docSlots.bank_document.status,
     formValues.aadhaar_number,
     docSlots.aadhaar.status,
+    formValues.license_number,
+    docSlots.driving_license.status,
     formValues.password,
     formValues.confirm_password,
     agreedToTerms,
@@ -687,103 +711,57 @@ export default function SignupPage() {
     e.preventDefault();
     if (isSubmittingRef.current || pending) return;
 
-    // Client-side pre-flight checks aligned with all mandatory sections
-    const errors: Record<string, string> = {};
-    if (!formValues.full_name.trim() || formValues.full_name.trim().length < 2) {
-      errors.full_name = "Full name is required (minimum 2 characters).";
-    }
-    const cleanEmail = formValues.email.trim().toLowerCase();
-    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      errors.email = "Please enter a valid email address.";
-    }
-    const phoneDigits = formValues.phone.replace(/\D/g, "");
-    if (phoneDigits.length < 10) {
-      errors.phone = "Please enter a valid 10-digit mobile number.";
-    }
-    if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
-      errors.supervisor_id = "Please select your supervisor.";
-    }
-    if (formValues.role === "operator" && !formValues.machine_category.trim()) {
-      errors.machine_category = "Please select a machine category.";
-    }
-    if (!formValues.shift_start_time.trim()) {
-      errors.shift_start_time = "Shift start time is required.";
-    }
-    if (!formValues.shift_end_time.trim()) {
-      errors.shift_end_time = "Shift end time is required.";
-    }
-
+    // Client-side pre-flight checks using canonical monorepo validator
     const resolvedStreet = (formValues.street || formValues.address || "").trim();
-    if (resolvedStreet.length < 2) {
-      errors.street = "Address (street / site base) is required.";
-      errors.address = "Address (street / site base) is required.";
-    }
-    if (!formValues.city.trim() || formValues.city.trim().length < 2) {
-      errors.city = "City is required.";
-    }
-    if (!formValues.district.trim() || formValues.district.trim().length < 2) {
-      errors.district = "District is required.";
-    }
-    if (!formValues.state.trim() && !formValues.state_id) {
-      errors.state = "State is required.";
+    const validationRes = validateSignupFormData({
+      fullName: formValues.full_name,
+      email: formValues.email,
+      phone: formValues.phone,
+      role: formValues.role,
+      supervisorId: isSupervisedRole(formValues.role) ? formValues.supervisor_id : null,
+      machineCategory: formValues.role === "operator" ? formValues.machine_category : null,
+      shiftStartTime: formValues.shift_start_time,
+      shiftEndTime: formValues.shift_end_time,
+      street: resolvedStreet,
+      city: formValues.city,
+      district: formValues.district,
+      state: formValues.state,
+      stateId: formValues.state_id ? Number(formValues.state_id) : null,
+      bankAccountNumber: formValues.bank_account_number,
+      bankIfscCode: formValues.bank_ifsc_code,
+      hasBankDoc: docSlots.bank_document.status === "ready",
+      aadhaarNumber: formValues.aadhaar_number,
+      hasAadhaarDoc: docSlots.aadhaar.status === "ready",
+      licenseNumber: formValues.license_number,
+      hasLicenseDoc: docSlots.driving_license.status === "ready",
+      password: formValues.password,
+      confirmPassword: formValues.confirm_password,
+      agreedToTerms: agreedToTerms,
+    });
+
+    const errors: Record<string, string> = {};
+    if (!validationRes.isValid) {
+      for (const [k, v] of Object.entries(validationRes.errors)) {
+        if (k === "fullName") errors.full_name = v;
+        else if (k === "supervisorId") errors.supervisor_id = v;
+        else if (k === "machineCategory") errors.machine_category = v;
+        else if (k === "shiftStartTime") errors.shift_start_time = v;
+        else if (k === "shiftEndTime") errors.shift_end_time = v;
+        else if (k === "bankAccountNumber") errors.bank_account_number = v;
+        else if (k === "bankIfscCode") errors.bank_ifsc_code = v;
+        else if (k === "bank_doc" || k === "hasBankDoc") errors.bank_document_file = v;
+        else if (k === "aadhaarNumber") errors.aadhaar_number = v;
+        else if (k === "aadhaar_doc" || k === "hasAadhaarDoc") errors.aadhaar_file = v;
+        else if (k === "licenseNumber") errors.license_number = v;
+        else if (k === "license_doc" || k === "hasLicenseDoc") errors.license_file = v;
+        else if (k === "confirmPassword") errors.confirm_password = v;
+        else errors[k] = v;
+      }
     }
 
-    if (!formValues.bank_account_number.trim()) {
-      errors.bank_account_number = "Bank account number is required.";
-    } else {
-      const bankRes = validateBankAccountNumber(formValues.bank_account_number);
-      if (!bankRes.isValid) {
-        errors.bank_account_number = bankRes.error || "Valid bank account required (9-18 digits).";
-      }
-    }
-    if (!formValues.bank_ifsc_code.trim()) {
-      errors.bank_ifsc_code = "IFSC code is required.";
-    } else {
-      const ifscRes = validateIfscCode(formValues.bank_ifsc_code);
-      if (!ifscRes.isValid) {
-        errors.bank_ifsc_code = ifscRes.error || "Valid 11-character IFSC code required.";
-      }
-    }
-    if (docSlots.bank_document.status !== "ready") {
-      errors.bank_document_file = "Bank document photo is required.";
-    }
-    if (!formValues.aadhaar_number.trim()) {
-      errors.aadhaar_number = "Valid 12-digit Aadhaar required.";
-    } else {
-      const aadhaarRes = validateAadhaarNumber(formValues.aadhaar_number);
-      if (!aadhaarRes.isValid) {
-        errors.aadhaar_number = aadhaarRes.error || "Valid 12-digit Aadhaar required.";
-      }
-    }
-    if (docSlots.aadhaar.status !== "ready") {
-      errors.aadhaar_file = "Aadhaar document photo is required.";
-    }
-    if (docSlots.driving_license.status === "failed") {
+    const isOperator = formValues.role === "operator";
+    if (isOperator && docSlots.driving_license.status === "failed") {
       errors.license_file = docSlots.driving_license.error || "Licence document upload failed.";
-    }
-    if (formValues.license_number.trim()) {
-      const licRes = validateLicenseNumber(formValues.license_number);
-      if (!licRes.isValid) {
-        errors.license_number = licRes.error || "Invalid licence format.";
-      }
-    }
-    if (!formValues.password || formValues.password.length < 8) {
-      errors.password = "Must be at least 8 characters.";
-    } else {
-      const hasUppercase = /[A-Z]/.test(formValues.password);
-      const hasLowercase = /[a-z]/.test(formValues.password);
-      const hasDigit = /\d/.test(formValues.password);
-      if (!hasUppercase || !hasLowercase || !hasDigit) {
-        errors.password = "Must include uppercase, lowercase, and a number.";
-      }
-    }
-    if (!formValues.confirm_password) {
-      errors.confirm_password = "Confirm password is required.";
-    } else if (formValues.password !== formValues.confirm_password) {
-      errors.confirm_password = "Passwords do not match.";
-    }
-    if (!agreedToTerms) {
-      errors.terms = "Please agree to Terms and Privacy Policy.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1244,6 +1222,15 @@ export default function SignupPage() {
                         }
                         if (val !== "operator") {
                           handleChange("machine_category", "");
+                          handleChange("license_number", "");
+                          handleSlotFileChange("driving_license", null);
+                          setFieldErrors((prev) => {
+                            const copy = { ...prev };
+                            delete copy.machine_category;
+                            delete copy.license_number;
+                            delete copy.license_file;
+                            return copy;
+                          });
                         }
                       }}
                       placeholder="Select role..."
@@ -1447,8 +1434,8 @@ export default function SignupPage() {
                 isCompleted={section5Complete}
               >
                 <div className="space-y-2.5 sm:space-y-3">
-                  {/* Aadhaar Card Number | Driving Licence Number */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  {/* Aadhaar Card Number | Driving Licence Number (Mandatory only for operators) */}
+                  <div className={`grid ${formValues.role === "operator" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 sm:gap-2.5`}>
                     <Input
                       id="signup-aadhaar"
                       name="aadhaar_number"
@@ -1465,28 +1452,27 @@ export default function SignupPage() {
                       icon={<AnimatedShieldCheck size={15} />}
                     />
 
-                    <Input
-                      id="signup-license"
-                      name="license_number"
-                      label={
-                        <span>
-                          Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
-                        </span>
-                      }
-                      type="text"
-                      value={formValues.license_number}
-                      onChange={(e) => handleChange("license_number", e.target.value)}
-                      onBlur={() => handleBlur("license_number")}
-                      placeholder="e.g. MH12 20110012345"
-                      maxLength={25}
-                      error={fieldErrors.license_number}
-                      hint="Required if operating Forklift, Boom Lift, or other equipment."
-                      icon={<AnimatedCreditCard size={15} />}
-                    />
+                    {formValues.role === "operator" && (
+                      <Input
+                        id="signup-license"
+                        name="license_number"
+                        label="Driving Licence Number"
+                        type="text"
+                        value={formValues.license_number}
+                        onChange={(e) => handleChange("license_number", e.target.value)}
+                        onBlur={() => handleBlur("license_number")}
+                        placeholder="e.g. MH12 20110012345"
+                        maxLength={25}
+                        required
+                        error={fieldErrors.license_number}
+                        hint="Mandatory for equipment operators (Forklift, Boom Lift, etc.)."
+                        icon={<AnimatedCreditCard size={15} />}
+                      />
+                    )}
                   </div>
 
-                  {/* Document Uploads: Aadhaar Card & Driving Licence */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  {/* Document Uploads: Aadhaar Card & Driving Licence (Mandatory only for operators) */}
+                  <div className={`grid ${formValues.role === "operator" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 sm:gap-2.5`}>
                     {/* Aadhaar Upload Card */}
                     <DocumentUploadCard
                       title="Aadhaar Document"
@@ -1499,17 +1485,19 @@ export default function SignupPage() {
                       fieldError={fieldErrors.aadhaar_file}
                     />
 
-                    {/* Licence Upload Card */}
-                    <DocumentUploadCard
-                      title="Licence Document"
-                      required={false}
-                      helperText="Upload Licence (JPG or PNG)"
-                      docType="driving_license"
-                      slot={docSlots.driving_license}
-                      onFileSelect={(file) => handleSlotFileChange("driving_license", file)}
-                      onRetry={() => retryUpload("driving_license")}
-                      fieldError={fieldErrors.license_file}
-                    />
+                    {/* Licence Upload Card: Only for operators */}
+                    {formValues.role === "operator" && (
+                      <DocumentUploadCard
+                        title="Licence Document"
+                        required={true}
+                        helperText="Upload Licence (JPG or PNG)"
+                        docType="driving_license"
+                        slot={docSlots.driving_license}
+                        onFileSelect={(file) => handleSlotFileChange("driving_license", file)}
+                        onRetry={() => retryUpload("driving_license")}
+                        fieldError={fieldErrors.license_file}
+                      />
+                    )}
                   </div>
                 </div>
               </FormSectionCard>

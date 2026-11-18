@@ -197,14 +197,17 @@ export interface UsersFiltersProps {
   onStatusFilterChange: (val: string) => void;
   stateFilter: string;
   onStateFilterChange: (val: string) => void;
-  kycFilter: string;
-  onKycFilterChange: (val: string) => void;
+  supervisorFilter: string;
+  onSupervisorFilterChange: (val: string) => void;
   dateRangeFilter: string;
   onDateRangeFilterChange: (val: string) => void;
   sortBy: string;
   onSortByChange: (val: string) => void;
   roleOptions: FilterOption[];
   stateOptions: FilterOption[];
+  supervisorOptions: FilterOption[];
+  kycFilter?: string;
+  onKycFilterChange?: (val: string) => void;
 }
 
 export function UsersFilters({
@@ -222,7 +225,9 @@ export function UsersFilters({
   onStatusFilterChange,
   stateFilter,
   onStateFilterChange,
-  kycFilter,
+  supervisorFilter = "all",
+  onSupervisorFilterChange,
+  kycFilter = "all",
   onKycFilterChange,
   dateRangeFilter,
   onDateRangeFilterChange,
@@ -230,6 +235,7 @@ export function UsersFilters({
   onSortByChange,
   roleOptions,
   stateOptions,
+  supervisorOptions = [],
 }: UsersFiltersProps) {
   return (
     <FilterToolbar
@@ -323,14 +329,14 @@ export function UsersFilters({
             />
           </div>
 
-          {/* 4. KYC / Verification Selector */}
-          <div className="w-full sm:w-48 min-w-0">
+          {/* 4. Supervisor Selector */}
+          <div className="w-full sm:w-52 min-w-0">
             <CustomFilterSelector
-              label="KYC"
-              value={kycFilter}
-              onChange={onKycFilterChange}
-              options={KYC_OPTIONS}
-              ariaLabel="Filter by KYC verification status"
+              label="Supervisor"
+              value={supervisorFilter}
+              onChange={onSupervisorFilterChange}
+              options={supervisorOptions}
+              ariaLabel="Filter by supervisor"
               align="right"
             />
           </div>
@@ -418,12 +424,25 @@ export function UsersFilters({
                 </button>
               </span>
             )}
-            {kycFilter !== "all" && (
+            {supervisorFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)]">
+                <span>Supervisor: {supervisorOptions.find((o) => o.id === supervisorFilter)?.label || "Selected"}</span>
+                <button
+                  type="button"
+                  onClick={() => onSupervisorFilterChange("all")}
+                  className="hover:text-[var(--color-link)] transition-colors ml-0.5"
+                  aria-label="Clear supervisor filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {kycFilter && kycFilter !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)]">
                 <span>KYC: {KYC_OPTIONS.find((o) => o.id === kycFilter)?.label}</span>
                 <button
                   type="button"
-                  onClick={() => onKycFilterChange("all")}
+                  onClick={() => onKycFilterChange && onKycFilterChange("all")}
                   className="hover:text-[var(--color-link)] transition-colors ml-0.5"
                   aria-label="Clear KYC filter"
                 >

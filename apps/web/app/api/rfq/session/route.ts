@@ -21,7 +21,7 @@ interface FileRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => null);
+    const body = (await req.json().catch(() => null)) as { files?: FileRequest[]; draft_id?: string } | null;
     const files: FileRequest[] = body?.files || [];
     const draftId: string = body?.draft_id || crypto.randomUUID();
 

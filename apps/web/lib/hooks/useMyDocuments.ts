@@ -59,7 +59,7 @@ export function useMyDocuments() {
         });
 
         if (res.ok) {
-          const json = await res.json();
+          const json = (await res.json()) as { documents?: unknown };
           if (json.documents && Array.isArray(json.documents)) {
             return json.documents as MyDocumentItem[];
           }
@@ -122,12 +122,27 @@ export function useMyDocuments() {
     }
 
     const targetBucket = isStaging ? "doc_staging" : "user_files";
-    const { data, error } = await supabase.storage
+    let { data, error } = await supabase.storage
       .from(targetBucket)
       .createSignedUrl(storagePath, 120);
 
+    // Fallback cross-bucket check if status recently changed
+    if ((error || !data?.signedUrl) && isStaging) {
+      const altRes = await supabase.storage.from("user_files").createSignedUrl(storagePath, 120);
+      if (altRes.data?.signedUrl) {
+        data = altRes.data;
+        error = null;
+      }
+    } else if ((error || !data?.signedUrl) && !isStaging) {
+      const altRes = await supabase.storage.from("doc_staging").createSignedUrl(storagePath, 120);
+      if (altRes.data?.signedUrl) {
+        data = altRes.data;
+        error = null;
+      }
+    }
+
     if (error || !data?.signedUrl) {
-      throw new Error(error?.message || "Failed to generate document view URL");
+      throw new Error(actionRes.error || error?.message || "Failed to generate document view URL");
     }
 
     return data.signedUrl;

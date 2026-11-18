@@ -146,6 +146,7 @@ const DEFAULT_USERS_FILTERS = {
   roleFilter: 'all',
   statusFilter: 'all',
   stateFilter: 'all',
+  supervisorFilter: 'all',
   kycFilter: 'all',
   dateRangeFilter: 'all',
   sortBy: 'newest',
@@ -157,7 +158,7 @@ export default function UsersScreen() {
   const { toast } = useToast();
   const { role: currentUserRole, user: authUser } = useAuth();
   const router = useRouter();
-  const localParams = useLocalSearchParams<{ search?: string }>();
+  const localParams = useLocalSearchParams<{ search?: string; id?: string; tab?: string }>();
 
   const normalizedRole = (currentUserRole || '').toLowerCase();
   const canAccessUsers = ['super_admin', 'admin', 'manager', 'hr', 'supervisor'].includes(normalizedRole);
@@ -192,6 +193,7 @@ export default function UsersScreen() {
     roleFilter: string;
     statusFilter: string;
     stateFilter: string;
+    supervisorFilter: string;
     kycFilter: string;
     dateRangeFilter: string;
     sortBy: string;
@@ -205,6 +207,7 @@ export default function UsersScreen() {
   const roleFilter = filters.roleFilter;
   const statusFilter = filters.statusFilter;
   const stateFilter = filters.stateFilter;
+  const supervisorFilter = filters.supervisorFilter || 'all';
   const kycFilter = filters.kycFilter;
   const dateRangeFilter = filters.dateRangeFilter;
   const sortBy = filters.sortBy;
@@ -212,6 +215,7 @@ export default function UsersScreen() {
   const setRoleFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('roleFilter', val), [setFilter]);
   const setStatusFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('statusFilter', val), [setFilter]);
   const setStateFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('stateFilter', val), [setFilter]);
+  const setSupervisorFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('supervisorFilter', val), [setFilter]);
   const setKycFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('kycFilter', val), [setFilter]);
   const setDateRangeFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('dateRangeFilter', val), [setFilter]);
   const setSortBy = useCallback((val: string | ((prev: string) => string)) => setFilter('sortBy', val), [setFilter]);
@@ -261,7 +265,15 @@ export default function UsersScreen() {
   });
 
   // 2. Pre-cache active supervisors across user cards
-  useActiveSupervisors({ enabled: Boolean(canAccessUsers) });
+  const { data: activeSupervisors } = useActiveSupervisors({ enabled: Boolean(canAccessUsers) });
+
+  const supervisorFilterOptions: FilterOption[] = useMemo(() => {
+    const list = (activeSupervisors || []).map((s: any) => ({
+      id: s.id,
+      label: s.full_name,
+    }));
+    return [{ id: 'all', label: 'All Supervisors' }, ...list];
+  }, [activeSupervisors]);
 
   // 3. Central Approvals Queue State
   const {
@@ -284,6 +296,7 @@ export default function UsersScreen() {
     roleFilter,
     statusFilter,
     stateFilter,
+    supervisorFilter,
     kycFilter,
     dateRangeFilter,
     sortBy,
@@ -337,6 +350,27 @@ export default function UsersScreen() {
 
   // Modals & Action States
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+
+  // Synchronize route id param if supplied (e.g. from direct deep link, operator profile click, or notifications)
+  useEffect(() => {
+    if (localParams.id && typeof localParams.id === 'string') {
+      const targetId = localParams.id.trim();
+      if (selectedUser?.id !== targetId && selectedUser?.employee_id !== targetId) {
+        const found = users.find(
+          (u) => u.id === targetId || (u.employee_id && u.employee_id.toLowerCase() === targetId.toLowerCase())
+        );
+        if (found) {
+          setSelectedUser(found);
+        } else {
+          void fetchSingleUserRecord(targetId).then((fetched) => {
+            if (fetched) {
+              setSelectedUser(fetched);
+            }
+          });
+        }
+      }
+    }
+  }, [localParams.id, users, selectedUser?.id, selectedUser?.employee_id]);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserRecord | null>(null);
@@ -377,11 +411,12 @@ export default function UsersScreen() {
     if (roleFilter !== 'all') count++;
     if (statusFilter !== 'all') count++;
     if (stateFilter !== 'all') count++;
+    if (supervisorFilter !== 'all') count++;
     if (kycFilter !== 'all') count++;
     if (dateRangeFilter !== 'all') count++;
     if (sortBy !== 'newest') count++;
     return count;
-  }, [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]);
+  }, [roleFilter, statusFilter, stateFilter, supervisorFilter, kycFilter, dateRangeFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
     resetListFilters();
@@ -1057,7 +1092,15 @@ export default function UsersScreen() {
       {selectedUser ? (
         <UserDetailView
           user={selectedUser}
-          onBack={() => setSelectedUser(null)}
+          userId={selectedUser.id}
+          initialTab={(localParams.tab as any) || 'machines'}
+          onBack={() => {
+            setSelectedUser(null);
+            router.setParams({ id: undefined, tab: undefined });
+          }}
+          onViewUser={(targetId: string) => {
+            router.setParams({ id: targetId, tab: undefined });
+          }}
           currentUserRole={currentUserRole || 'super_admin'}
           currentUserId={authUser?.id}
           onUserUpdated={(updatedUser?: any) => {
@@ -1066,6 +1109,7 @@ export default function UsersScreen() {
                 setDeletedUserIds((prev) => new Set(prev).add(updatedUser.id));
                 setTotalUsersCount((prev) => Math.max(0, prev - 1));
                 setSelectedUser(null);
+                router.setParams({ id: undefined, tab: undefined });
               } else {
                 setSelectedUser((prev: any) => ({ ...prev, ...updatedUser }));
                 updateSingleUserInState(updatedUser.id, updatedUser);
@@ -1087,6 +1131,7 @@ export default function UsersScreen() {
               setTotalUsersCount((prev) => Math.max(0, prev - 1));
             }
             setSelectedUser(null);
+            router.setParams({ id: undefined, tab: undefined });
             refetchKPIs();
           }}
         />
@@ -1144,8 +1189,8 @@ export default function UsersScreen() {
               />
             </KPIGrid>
 
-            {/* Centralized Approvals Ambient Banner */}
-            {(pendingRequestsData?.total || 0) > 0 && (
+            {/* Centralized Approvals Ambient Banner (Admin Only) */}
+            {['super_admin', 'admin'].includes(normalizedRole) && (pendingRequestsData?.total || 0) > 0 && (
               <Pressable
                 onPress={() => {
                   haptics.select();
@@ -1191,6 +1236,8 @@ export default function UsersScreen() {
               setStatusFilter={setStatusFilter}
               stateFilter={stateFilter}
               setStateFilter={setStateFilter}
+              supervisorFilter={supervisorFilter}
+              setSupervisorFilter={setSupervisorFilter}
               kycFilter={kycFilter}
               setKycFilter={setKycFilter}
               dateRangeFilter={dateRangeFilter}
@@ -1204,6 +1251,7 @@ export default function UsersScreen() {
               roleFilterOptions={ROLE_FILTER_OPTIONS}
               statusFilterOptions={STATUS_FILTER_OPTIONS}
               stateFilterOptions={STATE_FILTER_OPTIONS}
+              supervisorFilterOptions={supervisorFilterOptions}
               kycFilterOptions={KYC_FILTER_OPTIONS}
               dateRangeFilterOptions={JOINED_FILTER_OPTIONS}
               sortFilterOptions={SORT_FILTER_OPTIONS}

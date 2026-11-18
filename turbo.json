@@ -7,6 +7,8 @@
     "VERCEL_URL",
     "VERCEL_ENV",
     "VERCEL_PROJECT_PRODUCTION_URL",
+    "CLOUDFLARE",
+    "CF_PAGES",
     "SKIP_BUILD_GUARD",
     "NEXT_PUBLIC_APP_URL",
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -35,6 +37,10 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "build:worker": {
+      "dependsOn": ["^build"],
+      "outputs": [".open-next/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]

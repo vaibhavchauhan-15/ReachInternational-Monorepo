@@ -9,7 +9,7 @@ import { Badge, Text, HighlightText, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
 import { haptics } from '../../lib/haptics';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { getUserInitials } from '@reachinternational/utils';
+import { getUserInitials, maskAadhaar, formatLicenseNumber } from '@reachinternational/utils';
 import {
   User,
   Phone,
@@ -108,6 +108,9 @@ function areUserTouchCardPropsEqual(prev: UserTouchCardProps, next: UserTouchCar
     prev.user.city === next.user.city &&
     prev.user.district === next.user.district &&
     prev.user.state === next.user.state &&
+    prev.user.machine_category === next.user.machine_category &&
+    prev.user.aadhaar_number === next.user.aadhaar_number &&
+    prev.user.license_number === next.user.license_number &&
     prev.user.supervisor_id === next.user.supervisor_id &&
     prev.user.supervisor?.full_name === next.user.supervisor?.full_name &&
     (prev.user.assigned_machines?.length ?? 0) === (next.user.assigned_machines?.length ?? 0) &&
@@ -175,6 +178,9 @@ function BaseUserTouchCard({
     u.state ||
     (u.supervisors && u.supervisors.length > 0) ||
     u.supervisor?.full_name ||
+    u.machine_category ||
+    u.aadhaar_number ||
+    u.license_number ||
     (u.assigned_machines && u.assigned_machines.length > 0) ||
     u.shift_time
   );
@@ -239,6 +245,11 @@ function BaseUserTouchCard({
                 style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
                 numberOfLines={1}
               />
+              {u.employee_id ? (
+                <Text variant="caption" weight="medium" style={{ color: theme.colors.mute, marginTop: 1 }}>
+                  {u.employee_id}
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -266,30 +277,6 @@ function BaseUserTouchCard({
         {/* Card Metadata Section */}
         {hasMeta && (
           <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-            {u.employee_id ? (
-              <View style={styles.metaChipRow}>
-                <Badge
-                  variant="outline"
-                  size="sm"
-                  style={[
-                    styles.empIdBadge,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <HighlightText
-                    text={u.employee_id}
-                    query={searchTerm}
-                    variant="mono"
-                    weight="semibold"
-                    style={{ color: theme.colors.ink }}
-                  />
-                </Badge>
-              </View>
-            ) : null}
-
             {u.email ? (
               <View style={styles.metaChipRow}>
                 <Mail size={12} color={theme.colors.mute} />
@@ -320,13 +307,16 @@ function BaseUserTouchCard({
             {Boolean(u.city || u.district || u.state) && (
               <View style={styles.metaChipRow}>
                 <MapPin size={12} color={theme.colors.mute} />
-                <HighlightText
-                  text={[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                  query={searchTerm}
-                  variant="caption"
-                  style={[styles.metaChipText, { color: theme.colors.mute }]}
-                  numberOfLines={1}
-                />
+                <View style={{ flex: 1 }}>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                    {u.city || u.district || '—'}
+                  </Text>
+                  {u.state ? (
+                    <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
+                      {u.state}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             )}
 
@@ -344,6 +334,18 @@ function BaseUserTouchCard({
               </View>
             )}
 
+            {Boolean(u.machine_category) && (
+              <View style={styles.metaChipRow}>
+                <Wrench size={12} color="#d97706" />
+                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Machine: </Text>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                    {u.machine_category}
+                  </Text>
+                </Text>
+              </View>
+            )}
+
             {Boolean(u.assigned_machines && u.assigned_machines.length > 0) && (
               <View style={styles.metaChipRow}>
                 <Wrench size={12} color="#d97706" />
@@ -353,6 +355,27 @@ function BaseUserTouchCard({
                     {u.assigned_machines?.map((m) => m.machine_id).join(', ')}
                   </Text>
                 </Text>
+              </View>
+            )}
+
+            {Boolean(u.aadhaar_number || u.license_number) && (
+              <View style={[styles.metaChipRow, { flexWrap: 'wrap', gap: 6 }]}>
+                {u.aadhaar_number ? (
+                  <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>Aadhaar: </Text>
+                    <Text variant="mono" weight="medium" style={{ color: theme.colors.ink }}>
+                      {maskAadhaar(u.aadhaar_number)}
+                    </Text>
+                  </Text>
+                ) : null}
+                {u.license_number ? (
+                  <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>DL: </Text>
+                    <Text variant="mono" weight="medium" style={{ color: theme.colors.ink }}>
+                      {formatLicenseNumber(u.license_number)}
+                    </Text>
+                  </Text>
+                ) : null}
               </View>
             )}
 

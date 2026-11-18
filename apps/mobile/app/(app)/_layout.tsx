@@ -68,6 +68,7 @@ export default function AppLayout() {
         <Tabs.Screen name="machines" options={{ title: 'Machines' }} />
         <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
         <Tabs.Screen name="users" options={{ title: 'Users' }} />
+        <Tabs.Screen name="users/[id]" options={{ ...motion.tabsShift, title: 'User Details' }} />
         <Tabs.Screen name="clients/index" options={{ title: 'Clients' }} />
         <Tabs.Screen name="clients/[id]" options={{ ...motion.tabsShift, title: 'Client Details' }} />
         <Tabs.Screen name="payroll" options={{ title: 'Payroll' }} />

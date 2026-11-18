@@ -15,6 +15,8 @@ if (
   process.env.NODE_ENV === "production" ||
   process.env.CI ||
   process.env.VERCEL ||
+  process.env.CLOUDFLARE ||
+  process.env.CF_PAGES ||
   process.env.SKIP_BUILD_GUARD === "1" ||
   process.env.SKIP_BUILD_GUARD === "true"
 ) {

@@ -169,6 +169,13 @@ export const SignupSchema = z.object({
       message: "Machine category is required",
     });
   }
+  if (data.role === "operator" && (!data.license_number || !data.license_number.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["license_number"],
+      message: "Driving licence is required for operators",
+    });
+  }
   if (data.shift_start_time && data.shift_end_time) {
     const timing = computeShiftTiming({
       startTime: data.shift_start_time,
@@ -199,12 +206,14 @@ export interface SignupValidationFields {
   city: string;
   district: string;
   state: string;
+  stateId?: number | string | null;
   bankAccountNumber: string;
   bankIfscCode: string;
   hasBankDoc: boolean;
   aadhaarNumber: string;
   hasAadhaarDoc: boolean;
   licenseNumber?: string | null;
+  hasLicenseDoc?: boolean;
   password: string;
   confirmPassword: string;
   agreedToTerms: boolean;
@@ -216,20 +225,33 @@ export function validateSignupFormData(fields: SignupValidationFields): {
 } {
   const errors: Record<string, string> = {};
 
-  const cleanName = fields.fullName.trim();
+  const cleanName = (fields.fullName || "").trim();
   if (!cleanName || cleanName.length < 2) {
     errors.full_name = "Full name required (min 2 chars)";
+  } else if (cleanName.length > 100) {
+    errors.full_name = "Full name cannot exceed 100 characters";
   }
 
-  const cleanEmail = fields.email.trim().toLowerCase();
+  const cleanEmail = (fields.email || "").trim().toLowerCase();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!cleanEmail || !emailRegex.test(cleanEmail)) {
     errors.email = "Valid email required";
+  } else if (cleanEmail.length > 255) {
+    errors.email = "Email cannot exceed 255 characters";
   }
 
-  const cleanPhone = fields.phone.replace(/\D/g, "");
-  if (cleanPhone.length < 10) {
+  const digitsOnly = (fields.phone || "").replace(/\D/g, "");
+  const is10DigitMobile =
+    digitsOnly.length === 10 ||
+    (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
+    (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
+  if (!is10DigitMobile) {
     errors.phone = "10-digit mobile number required";
+  }
+
+  const validRoles = ["operator", "supervisor", "manager", "hr"];
+  if (!fields.role || !validRoles.includes(fields.role)) {
+    errors.role = "Valid role selection required";
   }
 
   if (fields.role === "operator" && (!fields.supervisorId || !fields.supervisorId.trim())) {
@@ -261,20 +283,33 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     }
   }
 
-  if (!fields.street?.trim() || fields.street.trim().length < 2) {
+  const cleanStreet = (fields.street || "").trim();
+  if (!cleanStreet || cleanStreet.length < 2) {
     errors.street = "Street address required";
+  } else if (cleanStreet.length > 255) {
+    errors.street = "Street address cannot exceed 255 characters";
   }
-  if (!fields.city?.trim() || fields.city.trim().length < 2) {
+
+  const cleanCity = (fields.city || "").trim();
+  if (!cleanCity || cleanCity.length < 2) {
     errors.city = "City required";
+  } else if (cleanCity.length > 100) {
+    errors.city = "City cannot exceed 100 characters";
   }
-  if (!fields.district?.trim() || fields.district.trim().length < 2) {
+
+  const cleanDistrict = (fields.district || "").trim();
+  if (!cleanDistrict || cleanDistrict.length < 2) {
     errors.district = "District required";
+  } else if (cleanDistrict.length > 100) {
+    errors.district = "District cannot exceed 100 characters";
   }
-  if (!fields.state?.trim()) {
+
+  const cleanState = (fields.state || "").trim();
+  if (!cleanState && !fields.stateId) {
     errors.state = "State required";
   }
 
-  const cleanBankAcc = fields.bankAccountNumber.replace(/\D/g, "");
+  const cleanBankAcc = (fields.bankAccountNumber || "").replace(/\D/g, "");
   if (!cleanBankAcc || cleanBankAcc.length < 9 || cleanBankAcc.length > 18) {
     errors.bank_account_number = "Account number required (9-18 digits)";
   } else {
@@ -284,7 +319,7 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     }
   }
 
-  const cleanIfsc = fields.bankIfscCode.trim().toUpperCase();
+  const cleanIfsc = (fields.bankIfscCode || "").trim().toUpperCase();
   if (!cleanIfsc || cleanIfsc.length !== 11) {
     errors.bank_ifsc_code = "11-character IFSC required";
   } else {
@@ -298,7 +333,7 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     errors.bank_doc = "Bank document required";
   }
 
-  const cleanAadhaar = fields.aadhaarNumber.replace(/\D/g, "");
+  const cleanAadhaar = (fields.aadhaarNumber || "").replace(/\D/g, "");
   if (cleanAadhaar.length !== 12) {
     errors.aadhaar_number = "12-digit Aadhaar required";
   } else {
@@ -312,7 +347,21 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     errors.aadhaar_doc = "Aadhaar document required";
   }
 
-  if (fields.licenseNumber && fields.licenseNumber.trim()) {
+  const isOperator = fields.role ? fields.role.trim().toLowerCase() === "operator" : false;
+  if (isOperator) {
+    if (!fields.licenseNumber || !fields.licenseNumber.trim()) {
+      errors.license_number = "Driving licence is required for operators";
+    } else {
+      const licRes = validateLicenseNumber(fields.licenseNumber.trim());
+      if (!licRes.isValid) {
+        errors.license_number = licRes.error || "Invalid licence format";
+      }
+    }
+
+    if (!fields.hasLicenseDoc) {
+      errors.license_doc = "Licence document required for operators";
+    }
+  } else if (fields.licenseNumber && fields.licenseNumber.trim()) {
     const licRes = validateLicenseNumber(fields.licenseNumber.trim());
     if (!licRes.isValid) {
       errors.license_number = licRes.error || "Invalid licence format";
@@ -321,6 +370,8 @@ export function validateSignupFormData(fields: SignupValidationFields): {
 
   if (!fields.password || fields.password.length < 8) {
     errors.password = "Min 8 characters required";
+  } else if (fields.password.length > 128) {
+    errors.password = "Password cannot exceed 128 characters";
   } else {
     const hasUpper = /[A-Z]/.test(fields.password);
     const hasLower = /[a-z]/.test(fields.password);
@@ -330,7 +381,9 @@ export function validateSignupFormData(fields: SignupValidationFields): {
     }
   }
 
-  if (fields.password !== fields.confirmPassword) {
+  if (!fields.confirmPassword) {
+    errors.confirm_password = "Confirm password is required";
+  } else if (fields.password !== fields.confirmPassword) {
     errors.confirm_password = "Passwords do not match";
   }
 
@@ -379,6 +432,13 @@ export const CreateUserSchema = z.object({
       message: "Machine category is required for operator accounts",
     });
   }
+  if (data.role === "operator" && (!data.license_number || !data.license_number.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["license_number"],
+      message: "Driving licence number is required for operator accounts",
+    });
+  }
 });
 
 export const UpdateUserSchema = z.object({
@@ -412,6 +472,13 @@ export const UpdateUserSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["machine_category"],
       message: "Machine category is required for operator accounts",
+    });
+  }
+  if (data.role === "operator" && (!data.license_number || !data.license_number.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["license_number"],
+      message: "Driving licence number is required for operator accounts",
     });
   }
 });
@@ -477,6 +544,13 @@ export const OnboardingProfileSchema = z.object({
       message: "Street / locality address is required",
     });
   }
+  if (data.role === "operator" && (!data.license_number || !data.license_number.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["license_number"],
+      message: "Driving licence number is required for operators",
+    });
+  }
 });
 
 export type LoginInput = z.infer<typeof LoginSchema>;
@@ -508,6 +582,8 @@ export interface SignupSectionFields {
   has_bank_doc?: boolean | null;
   aadhaar_number?: string | null;
   has_aadhaar_doc?: boolean | null;
+  license_number?: string | null;
+  has_license_doc?: boolean | null;
   password?: string | null;
   confirm_password?: string | null;
   agreed_to_terms?: boolean | null;
@@ -550,8 +626,21 @@ export function isSignupSection4Complete(fields: SignupSectionFields): boolean {
 
 export function isSignupSection5Complete(fields: SignupSectionFields): boolean {
   const hasAadhaar = Boolean(fields.aadhaar_number && fields.aadhaar_number.replace(/\D/g, "").length === 12);
-  const hasDoc = Boolean(fields.has_aadhaar_doc);
-  return hasAadhaar && hasDoc;
+  const hasAadhaarDoc = Boolean(fields.has_aadhaar_doc);
+  if (!hasAadhaar || !hasAadhaarDoc) return false;
+
+  const isOperator = fields.role ? fields.role.trim().toLowerCase() === "operator" : false;
+  if (isOperator) {
+    const hasLicenseNumber = Boolean(
+      fields.license_number &&
+      fields.license_number.trim().length > 0 &&
+      validateLicenseNumber(fields.license_number.trim()).isValid
+    );
+    const hasLicenseDoc = Boolean(fields.has_license_doc);
+    return hasLicenseNumber && hasLicenseDoc;
+  }
+
+  return true;
 }
 
 export function isSignupSection6Complete(fields: SignupSectionFields): boolean {

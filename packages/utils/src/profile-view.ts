@@ -1,5 +1,5 @@
-import { maskAadhaar } from "./string";
-import { formatDate, formatShiftTimingRange, parseTimeToMinutes, parseProfileShiftTime } from "./date";
+import { maskAadhaar } from "./string.ts";
+import { formatDate, formatShiftTimingRange, parseTimeToMinutes, parseProfileShiftTime } from "./date.ts";
 
 export interface ProfileRow {
   label: string;

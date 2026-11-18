@@ -3,7 +3,7 @@
  * Deterministically resolves and pre-selects the operator's assigned or roster shift.
  */
 
-import { parseTimeToMinutes, formatTo12Hour } from './date';
+import { parseTimeToMinutes, formatTo12Hour } from './date.ts';
 export { parseTimeToMinutes, formatTo12Hour };
 
 export interface ShiftMatchTarget {

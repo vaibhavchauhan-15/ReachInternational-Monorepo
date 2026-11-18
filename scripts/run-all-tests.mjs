@@ -63,6 +63,12 @@ const SUITES = [
     domain: 'Universal Queue, BottomSheet, Touch Targets, Haptics & Parity',
   },
   {
+    name: 'Admin-Only Approvals & Scalability Verification Suite',
+    cmd: 'node',
+    args: ['tests/approvals/test-admin-only-approvals.mjs'],
+    domain: 'Admin-Only Route Guards, Dual Auth, RLS & Composite Indexes',
+  },
+  {
     name: 'Mobile Unit & Integration Suite',
     cmd: 'node',
     args: ['apps/mobile/test/run-tests.mjs'],

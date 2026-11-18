@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { verifySession } from "@/lib/dal";
+import { getCurrentUser } from "@/lib/dal";
 import type {
   ApprovalCounts,
   ApprovalRequest,
@@ -19,67 +19,286 @@ export interface ApprovalListParams {
   limit?: number;
 }
 
+export interface ApprovalCallerContext {
+  id: string;
+  role: string;
+}
+
 /**
  * Fetch keyset-paginated approvals list via approval_list RPC.
+ * Queue review is strictly restricted to admin users (super_admin, admin).
  */
 export const getApprovalsListDAL = cache(
   async (
-    params: ApprovalListParams = {}
+    params: ApprovalListParams = {},
+    overrideCaller?: ApprovalCallerContext
   ): Promise<{ data: ApprovalRequestListItem[]; error: string | null }> => {
     try {
-      const session = await verifySession();
-      if (!session.isAuth) {
-        return { data: [], error: "Unauthorized" };
+      let userId = overrideCaller?.id;
+      let userRole = overrideCaller?.role;
+
+      if (!userId || !userRole) {
+        const user = await getCurrentUser();
+        if (!user) {
+          return { data: [], error: "Unauthorized" };
+        }
+        userId = user.id;
+        userRole = user.role;
       }
 
-      const supabase = await createSupabaseServerClient();
-      const { data, error } = await supabase.rpc("approval_list", {
-        p_status: params.status ?? "pending",
-        p_type_key: params.type_key ?? null,
-        p_cursor_created_at: params.cursor_created_at ?? null,
-        p_cursor_id: params.cursor_id ?? null,
-        p_limit: params.limit ?? 25,
-      });
+      const isAdmin = userRole === "admin" || userRole === "super_admin";
+      if (!isAdmin) {
+        return { data: [], error: "Forbidden: Approvals queue is restricted to admin users." };
+      }
 
-      if (error) {
-        // Fallback to table select if RPC schema cache is updating
-        const adminSupabase = createSupabaseAdminClient();
-        let query = adminSupabase
-          .from("approval_requests")
-          .select(`
+      const adminSupabase = createSupabaseAdminClient();
+      let query = adminSupabase
+        .from("approval_requests")
+        .select(`
+          id,
+          type_key,
+          subject_type,
+          subject_id,
+          subject_label,
+          requested_by,
+          status,
+          summary,
+          payload,
+          version,
+          created_at,
+          expires_at,
+          type:approval_types (
+            label,
+            priority
+          ),
+          requester:users!approval_requests_requested_by_fkey (
             id,
-            type_key,
-            subject_type,
-            subject_id,
-            subject_label,
-            requested_by,
-            status,
-            summary,
-            version,
-            created_at,
-            expires_at,
-            type:approval_types (
-              label,
-              priority
-            ),
-            requester:users!approval_requests_requested_by_fkey (
-              full_name
-            )
-          `)
-          .eq("status", params.status ?? "pending")
-          .order("created_at", { ascending: false })
-          .limit(params.limit ?? 25);
+            full_name,
+            email,
+            phone,
+            role,
+            employee_id,
+            machine_category
+          )
+        `)
+        .order("created_at", { ascending: false })
+        .limit(params.limit ?? 50);
 
-        if (params.type_key) {
-          query = query.eq("type_key", params.type_key);
+      if (params.status && params.status !== ("all" as any)) {
+        query = query.eq("status", params.status);
+      }
+      if (params.type_key) {
+        query = query.eq("type_key", params.type_key);
+      }
+
+      const { data: rows, error: qErr } = await query;
+      if (qErr) {
+        return { data: [], error: sanitizeUserErrorMessage(qErr) };
+      }
+
+      const userProfileMap = new Map<string, any>();
+      for (const row of rows || []) {
+        const reqObj: any = Array.isArray(row.requester) ? row.requester[0] : row.requester;
+        if (reqObj?.id) {
+          userProfileMap.set(reqObj.id, reqObj);
+        }
+      }
+
+      const missingUserIds = (rows || [])
+        .map((r: any) => {
+          const p = r.payload || {};
+          return p.user_id || (r.subject_type === "user" ? r.subject_id : null);
+        })
+        .filter((id: string | null) => Boolean(id) && !userProfileMap.has(id!)) as string[];
+
+      const targetUserIds = Array.from(
+        new Set(
+          (rows || [])
+            .map((r: any) => {
+              const p = r.payload || {};
+              return (
+                p.user_id ||
+                (r.subject_type === "user" ? r.subject_id : null) ||
+                r.requested_by
+              );
+            })
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      // Parallel data fetching for missing user profiles and associated documents
+      const [missingUsersRes, userDocsRes] = await Promise.all([
+        missingUserIds.length > 0
+          ? adminSupabase
+              .from("users")
+              .select("id, full_name, email, phone, role, employee_id, machine_category")
+              .in("id", Array.from(new Set(missingUserIds)))
+          : Promise.resolve({ data: null }),
+        targetUserIds.length > 0
+          ? adminSupabase
+              .from("user_documents")
+              .select(
+                "id, user_id, document_type_code, storage_path, thumb_path, verification_status, mime_type, file_size_bytes"
+              )
+              .in("user_id", targetUserIds)
+              .order("created_at", { ascending: true })
+          : Promise.resolve({ data: null }),
+      ]);
+
+      if (missingUsersRes.data) {
+        for (const u of missingUsersRes.data) {
+          userProfileMap.set(u.id, u);
+        }
+      }
+
+      const userDocsMap = new Map<string, any[]>();
+      const userFilesPaths: string[] = [];
+
+      if (userDocsRes.data) {
+        for (const doc of userDocsRes.data) {
+          const list = userDocsMap.get(doc.user_id) || [];
+          list.push(doc);
+          userDocsMap.set(doc.user_id, list);
+          if (doc.storage_path) userFilesPaths.push(doc.storage_path);
+          if (doc.thumb_path) userFilesPaths.push(doc.thumb_path);
+        }
+      }
+
+      const stagingPaths: string[] = [];
+      for (const row of rows || []) {
+        const p = (row.payload || {}) as Record<string, any>;
+        if (p.staging_path) stagingPaths.push(p.staging_path);
+        if (p.staging_thumb_path) stagingPaths.push(p.staging_thumb_path);
+        if (p.storage_path) userFilesPaths.push(p.storage_path);
+        if (p.thumb_path) userFilesPaths.push(p.thumb_path);
+      }
+
+      // Parallel batch signed URL resolution across storage buckets
+      const [userFilesSignedRes, stagingSignedRes] = await Promise.all([
+        userFilesPaths.length > 0
+          ? adminSupabase.storage
+              .from("user_files")
+              .createSignedUrls(Array.from(new Set(userFilesPaths)), 3600)
+          : Promise.resolve({ data: null }),
+        stagingPaths.length > 0
+          ? adminSupabase.storage
+              .from("doc_staging")
+              .createSignedUrls(Array.from(new Set(stagingPaths)), 3600)
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const signedUserFilesMap = new Map<string, string>();
+      if (userFilesSignedRes.data) {
+        for (const s of userFilesSignedRes.data) {
+          if (s?.path && s.signedUrl) signedUserFilesMap.set(s.path, s.signedUrl);
+        }
+      }
+
+      const signedStagingMap = new Map<string, string>();
+      if (stagingSignedRes.data) {
+        for (const s of stagingSignedRes.data) {
+          if (s?.path && s.signedUrl) signedStagingMap.set(s.path, s.signedUrl);
+        }
+      }
+
+      const formatDocLabel = (code: string): string => {
+        switch (code) {
+          case "aadhaar":
+            return "Aadhaar Card";
+          case "driving_license":
+            return "Driving License";
+          case "bank_document":
+            return "Bank Details";
+          default:
+            return code
+              .replace(/_/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+        }
+      };
+
+      const mapped: ApprovalRequestListItem[] = (rows || []).map((row: any) => {
+        const p = (row.payload || {}) as Record<string, any>;
+        const targetUserId =
+          p.user_id ||
+          (row.subject_type === "user" ? row.subject_id : null) ||
+          row.requested_by;
+        const reqObj: any = Array.isArray(row.requester) ? row.requester[0] : row.requester;
+        const profile = userProfileMap.get(targetUserId) || reqObj || null;
+
+        let empId = profile?.employee_id || p.employee_id || null;
+        if (!empId && row.subject_label?.includes("·")) {
+          const parts = row.subject_label.split("·").map((s: string) => s.trim());
+          if (
+            parts[0] &&
+            (parts[0].startsWith("EMP") ||
+              parts[0].startsWith("RI-") ||
+              parts[0].startsWith("#"))
+          ) {
+            empId = parts[0];
+          }
         }
 
-        const { data: fbData, error: fbErr } = await query;
-        if (fbErr) {
-          return { data: [], error: sanitizeUserErrorMessage(fbErr) };
+        const rawDocs = targetUserId ? userDocsMap.get(targetUserId) || [] : [];
+        const attachedDocs = rawDocs.map((doc: any) => ({
+          id: doc.id,
+          document_type_code: doc.document_type_code,
+          label: formatDocLabel(doc.document_type_code),
+          thumb_signed_url:
+            (doc.thumb_path ? signedUserFilesMap.get(doc.thumb_path) : null) ||
+            (doc.storage_path ? signedUserFilesMap.get(doc.storage_path) : null) ||
+            null,
+          signed_url:
+            (doc.storage_path ? signedUserFilesMap.get(doc.storage_path) : null) ||
+            (doc.thumb_path ? signedUserFilesMap.get(doc.thumb_path) : null) ||
+            null,
+          verification_status: doc.verification_status || "pending",
+          file_size_bytes: doc.file_size_bytes,
+          mime_type: doc.mime_type,
+        }));
+
+        if (
+          row.type_key === "document_verify" &&
+          attachedDocs.length === 0 &&
+          p.document_type_code
+        ) {
+          attachedDocs.push({
+            id: p.document_id || row.id,
+            document_type_code: p.document_type_code,
+            label: formatDocLabel(p.document_type_code),
+            thumb_signed_url:
+              (p.thumb_path ? signedUserFilesMap.get(p.thumb_path) : null) ||
+              (p.storage_path ? signedUserFilesMap.get(p.storage_path) : null) ||
+              null,
+            signed_url:
+              (p.storage_path ? signedUserFilesMap.get(p.storage_path) : null) ||
+              (p.thumb_path ? signedUserFilesMap.get(p.thumb_path) : null) ||
+              null,
+            verification_status: row.status,
+            file_size_bytes: p.file_size_bytes,
+            mime_type: p.mime_type || "image/jpeg",
+          });
         }
 
-        const mapped: ApprovalRequestListItem[] = (fbData || []).map((row: any) => ({
+        if (row.type_key === "document_replace" && p.document_type_code) {
+          attachedDocs.unshift({
+            id: row.id,
+            document_type_code: p.document_type_code,
+            label: `${formatDocLabel(p.document_type_code)} (Replacement)`,
+            thumb_signed_url:
+              (p.staging_thumb_path ? signedStagingMap.get(p.staging_thumb_path) : null) ||
+              (p.staging_path ? signedStagingMap.get(p.staging_path) : null) ||
+              null,
+            signed_url:
+              (p.staging_path ? signedStagingMap.get(p.staging_path) : null) ||
+              (p.staging_thumb_path ? signedStagingMap.get(p.staging_thumb_path) : null) ||
+              null,
+            verification_status: "pending",
+            file_size_bytes: p.file_size_bytes,
+            mime_type: "image/jpeg",
+          });
+        }
+
+        return {
           id: row.id,
           type_key: row.type_key,
           type_label: row.type?.label || row.type_key,
@@ -87,19 +306,119 @@ export const getApprovalsListDAL = cache(
           subject_id: row.subject_id,
           subject_label: row.subject_label,
           requested_by: row.requested_by,
-          requester_name: row.requester?.full_name || null,
+          requester_name:
+            profile?.full_name || reqObj?.full_name || p.full_name || null,
           status: row.status,
           summary: row.summary,
           priority: row.type?.priority ?? 0,
           created_at: row.created_at,
           expires_at: row.expires_at,
           version: row.version,
-        }));
+          payload: p,
+          role: profile?.role || p.role || null,
+          employee_id: empId,
+          email: profile?.email || p.email || null,
+          phone: profile?.phone || p.phone || null,
+          machine_category:
+            profile?.machine_category || p.machine_category || null,
+          documents: attachedDocs,
+          bound_request_ids: [row.id],
+        };
+      });
 
-        return { data: mapped, error: null };
+      // ─── Approvals Normalization Engine ──────────────────────────
+      // 1. Group / suppress redundant document_verify requests for users undergoing registration
+      // 2. Bind multiple requests of same type for same user into one consolidated card
+      const pendingRegistrationUserIds = new Set<string>();
+      for (const item of mapped) {
+        if (item.type_key === "registration" && item.status === "pending") {
+          const uId = item.payload?.user_id || item.subject_id || item.requested_by;
+          if (uId) pendingRegistrationUserIds.add(uId);
+        }
       }
 
-      return { data: Array.isArray(data) ? data : [], error: null };
+      // Map of registration items by userId for attaching bound document_verify IDs
+      const registrationByUserId = new Map<string, ApprovalRequestListItem>();
+      for (const item of mapped) {
+        if (item.type_key === "registration" && item.status === "pending") {
+          const uId = item.payload?.user_id || item.subject_id || item.requested_by;
+          if (uId) registrationByUserId.set(uId, item);
+        }
+      }
+
+      const normalized: ApprovalRequestListItem[] = [];
+      // Groups for binding same-user same-type requests: key = `${targetUserId}:${typeKey}`
+      const groupedIndex = new Map<string, ApprovalRequestListItem>();
+
+      for (const item of mapped) {
+        const targetUserId =
+          item.payload?.user_id ||
+          (item.subject_type === "user" ? item.subject_id : null) ||
+          item.requested_by;
+
+        // If this is a document_verify request for a user who already has a pending registration card:
+        // Absorb it into the registration card and suppress this duplicate standalone card!
+        if (
+          item.type_key === "document_verify" &&
+          targetUserId &&
+          pendingRegistrationUserIds.has(targetUserId)
+        ) {
+          const regItem = registrationByUserId.get(targetUserId);
+          if (regItem) {
+            regItem.bound_request_ids = regItem.bound_request_ids || [];
+            if (!regItem.bound_request_ids.includes(item.id)) {
+              regItem.bound_request_ids.push(item.id);
+            }
+          }
+          continue; // Suppress duplicate standalone document_verify card
+        }
+
+        // For document_verify or document_replace: bind multiple same-user requests into 1 consolidated card
+        if (
+          (item.type_key === "document_verify" || item.type_key === "document_replace") &&
+          targetUserId &&
+          item.status === "pending"
+        ) {
+          const groupKey = `${targetUserId}:${item.type_key}`;
+          const existing = groupedIndex.get(groupKey);
+
+          if (existing) {
+            // Bind into existing card
+            existing.bound_request_ids = existing.bound_request_ids || [existing.id];
+            if (!existing.bound_request_ids.includes(item.id)) {
+              existing.bound_request_ids.push(item.id);
+            }
+
+            // Merge documents without duplicate IDs
+            const existingDocIds = new Set((existing.documents || []).map((d) => d.id));
+            for (const doc of item.documents || []) {
+              if (!existingDocIds.has(doc.id)) {
+                existing.documents = existing.documents || [];
+                existing.documents.push(doc);
+                existingDocIds.add(doc.id);
+              }
+            }
+
+            // Update summary and subject_label for multi-document representation
+            const totalDocs = existing.documents?.length || 1;
+            if (totalDocs > 1) {
+              const uName = existing.requester_name || existing.subject_label || "User";
+              existing.subject_label = `${uName} (${totalDocs} Documents)`;
+              existing.summary = `${existing.type_label}: ${uName} (${totalDocs} documents pending review)`;
+            }
+            continue; // Absorbed into existing card
+          } else {
+            item.bound_request_ids = [item.id];
+            groupedIndex.set(groupKey, item);
+            normalized.push(item);
+            continue;
+          }
+        }
+
+        normalized.push(item);
+      }
+
+      return { data: normalized, error: null };
     } catch (err) {
       return { data: [], error: sanitizeUserErrorMessage(err) };
     }
@@ -111,13 +430,23 @@ export const getApprovalsListDAL = cache(
  */
 export const getApprovalDetailDAL = cache(
   async (
-    requestId: string
+    requestId: string,
+    overrideCaller?: ApprovalCallerContext
   ): Promise<{ data: ApprovalRequest | null; error: string | null }> => {
     try {
-      const session = await verifySession();
-      if (!session.isAuth) {
-        return { data: null, error: "Unauthorized" };
+      let userId = overrideCaller?.id;
+      let userRole = overrideCaller?.role;
+
+      if (!userId || !userRole) {
+        const user = await getCurrentUser();
+        if (!user) {
+          return { data: null, error: "Unauthorized" };
+        }
+        userId = user.id;
+        userRole = user.role;
       }
+
+      const isAdmin = userRole === "admin" || userRole === "super_admin";
 
       const supabase = await createSupabaseServerClient();
       const { data, error } = await supabase.rpc("approval_get", {
@@ -130,10 +459,29 @@ export const getApprovalDetailDAL = cache(
         const { data: fbData, error: fbErr } = await adminSupabase
           .from("approval_requests")
           .select(`
-            *,
-            type:approval_types (*),
+            id,
+            type_key,
+            subject_type,
+            subject_id,
+            subject_label,
+            requested_by,
+            status,
+            summary,
+            payload,
+            decision_note,
+            decided_by,
+            decided_at,
+            expires_at,
+            supersedes_id,
+            idempotency_key,
+            version,
+            created_at,
+            updated_at,
+            type:approval_types (
+              key, label, category, approver_roles, required_approvals, allow_self_approve, ttl, cooling_off, priority, active
+            ),
             requester:users!approval_requests_requested_by_fkey (
-              id, full_name, email, role
+              id, full_name, email, role, phone, employee_id, machine_category
             )
           `)
           .eq("id", requestId)
@@ -143,7 +491,17 @@ export const getApprovalDetailDAL = cache(
           return { data: null, error: sanitizeUserErrorMessage(fbErr || "Approval request not found") };
         }
 
-        return { data: fbData as ApprovalRequest, error: null };
+        if (!isAdmin && fbData.requested_by !== userId && fbData.subject_id !== userId) {
+          return { data: null, error: "Forbidden: Access denied to this approval request." };
+        }
+
+        const mapped = {
+          ...fbData,
+          type: Array.isArray(fbData.type) ? fbData.type[0] : fbData.type,
+          requester: Array.isArray(fbData.requester) ? fbData.requester[0] : fbData.requester,
+        } as unknown as ApprovalRequest;
+
+        return { data: mapped, error: null };
       }
 
       return { data: data as ApprovalRequest, error: null };
@@ -155,20 +513,34 @@ export const getApprovalDetailDAL = cache(
 
 /**
  * Fetch aggregated approval counts across types.
+ * Strictly available to admin users; non-admins safely receive zero counts.
  */
 export const getApprovalCountsDAL = cache(
-  async (): Promise<{ data: ApprovalCounts; error: string | null }> => {
+  async (
+    overrideCaller?: ApprovalCallerContext
+  ): Promise<{ data: ApprovalCounts; error: string | null }> => {
     try {
-      const session = await verifySession();
-      if (!session.isAuth) {
-        return { data: { total: 0, by_type: {} }, error: "Unauthorized" };
+      let userId = overrideCaller?.id;
+      let userRole = overrideCaller?.role;
+
+      if (!userId || !userRole) {
+        const user = await getCurrentUser();
+        if (!user) {
+          return { data: { total: 0, by_type: {} }, error: "Unauthorized" };
+        }
+        userId = user.id;
+        userRole = user.role;
       }
 
-      const supabase = await createSupabaseServerClient();
-      const { data, error } = await supabase.rpc("approval_counts");
+      const isAdmin = userRole === "admin" || userRole === "super_admin";
+      if (!isAdmin) {
+        return { data: { total: 0, by_type: {} }, error: null };
+      }
+
+      const adminSupabase = createSupabaseAdminClient();
+      const { data, error } = await adminSupabase.rpc("approval_counts");
 
       if (error) {
-        const adminSupabase = createSupabaseAdminClient();
         const { data: rows, error: fbErr } = await adminSupabase
           .from("approval_requests")
           .select("type_key")

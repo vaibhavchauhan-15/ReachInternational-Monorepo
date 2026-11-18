@@ -147,10 +147,6 @@ export const NAV_ITEMS: NavItem[] = [
     roles: [
       "super_admin",
       "admin",
-      "manager",
-      "supervisor",
-      "hr",
-      "operator",
     ],
   },
   {

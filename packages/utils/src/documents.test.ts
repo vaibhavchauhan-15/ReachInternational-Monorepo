@@ -11,13 +11,13 @@ import {
 
 test("DOC_UPLOAD specifications match exact architectural requirements", () => {
   assert.deepEqual(DOC_UPLOAD.docTypes, ["bank_document", "aadhaar", "driving_license"]);
-  assert.equal(DOC_UPLOAD.maxEdge, 1600);
-  assert.equal(DOC_UPLOAD.thumbEdge, 320);
+  assert.equal(DOC_UPLOAD.maxEdge, 2400);
+  assert.equal(DOC_UPLOAD.thumbEdge, 480);
   assert.equal(DOC_UPLOAD.minShortEdge, 600);
-  assert.equal(DOC_UPLOAD.quality, 0.8);
-  assert.equal(DOC_UPLOAD.thumbQuality, 0.7);
-  assert.equal(DOC_UPLOAD.targetBytes, 400000);
-  assert.equal(DOC_UPLOAD.maxBytes, 1000000);
+  assert.equal(DOC_UPLOAD.quality, 0.92);
+  assert.equal(DOC_UPLOAD.thumbQuality, 0.82);
+  assert.equal(DOC_UPLOAD.targetBytes, 800000);
+  assert.equal(DOC_UPLOAD.maxBytes, 2500000);
   assert.equal(DOC_UPLOAD.mime, "image/jpeg");
 });
 

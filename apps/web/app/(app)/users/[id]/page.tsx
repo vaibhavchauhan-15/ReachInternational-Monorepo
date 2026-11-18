@@ -7,6 +7,7 @@ import {
   getUserById,
   getUserSummaryKPIs,
   getUserAssignedMachines,
+  getUserSupervisedOperators,
   getUserRunningLogs,
   getUserAssignments,
   getUserAuditLogs,
@@ -94,28 +95,7 @@ export default async function UserDetailPage(props: {
     );
   }
 
-  // High-performance concurrent queries: load all detail sections in parallel
-  const [
-    user,
-    kpis,
-    machines,
-    runningLogs,
-    assignments,
-    auditLogs,
-    documents,
-    docTypes,
-    supervisors,
-  ] = await Promise.all([
-    getUserById(userId),
-    getUserSummaryKPIs(userId),
-    getUserAssignedMachines(userId),
-    getUserRunningLogs(userId, 50),
-    getUserAssignments(userId),
-    getUserAuditLogs(userId, 50),
-    getUserDocumentsAction(userId).catch(() => []),
-    getDocumentTypesAction().catch(() => []),
-    getSupervisorsAction().catch(() => []),
-  ]);
+  const user = await getUserById(userId);
 
   if (!user) {
     return (
@@ -136,6 +116,32 @@ export default async function UserDetailPage(props: {
     );
   }
 
+  // High-performance concurrent queries: load all detail sections in parallel tailored to role
+  const isOperator = user.role === "operator";
+  const isSupervisor = user.role === "supervisor";
+
+  const [
+    kpis,
+    machines,
+    runningLogs,
+    assignments,
+    auditLogs,
+    documents,
+    docTypes,
+    supervisors,
+    operators,
+  ] = await Promise.all([
+    getUserSummaryKPIs(userId, user.role),
+    getUserAssignedMachines(userId, user.role),
+    isOperator ? getUserRunningLogs(userId, 50) : Promise.resolve([]),
+    isOperator ? getUserAssignments(userId) : Promise.resolve([]),
+    getUserAuditLogs(userId, 50),
+    getUserDocumentsAction(userId).catch(() => []),
+    getDocumentTypesAction().catch(() => []),
+    getSupervisorsAction().catch(() => []),
+    isSupervisor ? getUserSupervisedOperators(userId).catch(() => []) : Promise.resolve([]),
+  ]);
+
   const isSuperAdmin = currentUser.role === "super_admin";
   const canManage = isSuperAdmin || (currentUser.role === "admin" && user.role !== "super_admin");
 
@@ -153,6 +159,7 @@ export default async function UserDetailPage(props: {
       documents={documents}
       documentTypes={docTypes}
       supervisors={Array.isArray(supervisors) ? supervisors : []}
+      operators={Array.isArray(operators) ? operators : []}
     />
   );
 }

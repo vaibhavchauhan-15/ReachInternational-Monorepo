@@ -19,6 +19,7 @@ import {
   canDecideApproval,
 } from "@reachinternational/permissions";
 import { sanitizeUserErrorMessage } from "@reachinternational/utils";
+import { processPendingApprovalOutboxItems } from "@/lib/server/approvals-outbox";
 
 export interface ApprovalActionResult<T = any> {
   success: boolean;
@@ -177,8 +178,18 @@ export async function decideApprovalAction(
       };
     }
 
+    let targetRole: string | undefined = undefined;
+    if (request.subject_id) {
+      const { data: targetUser } = await adminSupabase
+        .from("users")
+        .select("role")
+        .eq("id", request.subject_id)
+        .maybeSingle();
+      targetRole = targetUser?.role;
+    }
+
     const approverObj = { id: user.id, role: user.role };
-    const targetObj = { id: request.subject_id, role: undefined };
+    const targetObj = { id: request.subject_id, role: targetRole };
 
     if (!canDecideApproval(approverObj, targetObj, request.type_key)) {
       return {
@@ -187,12 +198,13 @@ export async function decideApprovalAction(
       };
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { data: rpcData, error: rpcErr } = await supabase.rpc("approval_decide", {
+    // Call atomic approval_decide RPC with caller attribution
+    const { data: rpcData, error: rpcErr } = await adminSupabase.rpc("approval_decide", {
       p_request_id: input.request_id,
       p_decision: input.decision,
       p_note: input.note ?? null,
       p_expected_version: input.expected_version ?? request.version,
+      p_actor_id: user.id,
     });
 
     if (rpcErr) {
@@ -207,10 +219,29 @@ export async function decideApprovalAction(
       return { success: false, error: sanitizeUserErrorMessage(rpcErr) };
     }
 
+    // If bound requests are present, decide other bound requests in parallel
+    if (input.bound_request_ids && input.bound_request_ids.length > 0) {
+      const otherBoundIds = input.bound_request_ids.filter((id) => id !== input.request_id);
+      if (otherBoundIds.length > 0) {
+        await Promise.allSettled(
+          otherBoundIds.map((boundId) =>
+            adminSupabase.rpc("approval_decide", {
+              p_request_id: boundId,
+              p_decision: input.decision,
+              p_note: input.note ?? null,
+              p_actor_id: user.id,
+            })
+          )
+        );
+      }
+    }
+
     revalidateTag(TAGS.approvals, "max");
     revalidateTag(TAGS.approvalsList, "max");
     revalidateTag(TAGS.approvalsCounts, "max");
     revalidateTag(TAGS.approvalDetail(input.request_id), "max");
+    revalidateTag(TAGS.users, "max");
+    revalidateTag(TAGS.documents, "max");
 
     await logAudit({
       user_id: user.id,
@@ -224,6 +255,11 @@ export async function decideApprovalAction(
         note: input.note,
       },
     }).catch(() => {});
+
+    // Fast-path drain outbox so notifications and staged file transfers happen immediately
+    await processPendingApprovalOutboxItems(10).catch((err) => {
+      console.warn("[decideApprovalAction] Background outbox processing non-blocking error:", err);
+    });
 
     return {
       success: true,

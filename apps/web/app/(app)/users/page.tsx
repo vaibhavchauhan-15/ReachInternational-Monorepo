@@ -5,6 +5,7 @@ import {
   getUserList,
   getUserListAggregatesCached,
   getSupervisorUserListAggregatesCached,
+  getActiveSupervisorsCached,
   USERS_PAGE_SIZE,
 } from "@/lib/data/users";
 import { getApprovalCountsDAL } from "@/lib/dal/approvals";
@@ -52,13 +53,15 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const status = typeof params?.status === "string" ? params.status : "all";
   const kyc = typeof params?.kyc === "string" ? params.kyc : "all";
   const state = typeof params?.state === "string" ? params.state : "all";
+  const supervisor = typeof params?.supervisor === "string" ? params.supervisor : "all";
   const dateRange = typeof params?.dateRange === "string" ? params.dateRange : "all";
   const sort = typeof params?.sort === "string" ? params.sort : "newest";
 
-  const [{ users, totalPages, total }, aggregates, approvalCountsResult] = await Promise.all([
-    getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: USERS_PAGE_SIZE }),
+  const [{ users, totalPages, total }, aggregates, approvalCountsResult, initialSupervisors] = await Promise.all([
+    getUserList({ search, role, status, kyc, state, supervisor, dateRange, sort, page, pageSize: USERS_PAGE_SIZE }),
     isSupervisor ? getSupervisorUserListAggregatesCached(currentUser.id) : getUserListAggregatesCached(),
     readOnly ? Promise.resolve({ data: { total: 0, by_type: {} }, error: null }) : getApprovalCountsDAL(),
+    getActiveSupervisorsCached(),
   ]);
 
   const approvalCounts = approvalCountsResult?.data || { total: 0, by_type: {} };
@@ -74,6 +77,7 @@ async function UsersPageContent({ searchParams }: PageProps) {
       aggregates={aggregates}
       readOnly={readOnly}
       pendingApprovalCounts={approvalCounts}
+      initialSupervisors={initialSupervisors}
     />
   );
 }

@@ -37,6 +37,7 @@ import {
   FileText,
   Download,
 } from '../ui/icon';
+import { CheckCircle2, XCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { Pressable } from '@/components/ui/touch/Pressable';
@@ -62,14 +63,26 @@ export interface MobileViewerDoc {
   updatedAt?: string;
 }
 
-interface MobileDocumentViewerModalProps {
+export interface MobileDocumentViewerModalProps {
   document: MobileViewerDoc | null;
   onClose: () => void;
+  canDecide?: boolean;
+  isPending?: boolean;
+  verificationStatus?: string;
+  onVerifyDocument?: (docId: string) => Promise<void> | void;
+  onRejectDocumentPrompt?: (doc: MobileViewerDoc) => void;
+  isActionLoading?: boolean;
 }
 
 export function MobileDocumentViewerModal({
   document: doc,
   onClose,
+  canDecide = false,
+  isPending = false,
+  verificationStatus,
+  onVerifyDocument,
+  onRejectDocumentPrompt,
+  isActionLoading = false,
 }: MobileDocumentViewerModalProps) {
   const { theme, isDark } = useTheme();
 
@@ -475,6 +488,94 @@ export function MobileDocumentViewerModal({
                 </Pressable>
               </View>
             )}
+
+            {/* 3. Floating Document Verification Action Overlay (Matching Web DocumentLightboxModal) */}
+            {canDecide && isPending && doc.id ? (
+              <View style={styles.reviewActionOverlay} pointerEvents="box-none">
+                <View
+                  style={[
+                    styles.reviewActionPill,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(23, 23, 23, 0.95)'
+                        : 'rgba(255, 255, 255, 0.95)',
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  {onRejectDocumentPrompt ? (
+                    <Pressable
+                      variant="plain"
+                      onPress={() => onRejectDocumentPrompt(doc)}
+                      disabled={isActionLoading}
+                      style={[styles.reviewActionBtn, styles.reviewRejectBtn]}
+                      accessibilityLabel="Reject Document"
+                    >
+                      <XCircle size={15} color="#ef4444" />
+                      <Text variant="label" style={{ color: '#ef4444', marginLeft: 6 }}>
+                        Reject Document
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {onVerifyDocument ? (
+                    <Pressable
+                      variant="plain"
+                      onPress={() => void onVerifyDocument(doc.id!)}
+                      disabled={isActionLoading}
+                      style={[styles.reviewActionBtn, styles.reviewApproveBtn]}
+                      accessibilityLabel="Approve Document"
+                    >
+                      {isActionLoading ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={15} color="#ffffff" />
+                          <Text variant="label" style={{ color: '#ffffff', marginLeft: 6 }}>
+                            Approve Document
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {/* 4. Decided Status Badge Overlay */}
+            {!isPending && verificationStatus ? (
+              <View style={styles.reviewStatusOverlay} pointerEvents="none">
+                <View
+                  style={[
+                    styles.reviewStatusPill,
+                    {
+                      backgroundColor:
+                        verificationStatus === 'verified'
+                          ? 'rgba(16, 185, 129, 0.15)'
+                          : 'rgba(239, 68, 68, 0.15)',
+                      borderColor:
+                        verificationStatus === 'verified'
+                          ? 'rgba(16, 185, 129, 0.3)'
+                          : 'rgba(239, 68, 68, 0.3)',
+                    },
+                  ]}
+                >
+                  {verificationStatus === 'verified' ? (
+                    <CheckCircle2 size={14} color="#10b981" />
+                  ) : (
+                    <XCircle size={14} color="#ef4444" />
+                  )}
+                  <Text
+                    variant="micro"
+                    style={{
+                      color: verificationStatus === 'verified' ? '#10b981' : '#ef4444',
+                      marginLeft: 4,
+                    }}
+                  >
+                    {verificationStatus.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         </SafeAreaView>
       </View>
@@ -614,5 +715,58 @@ const styles = StyleSheet.create({
   },
   primaryActionText: {
     color: '#ffffff',
+  },
+  reviewActionOverlay: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+  },
+  reviewActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 6,
+    borderRadius: 28,
+    borderWidth: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  reviewActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    minHeight: 44,
+  },
+  reviewRejectBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  reviewApproveBtn: {
+    backgroundColor: '#10b981',
+  },
+  reviewStatusOverlay: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 40,
+  },
+  reviewStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
 });

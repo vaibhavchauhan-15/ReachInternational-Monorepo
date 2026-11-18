@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ReachInternational Mobile — Mobile Document Upload Card
  * Matches web mobile viewport 95% identically:
  * - Direct form field alignment matching Input/Select (no awkward double-nested card)

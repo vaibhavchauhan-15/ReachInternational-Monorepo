@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ disabled: true, reason: 'PUSH_ENABLED is not true' });
   }
 
-  const bodyJson = await req.json().catch(() => ({}));
+  const bodyJson = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const ids: string[] | undefined = Array.isArray(bodyJson?.ids) ? bodyJson.ids : undefined;
 
   const admin = createSupabaseAdminClient();

@@ -51,6 +51,7 @@ export interface DecideApprovalInput {
   decision: "approve" | "reject";
   note?: string;
   expected_version?: number;
+  actor_id?: string | null;
 }
 
 export interface CancelApprovalInput {
@@ -59,7 +60,7 @@ export interface CancelApprovalInput {
 }
 
 export interface ListApprovalsInput {
-  status?: ApprovalStatus;
+  status?: ApprovalStatus | "all";
   type_key?: string;
   cursor_created_at?: string;
   cursor_id?: string;
@@ -103,7 +104,7 @@ export async function submitApproval(
       body: JSON.stringify(input),
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
@@ -131,6 +132,7 @@ export async function decideApproval(
         p_decision: input.decision,
         p_note: input.note ?? null,
         p_expected_version: input.expected_version ?? null,
+        p_actor_id: input.actor_id ?? null,
       });
 
       if (error) {
@@ -150,7 +152,7 @@ export async function decideApproval(
       body: JSON.stringify(input),
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
@@ -194,7 +196,7 @@ export async function cancelApproval(
       body: JSON.stringify(input),
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
@@ -244,7 +246,7 @@ export async function listApprovals(
       headers,
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
@@ -283,7 +285,7 @@ export async function getApproval(
       headers,
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
@@ -319,7 +321,7 @@ export async function approvalCounts(
       headers,
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
