@@ -13,7 +13,8 @@ import { ApprovalRow } from "./components/ApprovalRow";
 import { ApprovalDetailPanel } from "./components/ApprovalDetailPanel";
 import { DocumentLightboxModal } from "./components/DocumentLightboxModal";
 import { ApprovalRejectModal } from "./components/ApprovalRejectModal";
-import { decideApprovalAction } from "@/app/actions/approvals";
+import { ApproveAllConfirmModal } from "./components/ApproveAllConfirmModal";
+import { decideApprovalAction, approveAllAction } from "@/app/actions/approvals";
 import {
   verifyUserDocumentAction,
   rejectUserDocumentAction,
@@ -23,6 +24,7 @@ import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
+  CheckCheck,
   AlertCircle,
   Loader2,
   Inbox,
@@ -129,6 +131,9 @@ export function ApprovalsClientShell({
   const [exitStates, setExitStates] = useState<Record<string, "approved" | "rejected">>({});
   // Modal-only submitting state (does not block grid cards)
   const [isModalSubmitting, setIsModalSubmitting] = useState(false);
+  // Bulk Approve All modal and submitting state
+  const [approveAllModalOpen, setApproveAllModalOpen] = useState(false);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
 
   // Custom Dropdown Popover States (Feedback 4 & 5)
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -588,6 +593,116 @@ export function ApprovalsClientShell({
     "registration"
   );
 
+  // Pending approvals count for Approve All button badge
+  const pendingApprovalsCount = useMemo(() => {
+    if (typeFilter !== "all") {
+      const typeCount = counts.by_type[typeFilter];
+      if (typeCount !== undefined && typeCount > 0) return typeCount;
+      return items.filter((i) => i.status === "pending" && i.type_key === typeFilter).length;
+    }
+    const regCount = counts.by_type["registration"];
+    if (regCount !== undefined && regCount > 0) return regCount;
+    return counts.total || items.filter((i) => i.status === "pending").length;
+  }, [counts, items, typeFilter]);
+
+  const canApproveAll =
+    canDecide &&
+    (pendingApprovalsCount > 0 || items.some((i) => i.status === "pending"));
+
+  // Action: Approve All Pending Requests
+  const handleApproveAll = async () => {
+    if (isApprovingAll) return;
+    setIsApprovingAll(true);
+    setToastMessage(null);
+
+    const targetTypeKey = typeFilter !== "all" ? typeFilter : undefined;
+    const pendingItemsToApprove = items.filter(
+      (i) => i.status === "pending" && (!targetTypeKey || i.type_key === targetTypeKey)
+    );
+    const countToApprove = pendingApprovalsCount || pendingItemsToApprove.length;
+
+    // Fast responsive optimistic exit state
+    if (status === "pending") {
+      const exitMap: Record<string, "approved"> = {};
+      for (const item of pendingItemsToApprove) {
+        exitMap[item.id] = "approved";
+      }
+      setExitStates((prev) => ({ ...prev, ...exitMap }));
+    }
+
+    try {
+      const result = await approveAllAction({
+        type_key: targetTypeKey,
+      });
+
+      if (!result.success) {
+        setExitStates({});
+        setToastMessage({
+          type: "error",
+          text: result.error || "Failed to approve all requests.",
+        });
+      } else {
+        const approvedCount = result.data?.approved_count ?? countToApprove;
+        setToastMessage({
+          type: "success",
+          text: `Successfully approved ${approvedCount} request${
+            approvedCount === 1 ? "" : "s"
+          }. User accounts activated with documents pending verification.`,
+        });
+
+        // Smoothly remove approved items from items state
+        if (status === "pending") {
+          setTimeout(() => {
+            setItems((prev) =>
+              prev.filter((i) => !pendingItemsToApprove.some((p) => p.id === i.id))
+            );
+            setExitStates({});
+          }, 350);
+        } else {
+          setItems((prev) =>
+            prev.map((i) =>
+              pendingItemsToApprove.some((p) => p.id === i.id)
+                ? { ...i, status: "approved" }
+                : i
+            )
+          );
+          setExitStates({});
+        }
+
+        // Optimistically clear pending counts for approved types
+        setCounts((prev) => {
+          const newByType = { ...prev.by_type };
+          if (targetTypeKey) {
+            newByType[targetTypeKey] = 0;
+          } else {
+            newByType["registration"] = 0;
+          }
+          const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
+          return {
+            total: Math.max(0, newTotal),
+            by_type: newByType,
+          };
+        });
+
+        // Silently revalidate counts from server
+        fetch("/api/approvals/counts")
+          .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
+          .then((countData: ApprovalCounts | null) => {
+            if (countData) setCounts(countData);
+          })
+          .catch(() => {});
+      }
+    } catch (err: unknown) {
+      setExitStates({});
+      const msg = err instanceof Error ? err.message : String(err);
+      setToastMessage({ type: "error", text: msg });
+    } finally {
+      setIsApprovingAll(false);
+      setApproveAllModalOpen(false);
+    }
+  };
+
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-4rem)] max-w-7xl mx-auto p-3 sm:p-6 space-y-4">
       {/* Toast Feedback with 5s auto-dismiss and smooth exit animation (Feedback 3) */}
@@ -622,11 +737,33 @@ export function ApprovalsClientShell({
         )}
       </AnimatePresence>
 
-      {/* ── Clean Header (Feedback 2, 3, 4: No "1 Pending", No description, No Refresh button) ── */}
-      <div className="pb-3 border-b border-[var(--color-border)]">
+      {/* ── Clean Header with Action Bar ── */}
+      <div className="pb-3 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
           Approvals &amp; Verifications
         </h1>
+
+        {canDecide && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              disabled={!canApproveAll || isApprovingAll}
+              onClick={() => setApproveAllModalOpen(true)}
+              className="h-9 px-3.5 sm:px-4 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              title={canApproveAll ? "Approve all pending user registrations" : "No pending requests to approve"}
+            >
+              {isApprovingAll ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <CheckCheck size={15} />
+              )}
+              <span>
+                Approve All
+                {pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Standard Search & Filter Toolbar (Feedback 1) ── */}
@@ -1064,6 +1201,16 @@ export function ApprovalsClientShell({
         onConfirm={handleConfirmRejection}
         requestSummary={rejectTarget?.summary}
         isSubmitting={isModalSubmitting}
+      />
+
+      {/* ── Bulk Approve All Confirmation Modal ── */}
+      <ApproveAllConfirmModal
+        isOpen={approveAllModalOpen}
+        onClose={() => setApproveAllModalOpen(false)}
+        onConfirm={handleApproveAll}
+        count={pendingApprovalsCount}
+        typeLabel={typeFilter !== "all" ? TYPE_FILTER_OPTIONS.find((t) => t.id === typeFilter)?.label : undefined}
+        isSubmitting={isApprovingAll}
       />
     </div>
   );

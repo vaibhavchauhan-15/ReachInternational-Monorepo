@@ -10,10 +10,13 @@ import {
   ApprovalSubmitInputSchema,
   ApprovalDecideInputSchema,
   ApprovalCancelInputSchema,
+  ApprovalApproveAllInputSchema,
   type ApprovalSubmitInput,
   type ApprovalDecideInput,
   type ApprovalCancelInput,
+  type ApprovalApproveAllInput,
 } from "@reachinternational/validation";
+import type { ApprovalApproveAllResult } from "@reachinternational/types";
 import {
   canSubmitApproval,
   canDecideApproval,
@@ -330,3 +333,87 @@ export async function cancelApprovalAction(
     return { success: false, error: sanitizeUserErrorMessage(err) };
   }
 }
+
+/**
+ * Approve All pending approval requests.
+ * Invariant: For user registrations, activates users immediately while keeping all user documents pending.
+ */
+export async function approveAllAction(
+  rawInput?: unknown
+): Promise<ApprovalActionResult<ApprovalApproveAllResult>> {
+  try {
+    const session = await verifySession();
+    if (!session.isAuth) {
+      return { success: false, error: "You must be signed in to approve requests." };
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Authenticated user record not found." };
+    }
+
+    // Role verification: strictly admin users
+    if (!["super_admin", "admin"].includes(user.role)) {
+      return {
+        success: false,
+        error: `Your role (${user.role}) is not authorized to perform bulk approval.`,
+      };
+    }
+
+    const parseResult = ApprovalApproveAllInputSchema.safeParse(rawInput || {});
+    if (!parseResult.success) {
+      const firstErr = parseResult.error.errors[0]?.message || "Invalid approve all payload.";
+      return { success: false, error: firstErr };
+    }
+
+    const input: ApprovalApproveAllInput = parseResult.data;
+    const adminSupabase = createSupabaseAdminClient();
+
+    const { data: rpcData, error: rpcErr } = await adminSupabase.rpc("approval_approve_all", {
+      p_actor_id: user.id,
+      p_type_key: input.type_key ?? null,
+      p_request_ids: input.request_ids ?? null,
+      p_note: input.note ?? null,
+    });
+
+    if (rpcErr) {
+      return { success: false, error: sanitizeUserErrorMessage(rpcErr) };
+    }
+
+    const result = rpcData as unknown as ApprovalApproveAllResult;
+
+    // Cache revalidation across Web App Router
+    revalidateTag(TAGS.approvals, "max");
+    revalidateTag(TAGS.approvalsList, "max");
+    revalidateTag(TAGS.approvalsCounts, "max");
+    revalidateTag(TAGS.users, "max");
+    revalidateTag(TAGS.documents, "max");
+
+    await logAudit({
+      user_id: user.id,
+      actor_role: user.role,
+      action: "approval.approve_all",
+      entity_type: "approval_request",
+      entity_id: user.id,
+      metadata: {
+        type_key: input.type_key,
+        approved_count: result?.approved_count ?? 0,
+        approved_ids: result?.approved_ids ?? [],
+        activated_user_ids: result?.activated_user_ids ?? [],
+      },
+    }).catch(() => {});
+
+    // Fast-path background drain outbox items
+    await processPendingApprovalOutboxItems(10).catch((err) => {
+      console.warn("[approveAllAction] Background outbox processing non-blocking error:", err);
+    });
+
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (err) {
+    return { success: false, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
