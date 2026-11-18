@@ -1,3 +1,20 @@
+## [2026-11-19] - Cloudflare Workers CI/CD Monorepo Build & Deploy Optimization
+
+### Fixed
+- **Wrangler Monorepo Root Deployment**: Created root wrangler.jsonc targeting pps/web/.open-next/worker.js and pps/web/.open-next/assets, resolving The Cloudflare application detection logic has been run in the root of a workspace instead of targeting a specific project.
+- **Worker Service Name Alignment**: Synchronized worker name in root wrangler.jsonc and pps/web/wrangler.jsonc to match Cloudflare service eachinternational-monorepo.
+- **Cloudflare CI Build Dispatcher**: Added scripts/build-dispatcher.js to intelligently route pnpm run build to uild:worker when WORKERS_CI=1 is detected, while preserving 	urbo run build for Vercel and local environments.
+- **Sentry Next.js Instrumentation**: Added pps/web/instrumentation.ts registering Sentry server/edge SDKs, eliminating the Could not find an instrumentation file build warning.
+- **Turborepo Outputs Cleanliness**: Configured package-specific outputs in 	urbo.json to eliminate o output files found for task warnings.
+- **Root Wrangler Dependency**: Added wrangler to root devDependencies for instant CI execution without runtime npm installation overhead.
+
+### Verified
+- px wrangler deploy --dry-run executed from monorepo root with exit code 0 (340 assets read, 27 MB bundle verified).
+- pnpm typecheck clean across all 7 packages (0 errors).
+- pnpm run build clean across all 7 packages (0 errors).
+
+---
+
 ## [2026-11-19] - Atomic Bulk "Approve All" Engine with Statutory Document Protection (/approvals)
 
 ### Added & Enhanced

@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build",
+    "build": "node scripts/build-dispatcher.js",
+    "build:vercel": "turbo run build",
     "build:worker": "pnpm --filter @reachinternational/web build:worker",
+    "build:cloudflare": "pnpm --filter @reachinternational/web build:worker",
     "dev:worker": "pnpm --filter @reachinternational/web dev:worker",
     "preview:worker": "pnpm --filter @reachinternational/web preview:worker",
-    "deploy:worker": "pnpm --filter @reachinternational/web deploy:worker",
+    "deploy:worker": "wrangler deploy",
     "cf-typegen": "pnpm --filter @reachinternational/web cf-typegen",
-    "wrangler": "pnpm --filter @reachinternational/web exec wrangler",
+    "wrangler": "wrangler",
     "build:mobile": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile production",
     "build:mobile:apk": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile production-apk",
     "build:mobile:preview": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile preview",
@@ -28,7 +30,8 @@
     "@supabase/supabase-js": "^2.117.3",
     "@types/node": "^20.19.43",
     "sharp": "^0.35.5",
-    "turbo": "^2.11.7"
+    "turbo": "^2.11.7",
+    "wrangler": "^4.163.0"
   },
   "overrides": {
     "@types/react": "^19.0.0",

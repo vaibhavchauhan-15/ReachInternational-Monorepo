@@ -1,10 +1,14 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Atomic Bulk "Approve All" Engine with Statutory Document Protection (`apps/web` & `apps/mobile`)
-- **Status**: 🟢 Clean / Verified & Production Ready (0 typecheck errors across all 7 packages, all 357 mobile tests, 14/14 approve all checks, and 28/28 monorepo suites passing; full Web & Mobile zero-drift parity)
+- **Current Task**: Cloudflare Workers CI/CD Monorepo Build & Deploy Optimization (`apps/web`)
+- **Status**: 🟢 Clean / Verified & Production Ready (Root wrangler configuration added, Worker service name aligned to 'reachinternational-monorepo', smart build dispatcher configured for Cloudflare CI, Sentry instrumentation added, Turbo output warnings eliminated, npx wrangler deploy verified from monorepo root, 0 typecheck errors across all 7 packages)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-19
+- **Cloudflare Workers CI/CD Monorepo Build & Deploy Optimization**:
+  - `User Request`: Deploy project to Cloudflare Worker (reachinternational-monorepo); inspect build logs, warnings, and errors, and fix.
+  - `Root Cause`: Cloudflare Workers CI executes `npx wrangler deploy` from `/opt/buildhome/repo` (the root). Without a root `wrangler.jsonc`, Wrangler rejected workspace root deployment. Additionally, `pnpm run build` ran standard Next.js rather than OpenNext worker build.
+  - `Fixes`: Added root `wrangler.jsonc` targeting `apps/web/.open-next/`, aligned service name to `reachinternational-monorepo`, added `wrangler` to root devDependencies, introduced `scripts/build-dispatcher.js` detecting `WORKERS_CI=1` to run `build:worker`, created `apps/web/instrumentation.ts` for Sentry, and updated `turbo.json` outputs. Tested `npx wrangler deploy --dry-run` successfully.
 - **Atomic Bulk "Approve All" Engine with Statutory Document Protection**:
   - `User Request`: In the approval page implement "Approve All". If approve all, then all user documents should be pending, only the user is active. Read the codebase properly, implement properly, and ensure it is fast, responsive, and optimized.
   - `Implementation Summary`:

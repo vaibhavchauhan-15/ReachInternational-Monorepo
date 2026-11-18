@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "reachinternational-web",
+  "name": "reachinternational-monorepo",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-08-16",
   "compatibility_flags": [

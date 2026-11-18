@@ -32,6 +32,9 @@ importers:
       turbo:
         specifier: ^2.11.7
         version: 2.11.7
+      wrangler:
+        specifier: ^4.163.0
+        version: 4.163.0(@types/node@20.19.43)
 
   apps/mobile:
     dependencies:

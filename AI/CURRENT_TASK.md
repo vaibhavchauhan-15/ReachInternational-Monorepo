@@ -1,6 +1,26 @@
 # Current Task
 
-## Task: Atomic Bulk "Approve All" Engine with Statutory Document Protection (`apps/web` & `apps/mobile`)
+## Task: Cloudflare Workers CI/CD Monorepo Build & Deploy Optimization
+**Status**: 🟢 FULLY VERIFIED & COMPLETE (ROOT WRANGLER CONFIGURATION ADDED, WORKER NAME SYNCHRONIZED TO 'reachinternational-monorepo', DYNAMIC BUILD DISPATCHER ADDED FOR CLOUDFLARE WORKERS CI, SENTRY INSTRUMENTATION ADDED, TURBO OUTPUT WARNINGS RESOLVED, NPX WRANGLER DEPLOY VERIFIED LOCALLY FROM MONOREPO ROOT, 0 TYPECHECK ERRORS ACROSS ALL 7 PACKAGES)
+**Date**: 2026-11-19
+
+### Cloudflare CI/CD Monorepo Build & Deploy Fix:
+- **Root Cause of CI Deploy Failure**:
+  - In Cloudflare Workers CI/CD (`reachinternational-monorepo`), Cloudflare executes `npx wrangler deploy` from `/opt/buildhome/repo` (the monorepo root).
+  - Without a root `wrangler.jsonc`, Wrangler detected a workspace root without an explicit target project and threw:
+    `✘ [ERROR] The Cloudflare application detection logic has been run in the root of a workspace instead of targeting a specific project.`
+  - Furthermore, `pnpm run build` executed `turbo run build` (standard Next.js) rather than `opennextjs-cloudflare build`.
+- **Fixes Applied**:
+  1. **Root `wrangler.jsonc`**: Added root Wrangler configuration with `name: "reachinternational-monorepo"` targeting `apps/web/.open-next/worker.js` and `apps/web/.open-next/assets`.
+  2. **Worker Service Name Match**: Updated `name` in both `wrangler.jsonc` and `apps/web/wrangler.jsonc` to `"reachinternational-monorepo"`, matching the user's Cloudflare dashboard service name.
+  3. **Root Wrangler DevDependency**: Added `wrangler` to root `devDependencies` so `npx wrangler` uses the pre-installed binary without runtime npm downloads.
+  4. **Smart Build Dispatcher (`scripts/build-dispatcher.js`)**: Automatically detects Cloudflare CI (`WORKERS_CI === '1'`) to invoke `build:worker`, while running `turbo run build` for Vercel (`VERCEL === '1'`) and local environments.
+  5. **Next.js Sentry Instrumentation**: Created `apps/web/instrumentation.ts`, eliminating the `Could not find an instrumentation file` Sentry build warning.
+  6. **Turbo Outputs Optimization**: Adjusted `turbo.json` task outputs to silence missing output warnings for workspace echo packages.
+
+---
+
+## Prior Task: Atomic Bulk "Approve All" Engine with Statutory Document Protection (`apps/web` & `apps/mobile`)
 **Status**: 🟢 FULLY VERIFIED & COMPLETE (0 TYPECHECK ERRORS ACROSS ALL 7 PACKAGES, 14/14 APPROVE ALL CHECKS PASSING, 357/357 MOBILE TESTS PASSING, 28/28 MONOREPO SUITES PASSING)
 **Date**: 2026-11-19
 **Target Files & Configurations**:
