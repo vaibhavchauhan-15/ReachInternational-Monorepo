@@ -1,7 +1,7 @@
 import "server-only";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseUrl } from "../env/client.ts";
-import { getSupabaseSecretKey } from "../env/server.ts";
+import { getSupabaseSecretKey, hasSupabaseSecretKey } from "../env/server.ts";
 
 /**
  * Admin Supabase client using the service role key.
@@ -9,7 +9,7 @@ import { getSupabaseSecretKey } from "../env/server.ts";
  * privileged operations (cron, queue workers, system tasks).
  * NEVER import this in client components.
  */
-export function createSupabaseAdminClient() {
+export function createSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = getSupabaseUrl();
   const secretKey = getSupabaseSecretKey();
 
@@ -19,4 +19,16 @@ export function createSupabaseAdminClient() {
       persistSession: false,
     },
   });
+}
+
+/**
+ * Safe accessor for admin client. Returns null if SUPABASE_SECRET_KEY is missing.
+ */
+export function tryCreateSupabaseAdminClient(): SupabaseClient | null {
+  if (!hasSupabaseSecretKey()) return null;
+  try {
+    return createSupabaseAdminClient();
+  } catch {
+    return null;
+  }
 }

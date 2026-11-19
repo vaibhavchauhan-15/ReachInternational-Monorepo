@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requirePermission, requireRole } from "@/lib/dal";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { tryCreateSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import {
@@ -35,7 +36,7 @@ export default async function AuditDetailPage({ params }: AuditDetailPageProps) 
   await requirePermission("audit.view");
 
   const { id } = await params;
-  const supabase = createSupabaseAdminClient();
+  const supabase = tryCreateSupabaseAdminClient() || (await createSupabaseServerClient());
 
   const { data: rawLog, error } = await supabase
     .from("audit_logs")

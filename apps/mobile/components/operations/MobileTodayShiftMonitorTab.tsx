@@ -238,17 +238,26 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   // Flattened and deduplicated rows from paginated responses
   const flatRows = useMemo(() => {
     if (!infiniteData?.pages) return [];
-    const seen = new Set<string>();
-    const res: TodayShiftMonitorRow[] = [];
+    const map = new Map<string, TodayShiftMonitorRow>();
     for (const page of infiniteData.pages) {
       for (const row of page.rows) {
-        const key = `${row.operator_id || 'unassigned'}-${row.machine_id || ''}-${row.shift_code || ''}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        res.push(row);
+        const shiftCode = (row.shift_code || 'S1').toUpperCase();
+        const key = `${row.machine_id}-${shiftCode}`;
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, row);
+        } else {
+          if (row.status === 'entered' && existing.status !== 'entered') {
+            map.set(key, row);
+          } else if (row.status === 'pending' && existing.status === 'unassigned') {
+            map.set(key, row);
+          } else if (row.status === existing.status && row.log_id && !existing.log_id) {
+            map.set(key, row);
+          }
+        }
       }
     }
-    return res;
+    return Array.from(map.values());
   }, [infiniteData]);
 
   const rows = flatRows;
@@ -931,9 +940,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
   const keyExtractor = useCallback(
     (item: TodayShiftMonitorRow, index: number) =>
-      item.operator_id
-        ? `mon-${item.operator_id}-${item.machine_id}-${item.shift_code}`
-        : `mon-unassigned-${item.machine_id}-${item.shift_code || index}-${index}`,
+      `mon-${item.machine_id}-${item.shift_code || 'S1'}-${item.operator_id || 'unassigned'}-${item.log_id || index}`,
     []
   );
 

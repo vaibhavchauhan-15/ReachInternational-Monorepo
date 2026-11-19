@@ -1661,7 +1661,8 @@ export async function getTodayShiftMonitorAction(
     return { success: true, data };
   } catch (err) {
     console.error("[getTodayShiftMonitorAction] Exception:", err);
-    return { success: false, error: "Failed to fetch shift monitor data" };
+    const { sanitizeUserErrorMessage } = await import("@reachinternational/utils");
+    return { success: false, error: sanitizeUserErrorMessage(err, "Failed to load shift monitor data.") };
   }
 }
 
@@ -1689,11 +1690,13 @@ export async function activateMachineAction(machineId: string): Promise<{
 
     if (rpcErr) {
       console.error("[activateMachineAction] RPC error:", rpcErr);
-      return { success: false, error: rpcErr.message || "Failed to activate machine." };
+      const { sanitizeUserErrorMessage } = await import("@reachinternational/utils");
+      return { success: false, error: sanitizeUserErrorMessage(rpcErr.message, "Failed to activate machine.") };
     }
 
     if (rpcRes && typeof rpcRes === "object" && (rpcRes as any).success === false) {
-      return { success: false, error: (rpcRes as any).error || "Failed to activate machine." };
+      const { sanitizeUserErrorMessage } = await import("@reachinternational/utils");
+      return { success: false, error: sanitizeUserErrorMessage((rpcRes as any).error, "Failed to activate machine.") };
     }
 
     revalidateTag(TAGS.todayShiftMonitor, "max");
@@ -1704,7 +1707,8 @@ export async function activateMachineAction(machineId: string): Promise<{
     return { success: true, data: rpcRes };
   } catch (err) {
     console.error("[activateMachineAction] Exception:", err);
-    return { success: false, error: "An unexpected error occurred while activating the machine." };
+    const { sanitizeUserErrorMessage } = await import("@reachinternational/utils");
+    return { success: false, error: sanitizeUserErrorMessage(err, "An error occurred while activating the machine.") };
   }
 }
 

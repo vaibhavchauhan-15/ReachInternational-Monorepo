@@ -6,15 +6,21 @@
  * while preventing header forgery via HMAC-SHA256 signature verification.
  */
 
-import { getSupabaseSecretKey } from "@/lib/env/server";
-
 const enc = new TextEncoder();
 
 export async function signInternalUser(userId: string, email: string): Promise<string> {
-  const secret = getSupabaseSecretKey();
+  const secret =
+    process.env.INTERNAL_AUTH_SECRET ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!secret?.trim()) {
+    return "";
+  }
+
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(secret),
+    enc.encode(secret.trim()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -34,7 +40,7 @@ export async function verifyInternalUser(
   if (!userId || !signature) return false;
   try {
     const expected = await signInternalUser(userId, email);
-    if (expected.length !== signature.length) return false;
+    if (!expected || expected.length !== signature.length) return false;
 
     // Constant-time timing-safe comparison to prevent timing attacks
     let mismatch = 0;

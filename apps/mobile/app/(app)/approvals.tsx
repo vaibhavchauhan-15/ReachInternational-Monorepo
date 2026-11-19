@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -134,6 +134,12 @@ export default function ApprovalsScreen() {
   const verifyDocMutation = useVerifyDocumentMutation();
   const rejectDocMutation = useRejectDocumentMutation();
 
+  // Stable refs for actions to avoid breaking callback memoization across list items
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const selectedDetailRef = useRef(selectedDetail);
+  selectedDetailRef.current = selectedDetail;
+
   // Enable Realtime sync for authorized approvers
   useApprovalsRealtimeSync(Boolean(canAccessApprovals));
 
@@ -210,35 +216,37 @@ export default function ApprovalsScreen() {
   }, []);
 
   // Select Item for BottomSheet Detail
-  const handleItemPress = (item: ApprovalRequestListItem) => {
+  const handleItemPress = useCallback((item: ApprovalRequestListItem) => {
     haptics.select();
     setSelectedRequestId(item.id);
     setIsDetailVisible(true);
-  };
+  }, []);
 
   // Action: Approve Entire Request
-  const handleApprove = async (requestId: string) => {
-    setSubmittingRequestId(requestId);
-    const targetItem = items.find((i) => i.id === requestId);
-    try {
-      await decideMutation.mutateAsync({
-        requestId,
-        decision: "approve",
-        expectedVersion:
-          selectedDetail?.id === requestId
-            ? selectedDetail?.version
-            : targetItem?.version,
-        boundRequestIds: targetItem?.bound_request_ids,
-      });
-      showToast("success", "Approved", "Request approved successfully.");
-      setIsDetailVisible(false);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      showToast("error", "Approval Error", msg);
-    } finally {
-      setSubmittingRequestId(null);
-    }
-  };
+  const handleApprove = useCallback(
+    async (requestId: string) => {
+      setSubmittingRequestId(requestId);
+      const targetItem = itemsRef.current.find((i) => i.id === requestId);
+      const detail = selectedDetailRef.current;
+      try {
+        await decideMutation.mutateAsync({
+          requestId,
+          decision: "approve",
+          expectedVersion:
+            detail?.id === requestId ? detail?.version : targetItem?.version,
+          boundRequestIds: targetItem?.bound_request_ids,
+        });
+        showToast("success", "Approved", "Request approved successfully.");
+        setIsDetailVisible(false);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast("error", "Approval Error", msg);
+      } finally {
+        setSubmittingRequestId(null);
+      }
+    },
+    [decideMutation, showToast]
+  );
 
   // Pending approvals count for Approve All button badge
   const pendingApprovalsCount = useMemo(() => {
@@ -257,7 +265,7 @@ export default function ApprovalsScreen() {
     (pendingApprovalsCount > 0 || items.some((i) => i.status === "pending"));
 
   // Action: Approve All Pending Requests
-  const handleApproveAll = async () => {
+  const handleApproveAll = useCallback(async () => {
     if (isApprovingAll) return;
     setIsApprovingAll(true);
     haptics.confirm();
@@ -278,8 +286,7 @@ export default function ApprovalsScreen() {
     } finally {
       setIsApprovingAll(false);
     }
-  };
-
+  }, [approveAllMutation, isApprovingAll, pendingApprovalsCount, showToast, typeKey]);
 
   // Action: Prompt Reject for Request
   const handleCardRejectPrompt = useCallback((cardItem: ApprovalRequestListItem) => {
@@ -294,16 +301,17 @@ export default function ApprovalsScreen() {
   }, []);
 
   // Action: Prompt Reject for BottomSheet
-  const handleBottomSheetRejectPrompt = () => {
-    if (!selectedDetail) return;
+  const handleBottomSheetRejectPrompt = useCallback(() => {
+    const detail = selectedDetailRef.current;
+    if (!detail) return;
     setRejectTarget({
       kind: "request",
-      requestId: selectedDetail.id,
-      summary: selectedDetail.summary || "Approval Request",
-      version: selectedDetail.version,
+      requestId: detail.id,
+      summary: detail.summary || "Approval Request",
+      version: detail.version,
     });
     setRejectModalVisible(true);
-  };
+  }, []);
 
   // Action: Verify Individual Document
   const handleVerifyDocument = useCallback(
@@ -311,15 +319,13 @@ export default function ApprovalsScreen() {
       try {
         await verifyDocMutation.mutateAsync({ documentId, userId });
         showToast("success", "Document Verified", "Document marked as verified.");
-        if (activeCardDoc?.doc.id === documentId) {
-          setActiveCardDoc(null);
-        }
+        setActiveCardDoc((prev) => (prev?.doc.id === documentId ? null : prev));
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         showToast("error", "Verification Error", msg);
       }
     },
-    [verifyDocMutation, activeCardDoc]
+    [verifyDocMutation, showToast]
   );
 
   // Action: Prompt Reject for Individual Document
@@ -338,52 +344,55 @@ export default function ApprovalsScreen() {
   );
 
   // Action: Confirm Rejection with Reason (Request or Document)
-  const handleConfirmReject = async (reason: string) => {
-    if (!rejectTarget) return;
+  const handleConfirmReject = useCallback(
+    async (reason: string) => {
+      if (!rejectTarget) return;
 
-    if (rejectTarget.kind === "request") {
-      setRejectingRequestId(rejectTarget.requestId);
-      const targetItem = items.find((i) => i.id === rejectTarget.requestId);
-      try {
-        await decideMutation.mutateAsync({
-          requestId: rejectTarget.requestId,
-          decision: "reject",
-          note: reason,
-          expectedVersion:
-            selectedDetail?.id === rejectTarget.requestId
-              ? selectedDetail?.version
-              : rejectTarget.version,
-          boundRequestIds: targetItem?.bound_request_ids,
-        });
-        showToast("success", "Request Rejected", "Approval request has been rejected.");
-        setRejectModalVisible(false);
-        setIsDetailVisible(false);
-        setRejectTarget(null);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        showToast("error", "Rejection Error", msg);
-      } finally {
-        setRejectingRequestId(null);
-      }
-    } else if (rejectTarget.kind === "document") {
-      try {
-        await rejectDocMutation.mutateAsync({
-          documentId: rejectTarget.docId,
-          rejectionReason: reason,
-          userId: rejectTarget.userId,
-        });
-        showToast("success", "Document Rejected", "Document has been marked as rejected.");
-        setRejectModalVisible(false);
-        setRejectTarget(null);
-        if (activeCardDoc?.doc.id === rejectTarget.docId) {
-          setActiveCardDoc(null);
+      const target = rejectTarget;
+      // ⚡ INSTANT OPTIMISTIC FEEDBACK: Dismiss modal immediately (0ms delay)
+      setRejectModalVisible(false);
+      setIsDetailVisible(false);
+      setRejectTarget(null);
+
+      if (target.kind === "request") {
+        setRejectingRequestId(target.requestId);
+        const targetItem = itemsRef.current.find((i) => i.id === target.requestId);
+        const detail = selectedDetailRef.current;
+        try {
+          await decideMutation.mutateAsync({
+            requestId: target.requestId,
+            decision: "reject",
+            note: reason,
+            expectedVersion:
+              detail?.id === target.requestId
+                ? detail?.version
+                : target.version,
+            boundRequestIds: targetItem?.bound_request_ids,
+          });
+          showToast("success", "Request Rejected", "Approval request has been rejected.");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          showToast("error", "Rejection Error", msg);
+        } finally {
+          setRejectingRequestId(null);
         }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        showToast("error", "Rejection Error", msg);
+      } else if (target.kind === "document") {
+        setActiveCardDoc((prev) => (prev?.doc.id === target.docId ? null : prev));
+        try {
+          await rejectDocMutation.mutateAsync({
+            documentId: target.docId,
+            rejectionReason: reason,
+            userId: target.userId,
+          });
+          showToast("success", "Document Rejected", "Document has been marked as rejected.");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          showToast("error", "Rejection Error", msg);
+        }
       }
-    }
-  };
+    },
+    [decideMutation, rejectDocMutation, rejectTarget, showToast]
+  );
 
   // Card Document Thumbnail Fullscreen Inspection
   const handleCardDocViewer = useCallback(
@@ -407,6 +416,35 @@ export default function ApprovalsScreen() {
       });
     },
     []
+  );
+
+  // Memoized FlatList renderItem to prevent full list re-renders on screen state updates
+  const renderApprovalItem = useCallback(
+    ({ item }: { item: ApprovalRequestListItem }) => (
+      <MobileApprovalCard
+        item={item}
+        onPress={handleItemPress}
+        onApprove={handleApprove}
+        onRejectPrompt={handleCardRejectPrompt}
+        onOpenDocViewer={handleCardDocViewer}
+        onVerifyDocument={handleVerifyDocument}
+        onRejectDocumentPrompt={handleRejectDocumentPrompt}
+        canDecide={canAccessApprovals}
+        isActionLoading={submittingRequestId === item.id}
+        isRejectLoading={rejectingRequestId === item.id}
+      />
+    ),
+    [
+      handleItemPress,
+      handleApprove,
+      handleCardRejectPrompt,
+      handleCardDocViewer,
+      handleVerifyDocument,
+      handleRejectDocumentPrompt,
+      canAccessApprovals,
+      submittingRequestId,
+      rejectingRequestId,
+    ]
   );
 
   if (!isAuthLoading && currentUserRole && !canAccessApprovals) {
@@ -599,20 +637,11 @@ export default function ApprovalsScreen() {
         <FlatList
           data={filteredItems}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <MobileApprovalCard
-              item={item}
-              onPress={handleItemPress}
-              onApprove={handleApprove}
-              onRejectPrompt={handleCardRejectPrompt}
-              onOpenDocViewer={handleCardDocViewer}
-              onVerifyDocument={handleVerifyDocument}
-              onRejectDocumentPrompt={handleRejectDocumentPrompt}
-              canDecide={canAccessApprovals}
-              isActionLoading={submittingRequestId === item.id}
-              isRejectLoading={rejectingRequestId === item.id}
-            />
-          )}
+          renderItem={renderApprovalItem}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={true}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl

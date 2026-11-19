@@ -109,6 +109,41 @@ export function ApprovalsClientShell({
   const [counts, setCounts] = useState<ApprovalCounts>(initialCounts);
   const [isPendingTransition, startTransition] = useTransition();
 
+  // Stable refs for actions to avoid breaking callback memoization
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const typeFilterRef = useRef(typeFilter);
+  typeFilterRef.current = typeFilter;
+
+  // ⚡ Debounced silent counts refresh — deduplicates multiple calls from rapid approvals
+  const countsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshCountsDebounced = useCallback(() => {
+    if (countsRefreshTimerRef.current) {
+      clearTimeout(countsRefreshTimerRef.current);
+    }
+    countsRefreshTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/approvals/counts");
+        if (res.ok) {
+          const countData = (await res.json()) as ApprovalCounts;
+          if (countData) setCounts(countData);
+        }
+      } catch {
+        // Non-blocking background revalidation
+      }
+    }, 400);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (countsRefreshTimerRef.current) {
+        clearTimeout(countsRefreshTimerRef.current);
+      }
+    };
+  }, []);
+
   // Document Lightbox Modal State
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxDocument, setLightboxDocument] = useState<AttachedDocumentSummary | null>(null);
@@ -267,53 +302,29 @@ export function ApprovalsClientShell({
   }, [items, searchQuery]);
 
   // Open Document Lightbox
-  const handleOpenDocumentLightbox = (
-    doc: AttachedDocumentSummary,
-    userName?: string,
-    userId?: string
-  ) => {
-    setLightboxDocument(doc);
-    setLightboxUserName(userName);
-    setLightboxUserId(userId);
-    setLightboxOpen(true);
-  };
+  const handleOpenDocumentLightbox = useCallback(
+    (doc: AttachedDocumentSummary, userName?: string, userId?: string) => {
+      setLightboxDocument(doc);
+      setLightboxUserName(userName);
+      setLightboxUserId(userId);
+      setLightboxOpen(true);
+    },
+    []
+  );
 
   // Action: Approve Request (e.g. registration, document verify, replacement)
-  const handleApproveRequest = async (requestId: string) => {
-    if (processingRequestIds[requestId]) return;
-    setProcessingRequestIds((prev) => ({ ...prev, [requestId]: "approving" }));
-    setToastMessage(null);
+  const handleApproveRequest = useCallback(
+    async (requestId: string) => {
+      if (processingRequestIds[requestId]) return;
+      setToastMessage(null);
 
-    const targetItem = items.find((i) => i.id === requestId);
+      const targetItem = itemsRef.current.find((i) => i.id === requestId);
+      const prevItems = itemsRef.current;
+      const prevCounts = { ...counts, by_type: { ...counts.by_type } };
 
-    try {
-      const result = await decideApprovalAction({
-        request_id: requestId,
-        decision: "approve",
-        expected_version: targetItem?.version,
-        bound_request_ids: targetItem?.bound_request_ids,
-      });
-
-      if (!result.success) {
-        setProcessingRequestIds((prev) => {
-          const next = { ...prev };
-          delete next[requestId];
-          return next;
-        });
-        setToastMessage({
-          type: "error",
-          text: result.error || "Failed to approve request.",
-        });
-        if (result.isVersionConflict) {
-          fetchList(status, typeFilter);
-        }
-      } else {
-        setToastMessage({
-          type: "success",
-          text: "Request approved successfully.",
-        });
-
-        // Optimistically update counts
+      // ⚡ INSTANT OPTIMISTIC UI: Immediate visual update (0ms delay)
+      if (statusRef.current === "pending") {
+        setExitStates((prev) => ({ ...prev, [requestId]: "approved" }));
         if (targetItem) {
           setCounts((prev) => {
             const newByType = { ...prev.by_type };
@@ -327,58 +338,92 @@ export function ApprovalsClientShell({
           });
         }
 
-        // Silently revalidate counts in background without unmounting or refreshing list
-        fetch("/api/approvals/counts")
-          .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
-          .then((countData: ApprovalCounts | null) => {
-            if (countData) setCounts(countData);
-          })
-          .catch(() => {});
-
-        // If viewing pending items, show brief approved state then smoothly exit
-        if (status === "pending") {
-          setExitStates((prev) => ({ ...prev, [requestId]: "approved" }));
-          setProcessingRequestIds((prev) => {
+        setTimeout(() => {
+          setItems((prev) => prev.filter((i) => i.id !== requestId));
+          setExitStates((prev) => {
             const next = { ...prev };
             delete next[requestId];
             return next;
           });
-
-          // Wait 350ms so user sees smooth approval transition, then remove from items for Framer Motion exit
-          setTimeout(() => {
-            setItems((prev) => prev.filter((i) => i.id !== requestId));
-            setExitStates((prev) => {
-              const next = { ...prev };
-              delete next[requestId];
-              return next;
-            });
-          }, 350);
-        } else {
-          // In 'all' or other status view, mark item as approved in place
-          setItems((prev) =>
-            prev.map((i) => (i.id === requestId ? { ...i, status: "approved" } : i))
-          );
-          setProcessingRequestIds((prev) => {
-            const next = { ...prev };
-            delete next[requestId];
-            return next;
-          });
-        }
+        }, 300);
+      } else {
+        setItems((prev) =>
+          prev.map((i) => (i.id === requestId ? { ...i, status: "approved" } : i))
+        );
       }
-    } catch (err: unknown) {
-      setProcessingRequestIds((prev) => {
-        const next = { ...prev };
-        delete next[requestId];
-        return next;
-      });
-      const msg = err instanceof Error ? err.message : String(err);
-      setToastMessage({ type: "error", text: msg });
-    }
-  };
+
+      setProcessingRequestIds((prev) => ({ ...prev, [requestId]: "approving" }));
+
+      try {
+        // ⚡ Fast Route Handler transport (avoids heavy RSC full-page re-render)
+        const res = await fetch(`/api/approvals/${requestId}/decide`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: "approve",
+            expected_version: targetItem?.version,
+            bound_request_ids: targetItem?.bound_request_ids,
+          }),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json.error || "Failed to approve request.");
+        }
+
+        setToastMessage({
+          type: "success",
+          text: "Request approved successfully.",
+        });
+        refreshCountsDebounced();
+      } catch (err: unknown) {
+        // Fallback to Server Action if fetch had network or transport issues
+        try {
+          const result = await decideApprovalAction({
+            request_id: requestId,
+            decision: "approve",
+            expected_version: targetItem?.version,
+            bound_request_ids: targetItem?.bound_request_ids,
+          });
+
+          if (result.success) {
+            setToastMessage({
+              type: "success",
+              text: "Request approved successfully.",
+            });
+            refreshCountsDebounced();
+            return;
+          }
+          throw new Error(result.error || "Failed to approve request.");
+        } catch (fallbackErr: any) {
+          // Roll back optimistic state on unexpected failure
+          setItems(prevItems);
+          setCounts(prevCounts);
+          setExitStates((prev) => {
+            const next = { ...prev };
+            delete next[requestId];
+            return next;
+          });
+          const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          setToastMessage({ type: "error", text: msg });
+          if (fallbackErr?.message?.includes("Refresh") || fallbackErr?.message?.includes("conflict")) {
+            fetchList(statusRef.current, typeFilterRef.current);
+          }
+        }
+      } finally {
+        setProcessingRequestIds((prev) => {
+          const next = { ...prev };
+          delete next[requestId];
+          return next;
+        });
+      }
+    },
+    [counts, fetchList, processingRequestIds, refreshCountsDebounced]
+  );
 
   // Action: Prompt Reject Request
-  const handleRejectPromptRequest = (requestId: string) => {
-    const item = items.find((i) => i.id === requestId);
+  const handleRejectPromptRequest = useCallback((requestId: string) => {
+    const item = itemsRef.current.find((i) => i.id === requestId);
     setRejectTarget({
       kind: "request",
       requestId,
@@ -386,139 +431,111 @@ export function ApprovalsClientShell({
       version: item?.version,
     });
     setRejectModalOpen(true);
-  };
+  }, []);
 
   // Action: Verify Single Document
-  const handleVerifyDocument = async (documentId: string, userId?: string) => {
-    setIsModalSubmitting(true);
-    setToastMessage(null);
+  const handleVerifyDocument = useCallback(
+    async (documentId: string, userId?: string) => {
+      setToastMessage(null);
 
-    try {
-      const result = await verifyUserDocumentAction({
-        documentId,
-        userId: userId || "",
-      });
+      // Snapshot previous items for rollback
+      const prevItems = itemsRef.current;
 
-      if (!result.success) {
-        setToastMessage({
-          type: "error",
-          text: result.error || "Failed to verify document.",
+      // ⚡ INSTANT OPTIMISTIC UI: Mark document verified in memory (0ms delay)
+      setItems((prev) =>
+        prev.map((item) => {
+          const docs = item.documents?.map((d) =>
+            d.id === documentId ? { ...d, verification_status: "verified" as const } : d
+          );
+          return { ...item, documents: docs };
+        })
+      );
+      setLightboxDocument((prev) =>
+        prev && prev.id === documentId ? { ...prev, verification_status: "verified" as const } : prev
+      );
+
+      try {
+        // Fast dedicated API endpoint (Route Handler) — avoids heavy RSC page re-render
+        const res = await fetch("/api/approvals/documents/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId, userId: userId || "" }),
         });
-      } else {
-        setToastMessage({
-          type: "success",
-          text: "Document verified successfully.",
-        });
-        // Optimistically update document in list without refreshing entire page
-        setItems((prev) =>
-          prev.map((item) => {
-            const docs = item.documents?.map((d) =>
-              d.id === documentId ? { ...d, verification_status: "verified" } : d
-            );
-            return { ...item, documents: docs };
-          })
-        );
-        setLightboxDocument((prev) =>
-          prev && prev.id === documentId ? { ...prev, verification_status: "verified" } : prev
-        );
-        fetch("/api/approvals/counts")
-          .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
-          .then((countData: ApprovalCounts | null) => {
-            if (countData) setCounts(countData);
-          })
-          .catch(() => {});
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json.error || "Failed to verify document.");
+        }
+
+        setToastMessage({ type: "success", text: "Document verified successfully." });
+        refreshCountsDebounced();
+      } catch (err: unknown) {
+        // Fallback to Server Action if fetch had network issue
+        try {
+          const result = await verifyUserDocumentAction({ documentId, userId: userId || "" });
+          if (result.success) {
+            setToastMessage({ type: "success", text: "Document verified successfully." });
+            refreshCountsDebounced();
+            return;
+          }
+          throw new Error(result.error || "Failed to verify document.");
+        } catch (fallbackErr: any) {
+          // Roll back optimistic document state on failure
+          setItems(prevItems);
+          setLightboxDocument((prev) =>
+            prev && prev.id === documentId ? { ...prev, verification_status: "pending" as const } : prev
+          );
+          const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          setToastMessage({ type: "error", text: msg });
+        }
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setToastMessage({ type: "error", text: msg });
-    } finally {
-      setIsModalSubmitting(false);
-    }
-  };
+    },
+    [refreshCountsDebounced]
+  );
 
   // Action: Prompt Reject Single Document
-  const handleRejectPromptDocument = (doc: AttachedDocumentSummary, userId?: string) => {
-    setRejectTarget({
-      kind: "document",
-      docId: doc.id,
-      userId: userId || "",
-      summary: `${doc.label} rejection`,
-    });
-    setRejectModalOpen(true);
-  };
+  const handleRejectPromptDocument = useCallback(
+    (doc: AttachedDocumentSummary, userId?: string) => {
+      setRejectTarget({
+        kind: "document",
+        docId: doc.id,
+        userId: userId || "",
+        summary: `${doc.label} rejection`,
+      });
+      setRejectModalOpen(true);
+    },
+    []
+  );
 
   // Action: Confirm Rejection with Reason
-  const handleConfirmRejection = async (reason: string) => {
-    if (!rejectTarget) return;
-    setIsModalSubmitting(true);
-    setToastMessage(null);
+  const handleConfirmRejection = useCallback(
+    async (reason: string) => {
+      if (!rejectTarget) return;
+      const target = rejectTarget;
+      setRejectTarget(null);
+      setRejectModalOpen(false);
+      setToastMessage(null);
 
-    const target = rejectTarget;
+      const prevItems = itemsRef.current;
+      const prevCounts = { ...counts, by_type: { ...counts.by_type } };
 
-    try {
-      if (target.kind === "request") {
-        const requestId = target.requestId;
-        setProcessingRequestIds((prev) => ({ ...prev, [requestId]: "rejecting" }));
-        const targetItem = items.find((i) => i.id === requestId);
+      try {
+        if (target.kind === "request") {
+          const requestId = target.requestId;
+          const targetItem = itemsRef.current.find((i) => i.id === requestId);
 
-        const result = await decideApprovalAction({
-          request_id: requestId,
-          decision: "reject",
-          note: reason,
-          expected_version: target.version,
-          bound_request_ids: targetItem?.bound_request_ids,
-        });
-
-        setIsModalSubmitting(false);
-        setRejectTarget(null);
-        setRejectModalOpen(false);
-
-        if (!result.success) {
-          setProcessingRequestIds((prev) => {
-            const next = { ...prev };
-            delete next[requestId];
-            return next;
-          });
-          setToastMessage({
-            type: "error",
-            text: result.error || "Failed to reject request.",
-          });
-          if (result.isVersionConflict) {
-            fetchList(status, typeFilter);
-          }
-        } else {
-          setToastMessage({ type: "success", text: "Request rejected." });
-
-          // Update counts optimistically
-          if (targetItem) {
-            setCounts((prev) => {
-              const newByType = { ...prev.by_type };
-              if (newByType[targetItem.type_key]) {
-                newByType[targetItem.type_key] = Math.max(0, newByType[targetItem.type_key] - 1);
-              }
-              return {
-                total: Math.max(0, prev.total - 1),
-                by_type: newByType,
-              };
-            });
-          }
-
-          // Silently revalidate counts
-          fetch("/api/approvals/counts")
-            .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
-            .then((countData: ApprovalCounts | null) => {
-              if (countData) setCounts(countData);
-            })
-            .catch(() => {});
-
-          if (status === "pending") {
+          // ⚡ INSTANT OPTIMISTIC UI: Mark rejected / exit state immediately (0ms delay)
+          if (statusRef.current === "pending") {
             setExitStates((prev) => ({ ...prev, [requestId]: "rejected" }));
-            setProcessingRequestIds((prev) => {
-              const next = { ...prev };
-              delete next[requestId];
-              return next;
-            });
-
+            if (targetItem) {
+              setCounts((prev) => {
+                const newByType = { ...prev.by_type };
+                if (newByType[targetItem.type_key]) {
+                  newByType[targetItem.type_key] = Math.max(0, newByType[targetItem.type_key] - 1);
+                }
+                return { total: Math.max(0, prev.total - 1), by_type: newByType };
+              });
+            }
             setTimeout(() => {
               setItems((prev) => prev.filter((i) => i.id !== requestId));
               setExitStates((prev) => {
@@ -526,66 +543,126 @@ export function ApprovalsClientShell({
                 delete next[requestId];
                 return next;
               });
-            }, 350);
+            }, 300);
           } else {
             setItems((prev) =>
               prev.map((i) => (i.id === requestId ? { ...i, status: "rejected" } : i))
             );
+          }
+
+          setProcessingRequestIds((prev) => ({ ...prev, [requestId]: "rejecting" }));
+
+          try {
+            const res = await fetch(`/api/approvals/${requestId}/decide`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                decision: "reject",
+                note: reason,
+                expected_version: target.version,
+                bound_request_ids: targetItem?.bound_request_ids,
+              }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(json.error || "Failed to reject request.");
+            }
+            setToastMessage({ type: "success", text: "Request rejected." });
+            refreshCountsDebounced();
+          } catch (err: unknown) {
+            // Fallback to Server Action
+            try {
+              const result = await decideApprovalAction({
+                request_id: requestId,
+                decision: "reject",
+                note: reason,
+                expected_version: target.version,
+                bound_request_ids: targetItem?.bound_request_ids,
+              });
+              if (result.success) {
+                setToastMessage({ type: "success", text: "Request rejected." });
+                refreshCountsDebounced();
+                return;
+              }
+              throw new Error(result.error || "Failed to reject request.");
+            } catch (fallbackErr: any) {
+              setItems(prevItems);
+              setCounts(prevCounts);
+              setExitStates((prev) => {
+                const next = { ...prev };
+                delete next[requestId];
+                return next;
+              });
+              const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+              setToastMessage({ type: "error", text: msg });
+            }
+          } finally {
             setProcessingRequestIds((prev) => {
               const next = { ...prev };
               delete next[requestId];
               return next;
             });
           }
-        }
-      } else if (target.kind === "document") {
-        const result = await rejectUserDocumentAction({
-          documentId: target.docId,
-          userId: target.userId,
-          rejectionReason: reason,
-        });
-
-        setIsModalSubmitting(false);
-        setRejectTarget(null);
-        setRejectModalOpen(false);
-
-        if (!result.success) {
-          setToastMessage({
-            type: "error",
-            text: result.error || "Failed to reject document.",
-          });
-        } else {
-          setToastMessage({ type: "success", text: "Document rejected." });
-          // Optimistically update document in list without refreshing entire page
+        } else if (target.kind === "document") {
+          // ⚡ INSTANT OPTIMISTIC UI: Mark document rejected immediately (0ms delay)
           setItems((prev) =>
             prev.map((item) => {
               const docs = item.documents?.map((d) =>
-                d.id === target.docId
-                  ? { ...d, verification_status: "rejected" }
-                  : d
+                d.id === target.docId ? { ...d, verification_status: "rejected" as const } : d
               );
               return { ...item, documents: docs };
             })
           );
           setLightboxDocument((prev) =>
-            prev && prev.id === target.docId ? { ...prev, verification_status: "rejected" } : prev
+            prev && prev.id === target.docId ? { ...prev, verification_status: "rejected" as const } : prev
           );
-          fetch("/api/approvals/counts")
-            .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
-            .then((countData: ApprovalCounts | null) => {
-              if (countData) setCounts(countData);
-            })
-            .catch(() => {});
+
+          try {
+            const res = await fetch("/api/approvals/documents/reject", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                documentId: target.docId,
+                userId: target.userId,
+                rejectionReason: reason,
+              }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(json.error || "Failed to reject document.");
+            }
+            setToastMessage({ type: "success", text: "Document rejected." });
+            refreshCountsDebounced();
+          } catch (err: unknown) {
+            try {
+              const result = await rejectUserDocumentAction({
+                documentId: target.docId,
+                userId: target.userId,
+                rejectionReason: reason,
+              });
+              if (result.success) {
+                setToastMessage({ type: "success", text: "Document rejected." });
+                refreshCountsDebounced();
+                return;
+              }
+              throw new Error(result.error || "Failed to reject document.");
+            } catch (fallbackErr: any) {
+              setItems(prevItems);
+              setLightboxDocument((prev) =>
+                prev && prev.id === target.docId ? { ...prev, verification_status: "pending" as const } : prev
+              );
+              const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+              setToastMessage({ type: "error", text: msg });
+            }
+          }
         }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setToastMessage({ type: "error", text: msg });
       }
-    } catch (err: unknown) {
-      setIsModalSubmitting(false);
-      setRejectTarget(null);
-      setRejectModalOpen(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      setToastMessage({ type: "error", text: msg });
-    }
-  };
+    },
+    [counts, refreshCountsDebounced, rejectTarget]
+  );
 
   const canDecide = canDecideApproval(
     { id: currentUser.id, role: currentUser.role },
@@ -610,38 +687,91 @@ export function ApprovalsClientShell({
     (pendingApprovalsCount > 0 || items.some((i) => i.status === "pending"));
 
   // Action: Approve All Pending Requests
-  const handleApproveAll = async () => {
+  const handleApproveAll = useCallback(async () => {
     if (isApprovingAll) return;
     setIsApprovingAll(true);
     setToastMessage(null);
 
-    const targetTypeKey = typeFilter !== "all" ? typeFilter : undefined;
-    const pendingItemsToApprove = items.filter(
+    const targetTypeKey = typeFilterRef.current !== "all" ? typeFilterRef.current : undefined;
+    const currentItems = itemsRef.current;
+    const pendingItemsToApprove = currentItems.filter(
       (i) => i.status === "pending" && (!targetTypeKey || i.type_key === targetTypeKey)
     );
     const countToApprove = pendingApprovalsCount || pendingItemsToApprove.length;
+    const prevItems = itemsRef.current;
+    const prevCounts = { ...counts, by_type: { ...counts.by_type } };
 
-    // Fast responsive optimistic exit state
-    if (status === "pending") {
+    // ⚡ Fast responsive optimistic exit state (0ms delay)
+    if (statusRef.current === "pending") {
       const exitMap: Record<string, "approved"> = {};
       for (const item of pendingItemsToApprove) {
         exitMap[item.id] = "approved";
       }
       setExitStates((prev) => ({ ...prev, ...exitMap }));
+
+      // Optimistically clear pending counts for approved types
+      setCounts((prev) => {
+        const newByType = { ...prev.by_type };
+        if (targetTypeKey) {
+          newByType[targetTypeKey] = 0;
+        } else {
+          newByType["registration"] = 0;
+        }
+        const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
+        return {
+          total: Math.max(0, newTotal),
+          by_type: newByType,
+        };
+      });
+
+      setTimeout(() => {
+        setItems((prev) =>
+          prev.filter((i) => !pendingItemsToApprove.some((p) => p.id === i.id))
+        );
+        setExitStates({});
+      }, 300);
+    } else {
+      setItems((prev) =>
+        prev.map((i) =>
+          pendingItemsToApprove.some((p) => p.id === i.id)
+            ? { ...i, status: "approved" }
+            : i
+        )
+      );
     }
 
     try {
-      const result = await approveAllAction({
-        type_key: targetTypeKey,
+      // ⚡ Fast Route Handler transport (avoids heavy RSC full-page re-render)
+      const res = await fetch("/api/approvals/approve-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type_key: targetTypeKey }),
       });
 
-      if (!result.success) {
-        setExitStates({});
-        setToastMessage({
-          type: "error",
-          text: result.error || "Failed to approve all requests.",
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to approve all requests.");
+      }
+
+      const approvedCount = json.data?.approved_count ?? json.approved_count ?? countToApprove;
+      setToastMessage({
+        type: "success",
+        text: `Successfully approved ${approvedCount} request${
+          approvedCount === 1 ? "" : "s"
+        }. User accounts activated with documents pending verification.`,
+      });
+      refreshCountsDebounced();
+    } catch (err: unknown) {
+      // Fallback to Server Action
+      try {
+        const result = await approveAllAction({
+          type_key: targetTypeKey,
         });
-      } else {
+
+        if (!result.success) {
+          throw new Error(result.error || "Failed to approve all requests.");
+        }
+
         const approvedCount = result.data?.approved_count ?? countToApprove;
         setToastMessage({
           type: "success",
@@ -649,58 +779,19 @@ export function ApprovalsClientShell({
             approvedCount === 1 ? "" : "s"
           }. User accounts activated with documents pending verification.`,
         });
-
-        // Smoothly remove approved items from items state
-        if (status === "pending") {
-          setTimeout(() => {
-            setItems((prev) =>
-              prev.filter((i) => !pendingItemsToApprove.some((p) => p.id === i.id))
-            );
-            setExitStates({});
-          }, 350);
-        } else {
-          setItems((prev) =>
-            prev.map((i) =>
-              pendingItemsToApprove.some((p) => p.id === i.id)
-                ? { ...i, status: "approved" }
-                : i
-            )
-          );
-          setExitStates({});
-        }
-
-        // Optimistically clear pending counts for approved types
-        setCounts((prev) => {
-          const newByType = { ...prev.by_type };
-          if (targetTypeKey) {
-            newByType[targetTypeKey] = 0;
-          } else {
-            newByType["registration"] = 0;
-          }
-          const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
-          return {
-            total: Math.max(0, newTotal),
-            by_type: newByType,
-          };
-        });
-
-        // Silently revalidate counts from server
-        fetch("/api/approvals/counts")
-          .then(async (res) => (res.ok ? ((await res.json()) as ApprovalCounts) : null))
-          .then((countData: ApprovalCounts | null) => {
-            if (countData) setCounts(countData);
-          })
-          .catch(() => {});
+        refreshCountsDebounced();
+      } catch (fallbackErr: any) {
+        setItems(prevItems);
+        setCounts(prevCounts);
+        setExitStates({});
+        const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        setToastMessage({ type: "error", text: msg });
       }
-    } catch (err: unknown) {
-      setExitStates({});
-      const msg = err instanceof Error ? err.message : String(err);
-      setToastMessage({ type: "error", text: msg });
     } finally {
       setIsApprovingAll(false);
       setApproveAllModalOpen(false);
     }
-  };
+  }, [counts, isApprovingAll, pendingApprovalsCount, refreshCountsDebounced]);
 
 
   return (
@@ -1119,12 +1210,8 @@ export function ApprovalsClientShell({
                     onApprove={handleApproveRequest}
                     onRejectPrompt={handleRejectPromptRequest}
                     onOpenDocumentLightbox={handleOpenDocumentLightbox}
-                    onVerifyDocument={(docId) =>
-                      handleVerifyDocument(docId, item.payload?.user_id || item.requested_by)
-                    }
-                    onRejectDocumentPrompt={(doc) =>
-                      handleRejectPromptDocument(doc, item.payload?.user_id || item.requested_by)
-                    }
+                    onVerifyDocument={handleVerifyDocument}
+                    onRejectDocumentPrompt={handleRejectPromptDocument}
                     canDecide={canDecide}
                     isActionLoading={processingRequestIds[item.id] === "approving"}
                     isRejectLoading={processingRequestIds[item.id] === "rejecting"}

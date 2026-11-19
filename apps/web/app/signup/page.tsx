@@ -61,6 +61,7 @@ import {
   computeShiftTiming,
   MACHINE_CATEGORY_SELECT_OPTIONS,
   normalizeMachineCategory,
+  classifyError,
 } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
@@ -120,6 +121,7 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [supervisorOptions, setSupervisorOptions] = useState<SelectOption[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+  const [supervisorError, setSupervisorError] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const draftValues = useMemo(
@@ -259,32 +261,36 @@ export default function SignupPage() {
     setAgreedToTerms(false);
   }, [clearDraft, clearDocumentSlots]);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadSupervisors() {
-      setLoadingSupervisors(true);
-      try {
-        const sups = await getSupervisorsAction();
-        if (isMounted && sups && sups.length > 0) {
-          setSupervisorOptions(
-            sups.map((s) => ({
-              value: s.value,
-              label: s.label,
-            }))
-          );
-        }
-      } catch (err) {
-        console.error("Failed to load supervisors in signup page:", err);
-      } finally {
-        if (isMounted) setLoadingSupervisors(false);
+  const loadSupervisors = useCallback(async () => {
+    setLoadingSupervisors(true);
+    setSupervisorError(null);
+    try {
+      const sups = await getSupervisorsAction();
+      if (sups && sups.length > 0) {
+        const uniqueSups = Array.from(
+          new Map(sups.map((s) => [s.value, s])).values()
+        );
+        setSupervisorOptions(
+          uniqueSups.map((s) => ({
+            value: s.value,
+            label: s.label,
+          }))
+        );
+        setSupervisorError(null);
+      } else {
+        setSupervisorError("No active supervisors found.");
       }
+    } catch (err) {
+      console.error("Failed to load supervisors in signup page:", err);
+      setSupervisorError("Unable to load supervisors. Tap to retry.");
+    } finally {
+      setLoadingSupervisors(false);
     }
-
-    loadSupervisors();
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadSupervisors();
+  }, [loadSupervisors]);
 
   const shiftTimingSummary = useMemo(() => {
     if (!formValues.shift_start_time || !formValues.shift_end_time) return null;
@@ -759,9 +765,15 @@ export default function SignupPage() {
       }
     }
 
+    if (docSlots.bank_document.status === "failed") {
+      errors.bank_document_file = docSlots.bank_document.error || "Bank document upload failed. Please reselect.";
+    }
+    if (docSlots.aadhaar.status === "failed") {
+      errors.aadhaar_file = docSlots.aadhaar.error || "Aadhaar document upload failed. Please reselect.";
+    }
     const isOperator = formValues.role === "operator";
     if (isOperator && docSlots.driving_license.status === "failed") {
-      errors.license_file = docSlots.driving_license.error || "Licence document upload failed.";
+      errors.license_file = docSlots.driving_license.error || "Licence document upload failed. Please reselect.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -913,7 +925,8 @@ export default function SignupPage() {
       }
 
       if (result.error) {
-        toast("error", "Registration Failed", result.error);
+        const errInfo = classifyError(result.error);
+        toast("error", errInfo.title || "Registration Error", errInfo.message);
       }
 
       if (result.fieldValues) {
@@ -950,21 +963,9 @@ export default function SignupPage() {
       isSubmittingRef.current = false;
       setPending(false);
 
-      const msg = err instanceof Error ? err.message : String(err);
-      const lower = msg.toLowerCase();
-      let userFriendlyError = "An unexpected error occurred. Please try again.";
-
-      if (lower.includes("rate limit") || lower.includes("too many requests") || lower.includes("429")) {
-        userFriendlyError = "Too many attempts from this network. Please wait a few minutes before trying again.";
-        toast("error", "Rate Limit Exceeded", userFriendlyError);
-      } else if (lower.includes("network") || lower.includes("fetch") || lower.includes("failed to fetch") || (typeof navigator !== "undefined" && !navigator.onLine)) {
-        userFriendlyError = "Unable to connect to the server. Please check your internet connection and try again.";
-        toast("error", "Network Connection Error", userFriendlyError);
-      } else {
-        toast("error", "Registration Error", userFriendlyError);
-      }
-
-      setState({ error: userFriendlyError });
+      const errInfo = classifyError(err);
+      toast("error", errInfo.title, errInfo.message);
+      setState({ error: errInfo.message });
     }
   }
 
@@ -1258,6 +1259,8 @@ export default function SignupPage() {
                       placeholder={
                         loadingSupervisors
                           ? "Loading supervisors..."
+                          : supervisorError
+                          ? supervisorError
                           : supervisorOptions.length === 0
                           ? "No active supervisors found"
                           : "Search or scroll to select supervisor..."
@@ -1267,6 +1270,15 @@ export default function SignupPage() {
                       icon={<AnimatedShieldCheck size={15} />}
                       className="w-full text-xs sm:text-[13px]"
                     />
+                    {Boolean(supervisorError) && (
+                      <button
+                        type="button"
+                        onClick={loadSupervisors}
+                        className="text-[11px] text-rose-500 hover:text-rose-600 font-medium text-left cursor-pointer transition-colors"
+                      >
+                        {supervisorError} Click here to retry.
+                      </button>
+                    )}
                     <p className="text-[11px] text-[var(--color-mute)] mt-0.5">Choose the site manager who oversees your work shift.</p>
                   </div>
                 )}

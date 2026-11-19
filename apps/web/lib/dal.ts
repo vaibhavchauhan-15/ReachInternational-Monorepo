@@ -3,7 +3,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient, tryCreateSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS } from "@/lib/cache";
 import type { User, UserRole } from "@/lib/types/database";
 import { roleHasPermission, getRoleHomeRoute } from "@reachinternational/permissions";
@@ -65,7 +65,8 @@ export const verifySession = cache(async () => {
 // auth.getUser() above still validates the token on every request.
 const getCachedUserRow = unstable_cache(
   async (userId: string) => {
-    const supabase = createSupabaseAdminClient();
+    const supabase = tryCreateSupabaseAdminClient();
+    if (!supabase) return null;
     const { data, error } = await supabase
       .from("users")
       .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, bank_account_number, bank_ifsc_code, street, shift_start_time, shift_end_time, machine_category, complete_profile, email, daily_rate, ot_hourly_rate, monthly_salary, supervisor_id, created_at, updated_at")
@@ -137,7 +138,36 @@ export function isProfileIncomplete(user: User): boolean {
 
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const session = await verifySession();
-  const data = await getCachedUserRow(session.userId);
+  if (!session?.userId) return null;
+
+  let data = null;
+  try {
+    data = await getCachedUserRow(session.userId);
+  } catch (err) {
+    console.warn("[DAL] getCachedUserRow error, falling back to direct server client:", err);
+  }
+
+  // Fallback to per-request authenticated Supabase client (operates via RLS: auth.uid() = id)
+  if (!data) {
+    try {
+      const serverClient = await createSupabaseServerClient();
+      const { data: rowData, error: rowError } = await serverClient
+        .from("users")
+        .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, bank_account_number, bank_ifsc_code, street, shift_start_time, shift_end_time, machine_category, complete_profile, email, daily_rate, ot_hourly_rate, monthly_salary, supervisor_id, created_at, updated_at")
+        .eq("id", session.userId)
+        .single();
+
+      if (!rowError && rowData) {
+        data = {
+          ...rowData,
+          address: rowData.street || null,
+        };
+      }
+    } catch (fallbackErr) {
+      console.error("[DAL] Direct server client fallback failed:", fallbackErr);
+    }
+  }
+
   if (!data) return null;
   return { ...data, email: session.email } as User;
 });

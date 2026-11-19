@@ -67,6 +67,19 @@ export interface CancelApprovalInput {
   note?: string;
 }
 
+export interface VerifyDocumentInput {
+  document_id: string;
+  user_id?: string;
+  reviewer_id?: string | null;
+}
+
+export interface RejectDocumentInput {
+  document_id: string;
+  rejection_reason: string;
+  user_id?: string;
+  reviewer_id?: string | null;
+}
+
 export interface ListApprovalsInput {
   status?: ApprovalStatus | "all";
   type_key?: string;
@@ -253,6 +266,100 @@ export async function cancelApproval(
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
     return { data: json.data || json, error: null };
+  } catch (err) {
+    return { data: null, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
+/**
+ * Verify a user's document directly via RPC or fast REST API.
+ */
+export async function verifyDocument(
+  transport: ApprovalClientTransport,
+  input: VerifyDocumentInput
+): Promise<ClientResult<{ success: boolean; status: "verified" }>> {
+  try {
+    if (isRpcClient(transport)) {
+      const { data, error } = await transport.rpc<boolean>("verify_user_document_atomic", {
+        p_document_id: input.document_id,
+        p_reviewer_id: input.reviewer_id ?? null,
+      });
+
+      if (error) {
+        return { data: null, error: sanitizeUserErrorMessage(error) };
+      }
+      return { data: { success: Boolean(data), status: "verified" }, error: null };
+    }
+
+    const fetchImpl = transport.fetchFn || fetch;
+    const base = transport.baseUrl || "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (transport.token) headers["Authorization"] = `Bearer ${transport.token}`;
+
+    const res = await fetchImpl(`${base}/api/approvals/documents/verify`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        documentId: input.document_id,
+        userId: input.user_id,
+      }),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
+    if (!res.ok) {
+      return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
+    }
+    return { data: { success: true, status: "verified" }, error: null };
+  } catch (err) {
+    return { data: null, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
+/**
+ * Reject a user's document with a required reason directly via RPC or fast REST API.
+ */
+export async function rejectDocument(
+  transport: ApprovalClientTransport,
+  input: RejectDocumentInput
+): Promise<ClientResult<{ success: boolean; status: "rejected" }>> {
+  try {
+    if (!input.rejection_reason || !input.rejection_reason.trim()) {
+      return { data: null, error: "A rejection reason is required." };
+    }
+
+    if (isRpcClient(transport)) {
+      const { data, error } = await transport.rpc<boolean>("reject_user_document_atomic", {
+        p_document_id: input.document_id,
+        p_reviewer_id: input.reviewer_id ?? null,
+        p_rejection_reason: input.rejection_reason.trim(),
+      });
+
+      if (error) {
+        return { data: null, error: sanitizeUserErrorMessage(error) };
+      }
+      return { data: { success: Boolean(data), status: "rejected" }, error: null };
+    }
+
+    const fetchImpl = transport.fetchFn || fetch;
+    const base = transport.baseUrl || "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (transport.token) headers["Authorization"] = `Bearer ${transport.token}`;
+
+    const res = await fetchImpl(`${base}/api/approvals/documents/reject`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        documentId: input.document_id,
+        userId: input.user_id,
+        rejectionReason: input.rejection_reason.trim(),
+      }),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
+    if (!res.ok) {
+      return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
+    }
+    return { data: { success: true, status: "rejected" }, error: null };
   } catch (err) {
     return { data: null, error: sanitizeUserErrorMessage(err) };
   }

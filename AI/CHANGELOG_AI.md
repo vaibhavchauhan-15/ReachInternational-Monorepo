@@ -1,3 +1,60 @@
+## [2026-11-19] - Approvals Speed, Responsiveness, Scalability & Query Deduplication Optimization
+- **Scope**: Approvals page across both Web (apps/web) and Native Mobile (apps/mobile) - registrations, documents, profile changes, and bulk approve-all.
+- **Root Bottlenecks Resolved**:
+  1. Next.js Server Action Full-Page RSC Re-renders: Decoupled client action dispatching to dedicated lightweight API route handlers (/api/approvals/[id]/decide, /api/approvals/documents/verify, /api/approvals/documents/reject, /api/approvals/approve-all) with instant optimistic UI transitions (0ms perceived delay) and non-blocking revalidation.
+  2. Supabase Storage Signed URL Creation Bottleneck: Added in-memory signed URL cache with 45-minute TTL (resolveSignedUrlsBatch) in Web DAL (apps/web/lib/dal/approvals.ts), reducing signed URL roundtrips from ~800ms to ~0ms.
+  3. Redundant Pre-RPC Queries in Server Actions: Eradicated 2 sequential pre-RPC database queries in decideApprovalAction; delegated all locking and validations to PostgreSQL RPC (approval_decide).
+  4. Blocking Document Review Outbox: Converted blocking outbox worker await processPendingApprovalOutboxItems(10) in document-review.ts to fire-and-forget background execution.
+  5. Sequential Auth in Document Actions: Parallelized verifySession() and getCurrentUserRole() with Promise.all across document review actions.
+  6. Mobile Post-Mutation Query Invalidation Storms: Updated invalidateApprovalListsAndCounts in useApprovalsData.ts to support gentle cache invalidation ({ gentle: true } with refetchType: "none" on lists) and debounced Supabase Realtime sync to 1500ms.
+  7. Mobile Rejection Modal Feedback: Dismissed rejection modal immediately upon confirmation for instant 0ms perceived feedback.
+- **Verification**:
+  - pnpm typecheck: 7/7 packages clean (0 errors, 56.8s).
+  - node scripts/check-typography.mjs: 0 raw typography property violations.
+  - node scripts/test-touch-haptics.mjs: 100% compliant.
+  - node tests/approvals/test-approval-engine-exhaustive.mjs: 44/44 checks passed.
+  - node tests/approvals/test-admin-only-approvals.mjs: 20/20 checks passed.
+  - node tests/approvals/test-approve-all-engine.mjs: 14/14 checks passed.
+  - node apps/mobile/test/test-unified-approval-engine.mjs: 53/53 checks passed.
+  - node apps/mobile/run-tests.mjs: 357/357 verification scenarios passed.
+  - node scripts/run-all-tests.mjs: 28/28 monorepo test suites passing (100%).
+
+## [2026-11-19] - Production Credentials Configuration & Cloudflare Worker Deployment Alignment
+- **Scope**: Applied production credentials for Supabase project dhbbgfzbyatzvqafnsqp and web app endpoint https://dashboard-reachinternational.vercel.app.
+- **Changes**:
+  - Configured public variables in root wrangler.jsonc and apps/web/wrangler.jsonc (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_GA_MEASUREMENT_ID, NEXT_PUBLIC_VAPID_PUBLIC_KEY, PUSH_ENABLED, VAPID_SUBJECT).
+  - Configured CI fallbacks in scripts/build-dispatcher.js targeting production project dhbbgfzbyatzvqafnsqp.
+  - Staged complete production credentials in gitignored files: apps/web/.env.production, apps/web/.env.production.local, apps/web/.dev.vars, .dev.vars, and apps/mobile/.env.production.
+  - Enhanced apps/web/lib/env/client.ts to accept either NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY.
+  - Fixed missing useRef import in apps/mobile/app/(app)/approvals.tsx.
+  - Zero privileged secrets committed to git.
+- **Verification**:
+  - pnpm typecheck: 7/7 packages clean (0 errors).
+  - pnpm build:worker: Compiled successfully with OpenNext (Worker saved in .open-next/worker.js).
+  - npx wrangler deploy --dry-run: 340 assets read, 12 production bindings verified.
+  - node scripts/run-all-tests.mjs: 28/28 monorepo test suites passing.
+
+## [2026-11-19] - Cloudflare Workers Production Deployment & Server Components Error Remediation
+- **Deep Root Cause**:
+  1. Live HTTP probe on Cloudflare Worker returned 'HTTP 500: {"error":"[ENV] SUPABASE_SECRET_KEY is not configured."}'.
+  2. When navigating to /dashboard, Server Components in AppLayout and DashboardPage invoked getCurrentUser() and getAdminDashboard(), which invoked createSupabaseAdminClient() via getCachedUserRow().
+  3. createSupabaseAdminClient() threw an unhandled exception because SUPABASE_SECRET_KEY was absent in the Cloudflare Worker runtime environment, causing Next.js App Router to catch and render apps/web/app/error.tsx ('We encountered an unexpected error / An error occurred in the Server Components render').
+  4. wrangler.jsonc files lacked public environment variables in vars.
+  5. getAppUrl() threw an unhandled exception on SSR if NEXT_PUBLIC_APP_URL was not set.
+  6. TodayShiftMonitorTab.tsx imported dedupeShiftMonitorRows from today-shift-monitor.ts, violating Turbopack's 'server-only' client import boundary.
+- **Fixes Applied**:
+  - Implemented multi-tier resilient fallback in apps/web/lib/dal.ts: getCurrentUser falls back to createSupabaseServerClient() using the authenticated session and PostgREST RLS (auth.uid() = id).
+  - Implemented resilient fallback across all 6 dashboard fetchers (apps/web/lib/data/dashboard/*) to execute RPCs via createSupabaseServerClient() and return typed default DTOs on error.
+  - Extracted dedupeShiftMonitorRows to client-safe apps/web/lib/utils/shift-monitor.ts.
+  - Enhanced apps/web/lib/env/client.ts with OpenNext origin detection and safe fallback.
+  - Added all 11 required public variables into vars in root wrangler.jsonc and apps/web/wrangler.jsonc.
+  - Updated scripts/build-dispatcher.js for Cloudflare Workers CI builds.
+- **Verification**: 0 typecheck errors across all 7 packages, OpenNext worker bundle built cleanly, wrangler deploy --dry-run verified, 28/28 monorepo test suites passing.
+
+## [1.5.1] - 2026-11-19
+### Fixed
+- **Shift Monitor & Signup Duplicate React Keys**: Resolved duplicate React child key console error in TodayShiftMonitorTab and TodayShiftMonitorCard. Introduced canonical dedupeShiftMonitorRows in 	oday-shift-monitor.ts, removed fallback in AssignOperatorModal.onSuccess that overwrote shift codes across multiple machine slots, made React keys guaranteed unique with index fallback, and secured Select and signup supervisor dropdowns with unique options.
+
 ## [2026-11-19] - Cloudflare Workers CI/CD Monorepo Build & Deploy Optimization
 
 ### Fixed

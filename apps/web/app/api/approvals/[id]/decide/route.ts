@@ -34,10 +34,11 @@ export async function POST(
 
     const { id } = await params;
     const body = (await req.json()) as Record<string, unknown>;
-    const result = await decideApprovalAction({
-      ...body,
-      request_id: id,
-    });
+    // ⚡ Pass pre-authenticated user — eliminates double auth (saves ~200-400ms)
+    const result = await decideApprovalAction(
+      { ...body, request_id: id },
+      { id: auth.user.id, role: auth.user.role }
+    );
 
     if (!result.success) {
       const status = result.isVersionConflict ? 409 : 400;

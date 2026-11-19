@@ -210,8 +210,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           {...props}
         >
           {placeholder && <option value="">{placeholder}</option>}
-          {parsedOptions.map((opt) => (
-            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+          {parsedOptions.map((opt, idx) => (
+            <option key={`${opt.value}-${idx}`} value={opt.value} disabled={opt.disabled}>
               {opt.label}
             </option>
           ))}
@@ -307,7 +307,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
 
                       return (
                         <button
-                          key={opt.value}
+                          key={`${opt.value}-${idx}`}
                           type="button"
                           disabled={opt.disabled}
                           onClick={() => handleSelectOption(opt)}

@@ -6,10 +6,20 @@ import "server-only";
  * Any accidental client-side import fails at build time.
  */
 
-export function getSupabaseSecretKey(): string {
+export function hasSupabaseSecretKey(): boolean {
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key?.trim()) throw new Error("[ENV] SUPABASE_SECRET_KEY is not configured.");
-  return key.trim();
+  return Boolean(key?.trim());
+}
+
+export function tryGetSupabaseSecretKey(): string | null {
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return key?.trim() || null;
+}
+
+export function getSupabaseSecretKey(): string {
+  const key = tryGetSupabaseSecretKey();
+  if (!key) throw new Error("[ENV] SUPABASE_SECRET_KEY is not configured.");
+  return key;
 }
 
 export function getUpstashRedisConfig() {
@@ -37,6 +47,12 @@ export function getUploadSessionSecret(): string {
  * Typed server-only environment configuration object
  */
 export const serverEnv = {
+  get hasSupabaseSecretKey(): boolean {
+    return hasSupabaseSecretKey();
+  },
+  get trySupabaseSecretKey(): string | null {
+    return tryGetSupabaseSecretKey();
+  },
   get supabaseSecretKey(): string {
     return getSupabaseSecretKey();
   },

@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getTodayShiftMonitorAction, activateMachineAction } from "@/app/actions/operators";
-import { Badge, useToast, Button, EmptyState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
+import { Badge, useToast, Button, EmptyState, ErrorState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
-import { getISTDateString, formatDate } from "@reachinternational/utils";
-import type { TodayShiftMonitorRow } from "@/lib/data/operations/today-shift-monitor";
+import { getISTDateString, formatDate, classifyError } from "@reachinternational/utils";
+import type { TodayShiftMonitorRow } from "@reachinternational/types";
+import { dedupeShiftMonitorRows } from "@/lib/utils/shift-monitor";
 import type { User, CRMClient, Machine } from "@/lib/types/database";
 import { UserCheck, Clock, AlertCircle, UserPlus, Calendar, Wrench, Edit2, MoreVertical } from "lucide-react";
 import { ClipboardCheck } from "@/components/icons";
@@ -67,8 +68,9 @@ export function TodayShiftMonitorTab({
 }: TodayShiftMonitorProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [rows, setRows] = useState<TodayShiftMonitorRow[]>(initialRows || []);
+  const [rows, setRows] = useState<TodayShiftMonitorRow[]>(() => dedupeShiftMonitorRows(initialRows || []));
   const [loading, setLoading] = useState(!initialRows);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "entered" | "unassigned" | "breakdown" | "maintenance">("all");
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
@@ -114,12 +116,18 @@ export function TodayShiftMonitorTab({
     };
   }, [activeMenuCardKey]);
 
-  // Sync selectedDate with initialDate prop if it changes
+  // Sync selectedDate and rows with initial props if they change
   useEffect(() => {
     if (initialDate && initialDate !== selectedDate) {
       setSelectedDate(initialDate);
     }
   }, [initialDate]);
+
+  useEffect(() => {
+    if (initialRows) {
+      setRows(dedupeShiftMonitorRows(initialRows));
+    }
+  }, [initialRows]);
 
   // Permission Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs
   const effectiveRole = userRole || user?.role || "";
@@ -130,6 +138,7 @@ export function TodayShiftMonitorTab({
       const targetDate = dateToFetch !== undefined ? dateToFetch : selectedDate;
       if (!search && !initialRows) setLoading(true);
       else if (search) setIsSearching(true);
+      setFetchError(null);
       try {
         const clientParam =
           selectedClient !== "all" && !selectedClient.startsWith("name:") && selectedClient !== "unassigned"
@@ -137,24 +146,24 @@ export function TodayShiftMonitorTab({
             : undefined;
         const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache, clientParam);
         if (result.success && result.data) {
-          // Robust deduplication: prevent any duplicate machine + shift combinations from rendering double cards
-          const seen = new Set<string>();
-          const dedupedRows = result.data.filter((r) => {
-            const key = `${r.machine_id}-${(r.shift_code || "S1").toUpperCase()}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          setRows(dedupedRows);
+          // Robust canonical deduplication: prevent any duplicate machine + shift combinations
+          setRows(dedupeShiftMonitorRows(result.data));
+          setFetchError(null);
+        } else {
+          const errInfo = classifyError(result.error || "Failed to load shift monitor data.");
+          setFetchError(errInfo.message);
+          toast("error", errInfo.title, errInfo.message);
         }
-      } catch {
-        // silent
+      } catch (err) {
+        const errInfo = classifyError(err);
+        setFetchError(errInfo.message);
+        toast("error", errInfo.title, errInfo.message);
       } finally {
         setLoading(false);
         setIsSearching(false);
       }
     },
-    [initialRows, selectedDate, selectedClient]
+    [initialRows, selectedDate, selectedClient, toast]
   );
 
   useEffect(() => {
@@ -278,10 +287,12 @@ export function TodayShiftMonitorTab({
           setWarningMachine(null);
           handleAssignOperator(machineId);
         } else {
-          toast("error", "Activation Failed", res.error || "Failed to set machine to active.");
+          const errInfo = classifyError(res.error || "Failed to set machine to active.");
+          toast("error", "Activation Failed", errInfo.message);
         }
-      } catch {
-        toast("error", "Activation Error", "An error occurred while activating the machine.");
+      } catch (err) {
+        const errInfo = classifyError(err);
+        toast("error", "Activation Error", errInfo.message);
       }
     },
     [warningMachine, toast, handleAssignOperator]
@@ -523,24 +534,26 @@ export function TodayShiftMonitorTab({
       if (entryData) {
         // 0ms Optimistic UI update: immediately switch row to 'entered' and update meters
         setRows((prev) =>
-          prev.map((r) => {
-            const isMatch =
-              r.machine_id === entryData.machineId &&
-              (!entryData.operatorId || r.operator_id === entryData.operatorId || !r.operator_id);
-            if (isMatch) {
-              return {
-                ...r,
-                status: "entered",
-                start_meter: entryData.startMeter,
-                end_meter: entryData.endMeter,
-                running_hours: entryData.runningHours,
-                shift_code: entryData.shiftCode || r.shift_code,
-                entered_by_name: user?.full_name || "Supervisor",
-                entry_source: user?.role === "operator" ? "operator" : (user?.role || "supervisor"),
-              };
-            }
-            return r;
-          })
+          dedupeShiftMonitorRows(
+            prev.map((r) => {
+              const isMatch =
+                r.machine_id === entryData.machineId &&
+                (!entryData.operatorId || r.operator_id === entryData.operatorId || !r.operator_id);
+              if (isMatch) {
+                return {
+                  ...r,
+                  status: "entered",
+                  start_meter: entryData.startMeter,
+                  end_meter: entryData.endMeter,
+                  running_hours: entryData.runningHours,
+                  shift_code: entryData.shiftCode || r.shift_code,
+                  entered_by_name: user?.full_name || "Supervisor",
+                  entry_source: user?.role === "operator" ? "operator" : (user?.role || "supervisor"),
+                };
+              }
+              return r;
+            })
+          )
         );
       }
       // Re-fetch 100% authoritative data directly from DB
@@ -688,8 +701,33 @@ export function TodayShiftMonitorTab({
         </div>
       </FilterToolbar>
 
-      {/* Content: Empty State when 0 rows, otherwise Table and Cards */}
-      {rows.length === 0 ? (
+      {/* Inline ambient error banner when we have existing cached rows but latest refresh failed */}
+      {fetchError && rows.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 text-xs text-rose-600 dark:text-rose-400">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle size={14} className="shrink-0" />
+            <span className="truncate">{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchData(selectedDate, undefined, true)}
+            className="font-semibold underline hover:no-underline cursor-pointer text-xs shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Content: ErrorState when fetch failed and 0 rows, Empty State when 0 rows, otherwise Table and Cards */}
+      {fetchError && rows.length === 0 ? (
+        <div className="py-6">
+          <ErrorState
+            title="Failed to Load Shift Roster"
+            description={fetchError}
+            onRetry={() => fetchData(selectedDate, undefined, true)}
+          />
+        </div>
+      ) : rows.length === 0 ? (
         <div className="py-6">
           <EmptyState
             icon={<ClipboardCheck className="w-10 h-10 text-sky-500" />}
@@ -764,7 +802,7 @@ export function TodayShiftMonitorTab({
 
                     return (
                       <tr
-                        key={row.operator_id ? `${row.operator_id}-${row.machine_id}-${row.shift_code}` : `unassigned-${row.machine_id}-${idx}`}
+                        key={`${row.machine_id}-${(row.shift_code || "S1").toUpperCase()}-${row.operator_id || "unassigned"}-${row.log_id || idx}`}
                         onClick={() => {
                           if (isUnassigned) handleInitiateAssign(row);
                         }}
@@ -1001,11 +1039,7 @@ export function TodayShiftMonitorTab({
             ) : (
               filtered.map((row, idx) => (
                 <TodayShiftMonitorCard
-                  key={
-                    row.operator_id
-                      ? `m-${row.operator_id}-${row.machine_id}-${row.shift_code}`
-                      : `m-unassigned-${row.machine_id}-${idx}`
-                  }
+                  key={`m-${row.machine_id}-${(row.shift_code || "S1").toUpperCase()}-${row.operator_id || "unassigned"}-${row.log_id || idx}`}
                   row={row}
                   idx={idx}
                   searchQuery={searchQuery}
@@ -1045,12 +1079,13 @@ export function TodayShiftMonitorTab({
         onSuccess={(result?: AssignPersonnelSuccessResult) => {
           // Fine-grained optimistic update: update only affected machine row values immediately
           if (result?.machineId && Array.isArray(result?.operators)) {
-            setRows((prevRows) =>
-              prevRows.map((r) => {
+            setRows((prevRows) => {
+              const updated = prevRows.map((r) => {
                 if (r.machine_id !== result.machineId) return r;
-                const matchingOp =
-                  result.operators?.find((o) => o.shift_code === r.shift_code) ||
-                  result.operators?.[0];
+                // Match strictly by shift code
+                const matchingOp = result.operators?.find(
+                  (o) => (o.shift_code || "S1").toUpperCase() === (r.shift_code || "S1").toUpperCase()
+                );
                 if (matchingOp) {
                   return {
                     ...r,
@@ -1063,8 +1098,9 @@ export function TodayShiftMonitorTab({
                   };
                 }
                 return r;
-              })
-            );
+              });
+              return dedupeShiftMonitorRows(updated);
+            });
           }
           fetchData(selectedDate, undefined, true);
         }}

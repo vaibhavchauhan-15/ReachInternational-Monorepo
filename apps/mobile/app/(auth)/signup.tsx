@@ -283,10 +283,15 @@ export default function SignupScreen() {
   });
 
   const supervisorOptions = useMemo(() => {
-    return supervisors.map((s) => ({
-      value: s.id,
-      label: s.full_name,
-    }));
+    const seen = new Set<string>();
+    const opts: Array<{ value: string; label: string }> = [];
+    for (const s of supervisors) {
+      if (s.id && !seen.has(s.id)) {
+        seen.add(s.id);
+        opts.push({ value: s.id, label: s.full_name });
+      }
+    }
+    return opts;
   }, [supervisors]);
 
   // Real-time Shift Duration & Schedule Computation

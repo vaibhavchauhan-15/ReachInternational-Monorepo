@@ -9,10 +9,29 @@ export function getAppUrl(): string {
     return window.location.origin.replace(/\/$/, "");
   }
   const url = process.env.NEXT_PUBLIC_APP_URL;
-  if (!url?.trim()) {
-    throw new Error("[ENV] NEXT_PUBLIC_APP_URL is not configured.");
+  if (url?.trim()) {
+    return url.trim().replace(/\/$/, "");
   }
-  return url.trim().replace(/\/$/, "");
+  if (process.env.OPEN_NEXT_ORIGIN) {
+    try {
+      const originConfig = JSON.parse(process.env.OPEN_NEXT_ORIGIN);
+      const host = originConfig.default?.host;
+      const protocol = originConfig.default?.protocol || "https";
+      if (host) {
+        return `${protocol}://${host}`.replace(/\/$/, "");
+      }
+    } catch {}
+  }
+  if (process.env.CF_PAGES_URL?.trim()) {
+    return process.env.CF_PAGES_URL.trim().replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`.replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL?.trim()) {
+    return `https://${process.env.VERCEL_URL.trim()}`.replace(/\/$/, "");
+  }
+  return "https://reachinternational-monorepo.vaibhavchauhan.workers.dev";
 }
 
 export function getSupabaseUrl(): string {
@@ -22,7 +41,7 @@ export function getSupabaseUrl(): string {
 }
 
 export function getSupabasePublishableKey(): string {
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!key?.trim()) throw new Error("[ENV] NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not configured.");
   return key.trim();
 }
@@ -38,7 +57,7 @@ export function hasSupabaseUrl(): boolean {
 export function hasSupabaseConfig(): boolean {
   return (
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim())
+    Boolean((process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim())
   );
 }
 

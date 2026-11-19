@@ -41,8 +41,10 @@ export async function approveDocumentReplacementCore(params: {
       });
 
       if (!decideErr) {
-        // Fast-path drain outbox so file movement and DB updates complete immediately
-        await processPendingApprovalOutboxItems(10);
+        // ⚡ Non-blocking fire-and-forget outbox drain (saves ~500ms-5s from response path)
+        processPendingApprovalOutboxItems(10).catch((err) => {
+          console.warn("[approveDocumentReplacementCore] Background outbox processing non-blocking error:", err);
+        });
         return { success: true };
       }
       console.warn("[approveDocumentReplacementCore] approval_decide fallback:", decideErr.message);

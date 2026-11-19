@@ -40,8 +40,8 @@ export interface ApprovalRowProps {
     userName?: string,
     userId?: string
   ) => void;
-  onVerifyDocument?: (docId: string) => Promise<void> | void;
-  onRejectDocumentPrompt?: (doc: AttachedDocumentSummary) => void;
+  onVerifyDocument?: (docId: string, userId?: string) => Promise<void> | void;
+  onRejectDocumentPrompt?: (doc: AttachedDocumentSummary, userId?: string) => void;
   canDecide?: boolean;
   isActionLoading?: boolean;
   isRejectLoading?: boolean;
@@ -93,7 +93,8 @@ function DocumentThumbnail({
   );
 }
 
-export function ApprovalRow({
+// ⚡ React.memo prevents full list re-renders on parent state changes (781-line component)
+export const ApprovalRow = React.memo(function ApprovalRow({
   item,
   onSelect,
   onApprove,
@@ -303,7 +304,10 @@ export function ApprovalRow({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onRejectDocumentPrompt(doc);
+                            onRejectDocumentPrompt(
+                              doc,
+                              payload.user_id || item.requested_by || item.subject_id
+                            );
                           }}
                           disabled={isActionLoading || isRejectLoading}
                           className="p-1 rounded text-red-600 hover:bg-red-500/15 transition-colors cursor-pointer"
@@ -315,7 +319,10 @@ export function ApprovalRow({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onVerifyDocument(doc.id);
+                            onVerifyDocument(
+                              doc.id,
+                              payload.user_id || item.requested_by || item.subject_id
+                            );
                           }}
                           disabled={isActionLoading || isRejectLoading}
                           className="p-1 rounded text-emerald-600 hover:bg-emerald-500/15 transition-colors cursor-pointer"
@@ -778,4 +785,4 @@ export function ApprovalRow({
       </div>
     </div>
   );
-}
+});

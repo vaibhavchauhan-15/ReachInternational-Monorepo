@@ -24,6 +24,66 @@ export interface ApprovalCallerContext {
   role: string;
 }
 
+// ⚡ In-memory signed URL cache with TTL (45 minutes) to avoid repeated Supabase Storage API round-trips
+interface CachedSignedUrl {
+  url: string;
+  expiresAt: number;
+}
+const signedUrlCache = new Map<string, CachedSignedUrl>();
+const SIGNED_URL_TTL_MS = 45 * 60 * 1000; // 45 min TTL for 60 min (3600s) signed URLs
+
+async function resolveSignedUrlsBatch(
+  adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
+  bucket: "user_files" | "doc_staging",
+  paths: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (paths.length === 0) return result;
+
+  const now = Date.now();
+  const missingPaths: string[] = [];
+
+  for (const p of paths) {
+    const cacheKey = `${bucket}:${p}`;
+    const cached = signedUrlCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      result.set(p, cached.url);
+    } else {
+      missingPaths.push(p);
+    }
+  }
+
+  if (missingPaths.length > 0) {
+    const uniqueMissing = Array.from(new Set(missingPaths));
+    const { data } = await adminSupabase.storage
+      .from(bucket)
+      .createSignedUrls(uniqueMissing, 3600);
+
+    if (data) {
+      for (const s of data) {
+        if (s?.path && s.signedUrl) {
+          result.set(s.path, s.signedUrl);
+          signedUrlCache.set(`${bucket}:${s.path}`, {
+            url: s.signedUrl,
+            expiresAt: now + SIGNED_URL_TTL_MS,
+          });
+        }
+      }
+    }
+
+    // Prune stale cache entries if cache size exceeds 1000 items
+    if (signedUrlCache.size > 1000) {
+      for (const [key, entry] of signedUrlCache.entries()) {
+        if (entry.expiresAt <= now) {
+          signedUrlCache.delete(key);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 /**
  * Fetch keyset-paginated approvals list via approval_list RPC.
  * Queue review is strictly restricted to admin users (super_admin, admin).
@@ -173,33 +233,11 @@ export const getApprovalsListDAL = cache(
         if (p.thumb_path) userFilesPaths.push(p.thumb_path);
       }
 
-      // Parallel batch signed URL resolution across storage buckets
-      const [userFilesSignedRes, stagingSignedRes] = await Promise.all([
-        userFilesPaths.length > 0
-          ? adminSupabase.storage
-              .from("user_files")
-              .createSignedUrls(Array.from(new Set(userFilesPaths)), 3600)
-          : Promise.resolve({ data: null }),
-        stagingPaths.length > 0
-          ? adminSupabase.storage
-              .from("doc_staging")
-              .createSignedUrls(Array.from(new Set(stagingPaths)), 3600)
-          : Promise.resolve({ data: null }),
+      // ⚡ Parallel batch signed URL resolution across storage buckets with 45-min memory caching
+      const [signedUserFilesMap, signedStagingMap] = await Promise.all([
+        resolveSignedUrlsBatch(adminSupabase, "user_files", userFilesPaths),
+        resolveSignedUrlsBatch(adminSupabase, "doc_staging", stagingPaths),
       ]);
-
-      const signedUserFilesMap = new Map<string, string>();
-      if (userFilesSignedRes.data) {
-        for (const s of userFilesSignedRes.data) {
-          if (s?.path && s.signedUrl) signedUserFilesMap.set(s.path, s.signedUrl);
-        }
-      }
-
-      const signedStagingMap = new Map<string, string>();
-      if (stagingSignedRes.data) {
-        for (const s of stagingSignedRes.data) {
-          if (s?.path && s.signedUrl) signedStagingMap.set(s.path, s.signedUrl);
-        }
-      }
 
       const formatDocLabel = (code: string): string => {
         switch (code) {

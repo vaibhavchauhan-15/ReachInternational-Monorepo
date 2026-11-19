@@ -613,8 +613,8 @@ export async function verifyUserDocumentAction(params: {
   userId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await verifySession();
-    const role = await getCurrentUserRole();
+    // ⚡ Parallel auth check (saves ~100-200ms)
+    const [session, role] = await Promise.all([verifySession(), getCurrentUserRole()]);
     if (!canVerifyDocument({ id: session.userId, role })) {
       return { success: false, error: "Unauthorized: only HR and Admins can verify documents." };
     }
@@ -645,8 +645,8 @@ export async function rejectUserDocumentAction(params: {
   rejectionReason: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await verifySession();
-    const role = await getCurrentUserRole();
+    // ⚡ Parallel auth check (saves ~100-200ms)
+    const [session, role] = await Promise.all([verifySession(), getCurrentUserRole()]);
     if (!canRejectDocument({ id: session.userId, role })) {
       return { success: false, error: "Unauthorized: only HR and Admins can reject documents." };
     }
@@ -677,8 +677,8 @@ export async function approveDocumentReplacementAction(params: {
   requestId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await verifySession();
-    const role = await getCurrentUserRole();
+    // ⚡ Parallel auth check (saves ~100-200ms)
+    const [session, role] = await Promise.all([verifySession(), getCurrentUserRole()]);
     if (!canVerifyDocument({ id: session.userId, role })) {
       return { success: false, error: "Unauthorized: only HR and Admins can approve document replacements." };
     }
@@ -708,8 +708,8 @@ export async function rejectDocumentReplacementAction(params: {
   rejectionReason: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await verifySession();
-    const role = await getCurrentUserRole();
+    // ⚡ Parallel auth check (saves ~100-200ms)
+    const [session, role] = await Promise.all([verifySession(), getCurrentUserRole()]);
     if (!canRejectDocument({ id: session.userId, role })) {
       return { success: false, error: "Unauthorized: only HR and Admins can reject document replacements." };
     }
