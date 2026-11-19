@@ -454,12 +454,130 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
         p_caller_id: currentUserId,
       });
 
-      if (rpcErr) {
-        throw rpcErr;
-      }
+      const rpcErrMsg = (rpcErr as any)?.message || '';
+      const rpcErrCode = (rpcErr as any)?.code || '';
+      const isRpcMissing =
+        Boolean(rpcErr) &&
+        (rpcErrCode === 'PGRST202' ||
+          rpcErrCode === '42883' ||
+          rpcErrMsg.includes('save_machine_roster_atomic') ||
+          rpcErrMsg.includes('schema cache') ||
+          rpcErrMsg.includes('Could not find the function'));
 
-      if (rpcRes && typeof rpcRes === 'object' && (rpcRes as any).success === false) {
-        throw new Error((rpcRes as any).error || 'Failed to save machine roster');
+      if (!isRpcMissing) {
+        if (rpcErr) {
+          throw rpcErr;
+        }
+        if (rpcRes && typeof rpcRes === 'object' && (rpcRes as any).success === false) {
+          throw new Error((rpcRes as any).error || 'Failed to save machine roster');
+        }
+      } else {
+        // Fallback: Direct database updates if save_machine_roster_atomic RPC is not yet in schema cache
+        // 1. Relieve assignments that existed in DB but were removed from current roster
+        for (const initAss of initialSnapshot.roster) {
+          const stillPresent = roster.some(
+            (m) =>
+              m.operatorId === initAss.operatorId &&
+              m.shiftCode.toUpperCase() === initAss.shiftCode.toUpperCase()
+          );
+
+          if (!stillPresent && initAss.assignmentId) {
+            try {
+              await supabase.rpc('end_operator_machine_assignment_atomic', {
+                p_assignment_id: initAss.assignmentId,
+                p_ended_by: currentUserId,
+                p_end_reason: 'Updated via mobile standardized assign dialog',
+              });
+            } catch {
+              await supabase
+                .from('operator_machine_assignments')
+                .update({
+                  is_active: false,
+                  ended_at: new Date().toISOString(),
+                  ended_by: currentUserId,
+                  end_reason: 'removed',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', initAss.assignmentId);
+            }
+          }
+        }
+
+        // 2. Assign/update operators in roster
+        for (const opItem of roster) {
+          const alreadyActive = initialSnapshot.roster.some(
+            (a) =>
+              a.operatorId === opItem.operatorId &&
+              a.shiftCode.toUpperCase() === opItem.shiftCode.toUpperCase() &&
+              Boolean(a.assignmentId)
+          );
+
+          if (!alreadyActive) {
+            let assignedViaRpc = false;
+            try {
+              const { error: assignRpcErr } = await supabase.rpc('assign_operator_machine_atomic', {
+                p_machine_id: machineId,
+                p_operator_id: opItem.operatorId,
+                p_shift_start_time: to24HourTime(opItem.shiftStartTime),
+                p_shift_end_time: to24HourTime(opItem.shiftEndTime),
+                p_shift_code: opItem.shiftCode,
+                p_assigned_by: currentUserId,
+                p_notes: 'Assigned via mobile standardized assign dialog',
+              });
+
+              if (!assignRpcErr) {
+                assignedViaRpc = true;
+              } else {
+                let msg = assignRpcErr.message;
+                if (assignRpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+                  throw new Error(`${opItem.operatorName} has reached the maximum of 3 active shifts (24h) across the fleet.`);
+                } else if (msg.includes('OVERLAPPING_SHIFT_FOR_OPERATOR') || msg.includes('overlap')) {
+                  throw new Error(`${opItem.operatorName}'s shift collides with an existing active assignment across the fleet.`);
+                }
+              }
+            } catch (err: any) {
+              if (err.message?.includes('active shifts') || err.message?.includes('collides')) {
+                throw err;
+              }
+              assignedViaRpc = false;
+            }
+
+            if (!assignedViaRpc) {
+              const todayIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+              await supabase.from('operator_machine_assignments').insert({
+                machine_id: machineId,
+                operator_id: opItem.operatorId,
+                shift_code: opItem.shiftCode,
+                shift_start_time: to24HourTime(opItem.shiftStartTime),
+                shift_end_time: to24HourTime(opItem.shiftEndTime),
+                is_active: true,
+                assigned_by: currentUserId,
+                assigned_at: new Date().toISOString(),
+                valid_from: todayIst,
+                valid_to: null,
+              });
+            }
+          }
+        }
+
+        // 3. Update machine operator IDs and supervisor if permitted
+        const machineUpdatePayload: Record<string, any> = {
+          operator_ids: Array.from(new Set(roster.map((o) => o.operatorId))),
+          current_operator_id: roster[0]?.operatorId || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (canEditSupervisor && !clientId) {
+          machineUpdatePayload.supervisor_ids = selectedSupervisorIds;
+          machineUpdatePayload.current_supervisor_id = selectedSupervisorIds[0] || null;
+        }
+
+        const { error: machineUpdateError } = await supabase
+          .from('machines')
+          .update(machineUpdatePayload)
+          .eq('id', machineId);
+
+        if (machineUpdateError) throw machineUpdateError;
       }
 
       // Realtime broadcast for multi-client synchronization

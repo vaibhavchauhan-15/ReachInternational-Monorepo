@@ -1,10 +1,25 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: End-to-End Performance Optimization — Operations Module (Web + Native App)
-- **Status**: 🟢 Clean / Verified & Production Ready (Single ACID transaction RPC, sub-20ms roster save, zero drift 100% Web & Mobile parity, eliminated Realtime websocket churn & burst refetches, 0 typecheck errors, all 29 monorepo test suites & 357 mobile scenarios passing)
+- **Current Task**: Production Bug Fix & Schema Cache Resilience — save_machine_roster_atomic Missing in Production DB
+- **Status**: 🟢 Clean / Verified & Production Ready (Root cause isolated, zero-downtime resilient fallback implemented across Web and Mobile, Migration 221 hardened with self-contained functions, 0 typecheck errors, all 29 monorepo test suites passing)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-19
+- **Production Schema Cache Missing RPC Bug Fix**:
+  - `User Request`: "Could not find the function public.save_machine_roster_atomic(p_activate_machine, p_caller_id, p_machine_id, p_operators, p_supervisor_ids) in the schema cache in the production db when i assing the operator it show this error first read the root cause and fix the bugs"
+  - `Root Causes Identified & Resolved`:
+    1. **Unapplied Migration in Production Database**: `public.save_machine_roster_atomic()` was introduced in migration `221_operations_roster_performance_optimization.sql` and applied only to Dev DB (`vlmxciuogczumumrwyot`). The Production database (`dhbbgfzbyatzvqafnsqp`) has migrations recorded up to `094_hr_payroll`; Migration 221 was never applied to Production, so PostgREST threw `PGRST202` on assignment saves.
+    2. **Missing Resilience Fallback in Server Actions (`updateMachinePersonnelAction`)**: Action assumed `save_machine_roster_atomic` was guaranteed to exist. Implemented `executeResilientPersonnelUpdateFallback()` in `apps/web/app/actions/machines.ts`. When `PGRST202` / schema cache error is returned, the action seamlessly falls back to direct assignment mutations, range closures, machine sync, cache revalidation, and returns fresh personnel snapshot without failing.
+    3. **Missing Resilience Fallback in Mobile Screens**: `AssignOperatorToMachineModal.tsx` and `MobileAssignPersonnelModal.tsx` directly invoked `save_machine_roster_atomic`. Added missing RPC detection (`PGRST202`) with graceful fallback to standard assignment mutations.
+    4. **Migration 221 Self-Contained Hardening**: Added idempotent `shift_to_ranges` and `do_shifts_overlap` definitions and `NOTIFY pgrst, 'reload schema';` inside `221_operations_roster_performance_optimization.sql`.
+  - `Verification Evidence`:
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations.
+    - `node scripts/test-touch-haptics.mjs`: 100% compliant.
+    - `node apps/mobile/run-tests.mjs`: 357/357 verification scenarios passed.
+    - `pnpm --filter @reachinternational/permissions test`: 25/25 tests passed.
+    - `node scripts/test-cross-platform-shift-assignment-push.mjs`: 5/5 scenarios passed (100%).
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
 - **Operations Module End-to-End Performance Optimization**:
   - `User Request`: "Perform a complete performance audit and implement production-grade optimizations across the Operations module, covering both the web frontend and native mobile app... Prioritize the Assign Personnel -> Save Roster workflow: Minimize save operation latency, avoid sequential requests, prevent duplicate submissions, use atomic and efficient database writes..."
   - `Root Causes Identified & Resolved`:

@@ -94,6 +94,13 @@ try {
   });
   console.log('  ✓ Operator preferences active (push_enabled = true, assignment_alerts = true)');
 
+  // Clear any existing active assignments for test operator to prevent SHIFT_OVERLAP_CONFLICT
+  await admin
+    .from('operator_machine_assignments')
+    .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
+    .eq('operator_id', operatorId)
+    .eq('is_active', true);
+
   // ============================================================================
   // SCENARIO 1: Web Supervisor -> Native Mobile Operator
   // ============================================================================

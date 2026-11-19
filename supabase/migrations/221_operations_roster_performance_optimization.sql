@@ -16,6 +16,51 @@
 --   9. Complete fresh personnel state returned in a single JSONB payload (eliminating follow-up queries)
 --   10. Advisory locks preventing race conditions and duplicate submissions under concurrency
 
+-- Ensure prerequisite immutable range functions exist
+CREATE OR REPLACE FUNCTION public.shift_to_ranges(p_start TIME, p_end TIME)
+RETURNS int4range[]
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_end > p_start THEN
+      ARRAY[
+        int4range(
+          (EXTRACT(HOUR FROM p_start)*60 + EXTRACT(MINUTE FROM p_start))::int,
+          (EXTRACT(HOUR FROM p_end)*60   + EXTRACT(MINUTE FROM p_end))::int,
+          '[)'
+        )
+      ]
+    ELSE
+      ARRAY[
+        int4range((EXTRACT(HOUR FROM p_start)*60 + EXTRACT(MINUTE FROM p_start))::int, 1440, '[)'),
+        int4range(0, (EXTRACT(HOUR FROM p_end)*60 + EXTRACT(MINUTE FROM p_end))::int, '[)')
+      ]
+  END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.shift_to_ranges(TIME, TIME) TO authenticated, service_role, anon;
+
+CREATE OR REPLACE FUNCTION public.do_shifts_overlap(
+  p_start1 TIME,
+  p_end1 TIME,
+  p_start2 TIME,
+  p_end2 TIME
+)
+RETURNS BOOLEAN
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM unnest(public.shift_to_ranges(p_start1, p_end1)) r1,
+         unnest(public.shift_to_ranges(p_start2, p_end2)) r2
+    WHERE r1 && r2
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.do_shifts_overlap(TIME, TIME, TIME, TIME) TO authenticated, service_role, anon;
+
 CREATE OR REPLACE FUNCTION public.save_machine_roster_atomic(
   p_machine_id        UUID,
   p_operators         JSONB    DEFAULT NULL,
@@ -603,3 +648,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.save_machine_roster_atomic(UUID, JSONB, UUID[], BOOLEAN, UUID) TO authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.save_machine_roster_atomic(UUID, JSONB, UUID[], BOOLEAN, UUID) FROM anon, public;
+
+-- Explicitly trigger PostgREST schema cache reload
+NOTIFY pgrst, 'reload schema';
