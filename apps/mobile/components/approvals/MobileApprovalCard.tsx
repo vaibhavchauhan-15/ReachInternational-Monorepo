@@ -333,32 +333,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                       {doc.label}
                     </Text>
 
-                    <View
-                      style={[
-                        styles.docStatusPill,
-                        {
-                          backgroundColor: isVerified
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : isRejected
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(245, 158, 11, 0.12)",
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="micro"
-                        style={{
-                          color: isVerified
-                            ? "#10b981"
-                            : isRejected
-                            ? "#ef4444"
-                            : "#d97706",
-                        }}
-                      >
-                        {doc.verification_status.toUpperCase()}
-                      </Text>
-                    </View>
-
+                    {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
                     {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
                       <View
                         style={[
@@ -371,27 +346,55 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           disabled={isActionLoading || isRejectLoading}
                           style={({ pressed }) => [
                             styles.docActionBtn,
-                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.15)" : "transparent" },
+                            styles.docRejectBtn,
+                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Reject ${doc.label}`}
                         >
-                          <X size={13} color="#ef4444" />
+                          <X size={15} color="#ef4444" strokeWidth={2.5} />
                         </Pressable>
                         <Pressable
                           onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
                           style={({ pressed }) => [
                             styles.docActionBtn,
-                            { backgroundColor: pressed ? "rgba(16, 185, 129, 0.15)" : "transparent" },
+                            styles.docApproveBtn,
+                            { backgroundColor: pressed ? "#059669" : "#10b981" },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Verify ${doc.label}`}
                         >
-                          <Check size={13} color="#10b981" />
+                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
                         </Pressable>
                       </View>
-                    ) : null}
+                    ) : (
+                      <View
+                        style={[
+                          styles.docStatusPill,
+                          {
+                            backgroundColor: isVerified
+                              ? "rgba(16, 185, 129, 0.12)"
+                              : isRejected
+                              ? "rgba(239, 68, 68, 0.12)"
+                              : "rgba(245, 158, 11, 0.12)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          variant="micro"
+                          style={{
+                            color: isVerified
+                              ? "#10b981"
+                              : isRejected
+                              ? "#ef4444"
+                              : "#d97706",
+                          }}
+                        >
+                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -803,53 +806,63 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                       {doc.label}
                     </Text>
 
-                    <View
-                      style={[
-                        styles.docStatusPill,
-                        {
-                          backgroundColor: isVerified
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : isRejected
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(245, 158, 11, 0.12)",
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="micro"
-                        style={{
-                          color: isVerified
-                            ? "#10b981"
-                            : isRejected
-                            ? "#ef4444"
-                            : "#d97706",
-                        }}
-                      >
-                        {doc.verification_status.toUpperCase()}
-                      </Text>
-                    </View>
-
-                    {/* Quick per-document action icons if authorized & document is pending */}
-                    {canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt ? (
+                    {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
+                    {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
                       <View style={[styles.docActionRow, { borderColor: colors.hairline }]}>
                         <Pressable
-                          onPress={() => onRejectDocumentPrompt(doc, payload.user_id || item.requested_by)}
+                          onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
-                          style={styles.docActionBtn}
+                          style={({ pressed }) => [
+                            styles.docActionBtn,
+                            styles.docRejectBtn,
+                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                          ]}
+                          accessibilityRole="button"
                           accessibilityLabel={`Reject ${doc.label}`}
                         >
-                          <X size={12} color="#ef4444" />
+                          <X size={15} color="#ef4444" strokeWidth={2.5} />
                         </Pressable>
                         <Pressable
-                          onPress={() => void onVerifyDocument(doc.id, payload.user_id || item.requested_by)}
+                          onPress={() => void onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
-                          style={styles.docActionBtn}
+                          style={({ pressed }) => [
+                            styles.docActionBtn,
+                            styles.docApproveBtn,
+                            { backgroundColor: pressed ? "#059669" : "#10b981" },
+                          ]}
+                          accessibilityRole="button"
                           accessibilityLabel={`Approve ${doc.label}`}
                         >
-                          <Check size={12} color="#10b981" />
+                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
                         </Pressable>
                       </View>
-                    ) : null}
+                    ) : (
+                      <View
+                        style={[
+                          styles.docStatusPill,
+                          {
+                            backgroundColor: isVerified
+                              ? "rgba(16, 185, 129, 0.12)"
+                              : isRejected
+                              ? "rgba(239, 68, 68, 0.12)"
+                              : "rgba(245, 158, 11, 0.12)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          variant="micro"
+                          style={{
+                            color: isVerified
+                              ? "#10b981"
+                              : isRejected
+                              ? "#ef4444"
+                              : "#d97706",
+                          }}
+                        >
+                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -1269,15 +1282,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   docCard: {
-    width: 96,
+    width: 112,
     borderRadius: 10,
     borderWidth: 1,
     padding: 6,
     alignItems: "center",
   },
   docThumbContainer: {
-    width: 82,
-    height: 54,
+    width: 98,
+    height: 64,
     borderRadius: 6,
     overflow: "hidden",
     backgroundColor: "rgba(0, 0, 0, 0.08)",
@@ -1325,8 +1338,16 @@ const styles = StyleSheet.create({
   docActionBtn: {
     minHeight: 44,
     minWidth: 44,
+    borderRadius: 8,
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  docRejectBtn: {
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  docApproveBtn: {
+    borderColor: "#059669",
   },
   dashedEmptyCard: {
     flexDirection: "row",

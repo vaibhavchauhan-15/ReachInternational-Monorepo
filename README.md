@@ -1158,4 +1158,27 @@ All test user accounts use the unified password: **`Password@123456`**
 | **Operator 4** | `amit.verma@reachinternational.co.in` | Amit Verma | Pune, Maharashtra (M/C-0004, Afcons) |
 | **Operator 5** | `suresh.sharma@reachinternational.co.in` | Suresh Sharma | Ahmedabad, Gujarat (M/C-0005, Reliance) |
 | **Operator 6** | `rohit.singh@reachinternational.co.in` | Rohit Singh | Noida, Uttar Pradesh (M/C-0006, L&T) |
+
+---
+
+## Web Deployment: Vercel, Cloudflare & Netlify Tri-Platform Parity
+
+The Next.js 16.2 App Router web application (`apps/web`) is production-ready for deployment across all three major platforms without platform drift:
+
+1. **Vercel** ([`vercel.json`](vercel.json)):
+   - Standard Turborepo build (`pnpm run build:vercel` or `turbo run build`).
+   - Serverless functions & Edge SSR.
+   - 3 daily crons (`/api/cron/cleanup-staging`, `/api/cron/cleanup-superseded`, `/api/cron/close-expired-jobs`).
+
+2. **Cloudflare Workers** ([`wrangler.jsonc`](wrangler.jsonc)):
+   - OpenNext edge build (`pnpm run build:worker`).
+   - Edge assets binding & workerd nodejs_compat runtime.
+   - 3 scheduled triggers (`triggers.crons`).
+
+3. **Netlify** ([`netlify.toml`](netlify.toml)):
+   - Monorepo root setup (`base = "."`, `publish = "apps/web/.next"`, `command = "node scripts/build-dispatcher.js"`).
+   - Subdirectory fallback setup ([`apps/web/netlify.toml`](apps/web/netlify.toml)).
+   - Netlify Scheduled Functions ([`netlify/functions/`](netlify/functions/)) triggering all 3 crons on identical schedules.
+   - Comprehensive deployment instructions in [`docs/NETLIFY_DEPLOYMENT.md`](docs/NETLIFY_DEPLOYMENT.md).
+
 

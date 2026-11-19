@@ -214,26 +214,35 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     };
   }, [isLoading]);
 
+  const broadcastDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refetchSummaryRef = useRef(refetchSummary);
+  refetchSummaryRef.current = refetchSummary;
+  const refetchInfiniteRef = useRef(refetchInfinite);
+  refetchInfiniteRef.current = refetchInfinite;
+
   // Real-time broadcast listener for instant roster revalidation
+  // Subscribed once on mount with 400ms debounce to prevent websocket teardown churn
   useEffect(() => {
     const rosterChannel = supabase.channel('operations-roster');
 
+    const triggerDebouncedRefresh = () => {
+      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+      broadcastDebounceRef.current = setTimeout(() => {
+        void Promise.all([refetchSummaryRef.current?.(), refetchInfiniteRef.current?.()]);
+      }, 400);
+    };
+
     rosterChannel
-      .on('broadcast', { event: 'assignment_changed' }, () => {
-        void Promise.all([refetchSummary(), refetchInfinite()]);
-      })
-      .on('broadcast', { event: 'roster_updated' }, () => {
-        void Promise.all([refetchSummary(), refetchInfinite()]);
-      })
-      .on('broadcast', { event: 'log_entered' }, () => {
-        void Promise.all([refetchSummary(), refetchInfinite()]);
-      })
+      .on('broadcast', { event: 'assignment_changed' }, triggerDebouncedRefresh)
+      .on('broadcast', { event: 'roster_updated' }, triggerDebouncedRefresh)
+      .on('broadcast', { event: 'log_entered' }, triggerDebouncedRefresh)
       .subscribe();
 
     return () => {
+      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
       supabase.removeChannel(rosterChannel);
     };
-  }, [refetchSummary, refetchInfinite]);
+  }, []);
 
   // Flattened and deduplicated rows from paginated responses
   const flatRows = useMemo(() => {

@@ -55,11 +55,13 @@ const PAGE_TITLES: Record<string, string> = {
   "/delete-account": "Delete Account",
   "/vendors": "Vendors",
   "/administration": "Administration",
+  "/approvals": "Approvals",
 };
 
 const DETAIL_TITLES: Record<string, string> = {
   machines: "Machine Details",
   clients: "Client Details",
+  approvals: "Approval Details",
   vendors: "Vendor Details",
   "purchase-orders": "Purchase Order",
   audit: "Audit Details",

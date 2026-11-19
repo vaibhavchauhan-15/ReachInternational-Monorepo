@@ -31,6 +31,15 @@ export function getAppUrl(): string {
   if (process.env.VERCEL_URL?.trim()) {
     return `https://${process.env.VERCEL_URL.trim()}`.replace(/\/$/, "");
   }
+  if (process.env.URL?.trim()) {
+    return process.env.URL.trim().replace(/\/$/, "");
+  }
+  if (process.env.DEPLOY_PRIME_URL?.trim()) {
+    return process.env.DEPLOY_PRIME_URL.trim().replace(/\/$/, "");
+  }
+  if (process.env.DEPLOY_URL?.trim()) {
+    return process.env.DEPLOY_URL.trim().replace(/\/$/, "");
+  }
   return "https://reachinternational-monorepo.vaibhavchauhan.workers.dev";
 }
 

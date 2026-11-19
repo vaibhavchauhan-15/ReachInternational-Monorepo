@@ -828,14 +828,14 @@ export function ApprovalsClientShell({
         )}
       </AnimatePresence>
 
-      {/* ── Clean Header with Action Bar ── */}
-      <div className="pb-3 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* ── Desktop Header with Action Bar (Hidden on Mobile where navbar already displays Approvals title) ── */}
+      <div className="hidden sm:flex sm:items-center sm:justify-between pb-3 border-b border-[var(--color-border)] gap-3">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
           Approvals &amp; Verifications
         </h1>
 
         {canDecide && (
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={!canApproveAll || isApprovingAll}
@@ -1145,12 +1145,32 @@ export function ApprovalsClientShell({
 
       {/* ── Single Section Main Layout (Feedback 6, 7: Only ONE section, no second split panel) ── */}
       <div className="w-full">
-        {/* Results Count Banner */}
+        {/* Results Count Banner + Mobile-Optimized Approve All Button (Utilizes existing empty space, 0 extra vertical space) */}
         <div className="flex items-center justify-between pb-2 text-xs font-medium text-[var(--color-ink-muted)]">
           <span>
             Showing <strong className="text-[var(--color-ink)]">{filteredItems.length}</strong>{" "}
             approval requests
           </span>
+
+          {canDecide && canApproveAll && (
+            <button
+              type="button"
+              disabled={isApprovingAll}
+              onClick={() => setApproveAllModalOpen(true)}
+              className="sm:hidden h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Approve all pending user registrations"
+            >
+              {isApprovingAll ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <CheckCheck size={13} />
+              )}
+              <span>
+                Approve All
+                {pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Loading State: only if initial items is empty and transition pending */}

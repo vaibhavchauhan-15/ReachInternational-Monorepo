@@ -1,0 +1,75 @@
+# ==============================================================================
+# ReachInternational Monorepo — Netlify Production & Preview Configuration
+# ==============================================================================
+# Seamless Next.js 16 App Router deployment on Netlify via pnpm & Turborepo.
+# Vercel (vercel.json) and Cloudflare (wrangler.jsonc) configurations remain intact.
+# ==============================================================================
+
+[build]
+  # Monorepo root is the base directory for pnpm workspace dependency resolution
+  base = "."
+  # Build command executes the build dispatcher (detects Netlify -> Turborepo web build)
+  command = "node scripts/build-dispatcher.js"
+  # Next.js build output directory relative to repository root
+  publish = "apps/web/.next"
+
+[build.environment]
+  # Node.js 20 LTS runtime matching modern Next.js 16 App Router requirements
+  NODE_VERSION = "20"
+  # Authoritative monorepo package manager version (matching package.json & pnpm-workspace.yaml)
+  PNPM_VERSION = "11.21.0"
+  # Netlify environment marker
+  NETLIFY = "true"
+  # Essential public environment variables for Next.js static page compilation
+  NEXT_PUBLIC_SUPABASE_URL = "https://dhbbgfzbyatzvqafnsqp.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoYmJnZnpieWF0enZxYWZuc3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2NTQyNDcsImV4cCI6MjEwMTIzMDI0N30.4ZHaKqZ-VIzB2-6kOkhIA-j0xpCmN5j5pJIWpfdyat8"
+  NEXT_PUBLIC_APP_VERSION = "1.5.0"
+  NEXT_PUBLIC_GA_MEASUREMENT_ID = "G-DC126P3SM9"
+  NEXT_PUBLIC_ENABLE_AGENTATION = "false"
+  NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH = "true"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY = "BICrnhbND6KveFxhqPQt1n7tZINfLxQJ0eD2oh0N_49hwW2Y-jCNOnAOkXR9lL342S-fYVDlQbjq7erm8q21xuA"
+  PUSH_ENABLED = "true"
+  VAPID_SUBJECT = "mailto:support@reachinternational.co.in"
+
+# ------------------------------------------------------------------------------
+# Scheduled Cron Functions (100% Parity with Vercel & Cloudflare Crons)
+# ------------------------------------------------------------------------------
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Daily 02:00 UTC - Purge unreferenced doc_staging sessions older than 24h
+[functions."cleanup-staging"]
+  schedule = "0 2 * * *"
+
+# Daily 03:00 UTC - Purge orphaned superseded user_documents older than 90d
+[functions."cleanup-superseded"]
+  schedule = "0 3 * * *"
+
+# Daily 00:00 UTC - Close expired job postings
+[functions."close-expired-jobs"]
+  schedule = "0 0 * * *"
+
+# ------------------------------------------------------------------------------
+# Static Assets & Service Worker Caching Rules
+# ------------------------------------------------------------------------------
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Content-Type = "application/javascript; charset=utf-8"
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), clipboard-read=(self), clipboard-write=(self)"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"

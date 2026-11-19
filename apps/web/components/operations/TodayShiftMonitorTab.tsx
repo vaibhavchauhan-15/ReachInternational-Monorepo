@@ -93,6 +93,12 @@ export function TodayShiftMonitorTab({
   const [activeMenuCardKey, setActiveMenuCardKey] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const broadcastDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchDataRef = useRef<((dateToFetch?: string, search?: string, bypassCache?: boolean) => Promise<void>) | null>(null);
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const searchQueryRef = useRef(searchQuery);
+  searchQueryRef.current = searchQuery;
   const abortRef = useRef<AbortController | null>(null);
 
   // Close card 3-dot actions menu on click outside or escape key
@@ -136,7 +142,7 @@ export function TodayShiftMonitorTab({
   const fetchData = useCallback(
     async (dateToFetch?: string, search?: string, bypassCache: boolean = true) => {
       const targetDate = dateToFetch !== undefined ? dateToFetch : selectedDate;
-      if (!search && !initialRows) setLoading(true);
+      if (!search && rows.length === 0 && !initialRows) setLoading(true);
       else if (search) setIsSearching(true);
       setFetchError(null);
       try {
@@ -163,8 +169,12 @@ export function TodayShiftMonitorTab({
         setIsSearching(false);
       }
     },
-    [initialRows, selectedDate, selectedClient, toast]
+    [initialRows, rows.length, selectedDate, selectedClient, toast]
   );
+
+  fetchDataRef.current = fetchData;
+  selectedDateRef.current = selectedDate;
+  searchQueryRef.current = searchQuery;
 
   useEffect(() => {
     if (!initialRows) {
@@ -175,32 +185,39 @@ export function TodayShiftMonitorTab({
   // Auto-refresh every 30 seconds (fallback polling when not searching)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!searchQuery.trim()) fetchData(selectedDate, undefined, true);
+      if (!searchQueryRef.current.trim() && fetchDataRef.current) {
+        fetchDataRef.current(selectedDateRef.current, undefined, false);
+      }
     }, 30_000);
     return () => clearInterval(interval);
-  }, [fetchData, searchQuery, selectedDate]);
+  }, []);
 
   // Real-time broadcast listener for instant roster revalidation
+  // Subscribed once on mount to prevent teardown/reconnect churn during user interactions
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const rosterChannel = supabase.channel("operations-roster");
 
+    const triggerDebouncedRefresh = () => {
+      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+      broadcastDebounceRef.current = setTimeout(() => {
+        if (fetchDataRef.current) {
+          fetchDataRef.current(selectedDateRef.current, searchQueryRef.current.trim() || undefined, true);
+        }
+      }, 400);
+    };
+
     rosterChannel
-      .on("broadcast", { event: "assignment_changed" }, () => {
-        fetchData(selectedDate, searchQuery.trim() || undefined, true);
-      })
-      .on("broadcast", { event: "roster_updated" }, () => {
-        fetchData(selectedDate, searchQuery.trim() || undefined, true);
-      })
-      .on("broadcast", { event: "log_entered" }, () => {
-        fetchData(selectedDate, searchQuery.trim() || undefined, true);
-      })
+      .on("broadcast", { event: "assignment_changed" }, triggerDebouncedRefresh)
+      .on("broadcast", { event: "roster_updated" }, triggerDebouncedRefresh)
+      .on("broadcast", { event: "log_entered" }, triggerDebouncedRefresh)
       .subscribe();
 
     return () => {
+      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
       supabase.removeChannel(rosterChannel);
     };
-  }, [fetchData, searchQuery, selectedDate]);
+  }, []);
 
 
   // Debounced server-side search
@@ -216,6 +233,7 @@ export function TodayShiftMonitorTab({
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
     };
   }, []);
 
@@ -1102,7 +1120,8 @@ export function TodayShiftMonitorTab({
               return dedupeShiftMonitorRows(updated);
             });
           }
-          fetchData(selectedDate, undefined, true);
+          // Background soft sync to verify with latest server state
+          fetchData(selectedDate, undefined, false);
         }}
       />
 

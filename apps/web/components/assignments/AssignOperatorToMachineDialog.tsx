@@ -644,7 +644,6 @@ export function AssignOperatorToMachineDialog({
         res,
       });
       onClose();
-      router.refresh();
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("reach:refresh-machine-personnel"));

@@ -37,7 +37,12 @@ ReachInternational is structured as a Turborepo monorepo:
 
 ## 4. Hosting Platform
 
-The web application (`apps/web`) is configured for Vercel / serverless edge deployment with native Next.js App Router optimization. The database backend is hosted on Supabase PostgreSQL with Row Level Security.
+The web application (`apps/web`) is configured for tri-platform deployment across:
+1. **Vercel** (`vercel.json`): Serverless edge deployment with native Next.js App Router optimization.
+2. **Cloudflare Workers** (`wrangler.jsonc`): Edge deployment via OpenNext (`pnpm build:worker`).
+3. **Netlify** (`netlify.toml`): Next.js App Router deployment with native `@netlify/plugin-nextjs` OpenNext adapter, Netlify Scheduled Functions for daily crons, and Turborepo workspace orchestration.
+
+The database backend is hosted on Supabase PostgreSQL with Row Level Security.
 
 ---
 

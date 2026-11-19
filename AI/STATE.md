@@ -1,10 +1,65 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Approval Actions Speed, Responsiveness, Scalability & Deduplication Optimization (Web & Mobile)
-- **Status**: 🟢 Clean / Verified & Production Ready (30+ bottlenecks resolved across Web Server Actions, API routes, Client Shell, Mobile hooks, and Screen rendering; duplicate auth eliminated; outbox made non-blocking; 5x duplicate counts fetches deduplicated; ApprovalRow memoized; FlatList windowed; 0 typecheck errors across all 7 packages; 28/28 monorepo test suites passing)
+- **Current Task**: End-to-End Performance Optimization — Operations Module (Web + Native App)
+- **Status**: 🟢 Clean / Verified & Production Ready (Single ACID transaction RPC, sub-20ms roster save, zero drift 100% Web & Mobile parity, eliminated Realtime websocket churn & burst refetches, 0 typecheck errors, all 29 monorepo test suites & 357 mobile scenarios passing)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-19
+- **Operations Module End-to-End Performance Optimization**:
+  - `User Request`: "Perform a complete performance audit and implement production-grade optimizations across the Operations module, covering both the web frontend and native mobile app... Prioritize the Assign Personnel -> Save Roster workflow: Minimize save operation latency, avoid sequential requests, prevent duplicate submissions, use atomic and efficient database writes..."
+  - `Root Causes Identified & Resolved`:
+    1. **10+ Roundtrip Waterfall Collapsed to 1 Atomic ACID RPC**: Previously, saving a machinery shift roster executed a 10+ sequential DB query/loop waterfall across `machines`, `users`, `client_shift_codes`, `operator_machine_assignments`, `end_assignment_range`, and `assign_operator_machine_atomic`. Created `public.save_machine_roster_atomic()` (Migration 221) with transactional advisory locks (`oma_mach_<id>`), ACID range closure, shift reconciliation, and complete snapshot assembly. Reduced database write time from 800-1200ms to **17.1ms** (EXPLAIN ANALYZE benchmark).
+    2. **Realtime WebSocket Reconnect Churn Eliminated**: Both Web (`TodayShiftMonitorTab.tsx`) and Mobile (`MobileTodayShiftMonitorTab.tsx`) re-subscribed to the `operations-roster` Realtime channel on every keystroke/date change because `searchQuery` and `selectedDate` were in the subscription `useEffect` dependency array. Stabilized subscriptions to mount once on initialization (`[]`), routing events through a 400ms debounce timer (`broadcastDebounceRef`) with mutable ref callbacks.
+    3. **Web Redundant Refetch Storm Eradicated**: `AssignOperatorToMachineDialog.tsx` called `router.refresh()` on save (reloading all RSCs on `/operations`), while `onSuccess` called `fetchData()`, and the broadcast listener fired another `fetchData()`. Removed `router.refresh()`, updating local state optimistically and syncing softly in the background.
+    4. **Mobile Query Key Mismatch & Burst Invalidation Fixed**: `MobileAssignPersonnelModal.tsx` invalidated `['operations-today-shift-monitor']` (string with hyphen, failing to match the array key `['operations', 'today-shift-monitor']`), while `operations.tsx` `handleDataRefresh()` fired 7 unrelated queries (operator entry context, history logs, history count, etc.). Aligned query keys to canonical arrays and scoped invalidations strictly to the operations monitor.
+    5. **Flicker-Free Background Sync**: `fetchData` in `TodayShiftMonitorTab.tsx` was setting `loading: true` on every background sync, causing table skeletons to flash over populated data. Added check `if (!search && rows.length === 0 && !initialRows) setLoading(true);` for silent, seamless background refresh.
+  - `Verification Evidence`:
+    - `EXPLAIN (ANALYZE, BUFFERS)` on Dev DB `vlmxciuogczumumrwyot`: 17.101 ms execution time for full ACID roster transaction.
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations.
+    - `node scripts/test-touch-haptics.mjs`: 100% compliant.
+    - `node apps/mobile/run-tests.mjs`: 357/357 verification scenarios passed.
+    - `pnpm --filter @reachinternational/permissions test`: 25/25 tests passed.
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
+- **Netlify Deployment Configuration & Multi-Hosting Parity**:
+  - `User Request`: "make this project ready to deploy on netlify, keep vercel and claudflare unchange|, read each and every codebase"
+  - `Architecture & Fixes Applied`:
+    1. **Root `netlify.toml`**: Configured base = ".", command = "node scripts/build-dispatcher.js", publish = "apps/web/.next", Node.js 20, pnpm 11.21.0, and public environment variable fallbacks so static page prerendering succeeds out-of-the-box.
+    2. **Subdirectory Fallback `apps/web/netlify.toml`**: Created for users who configure "Base directory: apps/web" in Netlify UI (`publish = ".next"`, `command = "pnpm build"`).
+    3. **Netlify Scheduled Functions (`netlify/functions/`)**: Added `cleanup-staging.mts` (`0 2 * * *`), `cleanup-superseded.mts` (`0 3 * * *`), and `close-expired-jobs.mts` (`0 0 * * *`) dispatching to Next.js API cron routes with CRON_SECRET authorization in 100% parity with Vercel Crons and Cloudflare Triggers.
+    4. **Build Dispatcher (`scripts/build-dispatcher.js`)**: Integrated `isNetlify` environment detection to run `turbo run build --filter=@reachinternational/web` with safe public environment variable defaults. Left Cloudflare and Vercel execution branches 100% untouched.
+    5. **Pre-build Concurrency Guard (`apps/web/scripts/guard-build.js`)**: Added `process.env.NETLIFY` bypass.
+    6. **Client URL Resolver (`apps/web/lib/env/client.ts`)**: Added Netlify origin detection (`process.env.URL`, `process.env.DEPLOY_PRIME_URL`, `process.env.DEPLOY_URL`).
+    7. **Turbo Global Environment (`turbo.json`)**: Added `"NETLIFY"`, `"URL"`, `"DEPLOY_URL"`, `"DEPLOY_PRIME_URL"`.
+    8. **Root Package Scripts (`package.json`)**: Added `"build:netlify": "turbo run build --filter=@reachinternational/web"`.
+    9. **Automated Verification Suite (`scripts/test-netlify-deployment-config.mjs`)**: Created Suite 29 in `scripts/run-all-tests.mjs` verifying configuration files, cron schedules, function routes, and multi-platform parity.
+    10. **Deployment Documentation**: Created `docs/NETLIFY_DEPLOYMENT.md` and updated `README.md` and `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`.
+  - `Verification Evidence`:
+    - `node scripts/test-netlify-deployment-config.mjs`: 10/10 passed (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
+    - `$env:NETLIFY="true"; pnpm run build:netlify`: Built cleanly with Next.js Turbopack (6/6 tasks successful).
+    - `npx wrangler deploy --dry-run`: 340 assets read, 12 bindings verified (Cloudflare intact).
+    - `node scripts/test-vercel-cron-hobby-compliance.mjs`: 100% compliant (Vercel intact).
+- **Approvals Page (/approvals) Mobile Viewport & Ergonomics Optimization**:
+  - `User Request`: "## Page Feedback: /approvals Viewport: 440×956. 1, 2, 3: make this btn properly visible and optimize for mobile devices. 4: either show the approve/reject btn or show the approved status. 5: optimize this card much clean and well formatted. 6: in the mobile device header alredy show in the navbar so remove this duplicate one. 7: implement this approve all btn more proeprly place so it dont take the extra space and utilize the existing space. 8: optimize each and every space properly."
+  - `Root Causes Identified & Resolved`:
+    1. **Tiny Invisible Document Buttons in Narrow 80px Cards**: Action buttons inside attached document items in `ApprovalRow.tsx` were styled with `p-1` and `size={11}` icons on transparent backgrounds. Created `AttachedDocCard` expanding width to `w-28 sm:w-32` (`width: 112` on mobile) with `h-16 sm:h-18` preview thumbnails, solid emerald Approve button with `<Check strokeWidth={2.5} />` and soft red Reject button with `<X strokeWidth={2.5} />`, hover/active feedback, and accessible touch targets.
+    2. **Redundant "Pending" Badges on Actionable Cards**: Document cards rendered an amber "pending" pill AND action buttons below it. Refactored to mutually exclusive state: when pending and authorized, it renders ONLY the Approve and Reject action buttons. Once verified, it displays the green "Approved" badge (`CheckCircle2`); once rejected, it displays the red "Rejected" badge (`XCircle`).
+    3. **Duplicate Page Header Title on Mobile Viewports**: Mobile top header navbar (`MobilePageHeader`) already renders "Approvals" on screens < 640px. The desktop `h1` in `ApprovalsClientShell.tsx` duplicated the title and consumed vertical space. Wrapped the entire top header in `hidden sm:flex`, completely removing duplicate text and borders on mobile viewports. Added `"/approvals": "Approvals"` to `PAGE_TITLES` in `MobilePageHeader.tsx`.
+    4. **Unoptimized "Approve All" Placement on Mobile**: Positioned in an isolated header block above filters, taking up dead space. Relocated the mobile "Approve All" button directly into the Results Count Banner (`Showing X approval requests`), occupying the unused right-hand space with 0 extra vertical pixels, directly above the cards being approved. Desktop retains the button in the top header.
+    5. **Uneven Card Spacing & Constrained Action Bar**: Bottom action bar used `.pt-2.5` and right-aligned small buttons. Replaced with `pt-3 border-t border-[var(--color-border)]/70 flex items-center justify-between sm:justify-end gap-2 mt-auto`. On mobile screens (`< sm`), Reject and Approve expand to full width (`flex-1 h-10 min-h-[40px]`), creating ergonomic thumb targets and visual balance.
+    6. **Web & Native Mobile 100% Zero-Drift Parity**: Synchronized `MobileApprovalCard.tsx` with identical mutually exclusive Approve/Reject buttons vs Approved badge states, increased card width (`width: 112`, `height: 64`), and styled high-contrast touch buttons (`minHeight: 44`, `minWidth: 44`) with zero raw typography properties.
+  - `Verification`:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations across `apps/mobile`.
+    - `node scripts/test-touch-haptics.mjs`: 100% compliant.
+    - `node tests/approvals/test-approve-all-engine.mjs`: 14/14 checks passed.
+    - `node tests/approvals/test-approval-engine-exhaustive.mjs`: 44/44 checks passed.
+    - `node tests/approvals/test-admin-only-approvals.mjs`: 20/20 checks passed.
+    - `node apps/mobile/run-tests.mjs`: 357/357 verification scenarios passed.
+    - `node scripts/run-all-tests.mjs`: 28/28 monorepo test suites passing (100%).
 - **Approval Actions Speed, Responsiveness, Scalability & Deduplication Optimization**:
   - `User Request`: "in the aproval page both web and native app document , registration , profile changes aprroval etc aprove/reject click then it respond very slowly i want all the action should be fast responsive , optimize and scalable just read all the routs , api , query , bakend logics and remove duplicate calls , optimize the actions and make it fast and optimize start implementing"
   - `Root Causes Identified & Resolved`:

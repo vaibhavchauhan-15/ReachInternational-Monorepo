@@ -510,7 +510,7 @@ export default function OperationsScreen() {
         onClose={() => setIsAssignModalOpen(false)}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] });
-          handleDataRefresh();
+          queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-summary'] });
         }}
       />
 

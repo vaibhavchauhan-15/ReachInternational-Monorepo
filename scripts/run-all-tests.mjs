@@ -176,6 +176,12 @@ const SUITES = [
     args: ['scripts/test-vercel-cron-hobby-compliance.mjs'],
     domain: 'Vercel Free Tier Cron Schedules (<=1/day) & Route Integrity',
   },
+  {
+    name: 'Netlify Deployment Configuration Suite',
+    cmd: 'node',
+    args: ['scripts/test-netlify-deployment-config.mjs'],
+    domain: 'Netlify Monorepo Build, Scheduled Functions & Platform Parity',
+  },
 ];
 
 console.log('\n================================================================');

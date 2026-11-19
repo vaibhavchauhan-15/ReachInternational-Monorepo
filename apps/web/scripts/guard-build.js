@@ -17,6 +17,7 @@ if (
   process.env.VERCEL ||
   process.env.CLOUDFLARE ||
   process.env.CF_PAGES ||
+  process.env.NETLIFY ||
   process.env.SKIP_BUILD_GUARD === "1" ||
   process.env.SKIP_BUILD_GUARD === "true"
 ) {

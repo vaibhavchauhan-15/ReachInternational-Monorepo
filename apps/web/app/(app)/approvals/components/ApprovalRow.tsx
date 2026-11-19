@@ -94,6 +94,127 @@ function DocumentThumbnail({
 }
 
 // ⚡ React.memo prevents full list re-renders on parent state changes (781-line component)
+interface AttachedDocCardProps {
+  doc: AttachedDocumentSummary;
+  fullName: string;
+  userId?: string;
+  canDecide: boolean;
+  isActionLoading: boolean;
+  isRejectLoading: boolean;
+  onOpenDocumentLightbox?: (
+    doc: AttachedDocumentSummary,
+    userName?: string,
+    userId?: string
+  ) => void;
+  onVerifyDocument?: (docId: string, userId?: string) => Promise<void> | void;
+  onRejectDocumentPrompt?: (doc: AttachedDocumentSummary, userId?: string) => void;
+}
+
+function AttachedDocCard({
+  doc,
+  fullName,
+  userId,
+  canDecide,
+  isActionLoading,
+  isRejectLoading,
+  onOpenDocumentLightbox,
+  onVerifyDocument,
+  onRejectDocumentPrompt,
+}: AttachedDocCardProps) {
+  const isDocPending = doc.verification_status === "pending";
+  const isDocVerified = doc.verification_status === "verified";
+  const isDocRejected = doc.verification_status === "rejected";
+
+  return (
+    <div className="flex flex-col items-center justify-between gap-1.5 w-28 sm:w-32 shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-2xs hover:border-sky-500/50 transition-all duration-150">
+      {/* Thumbnail Image Container — Click to open lightbox */}
+      <button
+        type="button"
+        onClick={() => onOpenDocumentLightbox?.(doc, fullName, userId)}
+        className="relative w-full h-16 sm:h-18 rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-canvas)] cursor-pointer group block shadow-2xs shrink-0"
+        title={`Click to view ${doc.label}`}
+      >
+        <DocumentThumbnail
+          src={doc.thumb_signed_url || doc.signed_url}
+          alt={doc.label}
+        />
+        <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+          <Eye size={15} />
+        </div>
+      </button>
+
+      {/* Document Label */}
+      <span
+        className="block text-[11px] font-semibold text-[var(--color-ink)] truncate w-full text-center px-0.5 leading-tight"
+        title={doc.label}
+      >
+        {doc.label}
+      </span>
+
+      {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
+      {canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt ? (
+        <div className="flex items-center gap-1.5 w-full pt-1 border-t border-[var(--color-border)]/60 justify-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRejectDocumentPrompt(doc, userId);
+            }}
+            disabled={isActionLoading || isRejectLoading}
+            className="flex-1 h-7 rounded-md bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60 flex items-center justify-center gap-1 text-[11px] font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={`Reject ${doc.label}`}
+          >
+            <X size={12} strokeWidth={2.5} className="shrink-0" />
+            <span className="truncate">Reject</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onVerifyDocument(doc.id, userId);
+            }}
+            disabled={isActionLoading || isRejectLoading}
+            className="flex-1 h-7 rounded-md bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center gap-1 text-[11px] font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={`Approve ${doc.label}`}
+          >
+            <Check size={12} strokeWidth={2.5} className="shrink-0" />
+            <span className="truncate">Approve</span>
+          </button>
+        </div>
+      ) : (
+        <div className="w-full pt-1 border-t border-[var(--color-border)]/60 flex justify-center">
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+              isDocVerified
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                : isDocRejected
+                ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+            }`}
+          >
+            {isDocVerified ? (
+              <>
+                <CheckCircle2 size={11} className="shrink-0" />
+                <span>Approved</span>
+              </>
+            ) : isDocRejected ? (
+              <>
+                <XCircle size={11} className="shrink-0" />
+                <span>Rejected</span>
+              </>
+            ) : (
+              <>
+                <Clock size={11} className="shrink-0" />
+                <span>Pending</span>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const ApprovalRow = React.memo(function ApprovalRow({
   item,
   onSelect,
@@ -246,95 +367,21 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-              {documents.map((doc) => {
-                const isDocPending = doc.verification_status === "pending";
-                const isDocVerified = doc.verification_status === "verified";
-                const isDocRejected = doc.verification_status === "rejected";
-
-                return (
-                  <div
-                    key={doc.id}
-                    className="flex flex-col items-center gap-1 w-20 sm:w-24 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas-elevated)] p-1 shadow-xs hover:border-sky-500/50 transition-all duration-150"
-                  >
-                    {/* Thumbnail Image Container — Click to open lightbox */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onOpenDocumentLightbox?.(
-                          doc,
-                          fullName,
-                          payload.user_id || item.requested_by || item.subject_id
-                        )
-                      }
-                      className="relative w-full h-12 sm:h-14 rounded-md overflow-hidden border border-[var(--color-border)] bg-[var(--color-canvas)] cursor-pointer group block shadow-2xs"
-                      title={`Click to view ${doc.label}`}
-                    >
-                      <DocumentThumbnail
-                        src={doc.thumb_signed_url || doc.signed_url}
-                        alt={doc.label}
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                        <Eye size={14} />
-                      </div>
-                    </button>
-
-                    {/* Document Label & Status Pill */}
-                    <div className="w-full text-center px-0.5">
-                      <span className="block text-[10px] sm:text-[11px] font-medium text-[var(--color-ink)] truncate leading-tight">
-                        {doc.label}
-                      </span>
-                      <span
-                        className={`inline-block mt-0.5 px-1 py-0.2 rounded-full text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider ${
-                          isDocVerified
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : isDocRejected
-                            ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        {doc.verification_status}
-                      </span>
-                    </div>
-
-                    {/* Quick Individual Document Actions (if pending & authorized) */}
-                    {canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt && (
-                      <div className="flex items-center gap-1 w-full pt-1 border-t border-[var(--color-border)]/60 justify-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRejectDocumentPrompt(
-                              doc,
-                              payload.user_id || item.requested_by || item.subject_id
-                            );
-                          }}
-                          disabled={isActionLoading || isRejectLoading}
-                          className="p-1 rounded text-red-600 hover:bg-red-500/15 transition-colors cursor-pointer"
-                          title={`Reject ${doc.label}`}
-                        >
-                          <X size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onVerifyDocument(
-                              doc.id,
-                              payload.user_id || item.requested_by || item.subject_id
-                            );
-                          }}
-                          disabled={isActionLoading || isRejectLoading}
-                          className="p-1 rounded text-emerald-600 hover:bg-emerald-500/15 transition-colors cursor-pointer"
-                          title={`Verify ${doc.label}`}
-                        >
-                          <Check size={11} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+              {documents.map((doc) => (
+                <AttachedDocCard
+                  key={doc.id}
+                  doc={doc}
+                  fullName={fullName}
+                  userId={payload.user_id || item.requested_by || item.subject_id}
+                  canDecide={canDecide}
+                  isActionLoading={isActionLoading}
+                  isRejectLoading={isRejectLoading}
+                  onOpenDocumentLightbox={onOpenDocumentLightbox}
+                  onVerifyDocument={onVerifyDocument}
+                  onRejectDocumentPrompt={onRejectDocumentPrompt}
+                />
+              ))}
             </div>
           </div>
         ) : singleDocTarget ? (
@@ -366,20 +413,25 @@ export const ApprovalRow = React.memo(function ApprovalRow({
                   <span className="text-xs sm:text-sm font-semibold text-[var(--color-ink)] truncate">
                     {singleDocTarget.label}
                   </span>
-                  <span
-                    className={`inline-block px-1.5 py-0.2 rounded-full text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider ${
-                      singleDocTarget.verification_status === "verified"
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                        : singleDocTarget.verification_status === "rejected"
-                        ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                    }`}
-                  >
-                    {singleDocTarget.verification_status}
-                  </span>
+                  {singleDocTarget.verification_status === "verified" ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <CheckCircle2 size={10} />
+                      Verified
+                    </span>
+                  ) : singleDocTarget.verification_status === "rejected" ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                      <XCircle size={10} />
+                      Rejected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <Clock size={10} />
+                      Pending
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-[var(--color-ink-muted)] truncate mt-0.5">
-                  Statutory document verification pending review
+                  Statutory KYC document pending review
                 </p>
               </div>
             </div>
@@ -583,89 +635,21 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-              {documents.map((doc) => {
-                const isDocPending = doc.verification_status === "pending";
-                const isDocVerified = doc.verification_status === "verified";
-                const isDocRejected = doc.verification_status === "rejected";
-
-                return (
-                  <div
-                    key={doc.id}
-                    className="flex flex-col items-center gap-1 w-20 sm:w-24 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas-elevated)] p-1 shadow-xs hover:border-sky-500/50 transition-all duration-150"
-                  >
-                    {/* Thumbnail Image Container — Click to open lightbox */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onOpenDocumentLightbox?.(
-                          doc,
-                          fullName,
-                          payload.user_id || item.requested_by || item.subject_id
-                        )
-                      }
-                      className="relative w-full h-12 sm:h-14 rounded-md overflow-hidden border border-[var(--color-border)] bg-[var(--color-canvas)] cursor-pointer group block shadow-2xs"
-                      title={`Click to view ${doc.label}`}
-                    >
-                      <DocumentThumbnail
-                        src={doc.thumb_signed_url || doc.signed_url}
-                        alt={doc.label}
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                        <Eye size={14} />
-                      </div>
-                    </button>
-
-                    {/* Document Label & Status Pill */}
-                    <div className="w-full text-center px-0.5">
-                      <span className="block text-[10px] sm:text-[11px] font-medium text-[var(--color-ink)] truncate leading-tight">
-                        {doc.label}
-                      </span>
-                      <span
-                        className={`inline-block mt-0.5 px-1 py-0.2 rounded-full text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider ${
-                          isDocVerified
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : isDocRejected
-                            ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        {doc.verification_status}
-                      </span>
-                    </div>
-
-                    {/* Quick Individual Document Actions (if pending & authorized) */}
-                    {canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt && (
-                      <div className="flex items-center gap-1 w-full pt-1 border-t border-[var(--color-border)]/60 justify-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRejectDocumentPrompt(doc);
-                          }}
-                          disabled={isActionLoading || isRejectLoading}
-                          className="p-1 rounded text-red-600 hover:bg-red-500/15 transition-colors cursor-pointer"
-                          title={`Reject ${doc.label}`}
-                        >
-                          <X size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onVerifyDocument(doc.id);
-                          }}
-                          disabled={isActionLoading || isRejectLoading}
-                          className="p-1 rounded text-emerald-600 hover:bg-emerald-500/15 transition-colors cursor-pointer"
-                          title={`Approve ${doc.label}`}
-                        >
-                          <Check size={11} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+              {documents.map((doc) => (
+                <AttachedDocCard
+                  key={doc.id}
+                  doc={doc}
+                  fullName={fullName}
+                  userId={payload.user_id || item.requested_by || item.subject_id}
+                  canDecide={canDecide}
+                  isActionLoading={isActionLoading}
+                  isRejectLoading={isRejectLoading}
+                  onOpenDocumentLightbox={onOpenDocumentLightbox}
+                  onVerifyDocument={onVerifyDocument}
+                  onRejectDocumentPrompt={onRejectDocumentPrompt}
+                />
+              ))}
             </div>
           </div>
         ) : (
@@ -686,32 +670,20 @@ export const ApprovalRow = React.memo(function ApprovalRow({
                 Attached Documents ({documents.length})
               </span>
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
               {documents.map((doc) => (
-                <div
+                <AttachedDocCard
                   key={doc.id}
-                  className="flex flex-col items-center gap-1 w-20 sm:w-24 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas-elevated)] p-1 shadow-xs"
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenDocumentLightbox?.(
-                        doc,
-                        fullName,
-                        payload.user_id || item.requested_by || item.subject_id
-                      )
-                    }
-                    className="relative w-full h-12 sm:h-14 rounded-md overflow-hidden border border-[var(--color-border)] bg-[var(--color-canvas)] cursor-pointer group block shadow-2xs"
-                  >
-                    <DocumentThumbnail
-                      src={doc.thumb_signed_url || doc.signed_url}
-                      alt={doc.label}
-                    />
-                  </button>
-                  <span className="block text-[10px] font-medium text-[var(--color-ink)] truncate w-full text-center">
-                    {doc.label}
-                  </span>
-                </div>
+                  doc={doc}
+                  fullName={fullName}
+                  userId={payload.user_id || item.requested_by || item.subject_id}
+                  canDecide={canDecide}
+                  isActionLoading={isActionLoading}
+                  isRejectLoading={isRejectLoading}
+                  onOpenDocumentLightbox={onOpenDocumentLightbox}
+                  onVerifyDocument={onVerifyDocument}
+                  onRejectDocumentPrompt={onRejectDocumentPrompt}
+                />
               ))}
             </div>
           </div>
@@ -723,29 +695,29 @@ export const ApprovalRow = React.memo(function ApprovalRow({
       )}
 
       {/* ── Card Bottom Action Bar (Optimized for Mobile & Desktop) ── */}
-      <div className="pt-2.5 border-t border-[var(--color-border)]/70 flex items-center justify-end gap-2">
+      <div className="pt-3 border-t border-[var(--color-border)]/70 flex items-center justify-between sm:justify-end gap-2 mt-auto">
         {/* Quick Approve / Reject Buttons (Strictly ONE loading spinner) */}
         {isApprovedExit ? (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in zoom-in-95 duration-200">
-            <CheckCircle2 size={14} className="shrink-0" />
+          <div className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in zoom-in-95 duration-200">
+            <CheckCircle2 size={15} className="shrink-0" />
             <span>Approved</span>
           </div>
         ) : isRejectedExit ? (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold animate-in zoom-in-95 duration-200">
-            <XCircle size={14} className="shrink-0" />
+          <div className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold animate-in zoom-in-95 duration-200">
+            <XCircle size={15} className="shrink-0" />
             <span>Rejected</span>
           </div>
         ) : showDecideActions ? (
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              icon={<XCircle size={13} />}
+              icon={<XCircle size={14} />}
               loading={isRejectLoading}
               disabled={isActionLoading || isRejectLoading}
               onClick={() => onRejectPrompt(item.id)}
-              className="gap-1.5 h-9 min-h-[40px] sm:min-h-[36px] px-3 text-xs font-semibold text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 cursor-pointer justify-center"
+              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[40px] sm:min-h-[36px] px-3.5 text-xs font-semibold text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 cursor-pointer justify-center rounded-xl"
             >
               <span>Reject</span>
             </Button>
@@ -753,11 +725,11 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               type="button"
               variant="primary"
               size="sm"
-              icon={<CheckCircle2 size={13} />}
+              icon={<CheckCircle2 size={14} />}
               loading={isActionLoading}
               disabled={isActionLoading || isRejectLoading}
               onClick={() => onApprove(item.id)}
-              className="gap-1.5 h-9 min-h-[40px] sm:min-h-[36px] px-3.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer justify-center"
+              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[40px] sm:min-h-[36px] px-4 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer justify-center rounded-xl"
             >
               <span>Approve</span>
             </Button>

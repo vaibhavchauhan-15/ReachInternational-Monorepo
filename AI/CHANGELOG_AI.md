@@ -1,3 +1,40 @@
+## [2026-11-19] - End-to-End Performance Optimization — Operations Module (Web + Native App)
+- **Scope**: Operations module on Web (`apps/web`) and Native Mobile (`apps/mobile`), prioritizing critical path **Assign Personnel -> Save Roster**.
+- **Key Bottlenecks Solved**:
+  1. **Atomic ACID Roster Save RPC**: Created `public.save_machine_roster_atomic()` (Migration 221) collapsing a 10+ sequential DB roundtrip waterfall into a single transaction protected by advisory locks (`oma_mach_<id>`). Reduced latency from 800-1200ms to **17.1ms** (EXPLAIN ANALYZE benchmark).
+  2. **WebSocket Reconnect Storm Eliminated**: Both Web (`TodayShiftMonitorTab.tsx`) and Mobile (`MobileTodayShiftMonitorTab.tsx`) stabilized Realtime channel subscriptions to mount once on initialization (`[]`), debouncing updates by 400ms via stable refs.
+  3. **Web Save Roster Duplicate Fetch Storm Eradicated**: Removed `router.refresh()` in `AssignOperatorToMachineDialog.tsx`, relying on fine-grained optimistic local updates and gentle background soft sync.
+  4. **Mobile Query Key Mismatch & Invalidation Blast Fixed**: Aligned `MobileAssignPersonnelModal.tsx` and `AssignOperatorToMachineModal.tsx` to canonical array query keys `['operations', 'today-shift-monitor']` and `['operations', 'today-shift-summary']`. Removed 7-query parallel invalidation blast from `operations.tsx`.
+  5. **Flicker-Free Background Sync**: Guarded table loading skeleton in `TodayShiftMonitorTab.tsx` so background revalidations update silently without flashing the skeleton.
+- **Verification Evidence**:
+  - `EXPLAIN (ANALYZE, BUFFERS)`: 17.101 ms execution time on Dev DB `vlmxciuogczumumrwyot`.
+  - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+  - `node scripts/check-typography.mjs`: 0 raw typography property violations.
+  - `node scripts/test-touch-haptics.mjs`: 100% compliant.
+  - `node apps/mobile/run-tests.mjs`: 357/357 verification scenarios passed.
+  - `pnpm --filter @reachinternational/permissions test`: 25/25 tests passed.
+  - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
+
+## [2026-11-19] - Approvals Page (/approvals) Mobile Viewport & Ergonomics Optimization
+- **Scope**: Approvals page on Web (apps/web) and Native Mobile (apps/mobile) at mobile viewports (440x956) and responsive desktop.
+- **Feedback & Enhancements**:
+  1. High-Contrast Document Action Buttons: Transformed individual document verify/reject buttons from tiny 11px icons in narrow 80px cards into prominent, high-contrast action controls with solid emerald green Approve button (with Check icon and text) and soft red Reject button (with X icon and text) inside comfortable w-28 sm:w-32 cards with h-16 sm:h-18 thumbnails.
+  2. Mutually Exclusive Action vs Status States: When a document is pending and authorized, it renders ONLY the Approve and Reject action buttons (eradicating redundant "pending" pill clutter). Once approved, it displays the green "Approved" status badge (CheckCircle2); once rejected, it displays the red "Rejected" status badge (XCircle).
+  3. Zero-Waste Mobile Header: Hidden top header on mobile viewports (< 640px) via hidden sm:flex, eradicating the duplicate h1 and surrounding empty border/padding since the mobile navbar (MobilePageHeader) already displays the page title. Added /approvals to PAGE_TITLES.
+  4. Ergonomic "Approve All" Placement: Relocated mobile "Approve All" button directly into the Results Count Banner row (Showing X approval requests), occupying the previously unused right-hand space with 0 extra vertical pixels right above the cards being approved. Retained desktop button in the header alongside h1.
+  5. Refined Card Hierarchy & Full-Width Action Bar: Bottom action bar refactored with pt-3 border-t and mt-auto; Reject and Approve buttons automatically expand to full width (flex-1 h-10 min-h-[40px]) on mobile viewports for thumb-friendly ergonomics, neatly right-aligning on desktop.
+  6. 100% Native Mobile Parity: Synchronized MobileApprovalCard.tsx with identical mutually exclusive states, enlarged document cards (width: 112, height: 64), and high-contrast touch buttons with min 44px touch targets and zero raw typography properties.
+- **Verification**:
+  - pnpm --filter @reachinternational/web exec tsc --noEmit: 0 errors.
+  - pnpm --filter @reachinternational/mobile exec tsc --noEmit: 0 errors.
+  - node scripts/check-typography.mjs: 0 raw typography properties found.
+  - node scripts/test-touch-haptics.mjs: 100% passed.
+  - node tests/approvals/test-approve-all-engine.mjs: 14/14 passed.
+  - node tests/approvals/test-approval-engine-exhaustive.mjs: 44/44 passed.
+  - node tests/approvals/test-admin-only-approvals.mjs: 20/20 passed.
+  - node apps/mobile/run-tests.mjs: 357/357 passed.
+  - node scripts/run-all-tests.mjs: 28/28 suites passed.
+
 ## [2026-11-19] - Approvals Speed, Responsiveness, Scalability & Query Deduplication Optimization
 - **Scope**: Approvals page across both Web (apps/web) and Native Mobile (apps/mobile) - registrations, documents, profile changes, and bulk approve-all.
 - **Root Bottlenecks Resolved**:
@@ -21162,3 +21199,4 @@ On user registration, 3 separate "Document Initial Verification" approval reques
    - `node apps/mobile/run-tests.mjs`: 357/357 passed.
    - `node scripts/run-all-tests.mjs`: 27/27 suites passed.
    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+

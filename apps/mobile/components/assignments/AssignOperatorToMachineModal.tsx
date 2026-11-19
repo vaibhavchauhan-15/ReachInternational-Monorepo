@@ -437,73 +437,30 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
     try {
       const currentUserId = user?.id || null;
 
-      // 1. Relieve assignments that existed in DB but were removed from current roster
-      for (const initAss of initialSnapshot.roster) {
-        const stillPresent = roster.some(
-          (m) =>
-            m.operatorId === initAss.operatorId &&
-            m.shiftCode.toUpperCase() === initAss.shiftCode.toUpperCase()
-        );
+      // Atomic update via single ACID transaction RPC
+      const operatorsPayload = roster.map((opItem) => ({
+        operatorId: opItem.operatorId,
+        shiftCode: opItem.shiftCode,
+        shiftStartTime: to24HourTime(opItem.shiftStartTime),
+        shiftEndTime: to24HourTime(opItem.shiftEndTime),
+        notes: 'Assigned via mobile standardized assign dialog',
+      }));
 
-        if (!stillPresent && initAss.assignmentId) {
-          await supabase.rpc('end_operator_machine_assignment_atomic', {
-            p_assignment_id: initAss.assignmentId,
-            p_ended_by: currentUserId,
-            p_end_reason: 'Updated via mobile standardized assign dialog',
-          });
-        }
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('save_machine_roster_atomic', {
+        p_machine_id: machineId,
+        p_operators: operatorsPayload,
+        p_supervisor_ids: canEditSupervisor && !clientId ? selectedSupervisorIds : null,
+        p_activate_machine: false,
+        p_caller_id: currentUserId,
+      });
+
+      if (rpcErr) {
+        throw rpcErr;
       }
 
-      // 2. Atomically assign/update operators in roster
-      for (const opItem of roster) {
-        const alreadyActive = initialSnapshot.roster.some(
-          (a) =>
-            a.operatorId === opItem.operatorId &&
-            a.shiftCode.toUpperCase() === opItem.shiftCode.toUpperCase() &&
-            Boolean(a.assignmentId)
-        );
-
-        if (!alreadyActive) {
-          const { error: rpcErr } = await supabase.rpc('assign_operator_machine_atomic', {
-            p_machine_id: machineId,
-            p_operator_id: opItem.operatorId,
-            p_shift_start_time: to24HourTime(opItem.shiftStartTime),
-            p_shift_end_time: to24HourTime(opItem.shiftEndTime),
-            p_shift_code: opItem.shiftCode,
-            p_assigned_by: currentUserId,
-            p_notes: 'Assigned via mobile standardized assign dialog',
-          });
-
-          if (rpcErr) {
-            let msg = rpcErr.message;
-            if (rpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
-              msg = `${opItem.operatorName} has reached the maximum of 3 active shifts (24h) across the fleet.`;
-            } else if (msg.includes('OVERLAPPING_SHIFT_FOR_OPERATOR') || msg.includes('overlap')) {
-              msg = `${opItem.operatorName}'s shift collides with an existing active assignment across the fleet.`;
-            }
-            throw new Error(msg);
-          }
-        }
+      if (rpcRes && typeof rpcRes === 'object' && (rpcRes as any).success === false) {
+        throw new Error((rpcRes as any).error || 'Failed to save machine roster');
       }
-
-      // 3. Update machine operator IDs and supervisor if permitted
-      const machineUpdatePayload: Record<string, any> = {
-        operator_ids: Array.from(new Set(roster.map((o) => o.operatorId))),
-        current_operator_id: roster[0]?.operatorId || null,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (canEditSupervisor && !clientId) {
-        machineUpdatePayload.supervisor_ids = selectedSupervisorIds;
-        machineUpdatePayload.current_supervisor_id = selectedSupervisorIds[0] || null;
-      }
-
-      const { error: machineUpdateError } = await supabase
-        .from('machines')
-        .update(machineUpdatePayload)
-        .eq('id', machineId);
-
-      if (machineUpdateError) throw machineUpdateError;
 
       // Realtime broadcast for multi-client synchronization
       broadcastMobileAssignmentChanged({
@@ -513,8 +470,9 @@ export const AssignOperatorToMachineModal: React.FC<AssignOperatorToMachineModal
         shiftCode: roster[0]?.shiftCode || '',
       });
 
-      // Surgical cache invalidation
-      queryClient.invalidateQueries({ queryKey: ['operations-today-shift-monitor'] });
+      // Surgical cache invalidation with canonical matching keys
+      queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] });
+      queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-summary'] });
       queryClient.invalidateQueries({ queryKey: ['machines'] });
       queryClient.invalidateQueries({ queryKey: ['machineDetail', machineId] });
       queryClient.invalidateQueries({ queryKey: ['assign-personnel-modal-data'] });
