@@ -1,6 +1,6 @@
 /**
  * ReachInternational — Google Analytics (gtag.js) Utility & Event Tracker
- * Measurement ID: G-DC126P3SM9 (Configurable via NEXT_PUBLIC_GA_MEASUREMENT_ID)
+ * Measurement ID: Configurable via NEXT_PUBLIC_GA_MEASUREMENT_ID
  *
  * Implements:
  * - Google Analytics 4 (GA4) event standards

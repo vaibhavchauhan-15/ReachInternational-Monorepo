@@ -987,7 +987,7 @@ The Reach International monorepo implements a defense-in-depth security model ac
 
 ## 📈 Google Analytics 4 (GA4) & Universal Telemetry Architecture
 
-The platform integrates enterprise **Google Analytics 4 (`gtag.js`)** under Measurement ID **`G-DC126P3SM9`** (configurable via `NEXT_PUBLIC_GA_MEASUREMENT_ID` across `.env`, `.env.local`, and `.env.example`):
+The platform integrates enterprise **Google Analytics 4 (`gtag.js`)** (configurable via `NEXT_PUBLIC_GA_MEASUREMENT_ID` across `.env`, `.env.local`, and `.env.example`, e.g. `G-XXXXXXXXXX`):
 
 ### 1. Zero-Latency Asynchronous Loading & Consent Mode v2
 - **Next.js App Router Integration (`apps/web/components/analytics/GoogleAnalytics.tsx`)**: Injected via `next/script` with `strategy="afterInteractive"`, accompanied by `<link rel="preconnect" href="https://www.googletagmanager.com" />` inside `<head>`.

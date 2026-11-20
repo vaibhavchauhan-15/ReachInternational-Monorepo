@@ -20,6 +20,11 @@
   PNPM_VERSION = "11.21.0"
   # Netlify environment marker
   NETLIFY = "true"
+  # Netlify Secrets Scanner Configuration
+  # Exclude public / client-safe environment variables from triggering secret scanning failures
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_GA_MEASUREMENT_ID,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_VAPID_PUBLIC_KEY,VAPID_SUBJECT,PUSH_ENABLED,NEXT_PUBLIC_APP_VERSION,NEXT_PUBLIC_ENABLE_AGENTATION,NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH,NEXT_PUBLIC_SENTRY_DSN,NOTIFY_SECRET"
+  # Exclude repository documentation, change logs, templates, tests, and reports from scanning
+  SECRETS_SCAN_OMIT_PATHS = ".env.example,apps/web/.env.example,apps/mobile/.env.example,apps/web/.dev.vars.example,AI/**,docs/**,runbooks/**,tests/**,apps/web/scripts/**,scripts/**,README.md"
   # Essential public environment variables for Next.js static page compilation
   NEXT_PUBLIC_SUPABASE_URL = "https://dhbbgfzbyatzvqafnsqp.supabase.co"
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis"

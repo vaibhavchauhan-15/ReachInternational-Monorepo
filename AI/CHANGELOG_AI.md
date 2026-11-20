@@ -11788,7 +11788,7 @@
       - `apps/mobile/shell/webview-config.ts`: Dynamic origin extraction from `getAppUrl()` and `getSupabaseUrl()`.
       - `apps/web/lib/supabase/client.ts`, `server.ts`, `admin.ts`: Uses `getSupabaseUrl()`, `getSupabasePublishableKey()`, and `getSupabaseSecretKey()`.
       - `apps/web/proxy.ts`: Uses `getSupabaseUrl()` and `getSupabasePublishableKey()`.
-      - `apps/web/lib/analytics.ts`: Removed `"G-DC126P3SM9"` hardcoded fallback.
+      - `apps/web/lib/analytics.ts`: Removed `"G-XXXXXXXXXX"` hardcoded fallback.
       - `apps/web/lib/email.ts`: Replaced 4 instances of `process.env.NEXT_PUBLIC_APP_URL || ""` with `getAppUrl()`.
       - `apps/web/app/layout.tsx`: Uses `getAppUrl()` and `getSupabaseUrl()`.
       - `apps/web/app/sitemap.ts`: Uses `getAppUrl()`.
@@ -11802,13 +11802,13 @@
 - **Setup Google Tag (gtag.js) for Universal Telemetry & Event Tracking (2026-09-21)**:
   - **1. User Request**:
     - "<!-- Google tag (gtag.js) -->
-<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-DC126P3SM9\"></script>
+<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX\"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', 'G-DC126P3SM9');
+  gtag('config', 'G-XXXXXXXXXX');
 </script>
 
 set this google tag properly
@@ -11824,7 +11824,7 @@ so i can tract each and everythings"
       6. Cross-platform mobile parity for Expo Web.
   - **3. Implementation Details**:
     - `apps/web/.env`, `apps/web/.env.local`, `apps/web/.env.example`:
-      - Added `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-DC126P3SM9`.
+      - Added `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX`.
     - `apps/web/lib/analytics.ts`:
       - Implemented typed `window.gtag` / `window.dataLayer` execution with SSR safety.
       - Implemented `updateConsent` for Google Consent Mode v2.

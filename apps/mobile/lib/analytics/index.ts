@@ -5,7 +5,8 @@
 
 import { Platform } from 'react-native';
 
-export const GA_MEASUREMENT_ID = 'G-DC126P3SM9';
+export const GA_MEASUREMENT_ID =
+  process.env.EXPO_PUBLIC_GA_MEASUREMENT_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
 
 declare global {
   interface Window {

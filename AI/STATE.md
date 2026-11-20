@@ -1,10 +1,25 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Update Production Supabase Database Rule & AI Agent Instruction
-- **Status**: 🟢 Clean / Verified & Production Ready (Updated Supabase environment isolation and access policy monorepo-wide: Production read-only allowed anytime, production writes strictly conditioned on explicit user instructions; 95/95 rule tests passing, 0 typecheck errors)
+- **Current Task**: Resolve Netlify Secrets Scanning Deployment Failure
+- **Status**: 🟢 Clean / Verified & Production Ready (Netlify secrets scanning omissions configured in netlify.toml and apps/web/netlify.toml, codebase secrets sanitized/redacted, 10/10 deployment checks passed, 29/29 monorepo test suites passing, 0 typecheck errors)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-20
+- **Netlify Deploy Secrets Scanning Remediation**:
+  - `User Report`: Netlify build failed with `Secrets scanning found 8 instance(s) of secrets in build output or repo code. Build script returned non-zero exit code: 2`. Offending keys flagged: `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `VAPID_SUBJECT`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, and `NOTIFY_SECRET`.
+  - `Root Cause`: Netlify's secret scanner matches all environment variable values against repository files and build outputs. It does not differentiate between client-safe variables (`NEXT_PUBLIC_*`, `VAPID_SUBJECT`) and backend secrets. Next.js statically renders public variables into HTML pages and JS bundles by design, triggering false positives. Additionally, the test mock string in `apps/web/scripts/test-push-dispatcher.mjs` matched `NOTIFY_SECRET`.
+  - `Fixes Applied`:
+    1. Configured `SECRETS_SCAN_OMIT_KEYS` in both root `netlify.toml` and `apps/web/netlify.toml` covering all public client variables.
+    2. Configured `SECRETS_SCAN_OMIT_PATHS` to skip templates, test scripts, documentation, and markdown logs (`.env.example`, `AI/**`, `docs/**`, `runbooks/**`, `tests/**`, `scripts/**`, `README.md`).
+    3. Replaced real/test IDs with generic placeholders (`G-XXXXXXXXXX`) in `.env.example`, `apps/web/.env.example`, `apps/web/.dev.vars.example`, `AI/CHANGELOG_AI.md`, `README.md`, and `docs/NETLIFY_DEPLOYMENT.md`.
+    4. Changed `apps/web/scripts/test-push-dispatcher.mjs` to use a dedicated local unit-testing secret string instead of matching production `NOTIFY_SECRET`.
+    5. Updated `apps/mobile/app/_layout.tsx` and `apps/mobile/lib/analytics/index.ts` to dynamically resolve GA ID from environment.
+    6. Updated `scripts/test-netlify-deployment-config.mjs` asserting `SECRETS_SCAN_OMIT_KEYS` and `SECRETS_SCAN_OMIT_PATHS` presence.
+  - `Verification Evidence`:
+    - `node scripts/test-netlify-deployment-config.mjs`: 10/10 passed (100%).
+    - `node apps/web/scripts/test-push-dispatcher.mjs`: PASSED.
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 29/29 suites passed cleanly (100%).
 - **Production Supabase DB Access Policy Update**:
   - `User Request`: "modify the production supabase db rule and instruction for the ai agents always ai agents can ready only anythime in the production db and when i say to make some changes in the production db or modify something in the production db via supabase cli or mcp so then only ai agents can write operation in the production db"
   - `Rules Enshrined`:

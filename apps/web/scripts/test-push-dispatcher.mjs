@@ -12,7 +12,7 @@ console.log('--- [TEST] Push Dispatcher & Receipt Reconciliation ---');
 // 1. Test Bearer Token Validator
 function testAssertBearer() {
   console.log('Testing Bearer token authentication...');
-  const expectedSecret = 'f2543d5600c980a26506b5adf150eff71ba6090d882682c27941a63b4de8baaf';
+  const expectedSecret = 'test-mock-notify-secret-for-local-unit-testing-only-12345';
 
   function assertBearer(req, secret) {
     if (!secret) throw new Error('Server configuration error: NOTIFY_SECRET is missing');

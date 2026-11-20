@@ -116,7 +116,9 @@ function MobileAgentation() {
 function MobileGoogleAnalytics() {
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const GA_ID = 'G-DC126P3SM9';
+    const GA_ID =
+      process.env.EXPO_PUBLIC_GA_MEASUREMENT_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
+    if (!GA_ID) return;
     if (document.getElementById('mobile-google-tag-script')) return;
 
     const script = document.createElement('script');

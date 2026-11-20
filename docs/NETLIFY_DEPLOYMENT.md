@@ -50,7 +50,7 @@ Configure these in the Netlify UI under **Site configuration > Environment varia
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Anon JWT key |
 | `NEXT_PUBLIC_APP_URL` | `https://<your-site>.netlify.app` (or custom domain) |
 | `NEXT_PUBLIC_APP_VERSION` | `1.5.0` |
-| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | `G-DC126P3SM9` |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | `G-XXXXXXXXXX` (or your GA4 ID) |
 | `NEXT_PUBLIC_ENABLE_AGENTATION` | `false` |
 | `NEXT_PUBLIC_ENABLE_PULL_TO_REFRESH` | `true` |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | WebPush VAPID Public Key |

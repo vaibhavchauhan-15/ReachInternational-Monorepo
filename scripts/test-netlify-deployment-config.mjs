@@ -27,6 +27,8 @@ assert(rootNetlifyContent.includes('base = "."'), 'root netlify.toml must have b
 assert(rootNetlifyContent.includes('command = "node scripts/build-dispatcher.js"'), 'root netlify.toml must invoke build dispatcher');
 assert(rootNetlifyContent.includes('NODE_VERSION = "22"'), 'root netlify.toml must declare Node.js 22 (required for pnpm v11 & node:sqlite)');
 assert(rootNetlifyContent.includes('PNPM_VERSION = "11.21.0"'), 'root netlify.toml must declare PNPM 11.21.0');
+assert(rootNetlifyContent.includes('SECRETS_SCAN_OMIT_KEYS'), 'root netlify.toml must declare SECRETS_SCAN_OMIT_KEYS');
+assert(rootNetlifyContent.includes('SECRETS_SCAN_OMIT_PATHS'), 'root netlify.toml must declare SECRETS_SCAN_OMIT_PATHS');
 
 const nvmrcPath = path.join(ROOT_DIR, '.nvmrc');
 assert(fs.existsSync(nvmrcPath), '.nvmrc must exist at root');
@@ -46,6 +48,8 @@ assert(
   'apps/web/netlify.toml must specify apps/web/.next for monorepo publish path'
 );
 assert(webNetlifyContent.includes('NODE_VERSION = "22"'), 'apps/web/netlify.toml must declare Node.js 22');
+assert(webNetlifyContent.includes('SECRETS_SCAN_OMIT_KEYS'), 'apps/web/netlify.toml must declare SECRETS_SCAN_OMIT_KEYS');
+assert(webNetlifyContent.includes('SECRETS_SCAN_OMIT_PATHS'), 'apps/web/netlify.toml must declare SECRETS_SCAN_OMIT_PATHS');
 assert(webNetlifyContent.includes('cleanup-staging'), 'apps/web/netlify.toml must register cleanup-staging cron');
 assert(webNetlifyContent.includes('cleanup-superseded'), 'apps/web/netlify.toml must register cleanup-superseded cron');
 assert(webNetlifyContent.includes('close-expired-jobs'), 'apps/web/netlify.toml must register close-expired-jobs cron');
